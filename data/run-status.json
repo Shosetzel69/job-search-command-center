@@ -1,9 +1,16 @@
 {
-  "run_id": "full-test-20260903T224500Z",
-  "status": "completed_with_limitations",
-  "started_at": "2026-09-03T22:40:00Z",
-  "completed_at": "2026-09-03T22:45:00Z",
-  "jobs_published": 5,
-  "applications_preserved": 1,
-  "limitations": ["JobsPipe API key is not configured", "Some sources do not expose an exact publication timestamp"]
+  "run_id": "github-20260903T225544Z",
+  "status": "completed",
+  "started_at": "2026-09-03T22:55:44.151834+00:00",
+  "completed_at": "2026-09-03T22:55:44.173244+00:00",
+  "sources": [
+    "JobsPipe geography",
+    "JobsPipe remote"
+  ],
+  "records_inspected": 25,
+  "jobs_published": 8,
+  "excluded": 17,
+  "limitations": [
+    "JobsPipe free-plan result cap applies to each query"
+  ]
 }

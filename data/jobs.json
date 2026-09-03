@@ -1,12 +1,330 @@
 {
-  "generated_at": "2026-09-03T22:45:00Z",
+  "generated_at": "2026-09-03T22:55:44.151834+00:00",
   "freshness_hours": 24,
-  "results": 5,
+  "criteria": {
+    "roles": [
+      "Project Manager",
+      "IT Project Manager",
+      "Technical/Agile PM",
+      "Delivery/Service Manager",
+      "Scrum Master",
+      "Program/PMO Manager"
+    ],
+    "geography": [
+      "Romania",
+      "Brussels/Belgium",
+      "Luxembourg",
+      "eligible remote Europe"
+    ],
+    "work_mode_priority": [
+      "Remote",
+      "Hybrid"
+    ],
+    "fit_threshold": 80,
+    "keep_reposts": true,
+    "exclusions": [
+      "Star Storage group",
+      "deep ERP/SAP implementation",
+      "non-IT roles"
+    ]
+  },
+  "raw_matches_available": {
+    "geography": 0,
+    "remote": 113
+  },
+  "records_inspected": 25,
+  "results": 8,
+  "excluded_count": 17,
   "jobs": [
-    {"title":"Project Delivery Manager","company":"Volta","location":"Europe","mode":"Remote","fit":90,"status":"new","url":"https://jobs.ashbyhq.com/volta/0ea572c8-bd8c-4446-b519-354c20597bed"},
-    {"title":"Technical Program Manager, AI Delivery for Public Sector & Defense","company":"Cohere","location":"France","mode":"Hybrid","fit":85,"status":"review","url":"https://jobs.ashbyhq.com/cohere/fc5cb642-23df-430e-ae84-67215384be1c"},
-    {"title":"Project / Product Manager - PSP & Payment Integrations","company":"OnHires","location":"Remote","mode":"Remote","fit":82,"status":"review","url":"https://jobs.ashbyhq.com/onhires/c4ae7297-9540-4312-abff-cfb27a6c682a"},
-    {"title":"Scrum Master - NL","company":"Smals","location":"Brussels","mode":"Hybrid","fit":62,"status":"review","url":"https://be.linkedin.com/jobs/view/scrum-master-nl-at-smals-4453124831"},
-    {"title":"Scrum Master - Calibration Team","company":"Mediane Systeme","location":"Hasselt","mode":"Onsite","fit":55,"status":"review","url":"https://be.linkedin.com/jobs/view/scrum-master-%E2%80%93-calibration-team-at-m%C3%A9diane-syst%C3%A8me-4462757890"}
+    {
+      "id": "f6a70fda5908610f",
+      "title": "Neocloud Service Delivery Manager (remote)",
+      "company": "Mirantis",
+      "initial": "M",
+      "fit": 96,
+      "location": "Poznań, wielkopolskie",
+      "mode": "Remote",
+      "type": "Full Time",
+      "age": 12,
+      "remote": true,
+      "b2b": true,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://www.indeed.com/viewjob?jk=f6a70fda5908610f",
+      "date_posted": "2026-09-03T10:09:19.691000+00:00",
+      "source": "indeed",
+      "verified_at": "2026-09-03 13:07:17"
+    },
+    {
+      "id": "323f15cb-d8a1-4c53-9bcf-14d79ffb7948",
+      "title": "IT Project Manager - Engineering Operations",
+      "company": "ELVTR",
+      "initial": "E",
+      "fit": 95,
+      "location": "TELECOMMUTE",
+      "mode": "Remote",
+      "type": "Full Time",
+      "age": 11,
+      "remote": true,
+      "b2b": true,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://jobs.workable.com/view/7cSqhXXo495ymPbGuyuNwC/remote-it-project-manager---engineering-operations-in-ukraine-at-elvtr",
+      "date_posted": "2026-09-03T11:25:18.470Z",
+      "source": "workable",
+      "verified_at": "2026-09-03 12:14:32"
+    },
+    {
+      "id": "8164718",
+      "title": "Manager Enablement, Program Manager",
+      "company": "Toast",
+      "initial": "T",
+      "fit": 93,
+      "location": "Remote",
+      "mode": "Remote",
+      "type": "Nespecificat",
+      "age": 25,
+      "remote": true,
+      "b2b": true,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote",
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://careers.toasttab.com/jobs?gh_jid=8164718",
+      "date_posted": "2026-09-02T17:00:02-04:00",
+      "source": "greenhouse",
+      "verified_at": "2026-09-03 12:23:50"
+    },
+    {
+      "id": "8164718",
+      "title": "Manager Enablement, Sr. Program Manager",
+      "company": "Toast",
+      "initial": "T",
+      "fit": 93,
+      "location": "Remote",
+      "mode": "Remote",
+      "type": "Nespecificat",
+      "age": 25,
+      "remote": true,
+      "b2b": true,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote",
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://careers.toasttab.com/jobs?gh_jid=8164718",
+      "date_posted": "2026-09-02T17:00:02-04:00",
+      "source": "greenhouse",
+      "verified_at": "2026-09-03 18:13:09"
+    },
+    {
+      "id": "8164716",
+      "title": "Senior Enablement Project Manager",
+      "company": "Toast",
+      "initial": "T",
+      "fit": 90,
+      "location": "Remote",
+      "mode": "Remote",
+      "type": "Nespecificat",
+      "age": 25,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote",
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://careers.toasttab.com/jobs?gh_jid=8164716",
+      "date_posted": "2026-09-02T17:00:01-04:00",
+      "source": "greenhouse",
+      "verified_at": "2026-09-03 18:13:11"
+    },
+    {
+      "id": "44f086c19f3fa9f7",
+      "title": "Technical Project Manager - SaaS Solution Architect",
+      "company": "Trimble",
+      "initial": "T",
+      "fit": 89,
+      "location": "En remoto",
+      "mode": "Remote",
+      "type": "Full Time",
+      "age": 17,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://www.indeed.com/viewjob?jk=44f086c19f3fa9f7",
+      "date_posted": "2026-09-03T05:00:00+00:00",
+      "source": "indeed",
+      "verified_at": "2026-09-03 13:12:57"
+    },
+    {
+      "id": "8164720",
+      "title": "Enablement Project Manager",
+      "company": "Toast",
+      "initial": "T",
+      "fit": 85,
+      "location": "Remote",
+      "mode": "Remote",
+      "type": "Nespecificat",
+      "age": 25,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://careers.toasttab.com/jobs?gh_jid=8164720",
+      "date_posted": "2026-09-02T17:00:01-04:00",
+      "source": "greenhouse",
+      "verified_at": "2026-09-03 18:13:08"
+    },
+    {
+      "id": "b2ceb86e-9f9d-4f0f-91c2-4e14ee7eae0d",
+      "title": "Referral Program Manager",
+      "company": "Political Asylum Lawyers",
+      "initial": "PA",
+      "fit": 82,
+      "location": "TELECOMMUTE",
+      "mode": "Remote",
+      "type": "Nespecificat",
+      "age": 23,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.workable.com/view/o5CPUHtvbvxCWMS31t8KvF/remote-referral-program-manager-in-c%C3%B3rdoba-at-political-asylum-lawyers",
+      "date_posted": "2026-09-02T23:44:34.047Z",
+      "source": "workable",
+      "verified_at": "2026-09-03 12:50:44"
+    }
+  ],
+  "excluded_sample": [
+    {
+      "title": "Deployment Project Manager - Warehouse Robotics & Automation (UK)",
+      "company": "Exotec",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Digital Project Manager",
+      "company": "6ix",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Scrum Master",
+      "company": "TJ Maxx",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Lead Service Manager",
+      "company": "SimCorp",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Program Manager",
+      "company": "TP",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Senior Project Manager, GTM Launch",
+      "company": "Dutchie",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Event Project Manager",
+      "company": "Midstay",
+      "reason": "non-IT role"
+    },
+    {
+      "title": "Customer Support Program Manager",
+      "company": "Knowtex",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Commercial Training & Competency Program Manager",
+      "company": "Danaher",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager II",
+      "company": "INNOVAS",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager - Construction Industry",
+      "company": "Sarrani Limited",
+      "reason": "non-IT role"
+    },
+    {
+      "title": "Senior Project Manager",
+      "company": "NAES Corporation",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager, Surveys",
+      "company": "ProSapient",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager - US Based",
+      "company": "Radiant Mobile",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager/Business Analyst",
+      "company": "Taazaa",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager",
+      "company": "Teamficient",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Associate Project Manager/Moves Management",
+      "company": "Turner & Townsend Pty Limited",
+      "reason": "remote geography not eligible"
+    }
   ]
 }
