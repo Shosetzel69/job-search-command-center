@@ -1,0 +1,908 @@
+{
+  "count": 129,
+  "sources": [
+    {
+      "category": "Job boards si agregatoare",
+      "name": "LinkedIn Jobs",
+      "url": "https://www.linkedin.com/jobs/",
+      "active": true,
+      "priority": 1
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Indeed",
+      "url": "https://www.indeed.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "eJobs",
+      "url": "https://www.ejobs.ro/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Hipo",
+      "url": "https://www.hipo.ro/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Jobicy",
+      "url": "https://jobicy.com/",
+      "active": true,
+      "priority": 2
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "EURES",
+      "url": "https://eures.europa.eu/",
+      "active": true,
+      "priority": 3
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "EU Careers / EPSO",
+      "url": "https://eu-careers.europa.eu/",
+      "active": true,
+      "priority": 4
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "EuroBrussels",
+      "url": "https://www.eurobrussels.com/",
+      "active": true,
+      "priority": 5
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "eFinancialCareers",
+      "url": "https://www.efinancialcareers.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Hays Romania",
+      "url": "https://www.hays.ro/en/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Jobgether",
+      "url": "https://jobgether.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Himalayas",
+      "url": "https://himalayas.app/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Working Nomads",
+      "url": "https://www.workingnomads.com/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Remote OK",
+      "url": "https://remoteok.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "We Work Remotely",
+      "url": "https://weworkremotely.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Remote.co",
+      "url": "https://remote.co/remote-jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "NoDesk",
+      "url": "https://nodesk.co/remote-jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "EU Remote Jobs",
+      "url": "https://euremotejobs.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Remote in Europe",
+      "url": "https://remoteineurope.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Landing.Jobs",
+      "url": "https://landing.jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Wellfound",
+      "url": "https://wellfound.com/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Flexa",
+      "url": "https://flexa.careers/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "No Fluff Jobs",
+      "url": "https://nofluffjobs.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Just Join IT",
+      "url": "https://justjoin.it/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "awork.ro",
+      "url": "https://awork.ro/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Remotive",
+      "url": "https://remotive.com/remote-jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "JustRemote",
+      "url": "https://justremote.co/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Jobspresso",
+      "url": "https://jobspresso.co/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "DailyRemote",
+      "url": "https://dailyremote.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "PowerToFly",
+      "url": "https://powertofly.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Dynamite Jobs",
+      "url": "https://dynamitejobs.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Torre",
+      "url": "https://torre.ai/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Welcome to the Jungle",
+      "url": "https://www.welcometothejungle.com/en/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Techjobs.be",
+      "url": "https://techjobs.be/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "FlexJobs",
+      "url": "https://www.flexjobs.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Glassdoor Jobs",
+      "url": "https://www.glassdoor.com/Job/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Monster",
+      "url": "https://www.monster.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "Pangian",
+      "url": "https://pangian.com/job-travel-remote/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "SkipTheDrive",
+      "url": "https://www.skipthedrive.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Job boards si agregatoare",
+      "name": "RemoteHunt",
+      "url": "https://remotehunt.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "Freelancermap",
+      "url": "https://www.freelancermap.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "Malt",
+      "url": "https://www.malt.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "Toptal",
+      "url": "https://www.toptal.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "Crossover",
+      "url": "https://www.crossover.com/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "Upwork",
+      "url": "https://www.upwork.com/freelance-jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "Arc.dev",
+      "url": "https://arc.dev/remote-jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "PeoplePerHour",
+      "url": "https://www.peopleperhour.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "Freelancer.com",
+      "url": "https://www.freelancer.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contract, B2B si freelance",
+      "name": "Hubstaff Talent",
+      "url": "https://talent.hubstaff.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "European Dynamics",
+      "url": "https://www.eurodyn.com/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "Almaviva de Belgique",
+      "url": "https://www.almaviva.it/en_GB/Careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "Vector Synergy",
+      "url": "https://vectorsynergy.com/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "NATO Careers",
+      "url": "https://www.nato.int/cps/en/natohq/recruitment.htm",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "Cronos Europa",
+      "url": "https://cronos-europa.eu/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "Serco Europe",
+      "url": "https://careers.serco.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "CGI",
+      "url": "https://www.cgi.com/en/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "Sopra Steria",
+      "url": "https://careers.soprasteria.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "Netcompany / Intrasoft",
+      "url": "https://www.netcompany.com/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Contractori UE si NATO",
+      "name": "Thales",
+      "url": "https://careers.thalesgroup.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Banking si enterprise",
+      "name": "ING Careers",
+      "url": "https://careers.ing.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Banking si enterprise",
+      "name": "Deutsche Bank",
+      "url": "https://careers.db.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Banking si enterprise",
+      "name": "Societe Generale",
+      "url": "https://careers.societegenerale.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Banking si enterprise",
+      "name": "Allianz Careers",
+      "url": "https://careers.allianz.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Banking si enterprise",
+      "name": "Worldline",
+      "url": "https://careers.worldline.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Banking si enterprise",
+      "name": "Worldpay / Global Payments",
+      "url": "https://jobs.globalpayments.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Banking si enterprise",
+      "name": "Vodafone / VOIS",
+      "url": "https://careers.vodafone.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Banking si enterprise",
+      "name": "Airbus",
+      "url": "https://www.airbus.com/en/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "GlobalLogic",
+      "url": "https://www.globallogic.com/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Luxoft",
+      "url": "https://career.luxoft.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Mantu",
+      "url": "https://careers.mantu.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "NTT",
+      "url": "https://careers.services.global.ntt/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "NTT DATA Romania",
+      "url": "https://ro.nttdata.com/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Cegeka",
+      "url": "https://www.cegeka.com/en/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Computacenter",
+      "url": "https://careers.computacenter.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "SoftServe",
+      "url": "https://career.softserveinc.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "EPAM",
+      "url": "https://www.epam.com/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Eviden",
+      "url": "https://eviden.com/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "DXC Technology",
+      "url": "https://careers.dxc.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "HARMAN",
+      "url": "https://jobs.harman.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Endava",
+      "url": "https://careers.endava.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Accenture",
+      "url": "https://www.accenture.com/ro-en/careers/jobsearch",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Atos",
+      "url": "https://jobs.atos.net/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Orange Romania",
+      "url": "https://www.orange.ro/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Bosch Romania",
+      "url": "https://www.bosch.ro/cariere/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Xebia CEE",
+      "url": "https://xebia.com/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Prohuman",
+      "url": "https://www.prohuman.ro/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Fortive",
+      "url": "https://careers.fortive.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Servicii IT si consultanta",
+      "name": "Saphetor",
+      "url": "https://saphetor.com/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "Camunda",
+      "url": "https://camunda.com/career/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "ClickHouse",
+      "url": "https://clickhouse.com/company/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "GitHub",
+      "url": "https://www.github.careers/careers-home",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "Snyk",
+      "url": "https://snyk.io/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "Datadog",
+      "url": "https://careers.datadoghq.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "Stripe",
+      "url": "https://stripe.com/jobs",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "Kong",
+      "url": "https://konghq.com/company/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "LocalStack",
+      "url": "https://www.localstack.cloud/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "Contentsquare",
+      "url": "https://careers.contentsquare.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Companii remote-first",
+      "name": "Storyblok",
+      "url": "https://www.storyblok.com/join-us",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "Ashby",
+      "url": "https://jobs.ashbyhq.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "Workable",
+      "url": "https://jobs.workable.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "Greenhouse",
+      "url": "https://www.greenhouse.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "Lever",
+      "url": "https://www.lever.co/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "Workday",
+      "url": "https://www.workday.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "SmartRecruiters",
+      "url": "https://www.smartrecruiters.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "Recruitee",
+      "url": "https://recruitee.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "BambooHR",
+      "url": "https://www.bamboohr.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "ATS publice",
+      "name": "Eightfold",
+      "url": "https://eightfold.ai/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "UpcoMinds",
+      "url": "https://upcominds.com/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Infoplus Technologies UK",
+      "url": "https://www.infoplusltd.co.uk/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "RED Global",
+      "url": "https://www.redglobal.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Salt",
+      "url": "https://welovesalt.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Avance Consulting",
+      "url": "https://www.avanceconsulting.com/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Hirexa Solutions",
+      "url": "https://hirexa.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Infinity Quest",
+      "url": "https://www.i-q.net/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Square One Resources",
+      "url": "https://www.squareoneresources.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Source Group International",
+      "url": "https://www.sourcegroupinternational.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Montreal Associates",
+      "url": "https://www.montrealassociates.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Brains Consulting",
+      "url": "https://brainsconsulting.ro/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Head Hunting IT",
+      "url": "https://www.headhuntingit.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Next Ventures",
+      "url": "https://next-ventures.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Lawrence Harvey",
+      "url": "https://www.lawrenceharvey.com/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Proactive.IT",
+      "url": "https://proactive.it/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "W Talent",
+      "url": "https://www.wtalent.com/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "KEYES / NRB",
+      "url": "https://www.nrb.be/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Trasys International",
+      "url": "https://careers.nrb.be/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Thaleria",
+      "url": "https://www.thaleria.com/careers",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Talan Belgium / Luxembourg",
+      "url": "https://www.talan.com/global/en/careers/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "Fujitsu Belgium",
+      "url": "https://www.fujitsu.com/be/about/local/jobs/",
+      "active": true,
+      "priority": null
+    },
+    {
+      "category": "Agentii si recrutare",
+      "name": "ARHS / Accenture",
+      "url": "https://www.arhs-group.com/careers/",
+      "active": true,
+      "priority": null
+    }
+  ]
+}
