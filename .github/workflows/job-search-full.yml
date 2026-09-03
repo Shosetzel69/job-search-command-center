@@ -157,6 +157,7 @@ jobs:
                   "remote": remote, "b2b": any(x in ("contract","contractor","freelance") for x in (j.get("employment_statuses") or [])),
                   "repost": bool(j.get("reposted")), "status": "new" if score >= 80 else "review",
                   "pros": pros[:2], "risks": risks[:2], "url": url,
+                  "description": description.strip(),
                   "date_posted": posted, "source": (j.get("sources") or [{}])[0].get("provider"),
                   "verified_at": j.get("verified_at")
               })
@@ -168,6 +169,7 @@ jobs:
                   "roles": ["Project Manager","IT Project Manager","Technical/Agile PM","Delivery/Service Manager","Scrum Master","Program/PMO Manager"],
                   "geography": ["Romania","Brussels/Belgium","Luxembourg","eligible remote Europe"],
                   "work_mode_priority": ["Remote","Hybrid"],
+                  "source_strategy": "all active sources equally",
                   "fit_threshold": 80,
                   "keep_reposts": True,
                   "exclusions": ["Star Storage group","deep ERP/SAP implementation","non-IT roles"]
@@ -186,7 +188,7 @@ jobs:
               "status": "completed",
               "started_at": now.isoformat(),
               "completed_at": datetime.now(timezone.utc).isoformat(),
-              "sources": ["JobsPipe geography","JobsPipe remote","JobsPipe core remote"],
+              "sources": ["JobsPipe aggregate search - all active sources equally"],
               "records_inspected": len(raw),
               "jobs_published": len(selected),
               "excluded": len(excluded),
