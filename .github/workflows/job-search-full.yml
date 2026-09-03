@@ -42,8 +42,15 @@ jobs:
             -H "Content-Type: application/json" \
             --data '{"job_title_or":["Project Manager","IT Project Manager","Technical Project Manager","Agile Project Manager","Delivery Manager","Technical Delivery Manager","Service Manager","Service Delivery Manager","Scrum Master","Program Manager","PMO Manager"],"remote":true,"posted_at_max_age_days":1,"limit":25,"include_total_results":true}' \
             > data/.work/remote.json
+          curl --fail-with-body --silent --show-error \
+            https://api.jobspipe.dev/v1/jobs/search \
+            -H "Authorization: Bearer $JOBSPIPE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"job_title_or":["IT Project Manager","Technical Project Manager","Agile Project Manager","Technical Delivery Manager","Service Delivery Manager"],"remote":true,"posted_at_max_age_days":1,"limit":25,"include_total_results":true}' \
+            > data/.work/core_remote.json
           jq -e '.data | type == "array"' data/.work/geography.json >/dev/null
           jq -e '.data | type == "array"' data/.work/remote.json >/dev/null
+          jq -e '.data | type == "array"' data/.work/core_remote.json >/dev/null
 
       - name: Filter, score and deduplicate
         run: |
@@ -55,14 +62,14 @@ jobs:
           now = datetime.now(timezone.utc)
           raw = []
           totals = {}
-          for name in ("geography", "remote"):
+          for name in ("geography", "remote", "core_remote"):
               payload = json.loads(Path(f"data/.work/{name}.json").read_text())
               totals[name] = payload.get("metadata", {}).get("total_results", len(payload.get("data", [])))
               raw.extend(payload.get("data", []))
 
           target = re.compile(r"\b(project|program|programme|delivery|service|scrum|pmo)\b", re.I)
           excluded_company = re.compile(r"star\s*storage", re.I)
-          excluded_role = re.compile(r"\b(construction|hvac|civil|mechanical|manufacturing|clinical|marketing|sales|event|facilities|facility)\b", re.I)
+          excluded_role = re.compile(r"\b(construction|hvac|civil|mechanical|manufacturing|clinical|marketing|sales|event|facilities|facility|enablement|referral|customer support|training)\b", re.I)
           deep_erp = re.compile(r"\b(SAP|ERP|S/4HANA|Dynamics 365)\b", re.I)
           europe = {"RO","BE","LU","FR","DE","NL","PL","PT","ES","IT","IE","AT","CZ","SK","HU","BG","GR","HR","SI","EE","LV","LT","DK","SE","FI","NO","CH","CY","MT"}
 
@@ -77,7 +84,7 @@ jobs:
               countries = j.get("countries") or []
               remote = bool(j.get("remote")) or (j.get("work_arrangement") == "remote")
               hybrid = bool(j.get("hybrid")) or (j.get("work_arrangement") == "hybrid")
-              key = (re.sub(r"\W+"," ",title.lower()).strip(), company.lower(), location.lower())
+              key = j.get("id") or (re.sub(r"\W+"," ",title.lower()).strip(), company.lower(), location.lower())
               reason = None
               if key in seen: reason = "duplicate"
               elif not target.search(title): reason = "title outside target"
@@ -85,6 +92,18 @@ jobs:
               elif excluded_role.search(title): reason = "non-IT role"
               elif deep_erp.search(text) and re.search(r"implement|consultant|specialist|functional", text, re.I): reason = "deep ERP/SAP implementation"
               elif remote and code and code not in europe and not any(c in ("Romania","Europe","European Union") for c in countries): reason = "remote geography not eligible"
+              elif remote and not code:
+                  eligibility_text = f"{location} {j.get('url') or ''} {j.get('source_url') or ''} {' '.join(countries)}"
+                  if not re.search(r"Europe|European|EMEA|Romania|Ukraine|Poland|Portugal|Spain|France|Germany|Belgium|Luxembourg|Netherlands|Ireland|Italy|Austria|Czech|Slovak|Hungary|Bulgaria|Greece|Croatia|Slovenia|Estonia|Latvia|Lithuania|Denmark|Sweden|Finland|Norway|Switzerland|Cyprus|Malta", eligibility_text, re.I):
+                      reason = "remote eligibility for Europe not explicit"
+              if not reason and ((j.get("sources") or [{}])[0].get("provider") == "indeed") and not j.get("final_url"):
+                  reason = "Indeed-only link"
+              if not reason and posted:
+                  try:
+                      if (now - datetime.fromisoformat(posted.replace("Z","+00:00"))).total_seconds() > 86400:
+                          reason = "older than 24 hours"
+                  except Exception:
+                      reason = "publication time not verifiable"
               if reason:
                   excluded.append({"title":title,"company":company,"reason":reason})
                   continue
@@ -135,7 +154,7 @@ jobs:
                   "initial": "".join(x[0] for x in company.split()[:2]).upper() or "?",
                   "fit": score, "location": location, "mode": arrangements,
                   "type": employment.replace("_"," ").title(), "age": age,
-                  "remote": remote, "b2b": bool(re.search(r"contract|freelance|b2b", text, re.I)),
+                  "remote": remote, "b2b": any(x in ("contract","contractor","freelance") for x in (j.get("employment_statuses") or [])),
                   "repost": bool(j.get("reposted")), "status": "new" if score >= 80 else "review",
                   "pros": pros[:2], "risks": risks[:2], "url": url,
                   "date_posted": posted, "source": (j.get("sources") or [{}])[0].get("provider"),
@@ -167,7 +186,7 @@ jobs:
               "status": "completed",
               "started_at": now.isoformat(),
               "completed_at": datetime.now(timezone.utc).isoformat(),
-              "sources": ["JobsPipe geography","JobsPipe remote"],
+              "sources": ["JobsPipe geography","JobsPipe remote","JobsPipe core remote"],
               "records_inspected": len(raw),
               "jobs_published": len(selected),
               "excluded": len(excluded),
