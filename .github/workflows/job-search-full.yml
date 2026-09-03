@@ -84,6 +84,7 @@ jobs:
               countries = j.get("countries") or []
               remote = bool(j.get("remote")) or (j.get("work_arrangement") == "remote")
               hybrid = bool(j.get("hybrid")) or (j.get("work_arrangement") == "hybrid")
+              posted = j.get("date_posted")
               key = j.get("id") or (re.sub(r"\W+"," ",title.lower()).strip(), company.lower(), location.lower())
               reason = None
               if key in seen: reason = "duplicate"
@@ -126,7 +127,6 @@ jobs:
               if not remote and not hybrid and code not in ("RO", ""): score -= 12
               score = max(40, min(96, score))
 
-              posted = j.get("date_posted")
               age = 0
               if posted:
                   try:
