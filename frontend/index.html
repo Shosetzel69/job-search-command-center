@@ -23,7 +23,7 @@
       </nav>
       <div class="sidebar-bottom">
         <div class="run-status"><i></i><div><strong>Monitor activ</strong><small>Ultima rulare: azi, 18:00</small></div></div>
-        <button class="nav" data-view="rules"><span>⚙</span> Reguli si filtre</button>
+        <div class="app-version">Versiunea 0.01</div>
       </div>
     </aside>
 
@@ -56,7 +56,9 @@
           <label class="search"><span>⌕</span><input id="sourceSearch" type="search" placeholder="Cauta o sursa"></label>
           <select id="sourceSort" aria-label="Ordonare surse"><option value="name">Nume A–Z</option><option value="status">Surse active primele</option></select>
           <button id="addSource" class="primary">+ Adauga sursa</button>
+          <button id="saveSourcePriorities" class="secondary">Salveaza prioritatile</button>
         </div>
+        <div id="sourcePriorityInfo" class="source-priority-info" hidden><span>Poti selecta maximum 5 surse prioritare.</span><strong id="priorityCount">0/5</strong></div>
 
         <div class="table-head"><span>ROL</span><span>FIT</span><span>MOD DE LUCRU</span><span>PUBLICAT</span><span></span></div>
         <div id="jobList" class="job-list"></div>
@@ -64,17 +66,12 @@
       </section>
 
       <section id="criteriaPanel" class="rules-panel" hidden>
-        <div class="rule-card"><h2>Roluri urmarite</h2><label class="check"><input type="checkbox" checked> Project Manager / IT Project Manager</label><label class="check"><input type="checkbox" checked> Delivery / Technical Project Manager</label><label class="check"><input type="checkbox" checked> Service Manager</label><label class="check"><input type="checkbox" checked> Scrum Master, fara nivel excesiv de senior</label></div>
+        <div class="rule-card"><h2>Roluri urmarite</h2><label class="check"><input id="rolePm" type="checkbox" checked> Project Manager / IT Project Manager</label><label class="check"><input id="roleDelivery" type="checkbox" checked> Delivery / Technical Project Manager</label><label class="check"><input id="roleService" type="checkbox" checked> Service Manager</label><label class="check"><input id="roleScrum" type="checkbox" checked> Scrum Master, fara nivel excesiv de senior</label></div>
+        <div class="rule-card"><h2>Mod de lucru</h2><p class="card-note">Ordinea optiunilor reprezinta prioritatea rezultatelor.</p><label class="check"><input id="workRemote" type="checkbox" checked> Remote</label><label class="check"><input id="workHybrid" type="checkbox" checked> Hibrid</label></div>
         <div class="rule-card"><h2>Praguri de selectie</h2><label>Vechimea maxima<select id="freshness"><option value="24">24 ore</option><option value="48">48 ore</option></select></label><label>Scor minim pentru fit ridicat<input id="fitThreshold" type="number" min="50" max="100" value="80">%</label><label class="check"><input id="keepReposts" type="checkbox" checked> Pastreaza si marcheaza repostarile</label></div>
-        <div class="rule-card"><h2>Prioritati</h2><label class="check"><input type="checkbox" checked> B2B, 250–650 EUR/zi</label><label class="check"><input type="checkbox" checked> Disponibilitate imediata</label><label class="check"><input type="checkbox" checked> Remote, apoi hibrid</label></div>
-        <button id="saveCriteria" class="primary">Salveaza criteriile</button>
-      </section>
-
-      <section id="rulesPanel" class="rules-panel" hidden>
-        <div class="rule-card"><h2>Mod de lucru</h2><label class="check"><input type="checkbox" checked> Remote in Europa / Romania</label><label class="check"><input type="checkbox" checked> Hibrid sau onsite in Bucuresti</label><label class="check"><input type="checkbox" checked> Hibrid in Bruxelles pentru institutii UE</label></div>
-        <div class="rule-card"><h2>Contract</h2><label>Interval B2B zilnic<div class="range"><input value="250" aria-label="Tarif minim">—<input value="650" aria-label="Tarif maxim"> EUR/zi</div></label><label class="check"><input type="checkbox" checked> Prioritizeaza disponibilitatea imediata</label></div>
-        <div class="rule-card"><h2>Excluderi</h2><label class="check"><input type="checkbox" checked> Star Storage si companiile grupului</label><label class="check"><input type="checkbox" checked> Implementari ERP care cer experienta specializata ampla</label><label class="check"><input type="checkbox" checked> Roluri non-IT</label></div>
-        <button id="saveRules" class="primary">Salveaza regulile</button>
+        <div class="rule-card"><h2>Contract si disponibilitate</h2><label>Interval B2B zilnic<div class="range"><input id="rateMin" value="250" aria-label="Tarif minim">—<input id="rateMax" value="650" aria-label="Tarif maxim"> EUR/zi</div></label><label class="check"><input id="immediateStart" type="checkbox" checked> Prioritizeaza disponibilitatea imediata</label></div>
+        <div class="rule-card exclusions-card"><h2>Excluderi</h2><label for="exclusionSuggestions">Propuneri de excludere</label><select id="exclusionSuggestions" class="exclusion-select"><option value="">Selecteaza o propunere</option><option>Star Storage si companiile grupului</option><option>Implementari ERP care cer experienta specializata ampla</option><option>Roluri non-IT</option><option>Roluri exclusiv onsite in afara Bucurestiului</option></select><div id="selectedExclusions" class="selected-exclusions" aria-live="polite"></div></div>
+        <div class="criteria-actions"><span id="criteriaState" class="save-state">Preferinte salvate</span><button id="saveCriteria" class="primary">Salveaza preferintele</button></div>
       </section>
     </main>
   </div>
