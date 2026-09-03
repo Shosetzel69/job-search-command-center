@@ -1,0 +1,23 @@
+name: Defect
+description: Raporteaza o functie care nu lucreaza corect
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema observata
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Comportamentul asteptat
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Pasi de reproducere
+    validations:
+      required: true
