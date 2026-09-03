@@ -1,12 +1,10 @@
 {
-  "run_id": "github-20260903T225806Z",
+  "run_id": "github-20260903T230957Z",
   "status": "completed",
-  "started_at": "2026-09-03T22:58:06.931391+00:00",
-  "completed_at": "2026-09-03T22:58:07.129186+00:00",
+  "started_at": "2026-09-03T23:09:57.573975+00:00",
+  "completed_at": "2026-09-03T23:09:57.584548+00:00",
   "sources": [
-    "JobsPipe geography",
-    "JobsPipe remote",
-    "JobsPipe core remote"
+    "JobsPipe aggregate search - all active sources equally"
   ],
   "records_inspected": 34,
   "jobs_published": 1,
