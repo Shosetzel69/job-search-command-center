@@ -1,0 +1,36 @@
+name: Cerinta
+description: Adauga sau modifica o cerinta
+title: "[REQ] "
+labels: ["requirement"]
+body:
+  - type: input
+    id: id
+    attributes:
+      label: ID cerinta
+      placeholder: CFR-XX sau CNF-XX
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: Descriere
+    validations:
+      required: true
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Prioritate
+      options: [Must, Should, Could, Wont]
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Criterii de acceptanta
+    validations:
+      required: true
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependinte si note
+      value: "#####"
