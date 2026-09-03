@@ -1,0 +1,191 @@
+name: Full job search
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/job-search-full.yml"
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6,15 * * *"
+
+concurrency:
+  group: full-job-search
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  collect-filter-publish-data:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      JOBSPIPE_API_KEY: ${{ secrets.JOBSPIPE_API_KEY }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Collect recent jobs
+        run: |
+          test -n "$JOBSPIPE_API_KEY"
+          mkdir -p data/.work
+          curl --fail-with-body --silent --show-error \
+            https://api.jobspipe.dev/v1/jobs/search \
+            -H "Authorization: Bearer $JOBSPIPE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"job_title_or":["Project Manager","IT Project Manager","Technical Project Manager","Agile Project Manager","Delivery Manager","Technical Delivery Manager","Service Manager","Service Delivery Manager","Scrum Master","Program Manager","PMO Manager"],"job_country_code_or":["RO","BE","LU"],"posted_at_max_age_days":1,"limit":25,"include_total_results":true}' \
+            > data/.work/geography.json
+          curl --fail-with-body --silent --show-error \
+            https://api.jobspipe.dev/v1/jobs/search \
+            -H "Authorization: Bearer $JOBSPIPE_API_KEY" \
+            -H "Content-Type: application/json" \
+            --data '{"job_title_or":["Project Manager","IT Project Manager","Technical Project Manager","Agile Project Manager","Delivery Manager","Technical Delivery Manager","Service Manager","Service Delivery Manager","Scrum Master","Program Manager","PMO Manager"],"remote":true,"posted_at_max_age_days":1,"limit":25,"include_total_results":true}' \
+            > data/.work/remote.json
+          jq -e '.data | type == "array"' data/.work/geography.json >/dev/null
+          jq -e '.data | type == "array"' data/.work/remote.json >/dev/null
+
+      - name: Filter, score and deduplicate
+        run: |
+          python3 - <<'PY'
+          import json, re
+          from datetime import datetime, timezone
+          from pathlib import Path
+
+          now = datetime.now(timezone.utc)
+          raw = []
+          totals = {}
+          for name in ("geography", "remote"):
+              payload = json.loads(Path(f"data/.work/{name}.json").read_text())
+              totals[name] = payload.get("metadata", {}).get("total_results", len(payload.get("data", [])))
+              raw.extend(payload.get("data", []))
+
+          target = re.compile(r"\b(project|program|programme|delivery|service|scrum|pmo)\b", re.I)
+          excluded_company = re.compile(r"star\s*storage", re.I)
+          excluded_role = re.compile(r"\b(construction|hvac|civil|mechanical|manufacturing|clinical|marketing|sales|event|facilities|facility)\b", re.I)
+          deep_erp = re.compile(r"\b(SAP|ERP|S/4HANA|Dynamics 365)\b", re.I)
+          europe = {"RO","BE","LU","FR","DE","NL","PL","PT","ES","IT","IE","AT","CZ","SK","HU","BG","GR","HR","SI","EE","LV","LT","DK","SE","FI","NO","CH","CY","MT"}
+
+          seen, selected, excluded = set(), [], []
+          for j in raw:
+              title = (j.get("job_title") or "").strip()
+              company = (j.get("company") or "").strip()
+              description = j.get("description") or ""
+              text = f"{title} {description}"
+              location = j.get("location") or j.get("short_location") or "Nespecificat"
+              code = (j.get("country_code") or "").upper()
+              countries = j.get("countries") or []
+              remote = bool(j.get("remote")) or (j.get("work_arrangement") == "remote")
+              hybrid = bool(j.get("hybrid")) or (j.get("work_arrangement") == "hybrid")
+              key = (re.sub(r"\W+"," ",title.lower()).strip(), company.lower(), location.lower())
+              reason = None
+              if key in seen: reason = "duplicate"
+              elif not target.search(title): reason = "title outside target"
+              elif excluded_company.search(company): reason = "excluded company"
+              elif excluded_role.search(title): reason = "non-IT role"
+              elif deep_erp.search(text) and re.search(r"implement|consultant|specialist|functional", text, re.I): reason = "deep ERP/SAP implementation"
+              elif remote and code and code not in europe and not any(c in ("Romania","Europe","European Union") for c in countries): reason = "remote geography not eligible"
+              if reason:
+                  excluded.append({"title":title,"company":company,"reason":reason})
+                  continue
+              seen.add(key)
+
+              score = 68
+              tl = title.lower()
+              if "it project" in tl or "technical project" in tl: score += 13
+              elif "project manager" in tl: score += 9
+              if "delivery" in tl: score += 9
+              if "service" in tl: score += 6
+              if "program" in tl or "programme" in tl or "pmo" in tl: score += 6
+              if "scrum" in tl: score += 3
+              if remote: score += 8
+              elif hybrid: score += 4
+              if re.search(r"contract|freelance|b2b", text, re.I): score += 6
+              if re.search(r"European Commission|European Parliament|EU institution|public sector", text, re.I): score += 7
+              if re.search(r"bank|financial|compliance|regulated|governance", text, re.I): score += 5
+              if re.search(r"Dutch|German|native French|fluent French", text, re.I): score -= 7
+              if not remote and not hybrid and code not in ("RO", ""): score -= 12
+              score = max(40, min(96, score))
+
+              posted = j.get("date_posted")
+              age = 0
+              if posted:
+                  try:
+                      age = max(0, int((now - datetime.fromisoformat(posted.replace("Z","+00:00"))).total_seconds() // 3600))
+                  except Exception:
+                      age = 0
+
+              arrangements = "Remote" if remote else ("Hybrid" if hybrid else "Onsite")
+              employment = ", ".join(j.get("employment_statuses") or []) or "Nespecificat"
+              url = j.get("final_url") or j.get("source_url") or j.get("url")
+              pros = []
+              if remote: pros.append("Remote")
+              if code in ("RO","BE","LU"): pros.append("Geografie prioritara")
+              if re.search(r"bank|financial|compliance|regulated|governance", text, re.I): pros.append("Mediu reglementat relevant")
+              if re.search(r"European Commission|European Parliament|EU institution|public sector", text, re.I): pros.append("Context public sau institutii europene")
+              if not pros: pros.append("Titlu si responsabilitati relevante pentru profil")
+              risks = []
+              if not remote and code not in ("RO",""): risks.append("Necesita prezenta in afara Romaniei")
+              if re.search(r"Dutch|German|native French|fluent French", text, re.I): risks.append("Cerinta lingvistica trebuie verificata")
+              if not re.search(r"contract|freelance|b2b", text, re.I): risks.append("Forma B2B nu este confirmata")
+              if not risks: risks.append("Conditiile contractuale trebuie confirmate")
+
+              selected.append({
+                  "id": j.get("id"), "title": title, "company": company,
+                  "initial": "".join(x[0] for x in company.split()[:2]).upper() or "?",
+                  "fit": score, "location": location, "mode": arrangements,
+                  "type": employment.replace("_"," ").title(), "age": age,
+                  "remote": remote, "b2b": bool(re.search(r"contract|freelance|b2b", text, re.I)),
+                  "repost": bool(j.get("reposted")), "status": "new" if score >= 80 else "review",
+                  "pros": pros[:2], "risks": risks[:2], "url": url,
+                  "date_posted": posted, "source": (j.get("sources") or [{}])[0].get("provider"),
+                  "verified_at": j.get("verified_at")
+              })
+
+          selected.sort(key=lambda x: (-x["fit"], x["age"], x["company"].lower()))
+          output = {
+              "generated_at": now.isoformat(), "freshness_hours": 24,
+              "criteria": {
+                  "roles": ["Project Manager","IT Project Manager","Technical/Agile PM","Delivery/Service Manager","Scrum Master","Program/PMO Manager"],
+                  "geography": ["Romania","Brussels/Belgium","Luxembourg","eligible remote Europe"],
+                  "work_mode_priority": ["Remote","Hybrid"],
+                  "fit_threshold": 80,
+                  "keep_reposts": True,
+                  "exclusions": ["Star Storage group","deep ERP/SAP implementation","non-IT roles"]
+              },
+              "raw_matches_available": totals,
+              "records_inspected": len(raw),
+              "results": len(selected),
+              "excluded_count": len(excluded),
+              "jobs": selected,
+              "excluded_sample": excluded[:20]
+          }
+          Path("data/jobs.json").write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n")
+
+          status = {
+              "run_id": "github-" + now.strftime("%Y%m%dT%H%M%SZ"),
+              "status": "completed",
+              "started_at": now.isoformat(),
+              "completed_at": datetime.now(timezone.utc).isoformat(),
+              "sources": ["JobsPipe geography","JobsPipe remote"],
+              "records_inspected": len(raw),
+              "jobs_published": len(selected),
+              "excluded": len(excluded),
+              "limitations": ["JobsPipe free-plan result cap applies to each query"]
+          }
+          Path("data/run-status.json").write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n")
+          print(f"Published {len(selected)} jobs from {len(raw)} inspected records; excluded {len(excluded)}")
+          PY
+
+      - name: Save results
+        run: |
+          rm -rf data/.work
+          git config user.name "job-search-automation"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/jobs.json data/run-status.json
+          if git diff --cached --quiet; then
+            echo "No data change"
+          else
+            git commit -m "Update job search results"
+            git push
+          fi
