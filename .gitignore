@@ -1,0 +1,21 @@
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Runtime data
+*.sqlite
+*.sqlite3
+*.db
+
+# Dependencies and build output
+node_modules/
+dist/
+build/
+coverage/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
