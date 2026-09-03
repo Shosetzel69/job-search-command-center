@@ -1,15 +1,16 @@
 {
-  "run_id": "github-20260903T225544Z",
+  "run_id": "github-20260903T225806Z",
   "status": "completed",
-  "started_at": "2026-09-03T22:55:44.151834+00:00",
-  "completed_at": "2026-09-03T22:55:44.173244+00:00",
+  "started_at": "2026-09-03T22:58:06.931391+00:00",
+  "completed_at": "2026-09-03T22:58:07.129186+00:00",
   "sources": [
     "JobsPipe geography",
-    "JobsPipe remote"
+    "JobsPipe remote",
+    "JobsPipe core remote"
   ],
-  "records_inspected": 25,
-  "jobs_published": 8,
-  "excluded": 17,
+  "records_inspected": 34,
+  "jobs_published": 1,
+  "excluded": 33,
   "limitations": [
     "JobsPipe free-plan result cap applies to each query"
   ]
