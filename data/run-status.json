@@ -1,14 +1,14 @@
 {
-  "run_id": "github-20260903T230957Z",
+  "run_id": "github-20260904T104329Z",
   "status": "completed",
-  "started_at": "2026-09-03T23:09:57.573975+00:00",
-  "completed_at": "2026-09-03T23:09:57.584548+00:00",
+  "started_at": "2026-09-04T10:43:29.344423+00:00",
+  "completed_at": "2026-09-04T10:43:29.361776+00:00",
   "sources": [
     "JobsPipe aggregate search - all active sources equally"
   ],
-  "records_inspected": 34,
-  "jobs_published": 1,
-  "excluded": 33,
+  "records_inspected": 65,
+  "jobs_published": 8,
+  "excluded": 57,
   "limitations": [
     "JobsPipe free-plan result cap applies to each query"
   ]
