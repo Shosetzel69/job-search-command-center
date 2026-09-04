@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-04T10:43:29.344423+00:00",
+  "generated_at": "2026-09-04T18:08:39.254378+00:00",
   "freshness_hours": 24,
   "criteria": {
     "roles": [
@@ -30,331 +30,142 @@
     ]
   },
   "raw_matches_available": {
-    "geography": 41,
-    "remote": 157,
-    "core_remote": 15
+    "geography": 124,
+    "remote": 334,
+    "core_remote": 24
   },
-  "records_inspected": 65,
-  "results": 8,
-  "excluded_count": 57,
+  "records_inspected": 74,
+  "results": 1,
+  "excluded_count": 73,
   "jobs": [
     {
-      "id": "MWYxNTkxNmQtYTI4YS00N2ExLWFlMWMtMGFkYTAyZTZkYjk4IDM",
-      "title": "IT Project Manager",
-      "company": "ICTJOB BV",
-      "initial": "IB",
-      "fit": 69,
-      "location": "BE212",
-      "mode": "Onsite",
-      "type": "Full Time",
-      "age": 21,
-      "remote": false,
-      "b2b": false,
-      "repost": false,
-      "status": "review",
-      "pros": [
-        "Geografie prioritara"
-      ],
-      "risks": [
-        "Necesita prezenta in afara Romaniei",
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/MWYxNTkxNmQtYTI4YS00N2ExLWFlMWMtMGFkYTAyZTZkYjk4IDM?lang=en",
-      "description": "Voor een stabiel en groeiend softwarebedrijf in de regio Mechelen zoek ik een IT Project Manager / PMO. De organisatie biedt innovatieve softwareoplossingen die bedrijven helpen om hun administratieve en digitale processen efficiënter te organiseren en werkt samen met uiteenlopende organisaties.\n\nVoor deze rol ben ik op zoek naar iemand die sterk is in structuur, organisatie en communicatie. Iemand die graag het overzicht bewaart, vlot schakelt met verschillende stakeholders en energie haalt uit het begeleiden van projecten. Je hoeft hiervoor geen technische specialist te zijn.\nHoe zal jouw takenpakket eruit zien?\n\n-\nJe beheert meerdere softwareprojecten van opstart tot oplevering en bewaakt scope, timing en budget.\n\n-\nJe volgt de planning, milestones en deliverables nauwgezet op.\n\n-\nJe bent het eerste aanspreekpunt voor klanten en zorgt voor een duidelijke communicatie en verwachtingsmanagement.\n\n-\nJe stemt af met interne teams en management om projecten vlot te laten verlopen.\n\n-\nJe detecteert risico's en knelpunten tijdig en stuurt bij waar nodig.\n\n-\nJe hebt minstens 3-4 jaar ervaring als Project Manager of PMO binnen een software- of IT-omgeving.\n\n-\nJe bent sterk in organisatie, communicatie en het stellen van de juiste prioriteiten.\n\n-\nJe hebt een sterke helicopterview en weet teams en stakeholders aan te sturen zonder zelf technisch in de uitvoering te duiken.\n\n-\nJe hebt ervaring met klantencontact en stakeholdermanagement en weet verwachtingen duidelijk af te stemmen.",
-      "date_posted": "2026-09-03T13:15:30.487000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-03 18:31:46"
-    },
-    {
-      "id": "Mjg4ZTcyOTctNWEzMi00ZDllLWE5ZjYtZGRkYjRlZjAwYjc0IDM",
-      "title": "IT Project Manager",
-      "company": "KWERY BV",
-      "initial": "KB",
-      "fit": 69,
-      "location": "BE212",
-      "mode": "Onsite",
-      "type": "Full Time",
-      "age": 22,
-      "remote": false,
-      "b2b": false,
-      "repost": false,
-      "status": "review",
-      "pros": [
-        "Geografie prioritara"
-      ],
-      "risks": [
-        "Necesita prezenta in afara Romaniei",
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/Mjg4ZTcyOTctNWEzMi00ZDllLWE5ZjYtZGRkYjRlZjAwYjc0IDM?lang=en",
-      "description": "Hoe zal jouw takenpakket eruit zien?\n\n-\nJe beheert meerdere softwareprojecten van opstart tot oplevering en bewaakt scope, timing en budget.\n\n-\nJe volgt de planning, milestones en deliverables nauwgezet op.\n\n-\nJe bent het eerste aanspreekpunt voor klanten en zorgt voor een duidelijke communicatie en verwachtingsmanagement.\n\n-\nJe stemt af met interne teams en management om projecten vlot te laten verlopen.\n\n-\nJe detecteert risico's en knelpunten tijdig en stuurt bij waar nodig.\n\nWat verwachten zij van jou?\n\n-\nJe hebt minstens 3-4 jaar ervaring als Project Manager of PMO binnen een software- of IT-omgeving.\n\n-\nJe bent sterk in organisatie, communicatie en het stellen van de juiste prioriteiten.\n\n-\nJe hebt een sterke helicopterview en weet teams en stakeholders aan te sturen zonder zelf technisch in de uitvoering te duiken.\n\n-\nJe hebt ervaring met klantencontact en stakeholdermanagement en weet verwachtingen duidelijk af te stemmen.",
-      "date_posted": "2026-09-03T12:15:40.557000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-03 18:33:18"
-    },
-    {
-      "id": "MDExY2VhZDEtNTA1OS00ZGU3LTllOTAtNDllY2I0ZGM3ZjgyIDM",
-      "title": "Project Manager Staalconstructies // Internationaal",
-      "company": "FORUM JOBS NV",
-      "initial": "FJ",
-      "fit": 65,
-      "location": "BE225",
-      "mode": "Onsite",
-      "type": "Full Time",
-      "age": 20,
-      "remote": false,
-      "b2b": false,
-      "repost": false,
-      "status": "review",
-      "pros": [
-        "Geografie prioritara"
-      ],
-      "risks": [
-        "Necesita prezenta in afara Romaniei",
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/MDExY2VhZDEtNTA1OS00ZGU3LTllOTAtNDllY2I0ZGM3ZjgyIDM?lang=en",
-      "description": "Voor een toonaangevend bedrijf gespecialiseerd in hoogwaardige staalconstructies zijn wij op zoek naar een Project Manager. Je komt terecht in een internationale en technisch uitdagende omgeving waar gewerkt wordt aan complexe projecten zoals bruggen, hoogbouw, pretparkattracties en industriële staalconstructies wereldwijd.\nJouw functie\nAls Project Manager ben je verantwoordelijk voor de volledige coördinatie en opvolging van projecten van A tot Z.\n\n- Eindverantwoordelijkheid over interne en externe projectcoördinatie\n\n- Fungeren als belangrijkste schakel tussen klant en bedrijf\n\n- Opvolgen van projecten vanaf opdracht tot en met oplevering\n\n- Coördineren van planning, onderaannemers en kwaliteit\n\n- Beheren van administratieve aspecten (meer- en minderwerken, vorderingsstaten, facturatie)\n\n- Rapporteren rechtstreeks aan de directie\n\n- Ondersteuning krijgen van diverse interne afdelingen\n\nJouw profiel\n\n- Je bent burgerlijk of industrieel ingenieur\n\n- Je hebt een sterke interesse in staalbouw en complexe projecten\n\n- Je bent geen 9-to-5 type en kan goed multitasken\n\n- Je bent communicatief sterk en assertief\n\n- Je kan een projectteam aansturen en motiveren\n\n- Je spreekt perfect Nederlands en Engels\n\n- Kennis van Duits en/of Frans is een pluspunt\n\n- Relevante ervaring is een troef, maar geen must",
-      "date_posted": "2026-09-03T14:15:39.692000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-03 18:27:59"
-    },
-    {
-      "id": "M2Y4ZDgxNjQtZGM1NC00ZWY1LThhMTQtZjcxMDEyNjJhZjI3IDM",
+      "id": "e2e5be11-5bce-4f71-8e2f-24ef190bea16",
       "title": "Project Manager",
-      "company": "FORUM JOBS NV",
-      "initial": "FJ",
-      "fit": 65,
-      "location": "BE225",
-      "mode": "Onsite",
+      "company": "D-ploy",
+      "initial": "D",
+      "fit": 89,
+      "location": "TELECOMMUTE",
+      "mode": "Remote",
       "type": "Full Time",
-      "age": 20,
-      "remote": false,
+      "age": 7,
+      "remote": true,
       "b2b": false,
       "repost": false,
-      "status": "review",
+      "status": "new",
       "pros": [
-        "Geografie prioritara"
+        "Remote",
+        "Mediu reglementat relevant"
       ],
       "risks": [
-        "Necesita prezenta in afara Romaniei",
-        "Forma B2B nu este confirmata"
+        "Cerinta lingvistica trebuie verificata"
       ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/M2Y4ZDgxNjQtZGM1NC00ZWY1LThhMTQtZjcxMDEyNjJhZjI3IDM?lang=en",
-      "description": "Als Project Manager ben jij de spilfiguur in onze projecten. Je bent verantwoordelijk voor de volledige opvolging van projecten, van de eerste klantcontacten tot en met de oplevering.\n\nJe werkt nauw samen met interne teams en externe partners om elk project binnen planning, budget en kwaliteitseisen te realiseren.\n\nJouw taken\n\n- Opvolgen van projecten van A tot Z in nauwe samenwerking met de klant\n\n- Coördineren van interne afdelingen\n\n- Bewaken van planning, budget en kwaliteit\n\n- Onderhandelen met klanten en meedenken in oplossingen\n\n- Zorgen voor een vlot en pragmatisch projectverloop\n\n- Bezoeken van projectlocaties indien nodig\n\n- Bereid zijn tot korte internationale verplaatsingen",
-      "date_posted": "2026-09-03T14:15:36.251000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-03 18:26:54"
-    },
-    {
-      "id": "MGM5YzhiZmMtMzIyYi00YWFlLTllMzItNGNkMmM0ZmM4NjI5IDM",
-      "title": "Project Manager I industriële automatisatie",
-      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
-      "initial": "HO",
-      "fit": 65,
-      "location": "BE211",
-      "mode": "Onsite",
-      "type": "Full Time",
-      "age": 22,
-      "remote": false,
-      "b2b": false,
-      "repost": false,
-      "status": "review",
-      "pros": [
-        "Geografie prioritara"
-      ],
-      "risks": [
-        "Necesita prezenta in afara Romaniei",
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/MGM5YzhiZmMtMzIyYi00YWFlLTllMzItNGNkMmM0ZmM4NjI5IDM?lang=en",
-      "description": "Deze onderneming is een sterk groeiend familiebedrijf, met hun vestiging gelegen in de regio van Antwerpen, die gespecialiseerd is in het ontwerpen, produceren en plaatsen van grote op maat gemaakte installaties en elektromechanische oplossingen.\n\nJobomschrijving\n\nVanwege hun sterke groei zijn wij op zoek naar een ervaren Projectmanager die zal instaan voor het coördineren en opvolgen van complexe automatiseringsprojecten aan infrastructuurinstallaties.\nHierbij fungeer je als centraal aanspreekpunt voor de klanten en interne betrokken partijen. Bij opstart analyseer je het concept van de klant en werk je mee aan technische oplossingen. Je organiseert projectmeetings, verzorg je de voorbereidende berekeningen en zie je er op toe dat alle nodige materialen aanwezig of besteld zijn.\nDoorheen het project stuur je betrokken partijen aan, coördineer je de oplevering van installaties en zorg je voor de nodige opvolging.\n\n- Je bent minstens in het bezit van een Master Elektromechanica of gelijkaardig\n\n- Je hebt minstens een eerste gedegen ervaring in projectmanagement binnen een technische omgeving.\n\n- Je hebt sterke technische kennis binnen industriële automatisatie\n\n- Je bent organisatorisch en communicatief sterk\n\n- Je bent communicatief vaardig\n\n- Je spreekt vlot in het Nederlands en Engels, Frans is een pluspunt",
-      "date_posted": "2026-09-03T12:15:37.490000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-03 18:36:41"
-    },
-    {
-      "id": "NWIyZWUzNjAtMTEzZC00N2JkLWI3MzctMzlkNjVhNzU5YWExIDM",
-      "title": "Project Manager Fasering & Planning",
-      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
-      "initial": "HO",
-      "fit": 65,
-      "location": "BE234",
-      "mode": "Onsite",
-      "type": "Full Time",
-      "age": 23,
-      "remote": false,
-      "b2b": false,
-      "repost": false,
-      "status": "review",
-      "pros": [
-        "Geografie prioritara"
-      ],
-      "risks": [
-        "Necesita prezenta in afara Romaniei",
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/NWIyZWUzNjAtMTEzZC00N2JkLWI3MzctMzlkNjVhNzU5YWExIDM?lang=en",
-      "description": "Square Group overkoepelt een reeks bedrijven die ontstaan zijn vanuit de groei van Aclargo. Ondertussen groeide zij uit tot een totaalpartner via 4 verschillende entiteiten:\n\n- ACLARGO: Aannemersactiviteiten in afbraak, ontmanteling, asbestverwijdering, bodemsanering, grondwerken en infrastructuurwerken.\n\n- AC Materials: Recyclage van afvalstromen tot secundaire grondstoffen, levering van granulaten en beton, productie van mengsels en tijdelijke opslag van gronden.\n\n- Square Real Estate: Projectontwikkeling.\n\n- DD Shipping: Op- en overslag van droge bulk- en stukgoederen.\n\nDe verschillende domeinen van de groep zorgen voor sterke synergiën met een duidelijke focus & engagement naar duurzaam ondernemen.\n\nDaarnaast fungeert Square Group ook als Shared Service Center voor alle bedrijven van de groep.\n\nDoor de groei van de lopende en toekomstige projecten ondersteunen wij hen in de zoektocht naar een ervaren Project Manager Fasering & Planning.\n\nJobomschrijving\n\nDe PPS afdeling is verantwoordelijk voor Publiek-Private samenwerkingen welke complex, multidisciplinair en vaak in consortium uitgevoerd worden gezien de omvang, evenals het risico van de projecten.\n\nAls Projectmanager Fasering & Planning ben je verantwoordelijk voor de fasering & de planning van complexe wegenwerken & grote infrastructuurprojecten.\n\n- Je staat in voor het ontwikkelen, coördineren en beheren van de geïntegreerde projectplanning over de verschillende fases heen. Je stuurt actief op haalbaarheid, een efficiënte opbouw van de werkzaamheden en optimalisatie van de uitvoering.\n\n- Vanuit je ruimtelijk inzicht & technische kennis detecteert je tijdig knelpunten & risico’s en vertaalt deze naar concrete acties en bijsturingen m.b.t. deadlines, werfopstellingen, faseringen, verkeershinder, etc.\n\n- Je neemt een coördinerende rol op ten aanzien van (junior) planners en zorgt voor structuur en uniformiteit in de planningsaanpak.\n\n- Je fungeert als sturende en kritische gesprekspartner voor projectteams, planners en uitvoerende partners met steeds het oog op het bewaken van deadlines, voortgang en samenhang van de planning & werfcoördinatie.\n\n- Je werkt proactief optimalisaties uit om de efficiëntie van de uitvoering te verhogen zonder de kwaliteit of voortgang van andere werkpaketten te verstoren.\n\n- Je werkt nauw samen met het begrotings- en tenderteam en levert input voor tenderdossiers, bouwmethodieken en faseringsscenario’s.\n\n- Je werkt nauw samen met interne - & externe stakeholders, denk maar aan overheden, studiebureaus en andere partners binnen het PPS-model om goedkeuringen en vergunningen tijdig te verkrijgen. Daarnaast vertaalt je complexe plannings- en faseringsinformatie op een heldere manier naar de opdrachtgever en andere betrokken partijen.\n\n- Je rapporteert rechtstreeks aan de Directeur PPS en stuurt een team van 3 FTE’s aan.\n\n- Je beschikt over een diploma Burgerlijk of Industrieel Ingenieur. Je combineert dit met een uitgebreide ervaring in fasering & planning binnen de infrastructuursector in uitvoering. Ervaring binnen PPS of grote complexe werken is een plus.\n\n- Je hebt een proven track record binnen projectmanagement waarbij je een helikopterview kan bewaren en complexe planningen & werken efficiënt weet te behartigen.\n\n- Je beschikt over sterke communicatieve vaardigheden en weet draagvlak te creëren bij zowel interne als externe stakeholders.\n\n- Je begrijpt de realiteit van de uitvoering en kan plannen vertalen naar werkbare scenario’s.\n\n- Je combineert analytische scherpte met een oplossingsgerichte aanpak en stuurt actief op het maximaliseren van efficiëntie.\n\n- Je hebt een goede kennis Nederlands en Engels\n\n- Je bent flexibel m.b.t. business travel tussen de verschillende kantoren & werven vnl. op de as Antwerpen/Brussel en Gent.",
-      "date_posted": "2026-09-03T11:18:06.084000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-03 18:35:34"
-    },
-    {
-      "id": "Y2YyMGFkMWEtOWIwNy00NGM2LWEwZmYtZTU3NzE4N2JlNWIzIDM",
-      "title": "Project Manager I industriële automatisatie",
-      "company": "Kingfisher Recruitment BV",
-      "initial": "KR",
-      "fit": 65,
-      "location": "BE211",
-      "mode": "Onsite",
-      "type": "Full Time",
-      "age": 23,
-      "remote": false,
-      "b2b": false,
-      "repost": false,
-      "status": "review",
-      "pros": [
-        "Geografie prioritara"
-      ],
-      "risks": [
-        "Necesita prezenta in afara Romaniei",
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/Y2YyMGFkMWEtOWIwNy00NGM2LWEwZmYtZTU3NzE4N2JlNWIzIDM?lang=en",
-      "description": "Vanwege hun sterke groei zijn wij op zoek naar een ervaren Projectmanager die zal instaan voor het coördineren en opvolgen van complexe automatiseringsprojecten aan infrastructuurinstallaties.\nHierbij fungeer je als centraal aanspreekpunt voor de klanten en interne betrokken partijen. Bij opstart analyseer je het concept van de klant en werk je mee aan technische oplossingen. Je organiseert projectmeetings, verzorg je de voorbereidende berekeningen en zie je er op toe dat alle nodige materialen aanwezig of besteld zijn.\nDoorheen het project stuur je betrokken partijen aan, coördineer je de oplevering van installaties en zorg je voor de nodige opvolging.\n\n- Je bent minstens in het bezit van een Master Elektromechanica of gelijkaardig\n\n- Je hebt minstens een eerste gedegen ervaring in projectmanagement binnen een technische omgeving.\n\n- Je hebt sterke technische kennis binnen industriële automatisatie\n\n- Je bent organisatorisch en communicatief sterk\n\n- Je bent communicatief vaardig\n\n- Je spreekt vlot in het Nederlands en Engels, Frans is een pluspunt",
-      "date_posted": "2026-09-03T11:18:18.550000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-03 18:36:55"
-    },
-    {
-      "id": "NTMwYzlhMjMtMGI0Yy00NzgzLTk3YjctOTI1ZDdlYWIzMzBjIDM",
-      "title": "Project Manager Automation",
-      "company": "VTS Consulting BVBA",
-      "initial": "VC",
-      "fit": 65,
-      "location": "BE234",
-      "mode": "Onsite",
-      "type": "Full Time",
-      "age": 23,
-      "remote": false,
-      "b2b": false,
-      "repost": false,
-      "status": "review",
-      "pros": [
-        "Geografie prioritara"
-      ],
-      "risks": [
-        "Necesita prezenta in afara Romaniei",
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/NTMwYzlhMjMtMGI0Yy00NzgzLTk3YjctOTI1ZDdlYWIzMzBjIDM?lang=en",
-      "description": "Voor een gevestigde Belgische technologiespeler met ongeveer 1.600 medewerkers zoeken we een ervaren Project Manager in automatisering. De organisatie ontwikkelt en realiseert technische oplossingen voor productie- en industriële omgevingen en brengt verschillende expertises samen, waaronder automation, elektrotechniek, mechatronica en machinebouw.\n\nProjecten worden multidisciplinair aangepakt: verschillende engineeringdisciplines werken samen om technische installaties en automatiseringsoplossingen te ontwerpen, bouwen en in bedrijf te stellen.\nWe zoeken iemand die technische kennis kan combineren met ownership, organisatie en communicatie.\n\n- Je hebt een hogere technische opleiding afgerond, bijvoorbeeld binnen elektromechanica, elektrotechniek of industriële automatisering, of hebt door ervaring een vergelijkbaar niveau opgebouwd.\n\n- Je hebt minstens 5 jaar ervaring binnen een technische projectomgeving.\n\n- Industriële automatisering kent voor jou weinig geheimen en begrippen zoals PLC's, frequentieregelaars, sensoren en actuatoren zijn vertrouwd terrein.\n\n- Je hebt ervaring met het coördineren van verschillende technische disciplines of bent klaar om vanuit een engineeringrol die stap te zetten.\n\n- Je houdt overzicht over meerdere deadlines en verantwoordelijkheden en werkt gestructureerd.\n\n- Je communiceert gemakkelijk met zowel klanten als engineers, leveranciers en medewerkers op de werf.\n\n- Je durft beslissingen te nemen en neemt verantwoordelijkheid voor het resultaat van jouw projecten.\n\n- Je hebt voldoende commerciële feeling om afspraken te maken en te onderhandelen met externe partijen.\n\n- Ervaring met EPLAN of Caneco is mooi meegenomen, net als kennis van relevante elektrische regelgeving en machineveiligheid.\n\n- Je communiceert vlot in het Nederlands en kan professioneel overweg met Engels en Frans.\n\n- Je beschikt over een rijbewijs B.",
-      "date_posted": "2026-09-03T11:18:21.419000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-03 18:34:43"
+      "url": "https://jobs.workable.com/view/u24rayRGATWiyn5nvNG3yf/remote-project-manager-in-czechia-at-d-ploy",
+      "description": "D-ploy is an IT and Engineering Solutions company with operations throughout the EMEA region including Switzerland, Germany, Czech Republic, Austria, UK, as well as the USA.\n\nWe pride ourselves on delivering innovative and superior services and solutions to numerous industry-leading clients. By building relationships and trusted partnerships within the IT community, we optimize our customer’s IT productivity and contribute to the organization’s success and value.\n\nWe are interested in talking to engaging, flexible, and solution-oriented individuals who are looking to become a part of a dynamically growing and international organization. We are focused on creating value where IT counts, join us!\n\nResponsabilities\n\n• Establish project governance, delivery methodology, reporting cadence, and management controls.\n\n• Own and maintain the integrated project plan and delivery roadmap.\n\n• Drive project execution to achieve the agreed milestones and deliverables.\n\n• Manage project scope, schedule, budget, quality, risks, issues, dependencies, and change requests.\n\n• Lead governance meetings, steering committees, project reviews, and decision forums.\n\n• Define and maintain delivery metrics, project reporting, and executive dashboards.\n\n• Direct activities related to application development, testing, database implementation, environment readiness, data migration, release management, cutover, and production deployment.\n\n• Ensure completion of all validation, acceptance, readiness, compliance, and approval activities required for milestone achievement.\n\n• Manage vendor performance and delivery commitments against agreed contractual obligations.\n\n• Ensure project documentation, knowledge transfer deliverables, operational readiness requirements, and formal transition to support organizations are completed and approved.\n\n• 8+ years of project management experience leading complex enterprise IT programs and projects through the complete project lifecycle, including initiation, planning, requirements management, execution, testing, deployment, hypercare, and transition to operations.\n • Demonstrated experience establishing and governing project delivery frameworks, including project plans, governance structures, status reporting, risk and issue management, dependency management, change control, scope management, and executive decision-making processes.\n • Proven track record leading cross-functional global teams and driving delivery across business, technology, infrastructure, vendor, and third-party organizations.\n • Extensive experience directing application development initiatives, database implementation projects, environment provisioning, data migration execution, release management activities, cutover planning, and production deployments.\n • Proven ability to manage project delivery against agreed scope, schedule, budget, quality, and business objectives while ensuring timely escalation and resolution of risks, issues, dependencies, and decisions.\n • Strong communication and presentation skills, including preparation and delivery of executive-level reporting, steering committee materials, governance updates, project reviews, and stakeholder communications.\n • Experience delivering projects within regulated environments. Experience in pharmaceutical, healthcare, biotechnology, or life sciences organizations is preferred.\n • Professional project management certification such as PMP, PRINCE2, Agile Project Management, SAFe, or equivalent is preferred.\n • Fluent written and spoken English.\n\nCandidates must declare Criminal record extract not older than three months\n\n- Broad range of activities, tasks, and projects\n\n- Flexible working conditions\n\n- Minimum 5 weeks of vacation\n\n- Paid sick days\n\n- Meal vouchers\n\n- Vouchers (B-day voucher, wedding, and new born surprise)\n\n- Contributions to wellness programs (multisport card)\n\n- Fishing for Friends program – our referral program\n\n- Refreshments in the D-ploy office\n\n- Further development and professional advancement\n\n- Friendly and international working environment\n\n- Company-sponsored events\n\n- Competitive salary and various benefits\n\n Is IT in your DNA?\nIf you believe you are a good match for this role, or any other opportunities for which D-ploy is currently staffing, then we are very keen to speak with you. You can apply though a variety of channels, including our website www.d-ploy.ch or by reaching our directly to our recruitment team recruiting@d-ploy.ch.",
+      "date_posted": "2026-09-04T10:22:27.650Z",
+      "source": "workable",
+      "verified_at": "2026-09-04 15:07:08"
     }
   ],
   "excluded_sample": [
+    {
+      "title": "Senior Scrum Master (M/F/H)",
+      "company": "Everience Benelux",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "IT Program Manager - Architecture FR/EN",
+      "company": "NSI IT SOFTWARE & SERVICES",
+      "reason": "deep ERP/SAP implementation"
+    },
+    {
+      "title": "Digital Transformation Project Manager",
+      "company": "Stanley/Stella",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "Scrum Master",
+      "company": "NTT DATA",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "Project Manager",
+      "company": "Keystone Solutions",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "Project Manager",
+      "company": "STROOHM",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "Senior Release & Delivery Manager",
+      "company": "Luxoft",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "Service Manager Retail",
+      "company": "Brussels Airport",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Service Delivery Project Manager",
+      "company": "Randstad Belgium",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Engineering Delivery Manager",
+      "company": "Thales",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Mechanical, Electrical and Plumbing (MEP) Project Manager",
+      "company": "NATO",
+      "reason": "non-IT role"
+    },
+    {
+      "title": "SAP Project Manager",
+      "company": "OneSource Consulting",
+      "reason": "deep ERP/SAP implementation"
+    },
     {
       "title": "Project Manager",
       "company": "Snowstack",
       "reason": "publication time not verifiable"
     },
     {
-      "title": "Senior Project Manager HVAC",
-      "company": "SPIE Belgium",
-      "reason": "non-IT role"
-    },
-    {
-      "title": "Facility Project Manager",
-      "company": "VERPOUCKE BV",
-      "reason": "non-IT role"
-    },
-    {
       "title": "Project Manager",
-      "company": "Actief Interim NV",
-      "reason": "older than 24 hours"
+      "company": "habeas",
+      "reason": "publication time not verifiable"
     },
     {
-      "title": "Scrum Master",
-      "company": "Capco",
-      "reason": "older than 24 hours"
+      "title": "Project Manager Residentiële Bouw",
+      "company": "Oak properties BVBA",
+      "reason": "publication time not verifiable"
     },
     {
-      "title": "IT Project Manager – Embedded & Web Systems",
-      "company": "MEDIANE SYSTEME",
-      "reason": "Indeed-only link"
+      "title": "Design & Utilization - Project Manager Customer Journey",
+      "company": "Bpost",
+      "reason": "publication time not verifiable"
     },
     {
-      "title": "Scrum Master Calibration",
-      "company": "ENGIBEX",
-      "reason": "Indeed-only link"
+      "title": "Project Manager Passenger Aviation",
+      "company": "Brussels Airport",
+      "reason": "publication time not verifiable"
     },
     {
-      "title": "Scrum Master – Embedded Software Environment",
-      "company": "MEDIANE SYSTEME",
-      "reason": "Indeed-only link"
+      "title": "Tyneso - Service Delivery & Project Manager",
+      "company": "JoBBsquare Belgie",
+      "reason": "publication time not verifiable"
     },
     {
-      "title": "Scrum Master – Calibration Team",
-      "company": "MEDIANE SYSTEME",
-      "reason": "Indeed-only link"
+      "title": "Digital Transformation Project Manager",
+      "company": "Stanley/Stella",
+      "reason": "publication time not verifiable"
     },
     {
-      "title": "IT Project Manager & Business Analyst",
-      "company": "Luxembourg Institute of Health",
-      "reason": "deep ERP/SAP implementation"
-    },
-    {
-      "title": "Senior Scrum Master Consultant",
-      "company": "Keystone Solutions",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Delivery Manager",
-      "company": "Harmoney",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Program Manager IT",
-      "company": "ADVISORY KEY",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Digital Change Project Manager",
-      "company": "La Lorraine Bakery Group",
-      "reason": "deep ERP/SAP implementation"
-    },
-    {
-      "title": "Project Manager",
-      "company": "Dover Fueling Solutions",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "IT Project Manager & Business Analyst – Clinical Operations",
-      "company": "Luxembourg Institute of Health",
-      "reason": "non-IT role"
-    },
-    {
-      "title": "Project Manager (ATOX)",
-      "company": "SMET JET",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "US Recruiting Delivery Manager",
-      "company": "People Avenue",
-      "reason": "remote geography not eligible"
-    },
-    {
-      "title": "Program Manager – IT & Cloud Infrastructure",
-      "company": "Colidius cloud",
-      "reason": "remote geography not eligible"
-    },
-    {
-      "title": "Business Platform Project Manager",
-      "company": "Holland America Line",
-      "reason": "Indeed-only link"
+      "title": "Industrial Project Manager",
+      "company": "SII Group Belgium",
+      "reason": "publication time not verifiable"
     }
   ]
 }
