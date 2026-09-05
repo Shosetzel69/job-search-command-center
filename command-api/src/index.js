@@ -154,8 +154,8 @@ function validateUserConfigPatch(input) {
 
   if ('freshness' in input) {
     const value = Number(input.freshness);
-    if (![24, 48].includes(value)) {
-      throw Object.assign(new Error('freshness must be 24 or 48'), { status: 400 });
+    if (![24, 36, 48, 120].includes(value)) {
+      throw Object.assign(new Error('freshness must be 24, 36, 48 or 120'), { status: 400 });
     }
     output.freshness = value;
   }
