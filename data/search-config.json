@@ -37,6 +37,7 @@
   "eligible_remote_country_codes": ["RO", "BE", "LU", "FR", "DE", "NL", "PL", "PT", "ES", "IT", "IE", "AT", "CZ", "SK", "HU", "BG", "GR", "HR", "SI", "EE", "LV", "LT", "DK", "SE", "FI", "NO", "CH", "CY", "MT"],
   "work_mode_priority": ["Remote", "Hybrid"],
   "source_strategy": "all active sources equally",
+  "jobspipe_enabled": false,
   "jobspipe_credit_budget_per_run": 14,
   "jobspipe_monthly_credit_guard": 950,
   "jobspipe_incremental_overlap_minutes": 2,
