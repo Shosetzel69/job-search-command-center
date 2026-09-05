@@ -23,6 +23,12 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - CFR-07: Fiecare rezultat are link direct la pagina disponibila pentru job; un rezultat nu este exclus doar pentru ca linkul disponibil este catre Indeed.
 - CFR-08: Detaliile jobului includ descrierea pozitiei atunci cand sursa o furnizeaza.
 - CFR-09: Fiecare excludere are justificare.
+- CFR-43: Colectarea JobsPipe foloseste `discovered_at_gte` si stare persistenta per interogare pentru a solicita in mod incremental numai joburile noi sau backlog-ul neprocesat.
+- CFR-44: Inaintea unei interogari JobsPipe platite, sistemul foloseste preview-ul gratuit `blur_company_data=true` pentru a determina daca exista rezultate noi si pentru a estima volumul.
+- CFR-45: Interogarile JobsPipe sunt impartite in doua seturi fara suprapunere geografica: geografiile prioritare si rolurile remote din restul tarilor europene eligibile.
+- CFR-46: Daca volumul depaseste bugetul unei rulari, sistemul pastreaza cursorul JobsPipe si continua backlog-ul in rularile urmatoare fara a avansa watermark-ul inainte de epuizarea paginarii.
+- CFR-47: Rezultatele deja colectate sunt pastrate intre rulari si eliminate numai dupa depasirea ferestrei maxime de 5 zile sau conform regulilor de filtrare.
+- CFR-48: Sistemul pastreaza un buget maxim configurabil de credite JobsPipe per rulare si un prag lunar local pentru evitarea epuizarii necontrolate a cotei.
 
 ### Interfata si configurare
 
@@ -75,6 +81,8 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - CNF-08: Fluxul initial ramane simplu si cu cost minim.
 - CNF-09: Arhitectura permite introducerea ulterioara a persistentei SQLite/PostgreSQL daca apar cerinte tranzactionale sau multi-user.
 - CNF-10: Schimbarea filtrelor locale nu declanseaza GitHub Actions si trebuie sa actualizeze lista instant din setul deja colectat.
+- CNF-11: Strategia JobsPipe trebuie sa ramana compatibila cu limita Free de 1.000 joburi/luna si sa foloseasca un prag local de siguranta configurabil.
+- CNF-12: Starea interna de sincronizare JobsPipe nu este publicata in pachetul static Cloudflare.
 
 ## Comportament curent confirmat
 
@@ -87,6 +95,8 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - Motorul colecteaza pana la 5 zile; filtrul UI selecteaza local 24h, 36h, 48h sau 5 zile.
 - Modurile de lucru pot fi filtrate cumulativ prin Remote / Hibrid / Onsite / N/A.
 - FIT este descrescator implicit si poate fi comutat crescator.
+- JobsPipe foloseste preview gratuit, polling incremental, paginare cu cursor si buget local de credite; valoarea curenta este 14 credite/rulare si prag lunar 950.
+- Starea incrementala este pastrata in `data/search-state.json`, dar acest fisier nu este copiat in bundle-ul static Cloudflare.
 - Rezultatele sunt generate de GitHub Actions si publicate automat in Cloudflare, dar accesul la continutul `data/*.json` este controlat de Worker.
 
 Documentul complet va folosi formatul: ID, Titlu, Descriere, Categorie, Sursa, Prioritate, Criterii de acceptanta, Dependinte, Note, Versiune.
