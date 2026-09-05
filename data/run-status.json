@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260905T160546Z",
+  "run_id": "github-20260905T160733Z",
   "status": "failed",
-  "started_at": "2026-09-05T16:05:46.162791+00:00",
-  "completed_at": "2026-09-05T16:05:47.193269+00:00",
+  "started_at": "2026-09-05T16:07:33.906679+00:00",
+  "completed_at": "2026-09-05T16:07:35.592598+00:00",
   "sources": [
     "jobspipe"
   ],
@@ -37,6 +37,16 @@
     "run_budget": 14,
     "estimated_monthly_credits": 0,
     "monthly_guard": 950,
-    "incremental": true
+    "incremental": true,
+    "query_progress": {
+      "priority_geography": {
+        "has_cursor": false,
+        "remaining_estimate": 0
+      },
+      "remote_europe": {
+        "has_cursor": false,
+        "remaining_estimate": 0
+      }
+    }
   }
 }

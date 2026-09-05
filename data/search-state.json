@@ -1,6 +1,5 @@
 {
   "schema_version": "1.0",
-  "query_watermarks": {},
   "job_first_seen": {},
   "usage": {
     "month_utc": "2026-09",
@@ -8,5 +7,9 @@
     "last_run_credits": 0,
     "monthly_guard": 950,
     "per_run_budget": 14
+  },
+  "query_progress": {
+    "priority_geography": {},
+    "remote_europe": {}
   }
 }
