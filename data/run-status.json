@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260905T154244Z",
-  "status": "completed",
-  "started_at": "2026-09-05T15:42:44.521232+00:00",
-  "completed_at": "2026-09-05T15:42:49.763491+00:00",
+  "run_id": "github-20260905T155116Z",
+  "status": "completed_with_errors",
+  "started_at": "2026-09-05T15:51:16.238568+00:00",
+  "completed_at": "2026-09-05T15:51:18.300119+00:00",
   "sources": [
     "jobspipe"
   ],
@@ -13,29 +13,29 @@
       "query": "geography",
       "status": "completed",
       "records": 25,
-      "total_available": 316,
+      "total_available": 317,
       "error": null
     },
     {
       "connector": "jobspipe",
       "query": "remote",
-      "status": "completed",
-      "records": 25,
-      "total_available": 934,
-      "error": null
+      "status": "failed",
+      "records": 0,
+      "total_available": 0,
+      "error": "HTTP 402: {\"error\":\"Monthly request quota exceeded\",\"message\":\"You have used all jobs included in your current plan (1 credit = 1 job returned). Upgrade or manage billing to continue.\",\"upgrade_url\":\"https://jobspipe.dev/pricing\",\"dashboard_url\":\"https://jobspipe.dev/dashboard/api\"}"
     },
     {
       "connector": "jobspipe",
       "query": "core_remote",
-      "status": "completed",
-      "records": 25,
-      "total_available": 658,
-      "error": null
+      "status": "failed",
+      "records": 0,
+      "total_available": 0,
+      "error": "HTTP 402: {\"error\":\"Monthly request quota exceeded\",\"message\":\"You have used all jobs included in your current plan (1 credit = 1 job returned). Upgrade or manage billing to continue.\",\"upgrade_url\":\"https://jobspipe.dev/pricing\",\"dashboard_url\":\"https://jobspipe.dev/dashboard/api\"}"
     }
   ],
-  "records_inspected": 75,
+  "records_inspected": 25,
   "jobs_published": 24,
-  "excluded": 51,
+  "excluded": 1,
   "limitations": [
     "JobsPipe free-plan result cap applies to each query"
   ]
