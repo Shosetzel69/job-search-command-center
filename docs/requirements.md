@@ -71,6 +71,10 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - CFR-40: Dupa pornirea unei cautari din UI, aplicatia verifica periodic statusul autentificat si reincarca rezultatele dupa publicarea unei rulari noi.
 - CFR-41: `Salveaza preferintele` necesita utilizator Google autorizat si persista configuratia canonica prin Command API.
 - CFR-42: Salvarea configuratiei canonice declanseaza automat o noua cautare.
+- CFR-52: La initializarea paginii, frontend-ul nu solicita fisierele `data/*.json` pana cand sesiunea Google nu a fost validata.
+- CFR-53: Dupa validarea sesiunii Google, frontend-ul incarca toate datele protejate cu acelasi token si afiseaza continutul functional numai dupa finalizarea cu succes a incarcarii.
+- CFR-54: Lista, contoarele, rezumatul si statusul rularii trebuie sa provina din aceeasi incarcare valida; o eroare de incarcare nu poate lasa valori vechi afisate in contoare.
+- CFR-55: La eroare de autentificare, eroare de incarcare a datelor protejate sau logout, starea de date din browser este golita si interfata revine la starea neautentificata.
 
 ## Cerinte non-functionale
 
@@ -87,12 +91,14 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - CNF-11: Strategia JobsPipe trebuie sa ramana compatibila cu limita Free de 1.000 joburi/luna si sa foloseasca un prag local de siguranta configurabil.
 - CNF-12: Starea interna de sincronizare JobsPipe nu este publicata in pachetul static Cloudflare.
 - CNF-13: Dezactivarea JobsPipe din configuratia canonica trebuie sa garanteze zero consum de credite JobsPipe pentru rularile ulterioare pana la reactivare.
+- CNF-14: Fluxul de autentificare si incarcare a datelor este explicit; frontend-ul nu foloseste interceptarea globala a `fetch` sau suprascrieri ulterioare ale functiilor de autentificare pentru accesul la datele protejate.
 
 ## Comportament curent confirmat
 
-- Aplicatia porneste in stare fara continut functional vizibil pana la autentificare.
-- Fara token Google valid, accesul direct la fisierele `data/*.json` protejate este refuzat de Cloudflare Worker.
-- Dupa login, frontend-ul reincarca datele protejate folosind tokenul Google tinut numai in memoria paginii.
+- Aplicatia porneste in stare fara continut functional vizibil si fara cereri catre `data/*.json` pana la autentificare.
+- Accesul fara token la fisierele `data/*.json` este refuzat cu HTTP 401 de Cloudflare Worker.
+- Dupa validarea loginului, frontend-ul incarca datele protejate cu tokenul Google tinut numai in memoria paginii si afiseaza continutul dupa incarcare.
+- Lista, contoarele si rezumatul sunt actualizate din acelasi set incarcat; la eroare starea clientului este golita.
 - Utilizatorul autorizat este evidentiat cu verde dupa autentificare.
 - Dupa login, butonul `Ruleaza verificarea` este vizibil si activ; in timpul rularii este dezactivat.
 - Dupa logout, continutul functional dispare, datele clientului sunt golite si butonul `Ruleaza verificarea` este ascuns.
@@ -102,6 +108,6 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - JobsPipe foloseste preview gratuit, polling incremental, paginare cu cursor si buget local de credite; valoarea curenta este 14 credite/rulare si prag lunar 950 cand providerul este activ.
 - JobsPipe este momentan dezactivat prin `jobspipe_enabled=false` pentru perioada de stabilizare; checkbox-ul din `Criterii de selectie` permite reactivarea ulterioara controlata.
 - Starea incrementala este pastrata in `data/search-state.json`, dar acest fisier nu este copiat in bundle-ul static Cloudflare.
-- Rezultatele sunt generate de GitHub Actions si publicate automat in Cloudflare, dar accesul la continutul `data/*.json` este controlat de Worker.
+- Rezultatele sunt generate de GitHub Actions si publicate automat in Cloudflare, iar accesul la continutul `data/*.json` este controlat de Worker.
 
 Documentul complet va folosi formatul: ID, Titlu, Descriere, Categorie, Sursa, Prioritate, Criterii de acceptanta, Dependinte, Note, Versiune.
