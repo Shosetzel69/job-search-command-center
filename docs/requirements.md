@@ -21,9 +21,9 @@ Actualizare: 2026-09-05
 - CFR-10: Utilizatorul poate gestiona criteriile de cautare si excluderile din interfata.
 - CFR-11: Utilizatorul poate gestiona sursele din interfata.
 - CFR-12: Utilizatorul pastreaza istoricul aplicarilor.
-- CFR-13: Cand utilizatorul nu este autentificat sau se deconecteaza, interfata nu afiseaza joburile, rezumatul, aplicarile, criteriile, sursele sau statusul ultimei rulari.
-- CFR-14: In starea neautentificata raman vizibile numai identificarea aplicatiei, controlul Google Sign-In si butonul `Ruleaza verificarea` dezactivat.
-- CFR-15: La autentificarea cu utilizatorul autorizat, continutul functional al aplicatiei si datele protejate devin vizibile.
+- CFR-13: Cand utilizatorul nu este autentificat sau se deconecteaza, interfata nu afiseaza joburile, rezumatul, aplicarile, criteriile, sursele, statusul ultimei rulari sau butonul `Ruleaza verificarea`.
+- CFR-14: In starea neautentificata raman vizibile numai identificarea aplicatiei si controlul Google Sign-In.
+- CFR-15: La autentificarea cu utilizatorul autorizat, continutul functional al aplicatiei, datele protejate si butonul `Ruleaza verificarea` devin vizibile.
 
 ### Autentificare, date si comenzi protejate
 
@@ -33,10 +33,10 @@ Actualizare: 2026-09-05
 - CFR-19: Accesul direct la un URL `data/*.json` fara autentificare este refuzat.
 - CFR-20: Frontend-ul trimite tokenul Google numai pentru cererile same-origin catre datele protejate; tokenul nu este stocat in `localStorage`.
 - CFR-21: La logout, datele incarcate sunt eliminate din starea clientului si continutul functional este ascuns.
-- CFR-22: Butonul `Ruleaza verificarea` este gri si dezactivat cand utilizatorul nu este autentificat.
-- CFR-23: Dupa autentificarea utilizatorului autorizat, butonul `Ruleaza verificarea` devine albastru si activ.
+- CFR-22: Butonul `Ruleaza verificarea` nu este afisat cand utilizatorul nu este autentificat.
+- CFR-23: Dupa autentificarea utilizatorului autorizat, butonul `Ruleaza verificarea` este afisat albastru si activ.
 - CFR-24: In timpul unei rulari, butonul `Ruleaza verificarea` ramane dezactivat pana la finalizarea fluxului.
-- CFR-25: Dupa logout, butonul `Ruleaza verificarea` revine automat la starea gri/dezactivata.
+- CFR-25: Dupa logout, butonul `Ruleaza verificarea` este ascuns imediat.
 - CFR-26: Utilizatorul autentificat este afisat vizual printr-un indicator verde care contine contul Google conectat.
 - CFR-27: Apasarea indicatorului utilizatorului autentificat deconecteaza contul din sesiunea aplicatiei.
 - CFR-28: Comanda `Ruleaza verificarea` porneste workflow-ul GitHub Actions prin Command API si nu expune credentiale GitHub in browser.
@@ -63,8 +63,8 @@ Actualizare: 2026-09-05
 - Fara token Google valid, accesul direct la fisierele `data/*.json` protejate este refuzat de Cloudflare Worker.
 - Dupa login, frontend-ul reincarca datele protejate folosind tokenul Google tinut numai in memoria paginii.
 - Utilizatorul autorizat este evidentiat cu verde dupa autentificare.
-- Dupa logout, continutul functional dispare, datele clientului sunt golite si accesul la date necesita o noua autentificare.
-- `Ruleaza verificarea`: neautentificat = gri/dezactivat; autentificat = albastru/activ; rulare in curs = dezactivat.
+- Dupa login, butonul `Ruleaza verificarea` este vizibil si activ; in timpul rularii este dezactivat.
+- Dupa logout, continutul functional dispare, datele clientului sunt golite si butonul `Ruleaza verificarea` este ascuns.
 - Rezultatele sunt generate de GitHub Actions si publicate automat in Cloudflare, dar accesul la continutul `data/*.json` este controlat de Worker.
 
 Documentul complet va folosi formatul: ID, Titlu, Descriere, Categorie, Sursa, Prioritate, Criterii de acceptanta, Dependinte, Note, Versiune.
