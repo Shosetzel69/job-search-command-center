@@ -40,13 +40,14 @@ jobs:
         working-directory: command-api
         run: npm run check
 
-      - name: Remove one-time refactor files
-        run: rm scripts/_apply_jobspipe_apify_refactor.py .github/workflows/apply-jobspipe-apify-refactor.yml
-
       - name: Commit refactor output
         run: |
           git config user.name "job-search-automation"
           git config user.email "actions@users.noreply.github.com"
-          git add -A
+          git add data/search-config.json \
+            scripts/job_search.py scripts/job_search_apify.py scripts/job_search_runner.py \
+            command-api/src/index.js frontend/src/main.jsx \
+            docs/requirements.md docs/functionalitati.md docs/architecture.md docs/data-contract.md docs/source-strategy.md \
+            README.md CHANGELOG.md
           git commit -m "Add configurable JobsPipe transport" || exit 0
           git push origin HEAD:feature/jobspipe-apify-mode
