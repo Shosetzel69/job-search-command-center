@@ -13,6 +13,11 @@ Frontend static (GitHub Pages)
   +--> data/jobs.json
   +--> data/run-status.json
   +--> data/search-config.json
+  |
+  +--> Google Sign-In -> Command API (Cloudflare Worker)
+                         |
+                         +--> GitHub workflow_dispatch
+                         +--> GitHub Contents API
 
 GitHub Actions
   |
@@ -33,7 +38,9 @@ JSON versionat in repository
 GitHub Pages
 ```
 
-Nu exista in MVP un backend public permanent si nici un server de baza de date activ.
+Nu exista in MVP un backend public permanent pentru datele de joburi si nici un server de baza de date activ.
+
+Command API este o componenta serverless minima pentru actiuni privilegiate; nu devine backend-ul principal al aplicatiei.
 
 ## 2. Frontend
 
@@ -43,7 +50,7 @@ Nu exista in MVP un backend public permanent si nici un server de baza de date a
 - citeste configuratia canonica din `data/search-config.json`;
 - afiseaza descrierea jobului, linkul direct, fit, riscuri si sursa;
 - nu contine secrete;
-- modificarile locale din browser nu sunt configuratie efectiva pana cand nu sunt persistate securizat.
+- modificarile locale din browser nu sunt configuratie efectiva pana cand nu sunt persistate prin Command API.
 
 ChatGPT Sites ramane optional pentru prototipare, nu dependinta runtime a MVP-ului curent.
 
@@ -131,11 +138,12 @@ Pentru MVP curent:
 - configuratie canonica: `data/search-config.json`;
 - registru surse: `data/sources.json`;
 - aplicari: `data/applications.json`;
-- secrete: GitHub Actions Secrets.
+- secrete cautare: GitHub Actions Secrets;
+- secrete Command API: Cloudflare Worker Secrets.
 
 SQLite nu este necesar pentru fluxul static-first curent.
 
-SQLite ramane optiunea preferata daca introducem un backend persistent, istoric complex, aplicari editabile server-side sau configuratie multi-device.
+SQLite ramane optiunea preferata daca introducem un backend persistent, istoric complex, aplicari editabile server-side sau cerinte care depasesc modelul JSON/versionat.
 
 PostgreSQL ramane rezervat pentru multi-user, concurenta ridicata sau replicare.
 
@@ -155,19 +163,61 @@ Contine:
 - geografie;
 - excluderi.
 
-Frontend-ul o citeste. Workflow-ul o foloseste efectiv.
+Frontend-ul o citeste. Motorul o foloseste efectiv.
 
-Scrierea configuratiei din frontend necesita un mecanism securizat si este urmarita separat.
+Modificarile din UI sunt validate si persistate prin `PUT /config` al Command API. Pana la activarea live a Command API, modificarile UI raman locale.
 
-## 8. Rulare din interfata
+## 8. Command API
 
-Frontend-ul static nu va contine GitHub PAT, API keys sau alte secrete.
+Command API este implementat in `command-api/` ca Cloudflare Worker.
 
-Butonul `Ruleaza verificarea` nu poate apela direct GitHub Actions folosind un secret expus in browser.
+Roluri:
 
-Pentru rulare initiata de utilizator este necesar un mecanism securizat intermediar sau o capabilitate autorizata care executa `workflow_dispatch` fara expunerea credentialelor.
+- autentifica utilizatorul prin Google ID token;
+- autorizeaza un singur Google `sub` in MVP;
+- protejeaza secretele GitHub;
+- lanseaza manual `job-search-full.yml`;
+- persista configuratia canonica.
 
-Pana la implementarea acestui mecanism, schedule-ul GitHub Actions ramane metoda principala de executie.
+Endpoint-uri:
+
+```text
+GET  /health
+POST /commands/run
+PUT  /config
+```
+
+Flux rulare manuala:
+
+```text
+Browser
+  -> Google ID token
+  -> Command API
+  -> verifica user/origin
+  -> verifica daca exista run activ
+  -> GitHub workflow_dispatch
+```
+
+Flux salvare configuratie:
+
+```text
+Browser
+  -> Google ID token
+  -> Command API
+  -> whitelist + validate
+  -> GitHub Contents API
+  -> data/search-config.json
+  -> GitHub Actions
+```
+
+Fine-grained PAT-ul folosit de Worker este limitat la repository si necesita:
+
+- `Actions: write`;
+- `Contents: write`.
+
+PAT-ul nu apare niciodata in frontend sau repository.
+
+Detalii: `docs/command-api.md`.
 
 ## 9. Publicare
 
@@ -181,8 +231,13 @@ Workflow-ul de deploy este implementat. Activarea initiala a GitHub Pages la niv
 
 ## 10. Securitate
 
-- toate cheile API stau in GitHub Actions Secrets;
+- toate cheile API pentru cautare stau in GitHub Actions Secrets;
+- PAT-ul Command API sta in Cloudflare Secret;
 - niciun secret in frontend, JSON public sau repository;
+- Google ID token este verificat server-side prin JWKS, issuer si audience;
+- autorizarea MVP foloseste Google `sub`;
+- CORS este limitat la origin exact al frontend-ului;
+- configuratia editabila foloseste whitelist si validare;
 - permisiunile workflow-urilor sunt minime;
 - inputurile externe sunt tratate ca date nevalidate;
 - descrierea jobului este afisata ca text sigur, fara executie HTML arbitrar;
@@ -205,11 +260,10 @@ Nu se foloseste pentru Docker/Container Manager sau backend Node modern.
 
 ## 12. Integrari Google
 
-Nu sunt necesare pentru fluxul MVP de cautare.
+Google Identity Services este folosit pentru autentificarea Command API dupa activarea live.
 
-Planificate optional:
+Alte integrari planificate optional:
 
-- Sign in with Google daca apare autentificare reala;
 - Gmail pentru notificari;
 - Google Sheets pentru export;
 - Google Drive pentru backup;
@@ -225,12 +279,11 @@ Poate fi introdus in etapa 2 daca este necesar acces AI direct la functiile sist
 
 ## 14. Evolutie
 
-Introducem backend + SQLite numai daca apar cerinte care nu pot fi rezolvate curat in modelul static-first, de exemplu:
+Introducem backend + SQLite numai daca apar cerinte care nu pot fi rezolvate curat in modelul static-first + Command API, de exemplu:
 
-- configuratie persistenta multi-device;
-- rulare interactiva securizata;
-- istoric extins si audit;
-- aplicari editabile server-side;
-- autentificare;
+- istoric extins si audit tranzactional;
+- aplicari editabile complex server-side;
+- multi-user;
 - documente private;
-- integrare MCP.
+- integrare MCP cu stare persistenta;
+- operatii care necesita o baza de date tranzactionala.
