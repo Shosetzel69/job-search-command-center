@@ -5,10 +5,12 @@ on:
     branches: [main]
     paths:
       - "command-api/**"
+      - "frontend/**"
       - ".github/workflows/command-api-check.yml"
   pull_request:
     paths:
       - "command-api/**"
+      - "frontend/**"
       - ".github/workflows/command-api-check.yml"
   workflow_dispatch:
 
@@ -31,6 +33,11 @@ jobs:
       - name: Install pinned dependencies
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Validate frontend JavaScript
+        run: |
+          node --check frontend/app.js
+          node --check frontend/auth.js
 
       - name: Validate Worker build
         working-directory: command-api
