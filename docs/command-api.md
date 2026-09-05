@@ -1,48 +1,33 @@
 # Command API
 
-## Scop
+Actualizare: 2026-09-05
 
-Command API este componenta server-side minima care permite frontend-ului static sa execute actiuni privilegiate fara a expune credentiale GitHub in browser.
+## 1. Scop
 
-Este necesar pentru:
+Command API este componenta server-side minima care permite frontend-ului React sa execute actiuni privilegiate si sa acceseze date protejate fara a expune credentiale GitHub in browser.
 
+Responsabilitati:
+
+- validare/autorizare Google;
+- protectie `/data/*`;
 - `Ruleaza verificarea`;
-- persistarea criteriilor din UI in `data/search-config.json`.
+- persistare configuratie in `data/search-config.json`;
+- acces la GitHub Actions si GitHub Contents API.
 
-Nu inlocuieste motorul de cautare si nu introduce un backend permanent pentru joburi.
+Nu este motorul de cautare si nu este un backend persistent pentru joburi.
 
-## Flux
+## 2. Componente
 
-```text
-Browser / Cloudflare Static Assets
-       |
-       | Sign in with Google
-       v
-Google ID token
-       |
-       v
-Cloudflare Worker - Command API
-       |
-       +--> verifica JWT Google
-       +--> verifica utilizatorul autorizat
-       +--> verifica Origin
-       |
-       +--> GitHub Actions workflow_dispatch
-       |
-       +--> GitHub Contents API -> data/search-config.json
-```
+- `command-api/src/index.js` - auth, Command API, GitHub API;
+- `command-api/src/secure-entry.js` - protectia `/data/*` + delegare catre Command API;
+- `command-api/wrangler.jsonc` - configuratie Worker/Static Assets;
+- `command-api/scripts/build-static.mjs` - asamblarea bundle-ului public.
 
-## De ce componenta separata
-
-Frontend-ul static nu poate pastra in siguranta un PAT GitHub, client secret sau alta credentilala privilegiata. Orice secret livrat browserului trebuie considerat public.
-
-Command API pastreaza secretele exclusiv server-side.
-
-## Autentificare
+## 3. Autentificare Google
 
 Frontend-ul foloseste Google Identity Services.
 
-Browser-ul primeste un Google ID token si il trimite in header:
+Browserul primeste Google ID token si il trimite:
 
 ```text
 Authorization: Bearer <GOOGLE_ID_TOKEN>
@@ -50,146 +35,247 @@ Authorization: Bearer <GOOGLE_ID_TOKEN>
 
 Worker-ul verifica:
 
-- semnatura JWT folosind Google JWKS;
-- issuer Google;
+- semnatura prin Google JWKS;
+- issuer `accounts.google.com` / `https://accounts.google.com`;
 - audience = `GOOGLE_CLIENT_ID`;
-- `sub` = `ALLOWED_GOOGLE_SUB`.
+- `payload.sub = ALLOWED_GOOGLE_SUB`.
 
-Pentru autorizare se foloseste `sub`, nu adresa email, deoarece `sub` este identificatorul stabil al contului Google pentru clientul respectiv.
+Autorizarea foloseste `sub`, nu emailul.
 
-## Bootstrap autorizare initiala
+Tokenul ramane numai in memoria frontend-ului.
 
-Pana la configurarea `ALLOWED_GOOGLE_SUB`, Worker-ul expune temporar:
-
-```text
-GET  /auth/bootstrap
-POST /auth/whoami
-```
-
-`/auth/bootstrap` afiseaza butonul Google Sign-In pentru clientul configurat.
-
-Dupa login, `/auth/whoami`:
-
-- valideaza criptografic ID token-ul;
-- verifica issuer si audience;
-- returneaza `sub` al contului autentificat.
-
-Utilizatorul copiaza valoarea `sub` in secretul Cloudflare `ALLOWED_GOOGLE_SUB`.
-
-Dupa configurarea secretului, endpoint-urile de bootstrap se dezactiveaza automat si returneaza 404.
-
-## GitHub
-
-Worker-ul foloseste initial un fine-grained personal access token limitat la repository-ul:
-
-`Shosetzel69/job-search-command-center`
-
-Permisiuni minime necesare:
-
-- `Actions: write` - pentru `workflow_dispatch`;
-- `Contents: write` - pentru actualizarea `data/search-config.json`.
-
-Tokenul este stocat ca secret Cloudflare `GITHUB_TOKEN` si nu este inclus in repository sau frontend.
-
-Pentru o etapa multi-user, PAT-ul poate fi inlocuit cu GitHub App installation tokens fara modificarea contractului frontend.
-
-## Endpoint-uri
+## 4. Endpoint-uri publice
 
 ### `GET /health`
 
-Public. Verifica daca Worker-ul este disponibil.
+Nu necesita login.
 
-Raspuns:
+Raspunsul curent include:
 
 ```json
-{"status":"ok"}
+{
+  "status": "ok",
+  "auth_configured": true,
+  "github_configured": true
+}
 ```
+
+Valorile boolean depind de configuratia mediului.
+
+### `GET /auth/config`
+
+Nu necesita login.
+
+Returneaza configuratia minima necesara Google Sign-In:
+
+```json
+{
+  "client_id": "...",
+  "configured": true
+}
+```
+
+`GOOGLE_CLIENT_ID` nu este secret.
+
+## 5. Endpoint autentificare
+
+### `POST /auth/session`
+
+Necesita bearer Google valid.
+
+Scop:
+
+- valida tokenul;
+- valida utilizatorul autorizat;
+- confirma sesiunea frontend.
+
+Raspuns de succes:
+
+```json
+{
+  "status": "ok",
+  "email": "user@example.com"
+}
+```
+
+Emailul este folosit numai pentru afisarea profilului.
+
+## 6. Date protejate
+
+Rutele protejate sunt:
+
+- `GET /data/jobs.json`;
+- `GET /data/run-status.json`;
+- `GET /data/search-config.json`;
+- `GET /data/sources.json`;
+- `GET /data/applications.json`.
+
+Flux:
+
+```text
+Browser
+  -> GET /data/...
+  -> Authorization: Bearer token
+  -> secure-entry.js
+  -> verificare prin /auth/session logic
+  -> env.ASSETS.fetch
+  -> response no-store
+```
+
+Reguli:
+
+- metoda diferita de GET -> 405;
+- `/data/*` necunoscut -> 404;
+- token lipsa/invalid -> auth error;
+- raspuns protejat -> `cache-control: no-store`;
+- raspuns protejat -> `x-content-type-options: nosniff`.
+
+## 7. Comenzi protejate
 
 ### `POST /commands/run`
 
-Necesita autentificare Google.
+Necesita utilizator Google autorizat.
 
 Comportament:
 
-1. verifica daca exista deja o rulare `queued` sau `in_progress`;
-2. daca exista, returneaza HTTP 409;
+1. interogheaza ultimele workflow runs;
+2. daca exista `queued` sau `in_progress`, returneaza 409;
 3. altfel executa `workflow_dispatch` pentru `job-search-full.yml` pe `main`;
-4. returneaza HTTP 202.
+4. returneaza 202.
 
-Frontend-ul continua sa urmareasca starea prin `data/run-status.json`.
+Frontend-ul urmareste ulterior `run-status.json` prin polling autentificat.
 
 ### `PUT /config`
 
-Necesita autentificare Google.
+Necesita utilizator Google autorizat.
 
-Accepta numai campurile editabile din UI:
+Campuri acceptate din UI:
 
-- roluri active;
-- Remote/Hibrid;
-- freshness 24/48h;
-- fit threshold 50-100;
-- repostari;
-- rate min/max;
-- immediate start;
-- excluderi.
+- `rolePm`;
+- `roleDelivery`;
+- `roleService`;
+- `roleScrum`;
+- `roleProgram`;
+- `workRemote`;
+- `workHybrid`;
+- `keepReposts`;
+- `immediateStart`;
+- `jobspipeEnabled`;
+- `freshness` = 24 / 36 / 48 / 120;
+- `fitThreshold` = 50-100;
+- `rateMin`;
+- `rateMax`;
+- `exclusions` - maximum 20 intrari scurte.
 
 Worker-ul:
 
-1. citeste configuratia canonica din GitHub;
-2. valideaza patch-ul;
-3. modifica numai campurile permise;
-4. salveaza fisierul prin GitHub Contents API.
+1. valideaza payload-ul;
+2. citeste `data/search-config.json` din GitHub;
+3. aplica numai campurile whitelist;
+4. scrie configuratia prin Contents API;
+5. commit message: `Update search config from command API`.
 
-Commit-ul configuratiei declanseaza workflow-ul de cautare prin regula existenta pentru `data/search-config.json`.
+Commit-ul pe `data/search-config.json` declanseaza automat workflow-ul de cautare.
 
-## CORS
+## 8. GitHub access
 
-Frontend-ul si Command API folosesc acelasi origin Cloudflare in MVP.
+Worker-ul foloseste un fine-grained PAT stocat in Cloudflare Secret:
 
-Worker-ul pastreaza validarea `FRONTEND_ORIGIN` pentru endpoint-urile privilegiate.
+`GITHUB_TOKEN`
 
-CORS nu este mecanism de autentificare. Autentificarea Google ramane obligatorie.
+Repository tinta:
 
-## Secrete
+`Shosetzel69/job-search-command-center`
 
-Cloudflare secrets:
+Permisiuni necesare:
+
+- Actions: write;
+- Contents: write.
+
+PAT-ul nu este livrat browserului.
+
+## 9. Origin si CORS
+
+Frontend-ul si Worker-ul folosesc acelasi origin Cloudflare.
+
+`FRONTEND_ORIGIN` este verificat pentru cererile privilegiate.
+
+Reguli:
+
+- Origin strain -> 403;
+- CORS nu inlocuieste autentificarea;
+- bearer Google ramane obligatoriu pentru endpoint-urile protejate.
+
+## 10. Variabile si secrete Cloudflare
+
+### Secrets
 
 - `GITHUB_TOKEN`;
 - `ALLOWED_GOOGLE_SUB`.
 
-Configuratie publica/non-secret:
+### Variabile non-secret
 
+- `GOOGLE_CLIENT_ID` - configurata in Dashboard;
 - `FRONTEND_ORIGIN`;
-- `GOOGLE_CLIENT_ID`;
 - `GITHUB_OWNER`;
 - `GITHUB_REPO`;
 - `GITHUB_REF`;
 - `GITHUB_WORKFLOW`;
 - `SEARCH_CONFIG_PATH`.
 
-`GOOGLE_CLIENT_ID` este configurat in Cloudflare Dashboard. `keep_vars=true` este activ in Wrangler, astfel incat deploy-urile din repository sa nu elimine variabilele setate in Dashboard.
+`keep_vars=true` este activ in Wrangler pentru a pastra variabilele configurate in Dashboard la deploy.
 
-## Setup necesar o singura data
+## 11. Frontend auth lifecycle
 
-1. Configureaza Google OAuth Web Client pentru frontend.
-2. Seteaza `GOOGLE_CLIENT_ID` in Cloudflare.
-3. Acceseaza `/auth/bootstrap` si autentifica-te cu contul Google autorizat.
-4. Copiaza `sub` rezultat in secretul Cloudflare `ALLOWED_GOOGLE_SUB`.
-5. Creeaza fine-grained PAT GitHub limitat la repository, cu `Actions: write` si `Contents: write`.
-6. Seteaza secretul `GITHUB_TOKEN` in Cloudflare.
-7. Testeaza `/health`.
-8. Integreaza Google Sign-In in frontend.
-9. Testeaza `Ruleaza verificarea` si `Salveaza preferintele` end-to-end.
+Implementarea React foloseste:
 
-## Cost
+```text
+GET /auth/config
+  -> Google Sign-In
+  -> POST /auth/session
+  -> auth valid
+  -> seteaza token in memorie
+  -> incarca /data/*
+```
 
-Pentru volumul single-user al acestei aplicatii, Command API este proiectat sa intre in limitele Cloudflare Workers Free. Daca politica de pret sau limitele se schimba, componenta poate fi mutata pe alta platforma serverless deoarece contractul HTTP este independent de Cloudflare.
+Separare obligatorie:
 
-## Limite MVP
+- login valid != date incarcate;
+- eroare `/data/*` nu produce logout automat;
+- UI afiseaza eroarea si `Reincearca incarcarea`;
+- logout-ul sterge tokenul si datele din memorie.
 
-- un singur utilizator autorizat prin `ALLOWED_GOOGLE_SUB`;
+## 12. Build si deploy
+
+`command-api/package.json`:
+
+```text
+npm run build
+  -> build:frontend
+  -> npm install frontend
+  -> vite build
+  -> build-static.mjs
+```
+
+`build-static.mjs` copiaza `frontend/dist` si cele 5 fisiere JSON protejate in `command-api/public`.
+
+Wrangler publica Static Assets si Worker-ul ca acelasi serviciu.
+
+## 13. Limitari MVP
+
+- un singur utilizator autorizat;
 - fara sesiuni server-side;
-- fara baza de date in Worker;
-- fara MCP;
-- fara documente private;
-- sursele active/inactive vor fi persistate separat dupa finalizarea connector registry.
+- fara refresh token propriu;
+- fara baza de date Worker;
+- fara persistenta server-side pentru arhivare;
+- fara persistenta canonica a toggle-urilor individuale din `Surse`;
+- fara multi-user;
+- fara MCP.
+
+## 14. Status verificare
+
+- sintaxa/build Worker: validat CI;
+- build React/Vite: validat CI;
+- route protection `/data/*`: implementat;
+- auth + data retry React: implementat;
+- test E2E complet in browser dupa release-ul React: de confirmat pe deploy-ul live.
