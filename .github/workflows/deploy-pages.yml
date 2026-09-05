@@ -32,7 +32,7 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
-      - name: Build static site
+      - name: Build and validate static site
         run: |
           rm -rf _site
           mkdir -p _site/data
@@ -44,8 +44,11 @@ jobs:
           test -f _site/index.html
           test -f _site/app.js
           test -f _site/styles.css
+          node --check _site/app.js
           python3 -m json.tool _site/data/jobs.json >/dev/null
           python3 -m json.tool _site/data/run-status.json >/dev/null
+          python3 -m json.tool _site/data/applications.json >/dev/null
+          python3 -m json.tool _site/data/sources.json >/dev/null
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
