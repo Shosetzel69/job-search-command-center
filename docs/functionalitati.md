@@ -95,7 +95,9 @@ Pagina foloseste grid responsive 1/2 coloane si permite configurarea:
 
 - grupuri de roluri;
 - Remote / Hibrid;
-- JobsPipe enabled/disabled;
+- mod JobsPipe: Oprit / Apify / Direct;
+- plafon configurabil de joburi brute/rulare pentru Apify;
+- buget si prag lunar configurabile pentru Direct;
 - vechime implicita;
 - prag FIT ridicat;
 - repostari;
@@ -141,21 +143,33 @@ Rularea poate fi declansata si de schimbari ale configuratiei/codului motorului.
 
 ## 12. JobsPipe
 
-Functionalitati implementate:
+Transport configurabil:
 
-- enable/disable din configuratie;
+- `disabled` - fara cereri externe; implicit in perioada de stabilizare;
+- `apify` - transport recomandat pentru volum, prin Actorul oficial `jobspipe~jobspipe-job-search`;
+- `direct` - fallback/diagnostic cu mecanismele existente de quota.
+
+Apify:
+
+- plafon implicit: 5.000 joburi brute/rulare;
+- plafon UI permis: 100-20.000;
+- doua cautari fara suprapunere: geografiile prioritare si remote Europe;
+- Actorul pagineaza automat;
+- necesita `APIFY_TOKEN` in GitHub Actions Secrets.
+
+Direct:
+
 - preview gratuit;
 - polling incremental;
 - cursor backlog;
 - buget per rulare;
 - guard lunar;
-- circuit breaker quota.
+- circuit breaker quota;
+- necesita `JOBSPIPE_API_KEY`.
 
 Stare curenta:
 
-`jobspipe_enabled=false`
-
-Motiv: stabilizarea aplicatiei inainte de folosirea noii quota.
+`jobspipe_mode=disabled`
 
 ## 13. Persistenta
 

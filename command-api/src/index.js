@@ -152,6 +152,29 @@ function validateUserConfigPatch(input) {
     }
   }
 
+  if ('jobspipeMode' in input) {
+    const value = String(input.jobspipeMode || '').toLowerCase();
+    if (!['disabled', 'apify', 'direct'].includes(value)) {
+      throw Object.assign(new Error('jobspipeMode must be disabled, apify or direct'), { status: 400 });
+    }
+    output.jobspipeMode = value;
+  }
+
+  const integerRules = {
+    jobspipeApifyMaxItems: [100, 20000],
+    jobspipeDirectRunBudget: [1, 1000],
+    jobspipeDirectMonthlyGuard: [1, 100000],
+  };
+  for (const [key, [min, max]] of Object.entries(integerRules)) {
+    if (key in input) {
+      const value = Number(input[key]);
+      if (!Number.isInteger(value) || value < min || value > max) {
+        throw Object.assign(new Error(`${key} must be ${min}-${max}`), { status: 400 });
+      }
+      output[key] = value;
+    }
+  }
+
   if ('freshness' in input) {
     const value = Number(input.freshness);
     if (![24, 36, 48, 120].includes(value)) {
@@ -220,7 +243,12 @@ function applyUserConfigPatch(config, patch) {
   if ('rateMin' in patch) config.rate_min_eur_day = patch.rateMin;
   if ('rateMax' in patch) config.rate_max_eur_day = patch.rateMax;
   if ('immediateStart' in patch) config.immediate_start = patch.immediateStart;
-  if ('jobspipeEnabled' in patch) config.jobspipe_enabled = patch.jobspipeEnabled;
+  if ('jobspipeMode' in patch) config.jobspipe_mode = patch.jobspipeMode;
+  if ('jobspipeEnabled' in patch && !('jobspipeMode' in patch)) config.jobspipe_mode = patch.jobspipeEnabled ? 'direct' : 'disabled';
+  if ('jobspipeApifyMaxItems' in patch) config.jobspipe_apify_max_items_per_run = patch.jobspipeApifyMaxItems;
+  if ('jobspipeDirectRunBudget' in patch) config.jobspipe_credit_budget_per_run = patch.jobspipeDirectRunBudget;
+  if ('jobspipeDirectMonthlyGuard' in patch) config.jobspipe_monthly_credit_guard = patch.jobspipeDirectMonthlyGuard;
+  delete config.jobspipe_enabled;
   if ('exclusions' in patch) config.exclusions = patch.exclusions;
   return config;
 }

@@ -155,6 +155,8 @@ Este sursa canonica de configuratie pentru motor.
 - `rate_min_eur_day = 250`;
 - `rate_max_eur_day = 650`;
 - `jobspipe_enabled = false`;
+- `jobspipe_mode = disabled`;
+- `jobspipe_apify_max_items_per_run = 5000`;
 - `jobspipe_credit_budget_per_run = 14`;
 - `jobspipe_monthly_credit_guard = 950`;
 - `jobspipe_incremental_overlap_minutes = 2`;

@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.04 - 2026-09-05
+
+### JobsPipe transport
+
+- Adaugat `jobspipe_mode`: `disabled`, `apify`, `direct`.
+- Apify devine transportul recomandat dupa stabilizare.
+- JobsPipe Direct ramane fallback cu quota guards.
+- UI permite selectarea transportului si configurarea limitelor specifice.
+- Adaugat suport pentru secretul GitHub Actions `APIFY_TOKEN`.
+- Plafon Apify implicit: 5.000 joburi brute/rulare; configurabil 100-20.000.
+- Starea curenta ramane `disabled`.
+
 ## 0.03 - 2026-09-05
 
 ### Frontend
