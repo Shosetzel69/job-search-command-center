@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-05T14:51:55.747762+00:00",
+  "generated_at": "2026-09-05T15:02:40.851820+00:00",
   "freshness_hours": 24,
   "criteria": {
     "roles": [
@@ -293,7 +293,7 @@
       "location": "Belgium",
       "mode": "Onsite",
       "type": "Full Time",
-      "age": 9,
+      "age": 10,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -319,7 +319,7 @@
       "location": "Belgium",
       "mode": "Onsite",
       "type": "Nespecificat",
-      "age": 9,
+      "age": 10,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -476,7 +476,7 @@
       "location": "1000 Brussels",
       "mode": "Onsite",
       "type": "Nespecificat",
-      "age": 9,
+      "age": 10,
       "remote": false,
       "b2b": false,
       "repost": false,
