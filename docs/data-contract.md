@@ -68,12 +68,32 @@ Campuri obligatorii:
 - `excluded`;
 - `limitations`.
 
-Valori permise pentru `status`:
+Camp optional recomandat:
+
+- `source_results` - rezultat detaliat pentru fiecare connector/query executat.
+
+Fiecare element `source_results` poate contine:
+
+- `connector`;
+- `query`;
+- `status`;
+- `records`;
+- `total_available`;
+- `error`.
+
+Valori permise pentru statusul rularii:
 
 - `running`;
 - `completed`;
 - `completed_with_errors`;
 - `failed`.
+
+Reguli:
+
+- un connector/query esuat nu trebuie sa opreasca automat colectarile independente;
+- daca exista rezultate valide si unele colectari esueaza, statusul este `completed_with_errors`;
+- daca toate colectarile esueaza, statusul este `failed`;
+- un esec total nu inlocuieste lista de joburi valida existenta cu o lista goala falsa.
 
 ## `data/search-config.json`
 
@@ -111,7 +131,7 @@ Campuri obligatorii:
 
 Reguli:
 
-- workflow-ul foloseste aceasta configuratie la construirea query-urilor si la filtrare/scoring;
+- motorul foloseste aceasta configuratie la construirea query-urilor si la filtrare/scoring;
 - frontend-ul foloseste aceeasi configuratie pentru valorile canonice ale criteriilor;
 - configurarile locale nesalvate pot exista temporar in browser, dar nu devin configuratie efectiva a workflow-ului fara un mecanism securizat de persistenta;
 - secretele si cheile API nu sunt permise in acest fisier.
@@ -124,4 +144,4 @@ Schimbarile incompatibile, precum redenumirea sau eliminarea campurilor obligato
 
 ## Validare
 
-Workflow-ul valideaza configuratia si structura minima a output-ului dupa generare si inainte de commit/publicare.
+Motorul si workflow-ul valideaza configuratia si structura minima a output-ului dupa generare si inainte de commit/publicare.
