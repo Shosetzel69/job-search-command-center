@@ -17,28 +17,29 @@ Actualizare: 2026-09-05
 
 ### Interfata si configurare
 
-- CFR-09: Utilizatorul poate vizualiza joburile noi, rolurile de evaluat, aplicarile, criteriile si sursele.
+- CFR-09: Utilizatorul autentificat poate vizualiza joburile noi, rolurile de evaluat, aplicarile, criteriile si sursele.
 - CFR-10: Utilizatorul poate gestiona criteriile de cautare si excluderile din interfata.
 - CFR-11: Utilizatorul poate gestiona sursele din interfata.
 - CFR-12: Utilizatorul pastreaza istoricul aplicarilor.
-- CFR-13: Rezultatele, statusul ultimei rulari si configuratia statica sunt vizibile in mod read-only fara autentificare in MVP-ul curent.
+- CFR-13: Cand utilizatorul nu este autentificat sau se deconecteaza, interfata nu afiseaza joburile, rezumatul, aplicarile, criteriile, sursele sau statusul ultimei rulari.
+- CFR-14: In starea neautentificata raman vizibile numai identificarea aplicatiei, controlul Google Sign-In si butonul `Ruleaza verificarea` dezactivat.
+- CFR-15: La autentificarea cu utilizatorul autorizat, continutul functional al aplicatiei devine din nou vizibil.
 
 ### Autentificare si comenzi protejate
 
-- CFR-14: Autentificarea se face cu Google Identity Services.
-- CFR-15: Autentificarea nu este necesara pentru vizualizarea rezultatelor, dar este obligatorie pentru comenzile care modifica starea sistemului.
-- CFR-16: Numai utilizatorul Google al carui `sub` corespunde valorii `ALLOWED_GOOGLE_SUB` poate executa comenzile protejate.
-- CFR-17: Butonul `Ruleaza verificarea` este gri si dezactivat cand utilizatorul nu este autentificat.
-- CFR-18: Dupa autentificarea utilizatorului autorizat, butonul `Ruleaza verificarea` devine albastru si activ.
-- CFR-19: In timpul unei rulari, butonul `Ruleaza verificarea` ramane dezactivat pana la finalizarea fluxului.
-- CFR-20: Dupa logout, butonul `Ruleaza verificarea` revine automat la starea gri/dezactivata.
-- CFR-21: Utilizatorul autentificat este afisat vizual printr-un indicator verde care contine contul Google conectat.
-- CFR-22: Apasarea indicatorului utilizatorului autentificat deconecteaza contul din sesiunea aplicatiei.
-- CFR-23: Comanda `Ruleaza verificarea` porneste workflow-ul GitHub Actions prin Command API si nu expune credentiale GitHub in browser.
-- CFR-24: Aplicatia previne pornirea unei a doua rulari daca exista deja una queued sau in progress.
-- CFR-25: Dupa pornirea unei cautari din UI, aplicatia verifica periodic statusul si reincarca rezultatele dupa publicarea unei rulari noi.
-- CFR-26: `Salveaza preferintele` necesita utilizator Google autorizat si persista configuratia canonica prin Command API.
-- CFR-27: Salvarea configuratiei canonice declanseaza automat o noua cautare.
+- CFR-16: Autentificarea se face cu Google Identity Services.
+- CFR-17: Numai utilizatorul Google al carui `sub` corespunde valorii `ALLOWED_GOOGLE_SUB` poate executa comenzile protejate.
+- CFR-18: Butonul `Ruleaza verificarea` este gri si dezactivat cand utilizatorul nu este autentificat.
+- CFR-19: Dupa autentificarea utilizatorului autorizat, butonul `Ruleaza verificarea` devine albastru si activ.
+- CFR-20: In timpul unei rulari, butonul `Ruleaza verificarea` ramane dezactivat pana la finalizarea fluxului.
+- CFR-21: Dupa logout, butonul `Ruleaza verificarea` revine automat la starea gri/dezactivata si continutul functional este ascuns.
+- CFR-22: Utilizatorul autentificat este afisat vizual printr-un indicator verde care contine contul Google conectat.
+- CFR-23: Apasarea indicatorului utilizatorului autentificat deconecteaza contul din sesiunea aplicatiei.
+- CFR-24: Comanda `Ruleaza verificarea` porneste workflow-ul GitHub Actions prin Command API si nu expune credentiale GitHub in browser.
+- CFR-25: Aplicatia previne pornirea unei a doua rulari daca exista deja una queued sau in progress.
+- CFR-26: Dupa pornirea unei cautari din UI, aplicatia verifica periodic statusul si reincarca rezultatele dupa publicarea unei rulari noi.
+- CFR-27: `Salveaza preferintele` necesita utilizator Google autorizat si persista configuratia canonica prin Command API.
+- CFR-28: Salvarea configuratiei canonice declanseaza automat o noua cautare.
 
 ## Cerinte non-functionale
 
@@ -50,12 +51,14 @@ Actualizare: 2026-09-05
 - CNF-06: Arhitectura MVP ramane static-first, cu Cloudflare Worker pentru Static Assets si Command API.
 - CNF-07: Fluxul initial ramane simplu si cu cost minim.
 - CNF-08: Arhitectura permite introducerea ulterioara a persistentei SQLite/PostgreSQL daca apar cerinte tranzactionale sau multi-user.
+- CNF-09: Ascunderea continutului dupa logout este un comportament UI; blocarea accesului direct la fisierele statice `data/*.json` necesita o masura separata de control al accesului.
 
 ## Comportament curent confirmat
 
-- Aplicatia poate fi deschisa si rezultatele pot fi consultate fara login.
-- Login-ul Google protejeaza actiunile de tip command/write, nu accesul read-only la rezultate.
+- Aplicatia porneste in stare fara continut functional vizibil pana la autentificare.
 - Utilizatorul autorizat este evidentiat cu verde dupa autentificare.
+- Dupa login, joburile, sumarul, aplicarile, criteriile, sursele si statusul rularii devin vizibile.
+- Dupa logout, continutul functional dispare imediat.
 - `Ruleaza verificarea`: neautentificat = gri/dezactivat; autentificat = albastru/activ; rulare in curs = dezactivat.
 - Rezultatele sunt generate de GitHub Actions si publicate automat in aplicatia Cloudflare dupa actualizarea fisierelor `data/*.json`.
 
