@@ -1,21 +1,25 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-05T12:31:00.620617+00:00",
+  "generated_at": "2026-09-05T12:37:12.809078+00:00",
   "freshness_hours": 24,
   "criteria": {
     "roles": [
       "Project Manager",
       "IT Project Manager",
-      "Technical/Agile PM",
-      "Delivery/Service Manager",
+      "Technical Project Manager",
+      "Agile Project Manager",
+      "Delivery Manager",
+      "Technical Delivery Manager",
+      "Service Manager",
+      "Service Delivery Manager",
       "Scrum Master",
-      "Program/PMO Manager"
+      "Program Manager",
+      "PMO Manager"
     ],
     "geography": [
-      "Romania",
-      "Brussels/Belgium",
-      "Luxembourg",
-      "eligible remote Europe"
+      "RO",
+      "BE",
+      "LU"
     ],
     "work_mode_priority": [
       "Remote",
@@ -25,19 +29,19 @@
     "fit_threshold": 80,
     "keep_reposts": true,
     "exclusions": [
-      "Star Storage group",
-      "deep ERP/SAP implementation",
-      "non-IT roles"
+      "Star Storage si companiile grupului",
+      "Implementari ERP care cer experienta specializata ampla",
+      "Roluri non-IT"
     ]
   },
   "raw_matches_available": {
     "geography": 93,
     "remote": 308,
-    "core_remote": 12
+    "core_remote": 218
   },
-  "records_inspected": 62,
+  "records_inspected": 75,
   "results": 0,
-  "excluded_count": 62,
+  "excluded_count": 75,
   "jobs": [],
   "excluded_sample": [
     {

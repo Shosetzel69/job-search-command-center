@@ -1,15 +1,15 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260905T123100Z",
+  "run_id": "github-20260905T123712Z",
   "status": "completed",
-  "started_at": "2026-09-05T12:31:00.620617+00:00",
-  "completed_at": "2026-09-05T12:31:00.635220+00:00",
+  "started_at": "2026-09-05T12:37:12.809078+00:00",
+  "completed_at": "2026-09-05T12:37:12.825070+00:00",
   "sources": [
     "JobsPipe aggregate search - all active sources equally"
   ],
-  "records_inspected": 62,
+  "records_inspected": 75,
   "jobs_published": 0,
-  "excluded": 62,
+  "excluded": 75,
   "limitations": [
     "JobsPipe free-plan result cap applies to each query"
   ]
