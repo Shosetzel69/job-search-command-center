@@ -279,3 +279,7 @@ Wrangler publica Static Assets si Worker-ul ca acelasi serviciu.
 - route protection `/data/*`: implementat;
 - auth + data retry React: implementat;
 - test E2E complet in browser dupa release-ul React: de confirmat pe deploy-ul live.
+
+## JobsPipe transport
+
+Command API persista numai configuratia, nu secretele providerilor. `APIFY_TOKEN` si `JOBSPIPE_API_KEY` exista numai in GitHub Actions Secrets. Alegerea `apify` din UI nu transmite tokenul prin browser sau Worker.

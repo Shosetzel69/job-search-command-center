@@ -1,7 +1,7 @@
 # Functionalitati
 
 Actualizare: 2026-09-05
-Versiune aplicatie: 0.03
+Versiune aplicatie: 0.04
 
 Acest document descrie functionalitatea curenta a aplicatiei, separat de cerintele detaliate si de arhitectura.
 
