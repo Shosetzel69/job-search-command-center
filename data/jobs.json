@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-05T14:34:52.592416+00:00",
+  "generated_at": "2026-09-05T14:51:55.747762+00:00",
   "freshness_hours": 24,
   "criteria": {
     "roles": [
@@ -40,89 +40,466 @@
     "jobspipe:core_remote": 228
   },
   "records_inspected": 75,
-  "results": 0,
-  "excluded_count": 75,
-  "jobs": [],
-  "excluded_sample": [
+  "results": 17,
+  "excluded_count": 58,
+  "jobs": [
     {
-      "title": "Project Manager Haute-Tension",
-      "company": "EES INFRA",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "(Senior) Project Manager | Industriële ICT",
-      "company": "Equans Belux",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Project & Program Manager",
-      "company": "Just Eat Takeaway.com",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "CSA Project Manager",
-      "company": "Mercury",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Asset MGT - Project Manager BBox",
-      "company": "Bpost",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Design & Utilization - Sr Project Manager Capacity & Yield Management",
-      "company": "Bpost",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Senior Project Manager",
-      "company": "Cyclops",
-      "reason": "publication time not verifiable"
-    },
-    {
+      "id": "4299362088",
       "title": "Project Manager Offshore Subsea Cables",
       "company": "Jan De Nul Group",
-      "reason": "publication time not verifiable"
+      "initial": "JD",
+      "fit": 96,
+      "location": "Aalst, Flemish Region, Belgium",
+      "mode": "Remote",
+      "type": "Full Time",
+      "age": 0,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote",
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/project-manager-offshore-subsea-cables-at-jan-de-nul-group-4299362088",
+      "description": "Your Work Context\n\nJan De Nul Group offers specialised services for the installation of submarine structures for the oil, gas and renewable energy markets. Seabed preparation, trench dredging, and their stabilisation and ballasting are part of these offshore services. Whether it concerns subsea pipelines, cables, umbilicals, foundations, platforms or even entire wind farms: always tailored to the customer and, if desired, on an EPC basis. Do you want to be part of our international team?\n\nYour Role\n\nAs Project Manager you are responsible for an offshore project by organising and supervising the execution of the works. You ensure that they are executed as described in the contract.\n\n- Together with the engineering team you are responsible for choosing the most economical, safe and successful method to carry out the project.\n\n- You preside over meetings with clients, authorities and other contractors on site.\n\n- You are responsible for the site administration, cost controlling and budgeting.\n\n- You coordinate the project team. In this, you also coach the employees and you are responsible for their development and evaluation.\n\n- You communicate with clients and third parties on a daily basis.\n\n- During the works, you report to the head office every day.\n\n- You have the final responsibility for compliance with the legal regulations regarding safety, environment and quality on site.\n\n- You plan the deployment of personnel, vessels, auxiliary equipment and subcontractors.\n\nWhat do you need to have?\n\nYou have an engineering degree and at least 10 years' experience in the sector. You are a born leader and very persuasive. You're great at planning and organising, always bearing in mind the client's wishes and needs. You speak and write fluent English.\n\nWorking at Jan De Nul\n\nWorking at Jan De Nul means helping to find solutions to some of the biggest challenges of our time: from energy transition to rising sea levels to smart mobility. It means learning and working together every day, with the aim of ensuring the global quality of life for generations to come.\n\nWhat We Offer\n\n- An ongoing training programme through our JDN Academy.\n\n- The opportunity to exercise at work through our FIT programme.\n\n- A permanent contract with 42 paid holidays (20 statutory, 12 ADV and 10 public holidays).\n\n- A healthy work-life balance (flexible working hours and occasional work from home).\n\n- A competitive salary with thirteenth month and double holiday pay, including:\n\n- Meal vouchers and eco vouchers\n\n- Company car including fuel card or charging pass in Belgium.\n\n- Opportunity to participate in bicycle leasing,\n\n- Group and hospitalisation insurance\n\n- Option of iPhone with data subscription\n\n- Various staff discounts\n\n- applicable with Belgian contract.\n\nThe world becomes what you make of itJan De Nul is shaping water and land worldwide. We drive the transition to renewable energy with offshore energy infrastructure. We focus on nature-inclusive dredging solutions to build ports and protect our coastline. We develop innovative construction projects for smart mobility and sustainable buildings. And we redevelop our planet by giving polluted sites a new purpose. At Jan De Nul, the world becomes what you make of it.\n\nJan De Nul Group promotes diversity and inclusion in the workplace. We are an equal opportunities and anti-discrimination employer.\n\nReferenced Team\n\nCareers in offshore energy\n\nWorking Abroad\n\nEducation\n\nMaster's degree\n\n\"project engineer offshore\"; offshore; projectingenieur; \"project engineer\"; cables; \"heavy lifting\"; rocks; \"rotation system\"; rotatie; elektromechanica; \"mechanical energy\"",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 12:25:56"
     },
     {
-      "title": "Assistant Project Manager | Water Process",
-      "company": "Equans BeLux",
-      "reason": "publication time not verifiable"
+      "id": "4441808789",
+      "title": "Data Center Project Manager - Medium Voltage",
+      "company": "Eaton",
+      "initial": "E",
+      "fit": 90,
+      "location": "Madrid, Community of Madrid, Spain",
+      "mode": "Remote",
+      "type": "Full Time",
+      "age": 0,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote",
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://es.linkedin.com/jobs/view/data-center-project-manager-medium-voltage-at-eaton-4441808789",
+      "description": "Location: Zaragoza, Spain – Remote during onboarding, then hybrid (up to 50% on-site). Candidates must be based in Zaragoza, nearby, or willing to travel regularly to the customer construction site in Zaragoza.\n\nTraveling: 50% in EMEA region, rotating possibility between the countries\n\nUnlock Your Potential at Eaton: Where Diversity Drives Innovation. No matter where you come from, your aspirations matter to us. We believe in the power of different perspectives, experiences, and backgrounds to ignite innovation and drive success. We're in the business of empowering people, and that includes you. Your journey here is not just about a job; it's about a shared vision for a brighter, more sustainable future.\n\nJoin Eaton’s EMEA Projects team and lead the delivery of complex, large-scale Datacenter projects. Our solutions span power distribution from medium to low voltage equipment, UPS systems, and battery technologies, all integrated with advanced automation and monitoring systems like DCIM and EPMS.\n\nAs Data Center Project Manager, you’ll own the full project lifecycle—from order intake through implementation and construction to handover—ensuring scope, cost, and risk are managed effectively. You’ll work closely with customers, suppliers, and internal teams to deliver engineered-to-order solutions across multiple manufacturing locations.\n\nWhat You’ll Do\n\n- Lead end-to-end project execution from purchase order to handover, covering design, procurement, and implementation for electrical/automation projects in critical infrastructure in Medium Voltage projects.\n\n- Build and manage project teams; organize kick-off and regular meetings to align all stakeholders.\n\n- Develop and maintain project schedules, risk registers, and ensure proactive mitigation of issues.\n\n- Control project costs and margins, manage variations, and provide accurate financial forecasts.\n\n- Act as single point of contact for on-site implementation, including SAT scripts and commissioning.\n\n- Ensure project success across safety, customer satisfaction, financial performance, and timing.\n\n- Drive continuous improvement by sharing lessons learned and recommending better practices.\n\nQualifications\n\n- Bachelor’s or Master’s degree (or equivalent) in Electrical Engineering; accredited Project Management certification with construction site focus is advantage.\n\n- Minimum 5 years of construction site management experience, ideally with hands-on Data Centre/Medium Voltage infrastrucre projects; experience in large industrial projects with automation and controls considered.\n\nSkills\n\n- Strong electrical engineering background and/or training in datacenter/medium voltage technologies and systems.\n\n- Direct experience with Medium Voltage realted Power Management, Power Control, Mission Critical, or Building Management systems is a plus.\n\n- Professional level of English language, other European language knowledge is considered as advantage.\n\n- Driving license and able to work and travel within EMEA region without any restrictions.\n\n- Advanced-level expertise, preferably with knowledge of datacenter industry or similar technologies.\n\n- Proven ability to lead and manage internal and external teams effectively.\n\n- Strong communication and stakeholder management skills.\n\nWe offer\n\n- Being part of a company that has been in business for more than 100 years, is well known in the industry, and has a major impact on the energy industry.\n\n- Work in a company with commitment to Inclusion & Diversity and Sustainability (Foster an inclusive culture with a strategic goal to increase a female representation including in Leadership)\n\n- Annual mentoring program, Eaton University, a reward, and recognition system\n\n- Ongoing Learning and Career Development Opportunities in a global company. Build your career and apply internally for our open positions worldwide.\n\n- Strong, agile, and diverse team locally and globally\n\n- Strong processes and state-of-the-art systems and tools\n\n- Structured employee development processes, open feedback culture with development plans\n\n- Detailed induction support and well-structured onboarding\n\n- Balance your work and life with a 100% remote worktime model.\n\n- For this position, we offer a base salary, sales incentive, a company car and other local benefits.\n\nWe are committed to ensuring equal employment opportunities for job applicants and employees. Our recruitment processes use balanced selection criteria and avoid unlawful discrimination against applicants on the basis of their age, colour, disability, marital status, national origin, gender, gender identity, genetic information, race or racial origin, religion, sexual orientation or any other status protected or required by law.",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 12:55:28"
     },
     {
-      "title": "Medior Project Manager",
-      "company": "Cyclops",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Project Manager @ Employee Benefits - FR",
-      "company": "P&V Group",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Kwery - IT Project Manager",
-      "company": "JoBBsquare Belgie",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Project Manager @ Employee Benefits - NL",
-      "company": "P&V Group",
-      "reason": "publication time not verifiable"
-    },
-    {
+      "id": "4462360200",
       "title": "IT Project Manager & Scrum Master (Freelance optional)",
       "company": "EngiFlex",
-      "reason": "publication time not verifiable"
+      "initial": "E",
+      "fit": 90,
+      "location": "Brussels, Brussels Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/it-project-manager-scrum-master-freelance-optional-at-engiflex-4462360200",
+      "description": "Tâches et responsabilités\n\nDans le cadre de l’évolution d’applications core business, nous recherchons un Chef de projet IT / Scrum Master capable de piloter une équipe tout en garantissant le respect du planning, des priorités métier et des contraintes techniques.\n\nVous intervenez comme point de coordination entre les interlocuteurs métier et les équipes IT, avec une bonne compréhension du développement applicatif et des enjeux de livraison.\n\n- Piloter l’équipe projet en tenant compte des besoins exprimés par le Product Owner, le Business Analyst, les développeurs, les designers et les autres parties prenantes\n\n- Assurer le suivi du planning et élaborer de manière autonome des plannings et rétroplannings de haut niveau\n\n- Travailler dans un cadre Agile / Scrum en combinant animation opérationnelle et coordination projet côté IT\n\n- Animer les cérémonies Scrum, notamment les sprint plannings et sprint reviews\n\n- Gérer et faire vivre le backlog avec les interlocuteurs métier, tout en challengeant les demandes lorsque nécessaire\n\n- Coordonner la communication avec les équipes techniques, y compris les équipes réseau et exploitation\n\n- Suivre les user stories, les bugs, les tâches et les release notes dans Azure DevOps\n\n- Veiller au respect des règles définies par les architectes ainsi qu’aux contraintes des différents services IT\n\n- Communiquer avec aisance aussi bien avec le métier qu’avec les équipes techniques\n\n- S’adapter à l’évolution des technologies et des environnements de travail\n\nVotre profile\n\nVous disposez d’une expérience confirmée en gestion de projet IT et en animation Scrum, avec un background technique dans le développement logiciel.\n\nLes compétences attendues sont les suivantes :\n\n- Très bonne maîtrise des méthodologies Agile et Scrum\n\n- Excellente maîtrise d’Azure DevOps\n\n- Solide expérience en project management et en release management\n\n- Bonne connaissance des principaux langages et frameworks du développement web : HTML, JavaScript, CSS, ASP.Net MVC, Angular, React, WebAPI\n\n- Connaissance des bases de données Oracle et SQL Server\n\n- Capacité à lire et comprendre des diagrammes UML et BPMN\n\n- Capacité à collaborer efficacement dans un environnement mêlant enjeux métier, développement, infrastructure et exploitation\n\nLe service étant majoritairement francophone, une excellente maîtrise du français est indispensable. Une bonne maîtrise de l’anglais technique est également requise. Le néerlandais fait partie des langues pertinentes pour la fonction.\n\nOffre\n\nVous ferez partie d'une PME belge en pleine croissance, où l’initiative et le développement personnel sont encouragés. Nous vous offrirons un environnement de travail agréable, entouré(e) de collègues sympathiques. Ensemble, nous élaborerons un plan de carrière, avec une attention particulière et un budget dédié à la formation ou à la certification complémentaire. Vous pouvez compter sur un salaire attractif, complété par des avantages extra-légaux, y compris une voiture de société.\n\n(Freelance est également possible)",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 04:11:37"
     },
     {
+      "id": "4463741615",
+      "title": "Strategic Project Manager (Remote)",
+      "company": "Hire Feed",
+      "initial": "HF",
+      "fit": 90,
+      "location": "Spain",
+      "mode": "Remote",
+      "type": "Full Time",
+      "age": 0,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote",
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://es.linkedin.com/jobs/view/strategic-project-manager-remote-at-hire-feed-4463741615",
+      "description": "- Role: Strategic Project Manager (Remote)\n\n- Location: Remote (Work from Anywhere)\n\n- Job Type: Full-Time\n\n- Payout: $400K - $550K/yr\n\nRole Overview:\n\nWe are hiring for one of our clients, seeking a Strategic Project Lead, MD/Medical Expertise to work on a full-time basis. This role requires a medical doctorate or equivalent expertise to lead cross-functional projects in healthcare technology. You will collaborate with senior stakeholders to align project objectives with business and clinical goals.\n\nKey Responsibilities:\n\n• Develop and execute strategic project plans for medical technology initiatives with measurable outcomes.\n\n• Lead cross-functional teams including product, engineering, and clinical experts to deliver solutions.\n\n• Identify and mitigate risks related to project timelines, budgets, and regulatory compliance.\n\n• Coordinate with medical teams to ensure projects meet clinical requirements and standards.\n\n• Monitor project progress using data-driven metrics and adjust strategies as needed to achieve targets.\n\nRequired Skills & Qualifications:\n\n• Must hold an MD or equivalent medical degree with 5+ years of clinical or medical technology experience.\n\n• Proven track record leading strategic projects in healthcare, biotechnology, or related fields.\n\n• Strong understanding of medical regulations, compliance, and ethical considerations.\n\n• Ability to translate complex medical concepts into business requirements for technical teams.\n\n• Experience with project management methodologies (Agile, Waterfall) in a healthcare context.\n\nMore About the Opportunity:\n\nThis role offers a unique opportunity to work with a global leader in the Information Services industry, contributing to the advancement of medical technology solutions. You will play a key role in shaping projects that bridge clinical needs with technological innovation.\n\nEqual Opportunity Employer:\n\nWe hire based on skills and expertise. All qualified candidates are welcome regardless of background, experience, or prior employment history. Applications are reviewed solely on demonstrated technical ability and qualifications.\n\nApply Now!",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 13:02:31"
+    },
+    {
+      "id": "c9655680c7a31f4a",
       "title": "Compensation & Benefits Project Manager",
       "company": "Eurofins",
-      "reason": "Indeed-only link"
+      "initial": "E",
+      "fit": 88,
+      "location": "1000 Brussels",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 18,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Geografie prioritara",
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Link direct catre angajator neconfirmat"
+      ],
+      "url": "https://www.indeed.com/viewjob?jk=c9655680c7a31f4a",
+      "description": "Company Description\n\nEurofins Scientific is an international life sciences company, providing a unique range of analytical testing services to clients across multiple industries, to make life and our environment safer, healthier and more sustainable. From the food you eat, to the water you drink, to the medicines you rely on, Eurofins laboratories work with the biggest companies in the world to ensure the products they supply are safe, their ingredients are authentic, and labelling is accurate.\n\nEurofins is dedicated to delivering testing services that contribute to the health and safety of society and the planet, and to its corporate responsibility to protect the environment and ensure diversity, equity, and inclusion across the entire network of Eurofins companies.\n\nJob Description\n\nSUMMARY OF POSITION AND OBJECTIVES:\n\nThe Compensation & Benefits Project Manager will support the Manager of the Compensation & Benefits Team with the execution, coordination, administration and continuous improvement of global compensation and benefits processes.\n\nIn this role, you will focus on ensuring the timely delivery of annual compensation cycles, incentive plans, reporting, analytics, governance and HR systems projects across an international environment.\n\nPOSITION & OBJECTIVES:\n\nKey Responsibilities\n\nDeputy to Manager of the Compensation & Benefits Team\n\n-\nAct as the operational partner and trusted Deputy to the Manager of the Compensation & Benefits Team.\n\n-\nSupport prioritisation and execution of strategic initiatives.\n\n-\nCoordinate cross-functional activities involving HR and Finance staff, and Eurofins company leaders.\n\n-\nEnsure commitments are delivered on time and to a high standard.\n\n-\nTake ownership of recurring operational responsibilities.\n\n-\nSupport key guidance document review cycles and updates in accordance with business priorities.\n\nAnnual Compensation Review Coordination\n\n-\nCoordinate the annual compensation and bonus review process for staff at the local corporate office.\n\n-\nManage timelines, milestones, communications and deliverables.\n\n-\nEnsure data quality, consistency and compliance throughout the process.\n\n-\nProduce dashboards, reports and management presentations.\n\n-\nMonitor progress and proactively identify risks and delays.\n\n-\nDrive the completion of actions across multiple stakeholders and functions.\n\nCompensation Analytics & Reporting\n\n-\nConsolidate and analyse large volumes of HR and financial data.\n\n-\nDevelop KPIs, reports, dashboards and executive summaries.\n\n-\nSupport decision-making through data-driven insights.\n\n-\nPerform recurring analyses related to compensation, bonuses and workforce trends.\n\n-\nEnsure accuracy, reliability and consistency of data.\n\nProject Management & Process Excellence\n\n-\nLead and coordinate compensation-related projects.\n\n-\nImprove, document and standardise processes.\n\n-\nDevelop efficient workflows, templates and operational procedures.\n\n-\nEnsure strong governance and follow-up on deliverables.\n\n-\nDrive continuous improvement and automation initiatives.\n\n-\nReceive and process feedback from stakeholders to support continuous improvement.\n\nLong-Term Incentive (LTI) Administration\n\n-\nCoordinate administration of long-term incentive plans.\n\n-\nLiaise with external providers and internal stakeholders.\n\n-\nEnsure smooth execution, controls and participant communications.\n\n-\nSupport the preparation of analyses and materials for senior management.\n\nQualifications\n\nQUALIFICATIONS AND EXPERIENCE REQUIRED:\n\nMaster's degree in Finance, Economics, Business Administration, Human Resources, Engineering or a related field.\n\nExperience\n\nThe ideal candidate has a background in Finance, Controlling, Consulting, Project Management, HR Operations or Business Analytics. Success in this role will depend far more on execution capabilities, project management discipline, analytical strength, ownership and the ability to deliver complex recurring processes on time, rather than on prior Compensation & Benefits expertise. We are looking for a highly driven individual who takes accountability, follows through on commitments and can take on the role of a reliable Deputy to the Manager of Compensation & Benefits Team.\n\nIn addition, the ideal candidate has:\n\n-\nApproximately 5+ years of professional experience.\n\n-\nExperience in Finance, Controlling, Consulting, HR Operations, Project Management, Business Analytics or similar analytical functions.\n\n-\nExperience managing complex processes involving multiple stakeholders, while exposure to international environments and compensation processes and/or HRIS management being considered a plus.\n\n-\nProject management & deadline discipline, with an affinity for continuous improvement and process optimisation.\n\n-\nAnalytical skills and strong attention to detail, with a key focus on ownership & accountability.\n\nAdditional Information\n\nWhat’s in for you?\n\n-\nA unique opportunity to gain experience within a fast‑growing, international organisation.\n\n-\nExposure to a wide range of corporate departments, providing a comprehensive understanding of how a global organisation operates.\n\nYou will join an international office ideally located near parks and green spaces, bringing together colleagues from over 35 nationalities. Additionally, we offer an attractive compensation package and extra-legal benefits that include covered transportation costs, organic meals, sports activities, and annual office events.\n\nLocation: Brussels, Belgium. Curious about where you’ll be working? Tour the office: Meet the office - Brussels, Belgium.\n\n-\n\nWe support your development! Do you feel you don’t match 100% of the requirements? Don’t hesitate to apply anyway! Eurofins companies are committed to supporting your career development.\n\nWe embrace diversity! As an Equal Opportunity Employer, the Eurofins network of companies believes in strength and innovation through diversity. We prohibit discrimination against employees or applications based on gender identity and/or expression, race, nationality, age, religion, sexual orientation, disability, and everything else that makes employees of Eurofins companies unique.\n\nSustainability matters to us! We are well on our way to achieving our objective of carbon neutrality by 2025, through a combination of emission reduction and compensation initiatives. We encourage our laboratory leaders to make sustainable changes at their local level, and in addition to their initiatives we count on our dedicated carbon reduction team to help us to achieve this goal!\n\nFind out more on our Careers page: https://careers.eurofins.com/\n\nCompany description: Eurofins Scientific is an international life sciences company, providing a unique range of analytical testing services to clients across multiple industries, to make life and our environment safer, healthier and more sustainable. From the food you eat, to the water you drink, to the medicines you rely on, Eurofins laboratories work with the biggest companies in the world to ensure the products they supply are safe, their ingredients are authentic and labelling is accurate.\n\nThe Eurofins network of companies believes that it is a global leader in food, environment, pharmaceutical and cosmetic product testing and in discovery pharmacology, forensics, advanced material sciences and agroscience contract research services. It is also one of the market leaders in certain testing and laboratory services for genomics, and in the support of clinical studies, as well as in biopharma contract development and manufacturing. It also has a rapidly developing presence in highly specialised and molecular clinical diagnostic testing and in-vitro diagnostic products.\n\nIn over 37 years, Eurofins has grown from one laboratory in Nantes, France to over 65,000 staff across a decentralised and entrepreneurial network of more than 950 laboratories in over 1,000 companies across 60 countries. Eurofins companies offer a portfolio of over 200,000 analytical methods to evaluate the safety, identity, composition, authenticity, origin, traceability and purity of biological substances and products.\n\nIn 2024, Eurofins generated total revenues of EUR 6.95 billion, and has been among the best performing stocks in Europe over the past 20 years.",
+      "date_posted": "2026-09-04T20:09:45+00:00",
+      "source": "indeed",
+      "verified_at": "2026-09-05 12:36:01"
     },
+    {
+      "id": "4413272680",
+      "title": "Asset MGT - Project Manager BBox",
+      "company": "Bpost",
+      "initial": "B",
+      "fit": 85,
+      "location": "Brussels, Brussels Region, Belgium",
+      "mode": "Remote",
+      "type": "Full Time",
+      "age": 0,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote",
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/asset-mgt-project-manager-bbox-at-bpost-4413272680",
+      "description": "bpost strives to create an inclusive environment with challenging projects and inspiring collaborations. With our colleagues at the heart of our organisation, we believe in careers rather than jobs. As part of the international group bnode, bpost has transitioned from the Belgian postal operator to a regional and digital expert in parcel size logistics. With a focus on social and environmental sustainability, our people are the foundation of everything we do. We foster a culture that supports diversity, inclusion and career growth, ensuring that every team member has the opportunity to thrive and succeedWhat will you do?\n\nLead the rollout of one of the fastest-growing logistics networks in Belgium\n\nWithin our Out-of-Home (OOH) delivery activities, bbox (parcel lockers) play a key role in how customers receive and send their parcels today and tomorrow.\n\nTo support our growth ambitions, we are looking for a Project Manager Bbox who will take ownership of a strategic program with a direct impact on our network, partners, and customers.\n\nAs Project Manager Bbox\n\n- You lead the national rollout and optimization of the bbox network\n\n- You manage multiple project leaders and administrative functions, with a strong focus on quality, timing, and budget\n\n- You build long-term relationships with key accounts and partners\n\n- You actively contribute to broader cross-functional OOH initiatives\n\nKey Responsibilities\n\n- Monitor project progress and efficiency\n\n- Prioritize work in an environment with tight deadlines and changing priorities\n\n- Contribute to improving project quality and efficiency\n\n- Lead and coach a team of project managers\n\n- Develop their competencies\n\n- Collaborate with internal teams\n\n- Build strong relationships with partners\n\n- Continuously improve processes\n\n- Contribute to cross-functional projects (City Infrastructure, bbox boutique, OOH onboarding)\n\n- Report on progress and results\n\nWho are you?\n\n- Experience in project management (multi-project environment)\n\n- Leadership skills and coaching mindset\n\n- Strong stakeholder management skills\n\n- Ability to work under pressure with rapidly changing priorities (agile mindset)\n\n- Analytical thinking and pragmatic approach\n\n- Good communication skills (NL/EN), knowledge of French\n\n- Good knowledge of MS Office\n\n- Driving license B\n\n- Experience in infrastructure or network projects\n\n- Technical knowledge or background\n\n- Affinity with logistics or e-commerce\n\nWhat do we offer?\n\nLike a Long-awaited Parcel, We Want To Make You Feel Welcome And Valued. Our Offer Includes a Competitive Monthly Salary, That Goes Without Saying. On Top Of That, You Can Count On\n\n- Meal vouchers of €8 per working day\n\n- Hospitalization-, group- and disability insurances\n\n- A phone subscription, including 25GB data\n\n- A flexible renumeration plan, which allows you to customize your own benefits. A company car, bike leasing, public transportation, extra days off,... the choice is yours\n\n- Possibility to enter the Federal Mobility plan\n\n- Work/life balance, thanks to flexible working hours and the possibility to work from home\n\n- 20 days of statutory leave and 7 additional extralegal days off\n\n- An end-of-year and performance-based bonus and double holiday pay\n\n- Many benefits from more than 100 bpost-partners\n\n#bpost #bnode",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 10:23:29"
+    },
+    {
+      "id": "4413275673",
+      "title": "Design & Utilization - Sr Project Manager Capacity & Yield Management",
+      "company": "Bpost",
+      "initial": "B",
+      "fit": 83,
+      "location": "Brussels, Brussels Region, Belgium",
+      "mode": "Remote",
+      "type": "Full Time",
+      "age": 0,
+      "remote": true,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Remote",
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/design-utilization-sr-project-manager-capacity-yield-management-at-bpost-4413275673",
+      "description": "bpost strives to create an inclusive environment with challenging projects and inspiring collaborations. With our colleagues at the heart of our organisation, we believe in careers rather than jobs. As part of the international group bnode, bpost has transitioned from the Belgian postal operator to a regional and digital expert in parcel size logistics. With a focus on social and environmental sustainability, our people are the foundation of everything we do. We foster a culture that supports diversity, inclusion and career growth, ensuring that every team member has the opportunity to thrive and succeedWhat will you do?\n\nAt Bnode, we believe careers are built through stimulating challenges, inspiring collaborations, and continuous development. Our Out-of-Home network lockers and pickup points used daily by thousands of customers lies at the heart of our logistics innovation.\n\nTo support the next phase of our capacity & yield management strategy, we are looking for a Senior Project Manager Capacity / Yield who can operate at the intersection of data, strategy, and execution.\n\nAs Senior Project Manager Capacity, you will maximize the profitability and utilization of OOH assets (lockers & parcel points) by transforming analytical insights into end-to-end strategic projects.\n\nYour role sits at the intersection of revenue optimization, capacity planning, and strategic project management.\n\nYour Responsibilities\n\nStrategic Project Management\n\n- Lead complex projects related to OOH network capacity and profitability, from initial scoping through implementation.\n\n- Structure business problems, define priorities, and establish a clear roadmap for each initiative.\n\n- Coordinate multiple stakeholders and ensure alignment between operations, commercial, and finance teams.\n\n- Ensure effective project follow-up, respect of timelines, and achievement of defined objectives.\n\nCapacity & Revenue Optimization\n\n- Develop and implement strategies to optimize the utilization of lockers and parcel pickup points.\n\n- Analyze revenue and margin structures to identify opportunities to improve financial performance.\n\n- Contribute to capacity allocation decisions in order to maximize asset profitability.\n\n- Assess the financial impact of strategic options and support capacity investment decisions.\n\nCapacity Planning & Management\n\n- Develop capacity planning models aligned with commercial and financial objectives.\n\n- Anticipate demand evolution and adjust capacity strategies accordingly.\n\n- Identify capacity constraints and propose solutions to improve operational and economic efficiency.\n\n- Continuously monitor network utilization and performance.\n\nData-Driven Analysis & Decision Making\n\n- Conduct in-depth analysis of network utilization and channel performance.\n\n- Translate analytical insights into clear and actionable strategic recommendations.\n\n- Develop and maintain reporting to monitor capacity usage, revenue performance, and margins.\n\n- Contribute to improving the analytical tools and methodologies used within the team.\n\nCross-Functional Coordination & Stakeholder Management\n\n- Work closely with Capacity, Operations, Commercial, Finance, and Data teams.\n\n- Support decision-making by bringing a structured and business-oriented perspective.\n\n- Ensure clear and effective communication across different levels of the organization.\n\n- Support the implementation of strategic initiatives and alignment of teams around shared objectives.\n\nWho are you?\n\n- Master’s degree in Economics, Logistics, Data Science, or a related field\n\n- 5+ years of experience in strategy, revenue management, or capacity management\n\n- Strong problem-structuring and analytical skills\n\n- Ability to lead complex projects end-to-end\n\n- Experience in revenue optimization and profitability analysis\n\n- Advanced Excel skills\n\n- Experience with BI tools (Power BI, Tableau, or equivalent)\n\n- Knowledge of capacity planning and demand forecasting techniques\n\n- Affinity with pricing and yield management strategies\n\n- Strong ownership mindset and sense of responsibility\n\n- Ability to structure and defend well-reasoned arguments\n\n- Comfortable coordinating multiple stakeholders\n\n- Ability to thrive in dynamic and demanding environments\n\n- Excellent communication skills\n\n- Languages: Dutch, French, and English\n\nWhat do we offer?\n\nLike a Long-awaited Parcel, We Want To Make You Feel Welcome And Valued. Our Offer Includes a Competitive Monthly Salary, That Goes Without Saying. On Top Of That, You Can Count On\n\n- Meal vouchers of €8 per working day\n\n- Hospitalization-, group- and disability insurances\n\n- A phone subscription, including 25GB data\n\n- A flexible renumeration plan, which allows you to customize your own benefits. A company car, bike leasing, public transportation, extra days off,... the choice is yours\n\n- Possibility to enter the Federal Mobility plan\n\n- Work/life balance, thanks to flexible working hours and the possibility to work from home\n\n- 20 days of statutory leave and 7 additional extralegal days off\n\n- An end-of-year and performance-based bonus and double holiday pay\n\n- Many benefits from more than 100 bpost-partners\n\n#bpost #bnode",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 09:11:25"
+    },
+    {
+      "id": "4327939467",
+      "title": "CSA Project Manager",
+      "company": "Mercury",
+      "initial": "M",
+      "fit": 83,
+      "location": "Mons, Walloon Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/csa-project-manager-at-mercury-4327939467",
+      "description": "CSA Project Manager, Mons, Belgium\n\nApply Now\n\nMercury is the European leader in construction solutions.\n\nWe build and manage complex engineering & construction projects for the world’s leading corporations. Our solutions help deliver technologies and life changing advancements that connect people, communities and businesses, giving them the power to achieve incredible things. Our people have the courage to be innovative. Their determination and sharp focus enable us to deliver with certainty, time and time again.\n\nWe deliver our clients’ visions through leading edge construction solutions across multiple sectors, including: Enterprise Data Centres, Advanced Technology & Life Sciences, Hyperscale Data Centres, Fire Protection.\n\nAt Mercury, it is our duty to encourage and back our people to realise their vision of themselves. We place them at the heart of what we do, providing challenging opportunities to develop within a great team in a supportive environment that allows them to reach their full potential.\n\nKey Responsibilities Of The Role\n\n- Liaising with key Stakeholders to deliver all aspects of assigned projects.\n\n- Develop Project Execution strategies.\n\n- Develop site logistics (demobilisation / mobilisation) plans.\n\n- Develop and implement Project Schedules in accordance with key milestones, co-ordinating with all trades and CSA works.\n\n- Develop and implement Project costs and budget plans.\n\n- Review, sign-off and implement Project Quality plans and procedures.\n\n- Review, sign-off and implement Project EHS Management plan.\n\n- Management and motivation of Project construction and Engineering teams.\n\n- Develop and agree submission and approvals process with client / design consultants.\n\n- Develop and monitor material procurement schedules in accordance with schedule requirements.\n\n- Select and appoint Project Sub-contractors and Supply chain in conjunction with Project teams and specifications\n\n- Chair weekly internal team, supplier and sub-contractor meetings to co-ordinate and ensure project performance.\n\n- Oversee Project cost / revenue control and report performance and issue weekly reports on same.\n\n- Attendance at client / project management meetings.\n\n- Liaison with Sub-contractor and supplier senior management at steering group level to avoid project roadblocks.\n\n- Ongoing liaison with Client Design teams and building contractor teams to ensure project performance.\n\n- Develop and implement test and commissioning procedures\n\nEssential Criteria For The Role\n\n- Minimum 5 years’ experience in a similar position.\n\n- Professional project management qualifications or a trade qualification.\n\n- CSA Project Management experience\n\n- Understanding all the associated safety code related requirements relative to providing the service.\n\n- Experience in Health & Safety Risk Assessments and Control Measures.\n\n- Experience in vendor management, ability to manage and monitor progress to ensure objectives are achieved for outsourced support and projects.\n\n- Experience in Project Management principles & delivering DC project upgrade works.\n\n- Excellent verbal, written and interpersonal communication skills, with the ability to communicate intelligently and effectively with the client, employees and subcontractors.\n\n- Excellent motivational and influencing skills, with high levels of personal integrity.\n\n- Ability to communicate technical and business problems in a non-technical manner.\n\n- Ability to work well under pressure and within a strict deadline environment.\n\n- Travel and working abroad will be required for this role.\n\nMercury is an equal opportunity employer\n\nChef de projet CSA, Mons\n\nMercury est le leader européen des solutions de construction.\n\nNous concevons et gérons des projets d'ingénierie et de construction complexes pour les plus grandes entreprises mondiales. Nos solutions contribuent à diffuser des technologies et des avancées qui transforment des vies, connectant les personnes, les communautés et les entreprises et leur donnant les moyens de réaliser des choses incroyables. Notre peuple a le courage d'innover. Leur détermination et leur concentration sans faille nous permettent de tenir nos promesses avec certitude, à chaque fois.\n\nNous concrétisons les visions de nos clients grâce à des solutions de construction de pointe dans de multiples secteurs, notamment : les centres de données d'entreprise, les technologies avancées et les sciences de la vie, les centres de données hyperscale et la protection contre l'incendie.\n\nChez Mercury, notre devoir est d'encourager et de soutenir nos collaborateurs afin qu'ils réalisent leur potentiel. Nous les plaçons au cœur de nos activités, en leur offrant des opportunités stimulantes de se développer au sein d'une équipe formidable, dans un environnement favorable qui leur permette d'atteindre leur plein potentiel.\n\nPrincipales Responsabilités Du Poste\n\n- Assurer la liaison avec les principales parties prenantes afin de mener à bien tous les aspects des projets assignés.\n\n- Élaborer des stratégies d'exécution de projet.\n\n- Élaborer des plans logistiques de site (démobilisation / mobilisation).\n\n- Élaborer et mettre en œuvre les calendriers de projet en fonction des étapes clés, en coordination avec tous les corps de métier et les travaux de CSA.\n\n- Élaborer et mettre en œuvre les plans de coûts et de budget du projet.\n\n- Examiner, approuver et mettre en œuvre les plans et procédures qualité du projet.\n\n- Examiner, approuver et mettre en œuvre le plan de gestion EHS du projet.\n\n- Gestion et motivation des équipes de construction et d'ingénierie du projet.\n\n- Élaborer et convenir d'un processus de soumission et d'approbation avec le client / les consultants en conception.\n\n- Élaborer et suivre les calendriers d'approvisionnement en matériel conformément aux exigences du calendrier.\n\n- Sélectionner et désigner les sous-traitants et la chaîne d'approvisionnement du projet en collaboration avec les équipes de projet et conformément aux spécifications.\n\n- Animer les réunions hebdomadaires internes avec l'équipe, les fournisseurs et les sous-traitants afin de coordonner et de garantir la performance du projet.\n\n- Superviser le contrôle des coûts et des revenus du projet, rendre compte des performances et publier des rapports hebdomadaires à ce sujet.\n\n- Participation aux réunions de gestion de projet/clients.\n\n- Assurer la liaison avec la direction des sous-traitants et des fournisseurs au niveau du comité de pilotage afin d'éviter les blocages du projet.\n\n- Liaison permanente avec les équipes de conception du client et les équipes des entrepreneurs en bâtiment afin de garantir la bonne réalisation du projet.\n\n- Élaborer et mettre en œuvre des procédures de test et de mise en service\n\nCritères Essentiels Pour Le Poste\n\n- Expérience minimale de 5 ans à un poste similaire.\n\n- Qualifications professionnelles en gestion de projet ou qualification professionnelle.\n\n- Expérience en gestion de projet CSA\n\n- Comprendre toutes les exigences relatives aux codes de sécurité associés à la prestation de service.\n\n- Expérience en matière d'évaluation des risques et de mesures de contrôle en matière de santé et de sécurité.\n\n- Expérience en gestion des fournisseurs, capacité à gérer et à suivre les progrès pour garantir l'atteinte des objectifs des projets et du support externalisé.\n\n- Expérience des principes de gestion de projet et de la réalisation de travaux de modernisation de projets de centres de données.\n\n- Excellentes aptitudes à la communication verbale, écrite et interpersonnelle, avec la capacité de communiquer intelligemment et efficacement avec le client, les employés et les sous-traitants.\n\n- Excellentes aptitudes à la motivation et à l'influence, alliées à une grande intégrité personnelle.\n\n- Capacité à communiquer des problèmes techniques et commerciaux de manière non technique.\n\n- Capacité à bien travailler sous pression et dans un environnement où les délais sont stricts.\n\n- Ce poste nécessitera des déplacements et du travail à l'étranger.\n\nMercury est un employeur qui souscrit au principe de l'égalité d'accès à l'emploi\n\nApply Now",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 10:39:29"
+    },
+    {
+      "id": "4258152872",
+      "title": "Project Manager @ Employee Benefits - NL",
+      "company": "P&V Group",
+      "initial": "PG",
+      "fit": 83,
+      "location": "Antwerp, Flemish Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/project-manager-%40-employee-benefits-nl-at-p-v-group-4258152872",
+      "description": "Wil jij impact maken binnen Employee Benefits?\n\nHeb je een analytische geest, hou je van coördineren en krijg je energie van projecten die écht het verschil maken? Dan is dit jouw kans!\n\nAls Project Manager Employee Benefits (met rol van Initiative Owner) speel je een sleutelrol in het realiseren van strategische initiatieven met zichtbare impact op onze klanten, tussenpersonen en collega’s. Je werkt samen met teams uit de hele organisatie — van business tot IT — en zorgt ervoor dat projecten van A tot Z succesvol worden uitgevoerd.\n\nJouw uitdagingen\n\n - Coördineren van de dagelijkse aansturing van strategische initiatieven binnen Employee Benefits.\n- Bepalen van scope, prioriteiten, fasering en aanpak om doelstellingen efficiënt te realiseren.\n- Opstellen en onderbouwen van business cases die besluitvorming ondersteunen.\n- Definiëren van business requirements in nauwe samenwerking met businessanalisten en inhoudelijke experten.\n- Beschrijven van customer journeys, processen en gewenste oplossingen binnen het projectdomein.\n- Vertalen van businessbehoeften naar duidelijke epics en kwalitatieve requirements.\n- Bewaken van een end-to-end implementatie volgens de COPAFRIJTHX-principes, met aandacht voor de impact op klanten, tussenpersonen en medewerkers.\n- Identificeren van de betrokken teams en organiseren van een efficiënte samenwerking tussen alle stakeholders.\n- Opvolgen van planning, voortgang, risico's en afhankelijkheden binnen het initiatief.\n- Anticiperen op uitdagingen en proactief oplossingen voorstellen om obstakels weg te nemen.\n- Faciliteren van besluitvorming door tijdig te escaleren wanneer nodig.\n- Opbouwen van sterke relaties met stakeholders en zorgen voor een open en transparante communicatie.\n- Stimuleren van een constructieve en oplossingsgerichte samenwerking tussen alle betrokken partijen.\n- Evalueren van gerealiseerde initiatieven en verzamelen van lessen die bijdragen aan continue verbetering.\n- Actief bijdragen aan best practices binnen de P&V Groep en deze delen met collega's.\n\nWat je meebrengt\n\n - Een masterdiploma of gelijkwaardige ervaring.\n- Een grondige kennis van het domein Employee Benefits, inclusief verzekerings-, commerciële, operationele en juridische aspecten.\n- Ervaring met projectmanagement binnen complexe omgevingen, bij voorkeur in een agile context.\n- Sterke analytische vaardigheden en het vermogen om complexe vraagstukken te vertalen naar duidelijke actieplannen.\n- Ervaring met het definiëren van business requirements en het begeleiden van end-to-end implementaties.\n- Uitstekende communicatie- en coördinatievaardigheden.\n- Ervaring in stakeholdermanagement en het uitbouwen van duurzame samenwerkingen.\n- Een resultaatgerichte aanpak met aandacht voor kwaliteit en impact.\n- Een natuurlijke aanleg om mensen rond een gemeenschappelijk doel te verbinden.\n- Je communiceert vlot in het Nederlands en het Frans, met een goede kennis van het Engels.\n\n Wat je kan ontwikkelen bij ons\n\n Bij de P&V Groep krijg je de kans om een sleutelrol op te nemen in strategische initiatieven die een directe impact hebben op onze dienstverlening en onze klanten. Je werkt samen met experten uit verschillende domeinen en bouwt verder aan je expertise in Employee Benefits, projectmanagement en transformatie. We geven je de ruimte, het vertrouwen en de autonomie om initiatief te nemen en mee vorm te geven aan de toekomst van onze organisatie.\n\n Competenties die we waarderen\n\n - Geloofwaardigheid en integriteit- bouwt vertrouwen op door expertise, transparantie en een consistente aanpak.\n- Waardecreatie en challengen- stelt constructief bestaande werkwijzen in vraag en zoekt voortdurend naar verbeteringen.\n- Lerende organisatie- deelt kennis, stimuleert samenwerking en draagt actief bij aan collectieve groei.\n- Impact op beslissingen- formuleert onderbouwde adviezen en beïnvloedt besluitvorming op basis van feiten en inzichten.\n\n Ons aanbod\n\n - Contracttype- onbepaalde duur\n - Werklocatie- Antwerpen in combinatie met thuiswerken\n Desguinlei 92, 2018 Antwerpen\n Koningsstraat 151, 1210 Brussel\n - Extralegale voordelen- De P&V Groep biedt heel wat extralegale voordelen zoals maaltijdcheques, hospitalisatie- en groepsverzekering, ecocheques, een bedrijfsrestaurant, een cafetariaplan, flexibele werktijden en telewerkmogelijkheden, maar ook personeelskortingen bij verschillende partners (en een auto voor bepaalde functies).\n\n Waarom werken voor de P&V Groep?\n\n - De P&V Groep is een coöperatieve verzekeringsmaatschappij die verzekeringen toegankelijk wil maken voor zoveel mogelijk mensen. Daarnaast leveren we een actieve bijdrage aan een meer solidaire samenleving via onze ecologische en maatschappelijke projecten. Onze Stichting P&V ondersteunt actief burgerschap en komt op tegen de sociale uitsluiting van jongeren.\n - Wij zijn een Belgische groep , dat betekent dat alle beslissingen in België worden genomen.\n - De P&V Groep stelt de mens centraal , zowel medewerkers als klanten. We willen een groep zijn met een menselijke waarde en tegelijkertijd een prominente plaats in de Belgische verzekeringsmarkt behouden.\n\n De P&V Groep ondersteunt een beleid van diversiteit en inclusie in de rekrutering van haar medewerkers. We zijn vooral op zoek naar talent, ongeacht gender, leeftijd, afkomst, culturele achtergrond of geloofsovertuiging. Als coöperatie is solidariteit een van de pijlers van de P&V Groep. Wij vinden het dan ook belangrijk dat ons bedrijf een vertegenwoordiging is van de diverse samenleving waarin we leven.",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 09:51:38"
+    },
+    {
+      "id": "2563b7e8c0265da0",
+      "title": "Project Manager Haute-Tension",
+      "company": "EES INFRA",
+      "initial": "EI",
+      "fit": 83,
+      "location": "Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 9,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Link direct catre angajator neconfirmat"
+      ],
+      "url": "https://www.indeed.com/viewjob?jk=2563b7e8c0265da0",
+      "description": "Bedrijf\n\nBegin 2023 bundelden VSE, Yvan Paque en de afdeling Infrastructuur van Collignon hun krachten oner een gemeenschappelijke noemer: Eiffage Énergie Systèmes - Infra. Ook Luxtechnologie en Luxys hebben zicht bij de divisie aangesloten.\n\nDe Infra-activiteiten zijn zeer uitgebreid: van elektrische voedingen tot de plaatsing van LS- en MS-schakelborden, van openbare verlichting langs snelwegen tot renovatie en onderhoud van tunnels. En niet te vergeten: metrostations, verkeerslichten, glasvezel, spoorwegsignalisatie, elektriciteitsnetten op luchthavens, evenals onze expertise in milieu-instrumentatie met de installatie en het onderhoud van analysesystemen voor lucht- en waterkwaliteit.\n\nWat je doet\n\n- Je analyseert het contract, het bestek en de projectrisico’s.\n\n- Je stelt het budget, de planning en de projectorganisatie op en volgt deze op.\n\n- Je coördineert studies, aankopen, werken, testen en indienststellingen, van kantoor tot terrein.\n\n- Je begeleidt Project Leaders, werfverantwoordelijken en onderaannemers.\n\n- Je onderhoudt contacten met klanten en leveranciers van transformatoren en hoogspanningsmateriaal.\n\n- Je werkt nauw samen met het departement Laagspanning om de technische samenhang van de projecten te garanderen.\n\n- Je volgt kosten, marge, facturatie en contractwijzigingen op.\n\n- Je garandeert een veilige uitvoering volgens de kwaliteitsvereisten.\n\nWie je bent\n\n- Master of bachelor elektriciteit, elektromechanica of een gelijkwaardige opleiding.\n\n- Minstens 5 jaar ervaring met de studie en uitvoering van elektrische projecten.\n\n- Significante kennis van hoogspanning van 30 kV tot 400 kV.\n\n- Goede kennis van klanten, transformatoren, hoogspanningsapparatuur en leveranciers in de markt.\n\n- Goede kennis van technisch, financieel en contractueel projectmanagement.\n\n- Je beheerst het Nederlands. Kennis van het Frans is een pluspunt.\n\n- Teamgeest, organisatievermogen, leiderschap, klantgerichtheid en verantwoordelijkheidszin\n\n- Je ziet toe op de naleving van de veiligheidsregels en -instructies.\n\nWat we bieden\n\n- Een voltijds contract van onbepaalde duur onder een bediendestatuut.\n\n- Een aantrekkelijk loon in verhouding met uw kennis en ervaring.\n\n- Een volledig salarispakket (bedrijfswagen + tankkaart/laadpas, netto onkostenvergoeding, maaltijdcheques, groepsverzekering, hospitalisatieverzekering, jaarlijkse bonus, ecocheques, geschenkcheques, laptop, smartphone + abonnement, 12 ADV-dagen, deelname aan het werknemersaandeelhouderschap van Eiffage, Cafetariaplan).\n\n- Opleidingen en mogelijkheden om te evolueren.\n\n- Een aangename en motiverende werkomgeving in een stabiel en sterk bedrijf dat deel uitmaakt van de internationale Eiffage-groep.\n\nContact",
+      "date_posted": "2026-09-05T05:00:00+00:00",
+      "source": "indeed",
+      "verified_at": "2026-09-05 12:23:21"
+    },
+    {
+      "id": "3c11022f85b890fe",
+      "title": "(Senior) Project Manager | Industriële ICT",
+      "company": "Equans Belux",
+      "initial": "EB",
+      "fit": 83,
+      "location": "Belgium",
+      "mode": "Onsite",
+      "type": "Nespecificat",
+      "age": 9,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Link direct catre angajator neconfirmat"
+      ],
+      "url": "https://www.indeed.com/viewjob?jk=3c11022f85b890fe",
+      "description": "Grijp de leiding over complexe industriële ICT-projecten en bouw mee aan de digitale transformatie van productie- en procesomgevingen. Als (Senior) Project Manager begeleid je klanten bij uitdagende projecten rond industriële ICT-infrastructuren, cybersecurity, cloudplatformen, netwerken, virtualisatie, data-oplossingen en digitalisering.\n\nJe combineert technische expertise met projectmanagement en werkt in een omgeving waar technologie, industrie en innovatie samenkomen.\n\nBij Equans geloven we dat diverse talenten onze teams sterker maken. We bouwen actief aan een inclusieve werkomgeving waarin iedereen zich welkom voelt, zichzelf kan zijn en moedigen iedereen aan om te solliciteren.\n\nJouw Equans-uitvalsbasis: Meerhout.\n\nWat ga je doen?\n\n- leid en coördineer je industriële ICT-projecten van analyse tot oplevering\n\n- beheer je scope, budget, planning, kwaliteit, risico’s en resources\n\n- stuur je multidisciplinaire projectteams aan met ICT-specialisten, engineers en externe partners\n\n- ben je het centrale aanspreekpunt voor klanten tijdens de volledige projectlevenscyclus\n\n- werk je technische en commerciële voorstellen uit voor industriële ICT-oplossingen\n\n- bewaak je de financiële resultaten en rendabiliteit van jouw projecten\n\n- verzorg je duidelijke projectrapportering naar klanten en management\n\n- identificeer je nieuwe opportuniteiten bij bestaande en potentiële klanten\n\n- ondersteun je commerciële trajecten vanuit jouw technische expertise\n\n- begeleid je klanten bij digitalisering en digitale transformatie\n\n- coördineer je projecten rond cybersecurity, networking, virtualisatie, cloud en industriële ICT-platformen\n\n- coach en ondersteun je engineers en projectmedewerkers\n\n- draag je actief bij aan de verdere groei van de afdeling\n\n- werk je mee aan standaardisatie, procesoptimalisatie en continue verbetering\n\nZie je een match met jouw troeven?\n\n- een masterdiploma in Informatica, Elektronica-ICT, Toegepaste Informatica, Industriële Wetenschappen of een gelijkaardige technische richting\n\n- ruime ervaring in het succesvol leiden van complexe technische of industriële ICT-projecten\n\n- ervaring met budgetbeheer, contractmanagement en stakeholdermanagement\n\n- minstens 5 jaar ervaring in projectmanagement\n\n- affiniteit met cybersecurity, digitalisering, data-oplossingen, cloudoplossingen en AI-toepassingen binnen de industrie\n\n- sterk organisatorisch en analytisch vermogen\n\n- een ondernemende ingesteldheid en verantwoordelijkheidszin\n\n- uitstekende communicatieve vaardigheden en een klantgerichte aanpak\n\n- rijbewijs B\n\n- een vlotte kennis van het Nederlands, een goede kennis van het Engels. Kennis van het Frans is een pluspunt\n\nWat als jij (Senior) Project Manager Industriële ICT werd bij Equans?\n\nDit betekent voor jou:\n\n- een marktconform salaris in lijn met jouw opleiding en ervaring\n\n- interessante opleidings- en doorgroeimogelijkheden\n\n- groepsverzekering, hospitalisatieverzekering\n\n- ecocheques, maaltijdcheques, representatievergoeding, 13de maand, vakantiegeld\n\n- sociaal abonnement, elektrische leasewagen, fiets leaseplan\n\n- smartphone met abonnement, internetvergoeding\n\n- ADV-dagen, ancienniteitsverlof, thuiswerk\n\n- kortingen via Benefits@Work (cultuur, sport, reizen …)",
+      "date_posted": "2026-09-05T05:00:00+00:00",
+      "source": "indeed",
+      "verified_at": "2026-09-05 14:12:07"
+    },
+    {
+      "id": "4461417194",
+      "title": "Kwery - IT Project Manager",
+      "company": "JoBBsquare Belgie",
+      "initial": "JB",
+      "fit": 81,
+      "location": "Mechelen, Flemish Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/kwery-it-project-manager-at-jobbsquare-belgie-4461417194",
+      "description": "Voor een stabiel en groeiend softwarebedrijf in de regio Mechelen zoek ik een IT Project Manager / PMO. De organisatie biedt innovatieve softwareoplossingen die bedrijven helpen om hun administratieve en digitale processen efficiënter te organiseren en werkt samen met uiteenlopende organisaties.\n\nVoor deze rol ben ik op zoek naar iemand die sterk is in structuur, organisatie en communicatie. Iemand die graag het overzicht bewaart, vlot schakelt met verschillende stakeholders en energie haalt uit het begeleiden van projecten. Je hoeft hiervoor geen technische specialist te zijn.\n\nHoe zal jouw takenpakket eruit zien?\n\n- Je beheert meerdere softwareprojecten van opstart tot oplevering en bewaakt scope, timing en budget.\n\n- Je volgt de planning, milestones en deliverables nauwgezet op.\n\n- Je bent het eerste aanspreekpunt voor klanten en zorgt voor een duidelijke communicatie en verwachtingsmanagement.\n\n- Je stemt af met interne teams en management om projecten vlot te laten verlopen.\n\n- Je detecteert risico's en knelpunten tijdig en stuurt bij waar nodig.\n\nWat verwachten zij van jou?\n\n- Je hebt minstens 3-4 jaar ervaring als Project Manager of PMO binnen een software- of IT-omgeving.\n\n- Je bent sterk in organisatie, communicatie en het stellen van de juiste prioriteiten.\n\n- Je hebt een sterke helicopterview en weet teams en stakeholders aan te sturen zonder zelf technisch in de uitvoering te duiken.\n\n- Je hebt ervaring met klantencontact en stakeholdermanagement en weet verwachtingen duidelijk af te stemmen.\n\nWat bieden zij jou?\n\n- Een mooi bruto maandsalaris van €4.200 tot €5.600, afhankelijk van jouw ervaring en expertise.\n\n- Een bedrijfswagen met tank- of laadkaart, zodat je je ook privé zorgeloos kunt verplaatsen.\n\n- Een uitgebreid pakket aan extralegale voordelen met onder andere een netto onkostenvergoeding, maaltijdcheques, groeps- en hospitalisatieverzekering, internetabonnement en GSM.\n\n- 32 vakantiedagen die je flexibel kunt opnemen. Zo bepaal je zelf wanneer je even afstand neemt van het werk.\n\n- Na een korte inwerkperiode krijg je de mogelijkheid om tot 2 dagen per week van thuis uit te werken.\n\n- Ben je een echte teamplayer? Dan zit je hier zeker goed! Denk aan bedrijfstripjes waar samen remote gewerkt wordt, maandelijkse afterworks en lunches. Zo kan je, ondanks het thuiswerken, toch een hecht team blijven!\n\nEnglish\n\nFrançais\n\nNederlands",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 01:50:08"
+    },
+    {
+      "id": "4453585204",
+      "title": "Assistant Project Manager | Water Process",
+      "company": "Equans BeLux",
+      "initial": "EB",
+      "fit": 77,
+      "location": "Aartselaar, Flemish Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/assistant-project-manager-water-process-at-equans-belux-4453585204",
+      "description": "Als Assistant Project Manager | Water Process begeleid en coördineer je projecten binnen de waterinfrastructuur in Vlaanderen. Je werkt nauw samen met klanten, leveranciers, onderaannemers, werfleiding en het Engineering Office en bouwt mee aan installaties die een essentiële rol spelen in waterprocessen.\n\nBij Equans geloven we dat diverse talenten onze teams sterker maken. We bouwen actief aan een inclusieve werkomgeving waarin iedereen zich welkom voelt, zichzelf kan zijn en moedigen iedereen aan om te solliciteren.\n\nJouw werklocatie: Vlaanderen.\n\nJouw Equans-uitvalsbasis: Aartselaar.\n\nWat ga je doen?\n\n- calculaties uitvoeren en offertes opmaken\n\n- procedures en technische specificaties opstellen\n\n- contacten onderhouden en onderhandelen met klanten (overheden) tijdens de projectuitvoering\n\n- leveranciers, onderaannemers en werfleiding opvolgen\n\n- technische detailuitwerking en projectopvolging verzorgen samen met het Engineering Office\n\n- planning, kwaliteit, veiligheid, uitgaven en inkomsten beheren\n\n- inbedrijfnames coördineren en alle betrokken partijen op elkaar afstemmen\n\n- rapporteren aan de Project Manager en dagelijks fungeren als rechterhand\n\nZie je een match met jouw troeven?\n\n- diploma industrieel ingenieur of burgerlijk ingenieur elektromechanica of elektronica, of gelijkwaardig door ervaring\n\n- minimum 2 jaar werkervaring is een pluspunt maar geen vereiste\n\n- ervaring met overheidsopdrachten is een plus\n\n- sterk analytisch vermogen en het overzicht bewaren in complexe situaties\n\n- hands-on en pragmatische aanpak\n\n- autonoom kunnen werken binnen een teamgerichte organisatie\n\n- sterke communicatieve vaardigheden en resultaatgerichte ingesteldheid\n\n- leidinggevende vaardigheden op werven en een sterke affiniteit met praktische uitvoering\n\n- plannen, organiseren en coördineren gaan je natuurlijk af\n\n- je spreekt vlot Nederlands en kan je uit de slag trekken in het Frans en het Engels\n\nWat als jij Assistant Project Manager | Water Process werd bij Equans?\n\nDit betekent voor jou:\n\n- een marktconform salaris in lijn met jouw opleiding en ervaring\n\n- interessante opleidings- en doorgroeimogelijkheden\n\n- groepsverzekering, hospitalisatieverzekering\n\n- ecocheques, maaltijdcheques, representatievergoeding, 13de maand, vakantiegeld\n\n- sociaal abonnement, elektrische leasewagen, fiets leaseplan\n\n- smartphone met abonnement, internetvergoeding\n\n- ADV-dagen, ancienniteitsverlof, thuiswerk\n\n- kortingen via Benefits@Work (cultuur, sport, reizen …)",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 09:57:36"
+    },
+    {
+      "id": "4260624800",
+      "title": "Project Manager @ Employee Benefits - FR",
+      "company": "P&V Group",
+      "initial": "PG",
+      "fit": 77,
+      "location": "Antwerp, Flemish Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/project-manager-%40-employee-benefits-fr-at-p-v-group-4260624800",
+      "description": "Envie de jouer un rôle clé dans le secteur des assurances dans le domaine des Employee Benefits ?\n\nTu as l’esprit analytique, un vrai talent pour la coordination, et tu veux piloter des projets à fort impact business de A à Z ? Alors cette opportunité est faite pour toi !\n\nEn tant que Project Manager Employee Benefits (avec rôle d’Initiative Owner), tu es responsable de la mise en œuvre complète d’initiatives stratégiques au sein du département. Tu travailles en étroite collaboration avec des parties prenantes issues de différents départements — business et IT — pour garantir la réussite des projets dans le respect du scope, du planning et du budget.\n\nVos défis\n\n- Assurer la coordination quotidienne des initiatives stratégiques au sein des Employee Benefits.\n- Définir le périmètre, les priorités, les phases et l'approche du projet.\n- Élaborer et justifier les business cases nécessaires à la prise de décision.\n- Définir les besoins métier en collaboration avec les business analysts et les experts du domaine.\n- Décrire les parcours clients, les processus et les solutions attendues dans le cadre des projets.\n- Traduire les besoins métier en epics clairs et en exigences de qualité.\n- Garantir une implémentation end-to-end conforme aux principes COPAFRIJTHX, en tenant compte de l'impact sur les clients, les intermédiaires et les collaborateurs.\n- Identifier les équipes à mobiliser et organiser une collaboration efficace entre les différentes parties prenantes.\n- Suivre l'avancement, les risques, les dépendances et les priorités du projet.\n- Anticiper les difficultés et proposer des solutions pragmatiques pour lever les obstacles.\n- Faciliter la prise de décision en escaladant les sujets lorsque cela s'avère nécessaire.\n- Développer des relations de confiance avec les parties prenantes et assurer une communication transparente.\n- Encourager une dynamique de collaboration constructive et orientée solutions.\n- Évaluer les initiatives réalisées et capitaliser sur les enseignements acquis.\n- Contribuer activement aux bonnes pratiques du Groupe P&V.\n\nCe que vous apportez\n\n- Un diplôme de niveau master ou une expérience équivalente.\n- Une connaissance approfondie du domaine des Employee Benefits, tant sur les aspects assurantiels, commerciaux, opérationnels que juridiques.\n- Une expérience en gestion de projets dans des environnements complexes, idéalement en mode agile.\n- De fortes capacités d'analyse et la faculté de structurer des initiatives complexes.\n- Une expérience dans la définition des besoins métier et l'accompagnement de projets de bout en bout.\n- D'excellentes compétences en communication et en coordination.\n- Une expérience confirmée en gestion des parties prenantes et en développement de collaborations durables.\n- Une orientation résultats associée à un souci constant de qualité.\n- Une aptitude naturelle à fédérer les équipes autour d'objectifs communs.\n- Vous communiquez aisément en français et en néerlandais.\nUne bonne maîtrise de l'anglais.\n\nCe que vous approfondirez avec nous\n\nAu sein du Groupe P&V, vous participez à des initiatives stratégiques qui ont un impact direct sur nos activités, nos services et nos clients. Vous collaborez avec des experts de différents domaines et développez davantage votre expertise en Employee Benefits, en gestion de projets et en transformation. Nous vous offrons l'autonomie, la confiance et les opportunités nécessaires pour contribuer activement à l'évolution de notre organisation.\n\nLes compétences que nous valorisons\n\n- Crédibilité et intégrité inspire confiance grâce à son expertise, son professionnalisme et sa transparence.\n- Création de valeur et esprit de challenge identifie les opportunités d'amélioration et remet en question les pratiques existantes de manière constructive.\n- Organisation apprenante partage ses connaissances et favorise le développement collectif.\n- Impact sur les décisions formule des recommandations fondées et contribue activement à la prise de décision.\n\nNotre offre\n\n- Type de contrat durée indéterminée\n - Lieu de travail Anvers en combinaison avec le télétravail\n Rue Royale 151, 1210 Bruxelles\n Desguinlei 92, 2018 Antwerpen\n - Avantages extra légaux Le Groupe P&V offre de nombreux avantages extra légaux tels que des chèques-repas, une assurance hospitalisation et une assurance groupe, des écochèques, un restaurant d’entreprise, un plan cafétaria, des horaires flexibles et des possibilités de télétravail, ainsi que d’autres avantages auprès de nombreux partenaires.\n\nPourquoi travailler pour le Groupe P&V ?\n\n- Le Groupe P&V est un e compagnie d’assurances coopérative qui vise à rendre les assurances accessibles au plus grand nombre et participer à la construction d’un monde solidaire via plusieurs initiatives telles que la Fondation P&V.\n - Nous sommes un groupe belge , ce qui signifie que toutes les décisions sont également prises en Belgique.\n - Le Groupe place l’humain au centre de ses préoccupations, tant ses collaborateurs que ses clients. Nous souhai tons rester un groupe à valeur humaine tout en gardant une place de choix dans le marché belge des assurances.\n\nLe Groupe P&V soutient une politique de diversité et d’inclusion lors du recrutement de ses collaborateurs. Nous recherchons avant tout des talents, sans tenir compte de leur genre, âge, origine, appartenance culturelle ou croyance. En tant que coopérative, un des piliers du groupe P&V est la solidarité. Nous voyons notre entreprise comme une représentation de la société diverse dans laquelle nous vivons.",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 10:23:27"
+    },
+    {
+      "id": "4334788022",
+      "title": "Medior Project Manager",
+      "company": "Cyclops",
+      "initial": "C",
+      "fit": 76,
+      "location": "Vilvoorde, Flemish Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/medior-project-manager-at-cyclops-4334788022",
+      "description": "Are you looking to lead projects in various sectors such as food, pharmaceuticals, and industry? At Cyclops, you will take responsibility for delivering industrial projects, from concept to completion.\n\nCyclops is a project management company that supports organizations with investment projects, from initial concepts to full realization. The focus is on collaboration, quality, and sustainable growth — for both clients and employees.\n\nAbout The Role\n\nAs a Project Manager, you are responsible for the full execution of industrial investment projects for external clients.\n\nA Summary Of Your Main Tasks\n\n- You manage projects with a strong focus on scope, planning, budget, quality, and safety, ensuring smooth and successful delivery;\n\n- Translating client needs into practical and achievable solutions, you make a tangible impact on project outcomes;\n\n- In this role, you coordinate and lead project teams, including suppliers, contractors, and other stakeholders, to reach shared objectives;\n\n- Acting as the main point of contact for the client, you operate either as the owner’s representative or working within a larger project team;\n\n- Your work spans a variety of industries, including food, pharmaceuticals, chemicals, and FMCG, ensuring diversity and challenge in your projects.\n\nWHO ARE YOU?\n\n- Preferably, you hold a master’s degree in engineering, or a technical bachelor’s degree combined with relevant experience;\n\n- You have at least 3 years of experience in a project environment, either as an engineer or in a project/lead role;\n\n- You show a proactive, hands-on mindset with a strong sense of ownership, and you are able to stay resilient while delivering high-quality work in a fast-paced environment;\n\n- You have a strong attention to detail, a structured way of working, and the flexibility to travel within a reasonable distance to client sites;\n\n- You are fluent in English and Dutch or French;\n\nWHY CHOOSE CYCLOPS?\n\n- You take ownership of challenging projects in a fast-growing, dynamic environment where your impact is visible from day one;\n\n- You receive a comprehensive compensation package with benefits including a company car, laptop and phone, meal and eco vouchers, extensive insurance coverage, and a cafeteria plan;\n\n- With access to coaching and tailored training, you continuously sharpen your skills and grow as a project professional;\n\n- Growing together with the company, you are given real opportunities to develop your career as Cyclops evolves;\n\n- Working in a team where collaboration, drive, and a positive team culture go hand in hand with delivering results.\n\n👉 Apply now and become part of our team. Talk to you soon!\n\nCYCLOPS is a project management and engineering firm that supports companies worldwide with their investment projects. All the way from the initial concept to the complete project realization. Our goal? Moving forward together.",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 13:49:40"
+    },
+    {
+      "id": "4334797787",
+      "title": "Senior Project Manager",
+      "company": "Cyclops",
+      "initial": "C",
+      "fit": 70,
+      "location": "Vilvoorde, Flemish Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/senior-project-manager-at-cyclops-4334797787",
+      "description": "About The Job\n\n- As a Senior Project Manager you will be responsible for delivering multidisciplinary, complex EPC and CapEx projects.\n\n- You will organize your work and ensure that projects are executed safely, qualitatively, timely and within budget.\n\n- You will be responsible for high-level stakeholder-management and managing all project controls.\n\n- You will act as Owner’s representative for our clients or will be part of a bigger project team.\n\n- You will manage projects at the client and different internal and external teams.\n\n- The projects you will be involved in as a Project Manager comprise a variety of industries such as Food, Pharmaceutical, Chemical, FMCG, Metallurgy, etc.\n\nWhat We Need\n\n- You have a Master's degree in engineering or a technical Bachelor’s degree with equivalent experience.\n\n- You have minimal 5y experience as a project manager and have a proven record of leading big CaPex or EPC projects.\n\n- With your outstanding peoplemanagement and communication skills you succeed in getting the best out of the project teams.\n\n- As a Project Manager, you have a proactive “make-it-happen” mentality.\n\n- You are resilient and like to work in a fast-paced environment.\n\n- You are flexible to travel within a reasonable distance to the client.\n\n- Experience with Office Suite and Microsoft Project is a plus\n\n- You speak fluently English and Dutch.\n\nWhat We Offer\n\n- Cyclops is an open, dynamic and fast growing company which offers you a challenging job with direct responsibility for varying projects in different sectors.\n\n- We offer a competitive salary package, including laptop + professional software, mobile phone, car, fuel card, etc.. .\n\n- We provide coaching, trainings and courses to improve your soft and hard skills.\n\n- As we grow as a company, we enable you to grow in your profession and you’ll be able to have more responsibilities within the Cyclops’s organization.\n\n- Last but not least: If you want to combine fun and challenges, Cyclops is the place to be!\n\nCYCLOPS is a project management and engineering firm that supports companies worldwide with their investment projects. All the way from the initial concept to the complete project realization. Our goal? Moving forward together.",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 13:25:00"
+    },
+    {
+      "id": "5e75270d2aaa1667",
+      "title": "Project & Program Manager",
+      "company": "Just Eat Takeaway.com",
+      "initial": "JE",
+      "fit": 67,
+      "location": "1000 Brussels",
+      "mode": "Onsite",
+      "type": "Nespecificat",
+      "age": 9,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Link direct catre angajator neconfirmat"
+      ],
+      "url": "https://www.indeed.com/viewjob?jk=5e75270d2aaa1667",
+      "description": "Ready for a challenge?\n\nThen Just Eat Takeaway.com might be the place for you. We’re a leading global online delivery platform, and our vision is to empower everyday convenience. Whether it’s a Friday-night feast, a post-gym poke bowl, or grabbing some groceries, our tech platform connects tens of millions of customers with hundreds of thousands of restaurant, grocery and convenience partners across the globe.\n\nAbout this role As a Project & Program Manager, you will join an energetic, fast-paced team dedicated to operational excellence. In this role, you will lead and deliver end-to-end projects within defined scope, time, quality, and budget constraints.\n\nWorking closely with local operations, cross-functional squads, and external partners, you will bring structure to complex briefs while embodying our core values to Lead, Deliver, and Care.\n\nYou will take full ownership of outcomes, keeping solutions simple and effective while putting a customer-centric approach at the heart of everything you do.\n\nThese are some of the key components to the position:\n\n-\n\nTurn defined briefs into realistic, actionable project plans with clear objectives, scope, milestones, and risk management.\n\n-\n\nRun projects end to end from initiation to proper closure, including handovers and clear lessons learned.\n\n-\n\nTrack progress, budget, and quality, flagging slippage early alongside structured options and recommendations.\n\n-\n\nLead continuous improvement and LEAN process-optimization initiatives to elevate delivery operations.\n\n-\n\nManage operational stakeholders by preparing clear information to facilitate timely decision-making.\n\n-\n\nFacilitate productive working sessions and steering meetings to keep projects moving at a swift pace.\n\n-\n\nExecute day-to-day project activities directly, balancing hands-on work with structured oversight.\n\n-\n\nEscalate complex risks, trade-offs, or scope changes to senior management when necessary.\n\nWhat will you bring to the team?\n\n-\n\nProven track record of independently planning and delivering medium-sized operational or process improvement projects.\n\n-\n\nStrong understanding of continuous improvement practices (such as LEAN) and structured operations change.\n\n-\n\nPractical capability to manage operational stakeholders through clear, pragmatic, and fact-based communication.\n\n-\n\nExcellent facilitation skills, with the ability to turn complex choices into actionable recommendations.\n\n-\n\nProficiency with standard project management tools such as Jira, Confluence, MS Project, or Smartsheet.\n\n-\n\nExceptional written and spoken English skills; knowledge of Dutch or French is a strong asset in regional markets.\n\n-\n\nA hands-on, pragmatic mindset that prioritizes effective, on-time delivery over theoretical perfection.\n\n-\n\nStrong organizational capability to manage multiple parallel initiatives in a fast-changing environment.\n\n-\n\nAbility to build trust across matrixed organizations with local and central stakeholders.\n\nAt JET, this is how we play Our teams forge connections internally and work with some of the best-known brands on the planet, giving us truly international impact in a dynamic environment. Being the best at what we do isn’t just about delivering on our strategy. It's a competition for something incredibly valuable – our customers' choice. Every time a customer decides where to order, they're picking a side.\n\nAt the heart of the JET Customer League are our values and behaviours. They guide every interaction, every decision, every innovation. These are the actions we need to perform consistently and brilliantly, to surpass the competition and earn our customers’ loyalty, again and again.\n\nFun, fast-paced and supportive, the JET culture is about movement, growth, helping one another to succeed and celebrating wins. By truly living our values and embodying our behaviours, we’re building a customer-first culture which enables us to stay one step ahead of the competition.\n\nInclusion, Diversity & Belonging\n\nNo matter who you are, what you look like, who you love, or where you are from, you can find your place at Just Eat Takeaway.com.\n\nWe’re committed to creating an inclusive culture, encouraging diversity of people and thinking, in which all employees feel they truly belong and can bring their most colourful selves to work every day.\n\nWhat else are we delivering? Want to know more about our JETers, culture or company? Have a look at our career site where you can find people's stories, blogs, podcasts and more JET journeys.\n\nAre you ready to join the team? Apply now!",
+      "date_posted": "2026-09-05T05:00:00+00:00",
+      "source": "indeed",
+      "verified_at": "2026-09-05 12:26:57"
+    }
+  ],
+  "excluded_sample": [
     {
       "title": "Senior Scrum Master (M/F/H)",
       "company": "Everience Benelux",
-      "reason": "Indeed-only link"
+      "reason": "older than 24 hours"
     },
     {
       "title": "Project Manager",
@@ -143,6 +520,81 @@
       "title": "Project Manager | E&I - HVAC",
       "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
       "reason": "non-IT role"
+    },
+    {
+      "title": "(Senior) Project Manager | Industriële ICT",
+      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
+      "reason": "older than 24 hours"
+    },
+    {
+      "title": "HR Project Manager",
+      "company": "Actief Interim NV",
+      "reason": "older than 24 hours"
+    },
+    {
+      "title": "R&D Project Manager",
+      "company": "PROMAN Agilitas NV",
+      "reason": "older than 24 hours"
+    },
+    {
+      "title": "Field service manager",
+      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
+      "reason": "older than 24 hours"
+    },
+    {
+      "title": "Project Manager Machinebouw",
+      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
+      "reason": "older than 24 hours"
+    },
+    {
+      "title": "Project Manager – Digital Marketing",
+      "company": "Voxturr Consulting Pvt. Ltd",
+      "reason": "non-IT role"
+    },
+    {
+      "title": "Program Manager, Executive Experiences",
+      "company": "Stripe",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Technical Project Manager",
+      "company": "Penbrothers",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "IT Project Manager - LAGUNA STA.ROSA",
+      "company": "SLI Consulting",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager, Independent Contractor (6-Month Engagement)",
+      "company": "3Sharp",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Senior Project Manager",
+      "company": "NWM Risk Management",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Sr. Technology Project Manager",
+      "company": "Arizona Financial Credit Union",
+      "reason": "deep ERP/SAP implementation"
+    },
+    {
+      "title": "Senior / Project Manager - Oncology - US/Canada - Remote",
+      "company": "Worldwide Clinical Trials",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "REMOTE Project Manager - Restaurant Construction",
+      "company": "Jobot",
+      "reason": "non-IT role"
+    },
+    {
+      "title": "Project Manager - Growth (Remote)",
+      "company": "Hire Feed",
+      "reason": "remote geography not eligible"
     }
   ]
 }
