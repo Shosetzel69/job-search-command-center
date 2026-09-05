@@ -136,6 +136,12 @@ def load_config() -> dict[str, Any]:
         raise RuntimeError("role_groups must be an object")
     if not isinstance(config.get("work_modes"), dict):
         raise RuntimeError("work_modes must be an object")
+    mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
+    if mode not in {"disabled", "apify", "direct"}:
+        raise RuntimeError("jobspipe_mode must be disabled, apify or direct")
+    apify_max = int(config.get("jobspipe_apify_max_items_per_run", 5000))
+    if apify_max < 100 or apify_max > 20000:
+        raise RuntimeError("jobspipe_apify_max_items_per_run must be 100-20000")
     return config
 
 
@@ -389,7 +395,7 @@ def write_status(now: datetime, collection: list[CollectionResult], jobs_publish
         "records_inspected": sum(len(result.records) for result in successful),
         "jobs_published": jobs_published,
         "excluded": excluded,
-        "limitations": ["JobsPipe free-plan result cap applies to each query"],
+        "limitations": [],
     }
     STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     return state

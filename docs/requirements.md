@@ -1,7 +1,7 @@
 # Cerinte - sumar
 
 Actualizare: 2026-09-05
-Versiune aplicatie: 0.03
+Versiune aplicatie: 0.04
 
 ## Regula de lucru pentru cerinte
 
@@ -26,13 +26,13 @@ Documentatia proiectului este revizuita periodic si sincronizata cu implementare
 - CFR-07: Fiecare rezultat foloseste linkul disponibil pentru job; un rezultat nu este exclus doar pentru ca linkul disponibil este catre Indeed.
 - CFR-08: Detaliile jobului includ descrierea pozitiei atunci cand sursa o furnizeaza.
 - CFR-09: Excluderile automate trebuie sa aiba justificare verificabila in logica de filtrare.
-- CFR-43: Colectarea JobsPipe foloseste `discovered_at_gte` si stare persistenta per interogare pentru polling incremental.
-- CFR-44: JobsPipe foloseste preview gratuit cu `blur_company_data=true` pentru estimarea volumului inaintea colectarii platite.
-- CFR-45: Interogarile JobsPipe evita suprapunerea geografica intre geografiile prioritare si restul Europei remote eligibile.
-- CFR-46: Daca volumul depaseste bugetul unei rulari, cursorul este pastrat si backlog-ul continua ulterior.
-- CFR-47: Rezultatele deja colectate sunt pastrate pana la expirarea ferestrei maxime sau pana cand regulile de filtrare le elimina.
-- CFR-48: JobsPipe are buget configurabil per rulare si prag lunar local.
-- CFR-49: Cand `jobspipe_enabled=false`, workflow-ul nu executa cereri JobsPipe si nu consuma credite provider.
+- CFR-43: JobsPipe foloseste un transport configurabil: `disabled`, `apify` sau `direct`.
+- CFR-44: Modul `apify` foloseste Actorul oficial `jobspipe~jobspipe-job-search`, cu `APIFY_TOKEN` pastrat exclusiv in GitHub Actions Secrets.
+- CFR-45: Atat Apify, cat si Direct evita suprapunerea geografica intre geografiile prioritare si restul Europei remote eligibile.
+- CFR-46: Modul `apify` are plafon tehnic configurabil pentru numarul maxim de joburi brute pe rulare; valoarea implicita este 5.000.
+- CFR-47: Modul `direct` foloseste preview gratuit, `discovered_at_gte`, cursor de backlog si stare persistenta pentru polling incremental.
+- CFR-48: Modul `direct` pastreaza buget configurabil de credite/rulare, prag lunar local si circuit breaker de quota.
+- CFR-49: Cand `jobspipe_mode=disabled`, workflow-ul nu executa nicio cerere JobsPipe sau Apify si pastreaza rezultatele existente.
 
 ### 1.2 Interfata si navigare
 
@@ -52,8 +52,8 @@ Documentatia proiectului este revizuita periodic si sincronizata cu implementare
 - CFR-23: Filtrul Remote simplu separat nu exista; modul de lucru este gestionat prin multiselectie.
 - CFR-24: Contoarele si KPI-urile se actualizeaza din acelasi set de date filtrat.
 - CFR-25: Toate paginile sunt aliniate la partea de sus a ecranului.
-- CFR-50: `Criterii de selectie` include checkbox-ul `Activeaza JobsPipe`, mapat la `jobspipe_enabled`.
-- CFR-51: JobsPipe este dezactivat in perioada de stabilizare si se reactiveaza controlat prin salvarea configuratiei.
+- CFR-50: `Criterii de selectie` include selectorul JobsPipe `Oprit / Apify / Direct`, mapat la `jobspipe_mode`.
+- CFR-51: Pentru Apify, UI permite configurarea plafonului de joburi brute/rulare; pentru Direct, UI permite configurarea bugetului de credite/rulare si a pragului lunar local. JobsPipe ramane `disabled` in perioada de stabilizare.
 - CFR-56: Header-ul foloseste widget de profil discret cu avatar/text si dropdown pentru logout.
 - CFR-57: Albastrul este rezervat actiunii primare `Ruleaza verificarea` si focus states; verdele este folosit pentru stari active/succes.
 - CFR-58: Fundalul general este slate/gri deschis; cardurile sunt albe cu border discret si shadow fin.
@@ -107,9 +107,10 @@ Documentatia proiectului este revizuita periodic si sincronizata cu implementare
 - CNF-08: Solutia urmareste cost operational minim.
 - CNF-09: Arhitectura permite introducerea SQLite/PostgreSQL cand apar cerinte tranzactionale sau multi-user.
 - CNF-10: Filtrele locale nu declanseaza GitHub Actions si trebuie sa raspunda instant din setul incarcat.
-- CNF-11: Strategia JobsPipe trebuie sa protejeze quota prin polling incremental, buget per run si guard lunar.
+- CNF-11: Modul JobsPipe Direct protejeaza quota prin polling incremental, buget per run, guard lunar si circuit breaker; modul Apify foloseste un plafon tehnic de volum.
 - CNF-12: `data/search-state.json` nu este publicat in bundle-ul Cloudflare.
-- CNF-13: `jobspipe_enabled=false` garanteaza zero consum JobsPipe pentru rularile ulterioare pana la reactivare.
+- CNF-13: `jobspipe_mode=disabled` garanteaza zero cereri JobsPipe/Apify pana la reactivare.
+- CNF-18: `APIFY_TOKEN` si `JOBSPIPE_API_KEY` sunt pastrate exclusiv in GitHub Actions Secrets si nu ajung in frontend sau Worker.
 - CNF-14: Frontend-ul nu foloseste interceptari globale `fetch` sau monkey-patching intre module pentru autentificare.
 - CNF-15: Frontend-ul foloseste React functional components, Tailwind CSS si Vite.
 - CNF-16: Browserul primeste numai bundle-ul construit; JSX-ul sursa nu este runtime public.
@@ -126,10 +127,10 @@ Documentatia proiectului este revizuita periodic si sincronizata cu implementare
 - freshness UI: 24h implicit;
 - colectare maxima: 120h / 5 zile;
 - repostari: pastrate si marcate;
-- JobsPipe: `jobspipe_enabled=false` in perioada de stabilizare;
-- buget JobsPipe cand este activ: 14 credite/rulare;
-- guard lunar local: 950 credite;
-- overlap incremental: 2 minute.
+- JobsPipe: `jobspipe_mode=disabled` in perioada de stabilizare;
+- transport recomandat dupa stabilizare: `apify`; `direct` ramane fallback;
+- plafon Apify implicit: 5.000 joburi brute/rulare;
+- Direct: 14 credite/rulare, guard lunar 950, overlap incremental 2 minute.
 
 ## 4. Status implementare
 
@@ -149,7 +150,7 @@ Documentatia proiectului este revizuita periodic si sincronizata cu implementare
 - criterii in grid responsive;
 - `Ruleaza verificarea` prin Command API;
 - `Salveaza preferintele` prin Command API;
-- JobsPipe enable/disable si protectie quota.
+- JobsPipe `disabled/apify/direct`, configuratie UI si protectii specifice fiecarui transport.
 
 ### Limitari / gap-uri cunoscute
 

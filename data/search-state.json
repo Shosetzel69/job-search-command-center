@@ -6,8 +6,7 @@
     "estimated_credits_used": 0,
     "last_run_credits": 0,
     "monthly_guard": 950,
-    "per_run_budget": 14,
-    "provider_quota_exhausted_month": "2026-09"
+    "per_run_budget": 14
   },
   "query_progress": {
     "priority_geography": {},

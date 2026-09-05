@@ -85,16 +85,9 @@ Pipeline:
 
 JobsPipe este connectorul operational implementat, dar este momentan oprit:
 
-`jobspipe_enabled=false`
+`jobspipe_mode=disabled`
 
-Cand va fi reactivat, foloseste:
-
-- preview gratuit;
-- polling incremental;
-- cursor backlog;
-- 14 credite maximum/rulare;
-- guard lunar 950;
-- circuit breaker quota.
+Dupa stabilizare, transportul recomandat este Apify prin Actorul oficial JobsPipe, cu plafon initial 5.000 joburi brute/rulare. Modul Direct ramane fallback si pastreaza preview-ul, polling-ul incremental, cursorul, limita de 14 credite/rulare, guard-ul lunar 950 si circuit breaker-ul de quota.
 
 ## Structura repository
 

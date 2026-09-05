@@ -92,7 +92,8 @@ Frontend-ul calculeaza vechimea din `date_posted`; `age` este fallback.
 ### Campuri optionale
 
 - `source_results`;
-- `jobspipe_optimization`.
+- `jobspipe_optimization` - detalii Direct;
+- `jobspipe_transport` - modul efectiv `disabled/apify/direct` si metadate transport.
 
 ### `source_results[]`
 
@@ -138,7 +139,8 @@ Este sursa canonica de configuratie pentru motor.
 - `eligible_remote_country_codes`;
 - `work_mode_priority`;
 - `source_strategy`;
-- `jobspipe_enabled`;
+- `jobspipe_mode`;
+- `jobspipe_apify_max_items_per_run`;
 - `jobspipe_credit_budget_per_run`;
 - `jobspipe_monthly_credit_guard`;
 - `jobspipe_incremental_overlap_minutes`;
@@ -154,7 +156,8 @@ Este sursa canonica de configuratie pentru motor.
 - `fit_threshold = 80`;
 - `rate_min_eur_day = 250`;
 - `rate_max_eur_day = 650`;
-- `jobspipe_enabled = false`;
+- `jobspipe_mode = disabled`;
+- `jobspipe_apify_max_items_per_run = 5000`;
 - `jobspipe_credit_budget_per_run = 14`;
 - `jobspipe_monthly_credit_guard = 950`;
 - `jobspipe_incremental_overlap_minutes = 2`;

@@ -1,7 +1,7 @@
 # Arhitectura
 
 Actualizare: 2026-09-05
-Versiune aplicatie: 0.03
+Versiune aplicatie: 0.04
 
 ## 1. Principiu general
 
@@ -42,6 +42,8 @@ scripts/job_search_runner.py
         |
         +--> job_search.py
         +--> job_search_optimized.py
+        +--> job_search_apify.py
+        +--> transport: disabled / apify / direct
         +--> connectors
         +--> normalize / validate
         +--> geo eligibility
@@ -253,8 +255,9 @@ Valideaza:
 Componente:
 
 - `scripts/job_search.py` - model intern, normalizare, filtrare, scoring, contract output;
-- `scripts/job_search_optimized.py` - strategie JobsPipe incremental/paginare/quota;
-- `scripts/job_search_runner.py` - provider enablement, circuit breaker si entry point workflow.
+- `scripts/job_search_optimized.py` - transport JobsPipe Direct: preview, incremental, cursor si quota guards;
+- `scripts/job_search_apify.py` - transport JobsPipe prin Actorul oficial Apify;
+- `scripts/job_search_runner.py` - selector `disabled/apify/direct`, circuit breaker Direct si entry point workflow.
 
 Pipeline:
 
@@ -273,33 +276,44 @@ Collect
 
 Contractul `JobConnector` separa providerii de logica de scoring.
 
-Connector implementat operational:
+Connector logic implementat operational:
 
-- JobsPipe.
+- JobsPipe, cu doua transporturi alternative: Apify si Direct.
 
 Stare curenta:
 
-- `jobspipe_enabled=false` pentru stabilizare;
-- cand este dezactivat, workflow-ul nu apeleaza providerul si pastreaza lista existenta;
+- `jobspipe_mode=disabled` pentru stabilizare;
+- cand este dezactivat, workflow-ul nu apeleaza JobsPipe/Apify si pastreaza lista existenta;
+- dupa stabilizare, `apify` este transportul recomandat pentru volum;
+- `direct` ramane fallback/diagnostic;
 - `data/sources.json` este catalog UI, nu lista connectorilor implementati;
 - toggle-urile individuale din pagina `Surse` sunt locale;
 - campul legacy `priority` din catalog nu controleaza ordinea de colectare;
-- strategia canonica este `all active sources equally` pentru momentul in care connectorii sunt implementati.
+- strategia canonica este `all active sources equally` pentru momentul in care connectorii suplimentari sunt implementati.
 
-## 12. JobsPipe quota strategy
+## 12. JobsPipe transport strategy
 
-Cand providerul este activ:
+### Apify
 
+- Actor: `jobspipe~jobspipe-job-search`;
+- autentificare prin `APIFY_TOKEN` din GitHub Actions Secrets;
+- doua cautari fara suprapunere: geografiile prioritare si remote in restul Europei eligibile;
+- Actorul pagineaza automat;
+- plafon implicit 5.000 joburi brute/rulare, configurabil 100-20.000;
+- rezultatele intra in acelasi pipeline de normalizare, dedup, filtrare si scoring.
+
+### Direct
+
+- `JOBSPIPE_API_KEY` din GitHub Actions Secrets;
 - preview gratuit;
 - `discovered_at_gte` pentru polling incremental;
-- doua arii geografice fara suprapunere intentionata;
 - cursor pentru backlog;
-- maximum 14 credite/rulare configurat curent;
+- 14 credite/rulare implicit;
 - guard local lunar 950;
 - overlap incremental 2 minute;
-- circuit breaker dupa raportarea quota provider exhausted.
+- circuit breaker dupa quota exhausted.
 
-Starea incrementala este in `data/search-state.json`.
+Starea incrementala Direct este in `data/search-state.json`. Markerul vechi de quota a fost resetat deoarece exista quota noua, dar modul ramane dezactivat pana la stabilizare.
 
 ## 13. Persistenta
 
@@ -347,7 +361,8 @@ Repository-ul ramane privat. GitHub Pages nu este folosit.
 
 ## 15. Securitate
 
-- JobsPipe API key -> GitHub Actions Secret;
+- `APIFY_TOKEN` -> GitHub Actions Secret pentru modul Apify;
+- `JOBSPIPE_API_KEY` -> GitHub Actions Secret pentru modul Direct;
 - GitHub PAT -> Cloudflare Secret `GITHUB_TOKEN`;
 - user authorization -> Cloudflare Secret `ALLOWED_GOOGLE_SUB`;
 - `GOOGLE_CLIENT_ID` -> variabila publica Cloudflare;

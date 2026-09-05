@@ -91,3 +91,10 @@ Reguli de produs stabilite suplimentar:
 ## 8. Regula pentru extindere
 
 Fiecare provider nou se adauga printr-un connector care produce modelul intern standard. Logica de scoring nu trebuie duplicata in connector.
+
+## Transport JobsPipe
+
+- `disabled` - implicit in stabilizare;
+- `apify` - recomandat pentru volum dupa stabilizare; Actor oficial JobsPipe, billing per upstream request/page;
+- `direct` - fallback cu quota guards;
+- transportul nu schimba regulile de filtrare/scoring si nici strategia egala a surselor din catalog.
