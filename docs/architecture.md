@@ -2,30 +2,38 @@
 
 ## 1. Arhitectura MVP curenta
 
-Fluxul de baza este static-first:
+Fluxul ramane static-first:
 
 ```text
-Utilizator
+Utilizator / Browser
   |
   v
 Cloudflare Worker
   |
-  +--> Static Assets
-  |      +--> frontend
-  |      +--> data/jobs.json
-  |      +--> data/run-status.json
-  |      +--> data/search-config.json
+  +--> Static Assets construite cu React + Tailwind + Vite
+  |      +--> index.html
+  |      +--> assets/*.js
+  |      +--> assets/*.css
+  |
+  +--> Date protejate
+  |      +--> /data/jobs.json
+  |      +--> /data/run-status.json
+  |      +--> /data/search-config.json
+  |      +--> /data/sources.json
+  |      +--> /data/applications.json
+  |      +--> Google bearer auth obligatoriu
   |
   +--> Command API
-         +--> /health
-         +--> /commands/run
-         +--> /config
-         +--> /auth/bootstrap (temporar)
+         +--> GET  /health
+         +--> GET  /auth/config
+         +--> POST /auth/session
+         +--> POST /commands/run
+         +--> PUT  /config
 
 GitHub Actions
   |
   v
-scripts/job_search.py
+scripts/job_search_runner.py
   |
   +--> connectors
   +--> normalizare
@@ -35,7 +43,7 @@ scripts/job_search.py
   +--> scoring
   |
   v
-JSON versionat in repository
+data/*.json in repository privat
   |
   v
 commit main
@@ -44,81 +52,101 @@ commit main
 Cloudflare build/deploy
 ```
 
-Nu exista in MVP un backend public permanent pentru datele de joburi si nici un server de baza de date activ.
-
-Command API este o componenta serverless minima pentru actiuni privilegiate; nu devine backend-ul principal al aplicatiei.
+Nu exista baza de date activa in MVP.
 
 ## 2. Frontend
 
-- frontend static in `frontend/`;
-- publicare prin Cloudflare Worker Static Assets;
-- citeste rezultatele generate de workflow;
-- citeste configuratia canonica din `data/search-config.json`;
-- afiseaza descrierea jobului, linkul direct, fit, riscuri si sursa;
-- nu contine secrete;
-- modificarile locale din browser nu sunt configuratie efectiva pana cand nu sunt persistate prin Command API.
+Frontend-ul este o aplicatie React compilata static:
 
-ChatGPT Sites ramane optional pentru prototipare, nu dependinta runtime a MVP-ului curent.
+- sursa in `frontend/`;
+- React functional components;
+- Tailwind CSS pentru layout si styling;
+- Vite pentru build;
+- output in `frontend/dist/`;
+- `command-api/scripts/build-static.mjs` copiaza `frontend/dist/` in `command-api/public/` si adauga fisierele de date publicabile.
 
-## 3. Motor de executie
+Frontend-ul nu contine secrete.
 
-GitHub Actions este schedulerul si orchestratorul infrastructural.
+### Lifecycle autentificare si date
 
-Logica de cautare nu mai este hard-codata in YAML. Ea ruleaza in `scripts/job_search.py`.
+```text
+Pagina porneste
+  -> GET /auth/config
+  -> Google Sign-In
+  -> POST /auth/session
+  -> sesiune Google valida
+  -> UI autentificat + stare Loading
+  -> GET /data/*.json cu Bearer token
+      -> succes: afiseaza date
+      -> eroare: pastreaza sesiunea, afiseaza Error + Retry
+```
 
-Responsabilitati GitHub Actions:
+Un esec de incarcare a datelor nu este tratat ca esec de login.
+
+Tokenul Google ramane numai in memoria React si nu este persistat in `localStorage`.
+
+## 3. UI state
+
+React gestioneaza explicit:
+
+- auth state;
+- data loading/error/ready;
+- joburi, aplicari, surse si run status;
+- criterii saved/draft;
+- filtre locale;
+- drawer de detalii;
+- arhivare locala MVP;
+- toast-uri.
+
+Nu se folosesc monkey-patch-uri intre scripturi si nici interceptare globala `window.fetch`.
+
+## 4. Design system
+
+Reguli:
+
+- fundal general `slate-50`;
+- containere albe cu `border-slate-200` si `shadow-sm`;
+- albastru exclusiv pentru actiunea primara `Ruleaza verificarea` si focus states;
+- emerald/verde numai pentru stare activa/succes;
+- widget profil neutru/outline;
+- continut principal centrat, maxim 1400 px;
+- KPI-uri numai in `Joburi noi`;
+- tabela compacta cu hover actions;
+- pagina criterii in grila responsive 1/2 coloane.
+
+## 5. Motor de executie
+
+GitHub Actions ramane schedulerul si orchestratorul infrastructural.
+
+Responsabilitati:
 
 - schedule de doua ori pe zi;
-- `workflow_dispatch` pentru rulare manuala autorizata;
+- `workflow_dispatch` pentru rulare manuala;
 - injectarea secretelor;
-- timeout si concurrency control;
+- timeout si concurrency;
 - executia motorului;
 - validarea output-ului;
-- commit-ul rezultatelor.
+- commit rezultate.
 
-Responsabilitati motor cautare:
+Logica de cautare este in `scripts/job_search.py`, `scripts/job_search_optimized.py` si `scripts/job_search_runner.py`.
 
-- citirea configuratiei canonice;
-- executarea connectorilor;
-- izolarea erorilor de colectare;
-- normalizare si validare;
-- geo-eligibility;
-- deduplicare si detectare repostari;
-- filtrare si scoring;
-- generarea `jobs.json` si `run-status.json`.
-
-## 4. Connectors si surse
+## 6. Connectors si surse
 
 Exista contractul `JobConnector`.
 
-Primul adapter implementat este `JobsPipeConnector`.
+`JobsPipeConnector` este implementat, dar `jobspipe_enabled=false` in perioada de stabilizare.
 
-Adaugarea unui provider nou trebuie sa se faca printr-un connector nou, fara modificarea logicii de scoring.
+Cand JobsPipe este activ:
 
-Fiecare connector trebuie sa produca date care pot fi transformate in acelasi model intern de job.
+- preview gratuit;
+- polling incremental cu `discovered_at_gte`;
+- cursor pentru backlog;
+- buget per run;
+- guard lunar local.
 
-Campuri minime:
+Registrul `data/sources.json` ramane lista de surse afisata in UI. Toggle-urile individuale sunt inca locale pana la persistenta canonica a registrului.
 
-- id extern;
-- source;
-- title;
-- company;
-- location;
-- work arrangement;
-- description;
-- date_posted;
-- direct application URL;
-- employment type;
-- remote/hybrid;
-- metadata necesara geo-eligibility.
-
-Registrul `data/sources.json` ramane lista de surse vizibila in UI. Legarea active/inactive de executia reala a connectorilor este inca de implementat.
-
-Toate sursele active trebuie tratate egal. Nu exista prioritate 1-5.
-
-## 5. Procesare
-
-Ordinea logica:
+## 7. Procesare
 
 ```text
 Collect
@@ -131,183 +159,94 @@ Collect
   -> Publish
 ```
 
-Geo-eligibility ramane separat de matching/scoring.
+Repostarile sunt marcate, nu eliminate automat daca `keep_reposts=true`.
 
-Repostarile sunt marcate, nu eliminate automat, daca `keep_reposts=true`.
+## 8. Persistenta
 
-## 6. Persistenta
+MVP:
 
-Pentru MVP curent:
+- `data/jobs.json` - rezultate;
+- `data/run-status.json` - stare rulare;
+- `data/search-config.json` - configuratie canonica;
+- `data/sources.json` - registru surse;
+- `data/applications.json` - aplicari;
+- `data/search-state.json` - stare interna JobsPipe, nepublicata;
+- GitHub Actions Secrets - chei cautare;
+- Cloudflare Secrets - PAT si autorizare Google.
 
-- rezultate publicabile: `data/jobs.json`;
-- stare rulare: `data/run-status.json`;
-- configuratie canonica: `data/search-config.json`;
-- registru surse: `data/sources.json`;
-- aplicari: `data/applications.json`;
-- secrete cautare: GitHub Actions Secrets;
-- secrete Command API: Cloudflare Worker Secrets.
+Arhivarea rapida din UI este locala in `localStorage` in MVP.
 
-SQLite nu este necesar pentru fluxul static-first curent.
+SQLite ramane optiunea preferata pentru istoric tranzactional, aplicari editabile server-side, arhivare persistenta sau documente private.
 
-SQLite ramane optiunea preferata daca introducem un backend persistent, istoric complex, aplicari editabile server-side sau cerinte care depasesc modelul JSON/versionat.
+PostgreSQL ramane rezervat pentru multi-user/concurenta.
 
-PostgreSQL ramane rezervat pentru multi-user, concurenta ridicata sau replicare.
-
-## 7. Configuratie
+## 9. Configuratie
 
 `data/search-config.json` este sursa de adevar pentru executia cautarii.
 
-Contine:
+Modificarile din UI sunt validate si persistate prin `PUT /config`.
 
-- roluri;
-- mod de lucru;
-- vechime maxima;
-- prag fit;
-- regula repostari;
-- interval B2B;
-- disponibilitate;
-- geografie;
-- excluderi.
+`jobspipe_enabled` controleaza explicit accesul providerului JobsPipe.
 
-Frontend-ul o citeste. Motorul o foloseste efectiv.
+## 10. Command API
 
-Modificarile din UI sunt validate si persistate prin `PUT /config` al Command API. Pana la activarea live a autentificarii, modificarile UI raman locale.
+Command API este Cloudflare Worker minimal pentru actiuni privilegiate si access control.
 
-## 8. Command API
-
-Command API este implementat in `command-api/` ca Cloudflare Worker.
-
-Roluri:
-
-- autentifica utilizatorul prin Google ID token;
-- autorizeaza un singur Google `sub` in MVP;
-- protejeaza secretele GitHub;
-- lanseaza manual `job-search-full.yml`;
-- persista configuratia canonica.
-
-Endpoint-uri permanente:
+Endpoint-uri:
 
 ```text
 GET  /health
+GET  /auth/config
+POST /auth/session
 POST /commands/run
 PUT  /config
 ```
 
-Endpoint-uri temporare pentru bootstrap autentificare:
+Worker-ul verifica Google ID token prin JWKS, issuer, audience si `ALLOWED_GOOGLE_SUB`.
+
+## 11. Build si publicare
+
+Build-ul Cloudflare ruleaza din `command-api/`:
 
 ```text
-GET  /auth/bootstrap
-POST /auth/whoami
+npm run build
+  -> instaleaza dependintele frontend
+  -> vite build in frontend/dist
+  -> build-static.mjs
+  -> command-api/public
+  -> Wrangler deploy
 ```
 
-Bootstrap-ul valideaza Google ID token-ul si returneaza `sub`. Dupa setarea `ALLOWED_GOOGLE_SUB`, endpoint-urile de bootstrap se dezactiveaza automat.
-
-Flux rulare manuala:
-
-```text
-Browser
-  -> Google ID token
-  -> Command API
-  -> verifica user/origin
-  -> verifica daca exista run activ
-  -> GitHub workflow_dispatch
-```
-
-Flux salvare configuratie:
-
-```text
-Browser
-  -> Google ID token
-  -> Command API
-  -> whitelist + validate
-  -> GitHub Contents API
-  -> data/search-config.json
-  -> GitHub Actions
-```
-
-Fine-grained PAT-ul folosit de Worker este limitat la repository si necesita:
-
-- `Actions: write`;
-- `Contents: write`.
-
-PAT-ul nu apare niciodata in frontend sau repository.
-
-Detalii: `docs/command-api.md`.
-
-## 9. Publicare
-
-Tinta MVP:
-
-```text
-GitHub Actions -> data/*.json -> commit main -> Cloudflare build -> Worker + Static Assets -> browser
-```
+GitHub Actions `Validate Command API` executa dry-run Wrangler, care valideaza implicit build-ul React si Worker-ul.
 
 Repository-ul ramane privat. GitHub Pages nu este utilizat.
 
-Frontend-ul si Command API folosesc acelasi origin:
+## 12. Securitate
 
-```text
-https://job-search-command-api.myeboda.workers.dev
-```
-
-## 10. Securitate
-
-- toate cheile API pentru cautare stau in GitHub Actions Secrets;
-- PAT-ul Command API sta in Cloudflare Secret;
+- cheile providerilor stau in GitHub Actions Secrets;
+- PAT-ul GitHub sta in Cloudflare Secret;
 - `ALLOWED_GOOGLE_SUB` sta in Cloudflare Secret;
-- `GOOGLE_CLIENT_ID` este configuratie publica in Cloudflare Dashboard;
-- `keep_vars=true` pastreaza variabilele configurate in Dashboard la deploy;
-- niciun secret in frontend, JSON public sau repository;
-- Google ID token este verificat server-side prin JWKS, issuer si audience;
-- autorizarea MVP foloseste Google `sub`;
-- CORS/origin este limitat la origin-ul frontend-ului;
-- configuratia editabila foloseste whitelist si validare;
-- permisiunile workflow-urilor sunt minime;
-- inputurile externe sunt tratate ca date nevalidate;
-- descrierea jobului este afisata ca text sigur, fara executie HTML arbitrar;
+- `GOOGLE_CLIENT_ID` este configuratie publica;
+- tokenul Google este doar in memoria paginii;
+- `/data/*` este Worker-first si necesita bearer valid;
+- fisierele protejate folosesc `cache-control: no-store`;
+- descrierile joburilor sunt randate ca text React, nu HTML arbitrar;
 - linkurile externe folosesc `noopener noreferrer`;
-- workflow-urile au timeout si concurrency control;
-- un esec total de colectare nu suprascrie lista de joburi cu un rezultat gol fals;
-- erorile de colectare sunt raportate in `source_results`.
+- actiunile privilegiate nu expun credentiale GitHub in browser.
 
-## 11. NAS Synology DS213j
+## 13. NAS Synology DS213j
 
-DS213j nu este host principal pentru aplicatie.
+DS213j ramane doar pentru backup/arhiva/storage, nu pentru runtime.
 
-Rol permis:
+## 14. MCP si evolutie
 
-- backup;
-- arhiva;
-- storage offline/local.
+MCP ramane in etapa 2.
 
-Nu se foloseste pentru Docker/Container Manager sau backend Node modern.
+Backend persistent + SQLite se introduce numai cand apar cerinte care depasesc modelul static-first + Command API, de exemplu:
 
-## 12. Integrari Google
-
-Google Identity Services este folosit pentru autentificarea Command API.
-
-Alte integrari planificate optional:
-
-- Gmail pentru notificari;
-- Google Sheets pentru export;
-- Google Drive pentru backup;
-- Google Calendar pentru follow-up-uri, etapa 2.
-
-Google nu este sursa de agregare a joburilor.
-
-## 13. MCP
-
-MCP ramane in afara MVP-ului.
-
-Poate fi introdus in etapa 2 daca este necesar acces AI direct la functiile sistemului.
-
-## 14. Evolutie
-
-Introducem backend + SQLite numai daca apar cerinte care nu pot fi rezolvate curat in modelul static-first + Command API, de exemplu:
-
-- istoric extins si audit tranzactional;
-- aplicari editabile complex server-side;
+- istoric extins;
+- arhivare persistenta server-side;
+- aplicari editabile complex;
 - multi-user;
 - documente private;
-- integrare MCP cu stare persistenta;
-- operatii care necesita o baza de date tranzactionala.
+- integrare MCP cu stare persistenta.
