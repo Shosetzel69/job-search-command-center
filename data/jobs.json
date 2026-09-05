@@ -1,7 +1,8 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-05T15:41:51.441160+00:00",
-  "freshness_hours": 24,
+  "generated_at": "2026-09-05T15:42:44.521232+00:00",
+  "freshness_hours": 120,
+  "collection_freshness_hours": 120,
   "criteria": {
     "roles": [
       "Project Manager",
@@ -26,6 +27,7 @@
       "Hybrid"
     ],
     "source_strategy": "all active sources equally",
+    "display_freshness_hours": 24,
     "fit_threshold": 80,
     "keep_reposts": true,
     "exclusions": [
@@ -35,13 +37,13 @@
     ]
   },
   "raw_matches_available": {
-    "jobspipe:geography": 115,
-    "jobspipe:remote": 331,
-    "jobspipe:core_remote": 233
+    "jobspipe:geography": 316,
+    "jobspipe:remote": 934,
+    "jobspipe:core_remote": 658
   },
   "records_inspected": 75,
-  "results": 20,
-  "excluded_count": 55,
+  "results": 24,
+  "excluded_count": 51,
   "jobs": [
     {
       "id": "4299362088",
@@ -104,7 +106,7 @@
       "initial": "E",
       "fit": 90,
       "location": "Brussels, Brussels Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -130,7 +132,7 @@
       "initial": "E",
       "fit": 88,
       "location": "1000 Brussels",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 19,
       "remote": false,
@@ -212,7 +214,7 @@
       "initial": "M",
       "fit": 83,
       "location": "Mons, Walloon Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -238,7 +240,7 @@
       "initial": "PG",
       "fit": 83,
       "location": "Antwerp, Flemish Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -264,7 +266,7 @@
       "initial": "V",
       "fit": 83,
       "location": "Erpe-Mere, Flemish Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -290,7 +292,7 @@
       "initial": "EI",
       "fit": 83,
       "location": "Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 10,
       "remote": false,
@@ -316,7 +318,7 @@
       "initial": "EB",
       "fit": 83,
       "location": "Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Nespecificat",
       "age": 10,
       "remote": false,
@@ -342,7 +344,7 @@
       "initial": "JB",
       "fit": 81,
       "location": "Mechelen, Flemish Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -368,7 +370,7 @@
       "initial": "A",
       "fit": 77,
       "location": "Berchem, Flemish Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -394,7 +396,7 @@
       "initial": "EB",
       "fit": 77,
       "location": "Aartselaar, Flemish Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -420,7 +422,7 @@
       "initial": "PG",
       "fit": 77,
       "location": "Antwerp, Flemish Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -446,7 +448,7 @@
       "initial": "V",
       "fit": 77,
       "location": "Anderlecht, Brussels Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -466,13 +468,91 @@
       "verified_at": "2026-09-05 15:35:35"
     },
     {
+      "id": "ZWRmZGQzMDktOTUzMi00ZmI1LWFkMmQtMGNiNzRlOTZlYzU4IDM",
+      "title": "Project Manager Industriebouw",
+      "company": "ACTIEF CONSTRUCT NV",
+      "initial": "AC",
+      "fit": 77,
+      "location": "BE256",
+      "mode": "N/A",
+      "type": "Full Time",
+      "age": 29,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://europa.eu/eures/portal/jv-se/jv-details/ZWRmZGQzMDktOTUzMi00ZmI1LWFkMmQtMGNiNzRlOTZlYzU4IDM?lang=en",
+      "description": "Krijg jij energie van verantwoordelijkheid, structuur en het sturen van complexe trajecten naar een sterk eindresultaat? In deze functie ben jij het aanspreekpunt dat lijnen uitzet, knopen doorhakt en teams in beweging houdt. Je combineert strategisch inzicht met een pragmatische aanpak en bewaart rust, ook wanneer er veel tegelijk speelt. Je werkt op het kruispunt van planning, budget, kwaliteit en samenwerking en zorgt ervoor dat projecten vlot en gecontroleerd verlopen. Dankzij jouw leiderschap weten mensen wat er van hen verwacht wordt en voelen ze zich gesteund. Dit is een rol voor een ervaren professional die graag vooruitkijkt, verantwoordelijkheid opneemt en impact wil maken op zowel projecten als mensen.\n\nJouw takenpakket:\n\n- Aansturen en coachen van projectleiders en ondersteunende teamleden.\n\n- Opstellen, beheren en bewaken van de globale project- en werfplanning.\n\n- Coördineren van meerdere projecten van voorbereiding tot oplevering.\n\n- Leiden en structureren van overlegmomenten met alle betrokken partijen.\n\n- Bewaken van budgetten, timing en kwaliteitsdoelstellingen.\n\n- Zorgen voor duidelijke rapportering richting het management.\n\n- Eindverantwoordelijkheid opnemen voor een correcte en tijdige oplevering.\n\n- Je beschikt over een Bachelor of Master in een bouwkundige richting of gelijkwaardige ervaring.\n\n- Je hebt ruime ervaring in het managen van industriële bouwprojecten.\n\n- Je bent sterk in plannen, organiseren en prioriteiten bepalen.\n\n- Je haalt voldoening uit het aansturen en ontwikkelen van mensen.\n\n- Je communiceert helder en professioneel met interne en externe stakeholders in het Nederlands en in het Frans.\n\n- Je werkt gestructureerd, resultaatgericht en met oog voor detail.\n\n- Je voelt je comfortabel in een meertalige werkomgeving.\n\n- Je werkt vlot met gangbare software en digitale tools.",
+      "date_posted": "2026-09-04T10:16:15.638000+00:00",
+      "source": "eures",
+      "verified_at": "2026-09-05 14:10:49"
+    },
+    {
+      "id": "ZTIwYTk1NGQtZmU3Yi00NjI4LWE0NjctNjkzMGUwNTBlNTU1IDM",
+      "title": "Project Manager",
+      "company": "CTRL-F NV",
+      "initial": "CN",
+      "fit": 77,
+      "location": "BE232",
+      "mode": "N/A",
+      "type": "Full Time",
+      "age": 29,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://europa.eu/eures/portal/jv-se/jv-details/ZTIwYTk1NGQtZmU3Yi00NjI4LWE0NjctNjkzMGUwNTBlNTU1IDM?lang=en",
+      "description": "Voor onze klant, een dynamische Belgische KMO met een sterke internationale klantenportefeuille en een bewezen expertise in hoogtechnologische poeder process machines, zoeken we een Project Manager. Je werkt dagelijks aan innovatieve R&D projecten voor machines in onder meer pharma, biotech, voeding en chemie. In deze rol combineer je projectopvolging, technische coördinatie en klantcontact in een omgeving waar no-nonsense samenwerken en hands-on meewerken centraal staan. Je vervoegt een klein team van multi-inzetbare ingenieurs en krijgt een gevarieerd takenpakket waarin je zowel intern als extern een sleutelrol speelt.\n\nJouw verantwoordelijkheden:\n\n- Je bent het eerste aanspreekpunt voor de klant en volgt in samenwerking met de Productie Manager de voortgang van standaard machines op.\n\n- Je stemt tijdig af over leveringen, technische vereisten en de praktische voorbereiding bij de klant voor installatie.\n\n- Je staat in voor interne kwaliteitscontrole, kalibraties en projectdocumentatie, en voert deze taken waar nodig ook zelf uit.\n\n- Je begeleidt de afname van machines samen met de klant tijdens de factory acceptance test (FAT), en zorgt mee voor oplevering, installatie en training op locatie, soms in het buitenland.\n\n- Voor complexere projecten ben je het aanspreekpunt van A tot Z: je bent vanaf de RFQ-fase betrokken, denkt mee op basis van het lastenboek (URS), werkt engineering uit en stemt af met klanten en leveranciers.\n\n- Je volgt projecten van dichtbij op tot en met de installatie en blijft ook daarna betrokken in de verdere opvolging.\n\n- Je ondersteunt de after-sales service door technische hulp te bieden en offertes op te maken voor spares en services.\n\nVoor deze functie zoekt onze klant een Project Manager met een technische achtergrond en bij voorkeur een aantal jaar relevante ervaring. Je hoeft niet uit één specifiek domein te komen, maar je moet wel comfortabel zijn in een technische, projectmatige en klantgerichte omgeving.\n\nJouw profiel:\n\n- Je beschikt over een engineeringdiploma.\n\n- Je hebt een aantal jaar werkervaring in een technische of projectmatige rol.\n\n- Je bent pragmatisch, hands-on en denkt in oplossingen.\n\n- Je werkt gestructureerd en behoudt overzicht, ook wanneer meerdere projecten tegelijk lopen.\n\n- Je bent klantgericht en communiceert vlot met zowel interne collega’s als externe partners.\n\n- Je bent een sterke teamspeler, maar kan ook zelfstandig verantwoordelijkheid opnemen.\n\n- Je communiceert vlot in het Nederlands en Engels, zowel mondeling als schriftelijk.\n\n- Je voelt je goed in een transparante, flexibele en vlakke organisatie met korte communicatielijnen.\n\n- Reizen naar het buitenland, goed voor ongeveer 15% van de tijd verspreid over het jaar, vormt voor jou geen probleem.\n\n- Kennis van Siemens PLC-programmering is een pluspunt.\n\n- Ervaring met engineering binnen de farmaceutische industrie is een mooie troef.\n\nJe bent iemand die verantwoordelijkheid neemt, technische inhoud snel oppikt en graag mee instaat voor het succes van elk project, van eerste vraag tot installatie en nazorg.",
+      "date_posted": "2026-09-04T10:40:13.313000+00:00",
+      "source": "eures",
+      "verified_at": "2026-09-05 14:10:25"
+    },
+    {
+      "id": "OGIzNmIzYzctMjk5NC00YzFkLWI5YzQtNDMxNzZiNzk5MDNmIDM",
+      "title": "HR Project Manager",
+      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
+      "initial": "HO",
+      "fit": 77,
+      "location": "BE256",
+      "mode": "N/A",
+      "type": "Full Time",
+      "age": 30,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://europa.eu/eures/portal/jv-se/jv-details/OGIzNmIzYzctMjk5NC00YzFkLWI5YzQtNDMxNzZiNzk5MDNmIDM?lang=en",
+      "description": "Voor een trotse speler waar tonnen kwaliteitsvol varkensvlees wordt verwerkt zijn we op zoek naar een HR Project Manager.\n\nJe krijgt een gevarieerd takenpakket waarin strategie, projectmanagement en samenwerking samenkomen.\n\n- Je vertaalt de HR-strategie naar concrete projecten en initiatieven rond Learning & Development, interne communicatie, welzijn, onboarding en employer branding voor de volledige groep\n\n- Je werkt HR-projecten uit van concept tot implementatie en zorgt voor een duurzame verankering binnen de organisatie\n\n- Je bewaakt planning, scope, kwaliteit, timing en voortgang van verschillende projecten en stuurt bij waar nodig\n\n- Je analyseert bestaande HR-processen en formuleert projectmatige verbeterinitiatieven om HR verder te professionaliseren\n\n- Je beheert budgetten, subsidies en externe samenwerkingen binnen jouw projectdomeinen\n\n- Je stuurt een HR Project Officer aan, coacht deze collega en ondersteunt zijn of haar verdere ontwikkeling\n\n- Je werkt nauw samen met de HR Manager en verschillende interne stakeholders om HR verder uit te bouwen als strategische partner binnen de organisatie\n\n- Je begeleidt verandertrajecten en creëert draagvlak bij medewerkers en leidinggevenden\n\nJe bent iemand die graag bouwt, verbindt en veranderingen in beweging brengt.\n\nJe combineert een sterk organisatorisch talent met een mensgerichte aanpak en weet projecten succesvol af te ronden zonder het grotere geheel uit het oog te verliezen.\n\nDaarnaast:\n\n- beschik je over een bachelor- of masterdiploma, aangevuld met relevante HR-ervaring\n\n- heb je enkele jaren ervaring binnen HR-projectmanagement of in een brede HR-functie met een sterke projectmatige focus\n\n- heb je ervaring met het aansturen of coachen van medewerkers\n\n- weet je stakeholders te overtuigen en mensen mee te nemen in verandering\n\n- combineer je een strategische blik met een pragmatische hands-on aanpak\n\n- ben je sterk in projectmanagement en change management\n\n- communiceer je vlot en overtuigend met medewerkers op alle niveaus\n\n- werk je gestructureerd, analytisch en resultaatgericht\n\n- neem je verantwoordelijkheid en eigenaarschap\n\n- spreek je vlot Nederlands, Frans en Engels",
+      "date_posted": "2026-09-04T09:16:03.869000+00:00",
+      "source": "eures",
+      "verified_at": "2026-09-05 14:11:44"
+    },
+    {
       "id": "4334788022",
       "title": "Medior Project Manager",
       "company": "Cyclops",
       "initial": "C",
       "fit": 76,
       "location": "Vilvoorde, Flemish Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -492,13 +572,41 @@
       "verified_at": "2026-09-05 13:49:40"
     },
     {
+      "id": "ee17c185879bbeb5",
+      "title": "Senior Scrum Master (M/F/H)",
+      "company": "Everience Benelux",
+      "initial": "EB",
+      "fit": 76,
+      "location": "Brussels",
+      "mode": "N/A",
+      "type": "Full Time",
+      "age": 27,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara",
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Link direct catre angajator neconfirmat",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://www.indeed.com/viewjob?jk=ee17c185879bbeb5",
+      "description": "Company Description\n\nEverience is an international consulting group delivering AI-augmented digital services and placing people at the heart of the AI revolution.\n\nWith a presence in Europe, Africa, Asia and America, Everience offers its 4,000-strong workforce the most demanding and stimulating environment in which to transform and develop their skills, learning about new AI-based roles and building their future employability.\n\nThrough its Symbiotic Academy the group offers a unique hub for training, practical application and exchange where everyone can experiment, learn, and progress in the fields of artificial intelligence and data.\n\nIn accordance with its core purpose of orchestrating the symbiotic relationship between humans and AI in the workplace, Everience is making the augmented employee the driving force of a “symbiotic age”, where AI enhances talents and opens up new career opportunities.\n\nJob Description\n\nWe're looking for a Senior Scrum Master to join an Artificial Intelligence tribe within a large financial institution. You'll play a key role in scaling the team's activities, including managing a transition of run and lifecycle management tasks to an offshore partner in India, helping free up local teams to focus on delivering the target vision.\n\nAs Scrum Master, you'll be the go-to person for all things Agile: facilitating ceremonies, coaching the team, and making sure the Scrum framework actually works for the people using it, not the other way around. You'll also join a community of practice with other Scrum Masters across the company to share best practices and keep improving the way of working.\n\nWhat you'll do:\n\n-\nSet up and facilitate Scrum ceremonies (Daily Stand-up, Sprint Planning, Sprint Review, Retrospective)\n\n-\nSupport the Product Owner with backlog management\n\n-\nHelp the team deliver on Sprint Backlogs and Definition of Done\n\n-\nTrack team capacity and velocity to support planning\n\n-\nCoach the team, remove blockers, and shield them from outside distractions\n\n-\nChampion Agile practices across the organization and report on methodology adoption\n\n-\nManage risks and issues as they come up\n\nQualifications\n\nWhat we're looking for:\n\n-\nAt least 3 years of relevant experience as a Scrum Master\n\n-\nSolid English skills, you'll be working with both local and offshore teams\n\n-\nComfortable with Agile reporting tools (e.g., Jira)\n\n-\nFamiliarity with automated testing and CI tooling\n\n-\nStrong grasp of Agile methodologies (Scrum, Kanban) and project management practices\n\n-\nA \"servant leader\" mindset: empathetic, a great communicator, and genuinely invested in helping the team grow\n\nAdditional Information\n\nYou'll have the chance to contribute to the digital transformation of a major player in the banking sector, working at the heart of an AI-driven tribe.\n\nAll our positions are open to both women and men and are, of course, open to people with disabilities.",
+      "date_posted": "2026-09-04T11:45:02.967000+00:00",
+      "source": "indeed",
+      "verified_at": "2026-09-05 09:12:54"
+    },
+    {
       "id": "4461801044",
       "title": "Project Manager",
       "company": "Arcadis",
       "initial": "A",
       "fit": 70,
       "location": "Brussels, Brussels Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -525,7 +633,7 @@
       "initial": "C",
       "fit": 70,
       "location": "Vilvoorde, Flemish Region, Belgium",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Full Time",
       "age": 0,
       "remote": false,
@@ -552,7 +660,7 @@
       "initial": "JE",
       "fit": 67,
       "location": "1000 Brussels",
-      "mode": "Onsite",
+      "mode": "N/A",
       "type": "Nespecificat",
       "age": 10,
       "remote": false,
@@ -578,26 +686,6 @@
       "title": "SAP S/4HANA Program Manager & Quality Assurance",
       "company": "KPMG Belgium",
       "reason": "deep ERP/SAP implementation"
-    },
-    {
-      "title": "Senior Scrum Master (M/F/H)",
-      "company": "Everience Benelux",
-      "reason": "older than 24 hours"
-    },
-    {
-      "title": "Project Manager",
-      "company": "CTRL-F NV",
-      "reason": "older than 24 hours"
-    },
-    {
-      "title": "Project Manager Industriebouw",
-      "company": "ACTIEF CONSTRUCT NV",
-      "reason": "older than 24 hours"
-    },
-    {
-      "title": "HR Project Manager",
-      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
-      "reason": "older than 24 hours"
     },
     {
       "title": "Project Manager | E&I - HVAC",
@@ -650,11 +738,6 @@
       "reason": "remote geography not eligible"
     },
     {
-      "title": "Sr. Technology Project Manager",
-      "company": "Arizona Financial Credit Union",
-      "reason": "deep ERP/SAP implementation"
-    },
-    {
       "title": "Senior / Project Manager - Oncology - US/Canada - Remote",
       "company": "Worldwide Clinical Trials",
       "reason": "remote geography not eligible"
@@ -672,6 +755,31 @@
     {
       "title": "Project Geotechnical Engineer - Project Manager",
       "company": "GFT",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Strategic Project Manager (Finance) - Remote",
+      "company": "Quik Hire Staffing",
+      "reason": "deep ERP/SAP implementation"
+    },
+    {
+      "title": "Project Manager",
+      "company": "Inizio Evoke",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Strategic Project Manager (Remote)",
+      "company": "Hire Feed",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Heritage Advisor/Project Manager",
+      "company": "Unearthed Heritage Australia Pty Ltd",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager (Remote)",
+      "company": "Quik Hire Staffing",
       "reason": "remote geography not eligible"
     }
   ]
