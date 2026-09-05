@@ -1,0 +1,14 @@
+.shell{
+  align-items:start;
+}
+
+main{
+  align-self:start;
+  margin:0 auto;
+}
+
+@media(max-width:760px){
+  main{
+    margin:0;
+  }
+}
