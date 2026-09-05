@@ -1,8 +1,9 @@
 {
-  "run_id": "github-20260905T100214Z",
+  "schema_version": "1.0",
+  "run_id": "github-20260905T123100Z",
   "status": "completed",
-  "started_at": "2026-09-05T10:02:14.236184+00:00",
-  "completed_at": "2026-09-05T10:02:14.250123+00:00",
+  "started_at": "2026-09-05T12:31:00.620617+00:00",
+  "completed_at": "2026-09-05T12:31:00.635220+00:00",
   "sources": [
     "JobsPipe aggregate search - all active sources equally"
   ],

@@ -1,5 +1,6 @@
 {
-  "generated_at": "2026-09-05T10:02:14.236184+00:00",
+  "schema_version": "1.0",
+  "generated_at": "2026-09-05T12:31:00.620617+00:00",
   "freshness_hours": 24,
   "criteria": {
     "roles": [
@@ -30,8 +31,8 @@
     ]
   },
   "raw_matches_available": {
-    "geography": 89,
-    "remote": 295,
+    "geography": 93,
+    "remote": 308,
     "core_remote": 12
   },
   "records_inspected": 62,
@@ -55,13 +56,33 @@
       "reason": "Indeed-only link"
     },
     {
+      "title": "CSA Project Manager",
+      "company": "Mercury",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Asset MGT - Project Manager BBox",
+      "company": "Bpost",
+      "reason": "publication time not verifiable"
+    },
+    {
       "title": "Design & Utilization - Sr Project Manager Capacity & Yield Management",
       "company": "Bpost",
       "reason": "publication time not verifiable"
     },
     {
+      "title": "Project Manager Offshore Subsea Cables",
+      "company": "Jan De Nul Group",
+      "reason": "publication time not verifiable"
+    },
+    {
       "title": "Assistant Project Manager | Water Process",
       "company": "Equans BeLux",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Project Manager @ Employee Benefits - FR",
+      "company": "P&V Group",
       "reason": "publication time not verifiable"
     },
     {
@@ -117,26 +138,6 @@
     {
       "title": "Scrum Master",
       "company": "NTT DATA",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Project Manager",
-      "company": "Keystone Solutions",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Project Manager",
-      "company": "STROOHM",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Commercial Service Manager_3157",
-      "company": "Allianz",
-      "reason": "deep ERP/SAP implementation"
-    },
-    {
-      "title": "Senior Release & Delivery Manager",
-      "company": "Luxoft",
       "reason": "Indeed-only link"
     }
   ]
