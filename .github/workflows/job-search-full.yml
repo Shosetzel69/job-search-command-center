@@ -8,6 +8,7 @@ on:
       - "data/search-config.json"
       - "scripts/job_search.py"
       - "scripts/job_search_optimized.py"
+      - "scripts/job_search_apify.py"
       - "scripts/job_search_runner.py"
   workflow_dispatch:
   schedule:
@@ -26,12 +27,13 @@ jobs:
     timeout-minutes: 15
     env:
       JOBSPIPE_API_KEY: ${{ secrets.JOBSPIPE_API_KEY }}
+      APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
 
       - name: Validate search engine syntax
-        run: python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_runner.py
+        run: python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_apify.py scripts/job_search_runner.py
 
       - name: Collect, normalize, filter and score
         id: search
