@@ -1,18 +1,24 @@
-# Contract date JSON
+# Contracte date JSON
 
-## Regula generala
+Actualizare: 2026-09-05
 
-Fisierele JSON generate de workflow si consumate de frontend folosesc un camp obligatoriu `schema_version`.
+## 1. Reguli generale
 
-Versiunea initiala este `1.0`.
+Contractele principale folosesc `schema_version = "1.0"`.
 
-Timestamp-urile sunt UTC in format ISO-8601.
+Timestamp-urile generate de motor sunt UTC, format ISO-8601.
 
-Frontend-ul trebuie sa trateze o versiune necunoscuta ca eroare controlata si sa nu presupuna existenta campurilor optionale.
+Frontend-ul React valideaza explicit `schema_version` pentru:
 
-## `data/jobs.json`
+- `jobs.json`;
+- `run-status.json`;
+- `search-config.json`.
 
-Campuri obligatorii la nivel root:
+`applications.json` si `sources.json` sunt inca pe un contract legacy fara `schema_version`; frontend-ul le parseaza defensiv. Uniformizarea lor la schema versionata ramane un gap tehnic.
+
+## 2. `data/jobs.json`
+
+### Root obligatoriu
 
 - `schema_version`;
 - `generated_at`;
@@ -23,54 +29,54 @@ Campuri obligatorii la nivel root:
 - `excluded_count`;
 - `jobs`.
 
-Campuri optionale la nivel root:
+### Root optional
 
-- `collection_freshness_hours` - fereastra maxima folosita efectiv la colectare; pentru implementarea curenta este 120 ore / 5 zile;
-- `incremental_sync` - indica folosirea colectarii incrementale;
-- `expired_pruned` - numarul de rezultate eliminate deoarece au iesit din fereastra maxima;
-- `jobspipe_usage` - sumar local al consumului estimat de credite JobsPipe.
+- `collection_freshness_hours`;
+- `incremental_sync`;
+- `expired_pruned`;
+- `jobspipe_usage`.
 
-`freshness_hours` de la nivel root reprezinta fereastra maxima a setului publicat. Cand exista `collection_freshness_hours`, cele doua valori sunt in mod normal identice.
+### Job - campuri consumate de frontend
 
-`criteria.display_freshness_hours` poate indica valoarea implicita folosita de frontend pentru filtrarea locala a setului colectat.
-
-Campuri obligatorii pentru fiecare job:
-
+- `id` - optional;
 - `title`;
 - `company`;
+- `initial` - optional;
 - `fit`;
 - `location`;
 - `mode`;
+- `type` - optional;
+- `age` - optional/fallback;
 - `remote`;
 - `b2b`;
 - `repost`;
 - `status`;
 - `pros`;
 - `risks`;
+- `url` - optional/null;
 - `description`;
 - `date_posted`;
-- `source`.
+- `source`;
+- `verified_at` - optional.
 
-Campuri optionale:
+### Normalizare UI
 
-- `id`;
-- `initial`;
-- `type`;
-- `age`;
-- `url`;
-- `verified_at`.
+`mode` este normalizat la:
 
-`mode` foloseste valorile normalizate `Remote`, `Hybrid`, `Onsite` sau `N/A`.
+- `Remote`;
+- `Hybrid`;
+- `Onsite`;
+- `N/A`.
 
-`age` reprezinta vechimea calculata in ore. Pentru un `date_posted` care contine numai data calendaristica, motorul foloseste inceputul zilei in UTC pentru un calcul conservator si predictibil.
+Frontend-ul calculeaza vechimea din `date_posted`; `age` este fallback.
 
-`description` poate fi sir gol daca sursa nu furnizeaza descrierea.
+`description` poate fi sir gol.
 
-`url` poate fi `null` daca nu exista un link direct verificabil.
+`url` poate fi `null`.
 
-## `data/run-status.json`
+## 3. `data/run-status.json`
 
-Campuri obligatorii:
+### Campuri principale
 
 - `schema_version`;
 - `run_id`;
@@ -83,12 +89,12 @@ Campuri obligatorii:
 - `excluded`;
 - `limitations`.
 
-Campuri optionale recomandate:
+### Campuri optionale
 
-- `source_results` - rezultat detaliat pentru fiecare connector/query executat;
-- `jobspipe_optimization` - sumarul preview-urilor, creditelor consumate si backlog-ului incremental.
+- `source_results`;
+- `jobspipe_optimization`.
 
-Fiecare element `source_results` poate contine:
+### `source_results[]`
 
 - `connector`;
 - `query`;
@@ -97,40 +103,32 @@ Fiecare element `source_results` poate contine:
 - `total_available`;
 - `error`.
 
-`jobspipe_optimization` poate contine:
-
-- `preview_counts`;
-- `credits_used`;
-- `run_budget`;
-- `estimated_monthly_credits`;
-- `monthly_guard`;
-- `incremental`;
-- `query_progress` cu indicator de cursor si estimarea backlog-ului ramas.
-
-Valori permise pentru statusul rularii:
+### Status permis
 
 - `running`;
 - `completed`;
 - `completed_with_errors`;
 - `failed`.
 
-Reguli:
+### Reguli
 
-- un connector/query esuat nu trebuie sa opreasca automat colectarile independente;
-- daca exista rezultate valide si unele colectari esueaza, statusul este `completed_with_errors`;
-- daca toate colectarile esueaza, statusul este `failed`;
-- un esec total nu inlocuieste lista de joburi valida existenta cu o lista goala falsa.
+- o colectare independenta esuata nu opreste automat celelalte colectari;
+- succes partial -> `completed_with_errors`;
+- esec total -> `failed`;
+- esec total nu trebuie sa suprascrie `jobs.json` valid cu lista goala falsa;
+- cand JobsPipe este dezactivat, statusul poate fi `completed` cu `records_inspected=0` si limitare explicita.
 
-## `data/search-config.json`
+## 4. `data/search-config.json`
 
-Este sursa canonica de configuratie pentru cautare.
+Este sursa canonica de configuratie pentru motor.
 
-Campuri obligatorii:
+### Campuri curente
 
 - `schema_version`;
 - `role_groups`;
 - `work_modes`;
 - `freshness_hours`;
+- `collection_freshness_hours`;
 - `fit_threshold`;
 - `keep_reposts`;
 - `rate_min_eur_day`;
@@ -140,77 +138,177 @@ Campuri obligatorii:
 - `eligible_remote_country_codes`;
 - `work_mode_priority`;
 - `source_strategy`;
+- `jobspipe_enabled`;
+- `jobspipe_credit_budget_per_run`;
+- `jobspipe_monthly_credit_guard`;
+- `jobspipe_incremental_overlap_minutes`;
 - `exclusions`;
 - `excluded_company_patterns`;
 - `excluded_role_keywords`;
 - `deep_erp_terms`.
 
-Campuri optionale:
+### Valori curente relevante
 
-- `collection_freshness_hours` - fereastra de colectare independenta de filtrul implicit din UI. Daca lipseste, motorul foloseste `freshness_hours`;
-- `jobspipe_credit_budget_per_run` - limita locala de credite JobsPipe pentru o rulare;
-- `jobspipe_monthly_credit_guard` - prag local lunar sub limita furnizorului;
-- `jobspipe_incremental_overlap_minutes` - suprapunere mica intre ferestrele incrementale pentru evitarea golurilor la limita de timp.
-
-In configuratia curenta:
-
-- `freshness_hours = 24` reprezinta filtrul implicit al listei;
-- `collection_freshness_hours = 120` permite UI-ului sa filtreze local intre 24h, 36h, 48h si 5 zile fara o noua rulare;
+- `freshness_hours = 24`;
+- `collection_freshness_hours = 120`;
+- `fit_threshold = 80`;
+- `rate_min_eur_day = 250`;
+- `rate_max_eur_day = 650`;
+- `jobspipe_enabled = false`;
 - `jobspipe_credit_budget_per_run = 14`;
 - `jobspipe_monthly_credit_guard = 950`;
-- `jobspipe_incremental_overlap_minutes = 2`.
+- `jobspipe_incremental_overlap_minutes = 2`;
+- `source_strategy = "all active sources equally"`.
 
-`role_groups` contine grupuri de roluri. Fiecare grup are:
+### `role_groups`
+
+Fiecare grup foloseste:
 
 - `enabled` - boolean;
-- `titles` - lista titlurilor trimise catre sursa de cautare.
+- `titles` - lista de titluri.
 
-`work_modes` contine cel putin:
+Grupuri curente:
 
-- `remote` - boolean;
-- `hybrid` - boolean.
+- `pm`;
+- `delivery`;
+- `service`;
+- `scrum`;
+- `program`.
 
-Reguli:
+### Reguli
 
-- motorul foloseste aceasta configuratie la construirea query-urilor si la filtrare/scoring;
-- frontend-ul foloseste aceeasi configuratie pentru valorile canonice ale criteriilor;
-- listarile din UI pot aplica local filtre suplimentare de vechime, mod de lucru si sortare fara a modifica setul colectat;
-- configurarile locale nesalvate pot exista temporar in browser, dar nu devin configuratie efectiva a workflow-ului fara un mecanism securizat de persistenta;
-- secretele si cheile API nu sunt permise in acest fisier.
+- motorul foloseste configuratia la query/filter/scoring;
+- frontend-ul foloseste aceeasi configuratie pentru valorile implicite;
+- filtrele locale UI nu modifica automat configuratia canonica;
+- `PUT /config` modifica numai campurile whitelist;
+- secretele nu sunt permise in fisier.
 
-## `data/search-state.json`
+## 5. Mapare `PUT /config`
 
-Fisier intern folosit numai de GitHub Actions pentru sincronizarea JobsPipe. Nu este copiat in bundle-ul static Cloudflare si nu este consumat de frontend.
+Payload UI -> configuratie canonica:
 
-Campuri:
+- `rolePm` -> `role_groups.pm.enabled`;
+- `roleDelivery` -> `role_groups.delivery.enabled`;
+- `roleService` -> `role_groups.service.enabled`;
+- `roleScrum` -> `role_groups.scrum.enabled`;
+- `roleProgram` -> `role_groups.program.enabled`;
+- `workRemote` -> `work_modes.remote`;
+- `workHybrid` -> `work_modes.hybrid`;
+- `freshness` -> `freshness_hours`;
+- `fitThreshold` -> `fit_threshold`;
+- `keepReposts` -> `keep_reposts`;
+- `rateMin` -> `rate_min_eur_day`;
+- `rateMax` -> `rate_max_eur_day`;
+- `immediateStart` -> `immediate_start`;
+- `jobspipeEnabled` -> `jobspipe_enabled`;
+- `exclusions` -> `exclusions`.
+
+Valori permise pentru `freshness`:
+
+- 24;
+- 36;
+- 48;
+- 120.
+
+## 6. `data/search-state.json`
+
+Fisier intern, nepublicat in Cloudflare Static Assets.
+
+Scop:
+
+- progres incremental JobsPipe;
+- cursor backlog;
+- watermark;
+- first seen pentru joburi fara data utilizabila;
+- estimare quota locala;
+- circuit breaker provider.
+
+Campuri principale:
 
 - `schema_version`;
-- `query_progress` - stare separata pentru fiecare interogare JobsPipe;
-- `job_first_seen` - timestamp intern pentru joburile fara data de publicare utilizabila;
-- `usage` - estimarea consumului lunar local.
-
-`query_progress` poate pastra pentru fiecare interogare:
-
-- `watermark` - ultimul punct incremental finalizat;
-- `cursor` - cursorul JobsPipe pentru backlog neprocesat;
-- `remaining_estimate`;
-- `poll_started_at`;
-- `max_discovered_at_seen`.
+- `query_progress`;
+- `job_first_seen`;
+- `usage`.
 
 Reguli:
 
-- watermark-ul nu avanseaza cat timp exista un cursor de backlog;
-- la epuizarea cursorului, watermark-ul este avansat pe baza celui mai nou `discovered_at` procesat;
-- un query esuat nu isi avanseaza watermark-ul;
-- consumul estimat se reseteaza cand se schimba luna UTC;
-- fisierul este versionat in repository, dar exclus explicit din lista fisierelor copiate de build-ul static.
+- watermark-ul nu avanseaza cat timp exista backlog cursor;
+- query esuat nu isi avanseaza watermark-ul;
+- consumul estimat se reseteaza la schimbarea lunii UTC;
+- daca providerul raporteaza quota exhausted, luna este marcata pentru circuit breaker.
 
-## Compatibilitate
+## 7. `data/sources.json`
 
-Schimbarile care adauga doar campuri optionale pot pastra aceeasi versiune.
+Contract legacy curent:
 
-Schimbarile incompatibile, precum redenumirea sau eliminarea campurilor obligatorii, necesita cresterea versiunii contractului.
+```json
+{
+  "count": 129,
+  "sources": []
+}
+```
 
-## Validare
+Fiecare sursa poate contine:
 
-Motorul si workflow-ul valideaza configuratia, structura minima a output-ului si starea incrementala dupa generare si inainte de commit/publicare.
+- `category`;
+- `name`;
+- `url`;
+- `active`;
+- `priority` - camp legacy.
+
+Reguli curente:
+
+- fisierul este catalog UI;
+- `active` poate fi modificat local in browser;
+- schimbarea locala nu controleaza inca connectorii reali;
+- `priority` nu este parte din strategia curenta de colectare si nu trebuie interpretat ca prioritate operationala;
+- strategia functionala ramane `all active sources equally` dupa implementarea connectorilor.
+
+## 8. `data/applications.json`
+
+Contract legacy curent:
+
+```json
+{
+  "applications": []
+}
+```
+
+Campuri consumate de frontend pentru fiecare aplicare:
+
+- `company`;
+- `title`;
+- `location`;
+- `applied_at`;
+- `reference`;
+- `status`;
+- `next_status_check`;
+- `url` - optional;
+- `id` - optional.
+
+Frontend-ul transforma aplicarile in acelasi model vizual de rand ca joburile.
+
+## 9. Publicare Static Assets
+
+`command-api/scripts/build-static.mjs` copiaza numai:
+
+- `jobs.json`;
+- `run-status.json`;
+- `applications.json`;
+- `sources.json`;
+- `search-config.json`.
+
+`search-state.json` este exclus intentionat.
+
+## 10. Compatibilitate
+
+- adaugarea de campuri optionale poate pastra schema `1.0`;
+- redenumirea/eliminarea unui camp obligatoriu cere versiune noua;
+- uniformizarea `sources.json` si `applications.json` cu `schema_version` trebuie facuta controlat pentru a pastra compatibilitatea frontend.
+
+## 11. Validare
+
+- motorul valideaza configuratia si output-ul principal;
+- workflow-ul ruleaza validarea dupa executie;
+- frontend-ul valideaza schema pentru jobs/run-status/search-config;
+- build-ul Static Assets verifica existenta tuturor fisierelor protejate obligatorii.
