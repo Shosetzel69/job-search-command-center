@@ -1,0 +1,47 @@
+{
+  "schema_version": "1.0",
+  "role_groups": {
+    "pm": {
+      "enabled": true,
+      "titles": ["Project Manager", "IT Project Manager", "Technical Project Manager", "Agile Project Manager"]
+    },
+    "delivery": {
+      "enabled": true,
+      "titles": ["Delivery Manager", "Technical Delivery Manager"]
+    },
+    "service": {
+      "enabled": true,
+      "titles": ["Service Manager", "Service Delivery Manager"]
+    },
+    "scrum": {
+      "enabled": true,
+      "titles": ["Scrum Master"]
+    },
+    "program": {
+      "enabled": true,
+      "titles": ["Program Manager", "PMO Manager"]
+    }
+  },
+  "work_modes": {
+    "remote": true,
+    "hybrid": true
+  },
+  "freshness_hours": 24,
+  "fit_threshold": 80,
+  "keep_reposts": true,
+  "rate_min_eur_day": 250,
+  "rate_max_eur_day": 650,
+  "immediate_start": true,
+  "search_country_codes": ["RO", "BE", "LU"],
+  "eligible_remote_country_codes": ["RO", "BE", "LU", "FR", "DE", "NL", "PL", "PT", "ES", "IT", "IE", "AT", "CZ", "SK", "HU", "BG", "GR", "HR", "SI", "EE", "LV", "LT", "DK", "SE", "FI", "NO", "CH", "CY", "MT"],
+  "work_mode_priority": ["Remote", "Hybrid"],
+  "source_strategy": "all active sources equally",
+  "exclusions": [
+    "Star Storage si companiile grupului",
+    "Implementari ERP care cer experienta specializata ampla",
+    "Roluri non-IT"
+  ],
+  "excluded_company_patterns": ["star\\s*storage"],
+  "excluded_role_keywords": ["construction", "hvac", "civil", "mechanical", "manufacturing", "clinical", "marketing", "sales", "event", "facilities", "facility", "enablement", "referral", "customer support", "training"],
+  "deep_erp_terms": ["SAP", "ERP", "S/4HANA", "Dynamics 365"]
+}
