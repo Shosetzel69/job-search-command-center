@@ -3,8 +3,20 @@
   "name": "job-search-command-api",
   "main": "src/index.js",
   "compatibility_date": "2026-09-05",
+  "build": {
+    "command": "npm run build"
+  },
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/health",
+      "/commands/*",
+      "/config"
+    ]
+  },
   "vars": {
-    "FRONTEND_ORIGIN": "https://REPLACE_WITH_GITHUB_PAGES_ORIGIN",
+    "FRONTEND_ORIGIN": "https://job-search-command-api.myeboda.workers.dev",
     "GOOGLE_CLIENT_ID": "REPLACE_WITH_GOOGLE_CLIENT_ID",
     "GITHUB_OWNER": "Shosetzel69",
     "GITHUB_REPO": "job-search-command-center",
