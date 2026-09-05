@@ -215,15 +215,16 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
                 reason = "remote eligibility for Europe not explicit"
         if not reason and not keep_reposts and bool(job.get("reposted")):
             reason = "repost disabled by configuration"
-        if not reason and ((job.get("sources") or [{}])[0].get("provider") == "indeed") and not job.get("final_url"):
-            reason = "Indeed-only link"
         if not reason and posted:
             try:
                 posted_dt = datetime.fromisoformat(str(posted).replace("Z", "+00:00"))
                 if (now - posted_dt).total_seconds() > freshness_hours * 3600:
                     reason = f"older than {freshness_hours} hours"
             except Exception:
-                reason = "publication time not verifiable"
+                # JobsPipe already limits collection to posted_at_max_age_days.
+                # Keep the record instead of discarding a potentially fresh job
+                # only because the provider timestamp format is not ISO-8601.
+                pass
 
         if reason:
             excluded.append({"title": title, "company": company, "reason": reason})
@@ -290,6 +291,8 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             risks.append("Necesita prezenta in afara geografiei prioritare")
         if re.search(r"Dutch|German|native French|fluent French", text, re.I):
             risks.append("Cerinta lingvistica trebuie verificata")
+        if ((job.get("sources") or [{}])[0].get("provider") == "indeed") and not job.get("final_url"):
+            risks.append("Link direct catre angajator neconfirmat")
         if not re.search(r"contract|freelance|b2b", text, re.I):
             risks.append("Forma B2B nu este confirmata")
         if not risks:
