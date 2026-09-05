@@ -140,7 +140,7 @@ function validateUserConfigPatch(input) {
   const output = {};
   const booleanKeys = [
     'rolePm', 'roleDelivery', 'roleService', 'roleScrum', 'roleProgram',
-    'workRemote', 'workHybrid', 'keepReposts', 'immediateStart',
+    'workRemote', 'workHybrid', 'keepReposts', 'immediateStart', 'jobspipeEnabled',
   ];
 
   for (const key of booleanKeys) {
@@ -220,6 +220,7 @@ function applyUserConfigPatch(config, patch) {
   if ('rateMin' in patch) config.rate_min_eur_day = patch.rateMin;
   if ('rateMax' in patch) config.rate_max_eur_day = patch.rateMax;
   if ('immediateStart' in patch) config.immediate_start = patch.immediateStart;
+  if ('jobspipeEnabled' in patch) config.jobspipe_enabled = patch.jobspipeEnabled;
   if ('exclusions' in patch) config.exclusions = patch.exclusions;
   return config;
 }
