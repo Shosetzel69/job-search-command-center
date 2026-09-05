@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-05T15:05:06.825089+00:00",
+  "generated_at": "2026-09-05T15:41:51.441160+00:00",
   "freshness_hours": 24,
   "criteria": {
     "roles": [
@@ -35,13 +35,13 @@
     ]
   },
   "raw_matches_available": {
-    "jobspipe:geography": 113,
-    "jobspipe:remote": 323,
-    "jobspipe:core_remote": 228
+    "jobspipe:geography": 115,
+    "jobspipe:remote": 331,
+    "jobspipe:core_remote": 233
   },
   "records_inspected": 75,
-  "results": 17,
-  "excluded_count": 58,
+  "results": 20,
+  "excluded_count": 55,
   "jobs": [
     {
       "id": "4299362088",
@@ -124,33 +124,6 @@
       "verified_at": "2026-09-05 04:11:37"
     },
     {
-      "id": "4463741615",
-      "title": "Strategic Project Manager (Remote)",
-      "company": "Hire Feed",
-      "initial": "HF",
-      "fit": 90,
-      "location": "Spain",
-      "mode": "Remote",
-      "type": "Full Time",
-      "age": 0,
-      "remote": true,
-      "b2b": false,
-      "repost": false,
-      "status": "new",
-      "pros": [
-        "Remote",
-        "Mediu reglementat relevant"
-      ],
-      "risks": [
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://es.linkedin.com/jobs/view/strategic-project-manager-remote-at-hire-feed-4463741615",
-      "description": "- Role: Strategic Project Manager (Remote)\n\n- Location: Remote (Work from Anywhere)\n\n- Job Type: Full-Time\n\n- Payout: $400K - $550K/yr\n\nRole Overview:\n\nWe are hiring for one of our clients, seeking a Strategic Project Lead, MD/Medical Expertise to work on a full-time basis. This role requires a medical doctorate or equivalent expertise to lead cross-functional projects in healthcare technology. You will collaborate with senior stakeholders to align project objectives with business and clinical goals.\n\nKey Responsibilities:\n\n• Develop and execute strategic project plans for medical technology initiatives with measurable outcomes.\n\n• Lead cross-functional teams including product, engineering, and clinical experts to deliver solutions.\n\n• Identify and mitigate risks related to project timelines, budgets, and regulatory compliance.\n\n• Coordinate with medical teams to ensure projects meet clinical requirements and standards.\n\n• Monitor project progress using data-driven metrics and adjust strategies as needed to achieve targets.\n\nRequired Skills & Qualifications:\n\n• Must hold an MD or equivalent medical degree with 5+ years of clinical or medical technology experience.\n\n• Proven track record leading strategic projects in healthcare, biotechnology, or related fields.\n\n• Strong understanding of medical regulations, compliance, and ethical considerations.\n\n• Ability to translate complex medical concepts into business requirements for technical teams.\n\n• Experience with project management methodologies (Agile, Waterfall) in a healthcare context.\n\nMore About the Opportunity:\n\nThis role offers a unique opportunity to work with a global leader in the Information Services industry, contributing to the advancement of medical technology solutions. You will play a key role in shaping projects that bridge clinical needs with technological innovation.\n\nEqual Opportunity Employer:\n\nWe hire based on skills and expertise. All qualified candidates are welcome regardless of background, experience, or prior employment history. Applications are reviewed solely on demonstrated technical ability and qualifications.\n\nApply Now!",
-      "date_posted": "2026-09-05",
-      "source": "linkedin",
-      "verified_at": "2026-09-05 13:02:31"
-    },
-    {
       "id": "c9655680c7a31f4a",
       "title": "Compensation & Benefits Project Manager",
       "company": "Eurofins",
@@ -159,7 +132,7 @@
       "location": "1000 Brussels",
       "mode": "Onsite",
       "type": "Full Time",
-      "age": 18,
+      "age": 19,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -175,7 +148,7 @@
       "description": "Company Description\n\nEurofins Scientific is an international life sciences company, providing a unique range of analytical testing services to clients across multiple industries, to make life and our environment safer, healthier and more sustainable. From the food you eat, to the water you drink, to the medicines you rely on, Eurofins laboratories work with the biggest companies in the world to ensure the products they supply are safe, their ingredients are authentic, and labelling is accurate.\n\nEurofins is dedicated to delivering testing services that contribute to the health and safety of society and the planet, and to its corporate responsibility to protect the environment and ensure diversity, equity, and inclusion across the entire network of Eurofins companies.\n\nJob Description\n\nSUMMARY OF POSITION AND OBJECTIVES:\n\nThe Compensation & Benefits Project Manager will support the Manager of the Compensation & Benefits Team with the execution, coordination, administration and continuous improvement of global compensation and benefits processes.\n\nIn this role, you will focus on ensuring the timely delivery of annual compensation cycles, incentive plans, reporting, analytics, governance and HR systems projects across an international environment.\n\nPOSITION & OBJECTIVES:\n\nKey Responsibilities\n\nDeputy to Manager of the Compensation & Benefits Team\n\n-\nAct as the operational partner and trusted Deputy to the Manager of the Compensation & Benefits Team.\n\n-\nSupport prioritisation and execution of strategic initiatives.\n\n-\nCoordinate cross-functional activities involving HR and Finance staff, and Eurofins company leaders.\n\n-\nEnsure commitments are delivered on time and to a high standard.\n\n-\nTake ownership of recurring operational responsibilities.\n\n-\nSupport key guidance document review cycles and updates in accordance with business priorities.\n\nAnnual Compensation Review Coordination\n\n-\nCoordinate the annual compensation and bonus review process for staff at the local corporate office.\n\n-\nManage timelines, milestones, communications and deliverables.\n\n-\nEnsure data quality, consistency and compliance throughout the process.\n\n-\nProduce dashboards, reports and management presentations.\n\n-\nMonitor progress and proactively identify risks and delays.\n\n-\nDrive the completion of actions across multiple stakeholders and functions.\n\nCompensation Analytics & Reporting\n\n-\nConsolidate and analyse large volumes of HR and financial data.\n\n-\nDevelop KPIs, reports, dashboards and executive summaries.\n\n-\nSupport decision-making through data-driven insights.\n\n-\nPerform recurring analyses related to compensation, bonuses and workforce trends.\n\n-\nEnsure accuracy, reliability and consistency of data.\n\nProject Management & Process Excellence\n\n-\nLead and coordinate compensation-related projects.\n\n-\nImprove, document and standardise processes.\n\n-\nDevelop efficient workflows, templates and operational procedures.\n\n-\nEnsure strong governance and follow-up on deliverables.\n\n-\nDrive continuous improvement and automation initiatives.\n\n-\nReceive and process feedback from stakeholders to support continuous improvement.\n\nLong-Term Incentive (LTI) Administration\n\n-\nCoordinate administration of long-term incentive plans.\n\n-\nLiaise with external providers and internal stakeholders.\n\n-\nEnsure smooth execution, controls and participant communications.\n\n-\nSupport the preparation of analyses and materials for senior management.\n\nQualifications\n\nQUALIFICATIONS AND EXPERIENCE REQUIRED:\n\nMaster's degree in Finance, Economics, Business Administration, Human Resources, Engineering or a related field.\n\nExperience\n\nThe ideal candidate has a background in Finance, Controlling, Consulting, Project Management, HR Operations or Business Analytics. Success in this role will depend far more on execution capabilities, project management discipline, analytical strength, ownership and the ability to deliver complex recurring processes on time, rather than on prior Compensation & Benefits expertise. We are looking for a highly driven individual who takes accountability, follows through on commitments and can take on the role of a reliable Deputy to the Manager of Compensation & Benefits Team.\n\nIn addition, the ideal candidate has:\n\n-\nApproximately 5+ years of professional experience.\n\n-\nExperience in Finance, Controlling, Consulting, HR Operations, Project Management, Business Analytics or similar analytical functions.\n\n-\nExperience managing complex processes involving multiple stakeholders, while exposure to international environments and compensation processes and/or HRIS management being considered a plus.\n\n-\nProject management & deadline discipline, with an affinity for continuous improvement and process optimisation.\n\n-\nAnalytical skills and strong attention to detail, with a key focus on ownership & accountability.\n\nAdditional Information\n\nWhat’s in for you?\n\n-\nA unique opportunity to gain experience within a fast‑growing, international organisation.\n\n-\nExposure to a wide range of corporate departments, providing a comprehensive understanding of how a global organisation operates.\n\nYou will join an international office ideally located near parks and green spaces, bringing together colleagues from over 35 nationalities. Additionally, we offer an attractive compensation package and extra-legal benefits that include covered transportation costs, organic meals, sports activities, and annual office events.\n\nLocation: Brussels, Belgium. Curious about where you’ll be working? Tour the office: Meet the office - Brussels, Belgium.\n\n-\n\nWe support your development! Do you feel you don’t match 100% of the requirements? Don’t hesitate to apply anyway! Eurofins companies are committed to supporting your career development.\n\nWe embrace diversity! As an Equal Opportunity Employer, the Eurofins network of companies believes in strength and innovation through diversity. We prohibit discrimination against employees or applications based on gender identity and/or expression, race, nationality, age, religion, sexual orientation, disability, and everything else that makes employees of Eurofins companies unique.\n\nSustainability matters to us! We are well on our way to achieving our objective of carbon neutrality by 2025, through a combination of emission reduction and compensation initiatives. We encourage our laboratory leaders to make sustainable changes at their local level, and in addition to their initiatives we count on our dedicated carbon reduction team to help us to achieve this goal!\n\nFind out more on our Careers page: https://careers.eurofins.com/\n\nCompany description: Eurofins Scientific is an international life sciences company, providing a unique range of analytical testing services to clients across multiple industries, to make life and our environment safer, healthier and more sustainable. From the food you eat, to the water you drink, to the medicines you rely on, Eurofins laboratories work with the biggest companies in the world to ensure the products they supply are safe, their ingredients are authentic and labelling is accurate.\n\nThe Eurofins network of companies believes that it is a global leader in food, environment, pharmaceutical and cosmetic product testing and in discovery pharmacology, forensics, advanced material sciences and agroscience contract research services. It is also one of the market leaders in certain testing and laboratory services for genomics, and in the support of clinical studies, as well as in biopharma contract development and manufacturing. It also has a rapidly developing presence in highly specialised and molecular clinical diagnostic testing and in-vitro diagnostic products.\n\nIn over 37 years, Eurofins has grown from one laboratory in Nantes, France to over 65,000 staff across a decentralised and entrepreneurial network of more than 950 laboratories in over 1,000 companies across 60 countries. Eurofins companies offer a portfolio of over 200,000 analytical methods to evaluate the safety, identity, composition, authenticity, origin, traceability and purity of biological substances and products.\n\nIn 2024, Eurofins generated total revenues of EUR 6.95 billion, and has been among the best performing stocks in Europe over the past 20 years.",
       "date_posted": "2026-09-04T20:09:45+00:00",
       "source": "indeed",
-      "verified_at": "2026-09-05 12:36:01"
+      "verified_at": "2026-09-05 15:13:11"
     },
     {
       "id": "4413272680",
@@ -285,6 +258,32 @@
       "verified_at": "2026-09-05 09:51:38"
     },
     {
+      "id": "4435435077",
+      "title": "⚡ Project Manager gezocht!",
+      "company": "VMA",
+      "initial": "V",
+      "fit": 83,
+      "location": "Erpe-Mere, Flemish Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/%E2%9A%A1-project-manager-gezocht%21-at-vma-4435435077",
+      "description": "Voor wie graag verantwoordelijkheid neemt en projecten vooruit laat gaan.\n\nBij VMA zoeken we projectmanagers die structuur brengen, het overzicht bewaren en tegelijk dicht bij hun teams en klanten staan.\n\nWord jij ook een maker die met ons meebouwt aan de wereld van morgen?\n\n📊 Wat je hier zal doen\n\nJe volgt projecten op van start tot oplevering, zodat ze vooruitgaan en goed landen.\n\n- Je coördineert planning, budget en uitvoering\n\n- Je bewaakt veiligheid, kwaliteit en budget\n\n- Je houdt je projecten op koers, ook bij hoge complexiteit\n\n- Je zorgt voor strikte opvolging, onder andere via up-to-date dashboards\n\n- Je verzorgt het contact met klanten, leveranciers en interne teams\n\n🤝 Hoe we werken\n\nBij VMA sta je er niet alleen voor. Je werkt samen met collega's die hun vak kennen en elkaar vooruithelpen.\n\n- Je stuurt je teams aan en zorgt dat iedereen mee is\n\n- Je organiseert overleg en stuurt bij waar nodig\n\n- Je werkt samen met ervaren collega’s\n\n- Lijnen zijn kort, communicatie is direct\n\n📣 Bruggen bouwen met klanten\n\nJe bouwt duurzame relaties met klanten op.\n\n- Je bent het eerste aanspreekpunt voor klanten\n\n- Je houdt communicatie helder en correct\n\n- Je komt beloftes na\n\n- Je zorgt dat de klant tevreden is en blijft\n\n👷‍♂️ Op zoek naar gemotiveerde collega’s\n\n- Bachelor of Master (techniek, bouw, elektromechanica), of gelijkwaardig door ervaring\n\n- Affiniteit met technische installaties (elektriciteit, gebouwbeheersystemen, koeling, HVAC, sanitair, …)\n\n- Je werkt planmatig en neemt verantwoordelijkheid\n\n- Je communiceert vlot en zorgt ervoor dat mensen aan boord zijn en blijven\n\n- Je kan werken met tools, zoals MS Project en Office 365.\n\n⚙️ Wat jij krijgt\n\n- Een vast contract en correct loon volgens ervaring\n\n- Een flexibel verloningspakket\n\n- Projecten met impact en verantwoordelijkheid\n\n- Extralegale voordelen (maaltijdcheques, verzekeringen, bonus…)\n\n- Opleidingen om bij te leren en te groeien (3.000+ trainingen)\n\n- Regelmatige feedback- en groeigesprekken\n\n🎉 Werken bij VMA\n\n- Onderdeel van de multidisciplinaire CFE Group\n\n- Multi-technologisch bedrijf met groei-ambitie\n\n- Met een internationale footprint (Luxemburg, Polen)\n\n- Werken in toffe teams, een collegiale sfeer\n\n- Activiteiten waar we naast het werk samenkomen (BBQ, VMA Cycling Tour, …)\n\n#vma",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 15:21:40"
+    },
+    {
       "id": "2563b7e8c0265da0",
       "title": "Project Manager Haute-Tension",
       "company": "EES INFRA",
@@ -308,7 +307,7 @@
       "description": "Bedrijf\n\nBegin 2023 bundelden VSE, Yvan Paque en de afdeling Infrastructuur van Collignon hun krachten oner een gemeenschappelijke noemer: Eiffage Énergie Systèmes - Infra. Ook Luxtechnologie en Luxys hebben zicht bij de divisie aangesloten.\n\nDe Infra-activiteiten zijn zeer uitgebreid: van elektrische voedingen tot de plaatsing van LS- en MS-schakelborden, van openbare verlichting langs snelwegen tot renovatie en onderhoud van tunnels. En niet te vergeten: metrostations, verkeerslichten, glasvezel, spoorwegsignalisatie, elektriciteitsnetten op luchthavens, evenals onze expertise in milieu-instrumentatie met de installatie en het onderhoud van analysesystemen voor lucht- en waterkwaliteit.\n\nWat je doet\n\n- Je analyseert het contract, het bestek en de projectrisico’s.\n\n- Je stelt het budget, de planning en de projectorganisatie op en volgt deze op.\n\n- Je coördineert studies, aankopen, werken, testen en indienststellingen, van kantoor tot terrein.\n\n- Je begeleidt Project Leaders, werfverantwoordelijken en onderaannemers.\n\n- Je onderhoudt contacten met klanten en leveranciers van transformatoren en hoogspanningsmateriaal.\n\n- Je werkt nauw samen met het departement Laagspanning om de technische samenhang van de projecten te garanderen.\n\n- Je volgt kosten, marge, facturatie en contractwijzigingen op.\n\n- Je garandeert een veilige uitvoering volgens de kwaliteitsvereisten.\n\nWie je bent\n\n- Master of bachelor elektriciteit, elektromechanica of een gelijkwaardige opleiding.\n\n- Minstens 5 jaar ervaring met de studie en uitvoering van elektrische projecten.\n\n- Significante kennis van hoogspanning van 30 kV tot 400 kV.\n\n- Goede kennis van klanten, transformatoren, hoogspanningsapparatuur en leveranciers in de markt.\n\n- Goede kennis van technisch, financieel en contractueel projectmanagement.\n\n- Je beheerst het Nederlands. Kennis van het Frans is een pluspunt.\n\n- Teamgeest, organisatievermogen, leiderschap, klantgerichtheid en verantwoordelijkheidszin\n\n- Je ziet toe op de naleving van de veiligheidsregels en -instructies.\n\nWat we bieden\n\n- Een voltijds contract van onbepaalde duur onder een bediendestatuut.\n\n- Een aantrekkelijk loon in verhouding met uw kennis en ervaring.\n\n- Een volledig salarispakket (bedrijfswagen + tankkaart/laadpas, netto onkostenvergoeding, maaltijdcheques, groepsverzekering, hospitalisatieverzekering, jaarlijkse bonus, ecocheques, geschenkcheques, laptop, smartphone + abonnement, 12 ADV-dagen, deelname aan het werknemersaandeelhouderschap van Eiffage, Cafetariaplan).\n\n- Opleidingen en mogelijkheden om te evolueren.\n\n- Een aangename en motiverende werkomgeving in een stabiel en sterk bedrijf dat deel uitmaakt van de internationale Eiffage-groep.\n\nContact",
       "date_posted": "2026-09-05T05:00:00+00:00",
       "source": "indeed",
-      "verified_at": "2026-09-05 12:23:21"
+      "verified_at": "2026-09-05 15:10:58"
     },
     {
       "id": "3c11022f85b890fe",
@@ -334,7 +333,7 @@
       "description": "Grijp de leiding over complexe industriële ICT-projecten en bouw mee aan de digitale transformatie van productie- en procesomgevingen. Als (Senior) Project Manager begeleid je klanten bij uitdagende projecten rond industriële ICT-infrastructuren, cybersecurity, cloudplatformen, netwerken, virtualisatie, data-oplossingen en digitalisering.\n\nJe combineert technische expertise met projectmanagement en werkt in een omgeving waar technologie, industrie en innovatie samenkomen.\n\nBij Equans geloven we dat diverse talenten onze teams sterker maken. We bouwen actief aan een inclusieve werkomgeving waarin iedereen zich welkom voelt, zichzelf kan zijn en moedigen iedereen aan om te solliciteren.\n\nJouw Equans-uitvalsbasis: Meerhout.\n\nWat ga je doen?\n\n- leid en coördineer je industriële ICT-projecten van analyse tot oplevering\n\n- beheer je scope, budget, planning, kwaliteit, risico’s en resources\n\n- stuur je multidisciplinaire projectteams aan met ICT-specialisten, engineers en externe partners\n\n- ben je het centrale aanspreekpunt voor klanten tijdens de volledige projectlevenscyclus\n\n- werk je technische en commerciële voorstellen uit voor industriële ICT-oplossingen\n\n- bewaak je de financiële resultaten en rendabiliteit van jouw projecten\n\n- verzorg je duidelijke projectrapportering naar klanten en management\n\n- identificeer je nieuwe opportuniteiten bij bestaande en potentiële klanten\n\n- ondersteun je commerciële trajecten vanuit jouw technische expertise\n\n- begeleid je klanten bij digitalisering en digitale transformatie\n\n- coördineer je projecten rond cybersecurity, networking, virtualisatie, cloud en industriële ICT-platformen\n\n- coach en ondersteun je engineers en projectmedewerkers\n\n- draag je actief bij aan de verdere groei van de afdeling\n\n- werk je mee aan standaardisatie, procesoptimalisatie en continue verbetering\n\nZie je een match met jouw troeven?\n\n- een masterdiploma in Informatica, Elektronica-ICT, Toegepaste Informatica, Industriële Wetenschappen of een gelijkaardige technische richting\n\n- ruime ervaring in het succesvol leiden van complexe technische of industriële ICT-projecten\n\n- ervaring met budgetbeheer, contractmanagement en stakeholdermanagement\n\n- minstens 5 jaar ervaring in projectmanagement\n\n- affiniteit met cybersecurity, digitalisering, data-oplossingen, cloudoplossingen en AI-toepassingen binnen de industrie\n\n- sterk organisatorisch en analytisch vermogen\n\n- een ondernemende ingesteldheid en verantwoordelijkheidszin\n\n- uitstekende communicatieve vaardigheden en een klantgerichte aanpak\n\n- rijbewijs B\n\n- een vlotte kennis van het Nederlands, een goede kennis van het Engels. Kennis van het Frans is een pluspunt\n\nWat als jij (Senior) Project Manager Industriële ICT werd bij Equans?\n\nDit betekent voor jou:\n\n- een marktconform salaris in lijn met jouw opleiding en ervaring\n\n- interessante opleidings- en doorgroeimogelijkheden\n\n- groepsverzekering, hospitalisatieverzekering\n\n- ecocheques, maaltijdcheques, representatievergoeding, 13de maand, vakantiegeld\n\n- sociaal abonnement, elektrische leasewagen, fiets leaseplan\n\n- smartphone met abonnement, internetvergoeding\n\n- ADV-dagen, ancienniteitsverlof, thuiswerk\n\n- kortingen via Benefits@Work (cultuur, sport, reizen …)",
       "date_posted": "2026-09-05T05:00:00+00:00",
       "source": "indeed",
-      "verified_at": "2026-09-05 14:12:07"
+      "verified_at": "2026-09-05 15:10:58"
     },
     {
       "id": "4461417194",
@@ -361,6 +360,32 @@
       "date_posted": "2026-09-05",
       "source": "linkedin",
       "verified_at": "2026-09-05 01:50:08"
+    },
+    {
+      "id": "4432794145",
+      "title": "Project Manager Linear Assets",
+      "company": "Arcadis",
+      "initial": "A",
+      "fit": 77,
+      "location": "Berchem, Flemish Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/project-manager-linear-assets-at-arcadis-4432794145",
+      "description": "Arcadis is wereldwijd marktleider op het gebied van duurzame ontwerp-, engineering- en adviesoplossingen voor natuurlijke en gebouwde omgevingen.\n\nMet meer dan 34.000 medewerkers in ruim 30 landen zetten wij ons in om de levenskwaliteit te verbeteren. Iedereen speelt daarbij een belangrijke rol. Dankzij de kracht van vele nieuwsgierige geesten kunnen we samen de meest complexe uitdagingen ter wereld oplossen en samen meer impact maken.\n\nWelke uitdaging ga jij aan?\n\nWij zoeken enthousiaste collega's om ons huidig energietransitie team te versterken bij de uitdagingen en opportuniteiten rond elektrificatie en transport van hernieuwbare energie. Je zal deel uitmaken van een ervaren team van projectmanagers, lead engineers en designers die verantwoordelijk zijn voor het uitwerken van hoogspanningskabel projecten, alsook later in onze groeidomeinen leiding- en warmteprojecten in het kader van energietransitie.\n\nAls projectmanager / lead engineer lineaire energie-infrastructuur werk je zelfstandig en efficiënt projecten uit en coördineer je daarbij het projectteam. Concreet betekent dit dat je de behoeften van de klant weet te vertalen in ontwerpen: je geeft input bij offertes, je kan de scope van het project bepalen en richting geven aan de technische oplossing tijdens de ontwerpfase. Je bepaalt de planning, draagt de verantwoordelijkheid voor de verschillende onderdelen reikend van tracé over vergunning tot ontwerp. Je rapporteert periodiek over de gerealiseerde mijlpalen en de fundamentele problemen, je onderhoudt contacten met de opdrachtgever en je stuurt intern het projectteam aan. Je zorgt ervoor dat het project gerealiseerd wordt binnen het budget en de vooropgestelde timing en bent verantwoordelijkheid voor de deliverables, kwaliteit, het financiële aspect, rapportering en technische communicatie.\n\nType projecten bij Arcadis waaraan je kan meewerken :\n\n“Hoogspanningsverbinding ALEGrO”\n\n\"Antwerpen ontwikkelt warmtenet op grote schaal.\"\n\nWat heb jij in je mars?\n\n- Als projectmanager ben je vertrouwd met het werken binnen lump sum-projecten en het beheren van scope variations, en beschik je over een grondige kennis en ervaring in de opvolging van financiële KPI’s\n\n- Je beschikt over sterke people skills om het huidige projectteam naar een hoger niveau te tillen.\n\n- Je bent ingenieur met minstens 7 jaar ervaring als projectmanager alsook lead engineer binnen ondergrondse infrastructuurprojecten.\n\n- Je beschikt over een grondige kennis van ondergrondse infrastructuur (KLIP/KLIM, sleuven en gestuurde boringen) en bent gemotiveerd om deze expertise in te zetten voor de ontwikkeling van duurzame energie-infrastructuur in gans België.\n\n- Je bent vertrouwd met vergunningen in België (omgevingsvergunningen in Vlaanderen en permis d’urbanisme / environnement in Wallonië) en weet hoe je deze procedures efficiënt toepast binnen infrastructuurprojecten.\n\n- Je draagt kwaliteit en veiligheid hoog in het vaandel, kan vlot motiveren, delegeren en bijsturen. Dankzij je sterke communicatieve vaardigheden leg je vlot contact met zowel de klanten (de transmissienetbeheerders of industriële klanten) als de interne medewerkers (topografen, design- en engineeringsteam, finance en het management)\n\n- Je spreekt vlot Nederlands en Engels en hebt een basis Frans.\n\n- Hoogspanningskabels, H2-backbones, CO2-leidingen en warmtenetten: dat zijn de projecten waar jij mee het verschil wil maken.\n\n- We zijn op zoek naar een collega die van aanpakken weet. Een communicatief vaardige problemsolver, met een sterk planningsvermogen en een proactieve ingesteldheid.\n\n- Wij zorgen ervoor dat jij jouw talenten kan inzetten om impact te hebben op onze leefomgeving, vandaag en overmorgen, en geven jou het stuur in handen zodat je zelf bepaalt in welke richting je verder wil groeien!\n\nWaarom Arcadis?\n\nWe kunnen onze doelen alleen bereiken als iedereen in staat is om het beste uit zichzelf te halen. Wij geloven dat ieders bijdrage ertoe doet. Daarom pionieren we met een op vaardigheden gebaseerde aanpak, waarbij je jouw unieke ervaring en expertise kunt inzetten om jouw carrièrepad uit te stippelen en de impact die we samen kunnen maken te maximaliseren.\n\nJe doet zinvol werk en, ongeacht je functie, help je mee aan het realiseren van duurzame oplossingen voor een welvarendere planeet. Druk jouw stempel; op jouw carrière, jouw collega’s, jouw klanten, jouw leven en de wereld om je heen.\n\nSamen kunnen we een blijvende erfenis creëren.\n\nJoin Arcadis. Create a Legacy.\n\nOnze inzet voor gelijkheid, diversiteit, inclusie en verbondenheid\n\nWe willen dat je elke dag het beste van jezelf kunt laten zien op het werk. Daarom nemen we gelijkheid en inclusie serieus en dragen we verantwoordelijkheid voor onze daden. Het is onze ambitie om een voorkeurswerkgever te zijn en een geweldige werkplek te bieden aan al onze mensen.",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 15:06:20"
     },
     {
       "id": "4453585204",
@@ -415,6 +440,32 @@
       "verified_at": "2026-09-05 10:23:27"
     },
     {
+      "id": "4435418867",
+      "title": "⚡ Project Manager recherché·e!",
+      "company": "VMA",
+      "initial": "V",
+      "fit": 77,
+      "location": "Anderlecht, Brussels Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/%E2%9A%A1-project-manager-recherch%C3%A9%C2%B7e%21-at-vma-4435418867",
+      "description": "Pour celles et ceux qui aiment prendre des responsabilités et faire avancer les projets.\n\nChez VMA, nous recherchons des Project Managers qui apportent de la structure, gardent une vue d’ensemble et restent proches de leurs équipes et de leurs clients.\n\nEnsemble, nous construisons les technologies qui façonnent le monde de demain.\n\n📊 Votre quotidien chez nous\n\n- Vous pilotez vos projets du lancement jusqu’à la réception afin qu’ils avancent dans la bonne direction et atteignent leurs objectifs.\n\n- Vous coordonnez la planification, le budget et l’exécution\n\n- Vous veillez à la sécurité, à la qualité et au respect du budget\n\n- Vous gardez vos projets sur les rails, même lorsqu’ils sont complexes\n\n- Vous assurez un suivi rigoureux, notamment à l’aide de tableaux de bord actualisés\n\n- Vous entretenez les contacts avec les clients, les fournisseurs et les équipes internes\n\n🤝 Notre façon de travailler\n\nChez VMA, vous ne travaillez jamais tout seul.\n\n- Vous encadrez vos équipes et veillez à ce que chacun avance dans la même direction\n\n- Vous organisez les réunions de coordination et ajustez le cap lorsque c’est nécessaire\n\n- Vous collaborez avec des collègues expérimentés\n\n- La communication est claire et efficace, et la prise de décisions est fluide\n\n📣 Construire des relations durables avec les clients\n\n- Vous développez des relations de confiance sur le long terme.\n\n- Vous êtes le premier point de contact pour vos clients\n\n- Vous veillez à une communication claire et professionnelle\n\n- Vous veillez à respecter vos engagements\n\n- Vous contribuez à la satisfaction durable de vos clients\n\n👷 À la recherche de collègues motivé.e.s\n\n- Vous disposez d’un diplôme de Bachelier ou de Master (technique, construction, électromécanique) ou d’une expérience équivalente\n\n- Vous avez une affinité avec les installations techniques (électricité, systèmes de gestion des bâtiments, refroidissement, HVAC, sanitaire, ...)\n\n- Vous travaillez de manière structurée et prenez vos responsabilités\n\n- Vous communiquez facilement et êtes capables de fédérer les personnes autour d’un objectif commun\n\n- Vous maîtrisez des outils tels que MS Project et Office 365\n\n⚙️ Ce que nous vous offrons\n\n- Un contrat à durée indéterminée et un salaire attractif en fonction de votre expérience\n\n- Un package salarial flexible\n\n- Des projets à impact, avec de réelles responsabilités\n\n- Des avantages extralégaux (chèques-repas, assurances, bonus...)\n\n- Des formations pour apprendre et vous développer (plus de 3.000 formations)\n\n- Des moments réguliers de feedback et d’échange sur votre développement personnel\n\n🎉 Travailler chez VMA\n\n- Vous rejoignez CFE Group, un groupe multidisciplinaire de référence\n\n- Vous travaillez dans une entreprise multitechnologique tournée vers la croissance\n\n- Vous faites partie d’une organisation présente à l’international (Luxembourg, Pologne)\n\n- Vous travaillez au sein d’équipes soudées, dans une ambiance conviviale\n\n- Vous participez à des activités qui nous rassemblent en dehors du travail (BBQ, VMA Cycling Tour, ...)\n\n#vma",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 15:35:35"
+    },
+    {
       "id": "4334788022",
       "title": "Medior Project Manager",
       "company": "Cyclops",
@@ -439,6 +490,33 @@
       "date_posted": "2026-09-05",
       "source": "linkedin",
       "verified_at": "2026-09-05 13:49:40"
+    },
+    {
+      "id": "4461801044",
+      "title": "Project Manager",
+      "company": "Arcadis",
+      "initial": "A",
+      "fit": 70,
+      "location": "Brussels, Brussels Region, Belgium",
+      "mode": "Onsite",
+      "type": "Full Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie prioritara"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://be.linkedin.com/jobs/view/project-manager-at-arcadis-4461801044",
+      "description": "Arcadis is the world's leading company delivering sustainable design, engineering, and consultancy solutions for natural and built assets.\n\nWe are more than 34,000 people, in over 30 countries, dedicated to improving quality of life. Everyone has an important role to play. With the power of many curious minds, together we can solve the world’s most complex challenges and deliver more impact together.\n\nYour tasks\n\n- You are responsible for the completion of the handover with the Pursuit Leader.\n\n- You establish a Project Management Plan as defined in the Initiate and Plan Project phase of the Delivery to Results Quality Procedures. This should consider the fit to size principal stating that the plan should be commensurate with the project risk.\n\n- You ensure the Project Management Plan is followed by team members.\n\n- You deliver or exceed on the commercial plan for the project and identify margin improvement opportunities.\n\n- You aim to maintain a positive cash balance through prompt invoicing and chasing of aged receivables/debt.\n\n- You work with the Resource Manager/Planner to identify the best person for the project and ensure resources are correctly allocated to project and tasks.\n\n- You assure that client’s quality expectations and needs as defined by the PM are properly understood and reflected.\n\n- You monitor and update scopes of work, with appropriate schedules and budgets.\n\n- You communicate with the client variations that may impact planned scope, budget, schedule, content, and quality during execution.\n\n- You communicate the change process (internal and external) with team, where appropriate, i.e., not addressed by PM.\n\nYour background\n\n- You are an Industrial Engineer in Electromechanical Engineering or equivalent through your experience in MEP or HVAC.\n\n- Your solid experience as a project manager enables you to manage multidisciplinary projects, from design to implementation phase. You are also familiar with resource planning, quality monitoring and budget control.\n\n- You are communicatively strong, persuasive, results-oriented and above all customer-oriented.\n\n- You are fluent in Dutch and French and you have a good proficiency in English.\n\nQualifications & Experience:\n\nWhy Arcadis?\n\nWe can only achieve our goals when everyone is empowered to be their best. We believe everyone's contribution matters. It’s why we are pioneering a skills-based approach, where you can harness your unique experience and expertise to carve your career path and maximize the impact we can make together.\n\nYou’ll do meaningful work, and no matter what role, you’ll be helping to deliver sustainable solutions for a more prosperous planet. Make your mark, on your career, your colleagues, your clients, your life and the world around you.\n\nTogether, we can create a lasting legacy.\n\nJoin Arcadis. Create a Legacy.\n\nOur Commitment to Equality, Diversity, Inclusion & Belonging\n\nWe want you to be able to bring your best self to work every day, which is why we take equality and inclusion seriously and hold ourselves to account for our actions. Our ambition is to be an employer of choice and provide a great place to work for all our people.",
+      "date_posted": "2026-09-05",
+      "source": "linkedin",
+      "verified_at": "2026-09-05 15:21:38"
     },
     {
       "id": "4334797787",
@@ -492,10 +570,15 @@
       "description": "Ready for a challenge?\n\nThen Just Eat Takeaway.com might be the place for you. We’re a leading global online delivery platform, and our vision is to empower everyday convenience. Whether it’s a Friday-night feast, a post-gym poke bowl, or grabbing some groceries, our tech platform connects tens of millions of customers with hundreds of thousands of restaurant, grocery and convenience partners across the globe.\n\nAbout this role As a Project & Program Manager, you will join an energetic, fast-paced team dedicated to operational excellence. In this role, you will lead and deliver end-to-end projects within defined scope, time, quality, and budget constraints.\n\nWorking closely with local operations, cross-functional squads, and external partners, you will bring structure to complex briefs while embodying our core values to Lead, Deliver, and Care.\n\nYou will take full ownership of outcomes, keeping solutions simple and effective while putting a customer-centric approach at the heart of everything you do.\n\nThese are some of the key components to the position:\n\n-\n\nTurn defined briefs into realistic, actionable project plans with clear objectives, scope, milestones, and risk management.\n\n-\n\nRun projects end to end from initiation to proper closure, including handovers and clear lessons learned.\n\n-\n\nTrack progress, budget, and quality, flagging slippage early alongside structured options and recommendations.\n\n-\n\nLead continuous improvement and LEAN process-optimization initiatives to elevate delivery operations.\n\n-\n\nManage operational stakeholders by preparing clear information to facilitate timely decision-making.\n\n-\n\nFacilitate productive working sessions and steering meetings to keep projects moving at a swift pace.\n\n-\n\nExecute day-to-day project activities directly, balancing hands-on work with structured oversight.\n\n-\n\nEscalate complex risks, trade-offs, or scope changes to senior management when necessary.\n\nWhat will you bring to the team?\n\n-\n\nProven track record of independently planning and delivering medium-sized operational or process improvement projects.\n\n-\n\nStrong understanding of continuous improvement practices (such as LEAN) and structured operations change.\n\n-\n\nPractical capability to manage operational stakeholders through clear, pragmatic, and fact-based communication.\n\n-\n\nExcellent facilitation skills, with the ability to turn complex choices into actionable recommendations.\n\n-\n\nProficiency with standard project management tools such as Jira, Confluence, MS Project, or Smartsheet.\n\n-\n\nExceptional written and spoken English skills; knowledge of Dutch or French is a strong asset in regional markets.\n\n-\n\nA hands-on, pragmatic mindset that prioritizes effective, on-time delivery over theoretical perfection.\n\n-\n\nStrong organizational capability to manage multiple parallel initiatives in a fast-changing environment.\n\n-\n\nAbility to build trust across matrixed organizations with local and central stakeholders.\n\nAt JET, this is how we play Our teams forge connections internally and work with some of the best-known brands on the planet, giving us truly international impact in a dynamic environment. Being the best at what we do isn’t just about delivering on our strategy. It's a competition for something incredibly valuable – our customers' choice. Every time a customer decides where to order, they're picking a side.\n\nAt the heart of the JET Customer League are our values and behaviours. They guide every interaction, every decision, every innovation. These are the actions we need to perform consistently and brilliantly, to surpass the competition and earn our customers’ loyalty, again and again.\n\nFun, fast-paced and supportive, the JET culture is about movement, growth, helping one another to succeed and celebrating wins. By truly living our values and embodying our behaviours, we’re building a customer-first culture which enables us to stay one step ahead of the competition.\n\nInclusion, Diversity & Belonging\n\nNo matter who you are, what you look like, who you love, or where you are from, you can find your place at Just Eat Takeaway.com.\n\nWe’re committed to creating an inclusive culture, encouraging diversity of people and thinking, in which all employees feel they truly belong and can bring their most colourful selves to work every day.\n\nWhat else are we delivering? Want to know more about our JETers, culture or company? Have a look at our career site where you can find people's stories, blogs, podcasts and more JET journeys.\n\nAre you ready to join the team? Apply now!",
       "date_posted": "2026-09-05T05:00:00+00:00",
       "source": "indeed",
-      "verified_at": "2026-09-05 12:26:57"
+      "verified_at": "2026-09-05 15:10:58"
     }
   ],
   "excluded_sample": [
+    {
+      "title": "SAP S/4HANA Program Manager & Quality Assurance",
+      "company": "KPMG Belgium",
+      "reason": "deep ERP/SAP implementation"
+    },
     {
       "title": "Senior Scrum Master (M/F/H)",
       "company": "Everience Benelux",
@@ -522,31 +605,6 @@
       "reason": "non-IT role"
     },
     {
-      "title": "(Senior) Project Manager | Industriële ICT",
-      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
-      "reason": "older than 24 hours"
-    },
-    {
-      "title": "HR Project Manager",
-      "company": "Actief Interim NV",
-      "reason": "older than 24 hours"
-    },
-    {
-      "title": "R&D Project Manager",
-      "company": "PROMAN Agilitas NV",
-      "reason": "older than 24 hours"
-    },
-    {
-      "title": "Field service manager",
-      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
-      "reason": "older than 24 hours"
-    },
-    {
-      "title": "Project Manager Machinebouw",
-      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
-      "reason": "older than 24 hours"
-    },
-    {
       "title": "Project Manager – Digital Marketing",
       "company": "Voxturr Consulting Pvt. Ltd",
       "reason": "non-IT role"
@@ -559,6 +617,21 @@
     {
       "title": "Technical Project Manager",
       "company": "Penbrothers",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Manager - Community Health Worker Program",
+      "company": "CVS Health",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Senior Manager, Scrum Master",
+      "company": "CVS Health",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Manager, Scrum Master",
+      "company": "CVS Health",
       "reason": "remote geography not eligible"
     },
     {
@@ -594,6 +667,11 @@
     {
       "title": "Project Manager - Growth (Remote)",
       "company": "Hire Feed",
+      "reason": "remote geography not eligible"
+    },
+    {
+      "title": "Project Geotechnical Engineer - Project Manager",
+      "company": "GFT",
       "reason": "remote geography not eligible"
     }
   ]

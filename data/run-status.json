@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260905T150506Z",
+  "run_id": "github-20260905T154151Z",
   "status": "completed",
-  "started_at": "2026-09-05T15:05:06.825089+00:00",
-  "completed_at": "2026-09-05T15:05:09.507559+00:00",
+  "started_at": "2026-09-05T15:41:51.441160+00:00",
+  "completed_at": "2026-09-05T15:41:57.099847+00:00",
   "sources": [
     "jobspipe"
   ],
@@ -13,7 +13,7 @@
       "query": "geography",
       "status": "completed",
       "records": 25,
-      "total_available": 113,
+      "total_available": 115,
       "error": null
     },
     {
@@ -21,7 +21,7 @@
       "query": "remote",
       "status": "completed",
       "records": 25,
-      "total_available": 323,
+      "total_available": 331,
       "error": null
     },
     {
@@ -29,13 +29,13 @@
       "query": "core_remote",
       "status": "completed",
       "records": 25,
-      "total_available": 228,
+      "total_available": 233,
       "error": null
     }
   ],
   "records_inspected": 75,
-  "jobs_published": 17,
-  "excluded": 58,
+  "jobs_published": 20,
+  "excluded": 55,
   "limitations": [
     "JobsPipe free-plan result cap applies to each query"
   ]
