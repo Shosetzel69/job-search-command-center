@@ -10,6 +10,18 @@ function json(body, status = 200, headers = {}) {
   });
 }
 
+function html(body, status = 200, headers = {}) {
+  return new Response(body, {
+    status,
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': 'no-store',
+      'Cross-Origin-Opener-Policy': 'same-origin-allow-popups',
+      ...headers,
+    },
+  });
+}
+
 function corsHeaders(request, env) {
   const origin = request.headers.get('Origin');
   if (!origin || origin !== env.FRONTEND_ORIGIN) return {};
@@ -29,7 +41,11 @@ function assertAllowedOrigin(request, env) {
   }
 }
 
-async function authenticate(request, env) {
+async function verifyGoogleToken(request, env) {
+  if (!env.GOOGLE_CLIENT_ID || env.GOOGLE_CLIENT_ID.includes('REPLACE_WITH_')) {
+    throw Object.assign(new Error('Google OAuth client is not configured'), { status: 503 });
+  }
+
   const authorization = request.headers.get('Authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
   if (!match) throw Object.assign(new Error('Missing Google ID token'), { status: 401 });
@@ -38,11 +54,67 @@ async function authenticate(request, env) {
     issuer: ['https://accounts.google.com', 'accounts.google.com'],
     audience: env.GOOGLE_CLIENT_ID,
   });
+  return payload;
+}
 
+async function authenticate(request, env) {
+  const payload = await verifyGoogleToken(request, env);
+  if (!env.ALLOWED_GOOGLE_SUB) {
+    throw Object.assign(new Error('Authorization bootstrap incomplete'), { status: 503 });
+  }
   if (!payload.sub || payload.sub !== env.ALLOWED_GOOGLE_SUB) {
     throw Object.assign(new Error('User not authorized'), { status: 403 });
   }
   return payload;
+}
+
+function bootstrapPage(env) {
+  const clientId = String(env.GOOGLE_CLIENT_ID || '');
+  if (!clientId || clientId.includes('REPLACE_WITH_')) {
+    return html('<h1>Google OAuth client is not configured</h1>', 503);
+  }
+  if (env.ALLOWED_GOOGLE_SUB) {
+    return html('<h1>Bootstrap disabled</h1><p>ALLOWED_GOOGLE_SUB is already configured.</p>', 404);
+  }
+
+  const safeClientId = clientId.replace(/[<>&"']/g, '');
+  return html(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Job Search Auth Bootstrap</title>
+  <script src="https://accounts.google.com/gsi/client" async defer></script>
+  <style>
+    body{font-family:system-ui,sans-serif;max-width:720px;margin:60px auto;padding:0 20px;line-height:1.5}
+    pre{padding:16px;background:#f4f4f4;border-radius:8px;overflow:auto}
+  </style>
+</head>
+<body>
+  <h1>Authorize Job Search Command Center</h1>
+  <p>Sign in with the Google account that should be allowed to run searches and save configuration.</p>
+  <div id="button"></div>
+  <pre id="result">Waiting for Google sign-in…</pre>
+  <script>
+    window.onload = () => {
+      google.accounts.id.initialize({
+        client_id: '${safeClientId}',
+        callback: async ({credential}) => {
+          const result = document.getElementById('result');
+          result.textContent = 'Verifying…';
+          const response = await fetch('/auth/whoami', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + credential }
+          });
+          const body = await response.json();
+          result.textContent = JSON.stringify(body, null, 2);
+        }
+      });
+      google.accounts.id.renderButton(document.getElementById('button'), {theme:'outline',size:'large'});
+    };
+  </script>
+</body>
+</html>`);
 }
 
 function githubHeaders(env) {
@@ -211,6 +283,17 @@ export default {
       const url = new URL(request.url);
       if (request.method === 'GET' && url.pathname === '/health') {
         return json({ status: 'ok' }, 200, cors);
+      }
+
+      if (request.method === 'GET' && url.pathname === '/auth/bootstrap') {
+        return bootstrapPage(env);
+      }
+
+      if (request.method === 'POST' && url.pathname === '/auth/whoami') {
+        if (env.ALLOWED_GOOGLE_SUB) return json({ error: 'Bootstrap disabled' }, 404, cors);
+        assertAllowedOrigin(request, env);
+        const user = await verifyGoogleToken(request, env);
+        return json({ sub: user.sub, email: user.email || null }, 200, cors);
       }
 
       assertAllowedOrigin(request, env);
