@@ -95,6 +95,7 @@
       <section id="criteriaPanel" class="rules-panel" hidden>
         <div class="rule-card"><h2>Roluri urmarite</h2><label class="check"><input id="rolePm" type="checkbox" checked> Project Manager / IT Project Manager</label><label class="check"><input id="roleDelivery" type="checkbox" checked> Delivery / Technical Project Manager</label><label class="check"><input id="roleService" type="checkbox" checked> Service Manager</label><label class="check"><input id="roleScrum" type="checkbox" checked> Scrum Master, fara nivel excesiv de senior</label><label class="check"><input id="roleProgram" type="checkbox" checked> Program / PMO Manager</label></div>
         <div class="rule-card"><h2>Mod de lucru</h2><p class="card-note">Ordinea optiunilor reprezinta prioritatea rezultatelor.</p><label class="check"><input id="workRemote" type="checkbox" checked> Remote</label><label class="check"><input id="workHybrid" type="checkbox" checked> Hibrid</label></div>
+        <div class="rule-card"><h2>Surse de colectare</h2><p class="card-note">JobsPipe consuma quota API. Il pastram oprit in perioada de stabilizare si il reactivam controlat.</p><label class="check"><input id="jobspipeEnabled" type="checkbox"> Activeaza JobsPipe</label></div>
         <div class="rule-card"><h2>Praguri de selectie</h2><label>Vechimea implicita<select id="freshness"><option value="24">24 ore</option><option value="36">36 ore</option><option value="48">48 ore</option><option value="120">5 zile</option></select></label><label>Scor minim pentru fit ridicat<input id="fitThreshold" type="number" min="50" max="100" value="80">%</label><label class="check"><input id="keepReposts" type="checkbox" checked> Pastreaza si marcheaza repostarile</label></div>
         <div class="rule-card"><h2>Contract si disponibilitate</h2><label>Interval B2B zilnic<div class="range"><input id="rateMin" value="250" aria-label="Tarif minim">—<input id="rateMax" value="650" aria-label="Tarif maxim"> EUR/zi</div></label><label class="check"><input id="immediateStart" type="checkbox" checked> Prioritizeaza disponibilitatea imediata</label></div>
         <div class="rule-card exclusions-card"><h2>Excluderi</h2><label for="exclusionSuggestions">Propuneri de excludere</label><select id="exclusionSuggestions" class="exclusion-select"><option value="">Selecteaza o propunere</option><option>Star Storage si companiile grupului</option><option>Implementari ERP care cer experienta specializata ampla</option><option>Roluri non-IT</option><option>Roluri exclusiv onsite in afara Bucurestiului</option></select><div id="selectedExclusions" class="selected-exclusions" aria-live="polite"></div></div>
@@ -117,6 +118,7 @@
   <div id="scrim" class="scrim"></div>
   <div id="toast" class="toast"></div>
   <script src="app.js"></script>
+  <script src="provider-settings.js"></script>
   <script src="auth.js"></script>
   <script src="secure-data.js"></script>
   <script src="privacy-auth.js"></script>
