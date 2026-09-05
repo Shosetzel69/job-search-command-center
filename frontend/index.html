@@ -1,124 +1,16 @@
 <!doctype html>
 <html lang="ro">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Centru personal de monitorizare si evaluare a rolurilor de Project Management.">
-  <title>Job Search Command Center</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="styles.css">
-  <link rel="stylesheet" href="layout-fixes.css">
-  <style>
-    body.auth-signed-out .sidebar nav,
-    body.auth-signed-out .sidebar-bottom,
-    body.auth-signed-out main .topbar > div:first-child,
-    body.auth-signed-out .summary,
-    body.auth-signed-out .workspace,
-    body.auth-signed-out #criteriaPanel,
-    body.auth-signed-out #runSearch,
-    body.auth-signed-out #drawer,
-    body.auth-signed-out #scrim,
-    body.auth-signed-out #toast { display:none !important; }
-  </style>
-</head>
-<body class="auth-signed-out">
-  <div class="shell">
-    <aside class="sidebar">
-      <div class="brand"><span class="mark">S</span><span>Job Search</span></div>
-      <nav aria-label="Navigare principala">
-        <button class="nav active" data-view="jobs"><span>⌁</span> Joburi noi <b id="countJobs">0</b></button>
-        <button class="nav" data-view="review"><span>◎</span> De evaluat <b id="countReview">0</b></button>
-        <button class="nav" data-view="applications"><span>✓</span> Aplicari <b id="countApplications">0</b></button>
-        <button class="nav" data-view="criteria"><span>◇</span> Criterii de selectie</button>
-        <button class="nav" data-view="sources"><span>◫</span> Surse</button>
-      </nav>
-      <div class="sidebar-bottom">
-        <div class="run-status"><i></i><div><strong id="runState">Monitor</strong><small id="lastRun">Ultima rulare: se incarca...</small></div></div>
-        <div class="app-version">Versiunea 0.02</div>
-      </div>
-    </aside>
-
-    <main>
-      <header class="topbar">
-        <div>
-          <p id="currentDate" class="eyebrow"></p>
-          <h1>Joburi noi</h1>
-        </div>
-        <button id="runSearch" class="primary"><span>↻</span> Ruleaza verificarea</button>
-      </header>
-
-      <section class="summary" aria-label="Rezumat">
-        <article><span class="metric-icon blue">↗</span><div><strong id="metricJobs">0</strong><small>roluri noi</small></div><em id="metricFreshnessLabel">ultimele 24h</em></article>
-        <article><span class="metric-icon green">★</span><div><strong id="metricHigh">0</strong><small>fit ridicat</small></div><em>≥ 80%</em></article>
-        <article><span class="metric-icon amber">↺</span><div><strong id="metricReposts">0</strong><small>repostari</small></div><em>marcate, nu ascunse</em></article>
-        <article><span class="metric-icon violet">⌂</span><div><strong id="metricRemote">0</strong><small>remote</small></div><em>eligibile din Romania</em></article>
-      </section>
-
-      <section class="workspace">
-        <div class="toolbar">
-          <label class="search"><span>⌕</span><input id="search" type="search" placeholder="Cauta rol, companie sau tehnologie"></label>
-          <button class="filter active" data-filter="all">Toate <b id="filterAll">0</b></button>
-          <button class="filter" data-filter="high">Fit ridicat <b id="filterHigh">0</b></button>
-          <button class="filter" data-filter="b2b">B2B <b id="filterB2b">0</b></button>
-          <select id="freshnessFilter" class="toolbar-select" aria-label="Vechimea joburilor">
-            <option value="24" selected>24h</option>
-            <option value="36">36h</option>
-            <option value="48">48h</option>
-            <option value="120">5 zile</option>
-          </select>
-          <details id="workModeFilter" class="mode-multiselect">
-            <summary id="workModeLabel">Mod lucru: Toate</summary>
-            <div class="mode-options">
-              <label><input class="work-mode-filter" type="checkbox" value="Remote" data-label="Remote" checked> Remote</label>
-              <label><input class="work-mode-filter" type="checkbox" value="Hybrid" data-label="Hibrid" checked> Hibrid</label>
-              <label><input class="work-mode-filter" type="checkbox" value="Onsite" data-label="Onsite" checked> Onsite</label>
-              <label><input class="work-mode-filter" type="checkbox" value="N/A" data-label="N/A" checked> N/A</label>
-            </div>
-          </details>
-          <select id="sort" class="toolbar-select fit-sort" aria-label="Sortare FIT">
-            <option value="fit-desc" selected>FIT descrescator</option>
-            <option value="fit-asc">FIT crescator</option>
-          </select>
-        </div>
-        <div id="sourceToolbar" class="toolbar source-toolbar" hidden>
-          <label class="search"><span>⌕</span><input id="sourceSearch" type="search" placeholder="Cauta o sursa"></label>
-          <select id="sourceSort" aria-label="Ordonare surse"><option value="name">Nume A–Z</option><option value="status">Surse active primele</option></select>
-        </div>
-
-        <div class="table-head"><span>ROL</span><span>FIT</span><span>MOD DE LUCRU</span><span>PUBLICAT</span><span></span></div>
-        <div id="jobList" class="job-list"></div>
-        <div id="empty" class="empty" hidden>Niciun rol nu corespunde filtrelor.</div>
-      </section>
-
-      <section id="criteriaPanel" class="rules-panel" hidden>
-        <div class="rule-card"><h2>Roluri urmarite</h2><label class="check"><input id="rolePm" type="checkbox" checked> Project Manager / IT Project Manager</label><label class="check"><input id="roleDelivery" type="checkbox" checked> Delivery / Technical Project Manager</label><label class="check"><input id="roleService" type="checkbox" checked> Service Manager</label><label class="check"><input id="roleScrum" type="checkbox" checked> Scrum Master, fara nivel excesiv de senior</label><label class="check"><input id="roleProgram" type="checkbox" checked> Program / PMO Manager</label></div>
-        <div class="rule-card"><h2>Mod de lucru</h2><p class="card-note">Ordinea optiunilor reprezinta prioritatea rezultatelor.</p><label class="check"><input id="workRemote" type="checkbox" checked> Remote</label><label class="check"><input id="workHybrid" type="checkbox" checked> Hibrid</label></div>
-        <div class="rule-card"><h2>Surse de colectare</h2><p class="card-note">JobsPipe consuma quota API. Il pastram oprit in perioada de stabilizare si il reactivam controlat.</p><label class="check"><input id="jobspipeEnabled" type="checkbox"> Activeaza JobsPipe</label></div>
-        <div class="rule-card"><h2>Praguri de selectie</h2><label>Vechimea implicita<select id="freshness"><option value="24">24 ore</option><option value="36">36 ore</option><option value="48">48 ore</option><option value="120">5 zile</option></select></label><label>Scor minim pentru fit ridicat<input id="fitThreshold" type="number" min="50" max="100" value="80">%</label><label class="check"><input id="keepReposts" type="checkbox" checked> Pastreaza si marcheaza repostarile</label></div>
-        <div class="rule-card"><h2>Contract si disponibilitate</h2><label>Interval B2B zilnic<div class="range"><input id="rateMin" value="250" aria-label="Tarif minim">—<input id="rateMax" value="650" aria-label="Tarif maxim"> EUR/zi</div></label><label class="check"><input id="immediateStart" type="checkbox" checked> Prioritizeaza disponibilitatea imediata</label></div>
-        <div class="rule-card exclusions-card"><h2>Excluderi</h2><label for="exclusionSuggestions">Propuneri de excludere</label><select id="exclusionSuggestions" class="exclusion-select"><option value="">Selecteaza o propunere</option><option>Star Storage si companiile grupului</option><option>Implementari ERP care cer experienta specializata ampla</option><option>Roluri non-IT</option><option>Roluri exclusiv onsite in afara Bucurestiului</option></select><div id="selectedExclusions" class="selected-exclusions" aria-live="polite"></div></div>
-        <div class="criteria-actions"><span id="criteriaState" class="save-state">Preferinte salvate local</span><button id="saveCriteria" class="primary">Salveaza preferintele</button></div>
-      </section>
-    </main>
-  </div>
-
-  <aside id="drawer" class="drawer" aria-hidden="true">
-    <button id="closeDrawer" class="close" aria-label="Inchide">×</button>
-    <p class="eyebrow">EVALUARE RAPIDA</p>
-    <h2 id="drawerTitle"></h2>
-    <p id="drawerCompany" class="drawer-company"></p>
-    <div class="score-ring"><strong id="drawerScore"></strong><span>fit</span></div>
-    <h3>De ce se potriveste</h3><ul id="pros"></ul>
-    <h3>Riscuri</h3><ul id="risks" class="risks"></ul>
-    <h3>Descrierea pozitiei</h3><p id="drawerDescription" class="job-description"></p>
-    <div class="drawer-actions"><button class="secondary">Exclude</button><a id="applyLink" class="primary" href="#" target="_blank" rel="noopener noreferrer">Deschide jobul ↗</a></div>
-  </aside>
-  <div id="scrim" class="scrim"></div>
-  <div id="toast" class="toast"></div>
-  <script src="app.js"></script>
-  <script src="provider-settings.js"></script>
-  <script src="auth.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Centru personal de monitorizare si evaluare a rolurilor de Project Management." />
+    <title>Job Search Command Center</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>

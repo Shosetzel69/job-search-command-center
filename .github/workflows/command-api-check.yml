@@ -20,7 +20,7 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -30,15 +30,10 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install pinned dependencies
+      - name: Install Worker dependencies
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Validate frontend JavaScript
-        run: |
-          node --check frontend/app.js
-          node --check frontend/auth.js
-
-      - name: Validate Worker build
+      - name: Validate React frontend and Worker build
         working-directory: command-api
         run: npm run check

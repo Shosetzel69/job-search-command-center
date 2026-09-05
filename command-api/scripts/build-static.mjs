@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 const projectDir = process.cwd();
 const repoRoot = resolve(projectDir, '..');
-const frontendDir = resolve(repoRoot, 'frontend');
+const frontendDistDir = resolve(repoRoot, 'frontend', 'dist');
 const dataDir = resolve(repoRoot, 'data');
 const publicDir = resolve(projectDir, 'public');
 const publicDataDir = resolve(publicDir, 'data');
@@ -16,13 +16,13 @@ const dataFiles = [
   'search-config.json',
 ];
 
-if (!existsSync(frontendDir)) {
-  throw new Error(`Frontend directory not found: ${frontendDir}`);
+if (!existsSync(frontendDistDir)) {
+  throw new Error(`Frontend build directory not found: ${frontendDistDir}`);
 }
 
 rmSync(publicDir, { recursive: true, force: true });
 mkdirSync(publicDataDir, { recursive: true });
-cpSync(frontendDir, publicDir, { recursive: true });
+cpSync(frontendDistDir, publicDir, { recursive: true });
 
 for (const file of dataFiles) {
   const source = resolve(dataDir, file);
@@ -30,4 +30,4 @@ for (const file of dataFiles) {
   cpSync(source, resolve(publicDataDir, file));
 }
 
-console.log(`Static site assembled in ${publicDir}`);
+console.log(`React static site assembled in ${publicDir}`);
