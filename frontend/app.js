@@ -10,8 +10,10 @@ let savedCriteria=null;
 let draftExclusions=[];
 let view='jobs',active='all',visible=[];
 
-async function fetchJson(path){
-  const response=await fetch(path,{cache:'no-store'});
+async function fetchJson(path,token=null){
+  const headers={};
+  if(token)headers.Authorization=`Bearer ${token}`;
+  const response=await fetch(path,{headers,cache:'no-store'});
   if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);
   return response.json();
 }
@@ -91,13 +93,14 @@ function normalizeApplication(a){
   };
 }
 
-async function loadData(){
+async function loadData(token){
+  if(!token)throw new Error('Autentificarea este necesara pentru incarcarea datelor.');
   const [jobPayload,statusPayload,applicationPayload,sourcePayload,configPayload]=await Promise.all([
-    fetchJson('./data/jobs.json'),
-    fetchJson('./data/run-status.json'),
-    fetchJson('./data/applications.json'),
-    fetchJson('./data/sources.json'),
-    fetchJson('./data/search-config.json')
+    fetchJson('./data/jobs.json',token),
+    fetchJson('./data/run-status.json',token),
+    fetchJson('./data/applications.json',token),
+    fetchJson('./data/sources.json',token),
+    fetchJson('./data/search-config.json',token)
   ]);
   validateContract(jobPayload,'jobs.json');
   validateContract(statusPayload,'run-status.json');
@@ -111,6 +114,22 @@ async function loadData(){
   sources=(sourcePayload.sources||[]).map(s=>({category:s.category||'Altele',name:s.name||'Sursa',url:s.url||'#',active:s.active!==false}));
   runStatus=statusPayload;
   updateRunStatus();
+}
+
+function restoreLocalSourceState(){
+  try{
+    const localSourceState=JSON.parse(localStorage.getItem('sourceState')||'null');
+    if(localSourceState)sources.forEach(s=>{if(Object.hasOwn(localSourceState,s.url))s.active=Boolean(localSourceState[s.url])});
+  }catch(error){console.error('Starea locala a surselor nu a putut fi restaurata',error)}
+}
+
+function clearProtectedClientData(){
+  jobs=[];applications=[];sources=[];runStatus=null;canonicalConfig=null;savedCriteria=null;draftExclusions=[];visible=[];
+  const jobList=$('#jobList');if(jobList)jobList.innerHTML='';
+  const empty=$('#empty');if(empty){empty.hidden=true;empty.textContent='Niciun rol nu corespunde filtrelor.'}
+  ['countJobs','countReview','countApplications','metricJobs','metricHigh','metricReposts','metricRemote','filterAll','filterHigh','filterB2b'].forEach(id=>{const el=$('#'+id);if(el)el.textContent='0'});
+  const runState=$('#runState');if(runState)runState.textContent='Monitor';
+  const lastRun=$('#lastRun');if(lastRun)lastRun.textContent='Ultima rulare: se incarca...';
 }
 
 function updateRunStatus(){
@@ -130,9 +149,7 @@ function setHeaderDate(){
 
 function baseRows(){return view==='applications'?applications:view==='review'?jobs.filter(j=>j.status==='review'):jobs}
 
-function selectedWorkModes(){
-  return new Set($$('.work-mode-filter:checked').map(x=>x.value));
-}
+function selectedWorkModes(){return new Set($$('.work-mode-filter:checked').map(x=>x.value))}
 
 function globalFilteredRows(rows){
   if(view==='applications')return rows;
@@ -171,8 +188,7 @@ function setCounts(){
   $('#filterAll').textContent=base.length;
   $('#filterHigh').textContent=base.filter(j=>!j.isApplication&&j.fit>=threshold).length;
   $('#filterB2b').textContent=base.filter(j=>j.b2b).length;
-  updateFreshnessLabel();
-  updateWorkModeLabel();
+  updateFreshnessLabel();updateWorkModeLabel();
 }
 
 function renderJobs(){
@@ -184,9 +200,7 @@ function renderJobs(){
     return filterOk&&text.includes(q);
   });
   const sortValue=$('#sort')?.value||'fit-desc';
-  visible.sort(sortValue==='fit-asc'
-    ?(a,b)=>(a.fit??Number.MAX_SAFE_INTEGER)-(b.fit??Number.MAX_SAFE_INTEGER)||a.age-b.age
-    :(a,b)=>(b.fit??-1)-(a.fit??-1)||a.age-b.age);
+  visible.sort(sortValue==='fit-asc'?(a,b)=>(a.fit??Number.MAX_SAFE_INTEGER)-(b.fit??Number.MAX_SAFE_INTEGER)||a.age-b.age:(a,b)=>(b.fit??-1)-(a.fit??-1)||a.age-b.age);
   $('.table-head').innerHTML='<span>ROL</span><span>FIT</span><span>MOD DE LUCRU</span><span>PUBLICAT</span><span></span>';
   $('#jobList').innerHTML=visible.map((j,i)=>{
     const score=j.fit===null?'—':`${j.fit}%`;
@@ -207,8 +221,7 @@ function renderSources(){
   $('#jobList').innerHTML=Object.entries(groups).map(([category,items])=>`<details class="source-group" open><summary><strong>${escapeHtml(category)}</strong><small>${items.length} surse</small></summary><div class="source-items">${items.map(s=>`<div class="source-item"><div><a href="${escapeAttribute(s.url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(s.name)} ↗</a></div><label class="switch-label"><input class="source-toggle" type="checkbox" data-url="${escapeAttribute(s.url)}" ${s.active?'checked':''}> Activa</label></div>`).join('')}</div></details>`).join('');
   $('#empty').hidden=rows.length>0;
   $$('.source-toggle').forEach(x=>x.onchange=()=>{
-    const source=sources.find(v=>v.url===x.dataset.url);
-    if(source)source.active=x.checked;
+    const source=sources.find(v=>v.url===x.dataset.url);if(source)source.active=x.checked;
     localStorage.setItem('sourceState',JSON.stringify(Object.fromEntries(sources.map(s=>[s.url,s.active]))));
     toast('Starea sursei este salvata local; sincronizarea cu workflow-ul depinde de ARCH #19.');
   });
@@ -263,17 +276,13 @@ function loadCriteria(){
   $('#fitThreshold').value=String(c.fitThreshold||fallback.fitThreshold||'80');
   $('#rateMin').value=String(c.rateMin||fallback.rateMin||'250');
   $('#rateMax').value=String(c.rateMax||fallback.rateMax||'650');
-  renderExclusions();
-  updateFreshnessLabel();
-  updateWorkModeLabel();
+  renderExclusions();updateFreshnessLabel();updateWorkModeLabel();
 }
 
 function bindUi(){
   $$('.nav[data-view]').forEach(btn=>btn.onclick=()=>{$$('.nav[data-view]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');view=btn.dataset.view;active='all';$('h1').textContent={jobs:'Joburi noi',review:'De evaluat',applications:'Aplicari',criteria:'Criterii de selectie',sources:'Surse'}[view];$('.summary').hidden=!['jobs','criteria'].includes(view);$('.toolbar:not(.source-toolbar)').hidden=!['jobs','review'].includes(view);$('#sourceToolbar').hidden=view!=='sources';$('#criteriaPanel').hidden=view!=='criteria';$('.workspace').hidden=view==='criteria';$('#runSearch').hidden=view==='criteria';render()});
   $$('.filter').forEach(btn=>btn.onclick=()=>{const current=$('.filter.active');if(current)current.classList.remove('active');btn.classList.add('active');active=btn.dataset.filter;render()});
-  $('#search').oninput=render;
-  $('#sort').onchange=render;
-  $('#freshnessFilter').onchange=render;
+  $('#search').oninput=render;$('#sort').onchange=render;$('#freshnessFilter').onchange=render;
   $$('.work-mode-filter').forEach(box=>box.onchange=()=>{updateWorkModeLabel();render()});
   $('#sourceSearch').oninput=renderSources;$('#sourceSort').onchange=renderSources;
   $('#closeDrawer').onclick=close;$('#scrim').onclick=close;document.onkeydown=e=>e.key==='Escape'&&close();
@@ -284,20 +293,8 @@ function bindUi(){
   $('#saveCriteria').onclick=()=>{const c=currentCriteria();c.rateMin=$('#rateMin').value;c.rateMax=$('#rateMax').value;savedCriteria=c;localStorage.setItem('selectionCriteria',JSON.stringify(c));$('#criteriaState').textContent='Preferinte salvate local';$('#criteriaState').classList.remove('dirty');if($('#freshnessFilter'))$('#freshnessFilter').value=String(c.freshness);render();toast('Preferintele sunt salvate local. Configuratia canonica este data/search-config.json; scrierea securizata este urmarita in ARCH #19.');};
 }
 
-async function init(){
-  setHeaderDate();bindUi();
-  try{
-    await loadData();
-    loadCriteria();
-    const localSourceState=JSON.parse(localStorage.getItem('sourceState')||'null');
-    if(localSourceState)sources.forEach(s=>{if(Object.hasOwn(localSourceState,s.url))s.active=Boolean(localSourceState[s.url])});
-    render();
-  }catch(error){
-    console.error(error);
-    $('#empty').hidden=false;$('#empty').textContent=`Datele reale nu au putut fi incarcate: ${error.message}`;
-    $('#jobList').innerHTML='';
-    toast('Eroare la incarcarea datelor reale.');
-  }
+function init(){
+  setHeaderDate();bindUi();clearProtectedClientData();
 }
 
 init();
