@@ -23,6 +23,14 @@ Campuri obligatorii la nivel root:
 - `excluded_count`;
 - `jobs`.
 
+Campuri optionale la nivel root:
+
+- `collection_freshness_hours` - fereastra maxima folosita efectiv la colectare; pentru implementarea curenta este 120 ore / 5 zile.
+
+`freshness_hours` de la nivel root reprezinta fereastra maxima a setului publicat. Cand exista `collection_freshness_hours`, cele doua valori sunt in mod normal identice.
+
+`criteria.display_freshness_hours` poate indica valoarea implicita folosita de frontend pentru filtrarea locala a setului colectat.
+
 Campuri obligatorii pentru fiecare job:
 
 - `title`;
@@ -48,6 +56,10 @@ Campuri optionale:
 - `age`;
 - `url`;
 - `verified_at`.
+
+`mode` foloseste valorile normalizate `Remote`, `Hybrid`, `Onsite` sau `N/A`.
+
+`age` reprezinta vechimea calculata in ore. Pentru un `date_posted` care contine numai data calendaristica, motorul foloseste inceputul zilei in UTC pentru un calcul conservator si predictibil.
 
 `description` poate fi sir gol daca sursa nu furnizeaza descrierea.
 
@@ -119,6 +131,15 @@ Campuri obligatorii:
 - `excluded_role_keywords`;
 - `deep_erp_terms`.
 
+Camp optional:
+
+- `collection_freshness_hours` - fereastra de colectare independenta de filtrul implicit din UI. Daca lipseste, motorul foloseste `freshness_hours`.
+
+In configuratia curenta:
+
+- `freshness_hours = 24` reprezinta filtrul implicit al listei;
+- `collection_freshness_hours = 120` permite UI-ului sa filtreze local intre 24h, 36h, 48h si 5 zile fara o noua rulare.
+
 `role_groups` contine grupuri de roluri. Fiecare grup are:
 
 - `enabled` - boolean;
@@ -133,6 +154,7 @@ Reguli:
 
 - motorul foloseste aceasta configuratie la construirea query-urilor si la filtrare/scoring;
 - frontend-ul foloseste aceeasi configuratie pentru valorile canonice ale criteriilor;
+- listarile din UI pot aplica local filtre suplimentare de vechime, mod de lucru si sortare fara a modifica setul colectat;
 - configurarile locale nesalvate pot exista temporar in browser, dar nu devin configuratie efectiva a workflow-ului fara un mecanism securizat de persistenta;
 - secretele si cheile API nu sunt permise in acest fisier.
 
