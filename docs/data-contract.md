@@ -75,6 +75,47 @@ Valori permise pentru `status`:
 - `completed_with_errors`;
 - `failed`.
 
+## `data/search-config.json`
+
+Este sursa canonica de configuratie pentru cautare.
+
+Campuri obligatorii:
+
+- `schema_version`;
+- `role_groups`;
+- `work_modes`;
+- `freshness_hours`;
+- `fit_threshold`;
+- `keep_reposts`;
+- `rate_min_eur_day`;
+- `rate_max_eur_day`;
+- `immediate_start`;
+- `search_country_codes`;
+- `eligible_remote_country_codes`;
+- `work_mode_priority`;
+- `source_strategy`;
+- `exclusions`;
+- `excluded_company_patterns`;
+- `excluded_role_keywords`;
+- `deep_erp_terms`.
+
+`role_groups` contine grupuri de roluri. Fiecare grup are:
+
+- `enabled` - boolean;
+- `titles` - lista titlurilor trimise catre sursa de cautare.
+
+`work_modes` contine cel putin:
+
+- `remote` - boolean;
+- `hybrid` - boolean.
+
+Reguli:
+
+- workflow-ul foloseste aceasta configuratie la construirea query-urilor si la filtrare/scoring;
+- frontend-ul foloseste aceeasi configuratie pentru valorile canonice ale criteriilor;
+- configurarile locale nesalvate pot exista temporar in browser, dar nu devin configuratie efectiva a workflow-ului fara un mecanism securizat de persistenta;
+- secretele si cheile API nu sunt permise in acest fisier.
+
 ## Compatibilitate
 
 Schimbarile care adauga doar campuri optionale pot pastra aceeasi versiune.
@@ -83,4 +124,4 @@ Schimbarile incompatibile, precum redenumirea sau eliminarea campurilor obligato
 
 ## Validare
 
-Workflow-ul valideaza structura minima dupa generare si inainte de commit/publicare.
+Workflow-ul valideaza configuratia si structura minima a output-ului dupa generare si inainte de commit/publicare.
