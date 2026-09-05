@@ -25,7 +25,10 @@ Campuri obligatorii la nivel root:
 
 Campuri optionale la nivel root:
 
-- `collection_freshness_hours` - fereastra maxima folosita efectiv la colectare; pentru implementarea curenta este 120 ore / 5 zile.
+- `collection_freshness_hours` - fereastra maxima folosita efectiv la colectare; pentru implementarea curenta este 120 ore / 5 zile;
+- `incremental_sync` - indica folosirea colectarii incrementale;
+- `expired_pruned` - numarul de rezultate eliminate deoarece au iesit din fereastra maxima;
+- `jobspipe_usage` - sumar local al consumului estimat de credite JobsPipe.
 
 `freshness_hours` de la nivel root reprezinta fereastra maxima a setului publicat. Cand exista `collection_freshness_hours`, cele doua valori sunt in mod normal identice.
 
@@ -80,9 +83,10 @@ Campuri obligatorii:
 - `excluded`;
 - `limitations`.
 
-Camp optional recomandat:
+Campuri optionale recomandate:
 
-- `source_results` - rezultat detaliat pentru fiecare connector/query executat.
+- `source_results` - rezultat detaliat pentru fiecare connector/query executat;
+- `jobspipe_optimization` - sumarul preview-urilor, creditelor consumate si backlog-ului incremental.
 
 Fiecare element `source_results` poate contine:
 
@@ -92,6 +96,16 @@ Fiecare element `source_results` poate contine:
 - `records`;
 - `total_available`;
 - `error`.
+
+`jobspipe_optimization` poate contine:
+
+- `preview_counts`;
+- `credits_used`;
+- `run_budget`;
+- `estimated_monthly_credits`;
+- `monthly_guard`;
+- `incremental`;
+- `query_progress` cu indicator de cursor si estimarea backlog-ului ramas.
 
 Valori permise pentru statusul rularii:
 
@@ -131,14 +145,20 @@ Campuri obligatorii:
 - `excluded_role_keywords`;
 - `deep_erp_terms`.
 
-Camp optional:
+Campuri optionale:
 
-- `collection_freshness_hours` - fereastra de colectare independenta de filtrul implicit din UI. Daca lipseste, motorul foloseste `freshness_hours`.
+- `collection_freshness_hours` - fereastra de colectare independenta de filtrul implicit din UI. Daca lipseste, motorul foloseste `freshness_hours`;
+- `jobspipe_credit_budget_per_run` - limita locala de credite JobsPipe pentru o rulare;
+- `jobspipe_monthly_credit_guard` - prag local lunar sub limita furnizorului;
+- `jobspipe_incremental_overlap_minutes` - suprapunere mica intre ferestrele incrementale pentru evitarea golurilor la limita de timp.
 
 In configuratia curenta:
 
 - `freshness_hours = 24` reprezinta filtrul implicit al listei;
-- `collection_freshness_hours = 120` permite UI-ului sa filtreze local intre 24h, 36h, 48h si 5 zile fara o noua rulare.
+- `collection_freshness_hours = 120` permite UI-ului sa filtreze local intre 24h, 36h, 48h si 5 zile fara o noua rulare;
+- `jobspipe_credit_budget_per_run = 14`;
+- `jobspipe_monthly_credit_guard = 950`;
+- `jobspipe_incremental_overlap_minutes = 2`.
 
 `role_groups` contine grupuri de roluri. Fiecare grup are:
 
@@ -158,6 +178,33 @@ Reguli:
 - configurarile locale nesalvate pot exista temporar in browser, dar nu devin configuratie efectiva a workflow-ului fara un mecanism securizat de persistenta;
 - secretele si cheile API nu sunt permise in acest fisier.
 
+## `data/search-state.json`
+
+Fisier intern folosit numai de GitHub Actions pentru sincronizarea JobsPipe. Nu este copiat in bundle-ul static Cloudflare si nu este consumat de frontend.
+
+Campuri:
+
+- `schema_version`;
+- `query_progress` - stare separata pentru fiecare interogare JobsPipe;
+- `job_first_seen` - timestamp intern pentru joburile fara data de publicare utilizabila;
+- `usage` - estimarea consumului lunar local.
+
+`query_progress` poate pastra pentru fiecare interogare:
+
+- `watermark` - ultimul punct incremental finalizat;
+- `cursor` - cursorul JobsPipe pentru backlog neprocesat;
+- `remaining_estimate`;
+- `poll_started_at`;
+- `max_discovered_at_seen`.
+
+Reguli:
+
+- watermark-ul nu avanseaza cat timp exista un cursor de backlog;
+- la epuizarea cursorului, watermark-ul este avansat pe baza celui mai nou `discovered_at` procesat;
+- un query esuat nu isi avanseaza watermark-ul;
+- consumul estimat se reseteaza cand se schimba luna UTC;
+- fisierul este versionat in repository, dar exclus explicit din lista fisierelor copiate de build-ul static.
+
 ## Compatibilitate
 
 Schimbarile care adauga doar campuri optionale pot pastra aceeasi versiune.
@@ -166,4 +213,4 @@ Schimbarile incompatibile, precum redenumirea sau eliminarea campurilor obligato
 
 ## Validare
 
-Motorul si workflow-ul valideaza configuratia si structura minima a output-ului dupa generare si inainte de commit/publicare.
+Motorul si workflow-ul valideaza configuratia, structura minima a output-ului si starea incrementala dupa generare si inainte de commit/publicare.
