@@ -164,6 +164,7 @@ jobs:
 
           selected.sort(key=lambda x: (-x["fit"], x["age"], x["company"].lower()))
           output = {
+              "schema_version": "1.0",
               "generated_at": now.isoformat(), "freshness_hours": 24,
               "criteria": {
                   "roles": ["Project Manager","IT Project Manager","Technical/Agile PM","Delivery/Service Manager","Scrum Master","Program/PMO Manager"],
@@ -184,6 +185,7 @@ jobs:
           Path("data/jobs.json").write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n")
 
           status = {
+              "schema_version": "1.0",
               "run_id": "github-" + now.strftime("%Y%m%dT%H%M%SZ"),
               "status": "completed",
               "started_at": now.isoformat(),
@@ -196,6 +198,31 @@ jobs:
           }
           Path("data/run-status.json").write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n")
           print(f"Published {len(selected)} jobs from {len(raw)} inspected records; excluded {len(excluded)}")
+          PY
+
+      - name: Validate published JSON contract
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          jobs = json.loads(Path("data/jobs.json").read_text())
+          status = json.loads(Path("data/run-status.json").read_text())
+
+          root_required = {"schema_version","generated_at","freshness_hours","criteria","records_inspected","results","excluded_count","jobs"}
+          status_required = {"schema_version","run_id","status","started_at","completed_at","sources","records_inspected","jobs_published","excluded","limitations"}
+          job_required = {"title","company","fit","location","mode","remote","b2b","repost","status","pros","risks","description","date_posted","source"}
+
+          assert jobs.get("schema_version") == "1.0"
+          assert status.get("schema_version") == "1.0"
+          assert not (root_required - jobs.keys()), root_required - jobs.keys()
+          assert not (status_required - status.keys()), status_required - status.keys()
+          assert status["status"] in {"running","completed","completed_with_errors","failed"}
+          assert isinstance(jobs["jobs"], list)
+          for index, job in enumerate(jobs["jobs"]):
+              missing = job_required - job.keys()
+              assert not missing, f"job {index} missing {sorted(missing)}"
+          print("JSON contract valid")
           PY
 
       - name: Save results
