@@ -1,81 +1,35 @@
 # Job Search Command Center
 
-Aplicatie personala pentru monitorizarea, filtrarea si evaluarea rolurilor relevante de Project Management.
+Aplicatie personala pentru monitorizarea si evaluarea rolurilor de Project Management.
 
-Versiune curenta UI: `0.03`
+Versiune curenta: `0.04`
 
 ## Obiectiv
 
-- monitorizare Project Manager / IT PM / Delivery / Service / Scrum / Program roles;
+- roluri PM / IT PM / Delivery / Service / Scrum / Program;
 - Remote prioritar, apoi Hybrid;
 - geografie prioritara RO / BE / LU si remote eligibil in Europa;
 - B2B tinta 250-650 EUR/zi;
-- FIT, riscuri, descriere si link direct la job;
-- repostarile sunt marcate, nu ascunse;
-- rulare programata de doua ori pe zi si rulare manuala din UI.
+- FIT, riscuri, descriere si link de job;
+- repostarile sunt marcate;
+- rulare programata si manuala.
 
 ## Arhitectura MVP
 
-```text
-React + Tailwind + Vite
-        |
-        v
-Cloudflare Worker + Static Assets
-        |
-        +--> Google auth
-        +--> protected /data/*
-        +--> Command API
-                |
-                +--> GitHub Actions
-                +--> GitHub Contents API
+`React + Tailwind + Vite -> Cloudflare Worker -> GitHub Actions -> motor cautare -> data/*.json -> main -> Cloudflare deploy`
 
-GitHub Actions -> job search engine -> data/*.json -> commit main -> Cloudflare deploy
-```
-
-Repository-ul este privat. GitHub Pages nu este folosit.
-
-Nu exista baza de date activa in MVP.
-
-## Frontend
-
-- React 18;
-- Tailwind CSS;
-- Vite;
-- Google Identity Services;
-- profil discret + logout;
-- KPI-uri numai in `Joburi noi`;
-- filtre 24h / 36h / 48h / 5 zile;
-- Remote / Hibrid / Onsite / N/A;
-- FIT crescator / descrescator;
-- reset filtre;
-- tabel compact cu actiuni la hover;
-- criterii in grid responsive.
-
-## Date protejate
-
-Fisiere protejate de Cloudflare Worker:
-
-- `data/jobs.json`;
-- `data/run-status.json`;
-- `data/search-config.json`;
-- `data/sources.json`;
-- `data/applications.json`.
-
-Accesul necesita Google bearer token autorizat.
-
-`data/search-state.json` este intern si nu este publicat.
+Repository privat. Fara GitHub Pages si fara baza de date activa.
 
 ## Search engine
 
-Entry point:
-
-`scripts/job_search_runner.py`
+Entry point: `scripts/job_search_runner.py`.
 
 Componente:
 
-- `job_search.py`;
-- `job_search_optimized.py`;
-- `job_search_runner.py`.
+- `job_search.py` - normalizare, filtrare, scoring;
+- `job_search_optimized.py` - JobsPipe Direct;
+- `job_search_apify.py` - JobsPipe prin Apify;
+- `job_search_runner.py` - selector transport si orchestrare.
 
 Pipeline:
 
@@ -83,74 +37,37 @@ Pipeline:
 
 ## JobsPipe
 
-JobsPipe este connectorul operational implementat, dar este momentan oprit:
+Transporturi: `disabled`, `apify`, `direct`.
 
-`jobspipe_mode=disabled`
+Stare curenta:
 
-Dupa stabilizare, transportul recomandat este Apify prin Actorul oficial JobsPipe, cu plafon initial 5.000 joburi brute/rulare. Modul Direct ramane fallback si pastreaza preview-ul, polling-ul incremental, cursorul, limita de 14 credite/rulare, guard-ul lunar 950 si circuit breaker-ul de quota.
+- `jobspipe_mode=apify`;
+- `jobspipe_apify_max_items_per_run=100`;
+- Apify foloseste Actorul oficial `jobspipe~jobspipe-job-search`;
+- Direct ramane fallback cu preview, polling incremental, cursor, 14 credite/rulare si guard lunar 950.
 
-## Structura repository
+## Date si securitate
 
-- `frontend/` - React/Tailwind/Vite;
-- `command-api/` - Cloudflare Worker si build Static Assets;
-- `scripts/` - motorul de cautare;
-- `data/` - rezultate, configuratie si stare;
-- `docs/` - cerinte, functionalitati, arhitectura, API, contracte si surse;
-- `.github/workflows/` - search automation si validare build;
-- `backend/` - rezervat pentru etapa ulterioara.
+Protejate prin Cloudflare Worker: `jobs.json`, `run-status.json`, `search-config.json`, `sources.json`, `applications.json`.
+
+`search-state.json` ramane intern.
+
+Secrete:
+
+- `APIFY_TOKEN` si `JOBSPIPE_API_KEY` -> GitHub Actions Secrets;
+- `GITHUB_TOKEN` -> Cloudflare Secret;
+- `ALLOWED_GOOGLE_SUB` -> Cloudflare Secret;
+- Google ID token -> numai memoria paginii.
 
 ## Documentatie
 
-- `docs/requirements.md` - cerinte functionale/non-functionale;
-- `docs/functionalitati.md` - inventar functional curent;
-- `docs/architecture.md` - arhitectura tehnica;
-- `docs/command-api.md` - API, auth si securitate;
+- `docs/requirements.md` - cerinte;
+- `docs/functionalitati.md` - comportament curent;
+- `docs/architecture.md` - arhitectura;
+- `docs/command-api.md` - API si auth;
 - `docs/data-contract.md` - contracte JSON;
-- `docs/source-strategy.md` - strategia surselor.
+- `docs/source-strategy.md` - surse si transporturi.
 
-## Rulare programata
+## Rulare
 
-Workflow-ul `Full job search` ruleaza la:
-
-- 06:00 UTC;
-- 15:00 UTC.
-
-Poate fi pornit si manual din UI prin Command API.
-
-## Persistenta
-
-Canonica:
-
-- rezultate: `data/jobs.json`;
-- stare: `data/run-status.json`;
-- configuratie: `data/search-config.json`;
-- aplicari: `data/applications.json`;
-- surse: `data/sources.json`;
-- stare JobsPipe: `data/search-state.json`.
-
-Locale in browser:
-
-- arhivare rapida;
-- toggle-uri individuale surse.
-
-## Securitate
-
-- JobsPipe key -> GitHub Actions Secret;
-- GitHub PAT -> Cloudflare Secret;
-- Google allowed user -> `ALLOWED_GOOGLE_SUB`;
-- Google ID token -> numai memoria paginii;
-- fara secrete in frontend sau repository.
-
-## Status curent
-
-- React/Vite build: validat CI;
-- Worker build: validat CI;
-- protected `/data/*`: implementat;
-- auth/data retry flow: implementat in cod;
-- E2E browser dupa refactorul React: de confirmat pe deploy-ul live.
-
-## Evolutie
-
-SQLite ramane optiunea preferata pentru istoric tranzactional, arhivare persistenta, aplicari editabile, documente private si MCP cu stare.
-
-PostgreSQL este rezervat pentru multi-user si concurenta mai mare.
+Workflow-ul `Full job search` ruleaza la 06:00 si 15:00 UTC si poate fi pornit manual din UI.

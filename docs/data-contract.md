@@ -2,23 +2,17 @@
 
 Actualizare: 2026-09-05
 
-## 1. Reguli generale
+## 1. Reguli
 
-Contractele principale folosesc `schema_version = "1.0"`.
+Contractele principale folosesc `schema_version = "1.0"`. Timestamp-urile generate de motor sunt UTC ISO-8601.
 
-Timestamp-urile generate de motor sunt UTC, format ISO-8601.
+Frontend-ul valideaza explicit schema pentru `jobs.json`, `run-status.json` si `search-config.json`.
 
-Frontend-ul React valideaza explicit `schema_version` pentru:
-
-- `jobs.json`;
-- `run-status.json`;
-- `search-config.json`.
-
-`applications.json` si `sources.json` sunt inca pe un contract legacy fara `schema_version`; frontend-ul le parseaza defensiv. Uniformizarea lor la schema versionata ramane un gap tehnic.
+`sources.json` si `applications.json` raman contracte legacy fara `schema_version`.
 
 ## 2. `data/jobs.json`
 
-### Root obligatoriu
+Root principal:
 
 - `schema_version`;
 - `generated_at`;
@@ -29,166 +23,55 @@ Frontend-ul React valideaza explicit `schema_version` pentru:
 - `excluded_count`;
 - `jobs`.
 
-### Root optional
+Optionale: `collection_freshness_hours`, `incremental_sync`, `expired_pruned`, `jobspipe_usage`.
 
-- `collection_freshness_hours`;
-- `incremental_sync`;
-- `expired_pruned`;
-- `jobspipe_usage`.
+Joburile pot contine: `id`, `title`, `company`, `fit`, `location`, `mode`, `type`, `age`, `remote`, `b2b`, `repost`, `status`, `pros`, `risks`, `url`, `description`, `date_posted`, `source`, `verified_at`.
 
-### Job - campuri consumate de frontend
-
-- `id` - optional;
-- `title`;
-- `company`;
-- `initial` - optional;
-- `fit`;
-- `location`;
-- `mode`;
-- `type` - optional;
-- `age` - optional/fallback;
-- `remote`;
-- `b2b`;
-- `repost`;
-- `status`;
-- `pros`;
-- `risks`;
-- `url` - optional/null;
-- `description`;
-- `date_posted`;
-- `source`;
-- `verified_at` - optional.
-
-### Normalizare UI
-
-`mode` este normalizat la:
-
-- `Remote`;
-- `Hybrid`;
-- `Onsite`;
-- `N/A`.
-
-Frontend-ul calculeaza vechimea din `date_posted`; `age` este fallback.
-
-`description` poate fi sir gol.
-
-`url` poate fi `null`.
+`mode` este normalizat la `Remote`, `Hybrid`, `Onsite` sau `N/A`.
 
 ## 3. `data/run-status.json`
 
-### Campuri principale
+Campuri principale: `schema_version`, `run_id`, `status`, `started_at`, `completed_at`, `sources`, `records_inspected`, `jobs_published`, `excluded`, `limitations`.
 
-- `schema_version`;
-- `run_id`;
-- `status`;
-- `started_at`;
-- `completed_at`;
-- `sources`;
-- `records_inspected`;
-- `jobs_published`;
-- `excluded`;
-- `limitations`.
-
-### Campuri optionale
+Optionale:
 
 - `source_results`;
-- `jobspipe_optimization` - detalii Direct;
-- `jobspipe_transport` - modul efectiv `disabled/apify/direct` si metadate transport.
+- `jobspipe_optimization` pentru Direct;
+- `jobspipe_transport` pentru modul efectiv si metadate.
 
-### `source_results[]`
+Status: `running`, `completed`, `completed_with_errors`, `failed`.
 
-- `connector`;
-- `query`;
-- `status`;
-- `records`;
-- `total_available`;
-- `error`.
-
-### Status permis
-
-- `running`;
-- `completed`;
-- `completed_with_errors`;
-- `failed`.
-
-### Reguli
-
-- o colectare independenta esuata nu opreste automat celelalte colectari;
-- succes partial -> `completed_with_errors`;
-- esec total -> `failed`;
-- esec total nu trebuie sa suprascrie `jobs.json` valid cu lista goala falsa;
-- cand JobsPipe este dezactivat, statusul poate fi `completed` cu `records_inspected=0` si limitare explicita.
+Esec total nu trebuie sa suprascrie un `jobs.json` valid cu o lista goala falsa.
 
 ## 4. `data/search-config.json`
 
-Este sursa canonica de configuratie pentru motor.
+Sursa canonica pentru motor si valorile implicite UI.
 
-### Campuri curente
+Campuri JobsPipe:
 
-- `schema_version`;
-- `role_groups`;
-- `work_modes`;
-- `freshness_hours`;
-- `collection_freshness_hours`;
-- `fit_threshold`;
-- `keep_reposts`;
-- `rate_min_eur_day`;
-- `rate_max_eur_day`;
-- `immediate_start`;
-- `search_country_codes`;
-- `eligible_remote_country_codes`;
-- `work_mode_priority`;
-- `source_strategy`;
 - `jobspipe_mode`;
 - `jobspipe_apify_max_items_per_run`;
 - `jobspipe_credit_budget_per_run`;
 - `jobspipe_monthly_credit_guard`;
-- `jobspipe_incremental_overlap_minutes`;
-- `exclusions`;
-- `excluded_company_patterns`;
-- `excluded_role_keywords`;
-- `deep_erp_terms`.
+- `jobspipe_incremental_overlap_minutes`.
 
-### Valori curente relevante
+Valori curente relevante:
 
 - `freshness_hours = 24`;
 - `collection_freshness_hours = 120`;
 - `fit_threshold = 80`;
 - `rate_min_eur_day = 250`;
 - `rate_max_eur_day = 650`;
-- `jobspipe_mode = disabled`;
-- `jobspipe_apify_max_items_per_run = 5000`;
+- `jobspipe_mode = apify`;
+- `jobspipe_apify_max_items_per_run = 100`;
 - `jobspipe_credit_budget_per_run = 14`;
 - `jobspipe_monthly_credit_guard = 950`;
 - `jobspipe_incremental_overlap_minutes = 2`;
 - `source_strategy = "all active sources equally"`.
 
-### `role_groups`
-
-Fiecare grup foloseste:
-
-- `enabled` - boolean;
-- `titles` - lista de titluri.
-
-Grupuri curente:
-
-- `pm`;
-- `delivery`;
-- `service`;
-- `scrum`;
-- `program`.
-
-### Reguli
-
-- motorul foloseste configuratia la query/filter/scoring;
-- frontend-ul foloseste aceeasi configuratie pentru valorile implicite;
-- filtrele locale UI nu modifica automat configuratia canonica;
-- `PUT /config` modifica numai campurile whitelist;
-- secretele nu sunt permise in fisier.
-
 ## 5. Mapare `PUT /config`
 
-Payload UI -> configuratie canonica:
+Payload UI -> configuratie:
 
 - `rolePm` -> `role_groups.pm.enabled`;
 - `roleDelivery` -> `role_groups.delivery.enabled`;
@@ -203,115 +86,34 @@ Payload UI -> configuratie canonica:
 - `rateMin` -> `rate_min_eur_day`;
 - `rateMax` -> `rate_max_eur_day`;
 - `immediateStart` -> `immediate_start`;
-- `jobspipeEnabled` -> `jobspipe_enabled`;
+- `jobspipeMode` -> `jobspipe_mode`;
+- `jobspipeApifyMaxItems` -> `jobspipe_apify_max_items_per_run`;
+- `jobspipeDirectRunBudget` -> `jobspipe_credit_budget_per_run`;
+- `jobspipeDirectMonthlyGuard` -> `jobspipe_monthly_credit_guard`;
 - `exclusions` -> `exclusions`.
 
-Valori permise pentru `freshness`:
+Compatibilitate legacy: `jobspipeEnabled` este acceptat numai daca `jobspipeMode` lipseste si este convertit la `direct`/`disabled`; campul `jobspipe_enabled` este eliminat din configuratia canonica.
 
-- 24;
-- 36;
-- 48;
-- 120.
+Valori permise:
+
+- `freshness`: 24, 36, 48, 120;
+- `jobspipeMode`: `disabled`, `apify`, `direct`;
+- `jobspipeApifyMaxItems`: 100-20.000;
+- `jobspipeDirectRunBudget`: 1-1.000;
+- `jobspipeDirectMonthlyGuard`: 1-100.000.
 
 ## 6. `data/search-state.json`
 
-Fisier intern, nepublicat in Cloudflare Static Assets.
-
-Scop:
-
-- progres incremental JobsPipe;
-- cursor backlog;
-- watermark;
-- first seen pentru joburi fara data utilizabila;
-- estimare quota locala;
-- circuit breaker provider.
-
-Campuri principale:
-
-- `schema_version`;
-- `query_progress`;
-- `job_first_seen`;
-- `usage`.
-
-Reguli:
-
-- watermark-ul nu avanseaza cat timp exista backlog cursor;
-- query esuat nu isi avanseaza watermark-ul;
-- consumul estimat se reseteaza la schimbarea lunii UTC;
-- daca providerul raporteaza quota exhausted, luna este marcata pentru circuit breaker.
+Fisier intern pentru JobsPipe Direct: progres incremental, cursor, watermark, first-seen, estimare quota si circuit breaker. Nu este publicat in Cloudflare Static Assets.
 
 ## 7. `data/sources.json`
 
-Contract legacy curent:
-
-```json
-{
-  "count": 129,
-  "sources": []
-}
-```
-
-Fiecare sursa poate contine:
-
-- `category`;
-- `name`;
-- `url`;
-- `active`;
-- `priority` - camp legacy.
-
-Reguli curente:
-
-- fisierul este catalog UI;
-- `active` poate fi modificat local in browser;
-- schimbarea locala nu controleaza inca connectorii reali;
-- `priority` nu este parte din strategia curenta de colectare si nu trebuie interpretat ca prioritate operationala;
-- strategia functionala ramane `all active sources equally` dupa implementarea connectorilor.
+Catalog UI legacy. `active` poate fi schimbat local; `priority` este legacy si nu controleaza ordinea operationala.
 
 ## 8. `data/applications.json`
 
-Contract legacy curent:
+Contract legacy pentru istoricul aplicarilor. Frontend-ul consuma companie, rol, locatie, data aplicarii, referinta, status, urmatorul status check, URL si ID cand exista.
 
-```json
-{
-  "applications": []
-}
-```
+## 9. Publicare
 
-Campuri consumate de frontend pentru fiecare aplicare:
-
-- `company`;
-- `title`;
-- `location`;
-- `applied_at`;
-- `reference`;
-- `status`;
-- `next_status_check`;
-- `url` - optional;
-- `id` - optional.
-
-Frontend-ul transforma aplicarile in acelasi model vizual de rand ca joburile.
-
-## 9. Publicare Static Assets
-
-`command-api/scripts/build-static.mjs` copiaza numai:
-
-- `jobs.json`;
-- `run-status.json`;
-- `applications.json`;
-- `sources.json`;
-- `search-config.json`.
-
-`search-state.json` este exclus intentionat.
-
-## 10. Compatibilitate
-
-- adaugarea de campuri optionale poate pastra schema `1.0`;
-- redenumirea/eliminarea unui camp obligatoriu cere versiune noua;
-- uniformizarea `sources.json` si `applications.json` cu `schema_version` trebuie facuta controlat pentru a pastra compatibilitatea frontend.
-
-## 11. Validare
-
-- motorul valideaza configuratia si output-ul principal;
-- workflow-ul ruleaza validarea dupa executie;
-- frontend-ul valideaza schema pentru jobs/run-status/search-config;
-- build-ul Static Assets verifica existenta tuturor fisierelor protejate obligatorii.
+Static Assets includ `jobs.json`, `run-status.json`, `applications.json`, `sources.json`, `search-config.json`. `search-state.json` este exclus intentionat.

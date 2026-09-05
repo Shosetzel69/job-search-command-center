@@ -4,97 +4,71 @@ Actualizare: 2026-09-05
 
 ## 1. Principiu
 
-Strategia tinta este:
+Strategia tinta este `all active sources equally`.
 
-`all active sources equally`
+Nu exista prioritate operationala 1-5. Campul `priority` din `data/sources.json` este legacy.
 
-Nu exista prioritate operationala 1-5 intre sursele conectate.
+## 2. Catalog vs connector
 
-Campul `priority` ramas in unele intrari din `data/sources.json` este legacy si nu trebuie folosit pentru ordinea de colectare.
-
-## 2. Categorii catalog
-
-Catalogul include:
-
-- job boards si agregatoare;
-- site-uri de cariere;
-- ATS publice;
-- platforme remote;
-- contract/B2B/freelance;
-- agentii si consultanta IT;
-- contractori UE si NATO;
-- banking si enterprise;
-- software si servicii IT.
-
-## 3. Diferenta catalog vs connector
-
-`data/sources.json` este catalogul vizibil in UI.
-
-Prezenta unei surse in catalog NU inseamna ca motorul are connector operational pentru ea.
+`data/sources.json` este catalogul UI. Prezenta unei surse in catalog nu inseamna connector operational.
 
 Stare curenta:
 
 - aproximativ 129 intrari in catalog;
-- connector operational implementat: JobsPipe;
-- JobsPipe este momentan dezactivat prin `jobspipe_enabled=false`;
-- toggle-urile individuale din pagina `Surse` sunt locale si nu controleaza inca motorul.
+- connector operational: JobsPipe;
+- transport activ: `apify`;
+- plafon curent Apify: 100 joburi brute/rulare;
+- toggle-urile individuale din `Surse` sunt locale.
 
-## 4. Reguli pentru sursele conectate
+## 3. Reguli
 
-- se folosesc date publice de joburi sau API-uri autorizate;
+- se folosesc date publice sau API-uri autorizate;
 - se prefera link direct la job;
-- descrierea pozitiei se pastreaza cand providerul o furnizeaza;
-- repostarile sunt marcate, nu ascunse automat;
-- joburile sunt normalizate in contractul intern comun;
-- o sursa nu primeste avantaj de scoring doar pentru ca provine dintr-un provider preferat;
+- descrierea se pastreaza cand providerul o furnizeaza;
+- repostarile sunt marcate;
+- toate rezultatele intra in modelul intern comun;
+- sursa nu primeste avantaj de scoring;
 - geo-eligibility este separata de FIT.
 
-## 5. JobsPipe
+## 4. JobsPipe
 
-Cand este activ:
+### Apify - activ curent
 
-- preview gratuit inaintea colectarii cu consum;
+- `jobspipe_mode=apify`;
+- Actor oficial `jobspipe~jobspipe-job-search`;
+- `APIFY_TOKEN` in GitHub Actions Secrets;
+- doua cautari geografice fara suprapunere;
+- plafon configurabil 100-20.000; valoare curenta 100.
+
+### Direct - fallback
+
+- `JOBSPIPE_API_KEY` in GitHub Actions Secrets;
+- preview gratuit;
 - polling incremental `discovered_at_gte`;
-- separare geografica pentru reducerea suprapunerii;
-- cursor pentru backlog;
-- buget curent 14 credite/rulare;
-- guard local lunar 950;
+- cursor backlog;
+- 14 credite/rulare implicit;
+- guard lunar 950;
 - circuit breaker la quota exhausted.
 
-In perioada de stabilizare:
+### Disabled
 
-`jobspipe_enabled=false`
+`jobspipe_mode=disabled` garanteaza zero cereri JobsPipe/Apify.
 
-Prin urmare rularile nu trebuie sa consume credite JobsPipe.
-
-## 6. Excluderi
-
-Excluderi functionale curente in configuratia canonica:
+## 5. Excluderi
 
 - Star Storage si companiile grupului;
 - implementari ERP care cer experienta specializata ampla;
-- roluri non-IT.
+- roluri non-IT;
+- Monster nu este sursa operationala;
+- cardurile Indeed nu sunt folosite, dar un link Indeed poate ramane link de job daca acesta este linkul disponibil.
 
-Reguli de produs stabilite suplimentar:
+## 6. Gap-uri
 
-- Monster nu trebuie folosit ca sursa operationala;
-- cardurile generate de integrarea Indeed nu sunt folosite; un link Indeed poate ramane link de job daca acesta este linkul disponibil.
-
-## 7. Gap-uri cunoscute
-
-- `data/sources.json` contine inca metadate legacy `priority`;
-- catalogul poate contine surse care nu respecta inca toate excluderile operationale, inclusiv Monster;
+- `priority` legacy exista in catalog;
 - activ/inactiv per sursa nu este persistat server-side;
-- nu exista inca orchestrare multi-provider reala;
-- deduplicarea cross-provider devine relevanta dupa conectarea mai multor provideri.
+- nu exista orchestrare multi-provider reala;
+- deduplicarea cross-provider devine relevanta dupa conectarea altor provideri.
 
-## 8. Regula pentru extindere
+## 7. Extindere
 
-Fiecare provider nou se adauga printr-un connector care produce modelul intern standard. Logica de scoring nu trebuie duplicata in connector.
-
-## Transport JobsPipe
-
-- `disabled` - implicit in stabilizare;
-- `apify` - recomandat pentru volum dupa stabilizare; Actor oficial JobsPipe, billing per upstream request/page;
-- `direct` - fallback cu quota guards;
-- transportul nu schimba regulile de filtrare/scoring si nici strategia egala a surselor din catalog.
+Fiecare provider nou trebuie sa implementeze connectorul comun. Filtrarea si scoring-ul nu se duplica in connector.
