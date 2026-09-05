@@ -52,7 +52,7 @@ function normalizeMode(value){
   if(raw==='remote')return 'Remote';
   if(raw==='hybrid')return 'Hybrid';
   if(['onsite','on-site','office','in-office'].includes(raw))return 'Onsite';
-  return raw==='—'?'N/A':'N/A';
+  return 'N/A';
 }
 
 function normalizeJob(j){
@@ -131,8 +131,7 @@ function setHeaderDate(){
 function baseRows(){return view==='applications'?applications:view==='review'?jobs.filter(j=>j.status==='review'):jobs}
 
 function selectedWorkModes(){
-  const selected=new Set($$('.work-mode-filter:checked').map(x=>x.value));
-  return selected.size?selected:new Set(['Remote','Hybrid','Onsite','N/A']);
+  return new Set($$('.work-mode-filter:checked').map(x=>x.value));
 }
 
 function globalFilteredRows(rows){
