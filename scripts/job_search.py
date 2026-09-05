@@ -99,7 +99,8 @@ class JobsPipeConnector(JobConnector):
         if not countries:
             raise RuntimeError("No search countries")
 
-        freshness_days = max(1, math.ceil(int(config.get("freshness_hours", 24)) / 24))
+        collection_hours = int(config.get("collection_freshness_hours", config.get("freshness_hours", 24)))
+        freshness_days = max(1, math.ceil(collection_hours / 24))
         core_titles: list[str] = []
         for key in ("pm", "delivery", "service"):
             group = groups.get(key) or {}
@@ -159,7 +160,8 @@ def compile_config_patterns(config: dict[str, Any]):
 
 
 def process_records(config: dict[str, Any], collection: list[CollectionResult], now: datetime) -> dict[str, Any]:
-    freshness_hours = int(config.get("freshness_hours", 24))
+    display_freshness_hours = int(config.get("freshness_hours", 24))
+    collection_freshness_hours = int(config.get("collection_freshness_hours", display_freshness_hours))
     fit_threshold = int(config.get("fit_threshold", 80))
     keep_reposts = bool(config.get("keep_reposts", True))
     search_countries = set(config.get("search_country_codes") or [])
@@ -218,8 +220,8 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
         if not reason and posted:
             try:
                 posted_dt = datetime.fromisoformat(str(posted).replace("Z", "+00:00"))
-                if (now - posted_dt).total_seconds() > freshness_hours * 3600:
-                    reason = f"older than {freshness_hours} hours"
+                if (now - posted_dt).total_seconds() > collection_freshness_hours * 3600:
+                    reason = f"older than {collection_freshness_hours} hours"
             except Exception:
                 # JobsPipe already limits collection to posted_at_max_age_days.
                 # Keep the record instead of discarding a potentially fresh job
@@ -269,7 +271,17 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             except Exception:
                 age = 0
 
-        arrangements = "Remote" if remote else ("Hybrid" if hybrid else "Onsite")
+        arrangement_raw = str(job.get("work_arrangement") or "").strip().lower()
+        if remote:
+            arrangements = "Remote"
+        elif hybrid:
+            arrangements = "Hybrid"
+        elif arrangement_raw in {"onsite", "on-site", "office", "in-office"}:
+            arrangements = "Onsite"
+        elif arrangement_raw:
+            arrangements = "N/A"
+        else:
+            arrangements = "N/A"
         employment_statuses = job.get("employment_statuses") or []
         employment = ", ".join(employment_statuses) or "Nespecificat"
         url = job.get("final_url") or job.get("source_url") or job.get("url")
@@ -327,12 +339,14 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.isoformat(),
-        "freshness_hours": freshness_hours,
+        "freshness_hours": collection_freshness_hours,
+        "collection_freshness_hours": collection_freshness_hours,
         "criteria": {
             "roles": configured_titles(config),
             "geography": config.get("search_country_codes") or [],
             "work_mode_priority": config.get("work_mode_priority") or [],
             "source_strategy": config.get("source_strategy") or "all active sources equally",
+            "display_freshness_hours": display_freshness_hours,
             "fit_threshold": fit_threshold,
             "keep_reposts": keep_reposts,
             "exclusions": config.get("exclusions") or [],
