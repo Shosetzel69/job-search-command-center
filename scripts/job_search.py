@@ -123,7 +123,7 @@ class JobsPipeConnector(JobConnector):
                 records = response.get("data") or []
                 total = response.get("metadata", {}).get("total_results", len(records))
                 results.append(CollectionResult(self.name, query_name, True, records, int(total or 0)))
-            except Exception as exc:  # connector errors must not kill sibling queries
+            except Exception as exc:
                 results.append(CollectionResult(self.name, query_name, False, [], 0, str(exc)))
         return results
 
@@ -159,6 +159,18 @@ def compile_config_patterns(config: dict[str, Any]):
     return excluded_company, excluded_role, deep_erp
 
 
+def parse_posted_datetime(value: Any) -> datetime | None:
+    if value is None or value == "":
+        return None
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except (TypeError, ValueError):
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
 def process_records(config: dict[str, Any], collection: list[CollectionResult], now: datetime) -> dict[str, Any]:
     display_freshness_hours = int(config.get("freshness_hours", 24))
     collection_freshness_hours = int(config.get("collection_freshness_hours", display_freshness_hours))
@@ -192,6 +204,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
         remote = bool(job.get("remote")) or job.get("work_arrangement") == "remote"
         hybrid = bool(job.get("hybrid")) or job.get("work_arrangement") == "hybrid"
         posted = job.get("date_posted")
+        posted_dt = parse_posted_datetime(posted)
         key = job.get("id") or (re.sub(r"\W+", " ", title.lower()).strip(), company.lower(), str(location).lower())
         reason: str | None = None
 
@@ -217,16 +230,8 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
                 reason = "remote eligibility for Europe not explicit"
         if not reason and not keep_reposts and bool(job.get("reposted")):
             reason = "repost disabled by configuration"
-        if not reason and posted:
-            try:
-                posted_dt = datetime.fromisoformat(str(posted).replace("Z", "+00:00"))
-                if (now - posted_dt).total_seconds() > collection_freshness_hours * 3600:
-                    reason = f"older than {collection_freshness_hours} hours"
-            except Exception:
-                # JobsPipe already limits collection to posted_at_max_age_days.
-                # Keep the record instead of discarding a potentially fresh job
-                # only because the provider timestamp format is not ISO-8601.
-                pass
+        if not reason and posted_dt and (now - posted_dt).total_seconds() > collection_freshness_hours * 3600:
+            reason = f"older than {collection_freshness_hours} hours"
 
         if reason:
             excluded.append({"title": title, "company": company, "reason": reason})
@@ -263,13 +268,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             score -= 12
         score = max(40, min(96, score))
 
-        age = 0
-        if posted:
-            try:
-                posted_dt = datetime.fromisoformat(str(posted).replace("Z", "+00:00"))
-                age = max(0, int((now - posted_dt).total_seconds() // 3600))
-            except Exception:
-                age = 0
+        age = max(0, int((now - posted_dt).total_seconds() // 3600)) if posted_dt else 0
 
         arrangement_raw = str(job.get("work_arrangement") or "").strip().lower()
         if remote:
@@ -278,8 +277,6 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             arrangements = "Hybrid"
         elif arrangement_raw in {"onsite", "on-site", "office", "in-office"}:
             arrangements = "Onsite"
-        elif arrangement_raw:
-            arrangements = "N/A"
         else:
             arrangements = "N/A"
         employment_statuses = job.get("employment_statuses") or []
