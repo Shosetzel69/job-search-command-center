@@ -252,6 +252,9 @@ async function saveCriteriaToServer() {
     await commandApi('/config', { method: 'PUT', body: JSON.stringify(criteria) });
     if (typeof savedCriteria !== 'undefined') savedCriteria = criteria;
     localStorage.setItem('selectionCriteria', JSON.stringify(criteria));
+    const freshnessFilter = document.querySelector('#freshnessFilter');
+    if (freshnessFilter && criteria.freshness) freshnessFilter.value = String(criteria.freshness);
+    if (typeof render === 'function') render();
     if (state) {
       state.textContent = 'Preferinte salvate';
       state.classList.remove('dirty');
