@@ -1,196 +1,194 @@
 # Arhitectura
 
-## 1. Arhitectura MVP curenta
+Actualizare: 2026-09-05
+Versiune aplicatie: 0.03
 
-Fluxul ramane static-first:
+## 1. Principiu general
+
+MVP-ul foloseste arhitectura `static-first + serverless command/access-control`.
+
+Nu exista baza de date activa si nici backend persistent pentru datele de joburi.
 
 ```text
 Utilizator / Browser
-  |
-  v
+        |
+        v
 Cloudflare Worker
-  |
-  +--> Static Assets construite cu React + Tailwind + Vite
-  |      +--> index.html
-  |      +--> assets/*.js
-  |      +--> assets/*.css
-  |
-  +--> Date protejate
-  |      +--> /data/jobs.json
-  |      +--> /data/run-status.json
-  |      +--> /data/search-config.json
-  |      +--> /data/sources.json
-  |      +--> /data/applications.json
-  |      +--> Google bearer auth obligatoriu
-  |
-  +--> Command API
-         +--> GET  /health
-         +--> GET  /auth/config
-         +--> POST /auth/session
-         +--> POST /commands/run
-         +--> PUT  /config
+        |
+        +--> Static Assets
+        |      +--> React bundle
+        |      +--> Tailwind CSS
+        |      +--> Vite build
+        |
+        +--> Protected Data
+        |      +--> /data/jobs.json
+        |      +--> /data/run-status.json
+        |      +--> /data/search-config.json
+        |      +--> /data/sources.json
+        |      +--> /data/applications.json
+        |      +--> Google bearer auth
+        |
+        +--> Command API
+               +--> GET  /health
+               +--> GET  /auth/config
+               +--> POST /auth/session
+               +--> POST /commands/run
+               +--> PUT  /config
 
 GitHub Actions
-  |
-  v
+        |
+        v
 scripts/job_search_runner.py
-  |
-  +--> connectors
-  +--> normalizare
-  +--> geo-eligibility
-  +--> deduplicare / repost
-  +--> filtrare
-  +--> scoring
-  |
-  v
+        |
+        +--> job_search.py
+        +--> job_search_optimized.py
+        +--> connectors
+        +--> normalize / validate
+        +--> geo eligibility
+        +--> dedup / repost
+        +--> filter / score
+        |
+        v
 data/*.json in repository privat
-  |
-  v
+        |
+        v
 commit main
-  |
-  v
-Cloudflare build/deploy
+        |
+        v
+Cloudflare automatic build/deploy
 ```
-
-Nu exista baza de date activa in MVP.
 
 ## 2. Frontend
 
-Frontend-ul este o aplicatie React compilata static:
+Frontend-ul este o aplicatie React statica.
 
-- sursa in `frontend/`;
-- React functional components;
-- Tailwind CSS pentru layout si styling;
-- Vite pentru build;
-- output in `frontend/dist/`;
-- `command-api/scripts/build-static.mjs` copiaza `frontend/dist/` in `command-api/public/` si adauga fisierele de date publicabile.
+### Tehnologii
+
+- React 18.3.1;
+- React DOM 18.3.1;
+- Tailwind CSS 3.4.17;
+- Vite 5.4.14;
+- PostCSS + Autoprefixer.
+
+### Structura
+
+- `frontend/index.html` - shell Vite;
+- `frontend/src/main.jsx` - componente si logica UI;
+- `frontend/src/index.css` - Tailwind entry + reguli globale;
+- `frontend/tailwind.config.js` - configuratie design system;
+- `frontend/vite.config.js` - configuratie build.
 
 Frontend-ul nu contine secrete.
 
-### Lifecycle autentificare si date
+## 3. Lifecycle autentificare si date
+
+Fluxul este explicit si separa autentificarea de accesul la date.
 
 ```text
 Pagina porneste
   -> GET /auth/config
+  -> incarca Google Identity Services
   -> Google Sign-In
   -> POST /auth/session
-  -> sesiune Google valida
+      -> invalid: ramane signed-out
+      -> valid: seteaza sesiunea in memoria React
   -> UI autentificat + stare Loading
-  -> GET /data/*.json cu Bearer token
-      -> succes: afiseaza date
-      -> eroare: pastreaza sesiunea, afiseaza Error + Retry
+  -> GET /data/*.json cu Authorization: Bearer
+      -> succes: data state = ready
+      -> eroare: data state = error, sesiunea ramane valida, Retry disponibil
 ```
-
-Un esec de incarcare a datelor nu este tratat ca esec de login.
-
-Tokenul Google ramane numai in memoria React si nu este persistat in `localStorage`.
-
-## 3. UI state
-
-React gestioneaza explicit:
-
-- auth state;
-- data loading/error/ready;
-- joburi, aplicari, surse si run status;
-- criterii saved/draft;
-- filtre locale;
-- drawer de detalii;
-- arhivare locala MVP;
-- toast-uri.
-
-Nu se folosesc monkey-patch-uri intre scripturi si nici interceptare globala `window.fetch`.
-
-## 4. Design system
 
 Reguli:
 
+- tokenul Google ramane doar in memoria paginii;
+- nu se foloseste `localStorage` pentru token;
+- o eroare de date nu produce logout automat;
+- logout-ul goleste tokenul si datele din memoria React;
+- nu se foloseste interceptare globala `window.fetch`;
+- nu se foloseste monkey-patching intre scripturi.
+
+## 4. State management frontend
+
+React gestioneaza local:
+
+- `auth`: signed-out / authenticating / authenticated;
+- `data`: idle / loading / ready / error;
+- jobs;
+- applications;
+- sources;
+- run status;
+- config canonica;
+- criterii draft/saved;
+- filtre locale;
+- selected work modes;
+- sortare FIT;
+- drawer de detalii;
+- profile dropdown;
+- arhivare locala;
+- toast-uri.
+
+Nu exista state manager extern in MVP.
+
+## 5. Design system si layout
+
+Reguli curente:
+
 - fundal general `slate-50`;
-- containere albe cu `border-slate-200` si `shadow-sm`;
-- albastru exclusiv pentru actiunea primara `Ruleaza verificarea` si focus states;
-- emerald/verde numai pentru stare activa/succes;
-- widget profil neutru/outline;
-- continut principal centrat, maxim 1400 px;
+- carduri `white + border-slate-200 + shadow-sm`;
+- albastru pentru actiunea primara si focus states;
+- emerald/verde pentru stari active sau succes;
+- profil neutru/outline;
+- sidebar `slate-950`;
+- continut principal centrat, maximum 1400 px;
 - KPI-uri numai in `Joburi noi`;
-- tabela compacta cu hover actions;
-- pagina criterii in grila responsive 1/2 coloane.
+- filtre in doua randuri;
+- tabel compact cu actiuni la hover;
+- criterii in grid responsive 1/2 coloane.
 
-## 5. Motor de executie
+## 6. Cloudflare Worker
 
-GitHub Actions ramane schedulerul si orchestratorul infrastructural.
+Worker-ul are doua responsabilitati:
 
-Responsabilitati:
+1. serveste bundle-ul static;
+2. executa access control si comenzile privilegiate.
 
-- schedule de doua ori pe zi;
-- `workflow_dispatch` pentru rulare manuala;
-- injectarea secretelor;
-- timeout si concurrency;
-- executia motorului;
-- validarea output-ului;
-- commit rezultate.
+Entry point:
 
-Logica de cautare este in `scripts/job_search.py`, `scripts/job_search_optimized.py` si `scripts/job_search_runner.py`.
+`command-api/src/secure-entry.js`
 
-## 6. Connectors si surse
+Configuratia Wrangler foloseste:
 
-Exista contractul `JobConnector`.
+- `assets.directory = ./public`;
+- binding `ASSETS`;
+- `run_worker_first` pentru `/health`, `/auth/*`, `/commands/*`, `/config`, `/data/*`.
 
-`JobsPipeConnector` este implementat, dar `jobspipe_enabled=false` in perioada de stabilizare.
+## 7. Protectia datelor publicate
 
-Cand JobsPipe este activ:
+Fisierele copiate in bundle exista fizic in `command-api/public/data`, dar accesul HTTP este interceptat de Worker.
 
-- preview gratuit;
-- polling incremental cu `discovered_at_gte`;
-- cursor pentru backlog;
-- buget per run;
-- guard lunar local.
+Allowlist protejata:
 
-Registrul `data/sources.json` ramane lista de surse afisata in UI. Toggle-urile individuale sunt inca locale pana la persistenta canonica a registrului.
+- `/data/jobs.json`;
+- `/data/run-status.json`;
+- `/data/search-config.json`;
+- `/data/sources.json`;
+- `/data/applications.json`.
 
-## 7. Procesare
+Pentru `/data/*`:
 
-```text
-Collect
-  -> Normalize
-  -> Validate
-  -> Geo Eligibility
-  -> Deduplicate / Detect Repost
-  -> Filter
-  -> Score
-  -> Publish
-```
+- numai `GET` este permis;
+- fisier necunoscut -> 404;
+- fara bearer valid -> eroare auth;
+- bearer valid -> asset servit prin `env.ASSETS.fetch`;
+- raspunsurile folosesc `cache-control: no-store` si `x-content-type-options: nosniff`.
 
-Repostarile sunt marcate, nu eliminate automat daca `keep_reposts=true`.
+`data/search-state.json` nu este copiat in bundle.
 
-## 8. Persistenta
+## 8. Command API
 
-MVP:
+Implementare:
 
-- `data/jobs.json` - rezultate;
-- `data/run-status.json` - stare rulare;
-- `data/search-config.json` - configuratie canonica;
-- `data/sources.json` - registru surse;
-- `data/applications.json` - aplicari;
-- `data/search-state.json` - stare interna JobsPipe, nepublicata;
-- GitHub Actions Secrets - chei cautare;
-- Cloudflare Secrets - PAT si autorizare Google.
-
-Arhivarea rapida din UI este locala in `localStorage` in MVP.
-
-SQLite ramane optiunea preferata pentru istoric tranzactional, aplicari editabile server-side, arhivare persistenta sau documente private.
-
-PostgreSQL ramane rezervat pentru multi-user/concurenta.
-
-## 9. Configuratie
-
-`data/search-config.json` este sursa de adevar pentru executia cautarii.
-
-Modificarile din UI sunt validate si persistate prin `PUT /config`.
-
-`jobspipe_enabled` controleaza explicit accesul providerului JobsPipe.
-
-## 10. Command API
-
-Command API este Cloudflare Worker minimal pentru actiuni privilegiate si access control.
+`command-api/src/index.js`
 
 Endpoint-uri:
 
@@ -202,51 +200,192 @@ POST /commands/run
 PUT  /config
 ```
 
-Worker-ul verifica Google ID token prin JWKS, issuer, audience si `ALLOWED_GOOGLE_SUB`.
+Responsabilitati:
 
-## 11. Build si publicare
+- validare Google JWT prin JWKS;
+- verificare issuer;
+- verificare audience = `GOOGLE_CLIENT_ID`;
+- autorizare `sub = ALLOWED_GOOGLE_SUB`;
+- verificare origin pentru cererile privilegiate;
+- workflow dispatch GitHub;
+- persistenta configuratie prin GitHub Contents API.
 
-Build-ul Cloudflare ruleaza din `command-api/`:
+Nu exista sesiuni server-side.
+
+## 9. GitHub Actions
+
+### Full job search
+
+Workflow:
+
+`.github/workflows/job-search-full.yml`
+
+Trigger-uri:
+
+- push pe configuratie/codul motorului;
+- `workflow_dispatch`;
+- schedule `0 6,15 * * *` UTC.
+
+Responsabilitati:
+
+- validare Python;
+- executie `job_search_runner.py`;
+- validare JSON;
+- commit `jobs.json`, `run-status.json`, `search-state.json`;
+- concurrency control;
+- timeout 15 minute.
+
+### Validate Command API
+
+Workflow:
+
+`.github/workflows/command-api-check.yml`
+
+Valideaza:
+
+- instalare dependinte Worker;
+- build React/Vite;
+- asamblare Static Assets;
+- `wrangler deploy --dry-run`.
+
+## 10. Motorul de cautare
+
+Componente:
+
+- `scripts/job_search.py` - model intern, normalizare, filtrare, scoring, contract output;
+- `scripts/job_search_optimized.py` - strategie JobsPipe incremental/paginare/quota;
+- `scripts/job_search_runner.py` - provider enablement, circuit breaker si entry point workflow.
+
+Pipeline:
+
+```text
+Collect
+  -> Normalize
+  -> Validate
+  -> Geo Eligibility
+  -> Deduplicate / Repost
+  -> Filter
+  -> Score
+  -> Publish
+```
+
+## 11. Connectors si surse
+
+Contractul `JobConnector` separa providerii de logica de scoring.
+
+Connector implementat operational:
+
+- JobsPipe.
+
+Stare curenta:
+
+- `jobspipe_enabled=false` pentru stabilizare;
+- cand este dezactivat, workflow-ul nu apeleaza providerul si pastreaza lista existenta;
+- `data/sources.json` este catalog UI, nu lista connectorilor implementati;
+- toggle-urile individuale din pagina `Surse` sunt locale;
+- campul legacy `priority` din catalog nu controleaza ordinea de colectare;
+- strategia canonica este `all active sources equally` pentru momentul in care connectorii sunt implementati.
+
+## 12. JobsPipe quota strategy
+
+Cand providerul este activ:
+
+- preview gratuit;
+- `discovered_at_gte` pentru polling incremental;
+- doua arii geografice fara suprapunere intentionata;
+- cursor pentru backlog;
+- maximum 14 credite/rulare configurat curent;
+- guard local lunar 950;
+- overlap incremental 2 minute;
+- circuit breaker dupa raportarea quota provider exhausted.
+
+Starea incrementala este in `data/search-state.json`.
+
+## 13. Persistenta
+
+### Canonica in repository
+
+- `data/jobs.json` - rezultate;
+- `data/run-status.json` - stare ultima rulare;
+- `data/search-config.json` - configuratie cautare;
+- `data/sources.json` - catalog surse;
+- `data/applications.json` - istoric aplicari;
+- `data/search-state.json` - stare interna JobsPipe.
+
+### Browser local
+
+- preferinte temporare/UI;
+- stare locala surse;
+- arhivare rapida.
+
+Tokenul Google nu este persistat.
+
+## 14. Build si deploy
+
+Build Cloudflare ruleaza din `command-api/`.
 
 ```text
 npm run build
-  -> instaleaza dependintele frontend
-  -> vite build in frontend/dist
-  -> build-static.mjs
+  -> npm --prefix ../frontend install
+  -> npm --prefix ../frontend run build
+  -> frontend/dist
+  -> node scripts/build-static.mjs
   -> command-api/public
   -> Wrangler deploy
 ```
 
-GitHub Actions `Validate Command API` executa dry-run Wrangler, care valideaza implicit build-ul React si Worker-ul.
+`build-static.mjs` copiaza numai:
 
-Repository-ul ramane privat. GitHub Pages nu este utilizat.
+- bundle-ul Vite;
+- jobs.json;
+- run-status.json;
+- applications.json;
+- sources.json;
+- search-config.json.
 
-## 12. Securitate
+Repository-ul ramane privat. GitHub Pages nu este folosit.
 
-- cheile providerilor stau in GitHub Actions Secrets;
-- PAT-ul GitHub sta in Cloudflare Secret;
-- `ALLOWED_GOOGLE_SUB` sta in Cloudflare Secret;
-- `GOOGLE_CLIENT_ID` este configuratie publica;
-- tokenul Google este doar in memoria paginii;
-- `/data/*` este Worker-first si necesita bearer valid;
-- fisierele protejate folosesc `cache-control: no-store`;
-- descrierile joburilor sunt randate ca text React, nu HTML arbitrar;
+## 15. Securitate
+
+- JobsPipe API key -> GitHub Actions Secret;
+- GitHub PAT -> Cloudflare Secret `GITHUB_TOKEN`;
+- user authorization -> Cloudflare Secret `ALLOWED_GOOGLE_SUB`;
+- `GOOGLE_CLIENT_ID` -> variabila publica Cloudflare;
+- `keep_vars=true` protejeaza variabilele Dashboard la deploy;
+- descrierile sunt randate prin React ca text;
 - linkurile externe folosesc `noopener noreferrer`;
-- actiunile privilegiate nu expun credentiale GitHub in browser.
+- credentialele GitHub nu ajung in browser;
+- configuratia editabila este whitelist + validated patch.
 
-## 13. NAS Synology DS213j
+## 16. Infrastructura locala
 
-DS213j ramane doar pentru backup/arhiva/storage, nu pentru runtime.
+Synology DS213j nu este runtime principal.
 
-## 14. MCP si evolutie
+Rol permis:
 
-MCP ramane in etapa 2.
+- backup;
+- arhiva;
+- storage local/offline.
 
-Backend persistent + SQLite se introduce numai cand apar cerinte care depasesc modelul static-first + Command API, de exemplu:
+## 17. Evolutie planificata
 
-- istoric extins;
-- arhivare persistenta server-side;
-- aplicari editabile complex;
-- multi-user;
+SQLite devine justificat cand apar:
+
+- istoric tranzactional;
+- arhivare persistenta;
+- aplicari editabile server-side;
 - documente private;
-- integrare MCP cu stare persistenta.
+- multi-device state real;
+- MCP cu stare persistenta.
+
+PostgreSQL ramane pentru multi-user/concurenta/replicare.
+
+MCP ramane Phase 2.
+
+## 18. Status de verificare
+
+- build React: validat CI;
+- build Worker: validat CI;
+- protectia `/data/*`: implementata in Worker;
+- login/data lifecycle React: implementat in cod;
+- E2E complet in browser pe release-ul React: necesita confirmare dupa deploy Cloudflare.
