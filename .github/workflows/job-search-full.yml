@@ -52,6 +52,7 @@ jobs:
             echo "No data change"
           else
             git commit -m "Update job search results"
+            git pull --rebase origin main
             git push
           fi
 
