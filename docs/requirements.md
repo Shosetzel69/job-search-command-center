@@ -23,23 +23,27 @@ Actualizare: 2026-09-05
 - CFR-12: Utilizatorul pastreaza istoricul aplicarilor.
 - CFR-13: Cand utilizatorul nu este autentificat sau se deconecteaza, interfata nu afiseaza joburile, rezumatul, aplicarile, criteriile, sursele sau statusul ultimei rulari.
 - CFR-14: In starea neautentificata raman vizibile numai identificarea aplicatiei, controlul Google Sign-In si butonul `Ruleaza verificarea` dezactivat.
-- CFR-15: La autentificarea cu utilizatorul autorizat, continutul functional al aplicatiei devine din nou vizibil.
+- CFR-15: La autentificarea cu utilizatorul autorizat, continutul functional al aplicatiei si datele protejate devin vizibile.
 
-### Autentificare si comenzi protejate
+### Autentificare, date si comenzi protejate
 
 - CFR-16: Autentificarea se face cu Google Identity Services.
-- CFR-17: Numai utilizatorul Google al carui `sub` corespunde valorii `ALLOWED_GOOGLE_SUB` poate executa comenzile protejate.
-- CFR-18: Butonul `Ruleaza verificarea` este gri si dezactivat cand utilizatorul nu este autentificat.
-- CFR-19: Dupa autentificarea utilizatorului autorizat, butonul `Ruleaza verificarea` devine albastru si activ.
-- CFR-20: In timpul unei rulari, butonul `Ruleaza verificarea` ramane dezactivat pana la finalizarea fluxului.
-- CFR-21: Dupa logout, butonul `Ruleaza verificarea` revine automat la starea gri/dezactivata si continutul functional este ascuns.
-- CFR-22: Utilizatorul autentificat este afisat vizual printr-un indicator verde care contine contul Google conectat.
-- CFR-23: Apasarea indicatorului utilizatorului autentificat deconecteaza contul din sesiunea aplicatiei.
-- CFR-24: Comanda `Ruleaza verificarea` porneste workflow-ul GitHub Actions prin Command API si nu expune credentiale GitHub in browser.
-- CFR-25: Aplicatia previne pornirea unei a doua rulari daca exista deja una queued sau in progress.
-- CFR-26: Dupa pornirea unei cautari din UI, aplicatia verifica periodic statusul si reincarca rezultatele dupa publicarea unei rulari noi.
-- CFR-27: `Salveaza preferintele` necesita utilizator Google autorizat si persista configuratia canonica prin Command API.
-- CFR-28: Salvarea configuratiei canonice declanseaza automat o noua cautare.
+- CFR-17: Numai utilizatorul Google al carui `sub` corespunde valorii `ALLOWED_GOOGLE_SUB` poate accesa datele protejate si executa comenzile protejate.
+- CFR-18: Fisierele publicate `data/jobs.json`, `data/run-status.json`, `data/search-config.json`, `data/sources.json` si `data/applications.json` sunt rutate prin Cloudflare Worker si necesita un token Google valid al utilizatorului autorizat.
+- CFR-19: Accesul direct la un URL `data/*.json` fara autentificare este refuzat.
+- CFR-20: Frontend-ul trimite tokenul Google numai pentru cererile same-origin catre datele protejate; tokenul nu este stocat in `localStorage`.
+- CFR-21: La logout, datele incarcate sunt eliminate din starea clientului si continutul functional este ascuns.
+- CFR-22: Butonul `Ruleaza verificarea` este gri si dezactivat cand utilizatorul nu este autentificat.
+- CFR-23: Dupa autentificarea utilizatorului autorizat, butonul `Ruleaza verificarea` devine albastru si activ.
+- CFR-24: In timpul unei rulari, butonul `Ruleaza verificarea` ramane dezactivat pana la finalizarea fluxului.
+- CFR-25: Dupa logout, butonul `Ruleaza verificarea` revine automat la starea gri/dezactivata.
+- CFR-26: Utilizatorul autentificat este afisat vizual printr-un indicator verde care contine contul Google conectat.
+- CFR-27: Apasarea indicatorului utilizatorului autentificat deconecteaza contul din sesiunea aplicatiei.
+- CFR-28: Comanda `Ruleaza verificarea` porneste workflow-ul GitHub Actions prin Command API si nu expune credentiale GitHub in browser.
+- CFR-29: Aplicatia previne pornirea unei a doua rulari daca exista deja una queued sau in progress.
+- CFR-30: Dupa pornirea unei cautari din UI, aplicatia verifica periodic statusul autentificat si reincarca rezultatele dupa publicarea unei rulari noi.
+- CFR-31: `Salveaza preferintele` necesita utilizator Google autorizat si persista configuratia canonica prin Command API.
+- CFR-32: Salvarea configuratiei canonice declanseaza automat o noua cautare.
 
 ## Cerinte non-functionale
 
@@ -48,18 +52,19 @@ Actualizare: 2026-09-05
 - CNF-03: Tokenul Google folosit de frontend este pastrat numai in memoria paginii si nu in `localStorage`.
 - CNF-04: GitHub PAT este stocat exclusiv ca secret Cloudflare.
 - CNF-05: API-ul verifica semnatura tokenului Google, issuer, audience si `ALLOWED_GOOGLE_SUB`.
-- CNF-06: Arhitectura MVP ramane static-first, cu Cloudflare Worker pentru Static Assets si Command API.
-- CNF-07: Fluxul initial ramane simplu si cu cost minim.
-- CNF-08: Arhitectura permite introducerea ulterioara a persistentei SQLite/PostgreSQL daca apar cerinte tranzactionale sau multi-user.
-- CNF-09: Ascunderea continutului dupa logout este un comportament UI; blocarea accesului direct la fisierele statice `data/*.json` necesita o masura separata de control al accesului.
+- CNF-06: Arhitectura MVP ramane static-first, cu Cloudflare Worker pentru Static Assets, control acces la date si Command API.
+- CNF-07: Fisierele de date protejate sunt livrate cu `cache-control: no-store`.
+- CNF-08: Fluxul initial ramane simplu si cu cost minim.
+- CNF-09: Arhitectura permite introducerea ulterioara a persistentei SQLite/PostgreSQL daca apar cerinte tranzactionale sau multi-user.
 
 ## Comportament curent confirmat
 
 - Aplicatia porneste in stare fara continut functional vizibil pana la autentificare.
+- Fara token Google valid, accesul direct la fisierele `data/*.json` protejate este refuzat de Cloudflare Worker.
+- Dupa login, frontend-ul reincarca datele protejate folosind tokenul Google tinut numai in memoria paginii.
 - Utilizatorul autorizat este evidentiat cu verde dupa autentificare.
-- Dupa login, joburile, sumarul, aplicarile, criteriile, sursele si statusul rularii devin vizibile.
-- Dupa logout, continutul functional dispare imediat.
+- Dupa logout, continutul functional dispare, datele clientului sunt golite si accesul la date necesita o noua autentificare.
 - `Ruleaza verificarea`: neautentificat = gri/dezactivat; autentificat = albastru/activ; rulare in curs = dezactivat.
-- Rezultatele sunt generate de GitHub Actions si publicate automat in aplicatia Cloudflare dupa actualizarea fisierelor `data/*.json`.
+- Rezultatele sunt generate de GitHub Actions si publicate automat in Cloudflare, dar accesul la continutul `data/*.json` este controlat de Worker.
 
 Documentul complet va folosi formatul: ID, Titlu, Descriere, Categorie, Sursa, Prioritate, Criterii de acceptanta, Dependinte, Note, Versiune.
