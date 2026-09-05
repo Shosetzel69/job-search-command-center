@@ -14,7 +14,7 @@ function injectAuthStyles() {
     .command-user{height:40px;border:1px solid #188861;background:#188861;color:#fff;border-radius:9px;padding:0 12px;font:600 12px "DM Sans",sans-serif;cursor:pointer;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:0 4px 12px rgba(24,136,97,.18)}
     .command-user:hover{background:#13704f;border-color:#13704f}
     .command-auth-error{font-size:12px;color:#a65b32;max-width:220px}
-    .primary:disabled{background:#aeb8c7;box-shadow:none;cursor:not-allowed}
+    .primary:disabled{background:#aeb8c7;box-shadow:none;cursor:not-allowed;opacity:.9}
     @media(max-width:760px){.command-actions{gap:6px}.command-user{max-width:110px;padding:0 8px}.command-actions>div:first-child{max-width:130px;overflow:hidden}}
   `;
   document.head.appendChild(style);
@@ -38,6 +38,9 @@ function installAuthControls() {
   userButton.hidden = true;
   userButton.title = 'Deconecteaza contul Google';
   userButton.onclick = () => signOutCommandUser();
+
+  runButton.disabled = true;
+  runButton.title = 'Autentifica-te cu Google pentru a porni verificarea';
 
   const parent = runButton.parentElement;
   parent.insertBefore(wrapper, runButton);
@@ -85,18 +88,28 @@ async function commandApi(path, options = {}, token = commandIdToken) {
 function setAuthenticatedUi(email) {
   const signIn = document.querySelector('#googleSignIn');
   const userButton = document.querySelector('#commandUser');
+  const runButton = document.querySelector('#runSearch');
   if (signIn) signIn.hidden = true;
   if (userButton) {
     userButton.hidden = false;
     userButton.textContent = email || 'Google conectat';
+  }
+  if (runButton) {
+    runButton.disabled = false;
+    runButton.title = 'Porneste verificarea joburilor';
   }
 }
 
 function setSignedOutUi() {
   const signIn = document.querySelector('#googleSignIn');
   const userButton = document.querySelector('#commandUser');
+  const runButton = document.querySelector('#runSearch');
   if (signIn) signIn.hidden = false;
   if (userButton) userButton.hidden = true;
+  if (runButton) {
+    runButton.disabled = true;
+    runButton.title = 'Autentifica-te cu Google pentru a porni verificarea';
+  }
 }
 
 function signOutCommandUser(showMessage = true) {
@@ -162,7 +175,7 @@ function requireCommandAuth() {
 function setRunBusy(busy, label = null) {
   const button = document.querySelector('#runSearch');
   if (!button) return;
-  button.disabled = busy;
+  button.disabled = busy || !commandIdToken;
   button.innerHTML = busy ? `<span>↻</span> ${label || 'Verificare in curs...'}` : '<span>↻</span> Ruleaza verificarea';
 }
 
