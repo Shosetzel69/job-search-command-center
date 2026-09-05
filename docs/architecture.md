@@ -2,7 +2,7 @@
 
 ## 1. Arhitectura MVP curenta
 
-Fluxul de baza este static-first + Command API serverless:
+Fluxul de baza este static-first:
 
 ```text
 Utilizator
@@ -14,17 +14,13 @@ Cloudflare Worker
   |      +--> frontend
   |      +--> data/jobs.json
   |      +--> data/run-status.json
-  |      +--> data/applications.json
-  |      +--> data/sources.json
   |      +--> data/search-config.json
   |
-  +--> GET  /health
-  +--> POST /commands/run
-  +--> PUT  /config
-          |
-          +--> Google ID token
-          +--> GitHub workflow_dispatch
-          +--> GitHub Contents API
+  +--> Command API
+         +--> /health
+         +--> /commands/run
+         +--> /config
+         +--> /auth/bootstrap (temporar)
 
 GitHub Actions
   |
@@ -42,58 +38,33 @@ scripts/job_search.py
 JSON versionat in repository
   |
   v
-commit pe main
+commit main
   |
   v
-Cloudflare automatic deployment
+Cloudflare build/deploy
 ```
 
 Nu exista in MVP un backend public permanent pentru datele de joburi si nici un server de baza de date activ.
 
-Cloudflare Worker este atat host-ul frontend-ului static, cat si Command API-ul minimal pentru actiuni privilegiate.
+Command API este o componenta serverless minima pentru actiuni privilegiate; nu devine backend-ul principal al aplicatiei.
 
 ## 2. Frontend
 
-- sursa frontend in `frontend/`;
-- la deploy este copiat in `command-api/public/` de `command-api/scripts/build-static.mjs`;
-- publicare prin Cloudflare Workers Static Assets;
-- citeste fisierele JSON publicate in `/data/` pe acelasi origin;
-- citeste configuratia canonica din `/data/search-config.json`;
+- frontend static in `frontend/`;
+- publicare prin Cloudflare Worker Static Assets;
+- citeste rezultatele generate de workflow;
+- citeste configuratia canonica din `data/search-config.json`;
 - afiseaza descrierea jobului, linkul direct, fit, riscuri si sursa;
 - nu contine secrete;
 - modificarile locale din browser nu sunt configuratie efectiva pana cand nu sunt persistate prin Command API.
 
 ChatGPT Sites ramane optional pentru prototipare, nu dependinta runtime a MVP-ului curent.
 
-## 3. Hosting si deploy
-
-Host-ul MVP este Cloudflare Worker:
-
-`https://job-search-command-api.myeboda.workers.dev`
-
-Worker-ul foloseste Git integration cu repository-ul privat GitHub.
-
-Root directory Cloudflare Builds:
-
-`command-api`
-
-Deploy command:
-
-`npx wrangler deploy`
-
-`wrangler.jsonc` executa automat build-ul static inainte de deploy.
-
-Configuratia `assets.directory=./public` permite publicarea HTML/CSS/JS si a fisierelor JSON impreuna cu Worker-ul.
-
-Rutele dinamice `/health`, `/commands/*` si `/config` sunt procesate de Worker inaintea asset-urilor.
-
-GitHub Pages nu mai face parte din arhitectura MVP deoarece repository-ul ramane privat si planul GitHub curent nu permite Pages pentru acest repository.
-
-## 4. Motor de executie
+## 3. Motor de executie
 
 GitHub Actions este schedulerul si orchestratorul infrastructural.
 
-Logica de cautare ruleaza in `scripts/job_search.py`.
+Logica de cautare nu mai este hard-codata in YAML. Ea ruleaza in `scripts/job_search.py`.
 
 Responsabilitati GitHub Actions:
 
@@ -116,7 +87,7 @@ Responsabilitati motor cautare:
 - filtrare si scoring;
 - generarea `jobs.json` si `run-status.json`.
 
-## 5. Connectors si surse
+## 4. Connectors si surse
 
 Exista contractul `JobConnector`.
 
@@ -145,7 +116,7 @@ Registrul `data/sources.json` ramane lista de surse vizibila in UI. Legarea acti
 
 Toate sursele active trebuie tratate egal. Nu exista prioritate 1-5.
 
-## 6. Procesare
+## 5. Procesare
 
 Ordinea logica:
 
@@ -164,7 +135,7 @@ Geo-eligibility ramane separat de matching/scoring.
 
 Repostarile sunt marcate, nu eliminate automat, daca `keep_reposts=true`.
 
-## 7. Persistenta
+## 6. Persistenta
 
 Pentru MVP curent:
 
@@ -182,7 +153,7 @@ SQLite ramane optiunea preferata daca introducem un backend persistent, istoric 
 
 PostgreSQL ramane rezervat pentru multi-user, concurenta ridicata sau replicare.
 
-## 8. Configuratie
+## 7. Configuratie
 
 `data/search-config.json` este sursa de adevar pentru executia cautarii.
 
@@ -200,9 +171,9 @@ Contine:
 
 Frontend-ul o citeste. Motorul o foloseste efectiv.
 
-Modificarile din UI sunt validate si persistate prin `PUT /config` al Command API. Pana la activarea Google authentication, modificarile UI raman locale.
+Modificarile din UI sunt validate si persistate prin `PUT /config` al Command API. Pana la activarea live a autentificarii, modificarile UI raman locale.
 
-## 9. Command API
+## 8. Command API
 
 Command API este implementat in `command-api/` ca Cloudflare Worker.
 
@@ -214,13 +185,22 @@ Roluri:
 - lanseaza manual `job-search-full.yml`;
 - persista configuratia canonica.
 
-Endpoint-uri:
+Endpoint-uri permanente:
 
 ```text
 GET  /health
 POST /commands/run
 PUT  /config
 ```
+
+Endpoint-uri temporare pentru bootstrap autentificare:
+
+```text
+GET  /auth/bootstrap
+POST /auth/whoami
+```
+
+Bootstrap-ul valideaza Google ID token-ul si returneaza `sub`. Dupa setarea `ALLOWED_GOOGLE_SUB`, endpoint-urile de bootstrap se dezactiveaza automat.
 
 Flux rulare manuala:
 
@@ -254,14 +234,33 @@ PAT-ul nu apare niciodata in frontend sau repository.
 
 Detalii: `docs/command-api.md`.
 
+## 9. Publicare
+
+Tinta MVP:
+
+```text
+GitHub Actions -> data/*.json -> commit main -> Cloudflare build -> Worker + Static Assets -> browser
+```
+
+Repository-ul ramane privat. GitHub Pages nu este utilizat.
+
+Frontend-ul si Command API folosesc acelasi origin:
+
+```text
+https://job-search-command-api.myeboda.workers.dev
+```
+
 ## 10. Securitate
 
 - toate cheile API pentru cautare stau in GitHub Actions Secrets;
 - PAT-ul Command API sta in Cloudflare Secret;
+- `ALLOWED_GOOGLE_SUB` sta in Cloudflare Secret;
+- `GOOGLE_CLIENT_ID` este configuratie publica in Cloudflare Dashboard;
+- `keep_vars=true` pastreaza variabilele configurate in Dashboard la deploy;
 - niciun secret in frontend, JSON public sau repository;
 - Google ID token este verificat server-side prin JWKS, issuer si audience;
 - autorizarea MVP foloseste Google `sub`;
-- frontend si Command API folosesc acelasi origin Cloudflare;
+- CORS/origin este limitat la origin-ul frontend-ului;
 - configuratia editabila foloseste whitelist si validare;
 - permisiunile workflow-urilor sunt minime;
 - inputurile externe sunt tratate ca date nevalidate;
@@ -285,9 +284,7 @@ Nu se foloseste pentru Docker/Container Manager sau backend Node modern.
 
 ## 12. Integrari Google
 
-Google Identity Services este folosit pentru autentificarea Command API dupa configurarea OAuth Client.
-
-Authorized JavaScript origin pentru MVP va fi origin-ul Worker-ului Cloudflare.
+Google Identity Services este folosit pentru autentificarea Command API.
 
 Alte integrari planificate optional:
 
