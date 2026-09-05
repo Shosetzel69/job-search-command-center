@@ -11,8 +11,8 @@ function injectAuthStyles() {
   const style = document.createElement('style');
   style.textContent = `
     .command-actions{display:flex;align-items:center;gap:10px}
-    .command-user{height:40px;border:1px solid #dce2ea;background:#fff;color:#536174;border-radius:9px;padding:0 12px;font:600 12px "DM Sans",sans-serif;cursor:pointer;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .command-user:hover{background:#f5f7fa}
+    .command-user{height:40px;border:1px solid #188861;background:#188861;color:#fff;border-radius:9px;padding:0 12px;font:600 12px "DM Sans",sans-serif;cursor:pointer;max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;box-shadow:0 4px 12px rgba(24,136,97,.18)}
+    .command-user:hover{background:#13704f;border-color:#13704f}
     .command-auth-error{font-size:12px;color:#a65b32;max-width:220px}
     .primary:disabled{background:#aeb8c7;box-shadow:none;cursor:not-allowed}
     @media(max-width:760px){.command-actions{gap:6px}.command-user{max-width:110px;padding:0 8px}.command-actions>div:first-child{max-width:130px;overflow:hidden}}
