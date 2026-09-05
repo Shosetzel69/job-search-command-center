@@ -9,6 +9,7 @@ on:
       - "data/run-status.json"
       - "data/applications.json"
       - "data/sources.json"
+      - "data/search-config.json"
       - ".github/workflows/deploy-pages.yml"
   workflow_dispatch:
 
@@ -41,6 +42,7 @@ jobs:
           cp data/run-status.json _site/data/run-status.json
           cp data/applications.json _site/data/applications.json
           cp data/sources.json _site/data/sources.json
+          cp data/search-config.json _site/data/search-config.json
           test -f _site/index.html
           test -f _site/app.js
           test -f _site/styles.css
@@ -49,6 +51,7 @@ jobs:
           python3 -m json.tool _site/data/run-status.json >/dev/null
           python3 -m json.tool _site/data/applications.json >/dev/null
           python3 -m json.tool _site/data/sources.json >/dev/null
+          python3 -m json.tool _site/data/search-config.json >/dev/null
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
