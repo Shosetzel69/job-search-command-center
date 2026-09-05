@@ -1,52 +1,35 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260905T160733Z",
+  "run_id": "github-20260905T161044Z",
   "status": "failed",
-  "started_at": "2026-09-05T16:07:33.906679+00:00",
-  "completed_at": "2026-09-05T16:07:35.592598+00:00",
+  "started_at": "2026-09-05T16:10:44.204623+00:00",
+  "completed_at": "2026-09-05T16:10:44.206139+00:00",
   "sources": [
     "jobspipe"
   ],
   "source_results": [
     {
       "connector": "jobspipe",
-      "query": "priority_geography",
+      "query": "quota_guard",
       "status": "failed",
       "records": 0,
       "total_available": 0,
-      "error": "preview failed: HTTP 402: {\"error\":\"Monthly request quota exceeded\",\"message\":\"You have used all jobs included in your current plan (1 credit = 1 job returned). Upgrade or manage billing to continue.\",\"upgrade_url\":\"https://jobspipe.dev/pricing\",\"dashboard_url\":\"https://jobspipe.dev/dashboard/api\"}"
-    },
-    {
-      "connector": "jobspipe",
-      "query": "remote_europe",
-      "status": "failed",
-      "records": 0,
-      "total_available": 0,
-      "error": "preview failed: HTTP 402: {\"error\":\"Monthly request quota exceeded\",\"message\":\"You have used all jobs included in your current plan (1 credit = 1 job returned). Upgrade or manage billing to continue.\",\"upgrade_url\":\"https://jobspipe.dev/pricing\",\"dashboard_url\":\"https://jobspipe.dev/dashboard/api\"}"
+      "error": "JobsPipe monthly quota already reported exhausted; API call skipped until next UTC month"
     }
   ],
   "records_inspected": 0,
   "jobs_published": 24,
   "excluded": 0,
   "limitations": [
-    "JobsPipe free-plan result cap applies to each query"
+    "JobsPipe monthly quota exhausted; collection skipped to avoid redundant API calls"
   ],
   "jobspipe_optimization": {
     "preview_counts": {},
     "credits_used": 0,
-    "run_budget": 14,
+    "run_budget": 0,
     "estimated_monthly_credits": 0,
     "monthly_guard": 950,
     "incremental": true,
-    "query_progress": {
-      "priority_geography": {
-        "has_cursor": false,
-        "remaining_estimate": 0
-      },
-      "remote_europe": {
-        "has_cursor": false,
-        "remaining_estimate": 0
-      }
-    }
+    "provider_quota_exhausted": true
   }
 }
