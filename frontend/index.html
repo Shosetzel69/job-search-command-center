@@ -22,7 +22,7 @@
         <button class="nav" data-view="sources"><span>◫</span> Surse</button>
       </nav>
       <div class="sidebar-bottom">
-        <div class="run-status"><i></i><div><strong>Monitor activ</strong><small>Ultima rulare: azi, 18:00</small></div></div>
+        <div class="run-status"><i></i><div><strong id="runState">Monitor</strong><small id="lastRun">Ultima rulare: se incarca...</small></div></div>
         <div class="app-version">Versiunea 0.02</div>
       </div>
     </aside>
@@ -30,7 +30,7 @@
     <main>
       <header class="topbar">
         <div>
-          <p class="eyebrow">JOI, 3 SEPTEMBRIE</p>
+          <p id="currentDate" class="eyebrow"></p>
           <h1>Joburi noi</h1>
         </div>
         <button id="runSearch" class="primary"><span>↻</span> Ruleaza verificarea</button>
@@ -55,10 +55,7 @@
         <div id="sourceToolbar" class="toolbar source-toolbar" hidden>
           <label class="search"><span>⌕</span><input id="sourceSearch" type="search" placeholder="Cauta o sursa"></label>
           <select id="sourceSort" aria-label="Ordonare surse"><option value="name">Nume A–Z</option><option value="status">Surse active primele</option></select>
-          <button id="addSource" class="primary">+ Adauga sursa</button>
-          <button id="saveSourcePriorities" class="secondary">Salveaza prioritatile</button>
         </div>
-        <div id="sourcePriorityInfo" class="source-priority-info" hidden><span>Poti selecta maximum 5 surse prioritare.</span><strong id="priorityCount">0/5</strong></div>
 
         <div class="table-head"><span>ROL</span><span>FIT</span><span>MOD DE LUCRU</span><span>PUBLICAT</span><span></span></div>
         <div id="jobList" class="job-list"></div>
@@ -71,7 +68,7 @@
         <div class="rule-card"><h2>Praguri de selectie</h2><label>Vechimea maxima<select id="freshness"><option value="24">24 ore</option><option value="48">48 ore</option></select></label><label>Scor minim pentru fit ridicat<input id="fitThreshold" type="number" min="50" max="100" value="80">%</label><label class="check"><input id="keepReposts" type="checkbox" checked> Pastreaza si marcheaza repostarile</label></div>
         <div class="rule-card"><h2>Contract si disponibilitate</h2><label>Interval B2B zilnic<div class="range"><input id="rateMin" value="250" aria-label="Tarif minim">—<input id="rateMax" value="650" aria-label="Tarif maxim"> EUR/zi</div></label><label class="check"><input id="immediateStart" type="checkbox" checked> Prioritizeaza disponibilitatea imediata</label></div>
         <div class="rule-card exclusions-card"><h2>Excluderi</h2><label for="exclusionSuggestions">Propuneri de excludere</label><select id="exclusionSuggestions" class="exclusion-select"><option value="">Selecteaza o propunere</option><option>Star Storage si companiile grupului</option><option>Implementari ERP care cer experienta specializata ampla</option><option>Roluri non-IT</option><option>Roluri exclusiv onsite in afara Bucurestiului</option></select><div id="selectedExclusions" class="selected-exclusions" aria-live="polite"></div></div>
-        <div class="criteria-actions"><span id="criteriaState" class="save-state">Preferinte salvate</span><button id="saveCriteria" class="primary">Salveaza preferintele</button></div>
+        <div class="criteria-actions"><span id="criteriaState" class="save-state">Preferinte salvate local</span><button id="saveCriteria" class="primary">Salveaza preferintele</button></div>
       </section>
     </main>
   </div>
@@ -84,10 +81,11 @@
     <div class="score-ring"><strong id="drawerScore"></strong><span>fit</span></div>
     <h3>De ce se potriveste</h3><ul id="pros"></ul>
     <h3>Riscuri</h3><ul id="risks" class="risks"></ul>
+    <h3>Descrierea pozitiei</h3><p id="drawerDescription" class="job-description"></p>
     <div class="drawer-actions"><button class="secondary">Exclude</button><a id="applyLink" class="primary" href="#" target="_blank" rel="noopener noreferrer">Deschide jobul ↗</a></div>
   </aside>
   <div id="scrim" class="scrim"></div>
-  <div id="toast" class="toast">Verificare pornita. Sursele sunt procesate.</div>
+  <div id="toast" class="toast"></div>
   <script src="app.js"></script>
 </body>
 </html>
