@@ -14,7 +14,7 @@ Nu inlocuieste motorul de cautare si nu introduce un backend permanent pentru jo
 ## Flux
 
 ```text
-Browser / GitHub Pages
+Browser / Cloudflare Static Assets
        |
        | Sign in with Google
        v
@@ -56,6 +56,27 @@ Worker-ul verifica:
 - `sub` = `ALLOWED_GOOGLE_SUB`.
 
 Pentru autorizare se foloseste `sub`, nu adresa email, deoarece `sub` este identificatorul stabil al contului Google pentru clientul respectiv.
+
+## Bootstrap autorizare initiala
+
+Pana la configurarea `ALLOWED_GOOGLE_SUB`, Worker-ul expune temporar:
+
+```text
+GET  /auth/bootstrap
+POST /auth/whoami
+```
+
+`/auth/bootstrap` afiseaza butonul Google Sign-In pentru clientul configurat.
+
+Dupa login, `/auth/whoami`:
+
+- valideaza criptografic ID token-ul;
+- verifica issuer si audience;
+- returneaza `sub` al contului autentificat.
+
+Utilizatorul copiaza valoarea `sub` in secretul Cloudflare `ALLOWED_GOOGLE_SUB`.
+
+Dupa configurarea secretului, endpoint-urile de bootstrap se dezactiveaza automat si returneaza 404.
 
 ## GitHub
 
@@ -123,9 +144,11 @@ Commit-ul configuratiei declanseaza workflow-ul de cautare prin regula existenta
 
 ## CORS
 
-Worker-ul accepta cereri browser numai de la valoarea exacta `FRONTEND_ORIGIN`.
+Frontend-ul si Command API folosesc acelasi origin Cloudflare in MVP.
 
-CORS nu este mecanism de autentificare. Autentificarea Google ramane obligatorie pentru endpoint-urile privilegiate.
+Worker-ul pastreaza validarea `FRONTEND_ORIGIN` pentru endpoint-urile privilegiate.
+
+CORS nu este mecanism de autentificare. Autentificarea Google ramane obligatorie.
 
 ## Secrete
 
@@ -144,18 +167,19 @@ Configuratie publica/non-secret:
 - `GITHUB_WORKFLOW`;
 - `SEARCH_CONFIG_PATH`.
 
+`GOOGLE_CLIENT_ID` este configurat in Cloudflare Dashboard. `keep_vars=true` este activ in Wrangler, astfel incat deploy-urile din repository sa nu elimine variabilele setate in Dashboard.
+
 ## Setup necesar o singura data
 
-1. Creeaza/configureaza Google OAuth Web Client pentru frontend.
-2. Obtine `GOOGLE_CLIENT_ID`.
-3. Obtine `sub` pentru contul Google autorizat dupa primul login.
-4. Creeaza fine-grained PAT GitHub limitat la repository, cu `Actions: write` si `Contents: write`.
-5. Creeaza un Cloudflare Worker.
-6. Seteaza `FRONTEND_ORIGIN` si `GOOGLE_CLIENT_ID`.
-7. Seteaza secretele `GITHUB_TOKEN` si `ALLOWED_GOOGLE_SUB`.
-8. Ruleaza deploy din directorul `command-api/`.
-9. Testeaza `/health`.
-10. Integreaza URL-ul Worker si Google Sign-In in frontend.
+1. Configureaza Google OAuth Web Client pentru frontend.
+2. Seteaza `GOOGLE_CLIENT_ID` in Cloudflare.
+3. Acceseaza `/auth/bootstrap` si autentifica-te cu contul Google autorizat.
+4. Copiaza `sub` rezultat in secretul Cloudflare `ALLOWED_GOOGLE_SUB`.
+5. Creeaza fine-grained PAT GitHub limitat la repository, cu `Actions: write` si `Contents: write`.
+6. Seteaza secretul `GITHUB_TOKEN` in Cloudflare.
+7. Testeaza `/health`.
+8. Integreaza Google Sign-In in frontend.
+9. Testeaza `Ruleaza verificarea` si `Salveaza preferintele` end-to-end.
 
 ## Cost
 
