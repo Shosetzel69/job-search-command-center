@@ -47,6 +47,14 @@ function ageHours(value){
   return Number.isFinite(ms)?Math.max(0,Math.floor(ms/3600000)):0;
 }
 
+function normalizeMode(value){
+  const raw=String(value||'').trim().toLowerCase();
+  if(raw==='remote')return 'Remote';
+  if(raw==='hybrid')return 'Hybrid';
+  if(['onsite','on-site','office','in-office'].includes(raw))return 'Onsite';
+  return raw==='—'?'N/A':'N/A';
+}
+
 function normalizeJob(j){
   return {
     id:j.id||null,
@@ -55,7 +63,7 @@ function normalizeJob(j){
     initial:j.initial||((j.company||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?'),
     fit:Number.isFinite(Number(j.fit))?Number(j.fit):0,
     location:j.location||'Nespecificat',
-    mode:j.mode||'Nespecificat',
+    mode:normalizeMode(j.mode),
     type:j.type||'Nespecificat',
     age:Number.isFinite(Number(j.age))?Number(j.age):ageHours(j.date_posted),
     remote:Boolean(j.remote),
@@ -78,7 +86,7 @@ function normalizeApplication(a){
   const next=a.next_status_check?`Urmatorul status check: ${a.next_status_check}`:'Status check nespecificat';
   return {
     title:a.title||'Rol nespecificat',company:a.company||'Companie nespecificata',initial:(a.company||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?',
-    fit:null,location:a.location||'Nespecificat',mode:'—',type:'Aplicat',age:0,remote:false,b2b:false,repost:false,status:'applied',
+    fit:null,location:a.location||'Nespecificat',mode:'N/A',type:'Aplicat',age:0,remote:false,b2b:false,repost:false,status:'applied',
     pros:[`Aplicat: ${a.applied_at||'data nespecificata'}`,ref],risks:[next],url:a.url||null,description:`Status: ${a.status||'applied'}. ${ref}. ${next}.`,source:'Istoric aplicari',date_posted:a.applied_at||null,isApplication:true
   };
 }
@@ -122,31 +130,64 @@ function setHeaderDate(){
 
 function baseRows(){return view==='applications'?applications:view==='review'?jobs.filter(j=>j.status==='review'):jobs}
 
+function selectedWorkModes(){
+  const selected=new Set($$('.work-mode-filter:checked').map(x=>x.value));
+  return selected.size?selected:new Set(['Remote','Hybrid','Onsite','N/A']);
+}
+
+function globalFilteredRows(rows){
+  if(view==='applications')return rows;
+  const freshness=Number($('#freshnessFilter')?.value||savedCriteria?.freshness||24);
+  const modes=selectedWorkModes();
+  return rows.filter(j=>j.isApplication||(j.age<=freshness&&modes.has(j.mode)));
+}
+
+function updateWorkModeLabel(){
+  const boxes=[...$$('.work-mode-filter')];
+  const selected=boxes.filter(x=>x.checked);
+  const label=$('#workModeLabel');
+  if(!label)return;
+  if(selected.length===boxes.length){label.textContent='Mod lucru: Toate';return;}
+  if(selected.length===0){label.textContent='Mod lucru: Niciunul';return;}
+  label.textContent=`Mod lucru: ${selected.map(x=>x.dataset.label||x.value).join(', ')}`;
+}
+
+function updateFreshnessLabel(){
+  const hours=Number($('#freshnessFilter')?.value||24);
+  const label=$('#metricFreshnessLabel');
+  if(label)label.textContent=hours===120?'ultimele 5 zile':`ultimele ${hours}h`;
+}
+
 function setCounts(){
   const threshold=Number(savedCriteria?.fitThreshold||80);
-  const base=baseRows();
+  const base=globalFilteredRows(baseRows());
+  const allJobs=globalFilteredRows(jobs);
   $('#countJobs').textContent=jobs.length;
   $('#countReview').textContent=jobs.filter(j=>j.status==='review').length;
   $('#countApplications').textContent=applications.length;
-  $('#metricJobs').textContent=jobs.length;
-  $('#metricHigh').textContent=jobs.filter(j=>j.fit>=threshold).length;
-  $('#metricReposts').textContent=jobs.filter(j=>j.repost).length;
-  $('#metricRemote').textContent=jobs.filter(j=>j.remote).length;
+  $('#metricJobs').textContent=allJobs.length;
+  $('#metricHigh').textContent=allJobs.filter(j=>j.fit>=threshold).length;
+  $('#metricReposts').textContent=allJobs.filter(j=>j.repost).length;
+  $('#metricRemote').textContent=allJobs.filter(j=>j.mode==='Remote').length;
   $('#filterAll').textContent=base.length;
   $('#filterHigh').textContent=base.filter(j=>!j.isApplication&&j.fit>=threshold).length;
-  $('#filterRemote').textContent=base.filter(j=>j.remote).length;
   $('#filterB2b').textContent=base.filter(j=>j.b2b).length;
+  updateFreshnessLabel();
+  updateWorkModeLabel();
 }
 
 function renderJobs(){
   const q=($('#search').value||'').toLowerCase();
   const threshold=Number(savedCriteria?.fitThreshold||80);
-  visible=baseRows().filter(j=>{
-    const filterOk=active==='all'||active==='high'&&!j.isApplication&&j.fit>=threshold||active==='remote'&&j.remote||active==='b2b'&&j.b2b;
+  visible=globalFilteredRows(baseRows()).filter(j=>{
+    const filterOk=active==='all'||active==='high'&&!j.isApplication&&j.fit>=threshold||active==='b2b'&&j.b2b;
     const text=`${j.title} ${j.company} ${j.description} ${j.source}`.toLowerCase();
     return filterOk&&text.includes(q);
   });
-  visible.sort($('#sort').value==='fit'?(a,b)=>(b.fit??-1)-(a.fit??-1):(a,b)=>a.age-b.age);
+  const sortValue=$('#sort')?.value||'fit-desc';
+  visible.sort(sortValue==='fit-asc'
+    ?(a,b)=>(a.fit??Number.MAX_SAFE_INTEGER)-(b.fit??Number.MAX_SAFE_INTEGER)||a.age-b.age
+    :(a,b)=>(b.fit??-1)-(a.fit??-1)||a.age-b.age);
   $('.table-head').innerHTML='<span>ROL</span><span>FIT</span><span>MOD DE LUCRU</span><span>PUBLICAT</span><span></span>';
   $('#jobList').innerHTML=visible.map((j,i)=>{
     const score=j.fit===null?'—':`${j.fit}%`;
@@ -185,13 +226,13 @@ function previewCriteria(){
   const rows=jobs.filter(j=>{
     const t=j.title.toLowerCase();
     const role=t.includes('scrum')?c.roleScrum:t.includes('program')||t.includes('programme')||t.includes('pmo')?c.roleProgram:t.includes('service')?c.roleService:t.includes('delivery')||t.includes('technical')?c.roleDelivery:c.rolePm;
-    const mode=j.remote?c.workRemote:j.mode.toLowerCase()==='hybrid'?c.workHybrid:true;
+    const mode=j.mode==='Remote'?c.workRemote:j.mode==='Hybrid'?c.workHybrid:true;
     const fresh=j.age<=c.freshness;
     const repost=c.keepReposts||!j.repost;
     const excluded=c.exclusions.some(x=>{const q=x.toLowerCase();return(q.includes('star storage')&&j.company.toLowerCase().includes('star storage'))||(q.includes('erp')&&t.includes('erp'))||(q.includes('non-it')&&!t.match(/project|program|programme|pmo|scrum|service|delivery|technical|it/))});
     return role&&mode&&fresh&&repost&&!excluded;
   });
-  $('#metricJobs').textContent=rows.length;$('#metricHigh').textContent=rows.filter(j=>j.fit>=c.fitThreshold).length;$('#metricReposts').textContent=rows.filter(j=>j.repost).length;$('#metricRemote').textContent=rows.filter(j=>j.remote).length;$('#metricHigh').closest('article').querySelector('em').textContent=`>= ${c.fitThreshold}%`;
+  $('#metricJobs').textContent=rows.length;$('#metricHigh').textContent=rows.filter(j=>j.fit>=c.fitThreshold).length;$('#metricReposts').textContent=rows.filter(j=>j.repost).length;$('#metricRemote').textContent=rows.filter(j=>j.mode==='Remote').length;$('#metricHigh').closest('article').querySelector('em').textContent=`>= ${c.fitThreshold}%`;
 }
 
 function render(){setCounts();if(view==='criteria')previewCriteria();else if(view==='sources')renderSources();else renderJobs()}
@@ -219,21 +260,29 @@ function loadCriteria(){
   const fallback=criteriaFromConfig(canonicalConfig||{}),c=savedCriteria||fallback;
   ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','keepReposts','immediateStart'].forEach(id=>$('#'+id).checked=c[id]??fallback[id]);
   $('#freshness').value=String(c.freshness||fallback.freshness||'24');
+  if($('#freshnessFilter'))$('#freshnessFilter').value=String(c.freshness||fallback.freshness||'24');
   $('#fitThreshold').value=String(c.fitThreshold||fallback.fitThreshold||'80');
   $('#rateMin').value=String(c.rateMin||fallback.rateMin||'250');
   $('#rateMax').value=String(c.rateMax||fallback.rateMax||'650');
   renderExclusions();
+  updateFreshnessLabel();
+  updateWorkModeLabel();
 }
 
 function bindUi(){
   $$('.nav[data-view]').forEach(btn=>btn.onclick=()=>{$$('.nav[data-view]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');view=btn.dataset.view;active='all';$('h1').textContent={jobs:'Joburi noi',review:'De evaluat',applications:'Aplicari',criteria:'Criterii de selectie',sources:'Surse'}[view];$('.summary').hidden=!['jobs','criteria'].includes(view);$('.toolbar:not(.source-toolbar)').hidden=!['jobs','review'].includes(view);$('#sourceToolbar').hidden=view!=='sources';$('#criteriaPanel').hidden=view!=='criteria';$('.workspace').hidden=view==='criteria';$('#runSearch').hidden=view==='criteria';render()});
   $$('.filter').forEach(btn=>btn.onclick=()=>{const current=$('.filter.active');if(current)current.classList.remove('active');btn.classList.add('active');active=btn.dataset.filter;render()});
-  $('#search').oninput=render;$('#sort').onchange=render;$('#sourceSearch').oninput=renderSources;$('#sourceSort').onchange=renderSources;
+  $('#search').oninput=render;
+  $('#sort').onchange=render;
+  $('#freshnessFilter').onchange=render;
+  $$('.work-mode-filter').forEach(box=>box.onchange=()=>{updateWorkModeLabel();render()});
+  $('#sourceSearch').oninput=renderSources;$('#sourceSort').onchange=renderSources;
   $('#closeDrawer').onclick=close;$('#scrim').onclick=close;document.onkeydown=e=>e.key==='Escape'&&close();
+  document.addEventListener('click',e=>{const details=$('#workModeFilter');if(details?.open&&!details.contains(e.target))details.open=false});
   $('#runSearch').onclick=()=>toast('Rularea din interfata necesita trigger-ul securizat ARCH #19. Cautarea automata ramane activa de doua ori pe zi.');
   $('#criteriaPanel').addEventListener('change',markCriteriaDirty);$('#criteriaPanel').addEventListener('input',markCriteriaDirty);
   $('#exclusionSuggestions').onchange=e=>{if(e.target.value&&!draftExclusions.includes(e.target.value)){draftExclusions.push(e.target.value);markCriteriaDirty();renderExclusions()}e.target.value=''};
-  $('#saveCriteria').onclick=()=>{const c=currentCriteria();c.rateMin=$('#rateMin').value;c.rateMax=$('#rateMax').value;savedCriteria=c;localStorage.setItem('selectionCriteria',JSON.stringify(c));$('#criteriaState').textContent='Preferinte salvate local';$('#criteriaState').classList.remove('dirty');toast('Preferintele sunt salvate local. Configuratia canonica este data/search-config.json; scrierea securizata este urmarita in ARCH #19.');};
+  $('#saveCriteria').onclick=()=>{const c=currentCriteria();c.rateMin=$('#rateMin').value;c.rateMax=$('#rateMax').value;savedCriteria=c;localStorage.setItem('selectionCriteria',JSON.stringify(c));$('#criteriaState').textContent='Preferinte salvate local';$('#criteriaState').classList.remove('dirty');if($('#freshnessFilter'))$('#freshnessFilter').value=String(c.freshness);render();toast('Preferintele sunt salvate local. Configuratia canonica este data/search-config.json; scrierea securizata este urmarita in ARCH #19.');};
 }
 
 async function init(){
