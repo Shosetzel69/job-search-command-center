@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Workflow entry point with a provider-quota circuit breaker."""
+"""Workflow entry point with provider enablement and quota circuit breaker."""
 
 from __future__ import annotations
 
@@ -15,13 +15,48 @@ def quota_exhausted_this_month(state: dict, now: datetime) -> bool:
     return state.get("usage", {}).get("provider_quota_exhausted_month") == now.strftime("%Y-%m")
 
 
-def write_quota_skipped_status(state: dict, now: datetime) -> None:
+def current_job_count() -> int:
     try:
         current = json.loads(engine.JOBS_PATH.read_text(encoding="utf-8"))
-        jobs_published = len(current.get("jobs") or [])
+        return len(current.get("jobs") or [])
     except Exception:
-        jobs_published = 0
+        return 0
 
+
+def write_provider_disabled_status(now: datetime) -> None:
+    jobs_published = current_job_count()
+    status = {
+        "schema_version": engine.SCHEMA_VERSION,
+        "run_id": "github-" + now.strftime("%Y%m%dT%H%M%SZ"),
+        "status": "completed",
+        "started_at": now.isoformat(),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "sources": ["jobspipe"],
+        "source_results": [
+            {
+                "connector": "jobspipe",
+                "query": "provider_switch",
+                "status": "completed",
+                "records": 0,
+                "total_available": 0,
+                "error": None,
+            }
+        ],
+        "records_inspected": 0,
+        "jobs_published": jobs_published,
+        "excluded": 0,
+        "limitations": ["JobsPipe disabled by configuration; no provider credits consumed"],
+        "jobspipe_optimization": {
+            "credits_used": 0,
+            "provider_enabled": False,
+            "incremental": True,
+        },
+    }
+    engine.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+
+def write_quota_skipped_status(state: dict, now: datetime) -> None:
+    jobs_published = current_job_count()
     status = {
         "schema_version": engine.SCHEMA_VERSION,
         "run_id": "github-" + now.strftime("%Y%m%dT%H%M%SZ"),
@@ -74,6 +109,15 @@ def main() -> int:
         return optimized.main()
 
     now = datetime.now(timezone.utc)
+    config = engine.load_config()
+
+    if config.get("jobspipe_enabled", True) is False:
+        write_provider_disabled_status(now)
+        engine.validate_output()
+        optimized.validate_state()
+        print("JobsPipe disabled by configuration; provider call skipped.")
+        return 0
+
     state = optimized.load_state(now)
     if quota_exhausted_this_month(state, now):
         write_quota_skipped_status(state, now)
