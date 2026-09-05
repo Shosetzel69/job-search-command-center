@@ -50,7 +50,7 @@
       </header>
 
       <section class="summary" aria-label="Rezumat">
-        <article><span class="metric-icon blue">↗</span><div><strong id="metricJobs">0</strong><small>roluri noi</small></div><em>ultimele 24h</em></article>
+        <article><span class="metric-icon blue">↗</span><div><strong id="metricJobs">0</strong><small>roluri noi</small></div><em id="metricFreshnessLabel">ultimele 24h</em></article>
         <article><span class="metric-icon green">★</span><div><strong id="metricHigh">0</strong><small>fit ridicat</small></div><em>≥ 80%</em></article>
         <article><span class="metric-icon amber">↺</span><div><strong id="metricReposts">0</strong><small>repostari</small></div><em>marcate, nu ascunse</em></article>
         <article><span class="metric-icon violet">⌂</span><div><strong id="metricRemote">0</strong><small>remote</small></div><em>eligibile din Romania</em></article>
@@ -61,9 +61,26 @@
           <label class="search"><span>⌕</span><input id="search" type="search" placeholder="Cauta rol, companie sau tehnologie"></label>
           <button class="filter active" data-filter="all">Toate <b id="filterAll">0</b></button>
           <button class="filter" data-filter="high">Fit ridicat <b id="filterHigh">0</b></button>
-          <button class="filter" data-filter="remote">Remote <b id="filterRemote">0</b></button>
           <button class="filter" data-filter="b2b">B2B <b id="filterB2b">0</b></button>
-          <select id="sort" aria-label="Sortare"><option value="fit">Fit descrescator</option><option value="new">Cele mai noi</option></select>
+          <select id="freshnessFilter" class="toolbar-select" aria-label="Vechimea joburilor">
+            <option value="24" selected>24h</option>
+            <option value="36">36h</option>
+            <option value="48">48h</option>
+            <option value="120">5 zile</option>
+          </select>
+          <details id="workModeFilter" class="mode-multiselect">
+            <summary id="workModeLabel">Mod lucru: Toate</summary>
+            <div class="mode-options">
+              <label><input class="work-mode-filter" type="checkbox" value="Remote" data-label="Remote" checked> Remote</label>
+              <label><input class="work-mode-filter" type="checkbox" value="Hybrid" data-label="Hibrid" checked> Hibrid</label>
+              <label><input class="work-mode-filter" type="checkbox" value="Onsite" data-label="Onsite" checked> Onsite</label>
+              <label><input class="work-mode-filter" type="checkbox" value="N/A" data-label="N/A" checked> N/A</label>
+            </div>
+          </details>
+          <select id="sort" class="toolbar-select fit-sort" aria-label="Sortare FIT">
+            <option value="fit-desc" selected>FIT descrescator</option>
+            <option value="fit-asc">FIT crescator</option>
+          </select>
         </div>
         <div id="sourceToolbar" class="toolbar source-toolbar" hidden>
           <label class="search"><span>⌕</span><input id="sourceSearch" type="search" placeholder="Cauta o sursa"></label>
@@ -78,7 +95,7 @@
       <section id="criteriaPanel" class="rules-panel" hidden>
         <div class="rule-card"><h2>Roluri urmarite</h2><label class="check"><input id="rolePm" type="checkbox" checked> Project Manager / IT Project Manager</label><label class="check"><input id="roleDelivery" type="checkbox" checked> Delivery / Technical Project Manager</label><label class="check"><input id="roleService" type="checkbox" checked> Service Manager</label><label class="check"><input id="roleScrum" type="checkbox" checked> Scrum Master, fara nivel excesiv de senior</label><label class="check"><input id="roleProgram" type="checkbox" checked> Program / PMO Manager</label></div>
         <div class="rule-card"><h2>Mod de lucru</h2><p class="card-note">Ordinea optiunilor reprezinta prioritatea rezultatelor.</p><label class="check"><input id="workRemote" type="checkbox" checked> Remote</label><label class="check"><input id="workHybrid" type="checkbox" checked> Hibrid</label></div>
-        <div class="rule-card"><h2>Praguri de selectie</h2><label>Vechimea maxima<select id="freshness"><option value="24">24 ore</option><option value="48">48 ore</option></select></label><label>Scor minim pentru fit ridicat<input id="fitThreshold" type="number" min="50" max="100" value="80">%</label><label class="check"><input id="keepReposts" type="checkbox" checked> Pastreaza si marcheaza repostarile</label></div>
+        <div class="rule-card"><h2>Praguri de selectie</h2><label>Vechimea implicita<select id="freshness"><option value="24">24 ore</option><option value="36">36 ore</option><option value="48">48 ore</option><option value="120">5 zile</option></select></label><label>Scor minim pentru fit ridicat<input id="fitThreshold" type="number" min="50" max="100" value="80">%</label><label class="check"><input id="keepReposts" type="checkbox" checked> Pastreaza si marcheaza repostarile</label></div>
         <div class="rule-card"><h2>Contract si disponibilitate</h2><label>Interval B2B zilnic<div class="range"><input id="rateMin" value="250" aria-label="Tarif minim">—<input id="rateMax" value="650" aria-label="Tarif maxim"> EUR/zi</div></label><label class="check"><input id="immediateStart" type="checkbox" checked> Prioritizeaza disponibilitatea imediata</label></div>
         <div class="rule-card exclusions-card"><h2>Excluderi</h2><label for="exclusionSuggestions">Propuneri de excludere</label><select id="exclusionSuggestions" class="exclusion-select"><option value="">Selecteaza o propunere</option><option>Star Storage si companiile grupului</option><option>Implementari ERP care cer experienta specializata ampla</option><option>Roluri non-IT</option><option>Roluri exclusiv onsite in afara Bucurestiului</option></select><div id="selectedExclusions" class="selected-exclusions" aria-live="polite"></div></div>
         <div class="criteria-actions"><span id="criteriaState" class="save-state">Preferinte salvate local</span><button id="saveCriteria" class="primary">Salveaza preferintele</button></div>
