@@ -9,8 +9,18 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Manrope:wght@600;700;800&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
+  <style>
+    body.auth-signed-out .sidebar nav,
+    body.auth-signed-out .sidebar-bottom,
+    body.auth-signed-out main .topbar > div:first-child,
+    body.auth-signed-out .summary,
+    body.auth-signed-out .workspace,
+    body.auth-signed-out #criteriaPanel,
+    body.auth-signed-out #drawer,
+    body.auth-signed-out #scrim { display:none !important; }
+  </style>
 </head>
-<body>
+<body class="auth-signed-out">
   <div class="shell">
     <aside class="sidebar">
       <div class="brand"><span class="mark">S</span><span>Job Search</span></div>
@@ -88,5 +98,6 @@
   <div id="toast" class="toast"></div>
   <script src="app.js"></script>
   <script src="auth.js"></script>
+  <script src="privacy-auth.js"></script>
 </body>
 </html>
