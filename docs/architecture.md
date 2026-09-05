@@ -2,22 +2,29 @@
 
 ## 1. Arhitectura MVP curenta
 
-Fluxul de baza este static-first:
+Fluxul de baza este static-first + Command API serverless:
 
 ```text
 Utilizator
   |
   v
-Frontend static (GitHub Pages)
+Cloudflare Worker
   |
-  +--> data/jobs.json
-  +--> data/run-status.json
-  +--> data/search-config.json
+  +--> Static Assets
+  |      +--> frontend
+  |      +--> data/jobs.json
+  |      +--> data/run-status.json
+  |      +--> data/applications.json
+  |      +--> data/sources.json
+  |      +--> data/search-config.json
   |
-  +--> Google Sign-In -> Command API (Cloudflare Worker)
-                         |
-                         +--> GitHub workflow_dispatch
-                         +--> GitHub Contents API
+  +--> GET  /health
+  +--> POST /commands/run
+  +--> PUT  /config
+          |
+          +--> Google ID token
+          +--> GitHub workflow_dispatch
+          +--> GitHub Contents API
 
 GitHub Actions
   |
@@ -35,30 +42,58 @@ scripts/job_search.py
 JSON versionat in repository
   |
   v
-GitHub Pages
+commit pe main
+  |
+  v
+Cloudflare automatic deployment
 ```
 
 Nu exista in MVP un backend public permanent pentru datele de joburi si nici un server de baza de date activ.
 
-Command API este o componenta serverless minima pentru actiuni privilegiate; nu devine backend-ul principal al aplicatiei.
+Cloudflare Worker este atat host-ul frontend-ului static, cat si Command API-ul minimal pentru actiuni privilegiate.
 
 ## 2. Frontend
 
-- frontend static in `frontend/`;
-- publicare prin GitHub Pages;
-- citeste rezultatele generate de workflow;
-- citeste configuratia canonica din `data/search-config.json`;
+- sursa frontend in `frontend/`;
+- la deploy este copiat in `command-api/public/` de `command-api/scripts/build-static.mjs`;
+- publicare prin Cloudflare Workers Static Assets;
+- citeste fisierele JSON publicate in `/data/` pe acelasi origin;
+- citeste configuratia canonica din `/data/search-config.json`;
 - afiseaza descrierea jobului, linkul direct, fit, riscuri si sursa;
 - nu contine secrete;
 - modificarile locale din browser nu sunt configuratie efectiva pana cand nu sunt persistate prin Command API.
 
 ChatGPT Sites ramane optional pentru prototipare, nu dependinta runtime a MVP-ului curent.
 
-## 3. Motor de executie
+## 3. Hosting si deploy
+
+Host-ul MVP este Cloudflare Worker:
+
+`https://job-search-command-api.myeboda.workers.dev`
+
+Worker-ul foloseste Git integration cu repository-ul privat GitHub.
+
+Root directory Cloudflare Builds:
+
+`command-api`
+
+Deploy command:
+
+`npx wrangler deploy`
+
+`wrangler.jsonc` executa automat build-ul static inainte de deploy.
+
+Configuratia `assets.directory=./public` permite publicarea HTML/CSS/JS si a fisierelor JSON impreuna cu Worker-ul.
+
+Rutele dinamice `/health`, `/commands/*` si `/config` sunt procesate de Worker inaintea asset-urilor.
+
+GitHub Pages nu mai face parte din arhitectura MVP deoarece repository-ul ramane privat si planul GitHub curent nu permite Pages pentru acest repository.
+
+## 4. Motor de executie
 
 GitHub Actions este schedulerul si orchestratorul infrastructural.
 
-Logica de cautare nu mai este hard-codata in YAML. Ea ruleaza in `scripts/job_search.py`.
+Logica de cautare ruleaza in `scripts/job_search.py`.
 
 Responsabilitati GitHub Actions:
 
@@ -81,7 +116,7 @@ Responsabilitati motor cautare:
 - filtrare si scoring;
 - generarea `jobs.json` si `run-status.json`.
 
-## 4. Connectors si surse
+## 5. Connectors si surse
 
 Exista contractul `JobConnector`.
 
@@ -110,7 +145,7 @@ Registrul `data/sources.json` ramane lista de surse vizibila in UI. Legarea acti
 
 Toate sursele active trebuie tratate egal. Nu exista prioritate 1-5.
 
-## 5. Procesare
+## 6. Procesare
 
 Ordinea logica:
 
@@ -129,7 +164,7 @@ Geo-eligibility ramane separat de matching/scoring.
 
 Repostarile sunt marcate, nu eliminate automat, daca `keep_reposts=true`.
 
-## 6. Persistenta
+## 7. Persistenta
 
 Pentru MVP curent:
 
@@ -147,7 +182,7 @@ SQLite ramane optiunea preferata daca introducem un backend persistent, istoric 
 
 PostgreSQL ramane rezervat pentru multi-user, concurenta ridicata sau replicare.
 
-## 7. Configuratie
+## 8. Configuratie
 
 `data/search-config.json` este sursa de adevar pentru executia cautarii.
 
@@ -165,9 +200,9 @@ Contine:
 
 Frontend-ul o citeste. Motorul o foloseste efectiv.
 
-Modificarile din UI sunt validate si persistate prin `PUT /config` al Command API. Pana la activarea live a Command API, modificarile UI raman locale.
+Modificarile din UI sunt validate si persistate prin `PUT /config` al Command API. Pana la activarea Google authentication, modificarile UI raman locale.
 
-## 8. Command API
+## 9. Command API
 
 Command API este implementat in `command-api/` ca Cloudflare Worker.
 
@@ -219,16 +254,6 @@ PAT-ul nu apare niciodata in frontend sau repository.
 
 Detalii: `docs/command-api.md`.
 
-## 9. Publicare
-
-Tinta MVP:
-
-```text
-GitHub Actions -> data/*.json -> GitHub Pages -> browser
-```
-
-Workflow-ul de deploy este implementat. Activarea initiala a GitHub Pages la nivelul repository-ului ramane un pas administrativ manual.
-
 ## 10. Securitate
 
 - toate cheile API pentru cautare stau in GitHub Actions Secrets;
@@ -236,7 +261,7 @@ Workflow-ul de deploy este implementat. Activarea initiala a GitHub Pages la niv
 - niciun secret in frontend, JSON public sau repository;
 - Google ID token este verificat server-side prin JWKS, issuer si audience;
 - autorizarea MVP foloseste Google `sub`;
-- CORS este limitat la origin exact al frontend-ului;
+- frontend si Command API folosesc acelasi origin Cloudflare;
 - configuratia editabila foloseste whitelist si validare;
 - permisiunile workflow-urilor sunt minime;
 - inputurile externe sunt tratate ca date nevalidate;
@@ -260,7 +285,9 @@ Nu se foloseste pentru Docker/Container Manager sau backend Node modern.
 
 ## 12. Integrari Google
 
-Google Identity Services este folosit pentru autentificarea Command API dupa activarea live.
+Google Identity Services este folosit pentru autentificarea Command API dupa configurarea OAuth Client.
+
+Authorized JavaScript origin pentru MVP va fi origin-ul Worker-ului Cloudflare.
 
 Alte integrari planificate optional:
 
