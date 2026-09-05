@@ -27,6 +27,7 @@
     "hybrid": true
   },
   "freshness_hours": 24,
+  "collection_freshness_hours": 120,
   "fit_threshold": 80,
   "keep_reposts": true,
   "rate_min_eur_day": 250,
@@ -45,4 +46,3 @@
   "excluded_role_keywords": ["construction", "hvac", "civil", "mechanical", "manufacturing", "clinical", "marketing", "sales", "event", "facilities", "facility", "enablement", "referral", "customer support", "training"],
   "deep_erp_terms": ["SAP", "ERP", "S/4HANA", "Dynamics 365"]
 }
-
