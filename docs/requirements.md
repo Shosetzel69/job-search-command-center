@@ -29,6 +29,7 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - CFR-46: Daca volumul depaseste bugetul unei rulari, sistemul pastreaza cursorul JobsPipe si continua backlog-ul in rularile urmatoare fara a avansa watermark-ul inainte de epuizarea paginarii.
 - CFR-47: Rezultatele deja colectate sunt pastrate intre rulari si eliminate numai dupa depasirea ferestrei maxime de 5 zile sau conform regulilor de filtrare.
 - CFR-48: Sistemul pastreaza un buget maxim configurabil de credite JobsPipe per rulare si un prag lunar local pentru evitarea epuizarii necontrolate a cotei.
+- CFR-49: Cand `jobspipe_enabled=false`, workflow-ul nu executa nicio cerere catre JobsPipe si pastreaza setul de rezultate deja publicat.
 
 ### Interfata si configurare
 
@@ -48,6 +49,8 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - CFR-23: Filtrul simplu `Remote` din toolbar este eliminat pentru a evita suprapunerea cu multiselectia modului de lucru.
 - CFR-24: Rezumatul listei se actualizeaza conform filtrului de vechime si modului de lucru selectat.
 - CFR-25: Toate vizualizarile aplicatiei sunt aliniate la partea de sus a ecranului.
+- CFR-50: In `Criterii de selectie` exista checkbox-ul `Activeaza JobsPipe`, sincronizat cu `jobspipe_enabled` din configuratia canonica.
+- CFR-51: Checkbox-ul JobsPipe este dezactivat implicit in perioada de stabilizare; modificarea devine efectiva numai dupa `Salveaza preferintele` si necesita utilizator autentificat/autorizat.
 
 ### Autentificare, date si comenzi protejate
 
@@ -83,6 +86,7 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - CNF-10: Schimbarea filtrelor locale nu declanseaza GitHub Actions si trebuie sa actualizeze lista instant din setul deja colectat.
 - CNF-11: Strategia JobsPipe trebuie sa ramana compatibila cu limita Free de 1.000 joburi/luna si sa foloseasca un prag local de siguranta configurabil.
 - CNF-12: Starea interna de sincronizare JobsPipe nu este publicata in pachetul static Cloudflare.
+- CNF-13: Dezactivarea JobsPipe din configuratia canonica trebuie sa garanteze zero consum de credite JobsPipe pentru rularile ulterioare pana la reactivare.
 
 ## Comportament curent confirmat
 
@@ -95,7 +99,8 @@ Pentru orice cerinta noua se aplica obligatoriu fluxul:
 - Motorul colecteaza pana la 5 zile; filtrul UI selecteaza local 24h, 36h, 48h sau 5 zile.
 - Modurile de lucru pot fi filtrate cumulativ prin Remote / Hibrid / Onsite / N/A.
 - FIT este descrescator implicit si poate fi comutat crescator.
-- JobsPipe foloseste preview gratuit, polling incremental, paginare cu cursor si buget local de credite; valoarea curenta este 14 credite/rulare si prag lunar 950.
+- JobsPipe foloseste preview gratuit, polling incremental, paginare cu cursor si buget local de credite; valoarea curenta este 14 credite/rulare si prag lunar 950 cand providerul este activ.
+- JobsPipe este momentan dezactivat prin `jobspipe_enabled=false` pentru perioada de stabilizare; checkbox-ul din `Criterii de selectie` permite reactivarea ulterioara controlata.
 - Starea incrementala este pastrata in `data/search-state.json`, dar acest fisier nu este copiat in bundle-ul static Cloudflare.
 - Rezultatele sunt generate de GitHub Actions si publicate automat in Cloudflare, dar accesul la continutul `data/*.json` este controlat de Worker.
 
