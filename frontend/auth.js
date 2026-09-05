@@ -7,6 +7,23 @@ function authToast(message) {
   else console.log(message);
 }
 
+function hidePrivateUi() {
+  document.body.classList.add('auth-signed-out');
+  document.body.classList.remove('auth-authenticated');
+  const drawer = document.querySelector('#drawer');
+  const scrim = document.querySelector('#scrim');
+  if (drawer) {
+    drawer.classList.remove('open');
+    drawer.setAttribute('aria-hidden', 'true');
+  }
+  if (scrim) scrim.classList.remove('open');
+}
+
+function showPrivateUi() {
+  document.body.classList.remove('auth-signed-out');
+  document.body.classList.add('auth-authenticated');
+}
+
 function injectAuthStyles() {
   const style = document.createElement('style');
   style.textContent = `
@@ -98,6 +115,7 @@ function setAuthenticatedUi(email) {
     runButton.disabled = false;
     runButton.title = 'Porneste verificarea joburilor';
   }
+  showPrivateUi();
 }
 
 function setSignedOutUi() {
@@ -110,33 +128,56 @@ function setSignedOutUi() {
     runButton.disabled = true;
     runButton.title = 'Autentifica-te cu Google pentru a porni verificarea';
   }
+  hidePrivateUi();
 }
 
 function signOutCommandUser(showMessage = true) {
   commandIdToken = null;
   commandUserEmail = null;
+  commandPolling = false;
   try { window.google?.accounts?.id?.disableAutoSelect(); } catch {}
+  if (typeof clearProtectedClientData === 'function') clearProtectedClientData();
   setSignedOutUi();
   if (showMessage) authToast('Contul Google a fost deconectat din aceasta sesiune.');
 }
 
+async function loadAuthenticatedApplicationData(token) {
+  if (typeof loadData !== 'function') throw new Error('Modulul de date nu este disponibil.');
+  await loadData(token);
+  if (typeof loadCriteria === 'function') loadCriteria();
+  if (typeof restoreLocalSourceState === 'function') restoreLocalSourceState();
+  if (typeof render === 'function') render();
+}
+
 async function acceptGoogleCredential(credential) {
+  let sessionValidated = false;
   try {
     const session = await commandApi('/auth/session', { method: 'POST' }, credential);
+    sessionValidated = true;
     commandIdToken = credential;
     commandUserEmail = session?.email || null;
+
+    await loadAuthenticatedApplicationData(commandIdToken);
     setAuthenticatedUi(commandUserEmail);
     authToast('Autentificare Google reusita.');
   } catch (error) {
     commandIdToken = null;
     commandUserEmail = null;
+    if (typeof clearProtectedClientData === 'function') clearProtectedClientData();
     setSignedOutUi();
-    authToast(error.status === 403 ? 'Contul Google nu este autorizat pentru aceasta aplicatie.' : `Autentificare esuata: ${error.message}`);
+    if (error.status === 403) {
+      authToast('Contul Google nu este autorizat pentru aceasta aplicatie.');
+    } else if (sessionValidated) {
+      authToast(`Autentificarea a reusit, dar datele protejate nu au putut fi incarcate: ${error.message}`);
+    } else {
+      authToast(`Autentificare esuata: ${error.message}`);
+    }
   }
 }
 
 async function initializeGoogleAuth() {
   installAuthControls();
+  setSignedOutUi();
   try {
     const config = await commandApi('/auth/config');
     if (!config?.configured || !config?.client_id) {
@@ -189,17 +230,21 @@ async function pollForCompletedRun(previousRunId, previousCompletedAt) {
   try {
     for (let attempt = 0; attempt < 60; attempt++) {
       await sleep(5000);
-      const response = await fetch(`./data/run-status.json?t=${Date.now()}`, { cache: 'no-store' });
+      if (!commandIdToken) return;
+      const response = await fetch(`./data/run-status.json?t=${Date.now()}`, {
+        headers: { Authorization: `Bearer ${commandIdToken}` },
+        cache: 'no-store',
+      });
+      if (response.status === 401) {
+        signOutCommandUser(false);
+        return;
+      }
       if (!response.ok) continue;
       const status = await response.json();
       const changed = status.run_id !== previousRunId || status.completed_at !== previousCompletedAt;
       if (!changed) continue;
 
-      if (typeof runStatus !== 'undefined') runStatus = status;
-      if (typeof updateRunStatus === 'function') updateRunStatus();
-      if (typeof loadData === 'function') await loadData();
-      if (typeof loadCriteria === 'function') loadCriteria();
-      if (typeof render === 'function') render();
+      await loadAuthenticatedApplicationData(commandIdToken);
 
       if (status.status === 'completed' || status.status === 'completed_with_errors') {
         authToast(`Verificare finalizata: ${status.jobs_published ?? 0} joburi publicate.`);
