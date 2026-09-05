@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/job-search-full.yml"
+      - "data/search-config.json"
   workflow_dispatch:
   schedule:
     - cron: "0 6,15 * * *"
@@ -26,31 +27,74 @@ jobs:
       - name: Check out repository
         uses: actions/checkout@v4
 
+      - name: Validate config and prepare queries
+        run: |
+          python3 - <<'PY'
+          import json, math
+          from pathlib import Path
+
+          config = json.loads(Path("data/search-config.json").read_text())
+          assert config.get("schema_version") == "1.0"
+          groups = config.get("role_groups") or {}
+          titles = []
+          for group in groups.values():
+              if group.get("enabled"):
+                  titles.extend(group.get("titles") or [])
+          titles = list(dict.fromkeys(titles))
+          assert titles, "No enabled role titles"
+          countries = config.get("search_country_codes") or []
+          assert countries, "No search countries"
+          freshness_days = max(1, math.ceil(int(config.get("freshness_hours", 24)) / 24))
+
+          core_groups = ("pm", "delivery", "service")
+          core_titles = []
+          for key in core_groups:
+              group = groups.get(key) or {}
+              if group.get("enabled"):
+                  core_titles.extend(group.get("titles") or [])
+          core_titles = list(dict.fromkeys(core_titles)) or titles
+
+          payloads = {
+              "geography": {
+                  "job_title_or": titles,
+                  "job_country_code_or": countries,
+                  "posted_at_max_age_days": freshness_days,
+                  "limit": 25,
+                  "include_total_results": True
+              },
+              "remote": {
+                  "job_title_or": titles,
+                  "remote": True,
+                  "posted_at_max_age_days": freshness_days,
+                  "limit": 25,
+                  "include_total_results": True
+              },
+              "core_remote": {
+                  "job_title_or": core_titles,
+                  "remote": True,
+                  "posted_at_max_age_days": freshness_days,
+                  "limit": 25,
+                  "include_total_results": True
+              }
+          }
+          Path("data/.work").mkdir(parents=True, exist_ok=True)
+          for name, payload in payloads.items():
+              Path(f"data/.work/{name}-request.json").write_text(json.dumps(payload))
+          print(f"Configured {len(titles)} role titles, countries={countries}, freshness={config.get('freshness_hours', 24)}h")
+          PY
+
       - name: Collect recent jobs
         run: |
           test -n "$JOBSPIPE_API_KEY"
-          mkdir -p data/.work
-          curl --fail-with-body --silent --show-error \
-            https://api.jobspipe.dev/v1/jobs/search \
-            -H "Authorization: Bearer $JOBSPIPE_API_KEY" \
-            -H "Content-Type: application/json" \
-            --data '{"job_title_or":["Project Manager","IT Project Manager","Technical Project Manager","Agile Project Manager","Delivery Manager","Technical Delivery Manager","Service Manager","Service Delivery Manager","Scrum Master","Program Manager","PMO Manager"],"job_country_code_or":["RO","BE","LU"],"posted_at_max_age_days":1,"limit":25,"include_total_results":true}' \
-            > data/.work/geography.json
-          curl --fail-with-body --silent --show-error \
-            https://api.jobspipe.dev/v1/jobs/search \
-            -H "Authorization: Bearer $JOBSPIPE_API_KEY" \
-            -H "Content-Type: application/json" \
-            --data '{"job_title_or":["Project Manager","IT Project Manager","Technical Project Manager","Agile Project Manager","Delivery Manager","Technical Delivery Manager","Service Manager","Service Delivery Manager","Scrum Master","Program Manager","PMO Manager"],"remote":true,"posted_at_max_age_days":1,"limit":25,"include_total_results":true}' \
-            > data/.work/remote.json
-          curl --fail-with-body --silent --show-error \
-            https://api.jobspipe.dev/v1/jobs/search \
-            -H "Authorization: Bearer $JOBSPIPE_API_KEY" \
-            -H "Content-Type: application/json" \
-            --data '{"job_title_or":["IT Project Manager","Technical Project Manager","Agile Project Manager","Technical Delivery Manager","Service Delivery Manager"],"remote":true,"posted_at_max_age_days":1,"limit":25,"include_total_results":true}' \
-            > data/.work/core_remote.json
-          jq -e '.data | type == "array"' data/.work/geography.json >/dev/null
-          jq -e '.data | type == "array"' data/.work/remote.json >/dev/null
-          jq -e '.data | type == "array"' data/.work/core_remote.json >/dev/null
+          for name in geography remote core_remote; do
+            curl --fail-with-body --silent --show-error \
+              https://api.jobspipe.dev/v1/jobs/search \
+              -H "Authorization: Bearer $JOBSPIPE_API_KEY" \
+              -H "Content-Type: application/json" \
+              --data @"data/.work/${name}-request.json" \
+              > "data/.work/${name}.json"
+            jq -e '.data | type == "array"' "data/.work/${name}.json" >/dev/null
+          done
 
       - name: Filter, score and deduplicate
         run: |
@@ -59,19 +103,35 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
 
+          config = json.loads(Path("data/search-config.json").read_text())
           now = datetime.now(timezone.utc)
+          freshness_hours = int(config.get("freshness_hours", 24))
+          fit_threshold = int(config.get("fit_threshold", 80))
+          keep_reposts = bool(config.get("keep_reposts", True))
+          search_countries = set(config.get("search_country_codes") or [])
+          europe = set(config.get("eligible_remote_country_codes") or [])
+          work_modes = config.get("work_modes") or {}
+
+          groups = config.get("role_groups") or {}
+          configured_titles = []
+          for group in groups.values():
+              if group.get("enabled"):
+                  configured_titles.extend(group.get("titles") or [])
+
+          company_patterns = config.get("excluded_company_patterns") or []
+          excluded_company = re.compile("|".join(f"(?:{p})" for p in company_patterns), re.I) if company_patterns else None
+          role_keywords = [re.escape(x) for x in (config.get("excluded_role_keywords") or [])]
+          excluded_role = re.compile(r"\b(?:" + "|".join(role_keywords) + r")\b", re.I) if role_keywords else None
+          erp_terms = [re.escape(x) for x in (config.get("deep_erp_terms") or [])]
+          deep_erp = re.compile(r"\b(?:" + "|".join(erp_terms) + r")\b", re.I) if erp_terms else None
+          target = re.compile(r"\b(project|program|programme|delivery|service|scrum|pmo)\b", re.I)
+
           raw = []
           totals = {}
           for name in ("geography", "remote", "core_remote"):
               payload = json.loads(Path(f"data/.work/{name}.json").read_text())
               totals[name] = payload.get("metadata", {}).get("total_results", len(payload.get("data", [])))
               raw.extend(payload.get("data", []))
-
-          target = re.compile(r"\b(project|program|programme|delivery|service|scrum|pmo)\b", re.I)
-          excluded_company = re.compile(r"star\s*storage", re.I)
-          excluded_role = re.compile(r"\b(construction|hvac|civil|mechanical|manufacturing|clinical|marketing|sales|event|facilities|facility|enablement|referral|customer support|training)\b", re.I)
-          deep_erp = re.compile(r"\b(SAP|ERP|S/4HANA|Dynamics 365)\b", re.I)
-          europe = {"RO","BE","LU","FR","DE","NL","PL","PT","ES","IT","IE","AT","CZ","SK","HU","BG","GR","HR","SI","EE","LV","LT","DK","SE","FI","NO","CH","CY","MT"}
 
           seen, selected, excluded = set(), [], []
           for j in raw:
@@ -85,28 +145,33 @@ jobs:
               remote = bool(j.get("remote")) or (j.get("work_arrangement") == "remote")
               hybrid = bool(j.get("hybrid")) or (j.get("work_arrangement") == "hybrid")
               posted = j.get("date_posted")
-              key = j.get("id") or (re.sub(r"\W+"," ",title.lower()).strip(), company.lower(), location.lower())
+              key = j.get("id") or (re.sub(r"\W+", " ", title.lower()).strip(), company.lower(), location.lower())
               reason = None
+
               if key in seen: reason = "duplicate"
               elif not target.search(title): reason = "title outside target"
-              elif excluded_company.search(company): reason = "excluded company"
-              elif excluded_role.search(title): reason = "non-IT role"
-              elif deep_erp.search(text) and re.search(r"implement|consultant|specialist|functional", text, re.I): reason = "deep ERP/SAP implementation"
-              elif remote and code and code not in europe and not any(c in ("Romania","Europe","European Union") for c in countries): reason = "remote geography not eligible"
+              elif excluded_company and excluded_company.search(company): reason = "excluded company"
+              elif excluded_role and excluded_role.search(title): reason = "non-IT role"
+              elif deep_erp and deep_erp.search(text) and re.search(r"implement|consultant|specialist|functional", text, re.I): reason = "deep ERP/SAP implementation"
+              elif remote and not work_modes.get("remote", True): reason = "remote disabled by configuration"
+              elif hybrid and not work_modes.get("hybrid", True): reason = "hybrid disabled by configuration"
+              elif remote and code and europe and code not in europe and not any(c in ("Romania", "Europe", "European Union") for c in countries): reason = "remote geography not eligible"
               elif remote and not code:
                   eligibility_text = f"{location} {j.get('url') or ''} {j.get('source_url') or ''} {' '.join(countries)}"
                   if not re.search(r"Europe|European|EMEA|Romania|Ukraine|Poland|Portugal|Spain|France|Germany|Belgium|Luxembourg|Netherlands|Ireland|Italy|Austria|Czech|Slovak|Hungary|Bulgaria|Greece|Croatia|Slovenia|Estonia|Latvia|Lithuania|Denmark|Sweden|Finland|Norway|Switzerland|Cyprus|Malta", eligibility_text, re.I):
                       reason = "remote eligibility for Europe not explicit"
+              if not reason and not keep_reposts and bool(j.get("reposted")):
+                  reason = "repost disabled by configuration"
               if not reason and ((j.get("sources") or [{}])[0].get("provider") == "indeed") and not j.get("final_url"):
                   reason = "Indeed-only link"
               if not reason and posted:
                   try:
-                      if (now - datetime.fromisoformat(posted.replace("Z","+00:00"))).total_seconds() > 86400:
-                          reason = "older than 24 hours"
+                      if (now - datetime.fromisoformat(posted.replace("Z", "+00:00"))).total_seconds() > freshness_hours * 3600:
+                          reason = f"older than {freshness_hours} hours"
                   except Exception:
                       reason = "publication time not verifiable"
               if reason:
-                  excluded.append({"title":title,"company":company,"reason":reason})
+                  excluded.append({"title": title, "company": company, "reason": reason})
                   continue
               seen.add(key)
 
@@ -124,13 +189,13 @@ jobs:
               if re.search(r"European Commission|European Parliament|EU institution|public sector", text, re.I): score += 7
               if re.search(r"bank|financial|compliance|regulated|governance", text, re.I): score += 5
               if re.search(r"Dutch|German|native French|fluent French", text, re.I): score -= 7
-              if not remote and not hybrid and code not in ("RO", ""): score -= 12
+              if not remote and not hybrid and code not in search_countries and code: score -= 12
               score = max(40, min(96, score))
 
               age = 0
               if posted:
                   try:
-                      age = max(0, int((now - datetime.fromisoformat(posted.replace("Z","+00:00"))).total_seconds() // 3600))
+                      age = max(0, int((now - datetime.fromisoformat(posted.replace("Z", "+00:00"))).total_seconds() // 3600))
                   except Exception:
                       age = 0
 
@@ -139,12 +204,12 @@ jobs:
               url = j.get("final_url") or j.get("source_url") or j.get("url")
               pros = []
               if remote: pros.append("Remote")
-              if code in ("RO","BE","LU"): pros.append("Geografie prioritara")
+              if code in search_countries: pros.append("Geografie prioritara")
               if re.search(r"bank|financial|compliance|regulated|governance", text, re.I): pros.append("Mediu reglementat relevant")
               if re.search(r"European Commission|European Parliament|EU institution|public sector", text, re.I): pros.append("Context public sau institutii europene")
               if not pros: pros.append("Titlu si responsabilitati relevante pentru profil")
               risks = []
-              if not remote and code not in ("RO",""): risks.append("Necesita prezenta in afara Romaniei")
+              if not remote and code and code not in search_countries: risks.append("Necesita prezenta in afara geografiei prioritare")
               if re.search(r"Dutch|German|native French|fluent French", text, re.I): risks.append("Cerinta lingvistica trebuie verificata")
               if not re.search(r"contract|freelance|b2b", text, re.I): risks.append("Forma B2B nu este confirmata")
               if not risks: risks.append("Conditiile contractuale trebuie confirmate")
@@ -153,9 +218,9 @@ jobs:
                   "id": j.get("id"), "title": title, "company": company,
                   "initial": "".join(x[0] for x in company.split()[:2]).upper() or "?",
                   "fit": score, "location": location, "mode": arrangements,
-                  "type": employment.replace("_"," ").title(), "age": age,
-                  "remote": remote, "b2b": any(x in ("contract","contractor","freelance") for x in (j.get("employment_statuses") or [])),
-                  "repost": bool(j.get("reposted")), "status": "new" if score >= 80 else "review",
+                  "type": employment.replace("_", " ").title(), "age": age,
+                  "remote": remote, "b2b": any(x in ("contract", "contractor", "freelance") for x in (j.get("employment_statuses") or [])),
+                  "repost": bool(j.get("reposted")), "status": "new" if score >= fit_threshold else "review",
                   "pros": pros[:2], "risks": risks[:2], "url": url,
                   "description": description.strip(),
                   "date_posted": posted, "source": (j.get("sources") or [{}])[0].get("provider"),
@@ -165,15 +230,16 @@ jobs:
           selected.sort(key=lambda x: (-x["fit"], x["age"], x["company"].lower()))
           output = {
               "schema_version": "1.0",
-              "generated_at": now.isoformat(), "freshness_hours": 24,
+              "generated_at": now.isoformat(),
+              "freshness_hours": freshness_hours,
               "criteria": {
-                  "roles": ["Project Manager","IT Project Manager","Technical/Agile PM","Delivery/Service Manager","Scrum Master","Program/PMO Manager"],
-                  "geography": ["Romania","Brussels/Belgium","Luxembourg","eligible remote Europe"],
-                  "work_mode_priority": ["Remote","Hybrid"],
-                  "source_strategy": "all active sources equally",
-                  "fit_threshold": 80,
-                  "keep_reposts": True,
-                  "exclusions": ["Star Storage group","deep ERP/SAP implementation","non-IT roles"]
+                  "roles": configured_titles,
+                  "geography": config.get("search_country_codes") or [],
+                  "work_mode_priority": config.get("work_mode_priority") or [],
+                  "source_strategy": config.get("source_strategy") or "all active sources equally",
+                  "fit_threshold": fit_threshold,
+                  "keep_reposts": keep_reposts,
+                  "exclusions": config.get("exclusions") or []
               },
               "raw_matches_available": totals,
               "records_inspected": len(raw),
@@ -206,6 +272,7 @@ jobs:
           import json
           from pathlib import Path
 
+          config = json.loads(Path("data/search-config.json").read_text())
           jobs = json.loads(Path("data/jobs.json").read_text())
           status = json.loads(Path("data/run-status.json").read_text())
 
@@ -213,6 +280,7 @@ jobs:
           status_required = {"schema_version","run_id","status","started_at","completed_at","sources","records_inspected","jobs_published","excluded","limitations"}
           job_required = {"title","company","fit","location","mode","remote","b2b","repost","status","pros","risks","description","date_posted","source"}
 
+          assert config.get("schema_version") == "1.0"
           assert jobs.get("schema_version") == "1.0"
           assert status.get("schema_version") == "1.0"
           assert not (root_required - jobs.keys()), root_required - jobs.keys()
@@ -222,7 +290,7 @@ jobs:
           for index, job in enumerate(jobs["jobs"]):
               missing = job_required - job.keys()
               assert not missing, f"job {index} missing {sorted(missing)}"
-          print("JSON contract valid")
+          print("Configuration and JSON contracts valid")
           PY
 
       - name: Save results
