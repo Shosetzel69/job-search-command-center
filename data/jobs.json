@@ -1,5 +1,5 @@
 {
-  "generated_at": "2026-09-04T18:08:39.254378+00:00",
+  "generated_at": "2026-09-05T10:02:14.236184+00:00",
   "freshness_hours": 24,
   "criteria": {
     "roles": [
@@ -30,52 +30,84 @@
     ]
   },
   "raw_matches_available": {
-    "geography": 124,
-    "remote": 334,
-    "core_remote": 24
+    "geography": 89,
+    "remote": 295,
+    "core_remote": 12
   },
-  "records_inspected": 74,
-  "results": 1,
-  "excluded_count": 73,
-  "jobs": [
-    {
-      "id": "e2e5be11-5bce-4f71-8e2f-24ef190bea16",
-      "title": "Project Manager",
-      "company": "D-ploy",
-      "initial": "D",
-      "fit": 89,
-      "location": "TELECOMMUTE",
-      "mode": "Remote",
-      "type": "Full Time",
-      "age": 7,
-      "remote": true,
-      "b2b": false,
-      "repost": false,
-      "status": "new",
-      "pros": [
-        "Remote",
-        "Mediu reglementat relevant"
-      ],
-      "risks": [
-        "Cerinta lingvistica trebuie verificata"
-      ],
-      "url": "https://jobs.workable.com/view/u24rayRGATWiyn5nvNG3yf/remote-project-manager-in-czechia-at-d-ploy",
-      "description": "D-ploy is an IT and Engineering Solutions company with operations throughout the EMEA region including Switzerland, Germany, Czech Republic, Austria, UK, as well as the USA.\n\nWe pride ourselves on delivering innovative and superior services and solutions to numerous industry-leading clients. By building relationships and trusted partnerships within the IT community, we optimize our customer’s IT productivity and contribute to the organization’s success and value.\n\nWe are interested in talking to engaging, flexible, and solution-oriented individuals who are looking to become a part of a dynamically growing and international organization. We are focused on creating value where IT counts, join us!\n\nResponsabilities\n\n• Establish project governance, delivery methodology, reporting cadence, and management controls.\n\n• Own and maintain the integrated project plan and delivery roadmap.\n\n• Drive project execution to achieve the agreed milestones and deliverables.\n\n• Manage project scope, schedule, budget, quality, risks, issues, dependencies, and change requests.\n\n• Lead governance meetings, steering committees, project reviews, and decision forums.\n\n• Define and maintain delivery metrics, project reporting, and executive dashboards.\n\n• Direct activities related to application development, testing, database implementation, environment readiness, data migration, release management, cutover, and production deployment.\n\n• Ensure completion of all validation, acceptance, readiness, compliance, and approval activities required for milestone achievement.\n\n• Manage vendor performance and delivery commitments against agreed contractual obligations.\n\n• Ensure project documentation, knowledge transfer deliverables, operational readiness requirements, and formal transition to support organizations are completed and approved.\n\n• 8+ years of project management experience leading complex enterprise IT programs and projects through the complete project lifecycle, including initiation, planning, requirements management, execution, testing, deployment, hypercare, and transition to operations.\n • Demonstrated experience establishing and governing project delivery frameworks, including project plans, governance structures, status reporting, risk and issue management, dependency management, change control, scope management, and executive decision-making processes.\n • Proven track record leading cross-functional global teams and driving delivery across business, technology, infrastructure, vendor, and third-party organizations.\n • Extensive experience directing application development initiatives, database implementation projects, environment provisioning, data migration execution, release management activities, cutover planning, and production deployments.\n • Proven ability to manage project delivery against agreed scope, schedule, budget, quality, and business objectives while ensuring timely escalation and resolution of risks, issues, dependencies, and decisions.\n • Strong communication and presentation skills, including preparation and delivery of executive-level reporting, steering committee materials, governance updates, project reviews, and stakeholder communications.\n • Experience delivering projects within regulated environments. Experience in pharmaceutical, healthcare, biotechnology, or life sciences organizations is preferred.\n • Professional project management certification such as PMP, PRINCE2, Agile Project Management, SAFe, or equivalent is preferred.\n • Fluent written and spoken English.\n\nCandidates must declare Criminal record extract not older than three months\n\n- Broad range of activities, tasks, and projects\n\n- Flexible working conditions\n\n- Minimum 5 weeks of vacation\n\n- Paid sick days\n\n- Meal vouchers\n\n- Vouchers (B-day voucher, wedding, and new born surprise)\n\n- Contributions to wellness programs (multisport card)\n\n- Fishing for Friends program – our referral program\n\n- Refreshments in the D-ploy office\n\n- Further development and professional advancement\n\n- Friendly and international working environment\n\n- Company-sponsored events\n\n- Competitive salary and various benefits\n\n Is IT in your DNA?\nIf you believe you are a good match for this role, or any other opportunities for which D-ploy is currently staffing, then we are very keen to speak with you. You can apply though a variety of channels, including our website www.d-ploy.ch or by reaching our directly to our recruitment team recruiting@d-ploy.ch.",
-      "date_posted": "2026-09-04T10:22:27.650Z",
-      "source": "workable",
-      "verified_at": "2026-09-04 15:07:08"
-    }
-  ],
+  "records_inspected": 62,
+  "results": 0,
+  "excluded_count": 62,
+  "jobs": [],
   "excluded_sample": [
+    {
+      "title": "Project Manager Haute-Tension",
+      "company": "EES INFRA",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "(Senior) Project Manager | Industriële ICT",
+      "company": "Equans Belux",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "Project & Program Manager",
+      "company": "Just Eat Takeaway.com",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "Design & Utilization - Sr Project Manager Capacity & Yield Management",
+      "company": "Bpost",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Assistant Project Manager | Water Process",
+      "company": "Equans BeLux",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Kwery - IT Project Manager",
+      "company": "JoBBsquare Belgie",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Project Manager @ Employee Benefits - NL",
+      "company": "P&V Group",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "IT Project Manager & Scrum Master (Freelance optional)",
+      "company": "EngiFlex",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Compensation & Benefits Project Manager",
+      "company": "Eurofins",
+      "reason": "Indeed-only link"
+    },
     {
       "title": "Senior Scrum Master (M/F/H)",
       "company": "Everience Benelux",
-      "reason": "publication time not verifiable"
+      "reason": "Indeed-only link"
     },
     {
       "title": "IT Program Manager - Architecture FR/EN",
       "company": "NSI IT SOFTWARE & SERVICES",
       "reason": "deep ERP/SAP implementation"
+    },
+    {
+      "title": "Implementation Project Manager",
+      "company": "Safeguard Global",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "IT Project Manager Scrum Master",
+      "company": "Keystone Solutions",
+      "reason": "Indeed-only link"
+    },
+    {
+      "title": "Innovation Project Manager HEMS",
+      "company": "Eneco",
+      "reason": "Indeed-only link"
     },
     {
       "title": "Digital Transformation Project Manager",
@@ -98,74 +130,14 @@
       "reason": "Indeed-only link"
     },
     {
-      "title": "Senior Release & Delivery Manager",
-      "company": "Luxoft",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Service Manager Retail",
-      "company": "Brussels Airport",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Service Delivery Project Manager",
-      "company": "Randstad Belgium",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Engineering Delivery Manager",
-      "company": "Thales",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Mechanical, Electrical and Plumbing (MEP) Project Manager",
-      "company": "NATO",
-      "reason": "non-IT role"
-    },
-    {
-      "title": "SAP Project Manager",
-      "company": "OneSource Consulting",
+      "title": "Commercial Service Manager_3157",
+      "company": "Allianz",
       "reason": "deep ERP/SAP implementation"
     },
     {
-      "title": "Project Manager",
-      "company": "Snowstack",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Project Manager",
-      "company": "habeas",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Project Manager Residentiële Bouw",
-      "company": "Oak properties BVBA",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Design & Utilization - Project Manager Customer Journey",
-      "company": "Bpost",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Project Manager Passenger Aviation",
-      "company": "Brussels Airport",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Tyneso - Service Delivery & Project Manager",
-      "company": "JoBBsquare Belgie",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Digital Transformation Project Manager",
-      "company": "Stanley/Stella",
-      "reason": "publication time not verifiable"
-    },
-    {
-      "title": "Industrial Project Manager",
-      "company": "SII Group Belgium",
-      "reason": "publication time not verifiable"
+      "title": "Senior Release & Delivery Manager",
+      "company": "Luxoft",
+      "reason": "Indeed-only link"
     }
   ]
 }
