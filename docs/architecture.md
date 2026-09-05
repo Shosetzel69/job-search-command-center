@@ -12,20 +12,22 @@ Frontend static (GitHub Pages)
   |
   +--> data/jobs.json
   +--> data/run-status.json
+  +--> data/search-config.json
 
 GitHub Actions
   |
-  +--> rulare programata de doua ori pe zi
-  +--> rulare manuala prin workflow_dispatch
-  +--> colectare surse
+  v
+scripts/job_search.py
+  |
+  +--> connectors
   +--> normalizare
   +--> geo-eligibility
-  +--> filtrare si scoring
-  +--> deduplicare
-  +--> generare JSON
+  +--> deduplicare / repost
+  +--> filtrare
+  +--> scoring
   |
   v
-Repository GitHub
+JSON versionat in repository
   |
   v
 GitHub Pages
@@ -38,31 +40,49 @@ Nu exista in MVP un backend public permanent si nici un server de baza de date a
 - frontend static in `frontend/`;
 - publicare prin GitHub Pages;
 - citeste rezultatele generate de workflow;
+- citeste configuratia canonica din `data/search-config.json`;
 - afiseaza descrierea jobului, linkul direct, fit, riscuri si sursa;
 - nu contine secrete;
-- configuratia locala din browser nu este considerata sursa unica de adevar pentru executia workflow-ului.
+- modificarile locale din browser nu sunt configuratie efectiva pana cand nu sunt persistate securizat.
 
 ChatGPT Sites ramane optional pentru prototipare, nu dependinta runtime a MVP-ului curent.
 
 ## 3. Motor de executie
 
-Motorul MVP este GitHub Actions.
+GitHub Actions este schedulerul si orchestratorul infrastructural.
 
-Responsabilitati:
+Logica de cautare nu mai este hard-codata in YAML. Ea ruleaza in `scripts/job_search.py`.
+
+Responsabilitati GitHub Actions:
 
 - schedule de doua ori pe zi;
-- rulare manuala;
-- orchestrare surse active;
-- toate sursele active sunt tratate egal, fara limita de 5 prioritare;
-- eroarea unei surse nu opreste procesarea celorlalte;
-- progres si rezultat persistate in `data/run-status.json`;
-- rezultatele persistate in `data/jobs.json`.
+- `workflow_dispatch` pentru rulare manuala autorizata;
+- injectarea secretelor;
+- timeout si concurrency control;
+- executia motorului;
+- validarea output-ului;
+- commit-ul rezultatelor.
+
+Responsabilitati motor cautare:
+
+- citirea configuratiei canonice;
+- executarea connectorilor;
+- izolarea erorilor de colectare;
+- normalizare si validare;
+- geo-eligibility;
+- deduplicare si detectare repostari;
+- filtrare si scoring;
+- generarea `jobs.json` si `run-status.json`.
 
 ## 4. Connectors si surse
 
-Se pastreaza principiul de connector separat per tip de sursa/API.
+Exista contractul `JobConnector`.
 
-Fiecare connector trebuie sa produca acelasi model intern de job.
+Primul adapter implementat este `JobsPipeConnector`.
+
+Adaugarea unui provider nou trebuie sa se faca printr-un connector nou, fara modificarea logicii de scoring.
+
+Fiecare connector trebuie sa produca date care pot fi transformate in acelasi model intern de job.
 
 Campuri minime:
 
@@ -79,7 +99,9 @@ Campuri minime:
 - remote/hybrid;
 - metadata necesara geo-eligibility.
 
-Registrul surselor si starea active/inactive trebuie sa devina o configuratie persistenta comuna pentru UI si workflow.
+Registrul `data/sources.json` ramane lista de surse vizibila in UI. Legarea active/inactive de executia reala a connectorilor este inca de implementat.
+
+Toate sursele active trebuie tratate egal. Nu exista prioritate 1-5.
 
 ## 5. Procesare
 
@@ -98,15 +120,17 @@ Collect
 
 Geo-eligibility ramane separat de matching/scoring.
 
-Repostarile sunt marcate, nu eliminate automat.
+Repostarile sunt marcate, nu eliminate automat, daca `keep_reposts=true`.
 
 ## 6. Persistenta
 
 Pentru MVP curent:
 
-- rezultate publicabile: JSON versionat in repository;
-- stare rulare: JSON versionat in repository;
-- configuratie persistenta: de definit si separata de `localStorage`;
+- rezultate publicabile: `data/jobs.json`;
+- stare rulare: `data/run-status.json`;
+- configuratie canonica: `data/search-config.json`;
+- registru surse: `data/sources.json`;
+- aplicari: `data/applications.json`;
 - secrete: GitHub Actions Secrets.
 
 SQLite nu este necesar pentru fluxul static-first curent.
@@ -115,7 +139,27 @@ SQLite ramane optiunea preferata daca introducem un backend persistent, istoric 
 
 PostgreSQL ramane rezervat pentru multi-user, concurenta ridicata sau replicare.
 
-## 7. Rulare din interfata
+## 7. Configuratie
+
+`data/search-config.json` este sursa de adevar pentru executia cautarii.
+
+Contine:
+
+- roluri;
+- mod de lucru;
+- vechime maxima;
+- prag fit;
+- regula repostari;
+- interval B2B;
+- disponibilitate;
+- geografie;
+- excluderi.
+
+Frontend-ul o citeste. Workflow-ul o foloseste efectiv.
+
+Scrierea configuratiei din frontend necesita un mecanism securizat si este urmarita separat.
+
+## 8. Rulare din interfata
 
 Frontend-ul static nu va contine GitHub PAT, API keys sau alte secrete.
 
@@ -125,7 +169,7 @@ Pentru rulare initiata de utilizator este necesar un mecanism securizat intermed
 
 Pana la implementarea acestui mecanism, schedule-ul GitHub Actions ramane metoda principala de executie.
 
-## 8. Publicare
+## 9. Publicare
 
 Tinta MVP:
 
@@ -133,19 +177,21 @@ Tinta MVP:
 GitHub Actions -> data/*.json -> GitHub Pages -> browser
 ```
 
-Publicarea paginii statice trebuie automatizata dupa actualizarea datelor sau a frontend-ului.
+Workflow-ul de deploy este implementat. Activarea initiala a GitHub Pages la nivelul repository-ului ramane un pas administrativ manual.
 
-## 9. Securitate
+## 10. Securitate
 
 - toate cheile API stau in GitHub Actions Secrets;
 - niciun secret in frontend, JSON public sau repository;
 - permisiunile workflow-urilor sunt minime;
 - inputurile externe sunt tratate ca date nevalidate;
 - descrierea jobului este afisata ca text sigur, fara executie HTML arbitrar;
-- linkurile externe se deschid separat si folosesc protectiile browserului;
-- workflow-urile au timeout si concurrency control.
+- linkurile externe folosesc `noopener noreferrer`;
+- workflow-urile au timeout si concurrency control;
+- un esec total de colectare nu suprascrie lista de joburi cu un rezultat gol fals;
+- erorile de colectare sunt raportate in `source_results`.
 
-## 10. NAS Synology DS213j
+## 11. NAS Synology DS213j
 
 DS213j nu este host principal pentru aplicatie.
 
@@ -157,7 +203,7 @@ Rol permis:
 
 Nu se foloseste pentru Docker/Container Manager sau backend Node modern.
 
-## 11. Integrari Google
+## 12. Integrari Google
 
 Nu sunt necesare pentru fluxul MVP de cautare.
 
@@ -171,13 +217,13 @@ Planificate optional:
 
 Google nu este sursa de agregare a joburilor.
 
-## 12. MCP
+## 13. MCP
 
 MCP ramane in afara MVP-ului.
 
 Poate fi introdus in etapa 2 daca este necesar acces AI direct la functiile sistemului.
 
-## 13. Evolutie
+## 14. Evolutie
 
 Introducem backend + SQLite numai daca apar cerinte care nu pot fi rezolvate curat in modelul static-first, de exemplu:
 
