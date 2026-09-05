@@ -5,16 +5,40 @@ let jobs=[];
 let applications=[];
 let sources=[];
 let runStatus=null;
+let canonicalConfig=null;
+let savedCriteria=null;
+let draftExclusions=[];
 let view='jobs',active='all',visible=[];
-
-const defaultCriteria={rolePm:true,roleDelivery:true,roleService:true,roleScrum:true,workRemote:true,workHybrid:true,freshness:'24',fitThreshold:'80',keepReposts:true,rateMin:'250',rateMax:'650',immediateStart:true,exclusions:['Star Storage si companiile grupului','Implementari ERP care cer experienta specializata ampla','Roluri non-IT']};
-let savedCriteria=JSON.parse(localStorage.getItem('selectionCriteria')||'null')||defaultCriteria;
-let draftExclusions=[...(savedCriteria.exclusions||[])];
 
 async function fetchJson(path){
   const response=await fetch(path,{cache:'no-store'});
   if(!response.ok)throw new Error(`${path}: HTTP ${response.status}`);
   return response.json();
+}
+
+function validateContract(payload,name){
+  if(payload?.schema_version!==DATA_SCHEMA)throw new Error(`${name}: versiune contract ${payload?.schema_version||'lipsa'}; asteptat ${DATA_SCHEMA}`);
+}
+
+function criteriaFromConfig(config){
+  const groups=config?.role_groups||{};
+  const modes=config?.work_modes||{};
+  return {
+    rolePm:groups.pm?.enabled!==false,
+    roleDelivery:groups.delivery?.enabled!==false,
+    roleService:groups.service?.enabled!==false,
+    roleScrum:groups.scrum?.enabled!==false,
+    roleProgram:groups.program?.enabled!==false,
+    workRemote:modes.remote!==false,
+    workHybrid:modes.hybrid!==false,
+    freshness:String(config?.freshness_hours??24),
+    fitThreshold:String(config?.fit_threshold??80),
+    keepReposts:config?.keep_reposts!==false,
+    rateMin:String(config?.rate_min_eur_day??250),
+    rateMax:String(config?.rate_max_eur_day??650),
+    immediateStart:config?.immediate_start!==false,
+    exclusions:Array.isArray(config?.exclusions)?[...config.exclusions]:[]
+  };
 }
 
 function ageHours(value){
@@ -59,19 +83,21 @@ function normalizeApplication(a){
   };
 }
 
-function validateContract(payload,name){
-  if(payload?.schema_version!==DATA_SCHEMA)throw new Error(`${name}: versiune contract ${payload?.schema_version||'lipsa'}; asteptat ${DATA_SCHEMA}`);
-}
-
 async function loadData(){
-  const [jobPayload,statusPayload,applicationPayload,sourcePayload]=await Promise.all([
+  const [jobPayload,statusPayload,applicationPayload,sourcePayload,configPayload]=await Promise.all([
     fetchJson('./data/jobs.json'),
     fetchJson('./data/run-status.json'),
     fetchJson('./data/applications.json'),
-    fetchJson('./data/sources.json')
+    fetchJson('./data/sources.json'),
+    fetchJson('./data/search-config.json')
   ]);
   validateContract(jobPayload,'jobs.json');
   validateContract(statusPayload,'run-status.json');
+  validateContract(configPayload,'search-config.json');
+  canonicalConfig=configPayload;
+  const localCriteria=JSON.parse(localStorage.getItem('selectionCriteria')||'null');
+  savedCriteria=localCriteria||criteriaFromConfig(canonicalConfig);
+  draftExclusions=[...(savedCriteria.exclusions||[])];
   jobs=(jobPayload.jobs||[]).map(normalizeJob);
   applications=(applicationPayload.applications||[]).map(normalizeApplication);
   sources=(sourcePayload.sources||[]).map(s=>({category:s.category||'Altele',name:s.name||'Sursa',url:s.url||'#',active:s.active!==false}));
@@ -97,7 +123,7 @@ function setHeaderDate(){
 function baseRows(){return view==='applications'?applications:view==='review'?jobs.filter(j=>j.status==='review'):jobs}
 
 function setCounts(){
-  const threshold=Number(savedCriteria.fitThreshold||80);
+  const threshold=Number(savedCriteria?.fitThreshold||80);
   const base=baseRows();
   $('#countJobs').textContent=jobs.length;
   $('#countReview').textContent=jobs.filter(j=>j.status==='review').length;
@@ -114,7 +140,7 @@ function setCounts(){
 
 function renderJobs(){
   const q=($('#search').value||'').toLowerCase();
-  const threshold=Number(savedCriteria.fitThreshold||80);
+  const threshold=Number(savedCriteria?.fitThreshold||80);
   visible=baseRows().filter(j=>{
     const filterOk=active==='all'||active==='high'&&!j.isApplication&&j.fit>=threshold||active==='remote'&&j.remote||active==='b2b'&&j.b2b;
     const text=`${j.title} ${j.company} ${j.description} ${j.source}`.toLowerCase();
@@ -144,13 +170,13 @@ function renderSources(){
     const source=sources.find(v=>v.url===x.dataset.url);
     if(source)source.active=x.checked;
     localStorage.setItem('sourceState',JSON.stringify(Object.fromEntries(sources.map(s=>[s.url,s.active]))));
-    toast('Starea sursei este salvata local; sincronizarea cu workflow-ul este in lucru.');
+    toast('Starea sursei este salvata local; sincronizarea cu workflow-ul depinde de ARCH #19.');
   });
 }
 
 function currentCriteria(){
   const c={};
-  ['rolePm','roleDelivery','roleService','roleScrum','workRemote','workHybrid','keepReposts','immediateStart'].forEach(id=>c[id]=$('#'+id).checked);
+  ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','keepReposts','immediateStart'].forEach(id=>c[id]=$('#'+id).checked);
   c.freshness=Number($('#freshness').value);c.fitThreshold=Number($('#fitThreshold').value);c.exclusions=[...draftExclusions];return c;
 }
 
@@ -158,11 +184,11 @@ function previewCriteria(){
   const c=currentCriteria();
   const rows=jobs.filter(j=>{
     const t=j.title.toLowerCase();
-    const role=t.includes('scrum')?c.roleScrum:t.includes('service')?c.roleService:t.includes('delivery')||t.includes('technical')?c.roleDelivery:c.rolePm;
+    const role=t.includes('scrum')?c.roleScrum:t.includes('program')||t.includes('programme')||t.includes('pmo')?c.roleProgram:t.includes('service')?c.roleService:t.includes('delivery')||t.includes('technical')?c.roleDelivery:c.rolePm;
     const mode=j.remote?c.workRemote:j.mode.toLowerCase()==='hybrid'?c.workHybrid:true;
     const fresh=j.age<=c.freshness;
     const repost=c.keepReposts||!j.repost;
-    const excluded=c.exclusions.some(x=>{const q=x.toLowerCase();return(q.includes('star storage')&&j.company.toLowerCase().includes('star storage'))||(q.includes('erp')&&t.includes('erp'))||(q.includes('non-it')&&!t.match(/project|scrum|service|delivery|technical|it/))});
+    const excluded=c.exclusions.some(x=>{const q=x.toLowerCase();return(q.includes('star storage')&&j.company.toLowerCase().includes('star storage'))||(q.includes('erp')&&t.includes('erp'))||(q.includes('non-it')&&!t.match(/project|program|programme|pmo|scrum|service|delivery|technical|it/))});
     return role&&mode&&fresh&&repost&&!excluded;
   });
   $('#metricJobs').textContent=rows.length;$('#metricHigh').textContent=rows.filter(j=>j.fit>=c.fitThreshold).length;$('#metricReposts').textContent=rows.filter(j=>j.repost).length;$('#metricRemote').textContent=rows.filter(j=>j.remote).length;$('#metricHigh').closest('article').querySelector('em').textContent=`>= ${c.fitThreshold}%`;
@@ -188,7 +214,16 @@ function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,c=>({'&':
 function escapeAttribute(value){return escapeHtml(value)}
 function markCriteriaDirty(){$('#criteriaState').textContent='Modificari nesalvate';$('#criteriaState').classList.add('dirty');previewCriteria()}
 function renderExclusions(){$('#selectedExclusions').innerHTML=draftExclusions.length?draftExclusions.map((x,i)=>`<button type="button" class="exclusion-chip" data-index="${i}">${escapeHtml(x)}<span aria-hidden="true">×</span></button>`).join(''):'<span class="empty-selection">Nicio excludere selectata.</span>';$$('.exclusion-chip').forEach(x=>x.onclick=()=>{draftExclusions.splice(+x.dataset.index,1);markCriteriaDirty();renderExclusions()})}
-function loadCriteria(){const c=savedCriteria;['rolePm','roleDelivery','roleService','roleScrum','workRemote','workHybrid','keepReposts','immediateStart'].forEach(id=>$('#'+id).checked=c[id]??defaultCriteria[id]);$('#freshness').value=c.freshness||'24';$('#fitThreshold').value=c.fitThreshold||'80';$('#rateMin').value=c.rateMin||'250';$('#rateMax').value=c.rateMax||'650';renderExclusions()}
+
+function loadCriteria(){
+  const fallback=criteriaFromConfig(canonicalConfig||{}),c=savedCriteria||fallback;
+  ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','keepReposts','immediateStart'].forEach(id=>$('#'+id).checked=c[id]??fallback[id]);
+  $('#freshness').value=String(c.freshness||fallback.freshness||'24');
+  $('#fitThreshold').value=String(c.fitThreshold||fallback.fitThreshold||'80');
+  $('#rateMin').value=String(c.rateMin||fallback.rateMin||'250');
+  $('#rateMax').value=String(c.rateMax||fallback.rateMax||'650');
+  renderExclusions();
+}
 
 function bindUi(){
   $$('.nav[data-view]').forEach(btn=>btn.onclick=()=>{$$('.nav[data-view]').forEach(x=>x.classList.remove('active'));btn.classList.add('active');view=btn.dataset.view;active='all';$('h1').textContent={jobs:'Joburi noi',review:'De evaluat',applications:'Aplicari',criteria:'Criterii de selectie',sources:'Surse'}[view];$('.summary').hidden=!['jobs','criteria'].includes(view);$('.toolbar:not(.source-toolbar)').hidden=!['jobs','review'].includes(view);$('#sourceToolbar').hidden=view!=='sources';$('#criteriaPanel').hidden=view!=='criteria';$('.workspace').hidden=view==='criteria';$('#runSearch').hidden=view==='criteria';render()});
@@ -198,13 +233,14 @@ function bindUi(){
   $('#runSearch').onclick=()=>toast('Rularea din interfata necesita trigger-ul securizat ARCH #19. Cautarea automata ramane activa de doua ori pe zi.');
   $('#criteriaPanel').addEventListener('change',markCriteriaDirty);$('#criteriaPanel').addEventListener('input',markCriteriaDirty);
   $('#exclusionSuggestions').onchange=e=>{if(e.target.value&&!draftExclusions.includes(e.target.value)){draftExclusions.push(e.target.value);markCriteriaDirty();renderExclusions()}e.target.value=''};
-  $('#saveCriteria').onclick=()=>{const c=currentCriteria();c.rateMin=$('#rateMin').value;c.rateMax=$('#rateMax').value;savedCriteria=c;localStorage.setItem('selectionCriteria',JSON.stringify(c));$('#criteriaState').textContent='Preferinte salvate local';$('#criteriaState').classList.remove('dirty');toast('Preferintele sunt salvate local; sincronizarea cu workflow-ul este urmarita in ARCH #18.');};
+  $('#saveCriteria').onclick=()=>{const c=currentCriteria();c.rateMin=$('#rateMin').value;c.rateMax=$('#rateMax').value;savedCriteria=c;localStorage.setItem('selectionCriteria',JSON.stringify(c));$('#criteriaState').textContent='Preferinte salvate local';$('#criteriaState').classList.remove('dirty');toast('Preferintele sunt salvate local. Configuratia canonica este data/search-config.json; scrierea securizata este urmarita in ARCH #19.');};
 }
 
 async function init(){
-  setHeaderDate();loadCriteria();bindUi();
+  setHeaderDate();bindUi();
   try{
     await loadData();
+    loadCriteria();
     const localSourceState=JSON.parse(localStorage.getItem('sourceState')||'null');
     if(localSourceState)sources.forEach(s=>{if(Object.hasOwn(localSourceState,s.url))s.active=Boolean(localSourceState[s.url])});
     render();
