@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260905T182408Z",
-  "status": "failed",
-  "started_at": "2026-09-05T18:24:08.048609+00:00",
-  "completed_at": "2026-09-05T18:24:08.049764+00:00",
+  "run_id": "github-20260905T205632Z",
+  "status": "completed",
+  "started_at": "2026-09-05T20:56:32.387450+00:00",
+  "completed_at": "2026-09-05T20:56:45.107646+00:00",
   "sources": [
     "jobspipe-apify"
   ],
@@ -11,30 +11,30 @@
     {
       "connector": "jobspipe-apify",
       "query": "priority_geography",
-      "status": "failed",
-      "records": 0,
-      "total_available": 0,
-      "error": "APIFY_TOKEN is not configured"
+      "status": "completed",
+      "records": 40,
+      "total_available": 40,
+      "error": null
     },
     {
       "connector": "jobspipe-apify",
       "query": "remote_europe",
-      "status": "failed",
-      "records": 0,
-      "total_available": 0,
-      "error": "APIFY_TOKEN is not configured"
+      "status": "completed",
+      "records": 60,
+      "total_available": 60,
+      "error": null
     }
   ],
-  "records_inspected": 0,
-  "jobs_published": 24,
-  "excluded": 0,
+  "records_inspected": 100,
+  "jobs_published": 82,
+  "excluded": 19,
   "limitations": [],
   "jobspipe_transport": {
     "mode": "apify",
     "actor": "jobspipe~jobspipe-job-search",
     "max_items_per_run": 100,
-    "items_returned": 0,
-    "estimated_upstream_requests": 0,
+    "items_returned": 100,
+    "estimated_upstream_requests": 2,
     "billing_model": "per upstream request/page"
   }
 }
