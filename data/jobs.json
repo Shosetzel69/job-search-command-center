@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-05T12:42:48.382984+00:00",
+  "generated_at": "2026-09-05T14:34:52.592416+00:00",
   "freshness_hours": 24,
   "criteria": {
     "roles": [
@@ -35,9 +35,9 @@
     ]
   },
   "raw_matches_available": {
-    "jobspipe:geography": 93,
-    "jobspipe:remote": 308,
-    "jobspipe:core_remote": 218
+    "jobspipe:geography": 113,
+    "jobspipe:remote": 323,
+    "jobspipe:core_remote": 228
   },
   "records_inspected": 75,
   "results": 0,
@@ -75,6 +75,11 @@
       "reason": "publication time not verifiable"
     },
     {
+      "title": "Senior Project Manager",
+      "company": "Cyclops",
+      "reason": "publication time not verifiable"
+    },
+    {
       "title": "Project Manager Offshore Subsea Cables",
       "company": "Jan De Nul Group",
       "reason": "publication time not verifiable"
@@ -82,6 +87,11 @@
     {
       "title": "Assistant Project Manager | Water Process",
       "company": "Equans BeLux",
+      "reason": "publication time not verifiable"
+    },
+    {
+      "title": "Medior Project Manager",
+      "company": "Cyclops",
       "reason": "publication time not verifiable"
     },
     {
@@ -115,34 +125,24 @@
       "reason": "Indeed-only link"
     },
     {
-      "title": "IT Program Manager - Architecture FR/EN",
-      "company": "NSI IT SOFTWARE & SERVICES",
-      "reason": "deep ERP/SAP implementation"
+      "title": "Project Manager",
+      "company": "CTRL-F NV",
+      "reason": "older than 24 hours"
     },
     {
-      "title": "Implementation Project Manager",
-      "company": "Safeguard Global",
-      "reason": "Indeed-only link"
+      "title": "Project Manager Industriebouw",
+      "company": "ACTIEF CONSTRUCT NV",
+      "reason": "older than 24 hours"
     },
     {
-      "title": "IT Project Manager Scrum Master",
-      "company": "Keystone Solutions",
-      "reason": "Indeed-only link"
+      "title": "HR Project Manager",
+      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
+      "reason": "older than 24 hours"
     },
     {
-      "title": "Innovation Project Manager HEMS",
-      "company": "Eneco",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Digital Transformation Project Manager",
-      "company": "Stanley/Stella",
-      "reason": "Indeed-only link"
-    },
-    {
-      "title": "Scrum Master",
-      "company": "NTT DATA",
-      "reason": "Indeed-only link"
+      "title": "Project Manager | E&I - HVAC",
+      "company": "HOUSE OF RECRUITMENT SOLUTIONS BV",
+      "reason": "non-IT role"
     }
   ]
 }
