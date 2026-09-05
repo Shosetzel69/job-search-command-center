@@ -1,16 +1,16 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260905T171028Z",
+  "run_id": "github-20260905T175505Z",
   "status": "completed",
-  "started_at": "2026-09-05T17:10:28.846597+00:00",
-  "completed_at": "2026-09-05T17:10:28.848387+00:00",
+  "started_at": "2026-09-05T17:55:05.997100+00:00",
+  "completed_at": "2026-09-05T17:55:05.998738+00:00",
   "sources": [
     "jobspipe"
   ],
   "source_results": [
     {
       "connector": "jobspipe",
-      "query": "provider_switch",
+      "query": "transport_mode",
       "status": "completed",
       "records": 0,
       "total_available": 0,
@@ -21,11 +21,10 @@
   "jobs_published": 24,
   "excluded": 0,
   "limitations": [
-    "JobsPipe disabled by configuration; no provider credits consumed"
+    "JobsPipe transport disabled by configuration; no provider calls executed"
   ],
-  "jobspipe_optimization": {
-    "credits_used": 0,
-    "provider_enabled": false,
-    "incremental": true
+  "jobspipe_transport": {
+    "mode": "disabled",
+    "provider_enabled": false
   }
 }
