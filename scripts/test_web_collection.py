@@ -131,6 +131,23 @@ class WebTests(unittest.TestCase):
 
 
 class TransportTests(unittest.TestCase):
+    def test_robots_wildcard_end_anchor_and_longest_allow(self):
+        policy = transport.RobotsPolicy()
+        policy.parse(['User-agent: *', 'Disallow: /*?private=', 'Disallow: /jobs/*/apply$',
+                      'Allow: /jobs/public/apply'])
+        self.assertFalse(policy.can_fetch(transport.USER_AGENT, 'https://example.com/jobs/1/apply'))
+        self.assertTrue(policy.can_fetch(transport.USER_AGENT, 'https://example.com/jobs/1/apply/info'))
+        self.assertTrue(policy.can_fetch(transport.USER_AGENT, 'https://example.com/jobs/public/apply'))
+        self.assertFalse(policy.can_fetch(transport.USER_AGENT, 'https://example.com/jobs?private=1'))
+
+    def test_specific_agent_groups_combine_without_using_wildcard_group(self):
+        policy = transport.RobotsPolicy()
+        policy.parse(['User-agent: *', 'Disallow: /', '', 'User-agent: JobSearchCollector',
+                      'Disallow: /private', '', 'User-agent: JobSearchCollector', 'Disallow: /secret'])
+        self.assertTrue(policy.can_fetch(transport.USER_AGENT, 'https://example.com/jobs'))
+        self.assertFalse(policy.can_fetch(transport.USER_AGENT, 'https://example.com/private'))
+        self.assertFalse(policy.can_fetch(transport.USER_AGENT, 'https://example.com/secret'))
+
     def test_unsafe_url_and_dns_addresses_are_rejected(self):
         for url in ("http://127.0.0.1/", "http://169.254.169.254/latest", "https://localhost/", "http://[::1]/", "https://user:pass@example.com/", "file:///etc/passwd", "https://example.com:8080/"):
             with self.assertRaises(transport.FetchError):

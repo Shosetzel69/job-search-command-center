@@ -2,11 +2,12 @@
 
 import http.client
 import ipaddress
+import re
 import socket
 import ssl
 import threading
 import time
-from urllib.parse import urlsplit, urlunsplit, urljoin
+from urllib.parse import urlsplit, urlunsplit, urljoin, unquote, quote
 from urllib.robotparser import RobotFileParser
 
 USER_AGENT = "JobSearchCollector/1.0"
@@ -20,6 +21,47 @@ class FetchError(Exception):
     def __init__(self, message, kind="error"):
         super().__init__(message)
         self.kind = kind
+
+
+class RobotsPolicy(RobotFileParser):
+    """Honor wildcard/end-anchor rules and longest-match Allow precedence."""
+    def __init__(self):
+        super().__init__()
+        self.groups = []
+
+    def _add_entry(self, entry):
+        self.groups.append(entry)
+        super()._add_entry(entry)
+
+    def selected(self, agent):
+        agent = agent.split("/")[0].lower()
+        matches = [(max((len(value) for value in entry.useragents if value != "*" and value.lower() in agent), default=0), entry)
+                   for entry in self.groups if entry.applies_to(agent)]
+        best = max((size for size, _ in matches), default=0)
+        return [entry for size, entry in matches if size == best]
+
+    def can_fetch(self, agent, url):
+        parsed = urlsplit(url)
+        target = quote(unquote(parsed.path or "/")) + ("?" + quote(unquote(parsed.query)) if parsed.query else "")
+        matches = []
+        for entry in self.selected(agent):
+            for rule in entry.rulelines:
+                path = unquote(rule.path)
+                anchor = path.endswith("$")
+                path = path[:-1] if anchor else path
+                pattern = "^" + ".*".join(re.escape(quote(part)) for part in path.split("*")) + ("$" if anchor else "")
+                # The query delimiter is encoded in RuleLine but not part of the path.
+                pattern = pattern.replace("%3F", r"\?")
+                if re.search(pattern, target):
+                    matches.append((len(path.replace("*", "")), rule.allowance))
+        return max(matches)[1] if matches else True
+
+    def crawl_delay(self, agent):
+        return max((entry.delay or 0 for entry in self.selected(agent)), default=0)
+
+    def request_rate(self, agent):
+        rates = [entry.req_rate for entry in self.selected(agent) if entry.req_rate and entry.req_rate.requests]
+        return max(rates, key=lambda rate: rate.seconds / rate.requests, default=None)
 
 
 def public_url(url):
@@ -126,7 +168,7 @@ class PublicClient:
                     break
                 target = public_url(urljoin(robots_url, headers.get("location", "")))
                 robots_url = target
-            parser = RobotFileParser()
+            parser = RobotsPolicy()
             if status in {404, 410}:
                 parser.parse([])
             elif status == 200:
