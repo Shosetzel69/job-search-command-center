@@ -1,5 +1,16 @@
 # Changelog
 
+## [Unreleased]
+
+### Documentatie
+
+- Aliniate `GOVERNANCE.md`, `.ai-instructions.md`, `CONTRIBUTING.md`, `README.md` si documentele tehnice cu `ARCHITECTURE.md` v1.0.
+- Clarificata precedenta intre arhitectura, guvernanta si instructiunile AI.
+- Documentat taskul programat ChatGPT `Actualizare documentatie proiect` pentru review periodic la 2 ore.
+- Restructurat `docs/requirements.md` conform structurii oficiale a documentului de cerinte.
+- Eliminata documentatia backend legacy care contrazice arhitectura curenta.
+- Clarificat faptul ca autorizarea curenta este single-user, iar arhitectura multi-user este `UNDER ANALYSIS`.
+
 ## 0.05 - 2026-09-06
 
 ### Interfata
