@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.3`
+Versiune document: `v1.2`
 Versiune aplicatie de referinta: `0.05`
 Ultima actualizare: `2026-09-06`
 
@@ -197,7 +197,6 @@ Componente:
 - `source_orchestration.py` — plan din catalog, rutare si raportare per sursa;
 - `job_search_jobicy.py` — API public Jobicy;
 - `job_search_web.py`, `web_transport.py` — colectare pagini web si transport public cu limite/robots/DNS verificat;
-- `browser_render.py`, `browser_worker.py` — randare izolata, bugete si interceptare retea;
 - `job_identity.py` — deduplicare intre surse;
 - `shared/source-connectors.json` — rutare comuna pentru Python, Worker si UI;
 - `test_search_logic.py`, `test_source_orchestration.py` — teste de regresie.
@@ -314,7 +313,7 @@ Connector generic pentru URL-uri simple / scraping:
 
 **IMPLEMENTED - JobPosting JSON-LD**
 
-Collectorul urmeaza linkuri de cariere, anunturi si paginare, cu 12 pagini si 45 secunde per sursa, maximum 12 surse concurente. Aplica robots.txt, restrictii de retea publica si limite de dimensiune. Rezultatele intra in contractul comun existent. Pagina HTTP 200 fara anunturi nu inseamna succes. Acoperirea exhaustiva a site-ului nu este garantata. ADR-001 documenteaza colectarea HTML. ADR-002 adauga Playwright + Chromium ca fallback pentru pagini cu scripturi fara JobPosting static: maximum 2 randari/sursa, 3 browsere concurente si 20 secunde/randare in bugetul de 45 secunde. Cererile browserului folosesc acelasi transport public verificat; procesul nu primeste secrete. Activare in workflow prin WEB_BROWSER_ENABLED=1. Validarea pe site-uri reale: de confirmat.
+Collectorul urmeaza linkuri de cariere, anunturi si paginare, cu 12 pagini si 45 secunde per sursa, maximum 12 surse concurente. Aplica robots.txt, restrictii de retea publica si limite de dimensiune. Rezultatele intra in contractul comun existent. Pagina HTTP 200 fara anunturi nu inseamna succes. Acoperirea exhaustiva a site-ului nu este garantata. ADR-001 documenteaza decizia aprobata.
 
 ---
 
@@ -579,7 +578,7 @@ Nu exista momentan flux automat de notificari email.
 
 Status:
 
-**IMPLEMENTED - JSON-LD, cu fallback Chromium**
+**IMPLEMENTED - JSON-LD, fara executie JavaScript**
 
 Site-urile dinamice/fara JobPosting necesita extractori suplimentari; rezultatul incercarii este vizibil in Loguri.
 
@@ -650,7 +649,7 @@ JobsPipe si Jobicy au connectori implementati. Celelalte surse HTTP(S) active su
 Schema de versionare:
 
 - `v1.0`, `v2.0`, `v3.0` etc. pentru schimbari majore de structura sau arhitectura;
-- `v1.1`, `v1.3`, `v1.3` etc. pentru actualizari obisnuite care nu schimba fundamental arhitectura.
+- `v1.1`, `v1.2`, `v1.3` etc. pentru actualizari obisnuite care nu schimba fundamental arhitectura.
 
 Orice schimbare tehnica propusa care ar necesita cresterea versiunii majore trebuie semnalata explicit utilizatorului **inainte de implementare**, impreuna cu motivul si impactul estimat.
 
@@ -668,7 +667,7 @@ Politica de pastrare:
 
 Versiune document:
 
-**v1.3**
+**v1.2**
 
 Versiune aplicatie de referinta:
 

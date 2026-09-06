@@ -186,6 +186,14 @@ class PublicClient:
         return max(0.5, delay, rate.seconds / rate.requests if rate and rate.requests else 0)
 
     def get(self, url):
+        url, headers, body = self.get_resource(url)
+        kind = headers.get("content-type", "").lower()
+        if kind and not any(token in kind for token in ("html", "json", "text/plain")):
+            raise FetchError("Unsupported page content type: " + kind, "unsupported")
+        return url, body.decode("utf-8", errors="replace")
+
+    def get_resource(self, url):
+        """Serve browser assets through the same pinned transport and robots checks."""
         url = public_url(url)
         for _ in range(6):
             delay = self.policy(url)
@@ -197,8 +205,5 @@ class PublicClient:
                 continue
             if status != 200:
                 raise FetchError(f"HTTP {status}", "blocked" if status in {401, 403, 429} else "error")
-            kind = headers.get("content-type", "").lower()
-            if kind and not any(token in kind for token in ("html", "json", "text/plain")):
-                raise FetchError("Unsupported page content type: " + kind, "unsupported")
-            return url, body.decode("utf-8", errors="replace")
+            return url, headers, body
         raise FetchError("Too many redirects", "blocked")

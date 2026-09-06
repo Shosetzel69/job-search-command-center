@@ -240,3 +240,12 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 ## Clarificare aprobata - surse web (#49)
 
 Owner-ul a precizat ca obiectivul include sursele web fara API/connector dedicat si a aprobat implementarea. Toate URL-urile web active trebuie incercate; collectorul trebuie sa ajunga la anunturi si descrieri. Accesibilitatea paginii nu echivaleaza cu verificarea joburilor. Restrictiile, blocajele, extractia nesuportata si acoperirea partiala se raporteaza distinct. #49 a fost redeschis; acceptanta nu poate fi bazata doar pe adaugarea unui API suplimentar.
+
+### WEB-BROWSER-01 - Randare surse dinamice
+
+- **ID:** WEB-BROWSER-01
+- **Titlu:** Fallback browser pentru colectarea web
+- **Descriere:** Dupa acces HTML reusit, paginile cu JavaScript fara JobPosting static pot fi randate in Chromium. Datele trec prin normalizarea si filtrarea existente. Limite uniforme, respectarea robots, fara autentificare sau secrete, pastrarea HTML la eroare si loguri separate. Nu garanteaza acces sau acoperire exhaustiva.
+- **Categorie:** Functionala / colectare
+- **Sursa:** confirmare owner in Development, continuarea #49
+- **Prioritate:** ridicata

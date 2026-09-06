@@ -255,3 +255,7 @@ Istoricul vechi fara aceste campuri ramane lizibil; UI nu inventeaza contoare li
 Contoarele attempted/succeeded/failed pastreaza semantica anterioara. Fiecare sursa web este numarata individual.
 
 Contoare aditive dupa validarea live: `sources_with_records` (inclusiv rezultate partiale), `sources_partial`, `sources_blocked`, `sources_no_extractable_jobs`. Nu sunt categorii disjuncte fata de succeeded/failed: partial este inclus in failed, dar poate furniza records publicabile.
+
+## Diagnostic browser (campuri aditive, schema 1.0)
+
+Fiecare source_results web poate include browser_enabled, browser_attempts, browser_successes si browser_records (inregistrari brute dupa randare, inainte de deduplicare). page_results[].browser este null sau un obiect cu status, error optional, requests si resource_errors[]. Fiecare eroare de resursa contine url, status si error. Randarea reusita nu dovedeste acoperire completa. Un browser esuat nu schimba statusul HTTP fetched; eroarea browserului participa separat la calculul acoperirii partiale.

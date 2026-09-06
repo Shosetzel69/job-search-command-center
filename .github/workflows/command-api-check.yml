@@ -62,7 +62,14 @@ jobs:
           print("Python modules, geography configuration and run history are valid")
           PY
 
+      - name: Install browser runtime
+        run: |
+          python3 -m pip install -r scripts/requirements-browser.txt
+          python3 -m playwright install --with-deps chromium --only-shell
+
       - name: Run search logic regression tests
+        env:
+          BROWSER_SMOKE_TEST: "1"
         run: python3 -m unittest discover -s scripts -p "test_*.py"
 
       - name: Validate JSON files

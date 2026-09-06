@@ -156,3 +156,7 @@ Runner-ul foloseste sursele active din catalog, cu JobsPipe si Jobicy colectate 
 ## Colectare web (#49)
 
 Collector comun pentru sursele HTTP(S) active fara API dedicat: descoperire cariere/anunturi/paginare, extractie JobPosting JSON-LD, normalizare in pipeline. Loguri include outcome web, pagini si limite; Surse distinge API/Web. Testele sunt izolate, cu cazuri de blocaj, partial, schema invalida, geografie si acces la retea privata. Validarea live a acoperirii ramane de confirmat.
+
+## Colectare pagini dinamice
+
+Fallback Chromium dupa HTML, numai pentru pagini cu scripturi fara JobPosting static. Loguri arata randari incercate/reusite, anunturi extrase dupa randare si erori de resurse. Bugete uniforme si pastrarea colectarii HTML la esec. Validarea live pe site-uri: de confirmat.

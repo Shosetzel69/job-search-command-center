@@ -3,6 +3,7 @@
 import hashlib
 import heapq
 import json
+import os
 import re
 import time
 from datetime import datetime, timezone
@@ -11,6 +12,7 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
 import job_search as engine
+import browser_render
 from job_search_jobicy import plain_text
 from web_transport import FetchError, PublicClient, public_url
 
@@ -185,6 +187,8 @@ def collect(source, config, now=None, client=None):
     heapq.heappush(queue, (0, source["url"]))
     queued.add(source["url"])
     pages, detected, malformed, expired = 0, 0, 0, 0
+    browser_attempts, browser_successes, browser_records = 0, 0, 0
+    browser_enabled = os.environ.get("WEB_BROWSER_ENABLED") == "1"
     while queue and pages < MAX_PAGES and time.monotonic() < deadline:
         _, requested = heapq.heappop(queue)
         if requested in visited:
@@ -200,6 +204,29 @@ def collect(source, config, now=None, client=None):
             page = Page(html)
             if not page.documents and re.search(r"<input[^>]+type=[\"\']password", html, re.I) and re.search(r"/(login|signin|sign-in|sign_in)(/|$)", urlsplit(final_url).path, re.I):
                 raise FetchError("Authentication required", "blocked")
+            browser_info = None
+            has_jobs = any(is_type(node, "JobPosting") for doc in page.documents for node in objects(doc))
+            if browser_enabled and not has_jobs and re.search(r"<script\b", html, re.I):
+                if browser_attempts >= 2:
+                    browser_info = {"status": "skipped", "error": "Browser page budget reached"}
+                else:
+                    browser_attempts += 1
+                    try:
+                        rendered = browser_render.render(final_url, html, deadline)
+                        if re.search(r"<title[^>]*>\s*(just a moment|access denied|attention required)", rendered["html"], re.I) or "/cdn-cgi/challenge-platform/" in rendered["html"]:
+                            raise FetchError("Browser encountered bot challenge", "blocked")
+                        rendered_page = Page(rendered["html"])
+                        rendered_page.documents.extend(page.documents)
+                        # Keep static discovery if rendering removed useful links or failed resources.
+                        rendered_page.links.extend({**link, "url": urljoin(final_url, link["url"])} for link in page.links)
+                        page = rendered_page
+                        final_url = rendered["url"]
+                        roots.add(site_root(urlsplit(final_url).hostname))
+                        browser_successes += 1
+                        browser_info = {"status": "rendered", "requests": rendered.get("requests", 0),
+                                        "resource_errors": rendered.get("errors", [])}
+                    except FetchError as exc:
+                        browser_info = {"status": getattr(exc, "kind", "error"), "error": str(exc)}
             count = 0
             for document in page.documents:
                 for node in objects(document):
@@ -221,8 +248,10 @@ def collect(source, config, now=None, client=None):
                         url = (item.get("url") or item.get("@id") or node.get("url")) if isinstance(item, dict) else item
                         if url:
                             page.links.append({"url": url, "text": area_name(item), "next": False})
+            if browser_info and browser_info["status"] == "rendered":
+                browser_records += count
             diagnostics.append({"query": requested, "final_url": final_url, "status": "fetched", "records": count,
-                                "error": "; ".join(page.errors) or None})
+                                "error": "; ".join(page.errors) or None, "browser": browser_info})
             malformed += len(page.errors)
             for link in page.links[:MAX_LINKS]:
                 option = candidate(link, final_url, roots)
@@ -231,7 +260,8 @@ def collect(source, config, now=None, client=None):
                     heapq.heappush(queue, option)
         except (FetchError, ValueError, OSError, RecursionError) as exc:
             diagnostics.append({"query": requested, "status": getattr(exc, "kind", "error"), "records": 0, "error": str(exc)})
-    errors = [item for item in diagnostics if item["status"] != "fetched" or item.get("error")]
+    errors = [item for item in diagnostics if item["status"] != "fetched" or item.get("error")
+              or (item.get("browser") or {}).get("error") or (item.get("browser") or {}).get("resource_errors")]
     limited = bool(queue)
     if records:
         outcome = "partial" if errors or limited or malformed else "extracted"
@@ -252,5 +282,7 @@ def collect(source, config, now=None, client=None):
     if outcome not in {"extracted", "no_active_jobs"}:
         results.append(engine.CollectionResult(connector, outcome, False, [], 0, note))
     return results, {"web_outcome": outcome, "pages_attempted": pages, "pages_fetched": sum(item["status"] == "fetched" for item in diagnostics),
+                     "browser_enabled": browser_enabled, "browser_attempts": browser_attempts,
+                     "browser_successes": browser_successes, "browser_records": browser_records,
                      "jobs_detected": detected, "coverage_complete": False, "discovered_pages_complete": not limited and not errors and not malformed,
                      "limitations": [note], "page_results": diagnostics}

@@ -4,6 +4,8 @@
 
 ### Remedieri
 
+- #49: fallback Playwright/Chromium pentru pagini cu JavaScript fara JobPosting static. Limite uniforme, proces fara secrete, transport cu robots/DNS verificat, rezultate HTML pastrate la eroare si diagnostic browser in Loguri. Test fixture Chromium in CI; acoperire live de confirmat.
+
 - Validare live #49: 128 surse web incercate, 56 anunturi extrase din 12 site-uri. Corectate atribute HTML nule, adrese JSON-LD in liste si detectarea eronata a login-ului; Loguri separa rezultatele partiale si blocajele.
 
 - #49 redeschis: colectare web reala pentru surse fara API, prin pagini de cariere/anunturi/paginare si JobPosting JSON-LD. Rezultate si limite per pagina/sursa, transport public protejat, teste izolate; fara dependinte noi.

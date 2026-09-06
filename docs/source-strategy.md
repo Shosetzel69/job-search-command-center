@@ -119,3 +119,9 @@ Fiecare provider nou livreaza `CollectionResult`. Adaugarea in registru necesita
 - Un HTTP 200 fara JobPosting nu este contabilizat ca sursa colectata cu succes. Site-urile dinamice si HTML fara date structurate necesita extractori suplimentari.
 - Afisarea Surse foloseste `Colectare: Web/API`; Loguri arata paginile incercate, anunturile detectate, motivele si limitele.
 - Referinta standard: https://schema.org/JobPosting ; decizie: `docs/adr/ADR-001-web-source-collection.md`.
+
+## Randare JavaScript (ADR-002)
+
+Cu WEB_BROWSER_ENABLED=1, paginile HTML accesibile care contin scripturi, dar nu JobPosting, primesc o incercare Chromium. Maximum 2 randari/sursa, 20 secunde/randare, 3 browsere concurente; bugetul total ramane 45 secunde/sursa. Dupa randare se extrag JSON-LD si linkuri; nu se inventeaza date din text liber. Erorile pastreaza linkurile HTML initiale. Nu se incearca browserul dupa robots/CAPTCHA/HTTP blocat. Fara login, cookie-uri persistente, requesturi POST sau ocolirea restrictiilor. Pagini care necesita POST, click sau extractori HTML dedicati raman partiale/neextractibile.
+
+Instalare: `python3 -m pip install -r scripts/requirements-browser.txt`, apoi `python3 -m playwright install --with-deps chromium --only-shell`. Dezactivare operationala: eliminarea WEB_BROWSER_ENABLED sau valoarea 0. JobsPipe ramane controlat de configuratia existenta.
