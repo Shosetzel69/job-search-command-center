@@ -67,7 +67,7 @@
     {
       "category": "Job boards si agregatoare",
       "name": "Hays Romania",
-      "url": "https://www.hays.ro/en/jobs",
+      "url": "https://www.hays.ro/cauta-locuri-de-munca",
       "active": true,
       "priority": null
     },
@@ -221,7 +221,7 @@
     {
       "category": "Job boards si agregatoare",
       "name": "Torre",
-      "url": "https://torre.ai/jobs",
+      "url": "https://torre.ai/",
       "active": true,
       "priority": null
     },
@@ -354,7 +354,7 @@
     {
       "category": "Contractori UE si NATO",
       "name": "Almaviva de Belgique",
-      "url": "https://www.almaviva.it/en_GB/Careers",
+      "url": "https://www.almaviva.it/en_GB/Work-with-us/Open-positions",
       "active": true,
       "priority": null
     },
@@ -508,7 +508,7 @@
     {
       "category": "Servicii IT si consultanta",
       "name": "Cegeka",
-      "url": "https://www.cegeka.com/en/careers",
+      "url": "https://www.cegeka.com/en/ro/jobs/all-jobs",
       "active": true,
       "priority": null
     },
@@ -599,7 +599,7 @@
     {
       "category": "Servicii IT si consultanta",
       "name": "Prohuman",
-      "url": "https://www.prohuman.ro/jobs",
+      "url": "https://www.prohuman.ro/locuri-de-munca",
       "active": true,
       "priority": null
     },
@@ -683,7 +683,7 @@
     {
       "category": "Companii remote-first",
       "name": "Storyblok",
-      "url": "https://www.storyblok.com/join-us",
+      "url": "https://www.storyblok.com/jobs",
       "active": true,
       "priority": null
     },
@@ -753,7 +753,7 @@
     {
       "category": "Agentii si recrutare",
       "name": "UpcoMinds",
-      "url": "https://upcominds.com/careers/",
+      "url": "https://www.jobs4it.gr/",
       "active": true,
       "priority": null
     },
@@ -879,14 +879,14 @@
     {
       "category": "Agentii si recrutare",
       "name": "Thaleria",
-      "url": "https://www.thaleria.com/careers",
+      "url": "https://www.thaleria.com/careers/open-positions",
       "active": true,
       "priority": null
     },
     {
       "category": "Agentii si recrutare",
       "name": "Talan Belgium / Luxembourg",
-      "url": "https://www.talan.com/global/en/careers/",
+      "url": "https://www.talan.com/global/en/join-us/our-job-offers",
       "active": true,
       "priority": null
     },
