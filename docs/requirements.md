@@ -231,3 +231,8 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 - JobsPipe;
 - Apify pentru transportul activ curent;
 - repository GitHub privat pentru configuratie, runtime data si istoric.
+
+
+## Clarificare bug #49 - executia strategiei existente
+
+`all active sources equally` inseamna colectarea tuturor surselor active cu connector implementat, fara prioritate 1-5. Catalogul controleaza selectia efectiva. Sursele nesuportate si omiterile justificate sunt raportate explicit; nu sunt numarate ca incercate. Un agregator nu substituie verificarea surselor pe care le indexeaza. Esuarea unei surse nu anuleaza celelalte rezultate; esecul total nu inlocuieste rezultatele valide. Deduplicarea precede publicarea. Criteriile complete si acceptanta raman in issue #49; E2E de confirmat.

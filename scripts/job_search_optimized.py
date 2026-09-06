@@ -12,6 +12,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import job_search as engine
+from job_identity import deduplicate
 
 STATE_PATH = engine.DATA / "search-state.json"
 
@@ -277,7 +278,7 @@ def parse_job_age_hours(value: Any, now: datetime) -> int | None:
 
 def job_key(job: dict[str, Any]) -> str:
     if job.get("id"):
-        return f"id:{job['id']}"
+        return f"id:{str(job.get('source') or '').casefold()}:{job['id']}"
     return "fallback:" + "|".join(
         str(job.get(field) or "").strip().lower()
         for field in ("title", "company", "location")
@@ -335,6 +336,9 @@ def merge_with_existing(
         )
     )
 
+    before_dedup = len(retained)
+    retained = deduplicate(retained)
+    new_output["cross_source_duplicates_removed"] = before_dedup - len(retained)
     new_output["jobs"] = retained
     new_output["results"] = len(retained)
     new_output["freshness_hours"] = collection_hours
@@ -455,3 +459,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -228,3 +228,21 @@ Static Assets protejate includ:
 - `search-config.json`.
 
 `search-state.json` este exclus intentionat.
+
+
+## Extensie compatibila surse (#49)
+
+Schema ramane `1.0`; campuri aditive in `run-status.json` si intrarile `run-history.json`:
+
+- `source_strategy`: strategia executata;
+- `sources_configured`, `sources_active`, `sources_inactive`: intrari in catalog;
+- `sources_attempted` = `sources_processed`: surse executate efectiv, indiferent de numarul interogarilor;
+- `sources_succeeded`: toate interogarile sursei reusite;
+- `sources_failed`: cel putin o interogare esuata, inclusiv succes partial;
+- `sources_unsupported`: surse active fara connector;
+- `sources_skipped`: surse active omise cu motiv (quota, cooldown, mod disabled, alias);
+- `source_results`: o intrare per sursa, cu `source`, `source_id`, `connector`, `active`, `status`, `records`, `error`; pentru executii, `queries` pastreaza detaliile interogarilor.
+
+Invarianta: attempted = succeeded + failed; active = attempted + unsupported + skipped.
+Istoricul vechi fara aceste campuri ramane lizibil; UI nu inventeaza contoare lipsa.
+`search-state.json` adauga `source_last_attempt.jobicy`, timestamp UTC privat pentru limita de polling.

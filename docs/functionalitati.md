@@ -147,3 +147,8 @@ Locala in browser: arhivarea rapida a joburilor.
 - mecanismul de autorizare curent este pentru un singur utilizator; multi-user este `UNDER ANALYSIS`;
 - fara MCP;
 - validarea E2E live pentru 0.05 este de confirmat.
+
+
+## Remediere #49 (Unreleased)
+
+Runner-ul foloseste sursele active din catalog, cu JobsPipe si Jobicy colectate independent. Suportul connectorului este derivat identic in UI, Worker si Python. Loguri afiseaza configurate/active/incercate/reusite/esuate/nesuportate/omise, motive si rezultate per sursa. Deduplicarea acopera rezultatele noi si cele retinute din rulari anterioare. Testele izolate acopera succes, esec partial/total, deaktivare, quota, cooldown si duplicate. E2E dupa merge: de confirmat.

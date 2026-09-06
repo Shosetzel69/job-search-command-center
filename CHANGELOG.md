@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Remedieri
+
+- #49: colectare din catalog pentru toate sursele active suportate; JobsPipe si Jobicy independente, fara modificarea scoring-ului.
+- Loguri: acoperire reala, surse nesuportate si omiteri motivate, erori/query si records/sursa.
+- Deduplicare intre provideri si protectie pentru ID-uri locale identice; pastrarea rezultatelor la esec total.
+- Rutare comuna Python/Worker/UI; cooldown Jobicy de o ora si teste izolate in CI. E2E de confirmat dupa merge.
+
 ### Documentatie
 
 - Definit fluxul formal `Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare` si interzisa trecerea directa din idei sau analiza in Development.
@@ -166,3 +173,4 @@
 ### Observatie istorica
 
 Prioritizarea initiala a maximum cinci surse a fost eliminata ulterior. Strategia curenta este `all active sources equally`.
+

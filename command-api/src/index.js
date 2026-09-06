@@ -1,3 +1,4 @@
+import { sourceConnector } from '../../shared/source-connectors.mjs';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
@@ -213,7 +214,7 @@ function normalizeSource(source) {
     name: String(source?.name || 'Sursa').trim(),
     url,
     active: source?.active !== false,
-    connector_available: Boolean(source?.connector_available),
+    connector_available: Boolean(sourceConnector(url)),
   };
 }
 function normalizeCatalog(payload) {
@@ -280,7 +281,7 @@ export default {
         const source = validateSourceInput(await request.json(), false);
         const result = await mutateSources(env, catalog => {
           if (catalog.sources.some(item => sameUrl(item.url, source.url))) throw Object.assign(new Error('Exista deja o sursa cu acest URL. Editeaza intrarea existenta.'), { status: 409 });
-          catalog.sources.push({ id:`src-${crypto.randomUUID()}`, ...source, connector_available:false }); return catalog;
+          catalog.sources.push(normalizeSource({ id:`src-${crypto.randomUUID()}`, ...source })); return catalog;
         });
         return json({ status:'created', commit:result.commit, catalog:result.catalog }, 201, cors);
       }
@@ -291,7 +292,7 @@ export default {
           const index = catalog.sources.findIndex(item => item.id === id); if (index < 0) throw Object.assign(new Error('Sursa nu a fost gasita.'), { status: 404 });
           const next = { ...catalog.sources[index], ...patch };
           if (patch.url && catalog.sources.some((item, i) => i !== index && sameUrl(item.url, patch.url))) throw Object.assign(new Error('Exista deja o sursa cu acest URL.'), { status: 409 });
-          next.id = catalog.sources[index].id; next.connector_available = catalog.sources[index].connector_available; catalog.sources[index] = next; return catalog;
+          next.id = catalog.sources[index].id; next.connector_available = Boolean(sourceConnector(next.url)); catalog.sources[index] = next; return catalog;
         });
         return json({ status:'saved', commit:result.commit, catalog:result.catalog }, 200, cors);
       }
@@ -311,3 +312,4 @@ export default {
     }
   },
 };
+
