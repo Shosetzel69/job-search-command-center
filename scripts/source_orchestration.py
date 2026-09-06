@@ -14,7 +14,8 @@ import job_search_optimized as optimized
 REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
 SOURCES_PATH = engine.DATA / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
-            "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive")
+            "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
+            "sources_blocked", "sources_no_extractable_jobs")
 
 
 def connector_for(source):
@@ -155,6 +156,9 @@ def run(config, now):
     for field, value in (("succeeded", "completed"), ("failed", "failed"), ("unsupported", "unsupported"),
                          ("skipped", "skipped"), ("inactive", "inactive")):
         status["sources_" + field] = sum(item["status"] == value for item in plan)
+    status["sources_with_records"] = sum(item["records"] > 0 for item in plan)
+    for outcome in ("partial", "blocked", "no_extractable_jobs"):
+        status["sources_" + outcome] = sum(item.get("web_outcome") == outcome for item in plan)
     status["limitations"] = [f'{item["source"]}: {item["error"]}' for item in plan if item["status"] in {"skipped", "unsupported"}]
     if not collection and not status["sources_unsupported"]:
         status["status"] = "completed"

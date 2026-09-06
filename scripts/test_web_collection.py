@@ -36,6 +36,23 @@ class FakeClient:
 
 
 class WebTests(unittest.TestCase):
+    def test_null_html_attributes_do_not_abort_collection(self):
+        page = web.Page('<script type></script><a rel href="/jobs/1">PM</a><link rel href="/jobs">')
+        self.assertEqual(len(page.links), 1)
+
+    def test_list_addresses_and_organizations_are_normalized(self):
+        job = {**JOB, "jobLocationType": None, "hiringOrganization": [{"name": "Example"}],
+               "jobLocation": {"address": [{"addressCountry": "RO", "addressLocality": "Bucharest"}]}}
+        record = web.normalize(job, SOURCE["url"], SOURCE, NOW)
+        self.assertEqual(record["company"], "Example")
+        self.assertEqual(record["country_codes"], ["RO"])
+
+    def test_embedded_login_form_does_not_block_public_career_links(self):
+        client = FakeClient({SOURCE["url"]: '<input type="password"><a href="/jobs/123">Project Manager</a>', JOB["url"]: html(JOB)})
+        results, details = web.collect(SOURCE, {}, NOW, client)
+        self.assertEqual(details["web_outcome"], "extracted")
+        self.assertTrue(any(result.records for result in results))
+
     def setUp(self):
         self.network = patch("socket.create_connection", side_effect=AssertionError("Tests must not access network"))
         self.network.start()
