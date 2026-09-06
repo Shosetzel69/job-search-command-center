@@ -1,10 +1,10 @@
 # Command API
 
-Actualizare: 2026-09-05
+Actualizare: 2026-09-06
 
 ## 1. Scop
 
-Command API este componenta server-side minima care permite frontend-ului React sa execute actiuni privilegiate si sa acceseze date protejate fara a expune credentiale GitHub in browser.
+Command API permite frontend-ului React sa execute actiuni privilegiate si sa acceseze date protejate fara a expune credentiale GitHub in browser.
 
 Responsabilitati:
 
@@ -12,22 +12,21 @@ Responsabilitati:
 - protectie `/data/*`;
 - `Ruleaza verificarea`;
 - persistare configuratie in `data/search-config.json`;
+- CRUD persistent pentru `data/sources.json`;
 - acces la GitHub Actions si GitHub Contents API.
 
-Nu este motorul de cautare si nu este un backend persistent pentru joburi.
+Nu este motorul de cautare si nu este o baza de date.
 
 ## 2. Componente
 
-- `command-api/src/index.js` - auth, Command API, GitHub API;
-- `command-api/src/secure-entry.js` - protectia `/data/*` + delegare catre Command API;
+- `command-api/src/index.js` - auth, Command API, GitHub API, configuratie si Surse;
+- `command-api/src/secure-entry.js` - protectia `/data/*` + delegare;
 - `command-api/wrangler.jsonc` - configuratie Worker/Static Assets;
 - `command-api/scripts/build-static.mjs` - asamblarea bundle-ului public.
 
 ## 3. Autentificare Google
 
-Frontend-ul foloseste Google Identity Services.
-
-Browserul primeste Google ID token si il trimite:
+Browserul trimite Google ID token:
 
 ```text
 Authorization: Bearer <GOOGLE_ID_TOKEN>
@@ -36,11 +35,9 @@ Authorization: Bearer <GOOGLE_ID_TOKEN>
 Worker-ul verifica:
 
 - semnatura prin Google JWKS;
-- issuer `accounts.google.com` / `https://accounts.google.com`;
+- issuer Google;
 - audience = `GOOGLE_CLIENT_ID`;
 - `payload.sub = ALLOWED_GOOGLE_SUB`.
-
-Autorizarea foloseste `sub`, nu emailul.
 
 Tokenul ramane numai in memoria frontend-ului.
 
@@ -48,57 +45,17 @@ Tokenul ramane numai in memoria frontend-ului.
 
 ### `GET /health`
 
-Nu necesita login.
-
-Raspunsul curent include:
-
-```json
-{
-  "status": "ok",
-  "auth_configured": true,
-  "github_configured": true
-}
-```
-
-Valorile boolean depind de configuratia mediului.
+Returneaza starea minima a Worker-ului si daca auth/GitHub sunt configurate.
 
 ### `GET /auth/config`
 
-Nu necesita login.
-
-Returneaza configuratia minima necesara Google Sign-In:
-
-```json
-{
-  "client_id": "...",
-  "configured": true
-}
-```
-
-`GOOGLE_CLIENT_ID` nu este secret.
+Returneaza `GOOGLE_CLIENT_ID` si starea de configurare necesara Google Sign-In.
 
 ## 5. Endpoint autentificare
 
 ### `POST /auth/session`
 
-Necesita bearer Google valid.
-
-Scop:
-
-- valida tokenul;
-- valida utilizatorul autorizat;
-- confirma sesiunea frontend.
-
-Raspuns de succes:
-
-```json
-{
-  "status": "ok",
-  "email": "user@example.com"
-}
-```
-
-Emailul este folosit numai pentru afisarea profilului.
+Necesita bearer Google valid si confirma utilizatorul autorizat.
 
 ## 6. Date protejate
 
@@ -106,86 +63,118 @@ Rutele protejate sunt:
 
 - `GET /data/jobs.json`;
 - `GET /data/run-status.json`;
+- `GET /data/run-history.json`;
 - `GET /data/search-config.json`;
 - `GET /data/sources.json`;
 - `GET /data/applications.json`.
 
-Flux:
-
-```text
-Browser
-  -> GET /data/...
-  -> Authorization: Bearer token
-  -> secure-entry.js
-  -> verificare prin /auth/session logic
-  -> env.ASSETS.fetch
-  -> response no-store
-```
-
 Reguli:
 
-- metoda diferita de GET -> 405;
-- `/data/*` necunoscut -> 404;
+- numai GET;
+- cale necunoscuta -> 404;
 - token lipsa/invalid -> auth error;
-- raspuns protejat -> `cache-control: no-store`;
-- raspuns protejat -> `x-content-type-options: nosniff`.
+- `cache-control: no-store`;
+- `x-content-type-options: nosniff`.
+
+`search-state.json` nu este publicat.
 
 ## 7. Comenzi protejate
 
 ### `POST /commands/run`
 
-Necesita utilizator Google autorizat.
-
-Comportament:
-
-1. interogheaza ultimele workflow runs;
+1. verifica workflow runs recente;
 2. daca exista `queued` sau `in_progress`, returneaza 409;
-3. altfel executa `workflow_dispatch` pentru `job-search-full.yml` pe `main`;
+3. altfel executa `workflow_dispatch` pe `main`;
 4. returneaza 202.
-
-Frontend-ul urmareste ulterior `run-status.json` prin polling autentificat.
 
 ### `PUT /config`
 
-Necesita utilizator Google autorizat.
+Accepta campurile aprobate din UI:
 
-Campuri acceptate din UI:
+- roluri urmarite;
+- Remote/Hibrid;
+- freshness;
+- prag FIT;
+- repostari;
+- interval B2B;
+- disponibilitate imediata;
+- excluderi de business;
+- `jobspipeMode`;
+- limite Apify/Direct;
+- `targetRegions`;
+- `targetCountries`;
+- `excludedRegions`;
+- `excludedCountries`.
 
-- `rolePm`;
-- `roleDelivery`;
-- `roleService`;
-- `roleScrum`;
-- `roleProgram`;
-- `workRemote`;
-- `workHybrid`;
-- `keepReposts`;
-- `immediateStart`;
-- `jobspipeEnabled`;
-- `freshness` = 24 / 36 / 48 / 120;
-- `fitThreshold` = 50-100;
-- `rateMin`;
-- `rateMax`;
-- `exclusions` - maximum 20 intrari scurte.
+Reguli geografice server-side:
 
-Worker-ul:
+- regiuni permise: `EU`, `US`, `ASIA`;
+- codurile de tara trebuie sa fie ISO alpha-2;
+- aceeasi tara/regiune nu poate fi simultan inclusa si exclusa;
+- suprapunerea regiune inclusa/tara exclusa sau invers este respinsa cu 400.
 
-1. valideaza payload-ul;
-2. citeste `data/search-config.json` din GitHub;
-3. aplica numai campurile whitelist;
-4. scrie configuratia prin Contents API;
-5. commit message: `Update search config from command API`.
+Configuratia este scrisa prin GitHub Contents API. Commit-ul `data/search-config.json` declanseaza workflow-ul de cautare.
 
-Commit-ul pe `data/search-config.json` declanseaza automat workflow-ul de cautare.
+## 8. CRUD Surse
 
-## 8. GitHub access
+Toate endpoint-urile necesita utilizator autorizat.
 
-Worker-ul foloseste un fine-grained PAT stocat in Cloudflare Secret:
+### `POST /sources`
+
+Creeaza o sursa cu:
+
+- `id` stabil;
+- `name`;
+- `url`;
+- `category`;
+- `active`;
+- `connector_available=false` pentru o sursa noua manual.
+
+URL duplicat -> 409.
+
+### `PUT /sources/:id`
+
+Permite editarea:
+
+- nume;
+- URL;
+- categorie;
+- activa/inactiva.
+
+ID-ul si `connector_available` sunt pastrate. URL duplicat -> 409.
+
+### `DELETE /sources/:id`
+
+Sterge efectiv sursa din registrul curent. Istoricul ramane in Git.
+
+### Normalizare catalog
+
+La prima mutatie, catalogul legacy este normalizat la:
+
+```json
+{
+  "schema_version": "1.0",
+  "count": 129,
+  "sources": [
+    {
+      "id": "src-...",
+      "name": "...",
+      "url": "https://...",
+      "category": "...",
+      "active": true,
+      "connector_available": false
+    }
+  ]
+}
+```
+
+Campul legacy `priority` nu este pastrat in modelul normalizat.
+
+## 9. GitHub access
+
+Worker-ul foloseste fine-grained PAT din Cloudflare Secret:
 
 `GITHUB_TOKEN`
-
-Repository tinta:
-
-`Shosetzel69/job-search-command-center`
 
 Permisiuni necesare:
 
@@ -194,28 +183,24 @@ Permisiuni necesare:
 
 PAT-ul nu este livrat browserului.
 
-## 9. Origin si CORS
-
-Frontend-ul si Worker-ul folosesc acelasi origin Cloudflare.
+## 10. Origin si CORS
 
 `FRONTEND_ORIGIN` este verificat pentru cererile privilegiate.
 
-Reguli:
+Metode CORS permise: GET, POST, PUT, DELETE, OPTIONS.
 
-- Origin strain -> 403;
-- CORS nu inlocuieste autentificarea;
-- bearer Google ramane obligatoriu pentru endpoint-urile protejate.
+Origin strain -> 403. CORS nu inlocuieste autentificarea.
 
-## 10. Variabile si secrete Cloudflare
+## 11. Variabile si secrete
 
-### Secrets
+### Cloudflare Secrets
 
 - `GITHUB_TOKEN`;
 - `ALLOWED_GOOGLE_SUB`.
 
 ### Variabile non-secret
 
-- `GOOGLE_CLIENT_ID` - configurata in Dashboard;
+- `GOOGLE_CLIENT_ID`;
 - `FRONTEND_ORIGIN`;
 - `GITHUB_OWNER`;
 - `GITHUB_REPO`;
@@ -223,63 +208,45 @@ Reguli:
 - `GITHUB_WORKFLOW`;
 - `SEARCH_CONFIG_PATH`.
 
-`keep_vars=true` este activ in Wrangler pentru a pastra variabilele configurate in Dashboard la deploy.
+`SOURCES_PATH` este optional; implicit `data/sources.json`.
 
-## 11. Frontend auth lifecycle
+Provider secrets `APIFY_TOKEN` si `JOBSPIPE_API_KEY` raman numai in GitHub Actions Secrets.
 
-Implementarea React foloseste:
+## 12. Frontend auth lifecycle
 
 ```text
 GET /auth/config
   -> Google Sign-In
   -> POST /auth/session
   -> auth valid
-  -> seteaza token in memorie
+  -> token in memorie
   -> incarca /data/*
 ```
 
-Separare obligatorie:
+Eroarea de date dupa login nu produce logout automat.
 
-- login valid != date incarcate;
-- eroare `/data/*` nu produce logout automat;
-- UI afiseaza eroarea si `Reincearca incarcarea`;
-- logout-ul sterge tokenul si datele din memorie.
+## 13. Build si deploy
 
-## 12. Build si deploy
+`npm run build`:
 
-`command-api/package.json`:
+1. construieste frontend React/Vite;
+2. copiaza Static Assets;
+3. copiaza cele 6 fisiere JSON protejate necesare, inclusiv `run-history.json`.
 
-```text
-npm run build
-  -> build:frontend
-  -> npm install frontend
-  -> vite build
-  -> build-static.mjs
-```
-
-`build-static.mjs` copiaza `frontend/dist` si cele 5 fisiere JSON protejate in `command-api/public`.
-
-Wrangler publica Static Assets si Worker-ul ca acelasi serviciu.
-
-## 13. Limitari MVP
+## 14. Limitari MVP
 
 - un singur utilizator autorizat;
 - fara sesiuni server-side;
 - fara refresh token propriu;
 - fara baza de date Worker;
-- fara persistenta server-side pentru arhivare;
-- fara persistenta canonica a toggle-urilor individuale din `Surse`;
+- arhivarea joburilor ramane locala;
+- sursa in catalog nu implica automat connector;
 - fara multi-user;
 - fara MCP.
 
-## 14. Status verificare
+## 15. Status verificare
 
-- sintaxa/build Worker: validat CI;
-- build React/Vite: validat CI;
-- route protection `/data/*`: implementat;
-- auth + data retry React: implementat;
-- test E2E complet in browser dupa release-ul React: de confirmat pe deploy-ul live.
-
-## JobsPipe transport
-
-Command API persista numai configuratia, nu secretele providerilor. `APIFY_TOKEN` si `JOBSPIPE_API_KEY` exista numai in GitHub Actions Secrets. Alegerea `apify` din UI nu transmite tokenul prin browser sau Worker.
+- Python/search logic: validat CI;
+- React/Vite: validat CI;
+- Worker dry-run: validat CI;
+- test E2E complet pentru release 0.05: de confirmat pe deploy-ul live.
