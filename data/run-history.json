@@ -2,6 +2,45 @@
   "schema_version": "1.0",
   "runs": [
     {
+      "run_id": "github-20260906T141247Z",
+      "status": "completed",
+      "trigger": "workflow_dispatch",
+      "started_at": "2026-09-06T14:12:47.543801+00:00",
+      "completed_at": "2026-09-06T14:12:57.303393+00:00",
+      "duration_seconds": 9,
+      "transport": "apify",
+      "sources": [
+        "JobsPipe"
+      ],
+      "sources_processed": 1,
+      "failed_sources": [],
+      "records_inspected": 100,
+      "jobs_published": 92,
+      "excluded": 67,
+      "source_results": [
+        {
+          "source": "JobsPipe",
+          "connector": "jobspipe-apify",
+          "query": "target_geography",
+          "status": "completed",
+          "records": 40,
+          "total_available": 40,
+          "error": null
+        },
+        {
+          "source": "JobsPipe",
+          "connector": "jobspipe-apify",
+          "query": "remote_global",
+          "status": "completed",
+          "records": 60,
+          "total_available": 60,
+          "error": null
+        }
+      ],
+      "limitations": [],
+      "publication": "published"
+    },
+    {
       "run_id": "github-20260906T102201Z",
       "status": "completed",
       "trigger": "schedule",

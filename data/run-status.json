@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260906T102201Z",
+  "run_id": "github-20260906T141247Z",
   "status": "completed",
-  "started_at": "2026-09-06T10:22:01.775983+00:00",
-  "completed_at": "2026-09-06T10:22:12.497187+00:00",
+  "started_at": "2026-09-06T14:12:47.543801+00:00",
+  "completed_at": "2026-09-06T14:12:57.303393+00:00",
   "sources": [
     "JobsPipe"
   ],
@@ -30,7 +30,7 @@
     }
   ],
   "records_inspected": 100,
-  "jobs_published": 91,
+  "jobs_published": 92,
   "excluded": 67,
   "limitations": [],
   "jobspipe_transport": {
