@@ -1,6 +1,7 @@
 # Strategia surselor
 
-Actualizare: 2026-09-06
+Versiune aplicatie: `0.05`
+Ultima actualizare: `2026-09-06`
 
 ## 1. Principiu
 
@@ -79,14 +80,11 @@ JobsPipe este o singura sursa operationala. Apify si Direct sunt transporturi al
 
 `jobspipe_mode=disabled` garanteaza zero cereri JobsPipe/Apify si `sources_processed=0` pentru rularea respectiva.
 
-## 6. Excluderi
+## 6. Reguli specifice surselor
 
-- Star Storage si companiile grupului;
-- implementari ERP care cer experienta specializata ampla;
-- roluri non-IT;
 - Monster nu este sursa operationala;
 - cardurile Indeed nu sunt folosite, dar un link Indeed poate ramane link de job daca acesta este linkul disponibil;
-- excluderile teritoriale sunt configurate separat de catalogul de surse.
+- excluderile teritoriale si excluderile de business sunt reguli de selectie, nu reguli ale catalogului de surse, si sunt documentate in `docs/requirements.md` / `data/search-config.json`.
 
 ## 7. Gap-uri
 

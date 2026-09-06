@@ -1,12 +1,13 @@
 # Functionalitati
 
-Actualizare: 2026-09-06
-Versiune aplicatie: 0.05
+Versiune aplicatie: `0.05`
+Ultima actualizare: `2026-09-06`
 
 ## 1. Acces
 
 - Google Sign-In;
-- autorizare single-user prin Google `sub`;
+- mecanismul de autorizare curent permite un singur utilizator prin Google `sub`;
+- suportul multi-user este `UNDER ANALYSIS` conform `ARCHITECTURE.md`;
 - continut privat ascuns pana la autentificare;
 - token numai in memoria paginii;
 - profil + logout;
@@ -142,7 +143,7 @@ Locala in browser: arhivarea rapida a joburilor.
 - catalogul Surse legacy este normalizat/versionat la prima modificare persistenta;
 - arhivarea nu este persistata server-side;
 - aplicarile nu sunt editabile server-side;
-- fara baza de date;
-- fara multi-user;
+- fara baza de date activa;
+- mecanismul de autorizare curent este pentru un singur utilizator; multi-user este `UNDER ANALYSIS`;
 - fara MCP;
 - validarea E2E live pentru 0.05 este de confirmat.

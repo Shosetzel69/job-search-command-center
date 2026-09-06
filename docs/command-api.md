@@ -1,6 +1,7 @@
 # Command API
 
-Actualizare: 2026-09-06
+Versiune aplicatie: `0.05`
+Ultima actualizare: `2026-09-06`
 
 ## 1. Scop
 
@@ -235,13 +236,13 @@ Eroarea de date dupa login nu produce logout automat.
 
 ## 14. Limitari MVP
 
-- un singur utilizator autorizat;
+- mecanismul de autorizare curent permite un singur utilizator prin configuratia `ALLOWED_GOOGLE_SUB`;
+- suportul multi-user este `UNDER ANALYSIS` conform `ARCHITECTURE.md`;
 - fara sesiuni server-side;
 - fara refresh token propriu;
 - fara baza de date Worker;
 - arhivarea joburilor ramane locala;
 - sursa in catalog nu implica automat connector;
-- fara multi-user;
 - fara MCP.
 
 ## 15. Status verificare
