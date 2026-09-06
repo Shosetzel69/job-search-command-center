@@ -1,24 +1,28 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260905T205632Z",
+  "run_id": "github-20260906T090437Z",
   "status": "completed",
-  "started_at": "2026-09-05T20:56:32.387450+00:00",
-  "completed_at": "2026-09-05T20:56:45.107646+00:00",
+  "started_at": "2026-09-06T09:04:37.902277+00:00",
+  "completed_at": "2026-09-06T09:04:59.550600+00:00",
   "sources": [
-    "jobspipe-apify"
+    "JobsPipe"
   ],
+  "sources_processed": 1,
+  "failed_sources": [],
   "source_results": [
     {
+      "source": "JobsPipe",
       "connector": "jobspipe-apify",
-      "query": "priority_geography",
+      "query": "target_geography",
       "status": "completed",
       "records": 40,
       "total_available": 40,
       "error": null
     },
     {
+      "source": "JobsPipe",
       "connector": "jobspipe-apify",
-      "query": "remote_europe",
+      "query": "remote_global",
       "status": "completed",
       "records": 60,
       "total_available": 60,
@@ -26,8 +30,8 @@
     }
   ],
   "records_inspected": 100,
-  "jobs_published": 82,
-  "excluded": 19,
+  "jobs_published": 91,
+  "excluded": 67,
   "limitations": [],
   "jobspipe_transport": {
     "mode": "apify",
