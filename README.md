@@ -87,7 +87,9 @@ Secrete:
 
 - `ARCHITECTURE.md` - arhitectura canonica;
 - `GOVERNANCE.md` - reguli de guvernanta;
+- `.ai-instructions.md` - guardrails si reguli de lucru pentru AI;
 - `CONTRIBUTING.md` - mod de lucru;
+- `CHANGELOG.md` - istoric schimbari relevante;
 - `docs/requirements.md` - cerinte;
 - `docs/functionalitati.md` - comportament curent;
 - `docs/command-api.md` - API si autentificare;
