@@ -2,17 +2,19 @@
 
 Aplicatie personala pentru monitorizarea si evaluarea rolurilor de Project Management.
 
-Versiune curenta: `0.04`
+Versiune curenta: `0.05`
 
 ## Obiectiv
 
 - roluri PM / IT PM / Delivery / Service / Scrum / Program;
 - Remote prioritar, apoi Hybrid;
-- geografie prioritara RO / BE / LU si remote eligibil in Europa;
+- selectie geografica configurabila pe regiuni si tari;
 - B2B tinta 250-650 EUR/zi;
-- FIT, riscuri, descriere si link de job;
+- FIT, riscuri, descriere, tara/tari si link de job;
 - repostarile sunt marcate;
-- rulare programata si manuala.
+- rulare programata si manuala;
+- istoric pentru ultimele 10 rulari;
+- registru de surse administrabil din UI.
 
 ## Arhitectura MVP
 
@@ -26,14 +28,15 @@ Entry point: `scripts/job_search_runner.py`.
 
 Componente:
 
-- `job_search.py` - normalizare, filtrare, scoring;
+- `job_search.py` - normalizare, geografie, filtrare, scoring;
 - `job_search_optimized.py` - JobsPipe Direct;
 - `job_search_apify.py` - JobsPipe prin Apify;
-- `job_search_runner.py` - selector transport si orchestrare.
+- `job_search_runner.py` - selector transport, orchestrare si run history;
+- `test_search_logic.py` - teste de regresie search/geografie.
 
 Pipeline:
 
-`Collect -> Normalize -> Validate -> Geo Eligibility -> Dedup/Repost -> Filter -> Score -> Publish`
+`Collect -> Normalize -> Geo Eligibility -> Dedup/Repost -> Filter -> Score -> Publish`
 
 ## JobsPipe
 
@@ -44,11 +47,30 @@ Stare curenta:
 - `jobspipe_mode=apify`;
 - `jobspipe_apify_max_items_per_run=100`;
 - Apify foloseste Actorul oficial `jobspipe~jobspipe-job-search`;
-- Direct ramane fallback cu preview, polling incremental, cursor, 14 credite/rulare si guard lunar 950.
+- Direct ramane fallback cu preview, polling incremental, cursor, 14 credite/rulare si guard lunar 950;
+- JobsPipe este o singura sursa operationala, indiferent de transport.
+
+## Functionalitati 0.05
+
+- KPI-uri interactive ca filtre rapide;
+- tara in liste si toate tarile in detalii;
+- criterii `EU`, `US`, `Asia` + tari individuale;
+- excluderi teritoriale;
+- numar surse procesate in status;
+- pagina `Loguri`, maximum 10 rulari;
+- CRUD persistent pentru Surse;
+- publicare cu retry daca `main` se modifica concurent.
 
 ## Date si securitate
 
-Protejate prin Cloudflare Worker: `jobs.json`, `run-status.json`, `search-config.json`, `sources.json`, `applications.json`.
+Protejate prin Cloudflare Worker:
+
+- `jobs.json`;
+- `run-status.json`;
+- `run-history.json`;
+- `search-config.json`;
+- `sources.json`;
+- `applications.json`.
 
 `search-state.json` ramane intern.
 
@@ -71,3 +93,5 @@ Secrete:
 ## Rulare
 
 Workflow-ul `Full job search` ruleaza la 06:00 si 15:00 UTC si poate fi pornit manual din UI.
+
+CI valideaza Python, teste search logic, JSON, React/Vite si Cloudflare Worker dry-run.
