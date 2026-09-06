@@ -26,12 +26,20 @@ def html(node):
 class FakeClient:
     def __init__(self, pages):
         self.pages, self.called = pages, []
+        self.last_status = None
+        self.last_robots_status = 200
+        self.last_url = None
+
+    def policy(self, url):
+        return 0.5
 
     def get(self, url):
         self.called.append(url)
-        value = self.pages.get(url, transport.FetchError("HTTP 404"))
+        value = self.pages.get(url, transport.FetchError("HTTP 404", status_code=404, requested_url=url, final_url=url))
         if isinstance(value, Exception):
             raise value
+        self.last_status = 200
+        self.last_url = url
         return url, value
 
 
@@ -76,6 +84,28 @@ class WebTests(unittest.TestCase):
         results, details = web.collect(SOURCE, {}, NOW, FakeClient({SOURCE["url"]: "<h1>Welcome</h1>"}))
         self.assertFalse(any(result.ok for result in results))
         self.assertEqual(details["web_outcome"], "no_extractable_jobs")
+        self.assertEqual(details["collection_method"], "http")
+
+    def test_browser_fallback_renders_dynamic_page_once(self):
+        client = FakeClient({SOURCE["url"]: '<div id="root"></div><script src="/app.js"></script>'})
+        with patch.object(web.browser, "render", return_value=(SOURCE["url"], html(JOB), {"browser_status": "rendered"})) as render:
+            results, details = web.collect(SOURCE, {}, NOW, client)
+        records = [record for result in results if result.ok for record in result.records]
+        self.assertEqual(len(records), 1)
+        render.assert_called_once()
+        self.assertTrue(details["browser_attempted"])
+        self.assertEqual(details["browser_status"], "rendered")
+        self.assertEqual(details["collection_method"], "http+browser")
+        self.assertEqual(details["requested_url"], SOURCE["url"])
+        self.assertEqual(details["http_status"], 200)
+
+    def test_browser_fallback_never_runs_after_access_block(self):
+        client = FakeClient({SOURCE["url"]: transport.FetchError("Disallowed by robots.txt", "blocked")})
+        with patch.object(web.browser, "render") as render:
+            _, details = web.collect(SOURCE, {}, NOW, client)
+        render.assert_not_called()
+        self.assertEqual(details["web_outcome"], "blocked")
+        self.assertFalse(details["browser_attempted"])
 
     def test_jsonld_graph_nested_item_and_multiple_types(self):
         job = {**JOB, "@type": ["Thing", "https://schema.org/JobPosting"]}
@@ -134,12 +164,20 @@ class WebTests(unittest.TestCase):
         self.assertIsNotNone(web.candidate({"url": "https://boards.greenhouse.io/example", "text": "careers"}, SOURCE["url"], roots))
         self.assertIsNone(web.candidate({"url": "https://boards.greenhouse.io.evil.example/jobs", "text": "jobs"}, SOURCE["url"], roots))
 
+    def test_non_job_navigation_is_not_crawled(self):
+        roots = {"example.com"}
+        for path in ("/pricing", "/products/post-a-job", "/resources/job-descriptions", "/webinars/latest", "/status/history", "/career-advice"):
+            self.assertIsNone(web.candidate({"url": path, "text": "jobs and careers"}, SOURCE["url"], roots), path)
+        self.assertIsNotNone(web.candidate({"url": "/careers/project-manager", "text": "Project Manager"}, SOURCE["url"], roots))
+
     def test_all_web_sources_are_scheduled_individually(self):
         catalog = {"sources": [{"name": f"Source {i}", "url": f"https://site{i}.example/jobs"} for i in range(6)]}
         plan = orchestration.build_plan(catalog)
         self.assertEqual([item["connector"] for item in plan], ["web"] * 6)
+
         def collect(source, config, now):
             return [engine.CollectionResult("web:" + source["id"], "q", True, [], 0)], {"web_outcome": "no_active_jobs"}
+
         with patch.object(orchestration.web, "collect", side_effect=collect) as collector:
             results, _, _ = orchestration.collect_sources({"jobspipe_mode": "disabled"}, {}, NOW, plan)
         self.assertEqual(collector.call_count, 6)
@@ -198,6 +236,16 @@ class TransportTests(unittest.TestCase):
                 client.get("https://example.com/jobs")
             self.assertEqual(request.call_count, 3)
             self.assertEqual(request.call_args[0][0], "https://careers.example.com/robots.txt")
+
+    def test_http_error_keeps_diagnostic_status_and_urls(self):
+        client = transport.PublicClient(time.monotonic() + 30)
+        with patch.object(client, "policy", return_value=0.5), patch.object(transport, "request_once", return_value=(403, {}, b"")):
+            with self.assertRaises(transport.FetchError) as caught:
+                client.get("https://example.com/jobs")
+        self.assertEqual(caught.exception.status_code, 403)
+        self.assertEqual(caught.exception.requested_url, "https://example.com/jobs")
+        self.assertEqual(caught.exception.final_url, "https://example.com/jobs")
+        self.assertEqual(client.last_status, 403)
 
     def test_tcp_uses_validated_ip_and_tls_uses_original_hostname(self):
         sock, context = MagicMock(), MagicMock()
