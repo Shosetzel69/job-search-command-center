@@ -17,6 +17,26 @@ COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "source
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
 
+# These catalog entries are provider/platform roots, not concrete employer boards.
+# They are intentionally deferred while JobsPipe stays disabled instead of sending
+# generic crawler traffic to pages that cannot represent the provider feed.
+DEFERRED_PROVIDER_ROOTS = {
+    "linkedin.com": ("LinkedIn", "jobs"),
+    "www.linkedin.com": ("LinkedIn", "jobs"),
+    "indeed.com": ("Indeed", "root"),
+    "www.indeed.com": ("Indeed", "root"),
+    "www.workday.com": ("Workday", "root"),
+    "workday.com": ("Workday", "root"),
+    "www.greenhouse.com": ("Greenhouse", "root"),
+    "greenhouse.com": ("Greenhouse", "root"),
+    "jobs.workable.com": ("Workable", "root"),
+    "www.smartrecruiters.com": ("SmartRecruiters", "root"),
+    "smartrecruiters.com": ("SmartRecruiters", "root"),
+    "jobs.ashbyhq.com": ("Ashby", "root"),
+    "www.lever.co": ("Lever", "root"),
+    "lever.co": ("Lever", "root"),
+}
+
 
 def connector_for(source):
     try:
@@ -28,6 +48,23 @@ def connector_for(source):
         return None
 
 
+def deferred_provider(source):
+    try:
+        parsed = urlsplit(source.get("url") or "")
+        spec = DEFERRED_PROVIDER_ROOTS.get((parsed.hostname or "").lower())
+        if not spec:
+            return None
+        provider, scope = spec
+        path = (parsed.path or "/").rstrip("/") or "/"
+        if scope == "root" and path == "/":
+            return provider
+        if scope == "jobs" and (path == "/jobs" or path.startswith("/jobs/")):
+            return provider
+        return None
+    except ValueError:
+        return None
+
+
 def build_plan(catalog):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("sources"), list):
         raise ValueError("Source catalog must contain a sources array")
@@ -35,23 +72,30 @@ def build_plan(catalog):
     seen = set()
     for source in catalog["sources"]:
         connector = connector_for(source)
-        if not connector:
+        deferred = None if connector else deferred_provider(source)
+        if not connector and not deferred:
             try:
                 web.public_url(source.get("url") or "")
                 connector = "web"
             except web.FetchError:
                 connector = None
-        route_key = source.get("url") if connector == "web" else connector
+        route_key = source.get("url") if connector == "web" else connector or ("deferred:" + deferred if deferred else None)
         item = {"source": source.get("name") or source.get("url") or "Unknown",
-                "source_id": source.get("id") or source.get("url"), "url": source.get("url"), "connector": connector,
+                "source_id": source.get("id") or source.get("url"), "url": source.get("url"),
+                "connector": "deferred" if deferred else connector,
+                "collection_method": "deferred" if deferred else connector,
                 "active": source.get("active") is not False, "status": "pending",
-                "records": 0, "error": None}
+                "records": 0, "error": None, "failure_reason": None}
         if not item["active"]:
-            item.update(status="inactive", error="Disabled in source catalog")
+            item.update(status="inactive", error="Disabled in source catalog", failure_reason="Disabled in source catalog")
+        elif deferred:
+            reason = f"{deferred} provider root deferred; generic web crawling disabled while dedicated provider route is postponed"
+            item.update(status="skipped", error=reason, failure_reason=reason, deferred_provider=deferred)
         elif not connector:
-            item.update(status="unsupported", error="Invalid or unsafe source URL")
+            item.update(status="unsupported", error="Invalid or unsafe source URL", failure_reason="Invalid or unsafe source URL")
         elif route_key in seen:
-            item.update(status="skipped", error="Duplicate provider endpoint already planned")
+            item.update(status="skipped", error="Duplicate provider endpoint already planned",
+                        failure_reason="Duplicate provider endpoint already planned")
         else:
             seen.add(route_key)
         plan.append(item)
@@ -73,6 +117,7 @@ def collect_sources(config, state, now, plan):
             except Exception as exc:
                 results = [engine.CollectionResult("web:" + str(item["source_id"]), "collect", False, [], 0, str(exc))]
                 item["web_outcome"] = "error"
+                item["failure_reason"] = str(exc)
             record_results(item, results)
             collection.extend(results)
     return collection, metadata, mode
@@ -82,6 +127,8 @@ def record_results(item, results):
     item["status"] = "completed" if results and all(result.ok for result in results) else "failed"
     item["records"] = sum(len(result.records) for result in results if result.ok)
     item["error"] = "; ".join(result.error or "Collection failed" for result in results if not result.ok) or None
+    if item.get("error") and not item.get("failure_reason"):
+        item["failure_reason"] = item["error"]
     item["queries"] = [{"query": r.query, "status": "completed" if r.ok else "failed",
                         "records": len(r.records), "error": r.error} for r in results]
 
@@ -95,15 +142,18 @@ def collect_api_sources(config, state, now, plan):
             continue
         connector = item["connector"]
         if connector == "jobspipe" and mode == "disabled":
-            item.update(status="skipped", error="JobsPipe disabled by configuration")
+            item.update(status="skipped", error="JobsPipe disabled by configuration",
+                        failure_reason="JobsPipe disabled by configuration")
             continue
         if connector == "jobspipe" and mode == "direct" and state.get("usage", {}).get("provider_quota_exhausted_month") == now.strftime("%Y-%m"):
-            item.update(status="skipped", error="JobsPipe direct monthly quota exhausted; no API call")
+            item.update(status="skipped", error="JobsPipe direct monthly quota exhausted; no API call",
+                        failure_reason="JobsPipe direct monthly quota exhausted; no API call")
             continue
         if connector == "jobicy":
             last = engine.parse_posted_datetime(state.get("source_last_attempt", {}).get(connector))
             if last and (now - last).total_seconds() < 3600:
-                item.update(status="skipped", error="Jobicy hourly polling limit; no API call")
+                item.update(status="skipped", error="Jobicy hourly polling limit; no API call",
+                            failure_reason="Jobicy hourly polling limit; no API call")
                 continue
             state.setdefault("source_last_attempt", {})[connector] = now.isoformat()
         try:
