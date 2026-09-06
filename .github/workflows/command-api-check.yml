@@ -7,6 +7,8 @@ on:
       - "command-api/**"
       - "frontend/**"
       - "scripts/**"
+      - "shared/**"
+      - "data/sources.json"
       - "data/search-config.json"
       - "data/run-history.json"
       - ".github/workflows/command-api-check.yml"
@@ -16,6 +18,8 @@ on:
       - "command-api/**"
       - "frontend/**"
       - "scripts/**"
+      - "shared/**"
+      - "data/sources.json"
       - "data/search-config.json"
       - "data/run-history.json"
       - ".github/workflows/command-api-check.yml"
@@ -59,7 +63,7 @@ jobs:
           PY
 
       - name: Run search logic regression tests
-        run: python3 scripts/test_search_logic.py
+        run: python3 -m unittest discover -s scripts -p "test_*.py"
 
       - name: Validate JSON files
         run: |
@@ -88,3 +92,4 @@ jobs:
       - name: Validate React frontend and Worker build
         working-directory: command-api
         run: npm run check
+

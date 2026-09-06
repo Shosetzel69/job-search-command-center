@@ -1,0 +1,4 @@
+{
+  "jobspipe": {"name": "JobsPipe", "hosts": ["jobspipe.dev", "www.jobspipe.dev", "api.jobspipe.dev"]},
+  "jobicy": {"name": "Jobicy", "hosts": ["jobicy.com", "www.jobicy.com"]}
+}

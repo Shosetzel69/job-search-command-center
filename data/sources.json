@@ -1,5 +1,5 @@
 {
-  "count": 129,
+  "count": 130,
   "sources": [
     {
       "category": "Job boards si agregatoare",
@@ -903,6 +903,13 @@
       "url": "https://www.arhs-group.com/careers/",
       "active": true,
       "priority": null
+    },
+    {
+      "name": "JobsPipe",
+      "url": "https://jobspipe.dev/",
+      "category": "Job boards si agregatoare",
+      "active": true,
+      "connector_available": true
     }
   ]
 }

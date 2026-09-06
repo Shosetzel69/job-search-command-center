@@ -15,6 +15,8 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+from job_identity import deduplicate
+
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
 CONFIG_PATH = DATA / "search-config.json"
@@ -291,6 +293,9 @@ def normalize_job_geography(job: dict[str, Any], remote: bool) -> tuple[list[str
     if not remote:
         return countries, country_codes, "Country" if country_codes else "Unknown", True
 
+    if remote and job.get("romania_eligible") is False:
+        return countries, country_codes, "Country" if country_codes else "Unknown", False
+
     # An explicit country restriction takes precedence over generic scope wording.
     if country_codes:
         return countries, country_codes, "Country", "RO" in country_codes
@@ -361,7 +366,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     totals: dict[str, int] = {}
     for result in collection:
         if result.ok:
-            raw.extend(result.records)
+            raw.extend({**record, "_collection_source": canonical_source_name(result.connector)} for record in result.records)
             totals[f"{result.connector}:{result.query}"] = result.total_available
 
     seen: set[Any] = set()
@@ -380,7 +385,8 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
         codes = set(country_codes)
         posted = job.get("date_posted") or job.get("posted_at")
         posted_dt = parse_posted_datetime(posted)
-        key = job.get("id") or (
+        origin = job.get("_collection_source")
+        key = (origin, job.get("id")) if job.get("id") else (
             re.sub(r"\W+", " ", title.lower()).strip(),
             company.lower(),
             str(location).lower(),
@@ -508,10 +514,13 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             "url": url,
             "description": description.strip(),
             "date_posted": posted,
-            "source": provider or canonical_source_name(collection[0].connector if collection else None),
+            "source": provider or origin,
             "verified_at": job.get("verified_at"),
         })
 
+    unique = deduplicate(selected)
+    excluded.extend({"reason": "cross-source duplicate"} for _ in range(len(selected) - len(unique)))
+    selected = unique
     selected.sort(key=lambda item: (-item["fit"], item["age"], item["company"].lower()))
     return {
         "schema_version": SCHEMA_VERSION,
@@ -667,3 +676,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

@@ -5,7 +5,7 @@ Ultima actualizare: `2026-09-06`
 
 ## 1. Principiu
 
-Strategia tinta este `all active sources equally`.
+Strategia executata de runner este `all active sources equally`.
 
 Nu exista prioritate operationala 1-5. Campul `priority` din catalogul legacy este ignorat si este eliminat la normalizarea registrului.
 
@@ -15,12 +15,12 @@ Nu exista prioritate operationala 1-5. Campul `priority` din catalogul legacy es
 
 Stare curenta:
 
-- aproximativ 129 intrari in catalog;
-- connector operational: JobsPipe;
+- 130 intrari in catalog, inclusiv JobsPipe explicit;
+- connectori implementati: JobsPipe si Jobicy; E2E Jobicy de confirmat;
 - transport activ: `apify`;
 - plafon curent Apify: 100 joburi brute/rulare;
 - modificarile Surse sunt persistate prin Command API;
-- o sursa noua manual are implicit `connector_available=false`.
+- suportul se deriva din `shared/source-connectors.json`, dupa URL; nu este acordat printr-un flag trimis de client.
 
 ## 3. Administrarea registrului
 
@@ -78,7 +78,7 @@ JobsPipe este o singura sursa operationala. Apify si Direct sunt transporturi al
 
 ### Disabled
 
-`jobspipe_mode=disabled` garanteaza zero cereri JobsPipe/Apify si `sources_processed=0` pentru rularea respectiva.
+`jobspipe_mode=disabled` garanteaza zero cereri JobsPipe/Apify pentru acest provider. Celelalte surse active continua independent.
 
 ## 6. Reguli specifice surselor
 
@@ -86,13 +86,23 @@ JobsPipe este o singura sursa operationala. Apify si Direct sunt transporturi al
 - cardurile Indeed nu sunt folosite, dar un link Indeed poate ramane link de job daca acesta este linkul disponibil;
 - excluderile teritoriale si excluderile de business sunt reguli de selectie, nu reguli ale catalogului de surse, si sunt documentate in `docs/requirements.md` / `data/search-config.json`.
 
-## 7. Gap-uri
+## 7. Executie si limitari (#49)
 
-- fisierul catalog existent este legacy pana la prima mutatie persistenta;
-- numai JobsPipe are connector operational;
-- nu exista orchestrare multi-provider reala;
-- deduplicarea cross-provider devine relevanta dupa conectarea altor provideri.
+- Fiecare intrare este clasificata: `inactive`, `unsupported`, `skipped`, `completed` sau `failed`.
+- Toate sursele active suportate participa; `priority` nu limiteaza selectia.
+- Sursele cu acelasi connector/endpoint sunt colectate o singura data; aliasurile sunt raportate ca `skipped`.
+- JobsPipe respecta modul configurat si guard-ul lunar Direct. Dezactivarea/eliminarea din catalog opreste providerul.
+- Jobicy: un GET pentru cele mai recente 200 listari, fara filtre upstream care ar favoriza o categorie. Filtrarea ramane comuna. Feed-ul nu garanteaza toate joburile publicate vreodata.
+- Cel mult o incercare Jobicy pe ora, inclusiv la eroare; timestamp-ul se pastreaza in `search-state.json`. Rularile intre timp raporteaza motivul omiterii si pastreaza rezultatele existente.
+- Restrictiile teritoriale Jobicy necunoscute nu sunt transformate in Worldwide; necesita suport explicit in normalizare.
+- URL-ul si atribuirea Jobicy sunt pastrate. HTML-ul descrierii este convertit in text.
+- Documentatie provider: https://github.com/Jobicy/remote-jobs-api
+- Nu exista scraper generic. Restul de 128 intrari sunt raportate `unsupported`, fara pretentia ca au fost verificate prin JobsPipe.
+- Erorile per sursa sunt izolate. Esecul tuturor colectarilor pastreaza `jobs.json` neschimbat.
+- Deduplicarea comuna compara URL-uri fara tracking si titlu/companie/geografie/mod intre surse; ID-urile locale sunt separate pe provider.
+- Aceleasi campuri de acoperire sunt publicate in status si istoric, apoi afisate in Loguri.
+- Validare E2E dupa merge: de confirmat.
 
 ## 8. Extindere
 
-Fiecare provider nou trebuie sa implementeze connectorul comun. Filtrarea, geografia si scoring-ul nu se duplica in connector.
+Fiecare provider nou livreaza `CollectionResult`. Adaugarea in registru necesita implementarea adapterului; filtrarea, geografia si scoring-ul nu se duplica in connector. Nu se modifica mecanismul GitHub Actions, persistenta sau autentificarea.

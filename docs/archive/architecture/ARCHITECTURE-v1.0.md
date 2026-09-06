@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.1`
+Versiune document: `v1.0`
 Versiune aplicatie de referinta: `0.05`
 Ultima actualizare: `2026-09-06`
 
@@ -194,11 +194,7 @@ Componente:
 - `job_search_optimized.py` — JobsPipe Direct;
 - `job_search_apify.py` — JobsPipe prin Apify;
 - `job_search_runner.py` — orchestration, transport, status si run history;
-- `source_orchestration.py` — plan din catalog, rutare si raportare per sursa;
-- `job_search_jobicy.py` — API public Jobicy;
-- `job_identity.py` — deduplicare intre surse;
-- `shared/source-connectors.json` — rutare comuna pentru Python, Worker si UI;
-- `test_search_logic.py`, `test_source_orchestration.py` — teste de regresie.
+- `test_search_logic.py` — teste de regresie.
 
 Pipeline:
 
@@ -264,11 +260,7 @@ Secretele connectorilor nu sunt stocate in catalog.
 
 Connector operational:
 
-**JobsPipe si Jobicy** (integrarea E2E Jobicy: de confirmat).
-
-Runner-ul selecteaza toate sursele active suportate din catalog. Lipsa unui connector este raportata ca `unsupported`. Flag-ul `connector_available` este derivat din registrul implementat, nu din input-ul utilizatorului. JobsPipe are intrare explicita in catalog; eliminarea sau dezactivarea ei opreste colectarea providerului.
-
-Jobicy foloseste API-ul public, maximum 200 listari recente, timeout 30 secunde si cel mult o incercare pe ora. Nu foloseste credentiale JobsPipe.
+**JobsPipe**
 
 JobsPipe poate folosi doua transporturi:
 
@@ -587,7 +579,7 @@ Status:
 
 **PLANNED**
 
-JobsPipe si Jobicy au connectori implementati. Celelalte surse raman explicit nesuportate pana la adaugarea connectorilor.
+Momentan JobsPipe este singurul provider cu connector operational.
 
 ---
 
@@ -623,7 +615,7 @@ JobsPipe si Jobicy au connectori implementati. Celelalte surse raman explicit ne
 - [x] JobsPipe connector
 - [x] JobsPipe via Apify
 - [x] JobsPipe Direct fallback
-- [x] Additional connector: Jobicy (E2E de confirmat)
+- [ ] Additional operational connectors
 - [ ] Generic URL connector
 
 ### Runtime
@@ -666,7 +658,7 @@ Politica de pastrare:
 
 Versiune document:
 
-**v1.1**
+**v1.0**
 
 Versiune aplicatie de referinta:
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Workflow entry point for configurable JobsPipe transports and run history."""
+"""Workflow entry point for catalog-driven collection and run history."""
 
 from __future__ import annotations
 
@@ -11,6 +11,7 @@ from datetime import datetime, timezone
 import job_search as engine
 import job_search_apify as apify
 import job_search_optimized as optimized
+import source_orchestration as orchestration
 
 HISTORY_PATH = engine.DATA / "run-history.json"
 HISTORY_LIMIT = 10
@@ -139,6 +140,7 @@ def append_run_history() -> None:
         # successful Git data commit that publishes the run status and job results.
         "publication": "published",
     }
+    entry.update({key: status[key] for key in (*orchestration.COUNTERS, "source_strategy") if key in status})
     runs = [run for run in runs if run.get("run_id") != entry["run_id"]]
     runs.insert(0, entry)
     HISTORY_PATH.write_text(
@@ -168,25 +170,7 @@ def main() -> int:
 
     now = datetime.now(timezone.utc)
     config = engine.load_config()
-    mode = configured_mode(config)
-    code = 0
-
-    if mode == "disabled":
-        write_provider_disabled_status(now)
-    elif mode == "apify":
-        code = apify.main()
-    elif mode == "direct":
-        state = optimized.load_state(now)
-        if quota_exhausted_this_month(state, now):
-            write_quota_skipped_status(state, now)
-            optimized.save_state(state)
-            code = 2
-        else:
-            code = optimized.main()
-            if code == 2:
-                mark_provider_quota_if_reported(now)
-    else:
-        raise RuntimeError(f"Unsupported jobspipe_mode: {mode}")
+    code = orchestration.run(config, now)
 
     append_run_history()
     if code == 0:
@@ -198,3 +182,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

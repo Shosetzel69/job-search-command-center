@@ -10,6 +10,11 @@ on:
       - "scripts/job_search_optimized.py"
       - "scripts/job_search_apify.py"
       - "scripts/job_search_runner.py"
+      - "scripts/source_orchestration.py"
+      - "scripts/job_search_jobicy.py"
+      - "scripts/job_identity.py"
+      - "shared/**"
+      - "data/sources.json"
   workflow_dispatch:
   schedule:
     - cron: "0 6,15 * * *"
@@ -97,3 +102,4 @@ jobs:
         run: |
           echo "All configured collection queries failed. Run status was persisted."
           exit 1
+
