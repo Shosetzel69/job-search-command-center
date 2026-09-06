@@ -4,19 +4,11 @@
   "main": "src/secure-entry.js",
   "compatibility_date": "2026-09-05",
   "keep_vars": true,
-  "build": {
-    "command": "npm run build"
-  },
+  "build": { "command": "npm run build" },
   "assets": {
     "directory": "./public",
     "binding": "ASSETS",
-    "run_worker_first": [
-      "/health",
-      "/auth/*",
-      "/commands/*",
-      "/config",
-      "/data/*"
-    ]
+    "run_worker_first": ["/health", "/auth/*", "/commands/*", "/config", "/sources", "/sources/*", "/data/*"]
   },
   "vars": {
     "FRONTEND_ORIGIN": "https://job-search-command-api.myeboda.workers.dev",
@@ -24,6 +16,7 @@
     "GITHUB_REPO": "job-search-command-center",
     "GITHUB_REF": "main",
     "GITHUB_WORKFLOW": "job-search-full.yml",
-    "SEARCH_CONFIG_PATH": "data/search-config.json"
+    "SEARCH_CONFIG_PATH": "data/search-config.json",
+    "SOURCES_PATH": "data/sources.json"
   }
 }
