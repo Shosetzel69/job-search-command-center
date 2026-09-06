@@ -16,6 +16,16 @@ Versiune curenta: `0.05`
 - istoric pentru ultimele 10 rulari;
 - registru de surse administrabil din UI.
 
+## Flux de lucru
+
+Fluxul de guvernanta este:
+
+`Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare`
+
+Nu exista implementare directa din `Ideas / Requirements` sau `Analiza`.
+
+Regulile complete sunt definite in `GOVERNANCE.md`.
+
 ## Arhitectura MVP
 
 `React + Tailwind + Vite -> Cloudflare Worker -> GitHub Actions -> motor cautare -> data/*.json -> main -> Cloudflare deploy`
@@ -86,7 +96,7 @@ Secrete:
 ## Documentatie
 
 - `ARCHITECTURE.md` - arhitectura canonica;
-- `GOVERNANCE.md` - reguli de guvernanta;
+- `GOVERNANCE.md` - reguli de guvernanta si flux de maturizare a cerintelor;
 - `.ai-instructions.md` - guardrails si reguli de lucru pentru AI;
 - `CONTRIBUTING.md` - mod de lucru;
 - `CHANGELOG.md` - istoric schimbari relevante;
