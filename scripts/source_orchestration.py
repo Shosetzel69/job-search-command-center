@@ -1,12 +1,14 @@
 """Catalog-driven collection using the existing CollectionResult contract."""
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import job_search as engine
 import job_search_apify as apify
 import job_search_jobicy as jobicy
+import job_search_web as web
 import job_search_optimized as optimized
 
 REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
@@ -32,28 +34,63 @@ def build_plan(catalog):
     seen = set()
     for source in catalog["sources"]:
         connector = connector_for(source)
+        if not connector:
+            try:
+                web.public_url(source.get("url") or "")
+                connector = "web"
+            except web.FetchError:
+                connector = None
+        route_key = source.get("url") if connector == "web" else connector
         item = {"source": source.get("name") or source.get("url") or "Unknown",
-                "source_id": source.get("id") or source.get("url"), "connector": connector,
+                "source_id": source.get("id") or source.get("url"), "url": source.get("url"), "connector": connector,
                 "active": source.get("active") is not False, "status": "pending",
                 "records": 0, "error": None}
         if not item["active"]:
             item.update(status="inactive", error="Disabled in source catalog")
         elif not connector:
-            item.update(status="unsupported", error="No implemented connector for this source URL")
-        elif connector in seen:
+            item.update(status="unsupported", error="Invalid or unsafe source URL")
+        elif route_key in seen:
             item.update(status="skipped", error="Duplicate provider endpoint already planned")
         else:
-            seen.add(connector)
+            seen.add(route_key)
         plan.append(item)
     return plan
 
 
 def collect_sources(config, state, now, plan):
+    # Web sources execute independently; slow sites cannot starve the rest of the catalog.
+    with ThreadPoolExecutor(max_workers=12) as pool:
+        futures = {item["source_id"]: pool.submit(web.collect, {"id": item["source_id"], "name": item["source"], "url": item["url"]}, config, now)
+                   for item in plan if item["connector"] == "web" and item["status"] == "pending"}
+        collection, metadata, mode = collect_api_sources(config, state, now, plan)
+        for item in plan:
+            if item["connector"] != "web" or item["status"] != "pending":
+                continue
+            try:
+                results, details = futures[item["source_id"]].result()
+                item.update(details)
+            except Exception as exc:
+                results = [engine.CollectionResult("web:" + str(item["source_id"]), "collect", False, [], 0, str(exc))]
+                item["web_outcome"] = "error"
+            record_results(item, results)
+            collection.extend(results)
+    return collection, metadata, mode
+
+
+def record_results(item, results):
+    item["status"] = "completed" if results and all(result.ok for result in results) else "failed"
+    item["records"] = sum(len(result.records) for result in results if result.ok)
+    item["error"] = "; ".join(result.error or "Collection failed" for result in results if not result.ok) or None
+    item["queries"] = [{"query": r.query, "status": "completed" if r.ok else "failed",
+                        "records": len(r.records), "error": r.error} for r in results]
+
+
+def collect_api_sources(config, state, now, plan):
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
     for item in plan:
-        if item["status"] != "pending":
+        if item["status"] != "pending" or item["connector"] == "web":
             continue
         connector = item["connector"]
         if connector == "jobspipe" and mode == "disabled":
@@ -84,11 +121,7 @@ def collect_sources(config, state, now, plan):
         except Exception as exc:
             results = [engine.CollectionResult(connector, "collect", False, [], 0, str(exc))]
         collection.extend(results)
-        item["status"] = "completed" if all(result.ok for result in results) else "failed"
-        item["records"] = sum(len(result.records) for result in results if result.ok)
-        item["error"] = "; ".join(result.error or "Collection failed" for result in results if not result.ok) or None
-        item["queries"] = [{"query": r.query, "status": "completed" if r.ok else "failed",
-                            "records": len(r.records), "error": r.error} for r in results]
+        record_results(item, results)
         if connector == "jobspipe" and mode == "direct" and "Monthly request quota exceeded" in (item["error"] or ""):
             state.setdefault("usage", {})["provider_quota_exhausted_month"] = now.strftime("%Y-%m")
     return collection, metadata, mode

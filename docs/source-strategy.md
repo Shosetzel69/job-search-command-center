@@ -16,7 +16,7 @@ Nu exista prioritate operationala 1-5. Campul `priority` din catalogul legacy es
 Stare curenta:
 
 - 130 intrari in catalog, inclusiv JobsPipe explicit;
-- connectori implementati: JobsPipe si Jobicy; E2E Jobicy de confirmat;
+- adaptere API: JobsPipe si Jobicy; collector web comun pentru restul surselor HTTP(S) active;
 - transport activ: `apify`;
 - plafon curent Apify: 100 joburi brute/rulare;
 - modificarile Surse sunt persistate prin Command API;
@@ -38,7 +38,7 @@ Reguli:
 - istoricul modificarilor ramane disponibil prin Git;
 - nu se implementeaza audit separat in MVP;
 - secretele connectorilor nu se stocheaza in catalog;
-- `active=true` nu este suficient pentru executie: este necesar si connector operational.
+- orice sursa HTTP(S) activa este incercata: prin adapter dedicat sau prin collector web; disponibilitatea collectorului nu garanteaza extragerea pe orice site.
 
 La prima mutatie, catalogul legacy este normalizat la schema 1.0 cu `id` stabil si `connector_available`.
 
@@ -97,7 +97,7 @@ JobsPipe este o singura sursa operationala. Apify si Direct sunt transporturi al
 - Restrictiile teritoriale Jobicy necunoscute nu sunt transformate in Worldwide; necesita suport explicit in normalizare.
 - URL-ul si atribuirea Jobicy sunt pastrate. HTML-ul descrierii este convertit in text.
 - Documentatie provider: https://github.com/Jobicy/remote-jobs-api
-- Nu exista scraper generic. Restul de 128 intrari sunt raportate `unsupported`, fara pretentia ca au fost verificate prin JobsPipe.
+- Colectarea web incearca fiecare URL activ fara API dedicat. Nicio sursa web nu este deduplicata doar pentru ca foloseste acelasi collector.
 - Erorile per sursa sunt izolate. Esecul tuturor colectarilor pastreaza `jobs.json` neschimbat.
 - Deduplicarea comuna compara URL-uri fara tracking si titlu/companie/geografie/mod intre surse; ID-urile locale sunt separate pe provider.
 - Aceleasi campuri de acoperire sunt publicate in status si istoric, apoi afisate in Loguri.
@@ -106,3 +106,16 @@ JobsPipe este o singura sursa operationala. Apify si Direct sunt transporturi al
 ## 8. Extindere
 
 Fiecare provider nou livreaza `CollectionResult`. Adaugarea in registru necesita implementarea adapterului; filtrarea, geografia si scoring-ul nu se duplica in connector. Nu se modifica mecanismul GitHub Actions, persistenta sau autentificarea.
+
+## 9. Colectare web aprobata (#49)
+
+- Descoperire linkuri de cariere, anunturi si paginare; extractie `JobPosting` JSON-LD, inclusiv `@graph`/liste. Linkurile ATS descoperite explicit pot fi urmate.
+- Titlu, companie, descriere text, data si URL provin din anunt. Anunturile expirate sunt eliminate; cele fara data nu sunt publicate drept recente.
+- `applicantLocationRequirements` are prioritate fata de sediul companiei pentru Remote. Teritoriile explicite nerecunoscute nu devin Worldwide.
+- 12 pagini / 45 secunde / 2 MiB per pagina / minimum 0,5 secunde intre cereri pe host; maximum 12 surse concurente. Limitele sunt identice pentru toate sursele.
+- robots.txt si delay/request-rate sunt respectate. DNS public si IP fixat pe conexiune, redirect-uri validate, fara cookie-uri/credentiale, fara ocolire CAPTCHA/login.
+- `web_outcome`: `extracted`, `partial`, `no_active_jobs` (numai anunturi structurate expirate in paginile parcurse), `no_extractable_jobs`, `blocked`, `error`.
+- `coverage_complete=false`: collectorul generic nu garanteaza acoperire exhaustiva. `discovered_pages_complete` se refera numai la linkurile descoperite in bugetul rularii.
+- Un HTTP 200 fara JobPosting nu este contabilizat ca sursa colectata cu succes. Site-urile dinamice si HTML fara date structurate necesita extractori suplimentari.
+- Afisarea Surse foloseste `Colectare: Web/API`; Loguri arata paginile incercate, anunturile detectate, motivele si limitele.
+- Referinta standard: https://schema.org/JobPosting ; decizie: `docs/adr/ADR-001-web-source-collection.md`.

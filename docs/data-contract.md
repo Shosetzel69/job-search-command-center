@@ -246,3 +246,10 @@ Schema ramane `1.0`; campuri aditive in `run-status.json` si intrarile `run-hist
 Invarianta: attempted = succeeded + failed; active = attempted + unsupported + skipped.
 Istoricul vechi fara aceste campuri ramane lizibil; UI nu inventeaza contoare lipsa.
 `search-state.json` adauga `source_last_attempt.jobicy`, timestamp UTC privat pentru limita de polling.
+
+## Extensie colectare web (#49)
+
+`source_results` adauga `url`, `web_outcome`, `pages_attempted`, `pages_fetched`, `jobs_detected`, `coverage_complete`, `discovered_pages_complete`, `limitations`, `page_results`.
+`page_results` contine `query` (URL solicitat), `final_url` cand este disponibil, `status`, `records`, `error`.
+`status=completed` inseamna anunturi extrase fara erori/limite sau numai anunturi structurate expirate in paginile vizitate. `failed` poate avea rezultate valide partiale, publicate prin pipeline, plus un motiv explicit. `no_extractable_jobs` nu inseamna ca site-ul nu are joburi.
+Contoarele attempted/succeeded/failed pastreaza semantica anterioara. Fiecare sursa web este numarata individual.

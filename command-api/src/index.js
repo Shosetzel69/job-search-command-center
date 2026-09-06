@@ -1,4 +1,4 @@
-import { sourceConnector } from '../../shared/source-connectors.mjs';
+import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
@@ -214,7 +214,7 @@ function normalizeSource(source) {
     name: String(source?.name || 'Sursa').trim(),
     url,
     active: source?.active !== false,
-    connector_available: Boolean(sourceConnector(url)),
+    connector_available: Boolean(sourceCollectionMethod(url)),
   };
 }
 function normalizeCatalog(payload) {
@@ -292,7 +292,7 @@ export default {
           const index = catalog.sources.findIndex(item => item.id === id); if (index < 0) throw Object.assign(new Error('Sursa nu a fost gasita.'), { status: 404 });
           const next = { ...catalog.sources[index], ...patch };
           if (patch.url && catalog.sources.some((item, i) => i !== index && sameUrl(item.url, patch.url))) throw Object.assign(new Error('Exista deja o sursa cu acest URL.'), { status: 409 });
-          next.id = catalog.sources[index].id; next.connector_available = Boolean(sourceConnector(next.url)); catalog.sources[index] = next; return catalog;
+          next.id = catalog.sources[index].id; next.connector_available = Boolean(sourceCollectionMethod(next.url)); catalog.sources[index] = next; return catalog;
         });
         return json({ status:'saved', commit:result.commit, catalog:result.catalog }, 200, cors);
       }

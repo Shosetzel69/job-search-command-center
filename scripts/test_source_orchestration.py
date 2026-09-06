@@ -21,7 +21,7 @@ CONFIG = {"schema_version": "1.0", "source_strategy": "all active sources equall
 CATALOG = {"sources": [
     {"name": "JobsPipe", "url": "https://jobspipe.dev/", "active": True},
     {"name": "Jobicy", "url": "https://jobicy.com/", "active": True},
-    {"name": "Unimplemented", "url": "https://example.com/jobs", "active": True},
+    {"name": "Unimplemented", "url": "ftp://example.com/jobs", "active": True},
     {"name": "Inactive", "url": "https://inactive.example/", "active": False},
 ]}
 

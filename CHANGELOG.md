@@ -4,6 +4,8 @@
 
 ### Remedieri
 
+- #49 redeschis: colectare web reala pentru surse fara API, prin pagini de cariere/anunturi/paginare si JobPosting JSON-LD. Rezultate si limite per pagina/sursa, transport public protejat, teste izolate; fara dependinte noi.
+
 - #49: colectare din catalog pentru toate sursele active suportate; JobsPipe si Jobicy independente, fara modificarea scoring-ului.
 - Loguri: acoperire reala, surse nesuportate si omiteri motivate, erori/query si records/sursa.
 - Deduplicare intre provideri si protectie pentru ID-uri locale identice; pastrarea rezultatelor la esec total.

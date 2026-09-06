@@ -152,3 +152,7 @@ Locala in browser: arhivarea rapida a joburilor.
 ## Remediere #49 (Unreleased)
 
 Runner-ul foloseste sursele active din catalog, cu JobsPipe si Jobicy colectate independent. Suportul connectorului este derivat identic in UI, Worker si Python. Loguri afiseaza configurate/active/incercate/reusite/esuate/nesuportate/omise, motive si rezultate per sursa. Deduplicarea acopera rezultatele noi si cele retinute din rulari anterioare. Testele izolate acopera succes, esec partial/total, deaktivare, quota, cooldown si duplicate. E2E dupa merge: de confirmat.
+
+## Colectare web (#49)
+
+Collector comun pentru sursele HTTP(S) active fara API dedicat: descoperire cariere/anunturi/paginare, extractie JobPosting JSON-LD, normalizare in pipeline. Loguri include outcome web, pagini si limite; Surse distinge API/Web. Testele sunt izolate, cu cazuri de blocaj, partial, schema invalida, geografie si acces la retea privata. Validarea live a acoperirii ramane de confirmat.
