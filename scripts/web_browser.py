@@ -51,7 +51,7 @@ def render(url, deadline, client, roots=None):
     remaining = deadline - time.monotonic()
     if remaining <= 1:
         raise FetchError("Source time budget exhausted before browser fallback", "partial", requested_url=requested)
-    if not BROWSER_SLOTS.acquire(timeout=min(remaining, 5)):
+    if not BROWSER_SLOTS.acquire(timeout=max(0.1, remaining - 1)):
         raise FetchError("Browser fallback capacity exhausted", "partial", requested_url=requested)
 
     started = time.monotonic()
