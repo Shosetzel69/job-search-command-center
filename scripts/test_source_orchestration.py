@@ -139,7 +139,7 @@ class OrchestrationTests(unittest.TestCase):
         _, status = self.run_search()
         self.jobicy.assert_not_called()
         self.assertEqual(status["sources_attempted"], 1)
-        self.assertTrue(any("hourly" in x for x in status["limitations"]))
+        self.assertTrue(any("polling cooldown (1h)" in x for x in status["limitations"]))
 
     def test_provider_alias_is_not_counted_twice(self):
         catalog = copy.deepcopy(CATALOG)
