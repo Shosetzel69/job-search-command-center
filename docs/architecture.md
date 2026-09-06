@@ -1,7 +1,7 @@
 # Arhitectura
 
-Actualizare: 2026-09-05
-Versiune aplicatie: 0.04
+Actualizare: 2026-09-06
+Versiune aplicatie: 0.05
 
 ## 1. Principiu
 
@@ -14,12 +14,14 @@ Browser
       -> Google auth
       -> protected /data/*
       -> Command API
+          -> GitHub Contents API pentru configuratie si Surse
           -> GitHub Actions
               -> job_search_runner.py
                   -> disabled / apify / direct
-                  -> normalize / filter / score
+                  -> normalize / geo / filter / score
+                  -> run history
               -> data/*.json
-              -> commit main
+              -> commit main cu retry la conflict concurent
                   -> Cloudflare deploy
 ```
 
@@ -30,9 +32,13 @@ Nu exista baza de date activa.
 - React 18.3.1;
 - Tailwind CSS 3.4.17;
 - Vite 5.4.14;
+- versiune aplicatie 0.05;
 - token Google numai in memoria React;
 - datele protejate se incarca numai dupa validarea sesiunii;
-- erorile de date nu produc logout automat.
+- erorile de date nu produc logout automat;
+- pagini: Joburi noi, De evaluat, Aplicari, Criterii de selectie, Surse, Loguri;
+- KPI-urile din Joburi noi sunt filtre locale single-select;
+- modelul UI consuma explicit `countries`, `country_codes` si `remote_scope`.
 
 ## 3. Cloudflare Worker
 
@@ -45,9 +51,14 @@ Endpoint-uri:
 - `POST /auth/session`;
 - `POST /commands/run`;
 - `PUT /config`;
+- `POST /sources`;
+- `PUT /sources/:id`;
+- `DELETE /sources/:id`;
 - `GET /data/*` pentru fisierele protejate.
 
 Worker-ul valideaza Google JWT, issuer, audience si `ALLOWED_GOOGLE_SUB`.
+
+`run-history.json` este in allowlist-ul datelor protejate.
 
 ## 4. GitHub Actions
 
@@ -61,18 +72,57 @@ Trigger-uri:
 
 Workflow-ul primeste `APIFY_TOKEN` si `JOBSPIPE_API_KEY` numai din GitHub Actions Secrets.
 
+Publicarea datelor:
+
+1. runner-ul genereaza joburi, status, run history si stare interna;
+2. fisierele generate sunt salvate temporar;
+3. workflow-ul reincarca ultimul `main`;
+4. reaplica numai fisierele generate;
+5. incearca push;
+6. daca `main` s-a modificat intre timp, repeta de maximum 3 ori.
+
+Acest mecanism evita conflictul de rebase pentru fisierele runtime.
+
 ## 5. Motor cautare
 
-- `scripts/job_search.py` - model intern, normalizare, filtrare, scoring;
-- `scripts/job_search_optimized.py` - JobsPipe Direct;
+- `scripts/job_search.py` - normalizare canonica, geografie, filtrare si scoring;
+- `scripts/job_search_optimized.py` - JobsPipe Direct incremental/credit-aware;
 - `scripts/job_search_apify.py` - JobsPipe prin Actorul oficial Apify;
-- `scripts/job_search_runner.py` - selector `disabled/apify/direct` si orchestrare.
+- `scripts/job_search_runner.py` - selector transport, status si istoric ultimele 10 rulari;
+- `scripts/test_search_logic.py` - teste de regresie pentru geografie si surse.
 
 Pipeline:
 
-`Collect -> Normalize -> Validate -> Geo Eligibility -> Deduplicate/Repost -> Filter -> Score -> Publish`
+`Collect -> Normalize -> Geo Eligibility -> Deduplicate/Repost -> Filter -> Score -> Publish`
 
-## 6. JobsPipe
+Geografia este normalizata separat de FIT.
+
+## 6. Geografie
+
+Configuratia canonica foloseste:
+
+- `target_regions`;
+- `target_country_codes`;
+- `excluded_regions`;
+- `excluded_country_codes`.
+
+Regiuni initiale disponibile: `EU`, `US`, `ASIA`.
+
+Modelul unui job poate contine:
+
+- `countries`;
+- `country_codes`;
+- `remote_scope` = `Worldwide`, `EU`, `EMEA`, `Country` sau `Unknown`;
+- `romania_eligible` pentru Remote.
+
+Reguli principale:
+
+- Remote fara teritoriu explicit = Worldwide;
+- Remote cu tari explicite necesita Romania;
+- Worldwide nu este eliminat de o excludere regionala;
+- includerile si excluderile conflictuale sunt respinse atat in UI/Command API, cat si la incarcarea configuratiei.
+
+## 7. JobsPipe
 
 Stare curenta canonica:
 
@@ -83,17 +133,19 @@ Stare curenta canonica:
 
 - Actor: `jobspipe~jobspipe-job-search`;
 - autentificare: `APIFY_TOKEN`;
-- doua cautari fara suprapunere: geografiile prioritare si restul Europei remote eligibile;
+- colectare pentru geografia tinta + colectare Remote larga;
 - Actorul gestioneaza paginarea;
 - plafon configurabil 100-20.000 joburi brute/rulare;
-- rezultatele intra in pipeline-ul comun.
+- filtrarea geografica finala este facuta in pipeline-ul comun;
+- Apify este transport, nu sursa separata: sursa este JobsPipe.
 
 ### Direct
 
 - autentificare: `JOBSPIPE_API_KEY`;
 - preview gratuit;
 - polling incremental cu `discovered_at_gte`;
-- cursor backlog;
+- cursor backlog pastrat pana la epuizare;
+- query geografie tinta + Remote scope larg;
 - buget implicit 14 credite/rulare;
 - guard lunar 950;
 - overlap 2 minute;
@@ -101,25 +153,50 @@ Stare curenta canonica:
 
 `data/search-state.json` este folosit pentru starea incrementala Direct.
 
-## 7. Persistenta
+## 8. Persistenta
 
 Canonica in repository:
 
 - `data/jobs.json`;
 - `data/run-status.json`;
+- `data/run-history.json` - maximum 10 rulari;
 - `data/search-config.json`;
 - `data/sources.json`;
 - `data/applications.json`;
 - `data/search-state.json` intern.
 
-## 8. Surse
+## 9. Surse
 
-`data/sources.json` este catalog UI, nu lista connectorilor operationali.
+`data/sources.json` este catalogul UI, distinct de connectorii operationali.
 
-Toggle-urile individuale sunt locale. Campul legacy `priority` nu controleaza colectarea. Strategia tinta ramane `all active sources equally`.
+Administrarea se face prin Command API autentificat:
 
-## 9. Build si securitate
+- create;
+- edit;
+- activate/deactivate;
+- hard delete.
 
-Cloudflare publica bundle-ul React si numai fisierele JSON protejate necesare. `search-state.json` nu este publicat.
+La prima modificare persistenta, catalogul legacy este normalizat la schema 1.0 cu ID stabil si `connector_available`. Campul legacy `priority` nu este pastrat in modelul normalizat.
+
+O sursa adaugata in catalog nu devine operationala daca nu exista connector.
+
+## 10. Build, CI si securitate
+
+Cloudflare publica bundle-ul React si fisierele JSON protejate necesare. `search-state.json` nu este publicat.
+
+CI valideaza:
+
+- sintaxa Python;
+- configuratia geografica;
+- teste de regresie search logic;
+- JSON;
+- React/Vite production build;
+- Cloudflare Worker dry-run.
 
 Repository-ul ramane privat. GitHub Pages nu este folosit.
+
+## 11. Status verificare
+
+- CI pentru implementarea 0.05: validat;
+- test E2E complet pe deploy-ul live 0.05: de confirmat;
+- issue-urile #34-#40 raman deschise pana la validarea live.

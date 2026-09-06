@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Credit-aware incremental orchestration for the JobsPipe connector.
-
-The existing job_search module remains responsible for normalization, filtering,
-scoring and output validation. This module optimizes collection for the JobsPipe
-Free plan by using free previews, incremental discovery watermarks, cursors and a
-monthly credit guard.
-"""
+"""Credit-aware incremental orchestration for the direct JobsPipe transport."""
 
 from __future__ import annotations
 
@@ -36,7 +30,6 @@ def load_state(now: datetime) -> dict[str, Any]:
     state.setdefault("job_first_seen", {})
     state.setdefault("usage", {})
 
-    # Migrate the first incremental-state draft without losing its watermarks.
     for name, watermark in (state.pop("query_watermarks", {}) or {}).items():
         state["query_progress"].setdefault(name, {})["watermark"] = watermark
 
@@ -57,9 +50,8 @@ def discovered_timestamp(value: datetime) -> str:
 def parse_datetime(value: Any) -> datetime | None:
     if not value:
         return None
-    text = str(value).strip()
     try:
-        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
         if parsed.tzinfo is None:
             parsed = parsed.replace(tzinfo=timezone.utc)
         return parsed.astimezone(timezone.utc)
@@ -72,10 +64,7 @@ def build_query_specs(config: dict[str, Any], state: dict[str, Any], now: dateti
     if not titles:
         raise RuntimeError("No enabled role titles")
 
-    priority_countries = list(dict.fromkeys(config.get("search_country_codes") or []))
-    priority_set = set(priority_countries)
-    eligible_remote = list(dict.fromkeys(config.get("eligible_remote_country_codes") or []))
-    remote_countries = [code for code in eligible_remote if code not in priority_set]
+    target_countries = engine.resolve_target_country_codes(config)
     collection_hours = int(config.get("collection_freshness_hours", config.get("freshness_hours", 24)))
     freshness_days = max(1, math.ceil(collection_hours / 24))
     overlap_minutes = max(0, int(config.get("jobspipe_incremental_overlap_minutes", 2)))
@@ -83,8 +72,7 @@ def build_query_specs(config: dict[str, Any], state: dict[str, Any], now: dateti
 
     def incremental_fields(name: str) -> dict[str, Any]:
         progress = state.setdefault("query_progress", {}).setdefault(name, {})
-        raw = progress.get("watermark")
-        parsed = parse_datetime(raw) or fallback
+        parsed = parse_datetime(progress.get("watermark")) or fallback
         fields: dict[str, Any] = {
             "discovered_at_gte": discovered_timestamp(parsed - timedelta(minutes=overlap_minutes))
         }
@@ -98,19 +86,20 @@ def build_query_specs(config: dict[str, Any], state: dict[str, Any], now: dateti
         "include_total_results": True,
     }
     specs: dict[str, dict[str, Any]] = {}
-    if priority_countries:
-        specs["priority_geography"] = {
+    if target_countries:
+        specs["target_geography"] = {
             **common,
-            "job_country_code_or": priority_countries,
-            **incremental_fields("priority_geography"),
+            "job_country_code_or": target_countries,
+            **incremental_fields("target_geography"),
         }
-    if remote_countries:
-        specs["remote_europe"] = {
-            **common,
-            "job_country_code_or": remote_countries,
-            "remote": True,
-            **incremental_fields("remote_europe"),
-        }
+
+    # Remote is deliberately queried without a country restriction. This allows
+    # Worldwide / EU / EMEA scopes to be evaluated by the canonical local filter.
+    specs["remote_scope"] = {
+        **common,
+        "remote": True,
+        **incremental_fields("remote_scope"),
+    }
     return specs
 
 
@@ -130,15 +119,16 @@ class PacedJobsPipe:
 
 
 def preview_queries(
-    client: PacedJobsPipe, specs: dict[str, dict[str, Any]], state: dict[str, Any]
+    client: PacedJobsPipe,
+    specs: dict[str, dict[str, Any]],
+    state: dict[str, Any],
 ) -> tuple[dict[str, int], dict[str, str]]:
     counts: dict[str, int] = {}
     errors: dict[str, str] = {}
     for name, spec in specs.items():
         progress = state.setdefault("query_progress", {}).setdefault(name, {})
         if progress.get("cursor"):
-            # A stored cursor means there is unfinished paid pagination. Do not alter
-            # the cursor query with preview-only fields; continue it directly.
+            # Continue unfinished paid pagination without altering the cursor query.
             counts[name] = max(1, int(progress.get("remaining_estimate") or 1))
             continue
         try:
@@ -150,14 +140,14 @@ def preview_queries(
 
 
 def allocate_budget(counts: dict[str, int], budget: int) -> dict[str, int]:
-    """Allocate a bounded run budget, favoring remote while preserving local coverage."""
+    """Favor remote coverage while preserving target-geography coverage."""
     allocations = {name: 0 for name in counts}
     if budget <= 0:
         return allocations
 
-    base_targets = {"remote_europe": 8, "priority_geography": 6}
+    base_targets = {"remote_scope": 8, "target_geography": 6}
     remaining = budget
-    for name in ("remote_europe", "priority_geography"):
+    for name in ("remote_scope", "target_geography"):
         if name not in counts or remaining <= 0:
             continue
         amount = min(counts[name], base_targets[name], remaining)
@@ -166,7 +156,7 @@ def allocate_budget(counts: dict[str, int], budget: int) -> dict[str, int]:
 
     while remaining > 0:
         progressed = False
-        for name in ("remote_europe", "priority_geography"):
+        for name in ("remote_scope", "target_geography"):
             if name in counts and allocations[name] < counts[name] and remaining > 0:
                 allocations[name] += 1
                 remaining -= 1
@@ -177,7 +167,11 @@ def allocate_budget(counts: dict[str, int], budget: int) -> dict[str, int]:
 
 
 def update_query_progress(
-    state: dict[str, Any], name: str, response: dict[str, Any], records: list[dict[str, Any]], now: datetime
+    state: dict[str, Any],
+    name: str,
+    response: dict[str, Any],
+    records: list[dict[str, Any]],
+    now: datetime,
 ) -> None:
     progress = state.setdefault("query_progress", {}).setdefault(name, {})
     progress.setdefault("poll_started_at", now.isoformat())
@@ -199,8 +193,11 @@ def update_query_progress(
         progress["remaining_estimate"] = max(1, previous_remaining - len(records))
         return
 
-    # Sweep completed. Move the watermark only after the cursor chain is exhausted.
-    completed_watermark = parse_datetime(progress.get("max_discovered_at_seen")) or parse_datetime(progress.get("poll_started_at")) or now
+    completed_watermark = (
+        parse_datetime(progress.get("max_discovered_at_seen"))
+        or parse_datetime(progress.get("poll_started_at"))
+        or now
+    )
     progress["watermark"] = completed_watermark.isoformat()
     progress.pop("cursor", None)
     progress.pop("remaining_estimate", None)
@@ -218,10 +215,11 @@ def mark_empty_query_complete(state: dict[str, Any], name: str, now: datetime) -
 
 
 def collect_incremental(
-    config: dict[str, Any], state: dict[str, Any], now: datetime
+    config: dict[str, Any],
+    state: dict[str, Any],
+    now: datetime,
 ) -> tuple[list[engine.CollectionResult], int, dict[str, int], int]:
-    api_key = os.environ.get("JOBSPIPE_API_KEY", "")
-    client = PacedJobsPipe(api_key)
+    client = PacedJobsPipe(os.environ.get("JOBSPIPE_API_KEY", ""))
     specs = build_query_specs(config, state, now)
     preview_counts, preview_errors = preview_queries(client, specs, state)
 
@@ -271,31 +269,26 @@ def collect_incremental(
 
 
 def parse_job_age_hours(value: Any, now: datetime) -> int | None:
-    if not value:
+    parsed = parse_datetime(value)
+    if not parsed:
         return None
-    text = str(value).strip()
-    try:
-        if len(text) == 10 and text[4] == "-" and text[7] == "-":
-            parsed = datetime.fromisoformat(text).replace(tzinfo=timezone.utc)
-        else:
-            parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
-            if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
-        return max(0, int((now - parsed.astimezone(timezone.utc)).total_seconds() // 3600))
-    except Exception:
-        return None
+    return max(0, int((now - parsed).total_seconds() // 3600))
 
 
 def job_key(job: dict[str, Any]) -> str:
     if job.get("id"):
         return f"id:{job['id']}"
     return "fallback:" + "|".join(
-        str(job.get(field) or "").strip().lower() for field in ("title", "company", "location")
+        str(job.get(field) or "").strip().lower()
+        for field in ("title", "company", "location")
     )
 
 
 def merge_with_existing(
-    new_output: dict[str, Any], state: dict[str, Any], config: dict[str, Any], now: datetime
+    new_output: dict[str, Any],
+    state: dict[str, Any],
+    config: dict[str, Any],
+    now: datetime,
 ) -> dict[str, Any]:
     existing_jobs: list[dict[str, Any]] = []
     if engine.JOBS_PATH.exists():
@@ -324,12 +317,23 @@ def merge_with_existing(
         if age > collection_hours:
             expired += 1
             continue
+
         job["age"] = age
+        job.setdefault("countries", [])
+        job.setdefault("country_codes", [])
+        if "remote_scope" not in job:
+            job["remote_scope"] = "Worldwide" if job.get("remote") and not job.get("country_codes") else "Unknown"
         retained.append(job)
         retained_keys.add(key)
 
     state["job_first_seen"] = {key: first_seen[key] for key in retained_keys if key in first_seen}
-    retained.sort(key=lambda item: (-int(item.get("fit") or 0), int(item.get("age") or 0), str(item.get("company") or "").lower()))
+    retained.sort(
+        key=lambda item: (
+            -int(item.get("fit") or 0),
+            int(item.get("age") or 0),
+            str(item.get("company") or "").lower(),
+        )
+    )
 
     new_output["jobs"] = retained
     new_output["results"] = len(retained)
@@ -346,8 +350,14 @@ def merge_with_existing(
     return new_output
 
 
-def append_status_metadata(credits_used: int, preview_counts: dict[str, int], budget: int, state: dict[str, Any]) -> None:
+def append_status_metadata(
+    credits_used: int,
+    preview_counts: dict[str, int],
+    budget: int,
+    state: dict[str, Any],
+) -> None:
     status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+    status["jobspipe_transport"] = {"mode": "direct"}
     status["jobspipe_optimization"] = {
         "preview_counts": preview_counts,
         "credits_used": credits_used,
@@ -390,26 +400,23 @@ def main() -> int:
     try:
         collection, credits_used, preview_counts, budget = collect_incremental(config, state, now)
     except Exception as exc:
-        engine.STATUS_PATH.write_text(
-            json.dumps(
-                {
-                    "schema_version": engine.SCHEMA_VERSION,
-                    "run_id": "github-" + now.strftime("%Y%m%dT%H%M%SZ"),
-                    "status": "failed",
-                    "started_at": now.isoformat(),
-                    "completed_at": datetime.now(timezone.utc).isoformat(),
-                    "sources": [],
-                    "source_results": [],
-                    "records_inspected": 0,
-                    "jobs_published": 0,
-                    "excluded": 0,
-                    "limitations": [str(exc)],
-                },
-                ensure_ascii=False,
-                indent=2,
-            ) + "\n",
-            encoding="utf-8",
-        )
+        status = {
+            "schema_version": engine.SCHEMA_VERSION,
+            "run_id": "github-" + now.strftime("%Y%m%dT%H%M%SZ"),
+            "status": "failed",
+            "started_at": now.isoformat(),
+            "completed_at": datetime.now(timezone.utc).isoformat(),
+            "sources": ["JobsPipe"],
+            "sources_processed": 1,
+            "failed_sources": ["JobsPipe"],
+            "source_results": [],
+            "records_inspected": 0,
+            "jobs_published": 0,
+            "excluded": 0,
+            "limitations": [str(exc)],
+            "jobspipe_transport": {"mode": "direct"},
+        }
+        engine.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
         print(str(exc), file=sys.stderr)
         return 2
 

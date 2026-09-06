@@ -1,7 +1,7 @@
 # Functionalitati
 
-Actualizare: 2026-09-05
-Versiune aplicatie: 0.04
+Actualizare: 2026-09-06
+Versiune aplicatie: 0.05
 
 ## 1. Acces
 
@@ -16,19 +16,21 @@ Versiune aplicatie: 0.04
 
 - lista joburilor publicate de motor;
 - KPI numai in `Joburi noi`;
+- KPI `Roluri noi`, `Fit ridicat`, `Repostari`, `Remote` sunt filtre rapide single-select;
 - filtre text, FIT, B2B, vechime 24h/36h/48h/5 zile;
 - multiselect Remote/Hibrid/Onsite/N/A;
 - sortare FIT;
-- reset filtre;
+- reset filtre, inclusiv filtrul KPI;
+- tara afisata separat in liste;
+- multi-country afisat compact `prima tara + N`;
 - tabel compact cu arhivare locala, aplicare si detalii;
-- drawer cu descriere, pro, riscuri si link job.
+- drawer cu locatie, lista completa de tari, remote scope, descriere, pro, riscuri, sursa si link job.
 
-## 3. Aplicari si surse
+## 3. Aplicari
 
 - `Aplicari` citeste `data/applications.json`;
-- aplicarile nu sunt editabile server-side din UI;
-- `Surse` citeste `data/sources.json`;
-- toggle-urile individuale sunt locale si nu controleaza connectorii reali.
+- afiseaza tara cand aceasta poate fi determinata din datele aplicarii/jobului;
+- aplicarile nu sunt editabile server-side din UI.
 
 ## 4. Criterii de selectie
 
@@ -36,6 +38,9 @@ UI permite configurarea:
 
 - grupuri de roluri;
 - Remote / Hibrid;
+- regiuni `EU`, `US`, `Asia`;
+- tari individuale;
+- excluderi teritoriale pe regiuni si tari;
 - JobsPipe: Oprit / Apify / Direct;
 - plafon Apify;
 - buget si prag lunar Direct;
@@ -44,11 +49,36 @@ UI permite configurarea:
 - repostari;
 - interval B2B;
 - disponibilitate imediata;
-- excluderi.
+- excluderi de business.
+
+Reguli:
+
+- `Worldwide` si `EMEA` sunt scope-uri Remote, nu regiuni selectabile in criteriul principal;
+- Remote fara teritoriu explicit = `Worldwide`;
+- Remote cu tari explicite necesita Romania in lista acceptata;
+- conflictul dintre includeri si excluderi geografice blocheaza salvarea;
+- cardul Excluderi este compact.
 
 `Salveaza preferintele` trimite `PUT /config`; configuratia este salvata in `data/search-config.json`, iar commit-ul declanseaza workflow-ul de cautare.
 
-## 5. Rulare
+## 5. Surse
+
+Pagina `Surse`:
+
+- citeste `data/sources.json`;
+- cautare si sortare;
+- adaugare sursa;
+- editare nume, URL, categorie si stare activa/inactiva;
+- activare/dezactivare persistenta;
+- stergere efectiva dupa confirmare;
+- blocheaza URL duplicat;
+- afiseaza separat daca exista connector operational.
+
+Modificarile sunt facute prin Command API autentificat. `localStorage` nu mai este sursa canonica pentru registrul Surse.
+
+O sursa adaugata manual poate exista in catalog fara connector; nu devine automat operationala.
+
+## 6. Rulare si status
 
 `Ruleaza verificarea`:
 
@@ -58,9 +88,23 @@ UI permite configurarea:
 - face polling pe `run-status.json`;
 - reincarca datele dupa publicare.
 
+Zona `Ultima rulare` afiseaza si numarul surselor procesate. JobsPipe reprezinta o singura sursa indiferent de transportul Apify/Direct.
+
+Publicarea datelor reincearca de maximum 3 ori daca `main` se modifica intre colectare si push.
+
 Rulare programata: 06:00 si 15:00 UTC.
 
-## 6. JobsPipe
+## 7. Loguri
+
+Pagina `Loguri`:
+
+- foloseste `data/run-history.json`;
+- pastreaza maximum 10 rulari de cautare;
+- afiseaza status, trigger, ora, durata, transport, surse procesate, joburi inspectate/publicate/excluse;
+- permite extinderea unei rulari pentru source results, erori si limitari;
+- istoricul este protejat prin Cloudflare Worker.
+
+## 8. JobsPipe
 
 Transporturi disponibile:
 
@@ -73,22 +117,32 @@ Stare curenta:
 - `jobspipe_mode=apify`;
 - `jobspipe_apify_max_items_per_run=100`.
 
-Apify foloseste Actorul `jobspipe~jobspipe-job-search` si `APIFY_TOKEN` din GitHub Actions Secrets.
+Apify foloseste Actorul `jobspipe~jobspipe-job-search` si `APIFY_TOKEN` din GitHub Actions Secrets. Colectarea Remote este larga, iar eligibilitatea geografica finala este aplicata in pipeline-ul comun.
 
 Direct pastreaza preview, polling incremental, cursor backlog, buget per run, guard lunar si circuit breaker; foloseste `JOBSPIPE_API_KEY`.
 
-## 7. Persistenta
+## 9. Persistenta
 
-Canonica: joburi, run status, configuratie, aplicari si catalog surse in JSON GitHub. Starea JobsPipe Direct este in `search-state.json` intern.
+Canonica in GitHub JSON:
 
-Locale in browser: arhivare rapida si toggle-uri surse.
+- joburi;
+- run status;
+- istoric 10 rulari;
+- configuratie;
+- aplicari;
+- catalog surse.
 
-## 8. Limitari
+Starea JobsPipe Direct este in `search-state.json` intern.
+
+Locala in browser: arhivarea rapida a joburilor.
+
+## 10. Limitari
 
 - numai JobsPipe are connector operational;
-- sursele individuale nu sunt persistate server-side;
+- catalogul Surse legacy este normalizat/versionat la prima modificare persistenta;
 - arhivarea nu este persistata server-side;
 - aplicarile nu sunt editabile server-side;
 - fara baza de date;
 - fara multi-user;
-- fara MCP.
+- fara MCP;
+- validarea E2E live pentru 0.05 este de confirmat.

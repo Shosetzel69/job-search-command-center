@@ -49,6 +49,14 @@
   "rate_min_eur_day": 250,
   "rate_max_eur_day": 650,
   "immediate_start": true,
+  "target_regions": [],
+  "target_country_codes": [
+    "RO",
+    "BE",
+    "LU"
+  ],
+  "excluded_regions": [],
+  "excluded_country_codes": [],
   "search_country_codes": [
     "RO",
     "BE",

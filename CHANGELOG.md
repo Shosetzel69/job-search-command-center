@@ -1,5 +1,55 @@
 # Changelog
 
+## 0.05 - 2026-09-06
+
+### Interfata
+
+- KPI-urile din `Joburi noi` devin filtre rapide single-select.
+- Tara este afisata separat in Joburi noi, De evaluat si Aplicari.
+- Joburile multi-country folosesc `prima tara + N` in lista si toate tarile in detalii.
+- Detaliile jobului includ campuri separate pentru locatie, tari, remote scope si sursa.
+- `Criterii de selectie` include regiuni `EU`, `US`, `Asia` si tari individuale.
+- Adaugate excluderi teritoriale pe regiuni si tari.
+- Cardul `Excluderi` este compactat.
+- `Ultima rulare` afiseaza numarul surselor procesate.
+- Adaugata pagina `Loguri` cu ultimele 10 rulari.
+
+### Surse
+
+- Pagina `Surse` permite adaugare, editare, activare/dezactivare si stergere.
+- Modificarile sunt persistate canonic prin Command API si GitHub Contents API.
+- URL-urile duplicate sunt blocate.
+- UI separa starea din catalog de disponibilitatea connectorului.
+- Catalogul legacy este normalizat la schema 1.0 la prima modificare persistenta.
+
+### Geografie
+
+- Adaugate campurile canonice `countries`, `country_codes`, `remote_scope`.
+- Remote fara teritoriu explicit este tratat ca Worldwide.
+- Remote cu tari explicite necesita Romania intre tarile acceptate.
+- Remote EU/EMEA foloseste restrictia declarata.
+- Remote Worldwide ramane eligibil la excluderi regionale.
+- Conflictele includere/excludere sunt blocate in UI, Command API si configuratia motorului.
+
+### Rulare si loguri
+
+- `run-status.json` include `sources_processed` si `failed_sources`.
+- JobsPipe este numarat ca o singura sursa indiferent de transportul Apify/Direct.
+- Adaugat `data/run-history.json`, maximum 10 rulari.
+- Publicarea rezultatelor reincearca de maximum 3 ori daca `main` se modifica in timpul push-ului.
+
+### CI
+
+- CI valideaza si Python/search configuration.
+- Adaugate teste de regresie pentru geografie si normalizarea sursei JobsPipe.
+- Raman active validarile React/Vite si Cloudflare Worker dry-run.
+
+### Stare operationala
+
+- JobsPipe transport: `apify`.
+- Plafon Apify: 100 joburi brute/rulare.
+- Validarea CI este finalizata; validarea E2E live pentru 0.05 ramane de confirmat.
+
 ## 0.04 - 2026-09-05
 
 ### JobsPipe transport
@@ -10,7 +60,7 @@
 - UI permite selectarea transportului si configurarea limitelor specifice.
 - Adaugat suport pentru secretul GitHub Actions `APIFY_TOKEN`.
 - Plafon Apify implicit: 5.000 joburi brute/rulare; configurabil 100-20.000.
-- Starea curenta ramane `disabled`.
+- La introducerea functionalitatii transportul a ramas initial dezactivat pentru stabilizare.
 
 ## 0.03 - 2026-09-05
 
@@ -60,7 +110,7 @@
 - Buget 14 credite/rulare.
 - Guard lunar 950.
 - Circuit breaker quota.
-- `jobspipe_enabled=false` in perioada de stabilizare.
+- JobsPipe a fost dezactivat in perioada initiala de stabilizare.
 
 ### Build si hosting
 
@@ -77,13 +127,6 @@
 - Contractele JSON actualizate.
 - Strategia surselor actualizata.
 - Adaugat inventar functional separat.
-
-### Limitari cunoscute
-
-- E2E browser dupa refactorul React necesita confirmare live.
-- Toggle-urile individuale Surse sunt locale.
-- Arhivarea este locala.
-- Numai JobsPipe are connector operational si este momentan dezactivat.
 
 ## 0.02 - 2026-09-03
 

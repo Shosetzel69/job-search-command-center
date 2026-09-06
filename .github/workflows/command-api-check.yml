@@ -6,12 +6,20 @@ on:
     paths:
       - "command-api/**"
       - "frontend/**"
+      - "scripts/**"
+      - "data/search-config.json"
+      - "data/run-history.json"
       - ".github/workflows/command-api-check.yml"
+      - ".github/workflows/job-search-full.yml"
   pull_request:
     paths:
       - "command-api/**"
       - "frontend/**"
+      - "scripts/**"
+      - "data/search-config.json"
+      - "data/run-history.json"
       - ".github/workflows/command-api-check.yml"
+      - ".github/workflows/job-search-full.yml"
   workflow_dispatch:
 
 permissions:
@@ -24,6 +32,49 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate Python syntax and search configuration
+        run: |
+          python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_apify.py scripts/job_search_runner.py scripts/test_search_logic.py
+          python3 - <<'PY'
+          import json
+          import sys
+          sys.path.insert(0, "scripts")
+          import job_search
+          import job_search_runner
+
+          config = job_search.load_config()
+          assert job_search.configured_titles(config)
+          assert job_search_runner.HISTORY_LIMIT == 10
+          history = json.load(open("data/run-history.json", encoding="utf-8"))
+          assert history.get("schema_version") == job_search.SCHEMA_VERSION
+          assert isinstance(history.get("runs"), list)
+          assert len(history["runs"]) <= 10
+          print("Python modules, geography configuration and run history are valid")
+          PY
+
+      - name: Run search logic regression tests
+        run: python3 scripts/test_search_logic.py
+
+      - name: Validate JSON files
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          for path in [
+              Path("data/search-config.json"),
+              Path("data/run-history.json"),
+              Path("data/sources.json"),
+              Path("data/applications.json"),
+          ]:
+              json.loads(path.read_text(encoding="utf-8"))
+              print(f"valid JSON: {path}")
+          PY
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
