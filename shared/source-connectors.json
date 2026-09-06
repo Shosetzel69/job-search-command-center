@@ -1,4 +1,12 @@
 {
   "jobspipe": {"name": "JobsPipe", "hosts": ["jobspipe.dev", "www.jobspipe.dev", "api.jobspipe.dev"]},
-  "jobicy": {"name": "Jobicy", "hosts": ["jobicy.com", "www.jobicy.com"]}
+  "jobicy": {"name": "Jobicy", "hosts": ["jobicy.com", "www.jobicy.com"]},
+  "jobgether": {"name": "Jobgether", "hosts": ["jobgether.com", "www.jobgether.com"]},
+  "himalayas": {"name": "Himalayas", "hosts": ["himalayas.app", "www.himalayas.app"]},
+  "workingnomads": {"name": "Working Nomads", "hosts": ["workingnomads.com", "www.workingnomads.com"]},
+  "remoteok": {"name": "Remote OK", "hosts": ["remoteok.com", "www.remoteok.com"]},
+  "remotive": {"name": "Remotive", "hosts": ["remotive.com", "www.remotive.com"]},
+  "smartrecruiters": {"name": "SmartRecruiters", "hosts": ["careers.smartrecruiters.com", "jobs.smartrecruiters.com"]},
+  "greenhouse": {"name": "Greenhouse", "hosts": ["job-boards.greenhouse.io", "boards.greenhouse.io"]},
+  "ashby": {"name": "Ashby", "hosts": ["jobs.ashbyhq.com"]}
 }
