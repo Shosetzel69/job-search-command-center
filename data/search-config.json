@@ -42,7 +42,7 @@
     "remote": true,
     "hybrid": true
   },
-  "freshness_hours": 24,
+  "freshness_hours": 120,
   "collection_freshness_hours": 120,
   "fit_threshold": 80,
   "keep_reposts": true,
