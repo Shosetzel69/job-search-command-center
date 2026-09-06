@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
-"""JobsPipe collection through the official Apify Actor transport.
-
-The Actor wraps JobsPipe's production search endpoint and returns the same
-normalized JobsPipe records. This module only owns transport/orchestration;
-normalization, filtering, deduplication and scoring stay in job_search.py.
-"""
+"""JobsPipe collection through the official Apify Actor transport."""
 
 from __future__ import annotations
 
@@ -37,11 +32,7 @@ def _post_actor(token: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
     request = Request(
         ACTOR_ENDPOINT,
         data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {token}",
-            "Content-Type": "application/json",
-            "User-Agent": "job-search-command-center/1.0",
-        },
+        headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json", "User-Agent": "job-search-command-center/1.0"},
         method="POST",
     )
     try:
@@ -52,12 +43,11 @@ def _post_actor(token: str, payload: dict[str, Any]) -> list[dict[str, Any]]:
         raise RuntimeError(f"Apify HTTP {exc.code}: {detail}") from exc
     except URLError as exc:
         raise RuntimeError(f"Apify network error: {exc.reason}") from exc
-
-    payload_out = json.loads(body)
-    if isinstance(payload_out, list):
-        return [item for item in payload_out if isinstance(item, dict)]
-    if isinstance(payload_out, dict) and isinstance(payload_out.get("items"), list):
-        return [item for item in payload_out["items"] if isinstance(item, dict)]
+    output = json.loads(body)
+    if isinstance(output, list):
+        return [item for item in output if isinstance(item, dict)]
+    if isinstance(output, dict) and isinstance(output.get("items"), list):
+        return [item for item in output["items"] if isinstance(item, dict)]
     raise RuntimeError("Apify response does not contain a dataset item array")
 
 
@@ -65,34 +55,18 @@ def _query_specs(config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     titles = engine.configured_titles(config)
     if not titles:
         raise RuntimeError("No enabled role titles")
-
-    priority = list(dict.fromkeys(config.get("search_country_codes") or []))
-    priority_set = set(priority)
-    remote_europe = [
-        code for code in dict.fromkeys(config.get("eligible_remote_country_codes") or [])
-        if code not in priority_set
-    ]
+    target_countries = engine.resolve_target_country_codes(config)
     collection_hours = int(config.get("collection_freshness_hours", config.get("freshness_hours", 24)))
     posted_days = max(1, math.ceil(collection_hours / 24))
     max_items = max(100, min(20000, int(config.get("jobspipe_apify_max_items_per_run", 5000))))
-
-    if priority and remote_europe:
-        priority_limit = max(1, int(round(max_items * 0.4)))
-        remote_limit = max(1, max_items - priority_limit)
-    elif priority:
-        priority_limit, remote_limit = max_items, 0
-    else:
-        priority_limit, remote_limit = 0, max_items
-
-    common = {
-        "searchTerms": titles,
-        "postedWithinDays": posted_days,
-    }
+    target_limit = max(1, int(round(max_items * 0.4))) if target_countries else 0
+    remote_limit = max_items - target_limit
+    common = {"searchTerms": titles, "postedWithinDays": posted_days}
     specs: list[tuple[str, dict[str, Any]]] = []
-    if priority_limit:
-        specs.append(("priority_geography", {**common, "countries": priority, "maxItems": priority_limit}))
-    if remote_limit and remote_europe:
-        specs.append(("remote_europe", {**common, "countries": remote_europe, "remote": True, "maxItems": remote_limit}))
+    if target_limit:
+        specs.append(("target_geography", {**common, "countries": target_countries, "maxItems": target_limit}))
+    if remote_limit:
+        specs.append(("remote_global", {**common, "remote": True, "maxItems": remote_limit}))
     if not specs:
         raise RuntimeError("No eligible JobsPipe Apify query could be built")
     return specs
@@ -100,12 +74,11 @@ def _query_specs(config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
 
 def collect(config: dict[str, Any]) -> list[engine.CollectionResult]:
     token = os.environ.get("APIFY_TOKEN", "")
-    results: list[engine.CollectionResult] = []
     try:
         specs = _query_specs(config)
     except Exception as exc:
         return [engine.CollectionResult("jobspipe-apify", "configuration", False, [], 0, str(exc))]
-
+    results: list[engine.CollectionResult] = []
     for name, payload in specs:
         try:
             records = _post_actor(token, payload)
@@ -137,13 +110,11 @@ def main() -> int:
         optimized.validate_state()
         print("Configuration, JSON contracts and state valid")
         return 0
-
     now = datetime.now(timezone.utc)
     config = engine.load_config()
     collection = collect(config)
     state = optimized.load_state(now)
     successful = any(result.ok for result in collection)
-
     if successful:
         output = engine.process_records(config, collection, now)
         output = optimized.merge_with_existing(output, state, config, now)
@@ -157,19 +128,15 @@ def main() -> int:
             "estimated_upstream_requests": sum(math.ceil(len(result.records) / 500) for result in collection if result.ok and result.records),
         }
         engine.JOBS_PATH.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        jobs_published = output["results"]
-        excluded = output["excluded_count"]
+        jobs_published, excluded = output["results"], output["excluded_count"]
         optimized.save_state(state)
     else:
-        jobs_published = current_job_count()
-        excluded = 0
-
+        jobs_published, excluded = current_job_count(), 0
     run_state = engine.write_status(now, collection, jobs_published, excluded)
     update_status(collection, max(100, min(20000, int(config.get("jobspipe_apify_max_items_per_run", 5000)))))
     if successful:
         engine.validate_output()
         optimized.validate_state()
-
     for result in collection:
         suffix = f" records={len(result.records)}" if result.ok else f" error={result.error}"
         print(f"{result.connector}/{result.query}: {'ok' if result.ok else 'failed'}{suffix}")
