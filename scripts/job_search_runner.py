@@ -37,15 +37,16 @@ def configured_mode(config: dict) -> str:
 
 def _base_status(now: datetime, state: str, mode: str, limitation: str | None = None) -> dict:
     failed = state == "failed"
+    provider_processed = mode != "disabled"
     return {
         "schema_version": engine.SCHEMA_VERSION,
         "run_id": "github-" + now.strftime("%Y%m%dT%H%M%SZ"),
         "status": state,
         "started_at": now.isoformat(),
         "completed_at": datetime.now(timezone.utc).isoformat(),
-        "sources": ["JobsPipe"],
-        "sources_processed": 1,
-        "failed_sources": ["JobsPipe"] if failed else [],
+        "sources": ["JobsPipe"] if provider_processed else [],
+        "sources_processed": 1 if provider_processed else 0,
+        "failed_sources": ["JobsPipe"] if failed and provider_processed else [],
         "source_results": [{
             "source": "JobsPipe",
             "connector": "jobspipe",
@@ -59,12 +60,17 @@ def _base_status(now: datetime, state: str, mode: str, limitation: str | None = 
         "jobs_published": current_job_count(),
         "excluded": 0,
         "limitations": [limitation] if limitation else [],
-        "jobspipe_transport": {"mode": mode, "provider_enabled": mode != "disabled"},
+        "jobspipe_transport": {"mode": mode, "provider_enabled": provider_processed},
     }
 
 
 def write_provider_disabled_status(now: datetime) -> None:
-    status = _base_status(now, "completed", "disabled", "JobsPipe transport disabled by configuration; no provider calls executed")
+    status = _base_status(
+        now,
+        "completed",
+        "disabled",
+        "JobsPipe transport disabled by configuration; no provider calls executed",
+    )
     engine.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
 
@@ -105,12 +111,14 @@ def append_run_history() -> None:
         history = json.loads(HISTORY_PATH.read_text(encoding="utf-8")) if HISTORY_PATH.exists() else {}
     except Exception:
         history = {}
+
     runs = history.get("runs") if isinstance(history.get("runs"), list) else []
     started = engine.parse_posted_datetime(status.get("started_at"))
     completed = engine.parse_posted_datetime(status.get("completed_at"))
     duration_seconds = None
     if started and completed:
         duration_seconds = max(0, int((completed - started).total_seconds()))
+
     entry = {
         "run_id": status.get("run_id"),
         "status": status.get("status"),
@@ -120,19 +128,25 @@ def append_run_history() -> None:
         "duration_seconds": duration_seconds,
         "transport": (status.get("jobspipe_transport") or {}).get("mode"),
         "sources": status.get("sources") or [],
-        "sources_processed": int(status.get("sources_processed") or len(status.get("sources") or [])),
+        "sources_processed": int(status.get("sources_processed") or 0),
         "failed_sources": status.get("failed_sources") or [],
         "records_inspected": int(status.get("records_inspected") or 0),
         "jobs_published": int(status.get("jobs_published") or 0),
         "excluded": int(status.get("excluded") or 0),
         "source_results": status.get("source_results") or [],
         "limitations": status.get("limitations") or [],
-        "publication": "pending_workflow_commit",
+        # A history entry becomes visible to the application only through the same
+        # successful Git data commit that publishes the run status and job results.
+        "publication": "published",
     }
     runs = [run for run in runs if run.get("run_id") != entry["run_id"]]
     runs.insert(0, entry)
     HISTORY_PATH.write_text(
-        json.dumps({"schema_version": engine.SCHEMA_VERSION, "runs": runs[:HISTORY_LIMIT]}, ensure_ascii=False, indent=2) + "\n",
+        json.dumps(
+            {"schema_version": engine.SCHEMA_VERSION, "runs": runs[:HISTORY_LIMIT]},
+            ensure_ascii=False,
+            indent=2,
+        ) + "\n",
         encoding="utf-8",
     )
 
@@ -156,9 +170,9 @@ def main() -> int:
     config = engine.load_config()
     mode = configured_mode(config)
     code = 0
+
     if mode == "disabled":
         write_provider_disabled_status(now)
-        code = 0
     elif mode == "apify":
         code = apify.main()
     elif mode == "direct":
