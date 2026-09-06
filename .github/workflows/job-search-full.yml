@@ -50,6 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           tmpdir="$(mktemp -d)"
+          trap 'rm -rf "$tmpdir"' EXIT
           cp data/jobs.json "$tmpdir/jobs.json"
           cp data/run-status.json "$tmpdir/run-status.json"
           cp data/run-history.json "$tmpdir/run-history.json"
@@ -57,20 +58,38 @@ jobs:
 
           git config user.name "job-search-automation"
           git config user.email "actions@users.noreply.github.com"
-          git fetch origin main
-          git reset --hard origin/main
 
-          cp "$tmpdir/jobs.json" data/jobs.json
-          cp "$tmpdir/run-status.json" data/run-status.json
-          cp "$tmpdir/run-history.json" data/run-history.json
-          cp "$tmpdir/search-state.json" data/search-state.json
-          git add data/jobs.json data/run-status.json data/run-history.json data/search-state.json
+          published=false
+          for attempt in 1 2 3; do
+            echo "Publish attempt $attempt/3"
+            git fetch origin main
+            git reset --hard origin/main
 
-          if git diff --cached --quiet; then
-            echo "No data change"
-          else
+            cp "$tmpdir/jobs.json" data/jobs.json
+            cp "$tmpdir/run-status.json" data/run-status.json
+            cp "$tmpdir/run-history.json" data/run-history.json
+            cp "$tmpdir/search-state.json" data/search-state.json
+            git add data/jobs.json data/run-status.json data/run-history.json data/search-state.json
+
+            if git diff --cached --quiet; then
+              echo "No data change"
+              published=true
+              break
+            fi
+
             git commit -m "Update job search results"
-            git push origin HEAD:main
+            if git push origin HEAD:main; then
+              published=true
+              break
+            fi
+
+            echo "Main changed during publication; retrying from latest main"
+            sleep $((attempt * 2))
+          done
+
+          if [ "$published" != "true" ]; then
+            echo "Could not publish generated data after 3 attempts"
+            exit 1
           fi
 
       - name: Mark total collection failure
