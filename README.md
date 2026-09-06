@@ -1,6 +1,6 @@
 # Job Search Command Center
 
-Aplicatie personala pentru monitorizarea si evaluarea rolurilor de Project Management.
+Aplicatie pentru monitorizarea si evaluarea rolurilor de Project Management.
 
 Versiune curenta: `0.05`
 
@@ -8,10 +8,10 @@ Versiune curenta: `0.05`
 
 - roluri PM / IT PM / Delivery / Service / Scrum / Program;
 - Remote prioritar, apoi Hybrid;
-- selectie geografica configurabila pe regiuni si tari;
+- selectie geografica pe regiuni si tari;
 - B2B tinta 250-650 EUR/zi;
 - FIT, riscuri, descriere, tara/tari si link de job;
-- repostarile sunt marcate;
+- repostari marcate;
 - rulare programata si manuala;
 - istoric pentru ultimele 10 rulari;
 - registru de surse administrabil din UI.
@@ -22,21 +22,23 @@ Versiune curenta: `0.05`
 
 Repository privat. Fara GitHub Pages si fara baza de date activa.
 
+Documentul canonic de arhitectura este `ARCHITECTURE.md` din radacina repository-ului.
+
 ## Search engine
 
 Entry point: `scripts/job_search_runner.py`.
 
-Componente:
+Pipeline:
+
+`Collect -> Normalize -> Geo Eligibility -> Dedup/Repost -> Filter -> Score -> Publish`
+
+Componente principale:
 
 - `job_search.py` - normalizare, geografie, filtrare, scoring;
 - `job_search_optimized.py` - JobsPipe Direct;
 - `job_search_apify.py` - JobsPipe prin Apify;
 - `job_search_runner.py` - selector transport, orchestrare si run history;
-- `test_search_logic.py` - teste de regresie search/geografie.
-
-Pipeline:
-
-`Collect -> Normalize -> Geo Eligibility -> Dedup/Repost -> Filter -> Score -> Publish`
+- `test_search_logic.py` - teste de regresie.
 
 ## JobsPipe
 
@@ -47,7 +49,7 @@ Stare curenta:
 - `jobspipe_mode=apify`;
 - `jobspipe_apify_max_items_per_run=100`;
 - Apify foloseste Actorul oficial `jobspipe~jobspipe-job-search`;
-- Direct ramane fallback cu preview, polling incremental, cursor, 14 credite/rulare si guard lunar 950;
+- Direct ramane fallback;
 - JobsPipe este o singura sursa operationala, indiferent de transport.
 
 ## Functionalitati 0.05
@@ -83,12 +85,16 @@ Secrete:
 
 ## Documentatie
 
+- `ARCHITECTURE.md` - arhitectura canonica;
+- `GOVERNANCE.md` - reguli de guvernanta;
+- `CONTRIBUTING.md` - mod de lucru;
 - `docs/requirements.md` - cerinte;
 - `docs/functionalitati.md` - comportament curent;
-- `docs/architecture.md` - arhitectura;
-- `docs/command-api.md` - API si auth;
+- `docs/command-api.md` - API si autentificare;
 - `docs/data-contract.md` - contracte JSON;
 - `docs/source-strategy.md` - surse si transporturi.
+
+`docs/architecture.md` exista doar ca redirect documentar catre `ARCHITECTURE.md`.
 
 ## Rulare
 
