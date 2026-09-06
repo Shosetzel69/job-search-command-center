@@ -1,0 +1,77 @@
+{
+  "schema_version": "1.0",
+  "routes": {
+    "Netcompany / Intrasoft": {
+      "url": "https://careers.smartrecruiters.com/Netcompany1",
+      "reason": "SmartRecruiters public company board"
+    },
+    "Thales": {
+      "url": "https://careers.smartrecruiters.com/Thales",
+      "reason": "SmartRecruiters public company board"
+    },
+    "GlobalLogic": {
+      "url": "https://careers.smartrecruiters.com/GlobalLogic4",
+      "reason": "SmartRecruiters public company board"
+    },
+    "Endava": {
+      "url": "https://careers.smartrecruiters.com/Endava",
+      "reason": "SmartRecruiters public company board"
+    },
+    "Bosch Romania": {
+      "url": "https://careers.smartrecruiters.com/RobertBosch",
+      "reason": "SmartRecruiters public company board"
+    },
+    "Infinity Quest": {
+      "url": "https://careers.smartrecruiters.com/InfinityQuest",
+      "reason": "SmartRecruiters public company board"
+    },
+    "Talan Belgium / Luxembourg": {
+      "url": "https://careers.smartrecruiters.com/Talan",
+      "reason": "SmartRecruiters public company board"
+    },
+    "ARHS / Accenture": {
+      "url": "https://careers.smartrecruiters.com/ARHS",
+      "reason": "SmartRecruiters public company board"
+    },
+    "Xebia CEE": {
+      "url": "https://job-boards.greenhouse.io/xebiacee",
+      "reason": "Greenhouse public company board"
+    },
+    "ClickHouse": {
+      "url": "https://job-boards.greenhouse.io/clickhouse",
+      "reason": "Greenhouse public company board"
+    },
+    "Snyk": {
+      "url": "https://job-boards.greenhouse.io/snyk",
+      "reason": "Greenhouse public company board"
+    },
+    "Datadog": {
+      "url": "https://job-boards.greenhouse.io/datadog",
+      "reason": "Greenhouse public company board"
+    },
+    "Camunda": {
+      "url": "https://jobs.ashbyhq.com/camunda",
+      "reason": "Ashby public company board"
+    },
+    "Kong": {
+      "url": "https://jobs.ashbyhq.com/kong",
+      "reason": "Ashby public company board"
+    },
+    "LocalStack": {
+      "url": "https://jobs.ashbyhq.com/localstack",
+      "reason": "Ashby public company board"
+    },
+    "Contentsquare": {
+      "url": "https://jobs.lever.co/contentsquare/",
+      "reason": "Current public Lever board; dedicated Lever API deferred until publication date is reliable"
+    },
+    "KEYES / NRB": {
+      "url": "https://nrbcareers.com/find-my-job",
+      "reason": "Current NRB careers board"
+    },
+    "Trasys International": {
+      "url": "https://nrbcareers.com/find-my-job",
+      "reason": "Trasys vacancies are published through NRB Careers"
+    }
+  }
+}
