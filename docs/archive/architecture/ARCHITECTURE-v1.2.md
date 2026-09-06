@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.3`
+Versiune document: `v1.2`
 Versiune aplicatie de referinta: `0.05`
 Ultima actualizare: `2026-09-06`
 
@@ -174,7 +174,6 @@ Responsabilitati:
 
 - executa motorul de cautare;
 - furnizeaza secretele providerilor;
-- instaleaza dependintele runtime necesare colectarii, inclusiv Chromium pentru fallback-ul web;
 - genereaza fisierele runtime;
 - publica rezultatele in repository;
 - gestioneaza conflictele concurente la publicare.
@@ -197,12 +196,10 @@ Componente:
 - `job_search_runner.py` — orchestration, transport, status si run history;
 - `source_orchestration.py` — plan din catalog, rutare si raportare per sursa;
 - `job_search_jobicy.py` — API public Jobicy;
-- `job_search_web.py` — descoperire si extractie web generica;
-- `web_transport.py` — transport HTTP public cu limite, robots si DNS verificat;
-- `web_browser.py` — fallback Chromium/Playwright limitat pentru randare JavaScript dupa acces HTTP permis;
+- `job_search_web.py`, `web_transport.py` — colectare pagini web si transport public cu limite/robots/DNS verificat;
 - `job_identity.py` — deduplicare intre surse;
 - `shared/source-connectors.json` — rutare comuna pentru Python, Worker si UI;
-- `test_search_logic.py`, `test_source_orchestration.py`, `test_web_collection.py` — teste de regresie.
+- `test_search_logic.py`, `test_source_orchestration.py` — teste de regresie.
 
 Pipeline:
 
@@ -239,10 +236,8 @@ Pentru colectare sunt necesare:
 ```text
 active = true
 +
-strategie operationala permisa pentru sursa
+connector_available = true
 ```
-
-`connector_available` descrie disponibilitatea unui adapter dedicat; nu este o conditie pentru collectorul web generic.
 
 ### 8.2 Administrarea surselor
 
@@ -268,9 +263,11 @@ Secretele connectorilor nu sunt stocate in catalog.
 
 ### 8.3 Connector operational curent
 
-Connectori dedicati implementati:
+Connector operational:
 
 **JobsPipe si Jobicy** (integrarea E2E Jobicy: de confirmat).
+
+Runner-ul selecteaza toate sursele active suportate din catalog. Sursele HTTP(S) fara adapter dedicat sunt incercate prin collectorul web. URL-urile invalide sunt `unsupported`; paginile care nu produc anunturi extrase sunt raportate separat. Flag-ul `connector_available` este derivat din registrul implementat, nu din input-ul utilizatorului. JobsPipe are intrare explicita in catalog; eliminarea sau dezactivarea ei opreste colectarea providerului.
 
 Jobicy foloseste API-ul public, maximum 200 listari recente, timeout 30 secunde si cel mult o incercare pe ora. Nu foloseste credentiale JobsPipe.
 
@@ -284,29 +281,14 @@ JobsPipe
 
 Apify si Direct nu sunt surse distincte.
 
-Stare runtime curenta:
+Stare curenta:
 
 ```text
-jobspipe_mode = disabled
+jobspipe_mode = apify
 jobspipe_apify_max_items_per_run = 100
 ```
 
-Codul Apify si Direct ramane implementat, dar nu este apelat cat timp modul este `disabled`.
-
-Runner-ul selecteaza toate sursele active cu strategie operationala. URL-urile HTTP(S) fara adapter dedicat sunt incercate prin collectorul web, cu exceptia provider roots amanate explicit. URL-urile invalide sunt `unsupported`; omiterile deliberate sunt `skipped`; paginile care nu produc anunturi extrase sunt raportate separat.
-
-Provider roots amanate din collectorul generic cat timp ruta dedicata este postponata:
-
-- LinkedIn;
-- Indeed;
-- Workday;
-- Greenhouse;
-- Workable;
-- SmartRecruiters;
-- Ashby;
-- Lever.
-
-Un job board concret al unui angajator pe un ATS poate ramane eligibil pentru collectorul web daca URL-ul nu este radacina generica a providerului si respecta regulile de acces.
+Direct ramane fallback.
 
 ### 8.4 Connectori noi
 
@@ -329,13 +311,9 @@ Schimbarea contractului comun al connectorilor necesita ADR.
 
 Connector generic pentru URL-uri simple / scraping:
 
-**IMPLEMENTED - HTTP JobPosting JSON-LD + bounded browser fallback**
+**IMPLEMENTED - JobPosting JSON-LD**
 
-Collectorul foloseste HTTP ca prima metoda. Urmeaza linkuri de cariere, anunturi si paginare, cu 12 pagini si 45 secunde per sursa, maximum 12 surse concurente. Aplica robots.txt, restrictii de retea publica, limite de dimensiune si filtre pentru linkuri non-job.
-
-Daca prima pagina este accesibila, pare dinamica si nu contine `JobPosting`, poate fi randata o singura data cu Chromium/Playwright. Browserul este limitat la domeniul sursei, maximum 2 sesiuni simultan si 8 secunde de randare. Nu ocoleste robots, autentificare, HTTP 401/403/429 sau CAPTCHA. HTML-ul rezultat reintra in parserul comun; nu exista extractor DOM generic separat.
-
-Rezultatele intra in contractul comun existent. Pagina HTTP 200 sau pagina randata fara anunturi nu inseamna succes. Acoperirea exhaustiva a site-ului nu este garantata. ADR-001 documenteaza decizia initiala de colectare web; fallback-ul respecta acelasi contract si aceleasi limite de responsabilitate.
+Collectorul urmeaza linkuri de cariere, anunturi si paginare, cu 12 pagini si 45 secunde per sursa, maximum 12 surse concurente. Aplica robots.txt, restrictii de retea publica si limite de dimensiune. Rezultatele intra in contractul comun existent. Pagina HTTP 200 fara anunturi nu inseamna succes. Acoperirea exhaustiva a site-ului nu este garantata. ADR-001 documenteaza decizia aprobata.
 
 ---
 
@@ -541,8 +519,7 @@ Pentru logica critica trebuie mentinute teste pentru:
 - deduplicare;
 - filtrare;
 - scoring;
-- connectori;
-- rutare surse si fallback web.
+- connectori.
 
 ---
 
@@ -601,9 +578,9 @@ Nu exista momentan flux automat de notificari email.
 
 Status:
 
-**IMPLEMENTED - JSON-LD + fallback JavaScript limitat**
+**IMPLEMENTED - JSON-LD, fara executie JavaScript**
 
-HTTP ramane metoda principala. Chromium este folosit o singura data pentru prima pagina dinamica eligibila. Site-urile care raman fara `JobPosting` pot necesita extractori specifici; rezultatul incercarii este vizibil in Loguri.
+Site-urile dinamice/fara JobPosting necesita extractori suplimentari; rezultatul incercarii este vizibil in Loguri.
 
 ### Additional providers
 
@@ -611,7 +588,7 @@ Status:
 
 **PLANNED**
 
-JobsPipe si Jobicy au connectori implementati. JobsPipe este momentan dezactivat. Provider roots documentate pentru JobsPipe sunt amanate din crawlerul generic pana la reluarea integrarii dedicate. Celelalte surse HTTP(S) eligibile sunt incercate prin colectare web, cu status explicit pe pagini si sursa.
+JobsPipe si Jobicy au connectori implementati. Celelalte surse HTTP(S) active sunt incercate prin colectare web, cu status explicit pe pagini si sursa.
 
 ---
 
@@ -648,9 +625,7 @@ JobsPipe si Jobicy au connectori implementati. JobsPipe este momentan dezactivat
 - [x] JobsPipe via Apify
 - [x] JobsPipe Direct fallback
 - [x] Additional connector: Jobicy (E2E de confirmat)
-- [x] Generic URL collector (HTTP/JSON-LD)
-- [x] Bounded Chromium/Playwright fallback (E2E de confirmat)
-- [x] Deferred provider-root routing while JobsPipe is disabled
+- [x] Generic URL collector (JSON-LD, E2E de confirmat)
 
 ### Runtime
 
@@ -692,7 +667,7 @@ Politica de pastrare:
 
 Versiune document:
 
-**v1.3**
+**v1.2**
 
 Versiune aplicatie de referinta:
 

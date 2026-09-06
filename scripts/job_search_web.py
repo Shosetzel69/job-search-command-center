@@ -11,6 +11,7 @@ from html.parser import HTMLParser
 from urllib.parse import urljoin, urlsplit
 
 import job_search as engine
+import web_browser as browser
 from job_search_jobicy import plain_text
 from web_transport import FetchError, PublicClient, public_url
 
@@ -22,7 +23,12 @@ ATS_HOSTS = ("greenhouse.io", "lever.co", "myworkdayjobs.com", "smartrecruiters.
              "successfactors.com", "taleo.net", "teamtailor.com", "applytojob.com")
 CAREER = re.compile(r"job|career|vacanc|recruit|cariere|posturi|stellen|emploi|opening|opportunit", re.I)
 ROLE = re.compile(r"project|program|programme|delivery|service.manager|scrum|pmo", re.I)
-SKIP = re.compile(r"/(login|signin|register|privacy|terms|blog|news|press|events|about)(/|$)", re.I)
+SKIP = re.compile(
+    r"/(login|signin|sign-in|sign_in|register|privacy|terms|blog|news|press|events|about|pricing|"
+    r"products?|solutions?|resources?|webinars?|status|history|demo|contact|faq|support|help|career-advice)(/|$)",
+    re.I,
+)
+DYNAMIC = re.compile(r"<script[^>]+src=|__NEXT_DATA__|webpack|data-reactroot|id=[\"'](?:root|app|__next)[\"']", re.I)
 
 
 class Page(HTMLParser):
@@ -175,6 +181,37 @@ def candidate(link, page_url, roots):
     return priority, url
 
 
+def challenge(html):
+    return bool(re.search(r"<title[^>]*>\s*(just a moment|access denied|attention required)", html, re.I)
+                or "/cdn-cgi/challenge-platform/" in html)
+
+
+def extract_page(page, page_url, source, now, records):
+    detected = valid = malformed = expired = 0
+    for document in page.documents:
+        for node in objects(document):
+            if is_type(node, "JobPosting"):
+                if isinstance(node.get("url"), str):
+                    page.links.append({"url": node["url"], "text": node.get("title") or "job", "next": False})
+                detected += 1
+                try:
+                    record = normalize(node, page_url, source, now)
+                    if record:
+                        records[record["id"]] = record
+                        valid += 1
+                    else:
+                        expired += 1
+                except (ValueError, TypeError, FetchError):
+                    malformed += 1
+            if is_type(node, "ListItem"):
+                item = node.get("item") or {}
+                url = (item.get("url") or item.get("@id") or node.get("url")) if isinstance(item, dict) else item
+                if url:
+                    page.links.append({"url": url, "text": area_name(item), "next": False})
+    malformed += len(page.errors)
+    return detected, valid, malformed, expired
+
+
 def collect(source, config, now=None, client=None):
     now = now or datetime.now(timezone.utc)
     deadline = time.monotonic() + MAX_SECONDS
@@ -185,6 +222,13 @@ def collect(source, config, now=None, client=None):
     heapq.heappush(queue, (0, source["url"]))
     queued.add(source["url"])
     pages, detected, malformed, expired = 0, 0, 0, 0
+    browser_attempted = False
+    browser_status = "not_attempted"
+    browser_failure = None
+    first_final_url = None
+    first_http_status = None
+    first_robots_status = None
+
     while queue and pages < MAX_PAGES and time.monotonic() < deadline:
         _, requested = heapq.heappop(queue)
         if requested in visited:
@@ -193,44 +237,89 @@ def collect(source, config, now=None, client=None):
         pages += 1
         try:
             final_url, html = client.get(requested)
+            if first_final_url is None:
+                first_final_url = final_url
+                first_http_status = getattr(client, "last_status", None)
+                first_robots_status = getattr(client, "last_robots_status", None)
             visited.add(final_url)
             roots.add(site_root(urlsplit(final_url).hostname))
-            if re.search(r"<title[^>]*>\s*(just a moment|access denied|attention required)", html, re.I) or "/cdn-cgi/challenge-platform/" in html:
-                raise FetchError("Bot challenge; no bypass attempted", "blocked")
+            if challenge(html):
+                raise FetchError("Bot challenge; no bypass attempted", "blocked", requested_url=requested, final_url=final_url,
+                                 status_code=getattr(client, "last_status", None), robots_status=getattr(client, "last_robots_status", None))
             page = Page(html)
             if not page.documents and re.search(r"<input[^>]+type=[\"\']password", html, re.I) and re.search(r"/(login|signin|sign-in|sign_in)(/|$)", urlsplit(final_url).path, re.I):
-                raise FetchError("Authentication required", "blocked")
-            count = 0
-            for document in page.documents:
-                for node in objects(document):
-                    if is_type(node, "JobPosting"):
-                        if isinstance(node.get("url"), str):
-                            page.links.append({"url": node["url"], "text": node.get("title") or "job", "next": False})
-                        detected += 1
-                        try:
-                            record = normalize(node, final_url, source, now)
-                            if record:
-                                records[record["id"]] = record
-                                count += 1
-                            else:
-                                expired += 1
-                        except (ValueError, TypeError, FetchError):
-                            malformed += 1
-                    if is_type(node, "ListItem"):
-                        item = node.get("item") or {}
-                        url = (item.get("url") or item.get("@id") or node.get("url")) if isinstance(item, dict) else item
-                        if url:
-                            page.links.append({"url": url, "text": area_name(item), "next": False})
-            diagnostics.append({"query": requested, "final_url": final_url, "status": "fetched", "records": count,
-                                "error": "; ".join(page.errors) or None})
-            malformed += len(page.errors)
+                raise FetchError("Authentication required", "blocked", requested_url=requested, final_url=final_url,
+                                 status_code=getattr(client, "last_status", None), robots_status=getattr(client, "last_robots_status", None))
+
+            page_detected, count, page_malformed, page_expired = extract_page(page, final_url, source, now, records)
+            detected += page_detected
+            malformed += page_malformed
+            expired += page_expired
+            page_browser_attempted = False
+            page_browser_status = None
+            page_browser_error = None
+
+            # Browser rendering is a second attempt only for the first accessible dynamic page.
+            # It never runs after robots/access failures and never performs login or CAPTCHA handling.
+            if (not browser_attempted and page_detected == 0 and DYNAMIC.search(html)
+                    and config.get("web_browser_fallback_enabled", True) is not False
+                    and time.monotonic() < deadline - 1):
+                browser_attempted = page_browser_attempted = True
+                try:
+                    rendered_url, rendered_html, browser_meta = browser.render(final_url, deadline, client, roots)
+                    if challenge(rendered_html):
+                        raise FetchError("Bot challenge after browser render; no bypass attempted", "blocked",
+                                         requested_url=final_url, final_url=rendered_url)
+                    rendered = Page(rendered_html)
+                    rendered_detected, rendered_count, rendered_malformed, rendered_expired = extract_page(
+                        rendered, rendered_url, source, now, records)
+                    detected += rendered_detected
+                    count += rendered_count
+                    malformed += rendered_malformed
+                    expired += rendered_expired
+                    page.links.extend(rendered.links)
+                    roots.add(site_root(urlsplit(rendered_url).hostname))
+                    browser_status = page_browser_status = browser_meta.get("browser_status") or "rendered"
+                except (FetchError, ValueError, OSError) as exc:
+                    browser_status = page_browser_status = getattr(exc, "kind", "error")
+                    browser_failure = page_browser_error = str(exc)
+
+            diagnostic_error = list(page.errors)
+            if page_browser_error:
+                diagnostic_error.append("browser: " + page_browser_error)
+            diagnostics.append({
+                "query": requested,
+                "requested_url": requested,
+                "final_url": final_url,
+                "status": "fetched",
+                "transport": "http",
+                "http_status": getattr(client, "last_status", None),
+                "robots_status": getattr(client, "last_robots_status", None),
+                "records": count,
+                "browser_attempted": page_browser_attempted,
+                "browser_status": page_browser_status,
+                "error": "; ".join(diagnostic_error) or None,
+            })
             for link in page.links[:MAX_LINKS]:
                 option = candidate(link, final_url, roots)
                 if option and option[1] not in queued and option[1] not in visited and len(queued) < MAX_LINKS:
                     queued.add(option[1])
                     heapq.heappush(queue, option)
         except (FetchError, ValueError, OSError, RecursionError) as exc:
-            diagnostics.append({"query": requested, "status": getattr(exc, "kind", "error"), "records": 0, "error": str(exc)})
+            diagnostics.append({
+                "query": requested,
+                "requested_url": getattr(exc, "requested_url", None) or requested,
+                "final_url": getattr(exc, "final_url", None) or getattr(client, "last_url", None),
+                "status": getattr(exc, "kind", "error"),
+                "transport": "http",
+                "http_status": getattr(exc, "status_code", None) or getattr(client, "last_status", None),
+                "robots_status": getattr(exc, "robots_status", None) or getattr(client, "last_robots_status", None),
+                "records": 0,
+                "browser_attempted": False,
+                "browser_status": None,
+                "error": str(exc),
+            })
+
     errors = [item for item in diagnostics if item["status"] != "fetched" or item.get("error")]
     limited = bool(queue)
     if records:
@@ -243,14 +332,37 @@ def collect(source, config, now=None, client=None):
         outcome = "no_active_jobs"
     else:
         outcome = "no_extractable_jobs"
+
     note = f"{pages} pages attempted; {detected} JobPosting nodes; {len(records)} valid records; {expired} expired; {malformed} malformed"
+    if browser_attempted:
+        note += f"; browser fallback {browser_status}"
     if limited:
         note += "; page/time/link budget reached; coverage is partial"
     if outcome == "no_extractable_jobs":
-        note += "; HTML access does not establish absence of vacancies; site-specific extraction may be required"
+        note += "; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
     results = [engine.CollectionResult(connector, "web_pages", True, list(records.values()), len(records))] if records or outcome == "no_active_jobs" else []
     if outcome not in {"extracted", "no_active_jobs"}:
         results.append(engine.CollectionResult(connector, outcome, False, [], 0, note))
-    return results, {"web_outcome": outcome, "pages_attempted": pages, "pages_fetched": sum(item["status"] == "fetched" for item in diagnostics),
-                     "jobs_detected": detected, "coverage_complete": False, "discovered_pages_complete": not limited and not errors and not malformed,
-                     "limitations": [note], "page_results": diagnostics}
+
+    failures = list(dict.fromkeys(item["error"] for item in diagnostics if item.get("error")))
+    failure_reason = "; ".join(failures) or browser_failure
+    if not failure_reason and outcome not in {"extracted", "no_active_jobs"}:
+        failure_reason = note
+    return results, {
+        "web_outcome": outcome,
+        "collection_method": "http+browser" if browser_attempted else "http",
+        "requested_url": source.get("url"),
+        "final_url": first_final_url or getattr(client, "last_url", None),
+        "http_status": first_http_status,
+        "robots_status": first_robots_status,
+        "browser_attempted": browser_attempted,
+        "browser_status": browser_status,
+        "failure_reason": failure_reason,
+        "pages_attempted": pages,
+        "pages_fetched": sum(item["status"] == "fetched" for item in diagnostics),
+        "jobs_detected": detected,
+        "coverage_complete": False,
+        "discovered_pages_complete": not limited and not errors and not malformed,
+        "limitations": [note],
+        "page_results": diagnostics,
+    }

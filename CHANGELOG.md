@@ -4,6 +4,10 @@
 
 ### Remedieri
 
+- #54: providerii generici LinkedIn, Indeed, Workday, Greenhouse, Workable, SmartRecruiters, Ashby si Lever nu mai sunt trimisi crawlerului web cat timp ruta dedicata este amanata; JobsPipe ramane dezactivat.
+- #54: adaugat fallback Chromium/Playwright pentru prima pagina dinamica accesibila fara `JobPosting`, fara bypass robots/login/CAPTCHA si cu maximum 2 sesiuni browser simultan.
+- #54: restransa descoperirea linkurilor non-job (`pricing`, `products`, `resources`, `webinars`, `status`, `demo`, `career-advice` etc.) si extins diagnosticul per sursa cu metoda, URL final, HTTP/robots, browser si motivul esecului.
+
 - Validare live #49: 128 surse web incercate, 56 anunturi extrase din 12 site-uri. Corectate atribute HTML nule, adrese JSON-LD in liste si detectarea eronata a login-ului; Loguri separa rezultatele partiale si blocajele.
 
 - #49 redeschis: colectare web reala pentru surse fara API, prin pagini de cariere/anunturi/paginare si JobPosting JSON-LD. Rezultate si limite per pagina/sursa, transport public protejat, teste izolate; fara dependinte noi.

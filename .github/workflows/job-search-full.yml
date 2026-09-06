@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - ".github/workflows/job-search-full.yml"
+      - "requirements-search.txt"
       - "data/search-config.json"
       - "scripts/job_search.py"
       - "scripts/job_search_optimized.py"
@@ -13,6 +14,7 @@ on:
       - "scripts/source_orchestration.py"
       - "scripts/job_search_jobicy.py"
       - "scripts/job_search_web.py"
+      - "scripts/web_browser.py"
       - "scripts/web_transport.py"
       - "scripts/job_identity.py"
       - "shared/**"
@@ -41,7 +43,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Validate search engine syntax
-        run: python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_apify.py scripts/job_search_runner.py
+        run: python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_apify.py scripts/job_search_runner.py scripts/source_orchestration.py scripts/job_search_web.py scripts/web_browser.py scripts/web_transport.py
+
+      - name: Install browser fallback
+        run: |
+          python3 -m pip install --disable-pip-version-check -r requirements-search.txt
+          python3 -m playwright install --with-deps chromium
 
       - name: Collect, normalize, filter and score
         id: search
