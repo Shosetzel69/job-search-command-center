@@ -1,6 +1,8 @@
 # Contracte date JSON
 
-Actualizare: 2026-09-06
+Versiune aplicatie: `0.05`
+Schema principala: `1.0`
+Ultima actualizare: `2026-09-06`
 
 ## 1. Reguli
 
