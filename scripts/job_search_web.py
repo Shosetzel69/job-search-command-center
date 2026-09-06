@@ -34,11 +34,11 @@ class Page(HTMLParser):
 
     def handle_starttag(self, tag, attrs):
         attrs = dict(attrs)
-        if tag == "script" and attrs.get("type", "").lower().split(";")[0] == "application/ld+json":
+        if tag == "script" and (attrs.get("type") or "").lower().split(";")[0] == "application/ld+json":
             self.script = []
         if tag == "a" and attrs.get("href"):
-            self.anchor = {"url": attrs["href"], "text": "", "next": "next" in attrs.get("rel", "").split()}
-        if tag == "link" and "next" in attrs.get("rel", "").split() and attrs.get("href"):
+            self.anchor = {"url": attrs["href"], "text": "", "next": "next" in (attrs.get("rel") or "").split()}
+        if tag == "link" and "next" in (attrs.get("rel") or "").split() and attrs.get("href"):
             self.links.append({"url": attrs["href"], "text": "next", "next": True})
 
     def handle_data(self, data):
@@ -84,6 +84,8 @@ def as_list(value):
 
 
 def area_name(value):
+    if isinstance(value, list):
+        return ", ".join(filter(None, (area_name(item) for item in value)))
     return str(value.get("name") or value.get("@id") or "") if isinstance(value, dict) else str(value or "")
 
 
@@ -105,14 +107,14 @@ def normalize(node, page_url, source, now):
         if not isinstance(place, dict):
             locations.append(str(place))
             continue
-        address = place.get("address") or {}
-        if isinstance(address, str):
-            locations.append(address)
-            continue
-        parts = [address.get("addressLocality"), address.get("addressRegion"), area_name(address.get("addressCountry"))]
-        locations.append(", ".join(str(part) for part in parts if part))
-        if parts[-1]:
-            office_countries.append(parts[-1])
+        for address in as_list(place.get("address") or {}):
+            if not isinstance(address, dict):
+                locations.append(str(address))
+                continue
+            parts = [address.get("addressLocality"), address.get("addressRegion"), area_name(address.get("addressCountry"))]
+            locations.append(", ".join(str(part) for part in parts if part))
+            if parts[-1]:
+                office_countries.append(parts[-1])
     restrictions = [area_name(area) for area in as_list(node.get("applicantLocationRequirements"))]
     # For telecommuting, applicant restrictions take precedence over office addresses.
     territories = restrictions if remote else office_countries
@@ -196,7 +198,7 @@ def collect(source, config, now=None, client=None):
             if re.search(r"<title[^>]*>\s*(just a moment|access denied|attention required)", html, re.I) or "/cdn-cgi/challenge-platform/" in html:
                 raise FetchError("Bot challenge; no bypass attempted", "blocked")
             page = Page(html)
-            if not page.documents and re.search(r"<input[^>]+type=[\"\']password", html, re.I):
+            if not page.documents and re.search(r"<input[^>]+type=[\"\']password", html, re.I) and re.search(r"/(login|signin|sign-in|sign_in)(/|$)", urlsplit(final_url).path, re.I):
                 raise FetchError("Authentication required", "blocked")
             count = 0
             for document in page.documents:

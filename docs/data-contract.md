@@ -253,3 +253,5 @@ Istoricul vechi fara aceste campuri ramane lizibil; UI nu inventeaza contoare li
 `page_results` contine `query` (URL solicitat), `final_url` cand este disponibil, `status`, `records`, `error`.
 `status=completed` inseamna anunturi extrase fara erori/limite sau numai anunturi structurate expirate in paginile vizitate. `failed` poate avea rezultate valide partiale, publicate prin pipeline, plus un motiv explicit. `no_extractable_jobs` nu inseamna ca site-ul nu are joburi.
 Contoarele attempted/succeeded/failed pastreaza semantica anterioara. Fiecare sursa web este numarata individual.
+
+Contoare aditive dupa validarea live: `sources_with_records` (inclusiv rezultate partiale), `sources_partial`, `sources_blocked`, `sources_no_extractable_jobs`. Nu sunt categorii disjuncte fata de succeeded/failed: partial este inclus in failed, dar poate furniza records publicabile.
