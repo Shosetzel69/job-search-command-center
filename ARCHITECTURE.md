@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.3`
+Versiune document: `v1.4`
 Versiune aplicatie de referinta: `0.05`
 Ultima actualizare: `2026-09-06`
 
@@ -68,7 +68,7 @@ Principii:
 - motorul de cautare este independent de UI;
 - sursele sunt normalizate intr-un model comun;
 - geo-eligibility este separata de FIT/scoring;
-- catalogul surselor este separat de connectorii operationali;
+- catalogul surselor este separat de rutele si connectorii operationali;
 - secretele nu ajung in browser;
 - costul operational este mentinut redus;
 - componentele planificate nu sunt tratate ca implementate.
@@ -195,14 +195,16 @@ Componente:
 - `job_search_optimized.py` — JobsPipe Direct;
 - `job_search_apify.py` — JobsPipe prin Apify;
 - `job_search_runner.py` — orchestration, transport, status si run history;
-- `source_orchestration.py` — plan din catalog, rutare si raportare per sursa;
+- `source_orchestration.py` — plan din catalog, rutare operationala si raportare per sursa;
 - `job_search_jobicy.py` — API public Jobicy;
+- `job_search_public_api.py` — adaptoare publice Jobgether, Himalayas, Working Nomads, Remote OK, Remotive si board-uri SmartRecruiters/Greenhouse/Ashby;
 - `job_search_web.py` — descoperire si extractie web generica;
 - `web_transport.py` — transport HTTP public cu limite, robots si DNS verificat;
 - `web_browser.py` — fallback Chromium/Playwright limitat pentru randare JavaScript dupa acces HTTP permis;
 - `job_identity.py` — deduplicare intre surse;
-- `shared/source-connectors.json` — rutare comuna pentru Python, Worker si UI;
-- `test_search_logic.py`, `test_source_orchestration.py`, `test_web_collection.py` — teste de regresie.
+- `shared/source-connectors.json` — detectia connectorilor dupa host;
+- `shared/source-api-routes.json` — rute operationale separate de URL-ul uman din catalog;
+- `test_search_logic.py`, `test_source_orchestration.py`, `test_public_api_connectors.py`, `test_web_collection.py` — teste de regresie.
 
 Pipeline:
 
@@ -224,13 +226,15 @@ Geo-eligibility este evaluata separat de FIT.
 
 ### 8.1 Principiu
 
-Catalogul de surse si connectorii operationali sunt concepte diferite.
+Catalogul de surse, ruta operationala si connectorul sunt concepte diferite.
 
 ```text
-Source catalog != Operational connectors
+Source catalog != Operational route != Connector
 ```
 
-`data/sources.json` reprezinta catalogul gestionabil din UI.
+`data/sources.json` reprezinta catalogul gestionabil din UI si pastreaza URL-ul uman/canonic al sursei.
+
+`shared/source-api-routes.json` poate indica un endpoint operational diferit pentru o sursa cunoscuta, fara a modifica URL-ul afisat si administrat in UI.
 
 O sursa poate exista in catalog fara sa fie operationala.
 
@@ -242,7 +246,7 @@ active = true
 strategie operationala permisa pentru sursa
 ```
 
-`connector_available` descrie disponibilitatea unui adapter dedicat; nu este o conditie pentru collectorul web generic.
+`connector_available` descrie disponibilitatea unei metode de colectare deduse din URL; nu este o regula de scoring si nu este trimis de client ca autoritate.
 
 ### 8.2 Administrarea surselor
 
@@ -264,15 +268,38 @@ Frontend
 
 URL-urile duplicate sunt respinse.
 
-Secretele connectorilor nu sunt stocate in catalog.
+Secretele connectorilor nu sunt stocate in catalog sau in rutele operationale.
 
-### 8.3 Connector operational curent
+### 8.3 Connectori operationali curenti
 
 Connectori dedicati implementati:
 
-**JobsPipe si Jobicy** (integrarea E2E Jobicy: de confirmat).
+- JobsPipe;
+- Jobicy;
+- Jobgether;
+- Himalayas;
+- Working Nomads;
+- Remote OK;
+- Remotive;
+- SmartRecruiters Public Posting API pentru board-uri concrete;
+- Greenhouse Job Board API pentru board-uri concrete;
+- Ashby Public Job Posting API pentru board-uri concrete.
 
-Jobicy foloseste API-ul public, maximum 200 listari recente, timeout 30 secunde si cel mult o incercare pe ora. Nu foloseste credentiale JobsPipe.
+API-urile publice noi nu necesita credentiale. Toate livreaza acelasi `CollectionResult`; filtrarea, geografia, deduplicarea si scoring-ul raman in motorul comun.
+
+Politici de polling explicite:
+
+- Jobicy: maximum o incercare/ora;
+- Himalayas: maximum o incercare/24h;
+- Remotive: maximum o incercare/6h.
+
+Pentru API-urile ATS, data de publicare folosita pentru freshness este:
+
+- SmartRecruiters: `releasedDate`, cu filtrare upstream prin `releasedAfter`;
+- Greenhouse: `first_published` din detaliul jobului; `updated_at` este doar prefiltru;
+- Ashby: `publishedAt`.
+
+Un rezultat API fara data de publicare obligatorie este respins de adapter, pentru a nu ocoli implicit filtrul de freshness.
 
 JobsPipe poate folosi doua transporturi:
 
@@ -293,9 +320,9 @@ jobspipe_apify_max_items_per_run = 100
 
 Codul Apify si Direct ramane implementat, dar nu este apelat cat timp modul este `disabled`.
 
-Runner-ul selecteaza toate sursele active cu strategie operationala. URL-urile HTTP(S) fara adapter dedicat sunt incercate prin collectorul web, cu exceptia provider roots amanate explicit. URL-urile invalide sunt `unsupported`; omiterile deliberate sunt `skipped`; paginile care nu produc anunturi extrase sunt raportate separat.
+Runner-ul selecteaza toate sursele active cu strategie operationala. Daca exista o ruta in `shared/source-api-routes.json`, aceasta este folosita pentru colectare, iar URL-ul original ramane in diagnostic. URL-urile HTTP(S) fara adapter dedicat sunt incercate prin collectorul web, cu exceptia provider roots amanate explicit.
 
-Provider roots amanate din collectorul generic cat timp ruta dedicata este postponata:
+Provider roots generice amanate din collectorul generic:
 
 - LinkedIn;
 - Indeed;
@@ -306,7 +333,9 @@ Provider roots amanate din collectorul generic cat timp ruta dedicata este postp
 - Ashby;
 - Lever.
 
-Un job board concret al unui angajator pe un ATS poate ramane eligibil pentru collectorul web daca URL-ul nu este radacina generica a providerului si respecta regulile de acces.
+Radacina generica a unui ATS nu este tratata drept feed global. Un job board concret de companie SmartRecruiters, Greenhouse sau Ashby este eligibil pentru adapterul dedicat numai cand exista un identificator concret derivabil din ruta operationala.
+
+Lever ramane fara adapter dedicat deoarece schema publica documentata nu ofera o data de publicare suficient de clara pentru regula de freshness. Un board Lever concret poate ramane pe colectare web daca accesul este permis.
 
 ### 8.4 Connectori noi
 
@@ -345,6 +374,9 @@ Rezultatele intra in contractul comun existent. Pagina HTTP 200 sau pagina randa
 
 ```text
 External Sources
+      |
+      v
+Operational Route
       |
       v
 Connector / Provider
@@ -396,6 +428,8 @@ GitHub Contents API
    +--> data/sources.json
 ```
 
+Rutele operationale validate in Development sunt versionate separat in `shared/source-api-routes.json`; ele nu sunt editate din UI in MVP.
+
 ### 9.3 Lansare manuala
 
 ```text
@@ -432,6 +466,11 @@ Fisiere canonice:
 - `data/applications.json`;
 - `data/search-state.json`.
 
+Configuratie statica de rutare:
+
+- `shared/source-connectors.json`;
+- `shared/source-api-routes.json`.
+
 ### Roluri
 
 `jobs.json`
@@ -453,7 +492,7 @@ Fisiere canonice:
 - istoricul aplicarilor.
 
 `search-state.json`
-- stare interna pentru JobsPipe Direct;
+- stare interna pentru polling/cooldown si JobsPipe Direct;
 - nu este publicat frontend-ului.
 
 Trecerea la alta forma de persistenta este schimbare arhitecturala si necesita ADR.
@@ -487,6 +526,8 @@ Google ID token:
 
 - `APIFY_TOKEN`;
 - `JOBSPIPE_API_KEY`.
+
+API-urile publice implementate prin `job_search_public_api.py` nu necesita secrete.
 
 Reguli:
 
@@ -528,10 +569,11 @@ GitHub Pages nu este utilizat.
 
 CI valideaza cel putin:
 
-- sintaxa Python;
+- sintaxa Python, inclusiv adaptoarele publice;
 - configuratia geografica;
 - testele de regresie search logic;
-- fisierele JSON;
+- testele de connectori publici si rutare ATS;
+- fisierele JSON de date si rutare;
 - React/Vite production build;
 - Cloudflare Worker dry-run.
 
@@ -543,6 +585,8 @@ Pentru logica critica trebuie mentinute teste pentru:
 - scoring;
 - connectori;
 - rutare surse si fallback web.
+
+Testele connectorilor sunt izolate si nu efectueaza apeluri HTTP reale.
 
 ---
 
@@ -563,6 +607,7 @@ Necesita ADR inainte de implementare:
 Nu necesita ADR:
 
 - connector nou care respecta contractul existent;
+- ruta operationala noua pentru o sursa existenta;
 - sursa noua in catalog;
 - modificare UI fara impact arhitectural;
 - regula noua de filtrare/scoring aprobata ca requirement;
@@ -603,15 +648,15 @@ Status:
 
 **IMPLEMENTED - JSON-LD + fallback JavaScript limitat**
 
-HTTP ramane metoda principala. Chromium este folosit o singura data pentru prima pagina dinamica eligibila. Site-urile care raman fara `JobPosting` pot necesita extractori specifici; rezultatul incercarii este vizibil in Loguri.
+HTTP ramane metoda principala pentru sursele fara adapter. Chromium este folosit o singura data pentru prima pagina dinamica eligibila. Site-urile care raman fara `JobPosting` pot necesita extractori specifici; rezultatul incercarii este vizibil in Loguri.
 
 ### Additional providers
 
 Status:
 
-**PLANNED**
+**PARTIAL IMPLEMENTATION**
 
-JobsPipe si Jobicy au connectori implementati. JobsPipe este momentan dezactivat. Provider roots documentate pentru JobsPipe sunt amanate din crawlerul generic pana la reluarea integrarii dedicate. Celelalte surse HTTP(S) eligibile sunt incercate prin colectare web, cu status explicit pe pagini si sursa.
+Pe langa JobsPipe si Jobicy sunt implementate adaptoare fara credentiale pentru Jobgether, Himalayas, Working Nomads, Remote OK, Remotive, SmartRecruiters, Greenhouse si Ashby. Radacinile generice LinkedIn, Indeed, Workday, Workable si Lever raman amanate sau necesita alta strategie autorizata. JobsPipe este momentan dezactivat.
 
 ---
 
@@ -647,10 +692,19 @@ JobsPipe si Jobicy au connectori implementati. JobsPipe este momentan dezactivat
 - [x] JobsPipe connector
 - [x] JobsPipe via Apify
 - [x] JobsPipe Direct fallback
-- [x] Additional connector: Jobicy (E2E de confirmat)
+- [x] Jobicy public API
+- [x] Jobgether public API
+- [x] Himalayas public API
+- [x] Working Nomads public feed
+- [x] Remote OK public API
+- [x] Remotive public API
+- [x] SmartRecruiters company-board adapter
+- [x] Greenhouse company-board adapter
+- [x] Ashby company-board adapter
+- [x] Operational route registry separate from source catalog
 - [x] Generic URL collector (HTTP/JSON-LD)
-- [x] Bounded Chromium/Playwright fallback (E2E de confirmat)
-- [x] Deferred provider-root routing while JobsPipe is disabled
+- [x] Bounded Chromium/Playwright fallback
+- [x] Deferred generic provider-root routing
 
 ### Runtime
 
@@ -659,7 +713,7 @@ JobsPipe si Jobicy au connectori implementati. JobsPipe este momentan dezactivat
 - [x] Run status
 - [x] Run history
 - [x] Applications data
-- [x] Direct search state
+- [x] Polling / Direct search state
 
 ### Future
 
@@ -692,7 +746,7 @@ Politica de pastrare:
 
 Versiune document:
 
-**v1.3**
+**v1.4**
 
 Versiune aplicatie de referinta:
 
