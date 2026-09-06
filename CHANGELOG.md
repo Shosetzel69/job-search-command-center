@@ -4,6 +4,13 @@
 
 ### Remedieri
 
+- #56: adaugate adaptoare publice fara credentiale pentru Jobgether, Himalayas, Working Nomads, Remote OK si Remotive; fiecare rezultat nou necesita data de publicare pentru filtrul de freshness.
+- #56: adaugata rutare dedicata pentru board-uri concrete SmartRecruiters, Greenhouse si Ashby; radacinile generice ATS raman amanate si nu sunt tratate drept feed global.
+- #56: adaugat `shared/source-api-routes.json`, care separa URL-ul uman din catalog de endpointul operational de colectare; Endava, Bosch, Netcompany, Thales, GlobalLogic, Infinity Quest, Talan, ARHS, Xebia, ClickHouse, Snyk, Datadog, Camunda, Kong si LocalStack folosesc rute ATS confirmate.
+- #56: Contentsquare este rutat catre board-ul public Lever, iar KEYES/NRB si Trasys catre NRB Careers; Lever ramane fara adapter dedicat pana exista o data de publicare fiabila.
+- #56: polling protejat pentru Himalayas (24h) si Remotive (6h); JobsPipe ramane dezactivat si independent de noile API-uri publice.
+- #56: adaugate teste izolate pentru normalizare, freshness, paginare/rutare ATS si erori de schema; CI valideaza noile module si registre JSON.
+
 - #54: providerii generici LinkedIn, Indeed, Workday, Greenhouse, Workable, SmartRecruiters, Ashby si Lever nu mai sunt trimisi crawlerului web cat timp ruta dedicata este amanata; JobsPipe ramane dezactivat.
 - #54: adaugat fallback Chromium/Playwright pentru prima pagina dinamica accesibila fara `JobPosting`, fara bypass robots/login/CAPTCHA si cu maximum 2 sesiuni browser simultan.
 - #54: restransa descoperirea linkurilor non-job (`pricing`, `products`, `resources`, `webinars`, `status`, `demo`, `career-advice` etc.) si extins diagnosticul per sursa cu metoda, URL final, HTTP/robots, browser si motivul esecului.
@@ -19,6 +26,8 @@
 
 ### Documentatie
 
+- #56: actualizate `ARCHITECTURE.md` la v1.4 si `docs/source-strategy.md`; v1.3 a fost arhivat inaintea modificarii.
+- #56: adaugat raportul complet al celor 130 de surse din auditul `github-20260906T155445Z`, grupate pe outcome-ul initial si cu rutele operationale modificate.
 - Definit fluxul formal `Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare` si interzisa trecerea directa din idei sau analiza in Development.
 - Adaugate criteriile de maturitate pentru transferul unei idei in `Analiza` si formatul scurt de sumar pentru transfer.
 - Aliniate `GOVERNANCE.md`, `.ai-instructions.md`, `CONTRIBUTING.md` si `README.md` cu noul flux de lucru.
@@ -181,4 +190,3 @@
 ### Observatie istorica
 
 Prioritizarea initiala a maximum cinci surse a fost eliminata ulterior. Strategia curenta este `all active sources equally`.
-
