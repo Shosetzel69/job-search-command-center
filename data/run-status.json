@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260906T155258Z",
+  "run_id": "github-20260906T155445Z",
   "status": "completed_with_errors",
-  "started_at": "2026-09-06T15:52:58.874589+00:00",
-  "completed_at": "2026-09-06T15:54:36.865320+00:00",
+  "started_at": "2026-09-06T15:54:45.670758+00:00",
+  "completed_at": "2026-09-06T15:56:21.083340+00:00",
   "sources": [
     "LinkedIn Jobs",
     "Indeed",
@@ -133,10 +133,9 @@
     "Thaleria",
     "Talan Belgium / Luxembourg",
     "Fujitsu Belgium",
-    "ARHS / Accenture",
-    "JobsPipe"
+    "ARHS / Accenture"
   ],
-  "sources_processed": 130,
+  "sources_processed": 129,
   "failed_sources": [
     "LinkedIn Jobs",
     "Indeed",
@@ -465,15 +464,15 @@
       "active": true,
       "status": "failed",
       "records": 2,
-      "error": "12 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
+      "error": "12 pages attempted; 3 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
       "web_outcome": "partial",
       "pages_attempted": 12,
       "pages_fetched": 12,
-      "jobs_detected": 2,
+      "jobs_detected": 3,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "12 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
+        "12 pages attempted; 3 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
@@ -484,80 +483,80 @@
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222111/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222111/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+          "query": "https://www.hipo.ro/locuri-de-munca/targabsolventi/sectiune/4",
+          "final_url": "https://www.hipo.ro/",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222113/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222113/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
           "status": "fetched",
           "records": 1,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-IT/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-IT/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
           "status": "fetched",
           "records": 0,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/2",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/2",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/2",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/2",
           "status": "fetched",
           "records": 0,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante",
           "status": "fetched",
           "records": 0,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/3",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/3",
           "status": "fetched",
           "records": 0,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/4",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/4",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/4",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/4",
           "status": "fetched",
           "records": 0,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/5",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/5",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/5",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/5",
           "status": "fetched",
           "records": 0,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/6",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/6",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/6",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Banci,Contabilitate-Finante,Internship/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-Contabilitate-Finante/6",
           "status": "fetched",
           "records": 0,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/7",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/7",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222108/JumpStart---A-GenZ-Career-Hub/Programe-de-internship,-trainee-sau-joburi-entry-level-in-Resurse-Umane",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222108/JumpStart-A-GenZ-Career-Hub/Programe-de-internship,-trainee-sau-joburi-entry-level-in-Resurse-Umane",
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
           "status": "fetched",
           "records": 1,
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Educatie---Training,Internship,Resurse-Umane---Psihologie/BUCURESTI,Oradea,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-Resurse-Umane/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Educatie-Training,Internship,Resurse-Umane-Psihologie/BUCURESTI,Oradea,Timisoara/Programe-de-internship,-trainee-sau-joburi-entry-level-in-Resurse-Umane/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
           "status": "fetched",
-          "records": 0,
+          "records": 1,
           "error": null
         }
       ],
@@ -572,7 +571,7 @@
           "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
+          "error": "12 pages attempted; 3 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -1419,7 +1418,7 @@
       "status": "failed",
       "records": 0,
       "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
-      "web_outcome": "blocked",
+      "web_outcome": "error",
       "pages_attempted": 1,
       "pages_fetched": 0,
       "jobs_detected": 0,
@@ -1431,14 +1430,14 @@
       "page_results": [
         {
           "query": "https://euremotejobs.com/",
-          "status": "blocked",
+          "status": "error",
           "records": 0,
-          "error": "Bot challenge; no bypass attempted"
+          "error": "HTTP 202"
         }
       ],
       "queries": [
         {
-          "query": "blocked",
+          "query": "error",
           "status": "failed",
           "records": 0,
           "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
@@ -1676,16 +1675,16 @@
       "connector": "web",
       "active": true,
       "status": "failed",
-      "records": 1,
-      "error": "12 pages attempted; 1 JobPosting nodes; 1 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
+      "records": 7,
+      "error": "12 pages attempted; 7 JobPosting nodes; 7 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
       "web_outcome": "partial",
       "pages_attempted": 12,
-      "pages_fetched": 2,
-      "jobs_detected": 1,
+      "pages_fetched": 12,
+      "jobs_detected": 7,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "12 pages attempted; 1 JobPosting nodes; 1 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
+        "12 pages attempted; 7 JobPosting nodes; 7 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
@@ -1696,85 +1695,95 @@
           "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/head-of-delivery-dach-stx-next-remote",
-          "final_url": "https://nofluffjobs.com/job/head-of-delivery-dach-stx-next-remote",
+          "query": "https://nofluffjobs.com/project-manager",
+          "final_url": "https://nofluffjobs.com/project-manager",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-remote",
+          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-remote",
           "status": "fetched",
           "records": 1,
           "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-holy-cross",
-          "status": "blocked",
+          "query": "https://nofluffjobs.com//project-manager",
+          "final_url": "https://nofluffjobs.com//project-manager",
+          "status": "fetched",
           "records": 0,
-          "error": "Disallowed by robots.txt"
+          "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-kuyavian-pomeranian",
-          "status": "blocked",
+          "query": "https://nofluffjobs.com//remote?criteria=category=project-manager",
+          "final_url": "https://nofluffjobs.com//remote?criteria=category=project-manager",
+          "status": "fetched",
           "records": 0,
-          "error": "Disallowed by robots.txt"
+          "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-lesser-poland",
-          "status": "blocked",
-          "records": 0,
-          "error": "Disallowed by robots.txt"
+          "query": "https://nofluffjobs.com/job/case-manager-ework-group-warszawa",
+          "final_url": "https://nofluffjobs.com/job/case-manager-ework-group-warszawa",
+          "status": "fetched",
+          "records": 1,
+          "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-lodz",
-          "status": "blocked",
+          "query": "https://nofluffjobs.com//Warszawa?criteria=category=project-manager",
+          "final_url": "https://nofluffjobs.com//Warszawa?criteria=category=project-manager",
+          "status": "fetched",
           "records": 0,
-          "error": "Disallowed by robots.txt"
+          "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-lower-silesian",
-          "status": "blocked",
-          "records": 0,
-          "error": "Disallowed by robots.txt"
+          "query": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
+          "final_url": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
+          "status": "fetched",
+          "records": 1,
+          "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-lublin",
-          "status": "blocked",
-          "records": 0,
-          "error": "Disallowed by robots.txt"
+          "query": "https://nofluffjobs.com/job/agile-delivery-manager-link-group-remote",
+          "final_url": "https://nofluffjobs.com/job/agile-delivery-manager-link-group-remote",
+          "status": "fetched",
+          "records": 1,
+          "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-lubusz",
-          "status": "blocked",
-          "records": 0,
-          "error": "Disallowed by robots.txt"
+          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-warszawa",
+          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-warszawa",
+          "status": "fetched",
+          "records": 1,
+          "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-masovian",
-          "status": "blocked",
-          "records": 0,
-          "error": "Disallowed by robots.txt"
+          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-apreel-remote",
+          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-apreel-remote",
+          "status": "fetched",
+          "records": 1,
+          "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-opole",
-          "status": "blocked",
-          "records": 0,
-          "error": "Disallowed by robots.txt"
-        },
-        {
-          "query": "https://nofluffjobs.com/job/job/head-of-delivery-dach-stx-next-podlaskie",
-          "status": "blocked",
-          "records": 0,
-          "error": "Disallowed by robots.txt"
+          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-link-group-remote-1",
+          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-link-group-remote-1",
+          "status": "fetched",
+          "records": 1,
+          "error": null
         }
       ],
       "queries": [
         {
           "query": "web_pages",
           "status": "completed",
-          "records": 1,
+          "records": 7,
           "error": null
         },
         {
           "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 1 JobPosting nodes; 1 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
+          "error": "12 pages attempted; 7 JobPosting nodes; 7 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -2353,115 +2362,31 @@
       "connector": "web",
       "active": true,
       "status": "failed",
-      "records": 5,
-      "error": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
-      "web_outcome": "partial",
-      "pages_attempted": 12,
-      "pages_fetched": 12,
-      "jobs_detected": 5,
+      "records": 0,
+      "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
+      "web_outcome": "error",
+      "pages_attempted": 1,
+      "pages_fetched": 0,
+      "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
+        "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
       ],
       "page_results": [
         {
           "query": "https://dynamitejobs.com/",
-          "final_url": "https://dynamitejobs.com/",
-          "status": "fetched",
+          "status": "error",
           "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/company/alyssanobriga/remote-job/program-manager-academic-certification-programs",
-          "final_url": "https://dynamitejobs.com/company/alyssanobriga/remote-job/program-manager-academic-certification-programs",
-          "status": "fetched",
-          "records": 1,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/skill/remote-program-development-jobs",
-          "final_url": "https://dynamitejobs.com/skill/remote-program-development-jobs",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/remote-jobs?skills=Program+Development",
-          "final_url": "https://dynamitejobs.com/remote-jobs?skills=Program+Development",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/skill/remote-program-management-jobs",
-          "final_url": "https://dynamitejobs.com/skill/remote-program-management-jobs",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/company/jiga/remote-job/program-manager-production-programs",
-          "final_url": "https://dynamitejobs.com/company/jiga/remote-job/program-manager-production-programs",
-          "status": "fetched",
-          "records": 1,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/company/olly/remote-job/senior-associate-project-manager-creative-ops",
-          "final_url": "https://dynamitejobs.com/company/olly/remote-job/senior-associate-project-manager-creative-ops",
-          "status": "fetched",
-          "records": 1,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/company/relevatehealth/remote-job/project-manager",
-          "final_url": "https://dynamitejobs.com/company/relevatehealth/remote-job/project-manager",
-          "status": "fetched",
-          "records": 1,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/company/trulioo/remote-job/project-manager-transformation-office",
-          "final_url": "https://dynamitejobs.com/company/trulioo/remote-job/project-manager-transformation-office",
-          "status": "fetched",
-          "records": 1,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager",
-          "final_url": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/remote-jobs/remote-management-operations-jobs/remote-project-manager-jobs",
-          "final_url": "https://dynamitejobs.com/remote-jobs/remote-management-operations-jobs/remote-project-manager-jobs",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://dynamitejobs.com/remote-jobs?skills=Program+Management",
-          "final_url": "https://dynamitejobs.com/remote-jobs?skills=Program+Management",
-          "status": "fetched",
-          "records": 0,
-          "error": null
+          "error": "TimeoutError: The read operation timed out"
         }
       ],
       "queries": [
         {
-          "query": "web_pages",
-          "status": "completed",
-          "records": 5,
-          "error": null
-        },
-        {
-          "query": "partial",
+          "query": "error",
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
+          "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
         }
       ]
     },
@@ -3490,100 +3415,30 @@
       "active": true,
       "status": "failed",
       "records": 0,
-      "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required",
-      "web_outcome": "no_extractable_jobs",
-      "pages_attempted": 12,
-      "pages_fetched": 4,
+      "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
+      "web_outcome": "blocked",
+      "pages_attempted": 1,
+      "pages_fetched": 0,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
+        "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
       ],
       "page_results": [
         {
           "query": "https://www.eurodyn.com/careers/",
-          "final_url": "https://www.eurodyn.com/careers/",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://apply.workable.com/j/0296C6338B",
           "status": "blocked",
           "records": 0,
-          "error": "Bot challenge; no bypass attempted"
-        },
-        {
-          "query": "https://apply.workable.com/j/151C739477",
-          "status": "blocked",
-          "records": 0,
-          "error": "Bot challenge; no bypass attempted"
-        },
-        {
-          "query": "https://apply.workable.com/j/15C289E30A",
-          "status": "blocked",
-          "records": 0,
-          "error": "Bot challenge; no bypass attempted"
-        },
-        {
-          "query": "https://apply.workable.com/j/736464CD1B",
-          "status": "blocked",
-          "records": 0,
-          "error": "Bot challenge; no bypass attempted"
-        },
-        {
-          "query": "https://apply.workable.com/j/8068CEBC45",
-          "status": "blocked",
-          "records": 0,
-          "error": "Bot challenge; no bypass attempted"
-        },
-        {
-          "query": "https://apply.workable.com/j/8D4A378D4B",
-          "status": "blocked",
-          "records": 0,
-          "error": "Bot challenge; no bypass attempted"
-        },
-        {
-          "query": "https://apply.workable.com/j/AB438405BD",
-          "status": "blocked",
-          "records": 0,
-          "error": "Bot challenge; no bypass attempted"
-        },
-        {
-          "query": "https://www.eurodyn.com/portfolio-item/cpms/",
-          "final_url": "https://www.eurodyn.com/portfolio-item/cpms/",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/",
-          "final_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/?s=",
-          "final_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/?s=",
-          "status": "fetched",
-          "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/none",
-          "status": "error",
-          "records": 0,
-          "error": "HTTP 404"
+          "error": "robots.txt HTTP 202; access not established"
         }
       ],
       "queries": [
         {
-          "query": "no_extractable_jobs",
+          "query": "blocked",
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
+          "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
         }
       ]
     },
@@ -5439,7 +5294,7 @@
       "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required",
       "web_outcome": "no_extractable_jobs",
       "pages_attempted": 12,
-      "pages_fetched": 11,
+      "pages_fetched": 12,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
@@ -5512,9 +5367,10 @@
         },
         {
           "query": "https://ro.nttdata.com/career/experienced-professional",
-          "status": "error",
+          "final_url": "https://ro.nttdata.com/career/experienced-professional",
+          "status": "fetched",
           "records": 0,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
         },
         {
           "query": "https://ro.nttdata.com/career/life-at-ntt-data-romania",
@@ -9077,49 +8933,32 @@
       "url": "https://jobspipe.dev/",
       "connector": "jobspipe",
       "active": true,
-      "status": "completed",
-      "records": 100,
-      "error": null,
-      "queries": [
-        {
-          "query": "target_geography",
-          "status": "completed",
-          "records": 40,
-          "error": null
-        },
-        {
-          "query": "remote_global",
-          "status": "completed",
-          "records": 60,
-          "error": null
-        }
-      ]
+      "status": "skipped",
+      "records": 0,
+      "error": "JobsPipe disabled by configuration"
     }
   ],
-  "records_inspected": 367,
-  "jobs_published": 97,
-  "excluded": 329,
-  "limitations": [],
-  "jobspipe_transport": {
-    "mode": "apify",
-    "actor": "jobspipe~jobspipe-job-search",
-    "max_items_per_run": 100,
-    "items_returned": 100,
-    "estimated_upstream_requests": 2,
-    "billing_model": "per upstream request/page",
-    "provider_enabled": true
-  },
+  "records_inspected": 268,
+  "jobs_published": 96,
+  "excluded": 264,
+  "limitations": [
+    "JobsPipe: JobsPipe disabled by configuration"
+  ],
   "source_strategy": "all active sources equally",
   "sources_configured": 130,
   "sources_active": 130,
-  "sources_attempted": 130,
-  "sources_succeeded": 2,
+  "sources_attempted": 129,
+  "sources_succeeded": 1,
   "sources_failed": 128,
   "sources_unsupported": 0,
-  "sources_skipped": 0,
+  "sources_skipped": 1,
   "sources_inactive": 0,
-  "sources_with_records": 17,
-  "sources_partial": 15,
+  "sources_with_records": 15,
+  "sources_partial": 14,
   "sources_blocked": 39,
-  "sources_no_extractable_jobs": 51
+  "sources_no_extractable_jobs": 50,
+  "jobspipe_transport": {
+    "mode": "disabled",
+    "provider_enabled": false
+  }
 }
