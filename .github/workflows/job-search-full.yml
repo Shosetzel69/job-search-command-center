@@ -12,6 +12,8 @@ on:
       - "scripts/job_search_runner.py"
       - "scripts/source_orchestration.py"
       - "scripts/job_search_jobicy.py"
+      - "scripts/job_search_web.py"
+      - "scripts/web_transport.py"
       - "scripts/job_identity.py"
       - "shared/**"
       - "data/sources.json"

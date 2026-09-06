@@ -236,3 +236,7 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 ## Clarificare bug #49 - executia strategiei existente
 
 `all active sources equally` inseamna colectarea tuturor surselor active cu connector implementat, fara prioritate 1-5. Catalogul controleaza selectia efectiva. Sursele nesuportate si omiterile justificate sunt raportate explicit; nu sunt numarate ca incercate. Un agregator nu substituie verificarea surselor pe care le indexeaza. Esuarea unei surse nu anuleaza celelalte rezultate; esecul total nu inlocuieste rezultatele valide. Deduplicarea precede publicarea. Criteriile complete si acceptanta raman in issue #49; E2E de confirmat.
+
+## Clarificare aprobata - surse web (#49)
+
+Owner-ul a precizat ca obiectivul include sursele web fara API/connector dedicat si a aprobat implementarea. Toate URL-urile web active trebuie incercate; collectorul trebuie sa ajunga la anunturi si descrieri. Accesibilitatea paginii nu echivaleaza cu verificarea joburilor. Restrictiile, blocajele, extractia nesuportata si acoperirea partiala se raporteaza distinct. #49 a fost redeschis; acceptanta nu poate fi bazata doar pe adaugarea unui API suplimentar.

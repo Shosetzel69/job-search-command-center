@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.2`
+Versiune document: `v1.1`
 Versiune aplicatie de referinta: `0.05`
 Ultima actualizare: `2026-09-06`
 
@@ -196,7 +196,6 @@ Componente:
 - `job_search_runner.py` — orchestration, transport, status si run history;
 - `source_orchestration.py` — plan din catalog, rutare si raportare per sursa;
 - `job_search_jobicy.py` — API public Jobicy;
-- `job_search_web.py`, `web_transport.py` — colectare pagini web si transport public cu limite/robots/DNS verificat;
 - `job_identity.py` — deduplicare intre surse;
 - `shared/source-connectors.json` — rutare comuna pentru Python, Worker si UI;
 - `test_search_logic.py`, `test_source_orchestration.py` — teste de regresie.
@@ -267,7 +266,7 @@ Connector operational:
 
 **JobsPipe si Jobicy** (integrarea E2E Jobicy: de confirmat).
 
-Runner-ul selecteaza toate sursele active suportate din catalog. Sursele HTTP(S) fara adapter dedicat sunt incercate prin collectorul web. URL-urile invalide sunt `unsupported`; paginile care nu produc anunturi extrase sunt raportate separat. Flag-ul `connector_available` este derivat din registrul implementat, nu din input-ul utilizatorului. JobsPipe are intrare explicita in catalog; eliminarea sau dezactivarea ei opreste colectarea providerului.
+Runner-ul selecteaza toate sursele active suportate din catalog. Lipsa unui connector este raportata ca `unsupported`. Flag-ul `connector_available` este derivat din registrul implementat, nu din input-ul utilizatorului. JobsPipe are intrare explicita in catalog; eliminarea sau dezactivarea ei opreste colectarea providerului.
 
 Jobicy foloseste API-ul public, maximum 200 listari recente, timeout 30 secunde si cel mult o incercare pe ora. Nu foloseste credentiale JobsPipe.
 
@@ -311,9 +310,9 @@ Schimbarea contractului comun al connectorilor necesita ADR.
 
 Connector generic pentru URL-uri simple / scraping:
 
-**IMPLEMENTED - JobPosting JSON-LD**
+**PLANNED / NOT IMPLEMENTED**
 
-Collectorul urmeaza linkuri de cariere, anunturi si paginare, cu 12 pagini si 45 secunde per sursa, maximum 12 surse concurente. Aplica robots.txt, restrictii de retea publica si limite de dimensiune. Rezultatele intra in contractul comun existent. Pagina HTTP 200 fara anunturi nu inseamna succes. Acoperirea exhaustiva a site-ului nu este garantata. ADR-001 documenteaza decizia aprobata.
+Nu trebuie presupus disponibil pana la implementare si aprobare.
 
 ---
 
@@ -578,9 +577,9 @@ Nu exista momentan flux automat de notificari email.
 
 Status:
 
-**IMPLEMENTED - JSON-LD, fara executie JavaScript**
+**NOT IMPLEMENTED**
 
-Site-urile dinamice/fara JobPosting necesita extractori suplimentari; rezultatul incercarii este vizibil in Loguri.
+Necesita definirea contractului si a regulilor de securitate/colectare inainte de implementare.
 
 ### Additional providers
 
@@ -588,7 +587,7 @@ Status:
 
 **PLANNED**
 
-JobsPipe si Jobicy au connectori implementati. Celelalte surse HTTP(S) active sunt incercate prin colectare web, cu status explicit pe pagini si sursa.
+JobsPipe si Jobicy au connectori implementati. Celelalte surse raman explicit nesuportate pana la adaugarea connectorilor.
 
 ---
 
@@ -625,7 +624,7 @@ JobsPipe si Jobicy au connectori implementati. Celelalte surse HTTP(S) active su
 - [x] JobsPipe via Apify
 - [x] JobsPipe Direct fallback
 - [x] Additional connector: Jobicy (E2E de confirmat)
-- [x] Generic URL collector (JSON-LD, E2E de confirmat)
+- [ ] Generic URL connector
 
 ### Runtime
 
@@ -667,7 +666,7 @@ Politica de pastrare:
 
 Versiune document:
 
-**v1.2**
+**v1.1**
 
 Versiune aplicatie de referinta:
 

@@ -395,6 +395,8 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
 
         if key in seen:
             reason = "duplicate"
+        elif str(origin).startswith("web:") and not posted_dt:
+            reason = "web publication date unavailable"
         elif not target_title.search(title):
             reason = "title outside target"
         elif excluded_company and excluded_company.search(company):
