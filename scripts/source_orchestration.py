@@ -8,14 +8,20 @@ from urllib.parse import urlsplit
 import job_search as engine
 import job_search_apify as apify
 import job_search_jobicy as jobicy
+import job_search_public_api as public_api
 import job_search_web as web
 import job_search_optimized as optimized
 
-REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
+REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text(encoding="utf-8"))
+ROUTE_CONFIG = json.loads((engine.ROOT / "shared/source-api-routes.json").read_text(encoding="utf-8"))
+SOURCE_ROUTES = ROUTE_CONFIG.get("routes") or {}
 SOURCES_PATH = engine.DATA / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
+PUBLIC_API_CONNECTORS = {"jobgether", "himalayas", "workingnomads", "remoteok", "remotive",
+                         "smartrecruiters", "greenhouse", "ashby"}
+CONNECTOR_COOLDOWNS = {"jobicy": 3600, "himalayas": 86400, "remotive": 21600}
 
 # These catalog entries are provider/platform roots, not concrete employer boards.
 # They are intentionally deferred while JobsPipe stays disabled instead of sending
@@ -65,23 +71,40 @@ def deferred_provider(source):
         return None
 
 
+def operational_source(source):
+    route = SOURCE_ROUTES.get(source.get("name"))
+    if not route:
+        return dict(source), None
+    url = str(route.get("url") or "").strip()
+    if not url:
+        raise ValueError(f"Operational route missing URL for {source.get('name')}")
+    return {**source, "url": url}, route
+
+
 def build_plan(catalog):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("sources"), list):
         raise ValueError("Source catalog must contain a sources array")
     plan = []
     seen = set()
     for source in catalog["sources"]:
-        connector = connector_for(source)
-        deferred = None if connector else deferred_provider(source)
+        effective, route = operational_source(source)
+        deferred = None if route else deferred_provider(source)
+        connector = None if deferred else connector_for(effective)
         if not connector and not deferred:
             try:
-                web.public_url(source.get("url") or "")
+                web.public_url(effective.get("url") or "")
                 connector = "web"
             except web.FetchError:
                 connector = None
-        route_key = source.get("url") if connector == "web" else connector or ("deferred:" + deferred if deferred else None)
+        if connector in public_api.MULTI_BOARD_CONNECTORS:
+            route_key = (connector, effective.get("url"))
+        elif connector == "web":
+            route_key = (connector, effective.get("url"), source.get("name") if route else None)
+        else:
+            route_key = connector or ("deferred:" + deferred if deferred else None)
         item = {"source": source.get("name") or source.get("url") or "Unknown",
                 "source_id": source.get("id") or source.get("url"), "url": source.get("url"),
+                "operational_url": effective.get("url"), "route_reason": (route or {}).get("reason"),
                 "connector": "deferred" if deferred else connector,
                 "collection_method": "deferred" if deferred else connector,
                 "active": source.get("active") is not False, "status": "pending",
@@ -105,8 +128,12 @@ def build_plan(catalog):
 def collect_sources(config, state, now, plan):
     # Web sources execute independently; slow sites cannot starve the rest of the catalog.
     with ThreadPoolExecutor(max_workers=12) as pool:
-        futures = {item["source_id"]: pool.submit(web.collect, {"id": item["source_id"], "name": item["source"], "url": item["url"]}, config, now)
-                   for item in plan if item["connector"] == "web" and item["status"] == "pending"}
+        futures = {item["source_id"]: pool.submit(
+            web.collect,
+            {"id": item["source_id"], "name": item["source"], "url": item["operational_url"]},
+            config,
+            now,
+        ) for item in plan if item["connector"] == "web" and item["status"] == "pending"}
         collection, metadata, mode = collect_api_sources(config, state, now, plan)
         for item in plan:
             if item["connector"] != "web" or item["status"] != "pending":
@@ -133,6 +160,14 @@ def record_results(item, results):
                         "records": len(r.records), "error": r.error} for r in results]
 
 
+def _cooldown_active(connector, state, now):
+    seconds = CONNECTOR_COOLDOWNS.get(connector)
+    if not seconds:
+        return False
+    last = engine.parse_posted_datetime(state.get("source_last_attempt", {}).get(connector))
+    return bool(last and (now - last).total_seconds() < seconds)
+
+
 def collect_api_sources(config, state, now, plan):
     collection = []
     metadata = {}
@@ -149,24 +184,33 @@ def collect_api_sources(config, state, now, plan):
             item.update(status="skipped", error="JobsPipe direct monthly quota exhausted; no API call",
                         failure_reason="JobsPipe direct monthly quota exhausted; no API call")
             continue
-        if connector == "jobicy":
-            last = engine.parse_posted_datetime(state.get("source_last_attempt", {}).get(connector))
-            if last and (now - last).total_seconds() < 3600:
-                item.update(status="skipped", error="Jobicy hourly polling limit; no API call",
-                            failure_reason="Jobicy hourly polling limit; no API call")
-                continue
+        if _cooldown_active(connector, state, now):
+            seconds = CONNECTOR_COOLDOWNS[connector]
+            item.update(status="skipped", error=f"{connector} polling cooldown ({seconds // 3600}h); no API call",
+                        failure_reason=f"{connector} polling cooldown ({seconds // 3600}h); no API call")
+            continue
+        if connector in CONNECTOR_COOLDOWNS:
             state.setdefault("source_last_attempt", {})[connector] = now.isoformat()
         try:
             if connector == "jobicy":
                 results = jobicy.collect(config)
-            elif mode == "apify":
+            elif connector in PUBLIC_API_CONNECTORS:
+                results = public_api.collect(
+                    connector,
+                    {"id": item["source_id"], "name": item["source"], "url": item["operational_url"]},
+                    config,
+                    now,
+                )
+            elif connector == "jobspipe" and mode == "apify":
                 results = apify.collect(config)
-            elif mode == "direct":
+            elif connector == "jobspipe" and mode == "direct":
                 results, credits, previews, budget = optimized.collect_incremental(config, state, now)
                 metadata = {"credits_used": credits, "preview_counts": previews, "run_budget": budget,
                             "estimated_monthly_credits": state.get("usage", {}).get("estimated_credits_used", 0)}
-            else:
+            elif connector == "jobspipe":
                 raise ValueError(f"Unsupported jobspipe_mode: {mode}")
+            else:
+                raise ValueError(f"Unsupported API connector: {connector}")
             if not results:
                 raise ValueError("Connector returned no collection result")
         except Exception as exc:
