@@ -1,17 +1,27 @@
 # Mod de lucru
 
-## 1. Cerinte
+## 1. Flux cerinte
+
+Fluxul formal este:
+
+`Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare`
+
+Reguli:
+
+1. `Ideas / Requirements` este exclusiv pentru colectare, explorare si maturizare de idei. Nu se scrie si nu se modifica cod.
+2. Cand o idee este suficient de matura, se transfera in `Analiza` printr-un sumar scurt.
+3. `Analiza` clarifica formal functionalitatea, impactul, scope-ul, alternativele si cerintele. Nu se implementeaza cod.
+4. Owner-ul aproba explicit intrarea in `Development`.
+5. Numai in `Development` se face design tehnic, implementare, testare si integrare.
+
+Nu exista trecere directa din `Ideas / Requirements` in `Development`.
 
 Pentru orice cerinta noua:
 
 1. se analizeaza impactul;
 2. se propune optimizare daca este cazul;
-3. se asteapta confirmarea utilizatorului;
-4. se implementeaza numai dupa confirmare.
-
-Fluxul formal este:
-
-`Ideas / Requirements -> decizie aprobata explicit -> Development -> implementare`
+3. se asteapta confirmarea owner-ului;
+4. se implementeaza numai dupa transferul explicit in Development.
 
 ## 2. Schimbari de cod si documentatie
 
