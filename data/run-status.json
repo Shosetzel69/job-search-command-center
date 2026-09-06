@@ -1,9 +1,9 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260906T153941Z",
+  "run_id": "github-20260906T154532Z",
   "status": "completed_with_errors",
-  "started_at": "2026-09-06T15:39:41.539477+00:00",
-  "completed_at": "2026-09-06T15:41:32.387919+00:00",
+  "started_at": "2026-09-06T15:45:32.536764+00:00",
+  "completed_at": "2026-09-06T15:47:20.341523+00:00",
   "sources": [
     "LinkedIn Jobs",
     "Indeed",
@@ -463,31 +463,115 @@
       "connector": "web",
       "active": true,
       "status": "failed",
-      "records": 0,
-      "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
-      "web_outcome": "blocked",
-      "pages_attempted": 1,
-      "pages_fetched": 0,
-      "jobs_detected": 0,
+      "records": 3,
+      "error": "12 pages attempted; 4 JobPosting nodes; 3 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
+      "web_outcome": "partial",
+      "pages_attempted": 12,
+      "pages_fetched": 12,
+      "jobs_detected": 4,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
+        "12 pages attempted; 4 JobPosting nodes; 3 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
           "query": "https://www.hipo.ro/",
-          "status": "blocked",
+          "final_url": "https://www.hipo.ro/",
+          "status": "fetched",
           "records": 0,
-          "error": "Authentication required"
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/268051/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/268051/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management---Consultanta/BUCURESTI/PMO-Quality-Engineer/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer/2",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer/2",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222109/JumpStart---A-GenZ-Career-Hub/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222109/JumpStart-A-GenZ-Career-Hub/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Inginerie,Internship,Productie/BUCURESTI,Ploiesti,Timisoara/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Inginerie,Internship,Productie/BUCURESTI,Ploiesti,Timisoara/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Inginerie,Internship,Productie/BUCURESTI,Ploiesti,Timisoara/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie/2",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Inginerie,Internship,Productie/BUCURESTI,Ploiesti,Timisoara/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie/2",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Inginerie,Internship,Productie/BUCURESTI,Ploiesti,Timisoara/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Inginerie,Internship,Productie/BUCURESTI,Ploiesti,Timisoara/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Inginerie,Internship,Productie/BUCURESTI,Ploiesti,Timisoara/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie/3",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Inginerie,Internship,Productie/BUCURESTI,Ploiesti,Timisoara/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie/3",
+          "status": "fetched",
+          "records": 0,
+          "error": null
         }
       ],
       "queries": [
         {
-          "query": "blocked",
+          "query": "web_pages",
+          "status": "completed",
+          "records": 3,
+          "error": null
+        },
+        {
+          "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
+          "error": "12 pages attempted; 4 JobPosting nodes; 3 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -1587,7 +1671,7 @@
       "error": "12 pages attempted; 7 JobPosting nodes; 7 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
       "web_outcome": "partial",
       "pages_attempted": 12,
-      "pages_fetched": 11,
+      "pages_fetched": 12,
       "jobs_detected": 7,
       "coverage_complete": false,
       "discovered_pages_complete": false,
@@ -1603,21 +1687,15 @@
           "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/program-analyst-leadership-development-diverse-cg-sp-k--warszawa",
-          "final_url": "https://nofluffjobs.com/job/program-analyst-leadership-development-diverse-cg-sp-k--warszawa",
+          "query": "https://nofluffjobs.com/project-manager",
+          "final_url": "https://nofluffjobs.com/project-manager",
           "status": "fetched",
-          "records": 1,
+          "records": 0,
           "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/job/program-analyst-leadership-development-diverse-cg-sp-k--warszawa",
-          "status": "blocked",
-          "records": 0,
-          "error": "Disallowed by robots.txt"
-        },
-        {
-          "query": "https://nofluffjobs.com/job/senior-project-manager-winged-it-remote",
-          "final_url": "https://nofluffjobs.com/job/senior-project-manager-winged-it-remote",
+          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-remote",
+          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-remote",
           "status": "fetched",
           "records": 1,
           "error": null
@@ -1634,13 +1712,6 @@
           "final_url": "https://nofluffjobs.com//remote?criteria=category=project-manager",
           "status": "fetched",
           "records": 0,
-          "error": null
-        },
-        {
-          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-remote",
-          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-remote",
-          "status": "fetched",
-          "records": 1,
           "error": null
         },
         {
@@ -1674,6 +1745,20 @@
         {
           "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-warszawa",
           "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-1dea-warszawa",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-apreel-remote",
+          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-apreel-remote",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-link-group-remote-1",
+          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-link-group-remote-1",
           "status": "fetched",
           "records": 1,
           "error": null
@@ -2269,15 +2354,115 @@
       "connector": "web",
       "active": true,
       "status": "failed",
-      "records": 0,
-      "error": "'NoneType' object has no attribute 'split'",
-      "web_outcome": "error",
+      "records": 5,
+      "error": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
+      "web_outcome": "partial",
+      "pages_attempted": 12,
+      "pages_fetched": 12,
+      "jobs_detected": 5,
+      "coverage_complete": false,
+      "discovered_pages_complete": false,
+      "limitations": [
+        "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
+      ],
+      "page_results": [
+        {
+          "query": "https://dynamitejobs.com/",
+          "final_url": "https://dynamitejobs.com/",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/company/alyssanobriga/remote-job/program-manager-academic-certification-programs",
+          "final_url": "https://dynamitejobs.com/company/alyssanobriga/remote-job/program-manager-academic-certification-programs",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/skill/remote-program-development-jobs",
+          "final_url": "https://dynamitejobs.com/skill/remote-program-development-jobs",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/remote-jobs?skills=Program+Development",
+          "final_url": "https://dynamitejobs.com/remote-jobs?skills=Program+Development",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/skill/remote-program-management-jobs",
+          "final_url": "https://dynamitejobs.com/skill/remote-program-management-jobs",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/company/jiga/remote-job/program-manager-production-programs",
+          "final_url": "https://dynamitejobs.com/company/jiga/remote-job/program-manager-production-programs",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/company/olly/remote-job/senior-associate-project-manager-creative-ops",
+          "final_url": "https://dynamitejobs.com/company/olly/remote-job/senior-associate-project-manager-creative-ops",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/company/relevatehealth/remote-job/project-manager",
+          "final_url": "https://dynamitejobs.com/company/relevatehealth/remote-job/project-manager",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/company/trulioo/remote-job/project-manager-transformation-office",
+          "final_url": "https://dynamitejobs.com/company/trulioo/remote-job/project-manager-transformation-office",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager",
+          "final_url": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/remote-jobs/remote-management-operations-jobs/remote-project-manager-jobs",
+          "final_url": "https://dynamitejobs.com/remote-jobs/remote-management-operations-jobs/remote-project-manager-jobs",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://dynamitejobs.com/remote-jobs?skills=Program+Management",
+          "final_url": "https://dynamitejobs.com/remote-jobs?skills=Program+Management",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        }
+      ],
       "queries": [
         {
-          "query": "collect",
+          "query": "web_pages",
+          "status": "completed",
+          "records": 5,
+          "error": null
+        },
+        {
+          "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "'NoneType' object has no attribute 'split'"
+          "error": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -2358,15 +2543,115 @@
       "connector": "web",
       "active": true,
       "status": "failed",
-      "records": 0,
-      "error": "'list' object has no attribute 'get'",
-      "web_outcome": "error",
+      "records": 10,
+      "error": "12 pages attempted; 10 JobPosting nodes; 10 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial",
+      "web_outcome": "partial",
+      "pages_attempted": 12,
+      "pages_fetched": 12,
+      "jobs_detected": 10,
+      "coverage_complete": false,
+      "discovered_pages_complete": false,
+      "limitations": [
+        "12 pages attempted; 10 JobPosting nodes; 10 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
+      ],
+      "page_results": [
+        {
+          "query": "https://techjobs.be/",
+          "final_url": "https://techjobs.be/en",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs",
+          "final_url": "https://techjobs.be/en/ict-jobs",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/12003-it-project-manager",
+          "final_url": "https://techjobs.be/en/ict-jobs/12003-it-project-manager",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/17712-technical-service-delivery-administrator",
+          "final_url": "https://techjobs.be/en/ict-jobs/17712-technical-service-delivery-administrator",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/24254-service-delivery-manager-performance-testing",
+          "final_url": "https://techjobs.be/en/ict-jobs/24254-service-delivery-manager-performance-testing",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/31784-scrum-master",
+          "final_url": "https://techjobs.be/en/ict-jobs/31784-scrum-master",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/34094-pmo-manager",
+          "final_url": "https://techjobs.be/en/ict-jobs/34094-pmo-manager",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/34881-senior-it-project-manager",
+          "final_url": "https://techjobs.be/en/ict-jobs/34881-senior-it-project-manager",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/38088-it-infrastructure-project-manager",
+          "final_url": "https://techjobs.be/en/ict-jobs/38088-it-infrastructure-project-manager",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/42189-junior-technical-scrum-master",
+          "final_url": "https://techjobs.be/en/ict-jobs/42189-junior-technical-scrum-master",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/53636-program-manager-data",
+          "final_url": "https://techjobs.be/en/ict-jobs/53636-program-manager-data",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        },
+        {
+          "query": "https://techjobs.be/en/ict-jobs/54835-solution-engineer-delivery",
+          "final_url": "https://techjobs.be/en/ict-jobs/54835-solution-engineer-delivery",
+          "status": "fetched",
+          "records": 1,
+          "error": null
+        }
+      ],
       "queries": [
         {
-          "query": "collect",
+          "query": "web_pages",
+          "status": "completed",
+          "records": 10,
+          "error": null
+        },
+        {
+          "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "'list' object has no attribute 'get'"
+          "error": "12 pages attempted; 10 JobPosting nodes; 10 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -3389,30 +3674,106 @@
       "active": true,
       "status": "failed",
       "records": 0,
-      "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
-      "web_outcome": "blocked",
-      "pages_attempted": 1,
-      "pages_fetched": 0,
+      "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required",
+      "web_outcome": "no_extractable_jobs",
+      "pages_attempted": 12,
+      "pages_fetched": 10,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
+        "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
       ],
       "page_results": [
         {
           "query": "https://www.nato.int/cps/en/natohq/recruitment.htm",
+          "final_url": "https://www.nato.int/en/work-with-us/careers",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.nato.int/en/about-us/organization/nato-structure/science-for-peace-and-security-hub",
+          "final_url": "https://www.nato.int/en/about-us/organization/nato-structure/science-for-peace-and-security-hub",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.nato.int/en/about-us/organization/nato-structure/science-for-peace-and-security-hub/science-for-peace-and-security-programme",
+          "final_url": "https://www.nato.int/en/about-us/organization/nato-structure/science-for-peace-and-security-hub/science-for-peace-and-security-programme",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.nato.int/en/work-with-us/business-and-project-opportunities",
+          "final_url": "https://www.nato.int/en/work-with-us/business-and-project-opportunities",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/business-opportunities-at-nato-headquarters",
+          "final_url": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/business-opportunities-at-nato-headquarters",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/demand-signal",
+          "final_url": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/demand-signal",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/ecosystem",
+          "final_url": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/ecosystem",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/innovation-support-mechanisms",
+          "final_url": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/innovation-support-mechanisms",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.diana.nato.int/accelerator-programme.html",
           "status": "blocked",
           "records": 0,
-          "error": "Authentication required"
+          "error": "HTTP 403"
+        },
+        {
+          "query": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/procurement-opportunities",
+          "final_url": "https://www.nato.int/en/work-with-us/business-and-project-opportunities/procurement-opportunities",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://preview.staging.nato.int/en/work-with-us/business-and-project-opportunities/ecosystem",
+          "status": "blocked",
+          "records": 0,
+          "error": "Disallowed by robots.txt"
+        },
+        {
+          "query": "https://www.nato.int/en/work-with-us/careers/internship-programme",
+          "final_url": "https://www.nato.int/en/work-with-us/careers/internship-programme",
+          "status": "fetched",
+          "records": 0,
+          "error": null
         }
       ],
       "queries": [
         {
-          "query": "blocked",
+          "query": "no_extractable_jobs",
           "status": "failed",
           "records": 0,
-          "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
+          "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
         }
       ]
     },
@@ -3799,15 +4160,15 @@
       "active": true,
       "status": "failed",
       "records": 0,
-      "error": "11 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required",
+      "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required",
       "web_outcome": "no_extractable_jobs",
-      "pages_attempted": 11,
-      "pages_fetched": 7,
+      "pages_attempted": 12,
+      "pages_fetched": 12,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "11 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
+        "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
       ],
       "page_results": [
         {
@@ -3826,9 +4187,10 @@
         },
         {
           "query": "https://netcompany.com/careers/growth-development/",
-          "status": "error",
+          "final_url": "https://netcompany.com/careers/growth-development/",
+          "status": "fetched",
           "records": 0,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
         },
         {
           "query": "https://netcompany.com/careers/how-we-work-with-ai/",
@@ -3853,9 +4215,10 @@
         },
         {
           "query": "https://netcompany.com/amalie-froling-pedersen/",
-          "status": "error",
+          "final_url": "https://netcompany.com/amalie-froling-pedersen/",
+          "status": "fetched",
           "records": 0,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
         },
         {
           "query": "https://netcompany.com/careers/responsible-digitalisation/",
@@ -3866,9 +4229,17 @@
         },
         {
           "query": "https://netcompany.com/careers/stories-magazine/",
-          "status": "error",
+          "final_url": "https://netcompany.com/careers/stories-magazine/",
+          "status": "fetched",
           "records": 0,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
+        },
+        {
+          "query": "https://netcompany.com/careers/order-stories-magazine/",
+          "final_url": "https://netcompany.com/careers/order-stories-magazine/",
+          "status": "fetched",
+          "records": 0,
+          "error": null
         },
         {
           "query": "https://netcompany.com/careers/the-inside-view/",
@@ -3879,9 +4250,10 @@
         },
         {
           "query": "https://netcompany.com/careers/vacancies/",
-          "status": "error",
+          "final_url": "https://netcompany.com/careers/vacancies/",
+          "status": "fetched",
           "records": 0,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
         }
       ],
       "queries": [
@@ -3889,7 +4261,7 @@
           "query": "no_extractable_jobs",
           "status": "failed",
           "records": 0,
-          "error": "11 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
+          "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
         }
       ]
     },
@@ -3940,7 +4312,7 @@
       "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required",
       "web_outcome": "no_extractable_jobs",
       "pages_attempted": 12,
-      "pages_fetched": 11,
+      "pages_fetched": 12,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
@@ -3985,9 +4357,10 @@
         },
         {
           "query": "https://careers.ing.com/de/business-banking-programme",
-          "status": "error",
+          "final_url": "https://careers.ing.com/de/business-banking-programme",
+          "status": "fetched",
           "records": 0,
-          "error": "IncompleteRead: IncompleteRead(0 bytes read)"
+          "error": null
         },
         {
           "query": "https://careers.ing.com/de/dan-radu",
@@ -5788,7 +6161,7 @@
           "query": "https://cariere.orange.ro/",
           "status": "blocked",
           "records": 0,
-          "error": "robots.txt HTTP 403; access not established"
+          "error": "robots.txt HTTP 421; access not established"
         },
         {
           "query": "https://jobs.orange.ro/My/JobAlerts",
@@ -8106,15 +8479,15 @@
       "active": true,
       "status": "failed",
       "records": 0,
-      "error": "8 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required",
+      "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required",
       "web_outcome": "no_extractable_jobs",
-      "pages_attempted": 8,
-      "pages_fetched": 7,
+      "pages_attempted": 12,
+      "pages_fetched": 12,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "8 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
+        "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
       ],
       "page_results": [
         {
@@ -8168,9 +8541,38 @@
         },
         {
           "query": "https://www.brainsconsulting.ro/en/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands-2/",
-          "status": "error",
+          "final_url": "https://www.brainsconsulting.ro/en/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands-2/",
+          "status": "fetched",
           "records": 0,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
+        },
+        {
+          "query": "https://www.brainsconsulting.ro/en/melinda-moolman-manager-mma-recruitment-uk-2/",
+          "final_url": "https://www.brainsconsulting.ro/en/melinda-moolman-manager-mma-recruitment-uk-2/",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.brainsconsulting.ro/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands/",
+          "final_url": "https://www.brainsconsulting.ro/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands/",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.brainsconsulting.ro/melinda-moolman-manager-mma-recruitment-uk/",
+          "final_url": "https://www.brainsconsulting.ro/melinda-moolman-manager-mma-recruitment-uk/",
+          "status": "fetched",
+          "records": 0,
+          "error": null
+        },
+        {
+          "query": "https://www.brainsconsulting.ro/category/locuri-de-munca/page/2/",
+          "final_url": "https://www.brainsconsulting.ro/category/locuri-de-munca/page/2/",
+          "status": "fetched",
+          "records": 0,
+          "error": null
         }
       ],
       "queries": [
@@ -8178,7 +8580,7 @@
           "query": "no_extractable_jobs",
           "status": "failed",
           "records": 0,
-          "error": "8 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
+          "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; page/time/link budget reached; coverage is partial; HTML access does not establish absence of vacancies; site-specific extraction may be required"
         }
       ]
     },
@@ -8705,9 +9107,9 @@
       ]
     }
   ],
-  "records_inspected": 156,
+  "records_inspected": 174,
   "jobs_published": 96,
-  "excluded": 119,
+  "excluded": 137,
   "limitations": [
     "Jobicy: Jobicy hourly polling limit; no API call"
   ],
@@ -8728,5 +9130,9 @@
   "sources_failed": 128,
   "sources_unsupported": 0,
   "sources_skipped": 1,
-  "sources_inactive": 0
+  "sources_inactive": 0,
+  "sources_with_records": 16,
+  "sources_partial": 15,
+  "sources_blocked": 39,
+  "sources_no_extractable_jobs": 51
 }
