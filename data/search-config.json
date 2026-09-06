@@ -132,6 +132,6 @@
     "S/4HANA",
     "Dynamics 365"
   ],
-  "jobspipe_mode": "apify",
+  "jobspipe_mode": "disabled",
   "jobspipe_apify_max_items_per_run": 100
 }
