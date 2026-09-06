@@ -4,6 +4,9 @@
 
 ### Documentatie
 
+- Definit fluxul formal `Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare` si interzisa trecerea directa din idei sau analiza in Development.
+- Adaugate criteriile de maturitate pentru transferul unei idei in `Analiza` si formatul scurt de sumar pentru transfer.
+- Aliniate `GOVERNANCE.md`, `.ai-instructions.md`, `CONTRIBUTING.md` si `README.md` cu noul flux de lucru.
 - Aliniate `GOVERNANCE.md`, `.ai-instructions.md`, `CONTRIBUTING.md`, `README.md` si documentele tehnice cu `ARCHITECTURE.md` v1.0.
 - Clarificata precedenta intre arhitectura, guvernanta si instructiunile AI.
 - Documentat taskul programat ChatGPT `Actualizare documentatie proiect` pentru review periodic la 2 ore.
