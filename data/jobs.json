@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-06T14:12:47.543801+00:00",
+  "generated_at": "2026-09-06T14:47:28.216094+00:00",
   "freshness_hours": 120,
   "collection_freshness_hours": 120,
   "criteria": {
@@ -42,12 +42,13 @@
     ]
   },
   "raw_matches_available": {
+    "jobicy:latest_200": 200,
     "jobspipe-apify:target_geography": 40,
     "jobspipe-apify:remote_global": 60
   },
-  "records_inspected": 100,
+  "records_inspected": 300,
   "results": 92,
-  "excluded_count": 67,
+  "excluded_count": 267,
   "jobs": [
     {
       "id": "4454803079",
@@ -368,7 +369,7 @@
       "location": "Warszawa, mazowieckie",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 50,
+      "age": 51,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -913,7 +914,7 @@
       "location": "TELECOMMUTE",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 51,
+      "age": 52,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1040,7 +1041,7 @@
       "location": "20123 Milano",
       "mode": "Remote",
       "type": "Part Time",
-      "age": 67,
+      "age": 68,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1594,7 +1595,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 52,
+      "age": 53,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1864,7 +1865,7 @@
       "location": "Home Office",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 98,
+      "age": 99,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1929,7 +1930,7 @@
       "location": "BE212",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 53,
+      "age": 54,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2401,7 +2402,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 51,
+      "age": 52,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2436,7 +2437,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 51,
+      "age": 52,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2471,7 +2472,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 52,
+      "age": 53,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2497,7 +2498,7 @@
       "location": "BE256",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 53,
+      "age": 54,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2526,7 +2527,7 @@
       "location": "BE233",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 53,
+      "age": 54,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2555,7 +2556,7 @@
       "location": "BE234",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 53,
+      "age": 54,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2584,7 +2585,7 @@
       "location": "BE253",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 54,
+      "age": 55,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2613,7 +2614,7 @@
       "location": "BE211",
       "mode": "N/A",
       "type": "Part Time",
-      "age": 55,
+      "age": 56,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2717,7 +2718,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 50,
+      "age": 51,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2782,7 +2783,7 @@
       "location": "BE254",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 54,
+      "age": 55,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2984,112 +2985,113 @@
   ],
   "excluded_sample": [
     {
-      "title": "Finance Project Manager",
-      "company": "Moore Belgium",
-      "reason": "deep ERP/SAP implementation"
+      "title": "Account Executive Mid-Market - Italy",
+      "company": "Alma",
+      "reason": "title outside target"
     },
     {
-      "title": "Asset MGT - Project Manager BBox",
-      "company": "Bpost",
+      "title": "Senior Security Engineer I, Customer Trust EMEA (Remote Eligible in the UK)",
+      "company": "Smartsheet",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Customer Support Representative",
+      "company": "1840 & Company",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Sales Manager Calabria e Sicilia",
+      "company": "QuidelOrtho",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Senior Data Scientist",
+      "company": "Clover Health",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Partner Account Executive (M/F)",
+      "company": "Akamai Technologies",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Independent Contractor - Food Safety Consultant",
+      "company": "J. J. Keller & Associates, Inc.",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Product Manager, Central Products",
+      "company": "Meta",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Lead Contract Manager, IDC Contracts",
+      "company": "Meta",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Staff Software Developer",
+      "company": "Cision",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Software Developer II",
+      "company": "Cision",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Customer Service Business Process Specialist (Mandarin Speaker)",
+      "company": "Binance",
       "reason": "remote not eligible from Romania"
     },
     {
-      "title": "Design & Utilization - Sr Project Manager Capacity & Yield Management",
-      "company": "Bpost",
-      "reason": "remote not eligible from Romania"
+      "title": "Promo Features Marketing & Commercialisation Lead",
+      "company": "Playson",
+      "reason": "title outside target"
     },
     {
-      "title": "Senior Project Manager D365 CRM",
-      "company": "HSO",
-      "reason": "deep ERP/SAP implementation"
+      "title": "Principal DevOps Engineer",
+      "company": "NBCUniversal",
+      "reason": "title outside target"
     },
     {
-      "title": "Project Manager Offshore Subsea Cables",
-      "company": "Jan De Nul Group",
-      "reason": "remote not eligible from Romania"
+      "title": "Accounts Payable Clerk (Entry Level Opportunity)",
+      "company": "Canonical",
+      "reason": "title outside target"
     },
     {
-      "title": "SAP S/4HANA Program Manager & Quality Assurance",
-      "company": "KPMG Belgium",
-      "reason": "deep ERP/SAP implementation"
+      "title": "Data Center Location Strategy Manager",
+      "company": "Meta",
+      "reason": "title outside target"
     },
     {
-      "title": "Microsoft Dynamics 365 Project Manager",
-      "company": "9altitudes Belgium",
-      "reason": "deep ERP/SAP implementation"
+      "title": "Customer Solution Architect Team Lead (AMER)",
+      "company": "Supabase",
+      "reason": "title outside target"
     },
     {
-      "title": "Senior Customer Technical Program Manager - AI Datacenter",
-      "company": "NVIDIA",
-      "reason": "remote not eligible from Romania"
+      "title": "Senior Sales Engineer, Enterprise - German Speaking",
+      "company": "Fivetran",
+      "reason": "title outside target"
     },
     {
-      "title": "Project Manager – Social Science Research",
-      "company": "BETA Systems International",
-      "reason": "remote not eligible from Romania"
+      "title": "Pricing and Revenue Planner",
+      "company": "Samsara",
+      "reason": "title outside target"
     },
     {
-      "title": "Project Manager",
-      "company": "Bioscience Core Skills Institute (BCSI)",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "Project Manager - Growth (Remote)",
-      "company": "Hire Feed",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "Strategic Project Manager (Finance) - Remote",
-      "company": "Quik Hire Staffing",
-      "reason": "deep ERP/SAP implementation"
-    },
-    {
-      "title": "Strategic Project Manager (Remote)",
-      "company": "Hire Feed",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "Project Manager (Remote)",
-      "company": "Quik Hire Staffing",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "Marketing Project Manager",
-      "company": "TopFoxx",
-      "reason": "non-IT role"
-    },
-    {
-      "title": "Service Delivery Manager – Data, Integration & AI",
-      "company": "SGS",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "Scrum Master / Team Coach (d/m/w) - Remote",
-      "company": "Instaffo",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "OneStream Partner Enablement Principal Delivery Manager (Design & Build)",
-      "company": "OneStream Software",
-      "reason": "non-IT role"
-    },
-    {
-      "title": "Expert Opportunity - Onboarding Program Manager ($70/hr, up to $1,400/week)",
-      "company": "Ethos",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "AI Program Manager (Governance) (12-month Fixed Term)",
-      "company": "International Rescue Committee",
-      "reason": "remote not eligible from Romania"
+      "title": "Senior Manager, Deal Desk",
+      "company": "Eightfold",
+      "reason": "title outside target"
     }
   ],
+  "cross_source_duplicates_removed": 0,
   "incremental_sync": false,
   "expired_pruned": 0,
   "jobspipe_usage": {
-    "mode": "apify",
-    "max_items_per_run": 100,
-    "items_returned": 100,
-    "estimated_upstream_requests": 2
+    "month_utc": "2026-09",
+    "estimated_credits_used": 0,
+    "monthly_guard": 950,
+    "last_run_credits": 0
   }
 }

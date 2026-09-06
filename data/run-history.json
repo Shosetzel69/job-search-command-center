@@ -2,6 +2,1358 @@
   "schema_version": "1.0",
   "runs": [
     {
+      "run_id": "github-20260906T144728Z",
+      "status": "completed_with_errors",
+      "trigger": "push",
+      "started_at": "2026-09-06T14:47:28.216094+00:00",
+      "completed_at": "2026-09-06T14:47:39.309691+00:00",
+      "duration_seconds": 11,
+      "transport": "apify",
+      "sources": [
+        "Jobicy",
+        "JobsPipe"
+      ],
+      "sources_processed": 2,
+      "failed_sources": [],
+      "records_inspected": 300,
+      "jobs_published": 92,
+      "excluded": 267,
+      "source_results": [
+        {
+          "source": "LinkedIn Jobs",
+          "source_id": "https://www.linkedin.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Indeed",
+          "source_id": "https://www.indeed.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "eJobs",
+          "source_id": "https://www.ejobs.ro/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Hipo",
+          "source_id": "https://www.hipo.ro/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Jobicy",
+          "source_id": "https://jobicy.com/",
+          "connector": "jobicy",
+          "active": true,
+          "status": "completed",
+          "records": 200,
+          "error": null,
+          "queries": [
+            {
+              "query": "latest_200",
+              "status": "completed",
+              "records": 200,
+              "error": null
+            }
+          ]
+        },
+        {
+          "source": "EURES",
+          "source_id": "https://eures.europa.eu/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "EU Careers / EPSO",
+          "source_id": "https://eu-careers.europa.eu/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "EuroBrussels",
+          "source_id": "https://www.eurobrussels.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "eFinancialCareers",
+          "source_id": "https://www.efinancialcareers.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Hays Romania",
+          "source_id": "https://www.hays.ro/en/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Jobgether",
+          "source_id": "https://jobgether.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Himalayas",
+          "source_id": "https://himalayas.app/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Working Nomads",
+          "source_id": "https://www.workingnomads.com/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Remote OK",
+          "source_id": "https://remoteok.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "We Work Remotely",
+          "source_id": "https://weworkremotely.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Remote.co",
+          "source_id": "https://remote.co/remote-jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "NoDesk",
+          "source_id": "https://nodesk.co/remote-jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "EU Remote Jobs",
+          "source_id": "https://euremotejobs.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Remote in Europe",
+          "source_id": "https://remoteineurope.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Landing.Jobs",
+          "source_id": "https://landing.jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Wellfound",
+          "source_id": "https://wellfound.com/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Flexa",
+          "source_id": "https://flexa.careers/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "No Fluff Jobs",
+          "source_id": "https://nofluffjobs.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Just Join IT",
+          "source_id": "https://justjoin.it/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "awork.ro",
+          "source_id": "https://awork.ro/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Remotive",
+          "source_id": "https://remotive.com/remote-jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "JustRemote",
+          "source_id": "https://justremote.co/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Jobspresso",
+          "source_id": "https://jobspresso.co/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "DailyRemote",
+          "source_id": "https://dailyremote.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "PowerToFly",
+          "source_id": "https://powertofly.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Dynamite Jobs",
+          "source_id": "https://dynamitejobs.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Torre",
+          "source_id": "https://torre.ai/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Welcome to the Jungle",
+          "source_id": "https://www.welcometothejungle.com/en/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Techjobs.be",
+          "source_id": "https://techjobs.be/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "FlexJobs",
+          "source_id": "https://www.flexjobs.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Glassdoor Jobs",
+          "source_id": "https://www.glassdoor.com/Job/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Monster",
+          "source_id": "https://www.monster.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Pangian",
+          "source_id": "https://pangian.com/job-travel-remote/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "SkipTheDrive",
+          "source_id": "https://www.skipthedrive.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "RemoteHunt",
+          "source_id": "https://remotehunt.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Freelancermap",
+          "source_id": "https://www.freelancermap.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Malt",
+          "source_id": "https://www.malt.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Toptal",
+          "source_id": "https://www.toptal.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Crossover",
+          "source_id": "https://www.crossover.com/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Upwork",
+          "source_id": "https://www.upwork.com/freelance-jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Arc.dev",
+          "source_id": "https://arc.dev/remote-jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "PeoplePerHour",
+          "source_id": "https://www.peopleperhour.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Freelancer.com",
+          "source_id": "https://www.freelancer.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Hubstaff Talent",
+          "source_id": "https://talent.hubstaff.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "European Dynamics",
+          "source_id": "https://www.eurodyn.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Almaviva de Belgique",
+          "source_id": "https://www.almaviva.it/en_GB/Careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Vector Synergy",
+          "source_id": "https://vectorsynergy.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "NATO Careers",
+          "source_id": "https://www.nato.int/cps/en/natohq/recruitment.htm",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Cronos Europa",
+          "source_id": "https://cronos-europa.eu/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Serco Europe",
+          "source_id": "https://careers.serco.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "CGI",
+          "source_id": "https://www.cgi.com/en/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Sopra Steria",
+          "source_id": "https://careers.soprasteria.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Netcompany / Intrasoft",
+          "source_id": "https://www.netcompany.com/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Thales",
+          "source_id": "https://careers.thalesgroup.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "ING Careers",
+          "source_id": "https://careers.ing.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Deutsche Bank",
+          "source_id": "https://careers.db.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Societe Generale",
+          "source_id": "https://careers.societegenerale.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Allianz Careers",
+          "source_id": "https://careers.allianz.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Worldline",
+          "source_id": "https://careers.worldline.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Worldpay / Global Payments",
+          "source_id": "https://jobs.globalpayments.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Vodafone / VOIS",
+          "source_id": "https://careers.vodafone.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Airbus",
+          "source_id": "https://www.airbus.com/en/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "GlobalLogic",
+          "source_id": "https://www.globallogic.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Luxoft",
+          "source_id": "https://career.luxoft.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Mantu",
+          "source_id": "https://careers.mantu.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "NTT",
+          "source_id": "https://careers.services.global.ntt/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "NTT DATA Romania",
+          "source_id": "https://ro.nttdata.com/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Cegeka",
+          "source_id": "https://www.cegeka.com/en/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Computacenter",
+          "source_id": "https://careers.computacenter.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "SoftServe",
+          "source_id": "https://career.softserveinc.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "EPAM",
+          "source_id": "https://www.epam.com/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Eviden",
+          "source_id": "https://eviden.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "DXC Technology",
+          "source_id": "https://careers.dxc.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "HARMAN",
+          "source_id": "https://jobs.harman.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Endava",
+          "source_id": "https://careers.endava.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Accenture",
+          "source_id": "https://www.accenture.com/ro-en/careers/jobsearch",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Atos",
+          "source_id": "https://jobs.atos.net/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Orange Romania",
+          "source_id": "https://www.orange.ro/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Bosch Romania",
+          "source_id": "https://www.bosch.ro/cariere/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Xebia CEE",
+          "source_id": "https://xebia.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Prohuman",
+          "source_id": "https://www.prohuman.ro/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Fortive",
+          "source_id": "https://careers.fortive.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Saphetor",
+          "source_id": "https://saphetor.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Camunda",
+          "source_id": "https://camunda.com/career/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "ClickHouse",
+          "source_id": "https://clickhouse.com/company/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "GitHub",
+          "source_id": "https://www.github.careers/careers-home",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Snyk",
+          "source_id": "https://snyk.io/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Datadog",
+          "source_id": "https://careers.datadoghq.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Stripe",
+          "source_id": "https://stripe.com/jobs",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Kong",
+          "source_id": "https://konghq.com/company/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "LocalStack",
+          "source_id": "https://www.localstack.cloud/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Contentsquare",
+          "source_id": "https://careers.contentsquare.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Storyblok",
+          "source_id": "https://www.storyblok.com/join-us",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Ashby",
+          "source_id": "https://jobs.ashbyhq.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Workable",
+          "source_id": "https://jobs.workable.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Greenhouse",
+          "source_id": "https://www.greenhouse.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Lever",
+          "source_id": "https://www.lever.co/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Workday",
+          "source_id": "https://www.workday.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "SmartRecruiters",
+          "source_id": "https://www.smartrecruiters.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Recruitee",
+          "source_id": "https://recruitee.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "BambooHR",
+          "source_id": "https://www.bamboohr.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Eightfold",
+          "source_id": "https://eightfold.ai/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "UpcoMinds",
+          "source_id": "https://upcominds.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Infoplus Technologies UK",
+          "source_id": "https://www.infoplusltd.co.uk/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "RED Global",
+          "source_id": "https://www.redglobal.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Salt",
+          "source_id": "https://welovesalt.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Avance Consulting",
+          "source_id": "https://www.avanceconsulting.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Hirexa Solutions",
+          "source_id": "https://hirexa.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Infinity Quest",
+          "source_id": "https://www.i-q.net/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Square One Resources",
+          "source_id": "https://www.squareoneresources.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Source Group International",
+          "source_id": "https://www.sourcegroupinternational.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Montreal Associates",
+          "source_id": "https://www.montrealassociates.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Brains Consulting",
+          "source_id": "https://brainsconsulting.ro/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Head Hunting IT",
+          "source_id": "https://www.headhuntingit.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Next Ventures",
+          "source_id": "https://next-ventures.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Lawrence Harvey",
+          "source_id": "https://www.lawrenceharvey.com/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Proactive.IT",
+          "source_id": "https://proactive.it/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "W Talent",
+          "source_id": "https://www.wtalent.com/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "KEYES / NRB",
+          "source_id": "https://www.nrb.be/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Trasys International",
+          "source_id": "https://careers.nrb.be/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Thaleria",
+          "source_id": "https://www.thaleria.com/careers",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Talan Belgium / Luxembourg",
+          "source_id": "https://www.talan.com/global/en/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "Fujitsu Belgium",
+          "source_id": "https://www.fujitsu.com/be/about/local/jobs/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "ARHS / Accenture",
+          "source_id": "https://www.arhs-group.com/careers/",
+          "connector": null,
+          "active": true,
+          "status": "unsupported",
+          "records": 0,
+          "error": "No implemented connector for this source URL"
+        },
+        {
+          "source": "JobsPipe",
+          "source_id": "https://jobspipe.dev/",
+          "connector": "jobspipe",
+          "active": true,
+          "status": "completed",
+          "records": 100,
+          "error": null,
+          "queries": [
+            {
+              "query": "target_geography",
+              "status": "completed",
+              "records": 40,
+              "error": null
+            },
+            {
+              "query": "remote_global",
+              "status": "completed",
+              "records": 60,
+              "error": null
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        "LinkedIn Jobs: No implemented connector for this source URL",
+        "Indeed: No implemented connector for this source URL",
+        "eJobs: No implemented connector for this source URL",
+        "Hipo: No implemented connector for this source URL",
+        "EURES: No implemented connector for this source URL",
+        "EU Careers / EPSO: No implemented connector for this source URL",
+        "EuroBrussels: No implemented connector for this source URL",
+        "eFinancialCareers: No implemented connector for this source URL",
+        "Hays Romania: No implemented connector for this source URL",
+        "Jobgether: No implemented connector for this source URL",
+        "Himalayas: No implemented connector for this source URL",
+        "Working Nomads: No implemented connector for this source URL",
+        "Remote OK: No implemented connector for this source URL",
+        "We Work Remotely: No implemented connector for this source URL",
+        "Remote.co: No implemented connector for this source URL",
+        "NoDesk: No implemented connector for this source URL",
+        "EU Remote Jobs: No implemented connector for this source URL",
+        "Remote in Europe: No implemented connector for this source URL",
+        "Landing.Jobs: No implemented connector for this source URL",
+        "Wellfound: No implemented connector for this source URL",
+        "Flexa: No implemented connector for this source URL",
+        "No Fluff Jobs: No implemented connector for this source URL",
+        "Just Join IT: No implemented connector for this source URL",
+        "awork.ro: No implemented connector for this source URL",
+        "Remotive: No implemented connector for this source URL",
+        "JustRemote: No implemented connector for this source URL",
+        "Jobspresso: No implemented connector for this source URL",
+        "DailyRemote: No implemented connector for this source URL",
+        "PowerToFly: No implemented connector for this source URL",
+        "Dynamite Jobs: No implemented connector for this source URL",
+        "Torre: No implemented connector for this source URL",
+        "Welcome to the Jungle: No implemented connector for this source URL",
+        "Techjobs.be: No implemented connector for this source URL",
+        "FlexJobs: No implemented connector for this source URL",
+        "Glassdoor Jobs: No implemented connector for this source URL",
+        "Monster: No implemented connector for this source URL",
+        "Pangian: No implemented connector for this source URL",
+        "SkipTheDrive: No implemented connector for this source URL",
+        "RemoteHunt: No implemented connector for this source URL",
+        "Freelancermap: No implemented connector for this source URL",
+        "Malt: No implemented connector for this source URL",
+        "Toptal: No implemented connector for this source URL",
+        "Crossover: No implemented connector for this source URL",
+        "Upwork: No implemented connector for this source URL",
+        "Arc.dev: No implemented connector for this source URL",
+        "PeoplePerHour: No implemented connector for this source URL",
+        "Freelancer.com: No implemented connector for this source URL",
+        "Hubstaff Talent: No implemented connector for this source URL",
+        "European Dynamics: No implemented connector for this source URL",
+        "Almaviva de Belgique: No implemented connector for this source URL",
+        "Vector Synergy: No implemented connector for this source URL",
+        "NATO Careers: No implemented connector for this source URL",
+        "Cronos Europa: No implemented connector for this source URL",
+        "Serco Europe: No implemented connector for this source URL",
+        "CGI: No implemented connector for this source URL",
+        "Sopra Steria: No implemented connector for this source URL",
+        "Netcompany / Intrasoft: No implemented connector for this source URL",
+        "Thales: No implemented connector for this source URL",
+        "ING Careers: No implemented connector for this source URL",
+        "Deutsche Bank: No implemented connector for this source URL",
+        "Societe Generale: No implemented connector for this source URL",
+        "Allianz Careers: No implemented connector for this source URL",
+        "Worldline: No implemented connector for this source URL",
+        "Worldpay / Global Payments: No implemented connector for this source URL",
+        "Vodafone / VOIS: No implemented connector for this source URL",
+        "Airbus: No implemented connector for this source URL",
+        "GlobalLogic: No implemented connector for this source URL",
+        "Luxoft: No implemented connector for this source URL",
+        "Mantu: No implemented connector for this source URL",
+        "NTT: No implemented connector for this source URL",
+        "NTT DATA Romania: No implemented connector for this source URL",
+        "Cegeka: No implemented connector for this source URL",
+        "Computacenter: No implemented connector for this source URL",
+        "SoftServe: No implemented connector for this source URL",
+        "EPAM: No implemented connector for this source URL",
+        "Eviden: No implemented connector for this source URL",
+        "DXC Technology: No implemented connector for this source URL",
+        "HARMAN: No implemented connector for this source URL",
+        "Endava: No implemented connector for this source URL",
+        "Accenture: No implemented connector for this source URL",
+        "Atos: No implemented connector for this source URL",
+        "Orange Romania: No implemented connector for this source URL",
+        "Bosch Romania: No implemented connector for this source URL",
+        "Xebia CEE: No implemented connector for this source URL",
+        "Prohuman: No implemented connector for this source URL",
+        "Fortive: No implemented connector for this source URL",
+        "Saphetor: No implemented connector for this source URL",
+        "Camunda: No implemented connector for this source URL",
+        "ClickHouse: No implemented connector for this source URL",
+        "GitHub: No implemented connector for this source URL",
+        "Snyk: No implemented connector for this source URL",
+        "Datadog: No implemented connector for this source URL",
+        "Stripe: No implemented connector for this source URL",
+        "Kong: No implemented connector for this source URL",
+        "LocalStack: No implemented connector for this source URL",
+        "Contentsquare: No implemented connector for this source URL",
+        "Storyblok: No implemented connector for this source URL",
+        "Ashby: No implemented connector for this source URL",
+        "Workable: No implemented connector for this source URL",
+        "Greenhouse: No implemented connector for this source URL",
+        "Lever: No implemented connector for this source URL",
+        "Workday: No implemented connector for this source URL",
+        "SmartRecruiters: No implemented connector for this source URL",
+        "Recruitee: No implemented connector for this source URL",
+        "BambooHR: No implemented connector for this source URL",
+        "Eightfold: No implemented connector for this source URL",
+        "UpcoMinds: No implemented connector for this source URL",
+        "Infoplus Technologies UK: No implemented connector for this source URL",
+        "RED Global: No implemented connector for this source URL",
+        "Salt: No implemented connector for this source URL",
+        "Avance Consulting: No implemented connector for this source URL",
+        "Hirexa Solutions: No implemented connector for this source URL",
+        "Infinity Quest: No implemented connector for this source URL",
+        "Square One Resources: No implemented connector for this source URL",
+        "Source Group International: No implemented connector for this source URL",
+        "Montreal Associates: No implemented connector for this source URL",
+        "Brains Consulting: No implemented connector for this source URL",
+        "Head Hunting IT: No implemented connector for this source URL",
+        "Next Ventures: No implemented connector for this source URL",
+        "Lawrence Harvey: No implemented connector for this source URL",
+        "Proactive.IT: No implemented connector for this source URL",
+        "W Talent: No implemented connector for this source URL",
+        "KEYES / NRB: No implemented connector for this source URL",
+        "Trasys International: No implemented connector for this source URL",
+        "Thaleria: No implemented connector for this source URL",
+        "Talan Belgium / Luxembourg: No implemented connector for this source URL",
+        "Fujitsu Belgium: No implemented connector for this source URL",
+        "ARHS / Accenture: No implemented connector for this source URL"
+      ],
+      "publication": "published",
+      "sources_configured": 130,
+      "sources_active": 130,
+      "sources_attempted": 2,
+      "sources_succeeded": 2,
+      "sources_failed": 0,
+      "sources_unsupported": 128,
+      "sources_skipped": 0,
+      "sources_inactive": 0,
+      "source_strategy": "all active sources equally"
+    },
+    {
       "run_id": "github-20260906T141247Z",
       "status": "completed",
       "trigger": "workflow_dispatch",
