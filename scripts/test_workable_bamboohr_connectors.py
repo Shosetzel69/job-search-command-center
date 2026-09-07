@@ -49,7 +49,7 @@ class WorkableTests(unittest.TestCase):
         self.assertEqual(record["date_posted"], "2026-09-07T08:00:00Z")
         self.assertIn("Lead delivery", record["description"])
         request = opener.call_args.args[0]
-        self.assertIn("/api/accounts/example?details=true", request.full_url)
+        self.assertIn("/api/v1/widget/accounts/example?details=true", request.full_url)
 
     def test_invalid_subdomain_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "subdomain"):
