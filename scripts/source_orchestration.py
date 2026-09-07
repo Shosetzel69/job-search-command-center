@@ -2,24 +2,27 @@
 
 import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 import job_search as engine
 import job_search_apify as apify
+import job_search_ashby as ashby
+import job_search_bamboohr as bamboohr
+import job_search_greenhouse as greenhouse
 import job_search_jobicy as jobicy
+import job_search_recruitee as recruitee
+import job_search_smartrecruiters as smartrecruiters
 import job_search_web as web
+import job_search_workday as workday
 import job_search_optimized as optimized
 
 REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
+ATS_ROUTES = json.loads((engine.ROOT / "shared/validated-ats-routes.json").read_text()).get("routes", {})
 SOURCES_PATH = engine.DATA / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
 
-# These catalog entries are provider/platform roots, not concrete employer boards.
-# They are intentionally deferred while JobsPipe stays disabled instead of sending
-# generic crawler traffic to pages that cannot represent the provider feed.
 DEFERRED_PROVIDER_ROOTS = {
     "linkedin.com": ("LinkedIn", "jobs"),
     "www.linkedin.com": ("LinkedIn", "jobs"),
@@ -39,6 +42,9 @@ DEFERRED_PROVIDER_ROOTS = {
 
 
 def connector_for(source):
+    route = ATS_ROUTES.get(source.get("name"))
+    if route:
+        return route.get("connector")
     try:
         parsed = urlsplit(source.get("url") or "")
         if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port:
@@ -49,6 +55,8 @@ def connector_for(source):
 
 
 def deferred_provider(source):
+    if source.get("name") in ATS_ROUTES:
+        return None
     try:
         parsed = urlsplit(source.get("url") or "")
         spec = DEFERRED_PROVIDER_ROOTS.get((parsed.hostname or "").lower())
@@ -71,6 +79,7 @@ def build_plan(catalog):
     plan = []
     seen = set()
     for source in catalog["sources"]:
+        route = ATS_ROUTES.get(source.get("name"))
         connector = connector_for(source)
         deferred = None if connector else deferred_provider(source)
         if not connector and not deferred:
@@ -79,31 +88,39 @@ def build_plan(catalog):
                 connector = "web"
             except web.FetchError:
                 connector = None
-        route_key = source.get("url") if connector == "web" else connector or ("deferred:" + deferred if deferred else None)
+        if route:
+            route_key = "ats:" + source.get("name", "")
+        else:
+            route_key = source.get("url") if connector == "web" else connector or ("deferred:" + deferred if deferred else None)
         item = {"source": source.get("name") or source.get("url") or "Unknown",
                 "source_id": source.get("id") or source.get("url"), "url": source.get("url"),
                 "connector": "deferred" if deferred else connector,
                 "collection_method": "deferred" if deferred else connector,
                 "active": source.get("active") is not False, "status": "pending",
                 "records": 0, "error": None, "failure_reason": None}
-        if not item["active"]:
+        if route:
+            item["connector_config"] = route
+            if route.get("enabled") is False:
+                item["active"] = False
+                reason = route.get("disabled_reason") or "ATS route disabled"
+                item.update(status="inactive", error=reason, failure_reason=reason)
+        if item["status"] == "pending" and not item["active"]:
             item.update(status="inactive", error="Disabled in source catalog", failure_reason="Disabled in source catalog")
-        elif deferred:
+        elif item["status"] == "pending" and deferred:
             reason = f"{deferred} provider root deferred; generic web crawling disabled while dedicated provider route is postponed"
             item.update(status="skipped", error=reason, failure_reason=reason, deferred_provider=deferred)
-        elif not connector:
+        elif item["status"] == "pending" and not connector:
             item.update(status="unsupported", error="Invalid or unsafe source URL", failure_reason="Invalid or unsafe source URL")
-        elif route_key in seen:
+        elif item["status"] == "pending" and route_key in seen:
             item.update(status="skipped", error="Duplicate provider endpoint already planned",
                         failure_reason="Duplicate provider endpoint already planned")
-        else:
+        elif item["status"] == "pending":
             seen.add(route_key)
         plan.append(item)
     return plan
 
 
 def collect_sources(config, state, now, plan):
-    # Web sources execute independently; slow sites cannot starve the rest of the catalog.
     with ThreadPoolExecutor(max_workers=12) as pool:
         futures = {item["source_id"]: pool.submit(web.collect, {"id": item["source_id"], "name": item["source"], "url": item["url"]}, config, now)
                    for item in plan if item["connector"] == "web" and item["status"] == "pending"}
@@ -133,10 +150,30 @@ def record_results(item, results):
                         "records": len(r.records), "error": r.error} for r in results]
 
 
+def collect_ats(item):
+    route = item.get("connector_config") or {}
+    connector = item["connector"]
+    company = item["source"]
+    if connector == "smartrecruiters":
+        return smartrecruiters.collect(route["company_identifier"])
+    if connector == "workday":
+        return workday.collect(route["career_url"], company)
+    if connector == "greenhouse":
+        return greenhouse.collect(route["board_token"], company)
+    if connector == "ashby":
+        return ashby.collect(route["board_name"], company)
+    if connector == "recruitee":
+        return recruitee.collect(route["subdomain"], company)
+    if connector == "bamboohr":
+        return bamboohr.collect(route["subdomain"], company)
+    raise ValueError(f"Unsupported ATS connector: {connector}")
+
+
 def collect_api_sources(config, state, now, plan):
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
+    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr"}
     for item in plan:
         if item["status"] != "pending" or item["connector"] == "web":
             continue
@@ -157,16 +194,18 @@ def collect_api_sources(config, state, now, plan):
                 continue
             state.setdefault("source_last_attempt", {})[connector] = now.isoformat()
         try:
-            if connector == "jobicy":
+            if connector in ats_connectors:
+                results = collect_ats(item)
+            elif connector == "jobicy":
                 results = jobicy.collect(config)
-            elif mode == "apify":
+            elif connector == "jobspipe" and mode == "apify":
                 results = apify.collect(config)
-            elif mode == "direct":
+            elif connector == "jobspipe" and mode == "direct":
                 results, credits, previews, budget = optimized.collect_incremental(config, state, now)
                 metadata = {"credits_used": credits, "preview_counts": previews, "run_budget": budget,
                             "estimated_monthly_credits": state.get("usage", {}).get("estimated_credits_used", 0)}
             else:
-                raise ValueError(f"Unsupported jobspipe_mode: {mode}")
+                raise ValueError(f"Unsupported connector: {connector}")
             if not results:
                 raise ValueError("Connector returned no collection result")
         except Exception as exc:
@@ -209,7 +248,7 @@ def run(config, now):
     status["sources_with_records"] = sum(item["records"] > 0 for item in plan)
     for outcome in ("partial", "blocked", "no_extractable_jobs"):
         status["sources_" + outcome] = sum(item.get("web_outcome") == outcome for item in plan)
-    status["limitations"] = [f'{item["source"]}: {item["error"]}' for item in plan if item["status"] in {"skipped", "unsupported"}]
+    status["limitations"] = [f'{item["source"]}: {item["error"]}' for item in plan if item["status"] in {"skipped", "unsupported", "inactive"} and item.get("error")]
     if not collection and not status["sources_unsupported"]:
         status["status"] = "completed"
     if successful and (status["sources_failed"] or status["sources_unsupported"]):
