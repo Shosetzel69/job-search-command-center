@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 
 import job_search as engine
 
-BASE_URL = "https://www.workable.com/api/accounts"
+BASE_URL = "https://apply.workable.com/api/v1/widget/accounts"
 MAX_BYTES = 10 * 1024 * 1024
 MAX_POSTINGS = 1000
 SLUG = re.compile(r"^[a-z0-9][a-z0-9-]*$", re.I)
@@ -72,7 +72,7 @@ def normalize(item, subdomain, company_name):
         "id": f"workable:{subdomain}:{posting_id}",
         "job_title": str(title).strip(),
         "company": str(company_name).strip(),
-        "description": plain_text(item.get("description")),
+        "description": plain_text(item.get("description") or item.get("full_description")),
         "location": location,
         "countries": [country] if country else [],
         "remote": remote,
