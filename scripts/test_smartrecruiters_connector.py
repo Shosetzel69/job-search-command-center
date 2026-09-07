@@ -52,7 +52,7 @@ class SmartRecruitersConnectorTests(unittest.TestCase):
 
         self.assertEqual(len(results), 1)
         self.assertTrue(results[0].ok)
-        self.assertEqual(results[0].count, 1)
+        self.assertEqual(results[0].total_available, 1)
         record = results[0].records[0]
         self.assertEqual(record["id"], "smartrecruiters:Example:123")
         self.assertEqual(record["job_title"], "Project Manager")
@@ -86,7 +86,7 @@ class SmartRecruitersConnectorTests(unittest.TestCase):
 
         results = smartrecruiters.collect("Example", max_postings=150, opener=opener)
 
-        self.assertEqual(results[0].count, 101)
+        self.assertEqual(results[0].total_available, 101)
         self.assertEqual(opener.call_count, 103)
 
     def test_missing_company_identifier_is_rejected(self):
