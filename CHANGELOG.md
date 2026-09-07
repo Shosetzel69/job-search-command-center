@@ -4,6 +4,7 @@
 
 ### Conectori
 
+- #58: adaugat connector SmartRecruiters Public Posting API cu paginare, detalii complete, normalizare in `CollectionResult` si teste izolate; nu este rutat sau activat in Source Registry pana la validarea live.
 - #60: adaugat connector Workday public CXS cu derivare tenant/site din career URL, paginare fixa de 20, detalii complete, normalizare in `CollectionResult` si teste izolate; nu este rutat sau activat in Source Registry pana la validarea live.
 
 ### Remedieri
