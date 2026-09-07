@@ -77,7 +77,7 @@ def normalize(summary, detail, subdomain, company_name):
     merged = dict(summary)
     merged.update(info)
     location, source = _location(merged)
-    country = _country(source)
+    country = _country(source) or _country(merged.get("atsLocation") or {})
     location_type = str(merged.get("locationType") or "").strip()
     remote = bool(merged.get("isRemote") or location_type == "1")
     arrangement = "hybrid" if location_type == "2" else ("remote" if remote else "onsite")
