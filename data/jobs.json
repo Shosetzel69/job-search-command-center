@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-07T11:35:02.845945+00:00",
+  "generated_at": "2026-09-07T11:43:48.375471+00:00",
   "freshness_hours": 120,
   "collection_freshness_hours": 120,
   "criteria": {
@@ -46,13 +46,11 @@
     ]
   },
   "raw_matches_available": {
-    "jobicy:latest_200": 200,
-    "web:https://www.hipo.ro/:web_pages": 1,
     "web:https://remoteok.com/:web_pages": 2,
     "web:https://nodesk.co/remote-jobs/:web_pages": 1,
-    "web:https://flexa.careers/jobs:web_pages": 7,
+    "web:https://flexa.careers/jobs:web_pages": 9,
     "web:https://nofluffjobs.com/:web_pages": 7,
-    "web:https://justjoin.it/:web_pages": 10,
+    "web:https://justjoin.it/:web_pages": 11,
     "web:https://justremote.co/:web_pages": 1,
     "web:https://dynamitejobs.com/:web_pages": 5,
     "web:https://techjobs.be/:web_pages": 10,
@@ -65,9 +63,9 @@
     "web:https://www.lawrenceharvey.com/jobs/:web_pages": 9,
     "web:https://www.thaleria.com/careers/open-positions:web_pages": 3
   },
-  "records_inspected": 281,
+  "records_inspected": 83,
   "results": 92,
-  "excluded_count": 276,
+  "excluded_count": 79,
   "jobs": [
     {
       "id": "4454803079",
@@ -832,7 +830,7 @@
       "description": "Remote — South Africa | Full-Time \n Morgan & Westfield is a leading M&A firm specializing in business sales, mergers, acquisitions, and valuations for privately owned businesses in the United States. We’re a small, fast-moving team guided by three core values: learning, simplicity, and openness. \n Learn more about our values, workplace culture, and approach to careers on our Careers page: https://morganandwestfield.com/about/careers/ \n The Role \n We’re looking for a client-facing project manager who can work independently, manage multiple client projects from start to finish, solve problems, and produce accurate work. A substantial part of your role will involve communicating directly with business owners. \n This is a hands-on role. You’ll communicate with clients regularly, provide updates, follow up for information, answer routine questions, and keep each stage of their project moving. You’ll also personally prepare documents and spreadsheets, organize and review financial information, conduct research, maintain records, and complete administrative and operational work. This isn’t a sales role or one where you’ll assign work to others. \n The work changes from day to day, but the standard doesn’t change: organized, timely, and correct. You don’t need legal, financial, or M&A experience. We’ll teach you our industry and processes.\nThis role is suited to someone seeking a stable, long-term career. You’ll receive regular one-on-one coaching from our founder and, based on your performance and ability, may have the opportunity to advance into a dealmaker role. \n Compensation \n The starting monthly salary below is base compensation. Performance bonuses, closing bonuses, and the long-term incentive plan are additional. Compensation is paid in U.S. dollars. \n \n Monthly Base Salary – $2,500 - $3,500 per month \n Monthly Performance Bonus – Up to 25% of base salary ($625–$875 per month) \n Annual Healthcare Reimbursement – Up to $800 per year \n Annual Closing Bonus – Up to $30,000 per year. \n Paid Leaves – 10–15 days annually ($1,154–$2,423 estimated value), based on tenure. Eligible unused days are paid in cash annually. \n Additional Long-Term Incentive Plan – $6,000–$8,400 annually (20% of base salary), vested over 20 years. \n \n Typical Annual Compensation Before Closing Bonus – $34,500–$50,400. \n Potential Annual Compensation, Including Closing Bonus – Up to $83,300, excluding paid leave and the long-term incentive plan. \n How bonuses work: Team members who meet expectations typically earn 60%–80% of the monthly performance bonus; top performers typically earn 90%–100%. We allocate 15% of net success fees to the closing-bonus pool and divide it among team members based on tenure and monthly performance ratings. Closing bonuses may reach $50,000+ annually after 10 years of tenure. \n Candidates who advance beyond the initial application review will receive a detailed overview explaining our compensation and benefits before the first interview. \n What You Will Do \n \n Client communication – Communicate directly with business owners, ask clear questions, provide useful updates, and follow up professionally. \n Project management – Own multiple client projects from assignment through completion. Set priorities, coordinate tasks, track deadlines, and define next steps. \n Documents and analysis – Prepare and update documents, spreadsheets, reports, presentations, trackers, and internal records.  - Organize, review, and summarize financial information. \n Research – Find reliable information, check the facts, and summarize what matters in plain English. \n Quality control – Identify errors, omissions, inconsistencies, and formatting problems before work is shared. \n Problem-solving – Resolve routine issues independently, escalate matters that require a decision, and recommend practical improvements. \n \n What Success Looks Like \n \n You keep projects organized, current, and visible without constant supervision. \n You meet deadlines and complete follow-ups reliably. \n You produce accurate, complete, and professional documents, spreadsheets, and records. \n You keep clients and team members informed and clarify what happens next. \n You identify problems early, resolve routine issues, and escalate the right matters. \n You apply feedback quickly and improve with each assignment. \n \n How You Work \n \n Ownership – Work independently, take responsibility for assignments, and see them through to completion. \n Attention to detail – Produce accurate work and catch missing information or inconsistencies. \n Organization – Manage multiple projects, priorities, and deadlines without losing track of details. \n Judgment and adaptability – Make sound decisions, know when to ask for help, and remain effective as priorities change. \n Learning – Master new systems, welcome direct feedback, and apply it quickly. \n Required Skills and Experience \n Client relationships – Experience working directly with clients and managing professional relationships. \n Relevant background – Experience in project management, coordination, operations, executive support, administration, or a similar role. \n Technology – Strong skills with Google Docs, Sheets, Drive, Gmail, and other business software. \n Financial Data– Comfortable working with numbers; prior financial experience isn’t required. \n Accuracy – Excellent proofreading, document formatting, and spreadsheet skills. \n English – Clear, professional written and spoken English. \n \n Your previous title may have been Project Manager, Project Coordinator, Operations Coordinator, Executive Assistant, or something else. The title matters less than your ability to take ownership, think clearly, and deliver reliable work. \n Remote-Work Requirements \n \n Availability to work a full-time, 40-hour schedule during standard US Eastern Time business hours. \n A reliable high-speed fiber internet connection. \n Backup internet and backup power for outages. \n A reliable computer suitable for full-time remote work. \n A quiet, professional workspace. \n \n Benefits and Growth \n \n Paid learning time – Up to 10% of working hours may be used for learning and professional development. \n Long-term growth – Take on greater responsibility and advance based on performance and ability. \n \n How to Apply \n Submit your application through our online application form: https://forms.gle/AAw2hKanLb5CSrRh8 \n Complete every required field. We won’t review incomplete applications. \n Only shortlisted applicants will be contacted regarding the next stage of the hiring process.",
       "date_posted": "2026-09-03",
       "source": "NoDesk",
-      "verified_at": "2026-09-07T11:35:02.845945+00:00"
+      "verified_at": "2026-09-07T11:43:48.375471+00:00"
     },
     {
       "id": "e2e5be11-5bce-4f71-8e2f-24ef190bea16",
@@ -1146,7 +1144,7 @@
       "description": "A long-term leadership role for a grounded, systems-minded operator who can build, launch, and steward a world-class academic student experience at accredited level (higher education, postgraduate, master’s degree level). Role Overview Institute for Coaching Mastery by  Alyssa Nobriga International  is entering a new phase of growth as we expand our academic program portfolio and go through the postgraduate education accreditation process.   The Program Manager will partner closely with Alyssa, senior leadership, curriculum partners, faculty, coaches, student support, and operations department to turn a postgraduate coach certification program vision into a seamless, scalable student experience. The first few months of this role will be focused on the development and operational launch of the master’s pathway program, including curriculum coordination, student journey design, faculty workflows, delivery systems, accreditation-related coordination, and ongoing program management. As the company grows, this role may expand into broader program ownership across other programs of the institution. Core Responsibilities Program Development & Launch Translate program vision into clear timelines, workflows, launch plans, and operating systems Support curriculum planning, student journey mapping, faculty coordination, and accreditation-related project management Ensure promised program elements, resources, calendars, and student-facing materials are documented and delivered Program Delivery & Operations Own the ongoing coordination and delivery of assigned academic programs Oversee calendars, live-session logistics, LMS updates, student databases, certification processes, SOPs, and delivery workflows Monitor program health and proactively flag risks, bottlenecks, gaps, and decisions needed from leadership Student Experience & Retention Manage student support and mentoring/coaching teams to improve clarity, engagement, completion, satisfaction, retention, and re-enrollment Manage escalated student experience matters with calm, care, and brand-aligned communication Track feedback, recurring student issues, and opportunities to strengthen the journey Team Leadership & Cross-Functional Coordination Keep leadership, curriculum, faculty, coaching, support, marketing, and operations aligned Lead meetings, document decisions, follow up on action items, and maintain clear ownership across projects Support team rhythms, accountability, hiring, onboarding, training, and performance development where relevant Systems & Continuous Improvement Build scalable systems for program delivery, communication, documentation, tracking, and reporting Reduce reactive execution by creating clean SOPs, repeatable workflows, and proactive visibility Implement meaningful improvements that strengthen delivery without compromising quality Success Profile AI-first operator + experienced program leader with 3+ years of relevant industry experience (online education, coaching certification, academic programs). Highly organized, detail-oriented, and calm under pressure Strong communicator with excellent follow-through Able to own outcomes, not tasks Comfortable working with visionary founder, academic partners, accrediting bodies, faculty, coaches, and admin support professionals in a fully remote setting Experienced in program management, education operations, online learning, certification programs, higher education, or student experience Interested in a long-term role with room to grow This role is your only job. You have nothing going on the side. KPI Framework Program Delivery & Launch 95%+ of major milestones, deliverables, and launch activities completed within 6 months after onboarding 100% of essential program materials, calendars, and student-facing resources finalized within 6 months after onboarding LMS, databases, SOPs, and core operating documents maintained accurately and updated on time Student Success & Experience Student satisfaction: 95%+ positive feedback Completion rate: 93%+ Withdrawal rate: below 7% of enrollments Re-enrollment: min 5% increase year over year Escalated student issues resolved within 48 hours Team Leadership & Operations 100% of monthly 1:1s and quarterly reviews completed and documented for direct reports 85%+ of team tasks completed independently and on time Customer support initial response time maintained under 24 hours during active programming cycles Clear communication cadence maintained across teams, with visible ownership and follow-through Systems, Reporting & Improvement 1–2 meaningful process or systems automations with AI  implemented per quarter Monthly KPI and program-health reporting delivered clearly and proactively Program operations managed within approved budget parameters Key workflows and SOPs documented, maintained, and continuously refined Role Details Pacific Zone Hours (9 am - 5 pm, Mon-Fri) Remote (work from anywhere) 1099 Contract Long-term Reports to Executive Director Initial focus: Master’s pathway program development and launch Important notes for all applicants:  All remuneration is in USD, regardless of candidate location. We are unable to sponsor any visas or facilitate visa transfers. Applications and CVs must be in English to be considered. You must complete all applicant questions to be shortlisted for screening. Alyssa Nobriga asks respectfully to  only apply through the application form  and not email/apply to them directly. Recruiters and Agencies please do not contact Alyssa Nobriga directly. We read every application. Fully AI-generated answers to the applicant questions are easy to spot and will not be shortlisted — we want to hear from you, in your own words.",
       "date_posted": "2026-09-07T00:27:19.396Z",
       "source": "Dynamite Jobs",
-      "verified_at": "2026-09-07T11:35:02.845945+00:00"
+      "verified_at": "2026-09-07T11:43:48.375471+00:00"
     },
     {
       "id": "c9655680c7a31f4a",
@@ -1856,7 +1854,7 @@
       "description": "Hiring: SAP Service Coordinator | Permanent | Warsaw\n \nWe're looking for an experienced SAP Service Coordinator to join an established SAP Center of Excellence.\n \nLocation : Warsaw - Hybrid, 3 days per week in the office\nStart : January 2027\nDuration : Permanent role\n \nYou'll play a key role in SAP service delivery across an SAP S/4HANA RISE Private Cloud environment, covering:\n \n* Incident, Problem & Change Management\n* SAP RISE service & contract coordination\n* JIRA Service Management\n* SAP Cloud ALM\n* License management\n* Release & transport coordination\n* Service KPIs, escalations & continuous improvement\n \nKey requirements:\n \n✓ 5+ years SAP Service Management experience\n✓ SAP S/4HANA & RISE experience\n✓ JIRA Service Management - essential\n✓ ITIL experience/certification\n✓ 3+ years leadership experience\n✓ Strong stakeholder management & fluent English\n \nInterested? DM me for a confidential conversation.",
       "date_posted": "2026-09-03",
       "source": "RED Global",
-      "verified_at": "2026-09-07T11:35:02.845945+00:00"
+      "verified_at": "2026-09-07T11:43:48.375471+00:00"
     },
     {
       "id": "4398385666",
@@ -2602,41 +2600,6 @@
       "verified_at": "2026-09-06 01:32:32"
     },
     {
-      "id": "ZTIwYTk1NGQtZmU3Yi00NjI4LWE0NjctNjkzMGUwNTBlNTU1IDM",
-      "title": "Project Manager",
-      "company": "CTRL-F NV",
-      "initial": "CN",
-      "fit": 77,
-      "location": "BE232",
-      "countries": [
-        "Belgium",
-        "Belgia"
-      ],
-      "country_codes": [
-        "BE"
-      ],
-      "remote_scope": "Country",
-      "romania_eligible": null,
-      "mode": "N/A",
-      "type": "Full Time",
-      "age": 72,
-      "remote": false,
-      "b2b": false,
-      "repost": false,
-      "status": "review",
-      "pros": [
-        "Geografie eligibila"
-      ],
-      "risks": [
-        "Forma B2B nu este confirmata"
-      ],
-      "url": "https://europa.eu/eures/portal/jv-se/jv-details/ZTIwYTk1NGQtZmU3Yi00NjI4LWE0NjctNjkzMGUwNTBlNTU1IDM?lang=en",
-      "description": "Voor onze klant, een dynamische Belgische KMO met een sterke internationale klantenportefeuille en een bewezen expertise in hoogtechnologische poeder process machines, zoeken we een Project Manager. Je werkt dagelijks aan innovatieve R&D projecten voor machines in onder meer pharma, biotech, voeding en chemie. In deze rol combineer je projectopvolging, technische coördinatie en klantcontact in een omgeving waar no-nonsense samenwerken en hands-on meewerken centraal staan. Je vervoegt een klein team van multi-inzetbare ingenieurs en krijgt een gevarieerd takenpakket waarin je zowel intern als extern een sleutelrol speelt.\n\nJouw verantwoordelijkheden:\n\n- Je bent het eerste aanspreekpunt voor de klant en volgt in samenwerking met de Productie Manager de voortgang van standaard machines op.\n\n- Je stemt tijdig af over leveringen, technische vereisten en de praktische voorbereiding bij de klant voor installatie.\n\n- Je staat in voor interne kwaliteitscontrole, kalibraties en projectdocumentatie, en voert deze taken waar nodig ook zelf uit.\n\n- Je begeleidt de afname van machines samen met de klant tijdens de factory acceptance test (FAT), en zorgt mee voor oplevering, installatie en training op locatie, soms in het buitenland.\n\n- Voor complexere projecten ben je het aanspreekpunt van A tot Z: je bent vanaf de RFQ-fase betrokken, denkt mee op basis van het lastenboek (URS), werkt engineering uit en stemt af met klanten en leveranciers.\n\n- Je volgt projecten van dichtbij op tot en met de installatie en blijft ook daarna betrokken in de verdere opvolging.\n\n- Je ondersteunt de after-sales service door technische hulp te bieden en offertes op te maken voor spares en services.\n\nVoor deze functie zoekt onze klant een Project Manager met een technische achtergrond en bij voorkeur een aantal jaar relevante ervaring. Je hoeft niet uit één specifiek domein te komen, maar je moet wel comfortabel zijn in een technische, projectmatige en klantgerichte omgeving.\n\nJouw profiel:\n\n- Je beschikt over een engineeringdiploma.\n\n- Je hebt een aantal jaar werkervaring in een technische of projectmatige rol.\n\n- Je bent pragmatisch, hands-on en denkt in oplossingen.\n\n- Je werkt gestructureerd en behoudt overzicht, ook wanneer meerdere projecten tegelijk lopen.\n\n- Je bent klantgericht en communiceert vlot met zowel interne collega’s als externe partners.\n\n- Je bent een sterke teamspeler, maar kan ook zelfstandig verantwoordelijkheid opnemen.\n\n- Je communiceert vlot in het Nederlands en Engels, zowel mondeling als schriftelijk.\n\n- Je voelt je goed in een transparante, flexibele en vlakke organisatie met korte communicatielijnen.\n\n- Reizen naar het buitenland, goed voor ongeveer 15% van de tijd verspreid over het jaar, vormt voor jou geen probleem.\n\n- Kennis van Siemens PLC-programmering is een pluspunt.\n\n- Ervaring met engineering binnen de farmaceutische industrie is een mooie troef.\n\nJe bent iemand die verantwoordelijkheid neemt, technische inhoud snel oppikt en graag mee instaat voor het succes van elk project, van eerste vraag tot installatie en nazorg.",
-      "date_posted": "2026-09-04T10:40:13.313000+00:00",
-      "source": "eures",
-      "verified_at": "2026-09-06 12:22:42"
-    },
-    {
       "id": "ZWRmZGQzMDktOTUzMi00ZmI1LWFkMmQtMGNiNzRlOTZlYzU4IDM",
       "title": "Project Manager Industriebouw",
       "company": "ACTIEF CONSTRUCT NV",
@@ -2670,6 +2633,41 @@
       "date_posted": "2026-09-04T10:16:15.638000+00:00",
       "source": "eures",
       "verified_at": "2026-09-06 12:23:35"
+    },
+    {
+      "id": "ZTIwYTk1NGQtZmU3Yi00NjI4LWE0NjctNjkzMGUwNTBlNTU1IDM",
+      "title": "Project Manager",
+      "company": "CTRL-F NV",
+      "initial": "CN",
+      "fit": 77,
+      "location": "BE232",
+      "countries": [
+        "Belgium",
+        "Belgia"
+      ],
+      "country_codes": [
+        "BE"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "N/A",
+      "type": "Full Time",
+      "age": 73,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "review",
+      "pros": [
+        "Geografie eligibila"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://europa.eu/eures/portal/jv-se/jv-details/ZTIwYTk1NGQtZmU3Yi00NjI4LWE0NjctNjkzMGUwNTBlNTU1IDM?lang=en",
+      "description": "Voor onze klant, een dynamische Belgische KMO met een sterke internationale klantenportefeuille en een bewezen expertise in hoogtechnologische poeder process machines, zoeken we een Project Manager. Je werkt dagelijks aan innovatieve R&D projecten voor machines in onder meer pharma, biotech, voeding en chemie. In deze rol combineer je projectopvolging, technische coördinatie en klantcontact in een omgeving waar no-nonsense samenwerken en hands-on meewerken centraal staan. Je vervoegt een klein team van multi-inzetbare ingenieurs en krijgt een gevarieerd takenpakket waarin je zowel intern als extern een sleutelrol speelt.\n\nJouw verantwoordelijkheden:\n\n- Je bent het eerste aanspreekpunt voor de klant en volgt in samenwerking met de Productie Manager de voortgang van standaard machines op.\n\n- Je stemt tijdig af over leveringen, technische vereisten en de praktische voorbereiding bij de klant voor installatie.\n\n- Je staat in voor interne kwaliteitscontrole, kalibraties en projectdocumentatie, en voert deze taken waar nodig ook zelf uit.\n\n- Je begeleidt de afname van machines samen met de klant tijdens de factory acceptance test (FAT), en zorgt mee voor oplevering, installatie en training op locatie, soms in het buitenland.\n\n- Voor complexere projecten ben je het aanspreekpunt van A tot Z: je bent vanaf de RFQ-fase betrokken, denkt mee op basis van het lastenboek (URS), werkt engineering uit en stemt af met klanten en leveranciers.\n\n- Je volgt projecten van dichtbij op tot en met de installatie en blijft ook daarna betrokken in de verdere opvolging.\n\n- Je ondersteunt de after-sales service door technische hulp te bieden en offertes op te maken voor spares en services.\n\nVoor deze functie zoekt onze klant een Project Manager met een technische achtergrond en bij voorkeur een aantal jaar relevante ervaring. Je hoeft niet uit één specifiek domein te komen, maar je moet wel comfortabel zijn in een technische, projectmatige en klantgerichte omgeving.\n\nJouw profiel:\n\n- Je beschikt over een engineeringdiploma.\n\n- Je hebt een aantal jaar werkervaring in een technische of projectmatige rol.\n\n- Je bent pragmatisch, hands-on en denkt in oplossingen.\n\n- Je werkt gestructureerd en behoudt overzicht, ook wanneer meerdere projecten tegelijk lopen.\n\n- Je bent klantgericht en communiceert vlot met zowel interne collega’s als externe partners.\n\n- Je bent een sterke teamspeler, maar kan ook zelfstandig verantwoordelijkheid opnemen.\n\n- Je communiceert vlot in het Nederlands en Engels, zowel mondeling als schriftelijk.\n\n- Je voelt je goed in een transparante, flexibele en vlakke organisatie met korte communicatielijnen.\n\n- Reizen naar het buitenland, goed voor ongeveer 15% van de tijd verspreid over het jaar, vormt voor jou geen probleem.\n\n- Kennis van Siemens PLC-programmering is een pluspunt.\n\n- Ervaring met engineering binnen de farmaceutische industrie is een mooie troef.\n\nJe bent iemand die verantwoordelijkheid neemt, technische inhoud snel oppikt en graag mee instaat voor het succes van elk project, van eerste vraag tot installatie en nazorg.",
+      "date_posted": "2026-09-04T10:40:13.313000+00:00",
+      "source": "eures",
+      "verified_at": "2026-09-06 12:22:42"
     },
     {
       "id": "OGIzNmIzYzctMjk5NC00YzFkLWI5YzQtNDMxNzZiNzk5MDNmIDM",
@@ -2883,7 +2881,7 @@
       "description": "Project description Join our Development Centre in Bucharest and become a member of our open-minded, progressive and professional team. In this role you will be working for one of our world-famous clients.\nThe Chief Security Office (CSO) of our client comprises the Chief Information Security Office (CISO) and the Corporate Security unit. The CISO organization guarantees information security for our client.\nCSO requires a technical project manager to coordinate a Proof of Concept phase for candidate cloud security tools. This is a joint security and cloud infrastructure exercise. The person will support team leads and SMEs in both functions to define, track and report on detailed activities. The activities to be coordinated run from setup of the PoC environments, through collation and execution of test cases, engagement with testers from multiple teams, to documentation and scoring of results.\nOn top of attractive salary and benefits package, Luxoft will invest into your professional training, and allow you to grow your professional career. Responsibilities - Coordinate a Proof of Concept phase for candidate cloud security tools; This is a joint security and cloud infrastructure exercise.\n- Will support team leads and SMEs in both functions to define, track and report on detailed activities\n- The activities to be coordinated run from setup of the PoC environments, through collation and execution of test cases, engagement with testers from multiple teams, to documentation and scoring of results SKILLS Must have - IT project management\n- Agile methods such as Scrum\n- Jira\n- Medium-high Excel skills\n- Microsoft Office tools \n- Strong written communication in English\n- Ability to produce reports, presentations, and charts\n- Experience of managing structured, multi-vendor IT evaluations\n- Good project management skills and be able to produce management reports and document the results of the evaluations in clear business English, for a management audience\n- Experience of public cloud platforms or cyber security is desirable but not essential. Nice to have - experience in a multinational environment would be a plus;",
       "date_posted": "2026-09-04 00:00:00",
       "source": "Luxoft",
-      "verified_at": "2026-09-07T11:35:02.845945+00:00"
+      "verified_at": "2026-09-07T11:43:48.375471+00:00"
     },
     {
       "id": "4334788022",
@@ -3205,109 +3203,109 @@
   ],
   "excluded_sample": [
     {
-      "title": "Pensions Project Manager",
-      "company": "WTW",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "Staff Product Designer",
-      "company": "Monzo",
+      "title": "Production Lead",
+      "company": "ITC Limited",
       "reason": "title outside target"
     },
     {
-      "title": "Customer Success Manager, Corporate",
-      "company": "AlphaSense",
+      "title": "Delivery Driver",
+      "company": "The Drinks LLAB",
+      "reason": "older than 120 hours"
+    },
+    {
+      "title": "Project Management Office Administrator",
+      "company": "The Adaptavist Group",
+      "reason": "outside target or excluded geography"
+    },
+    {
+      "title": "Project Management Office Administrator",
+      "company": "The Adaptavist Group",
+      "reason": "outside target or excluded geography"
+    },
+    {
+      "title": "Project Management Office Administrator",
+      "company": "The Adaptavist Group",
+      "reason": "older than 120 hours"
+    },
+    {
+      "title": "Regional Head of Project Management Office",
+      "company": "The Adaptavist Group",
+      "reason": "outside target or excluded geography"
+    },
+    {
+      "title": "Regional Head of Project Management Office",
+      "company": "The Adaptavist Group",
+      "reason": "outside target or excluded geography"
+    },
+    {
+      "title": "Regional Head of Project Management Office",
+      "company": "The Adaptavist Group",
+      "reason": "outside target or excluded geography"
+    },
+    {
+      "title": "Services Programme Delivery Manager (f/m/d) German speaker",
+      "company": "The Adaptavist Group",
+      "reason": "outside target or excluded geography"
+    },
+    {
+      "title": "Junior Agile Delivery Coordinator",
+      "company": "Tyk",
+      "reason": "outside target or excluded geography"
+    },
+    {
+      "title": "Senior Project Manager, Marketing & Commercial - EMEA",
+      "company": "Tyk",
+      "reason": "non-IT role"
+    },
+    {
+      "title": "Business Analyst",
+      "company": "Verita HR",
       "reason": "title outside target"
     },
     {
-      "title": "Senior Software Engineer - REDAPL Graph Engine",
-      "company": "Datadog",
+      "title": "E2E Software Test Engineer",
+      "company": "Antal",
       "reason": "title outside target"
     },
     {
-      "title": "Presales Systems Engineer - Southern Germany",
-      "company": "Fortinet",
+      "title": "Senior Systems Engineering & PLM Consultant with German",
+      "company": "Capgemini",
       "reason": "title outside target"
     },
     {
-      "title": "Partner Sales Specialist",
-      "company": "Fortive",
+      "title": "AVP, REGULATION MANAGEMENT COE",
+      "company": "HSBC Technology Poland",
       "reason": "title outside target"
     },
     {
-      "title": "Engineering Manager - Linux Hardware Enablement",
-      "company": "Canonical",
+      "title": "Agile Project Lead",
+      "company": "Boldare",
+      "reason": "older than 120 hours"
+    },
+    {
+      "title": "Cybersecurity Project Manager",
+      "company": "Link Group",
+      "reason": "older than 120 hours"
+    },
+    {
+      "title": "Case Manager",
+      "company": "Ework Group",
       "reason": "title outside target"
     },
     {
-      "title": "Legal Consultant - Asset Management / Securities",
-      "company": "Axiom",
-      "reason": "title outside target"
+      "title": "Project Manager / Integration Coordinator - Sales & Logistics",
+      "company": "BPX S.A.",
+      "reason": "non-IT role"
     },
     {
-      "title": "Alliances & Channels Leader",
-      "company": "Canonical",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Customer Success Manager, Corporate",
-      "company": "AlphaSense",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Legal Consultant - Commercial contract (Malaysia)",
-      "company": "Axiom",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Legal / Compliance Consultant - Trade Compliance, Export Control (Remote Working)",
-      "company": "Axiom",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Senior Solutions Architect I, Pre-Sales - South Korea Defense & Intelligence",
-      "company": "Planet Labs Inc.",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Global Alliance Lead",
-      "company": "Fivetran",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Manager, Customer Support Engineering",
-      "company": "Fivetran",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Senior Account Executive, Enterprise",
-      "company": "Fivetran",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Customer Engineer - Melbourne",
-      "company": "NCR Voyix",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Non-Linguistic QC (China / US Time Zone)",
-      "company": "Welo Global",
-      "reason": "title outside target"
-    },
-    {
-      "title": "Senior Customer Technical Program Manager - Data Center",
-      "company": "NVIDIA",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "Customer Success Architect, CEUR",
-      "company": "GitLab",
-      "reason": "title outside target"
+      "title": "Director, Delivery Management",
+      "company": "EPAM Systems",
+      "reason": "outside target or excluded geography"
     }
   ],
   "cross_source_duplicates_removed": 0,
   "incremental_sync": false,
-  "expired_pruned": 7,
+  "expired_pruned": 0,
   "jobspipe_usage": {
     "month_utc": "2026-09",
     "estimated_credits_used": 0,
