@@ -7,9 +7,8 @@ connectors. It does not write data or use credentials.
 
 import json
 import sys
-import urllib.error
-import urllib.parse
 import urllib.request
+import xml.etree.ElementTree as ET
 
 UA = "job-search-command-center-live-smoke/1.0"
 TIMEOUT = 20
@@ -24,6 +23,14 @@ def fetch_json(url, *, method="GET", payload=None, headers=None):
     request = urllib.request.Request(url, data=data, headers=final_headers, method=method)
     with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
         return response.status, json.loads(response.read())
+
+
+def fetch_bytes(url, *, headers=None):
+    final_headers = {"User-Agent": UA}
+    final_headers.update(headers or {})
+    request = urllib.request.Request(url, headers=final_headers)
+    with urllib.request.urlopen(request, timeout=TIMEOUT) as response:
+        return response.status, response.read()
 
 
 def check(name, fn):
@@ -98,6 +105,19 @@ def workday():
     return f"{len(payload['jobPostings'])} postings"
 
 
+def successfactors():
+    url = (
+        "https://career5.successfactors.eu/career?company=C0001122692P"
+        "&career_ns=job_listing_summary&resultType=XML"
+    )
+    status, body = fetch_bytes(url, headers={"Accept": "application/xml,text/xml"})
+    assert status == 200
+    root = ET.fromstring(body)
+    jobs = root.findall(".//job")
+    assert jobs
+    return f"{len(jobs)} jobs"
+
+
 def main():
     checks = [
         ("SmartRecruiters", smartrecruiters),
@@ -108,6 +128,7 @@ def main():
         ("Recruitee", recruitee),
         ("Workable", workable),
         ("BambooHR", bamboohr),
+        ("SuccessFactors", successfactors),
     ]
     failures = [name for name, fn in checks if not check(name, fn)]
     if failures:
