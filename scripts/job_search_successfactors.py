@@ -27,10 +27,15 @@ def plain_text(value):
     return " ".join(part.strip() for part in parser.parts if part.strip())
 
 
+def _key(tag):
+    local = str(tag or "").rsplit("}", 1)[-1]
+    return re.sub(r"[^a-z0-9]", "", local.lower())
+
+
 def _text(node, *names):
-    for name in names:
-        child = node.find(name)
-        if child is not None and child.text and child.text.strip():
+    wanted = {_key(name) for name in names}
+    for child in list(node):
+        if _key(child.tag) in wanted and child.text and child.text.strip():
             return child.text.strip()
     return None
 
@@ -44,8 +49,8 @@ def _country(value):
 
 
 def normalize(node, company_id, company_name, origin):
-    posting_id = _text(node, "jobid", "jobId", "jobReqId", "jobreqid", "id")
-    title = _text(node, "title", "jobtitle", "jobTitle")
+    posting_id = _text(node, "ReqId", "jobid", "jobId", "jobReqId", "jobreqid", "id")
+    title = _text(node, "JobTitle", "title", "jobtitle", "jobTitle")
     source_url = _text(node, "url", "joburl", "jobUrl", "link")
     if not posting_id or not title or not company_name:
         raise ValueError("Malformed SuccessFactors job: missing id/title/company")
@@ -56,9 +61,9 @@ def normalize(node, company_id, company_name, origin):
     state = _text(node, "state", "region")
     country = _country(_text(node, "country", "countryCode"))
     location = ", ".join(value for value in (city, state, country) if value)
-    location = location or (_text(node, "location") or "")
+    location = location or (_text(node, "Location", "location") or "")
     remote = bool(re.search(r"\b(remote|anywhere|worldwide)\b", location, re.I))
-    description = plain_text(_text(node, "description", "jobDescription") or "")
+    description = plain_text(_text(node, "Job-Description", "description", "jobDescription") or "")
 
     return {
         "id": f"successfactors:{company_id}:{posting_id}",
@@ -70,7 +75,7 @@ def normalize(node, company_id, company_name, origin):
         "remote": remote,
         "work_arrangement": "remote" if remote else "onsite",
         "employment_statuses": engine.list_values(_text(node, "jobtype", "jobType", "employmentType")),
-        "date_posted": _text(node, "date", "datePosted", "postedDate", "publicationDate"),
+        "date_posted": _text(node, "Posted-Date", "date", "datePosted", "postedDate", "publicationDate"),
         "source_url": source_url,
         "sources": [{"provider": "SuccessFactors", "company_id": company_id}],
         "category": _text(node, "category"),
@@ -100,8 +105,6 @@ def collect(career_site_url, company_id, company_name, locale=None, max_postings
     if len(body) > MAX_BYTES:
         raise ValueError("SuccessFactors response exceeds size limit")
     root = ET.fromstring(body)
-    jobs = root.findall(".//job")
-    if not jobs and root.tag.lower().endswith("job"):
-        jobs = [root]
+    jobs = [node for node in root.iter() if _key(node.tag) == "job"]
     records = [normalize(node, company_id, company_name, origin) for node in jobs[:max_postings]]
     return [engine.CollectionResult(f"successfactors:{company_id}", "public_xml_feed", True, records, len(jobs))]
