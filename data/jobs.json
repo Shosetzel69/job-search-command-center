@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "generated_at": "2026-09-07T14:44:49.367464+00:00",
+  "generated_at": "2026-09-07T15:13:22.667104+00:00",
   "freshness_hours": 120,
   "collection_freshness_hours": 120,
   "criteria": {
@@ -19,11 +19,7 @@
     ],
     "geography": {
       "regions": [],
-      "country_codes": [
-        "BE",
-        "LU",
-        "RO"
-      ],
+      "country_codes": [],
       "excluded_regions": [],
       "excluded_country_codes": [
         "AF",
@@ -46,7 +42,6 @@
     ]
   },
   "raw_matches_available": {
-    "jobicy:latest_200": 200,
     "recruitee:almavivadebelgique:careers_site": 11,
     "smartrecruiters:Netcompany1:public_postings": 160,
     "smartrecruiters:Endava:public_postings": 190,
@@ -54,12 +49,12 @@
     "bamboohr:saphetor:public_careers": 15,
     "ashby:camunda:public_board": 30,
     "greenhouse:datadog:public_board": 443,
-    "web:src-a41721bd:web_pages": 3,
+    "web:src-a41721bd:web_pages": 2,
     "web:src-711652ce:web_pages": 2,
     "web:src-8dc57863:web_pages": 1,
-    "web:src-98e6fa9a:web_pages": 5,
-    "web:src-418d4402:web_pages": 5,
-    "web:src-08e07524:web_pages": 11,
+    "web:src-98e6fa9a:web_pages": 9,
+    "web:src-418d4402:web_pages": 7,
+    "web:src-08e07524:web_pages": 9,
     "web:src-95b41cd3:web_pages": 1,
     "web:src-27876fc7:web_pages": 5,
     "web:src-de78b466:web_pages": 10,
@@ -72,9 +67,9 @@
     "web:src-52730da8:web_pages": 9,
     "web:src-627fe4ae:web_pages": 3
   },
-  "records_inspected": 1627,
-  "results": 93,
-  "excluded_count": 1621,
+  "records_inspected": 1430,
+  "results": 122,
+  "excluded_count": 1396,
   "jobs": [
     {
       "id": "4454803079",
@@ -94,7 +89,7 @@
       "romania_eligible": null,
       "mode": "Hybrid",
       "type": "Contract",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": true,
       "repost": false,
@@ -121,7 +116,7 @@
       "location": "Aalst, Flemish Region, Belgium",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -151,7 +146,7 @@
       "location": "zdalnie",
       "mode": "Remote",
       "type": "Nespecificat",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -181,7 +176,7 @@
       "location": "Poznań, wielkopolskie",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 100,
+      "age": 101,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -210,7 +205,7 @@
       "location": "Barcelona, Catalonia, Spain",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -239,7 +234,7 @@
       "location": "Paris, Île-de-France, France",
       "mode": "Remote",
       "type": "Contract",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": true,
       "repost": false,
@@ -269,7 +264,7 @@
       "location": "Poznań, Wielkopolskie, Poland",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -307,7 +302,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -324,6 +319,40 @@
       "date_posted": "2026-09-05",
       "source": "linkedin",
       "verified_at": "2026-09-06 00:28:38"
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147157679",
+      "title": "SO_Service Delivery Manager-Platform",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 94,
+      "location": "coimbatore, India",
+      "countries": [
+        "India"
+      ],
+      "country_codes": [
+        "IN"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 104,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147157679-so-service-delivery-manager-platform",
+      "description": "Roles & Responsibilities : The Infrastructure Service Delivery Manager is responsible for overseeing the delivery, operation, and continuous improvement of infrastructure services across both Cloud and On-Premises environments. This role ensures that infrastructure services meet business requirements, service level commitments, security standards, and operational excellence . The individual will act as the key interface between technical teams, business stakeholders, customers, and external service providers to ensure reliable, scalable, and cost-effective infrastructure services. Key Responsibilities: Lead the end-to-end delivery and management of infrastructure services across Cloud and On-Premises environments, including servers, storage, virtualization, networks, databases, and platform services. Manage infrastructure operations teams and service providers, ensuring high availability, performance, and timely resolution of incidents, problems, and service requests in accordance with agreed SLAs and KPIs. Serve as the primary point of contact for stakeholders and customers regarding infrastructure service performance, escalations, and operational governance. Collaborate with business units, application teams, cybersecurity teams, and technology partners to align infrastructure services with organizational objectives and transformation initiatives. Drive continuous service improvement initiatives focused on reliability, automation, optimization, operational efficiency, and user experience. Oversee infrastructure lifecycle management, including capacity planning, patching, upgrades, refresh programs, and technology modernization initiatives. Ensure effective management of Cloud platforms (AWS, Azure, GCP) and On-Premises data center environments, maintaining operational consistency and governance standards. Monitor infrastructure health, service performance, utilization, and availability metrics; prepare operational reports and present insights to senior leadership. Ensure compliance with ITIL best practices, security policies, regulatory requirements, and organizational governance frameworks. Lead incident, problem, change, and release management processes to minimize service disruptions and ensure business continuity. Coordinate disaster recovery planning, business continuity testing, and resilience initiatives across infrastructure environments. Manage vendor relationships, contracts, and third-party service providers to ensure service quality, cost optimization, and contractual compliance. Facilitate knowledge sharing, operational readiness, and team development to enhance technical capabilities and service maturity.\n\nEducational qualification: Bachelor’s degree/Master’s degree(BE/ME) in Computer Science, Information Technology, or related field. Experience : 10+ Years Mandatory/requires Skills : Proven experience (8+ years) in hybrid infrastructure environment including Cloud and On-premises platforms Strong knowledge of ITIL processes and Service Management principles. Experience managing infrastructure services such as compute, Storage, Virtualization, networking and monitoring Knowledge of Cloud platforms such as Amazon Web Services (AWS), Microsoft Azure, and/or Google Cloud Platform. Excellent communication, leadership, and stakeholder management skills. Ability to handle multiple priorities and complex projects. Relevant certifications such as ITIL, AWS, Azure, GCP, PMP, or Prince2 are preferred.",
+      "date_posted": "2026-09-03T06:30:20.276Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
     },
     {
       "id": "5a338fb8612f403e",
@@ -364,7 +393,7 @@
       "location": "zdalnie",
       "mode": "Remote",
       "type": "Nespecificat",
-      "age": 105,
+      "age": 106,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -394,7 +423,7 @@
       "location": "Fully, Valais, Switzerland",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -424,7 +453,7 @@
       "location": "Spain",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -454,7 +483,7 @@
       "location": "Zürich, ZH",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -485,7 +514,7 @@
       "location": "Genova, Liguria",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -514,7 +543,7 @@
       "location": "Nijmegen, Gelderland, Netherlands",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 86,
+      "age": 87,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -543,7 +572,7 @@
       "location": "Stäfa, Zurich, Switzerland",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 86,
+      "age": 87,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -572,7 +601,7 @@
       "location": "Stäfa, ZH",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 105,
+      "age": 106,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -601,7 +630,7 @@
       "location": "Madrid, Community of Madrid, Spain",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -640,7 +669,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -666,7 +695,7 @@
       "location": "Italy",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 86,
+      "age": 87,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -696,7 +725,7 @@
       "location": "Darmstadt, Hesse, Germany",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 86,
+      "age": 87,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -726,7 +755,7 @@
       "location": "Ireland",
       "mode": "Remote",
       "type": "Contract",
-      "age": 86,
+      "age": 87,
       "remote": true,
       "b2b": true,
       "repost": false,
@@ -756,7 +785,7 @@
       "location": "Poznań, Wielkopolskie, Poland",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 86,
+      "age": 87,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -786,7 +815,7 @@
       "location": "Warszawa, mazowieckie",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 98,
+      "age": 99,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -823,7 +852,7 @@
       "romania_eligible": true,
       "mode": "Remote",
       "type": "Full-Time",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -839,7 +868,7 @@
       "description": "Remote — South Africa | Full-Time \n Morgan & Westfield is a leading M&A firm specializing in business sales, mergers, acquisitions, and valuations for privately owned businesses in the United States. We’re a small, fast-moving team guided by three core values: learning, simplicity, and openness. \n Learn more about our values, workplace culture, and approach to careers on our Careers page: https://morganandwestfield.com/about/careers/ \n The Role \n We’re looking for a client-facing project manager who can work independently, manage multiple client projects from start to finish, solve problems, and produce accurate work. A substantial part of your role will involve communicating directly with business owners. \n This is a hands-on role. You’ll communicate with clients regularly, provide updates, follow up for information, answer routine questions, and keep each stage of their project moving. You’ll also personally prepare documents and spreadsheets, organize and review financial information, conduct research, maintain records, and complete administrative and operational work. This isn’t a sales role or one where you’ll assign work to others. \n The work changes from day to day, but the standard doesn’t change: organized, timely, and correct. You don’t need legal, financial, or M&A experience. We’ll teach you our industry and processes.\nThis role is suited to someone seeking a stable, long-term career. You’ll receive regular one-on-one coaching from our founder and, based on your performance and ability, may have the opportunity to advance into a dealmaker role. \n Compensation \n The starting monthly salary below is base compensation. Performance bonuses, closing bonuses, and the long-term incentive plan are additional. Compensation is paid in U.S. dollars. \n \n Monthly Base Salary – $2,500 - $3,500 per month \n Monthly Performance Bonus – Up to 25% of base salary ($625–$875 per month) \n Annual Healthcare Reimbursement – Up to $800 per year \n Annual Closing Bonus – Up to $30,000 per year. \n Paid Leaves – 10–15 days annually ($1,154–$2,423 estimated value), based on tenure. Eligible unused days are paid in cash annually. \n Additional Long-Term Incentive Plan – $6,000–$8,400 annually (20% of base salary), vested over 20 years. \n \n Typical Annual Compensation Before Closing Bonus – $34,500–$50,400. \n Potential Annual Compensation, Including Closing Bonus – Up to $83,300, excluding paid leave and the long-term incentive plan. \n How bonuses work: Team members who meet expectations typically earn 60%–80% of the monthly performance bonus; top performers typically earn 90%–100%. We allocate 15% of net success fees to the closing-bonus pool and divide it among team members based on tenure and monthly performance ratings. Closing bonuses may reach $50,000+ annually after 10 years of tenure. \n Candidates who advance beyond the initial application review will receive a detailed overview explaining our compensation and benefits before the first interview. \n What You Will Do \n \n Client communication – Communicate directly with business owners, ask clear questions, provide useful updates, and follow up professionally. \n Project management – Own multiple client projects from assignment through completion. Set priorities, coordinate tasks, track deadlines, and define next steps. \n Documents and analysis – Prepare and update documents, spreadsheets, reports, presentations, trackers, and internal records.  - Organize, review, and summarize financial information. \n Research – Find reliable information, check the facts, and summarize what matters in plain English. \n Quality control – Identify errors, omissions, inconsistencies, and formatting problems before work is shared. \n Problem-solving – Resolve routine issues independently, escalate matters that require a decision, and recommend practical improvements. \n \n What Success Looks Like \n \n You keep projects organized, current, and visible without constant supervision. \n You meet deadlines and complete follow-ups reliably. \n You produce accurate, complete, and professional documents, spreadsheets, and records. \n You keep clients and team members informed and clarify what happens next. \n You identify problems early, resolve routine issues, and escalate the right matters. \n You apply feedback quickly and improve with each assignment. \n \n How You Work \n \n Ownership – Work independently, take responsibility for assignments, and see them through to completion. \n Attention to detail – Produce accurate work and catch missing information or inconsistencies. \n Organization – Manage multiple projects, priorities, and deadlines without losing track of details. \n Judgment and adaptability – Make sound decisions, know when to ask for help, and remain effective as priorities change. \n Learning – Master new systems, welcome direct feedback, and apply it quickly. \n Required Skills and Experience \n Client relationships – Experience working directly with clients and managing professional relationships. \n Relevant background – Experience in project management, coordination, operations, executive support, administration, or a similar role. \n Technology – Strong skills with Google Docs, Sheets, Drive, Gmail, and other business software. \n Financial Data– Comfortable working with numbers; prior financial experience isn’t required. \n Accuracy – Excellent proofreading, document formatting, and spreadsheet skills. \n English – Clear, professional written and spoken English. \n \n Your previous title may have been Project Manager, Project Coordinator, Operations Coordinator, Executive Assistant, or something else. The title matters less than your ability to take ownership, think clearly, and deliver reliable work. \n Remote-Work Requirements \n \n Availability to work a full-time, 40-hour schedule during standard US Eastern Time business hours. \n A reliable high-speed fiber internet connection. \n Backup internet and backup power for outages. \n A reliable computer suitable for full-time remote work. \n A quiet, professional workspace. \n \n Benefits and Growth \n \n Paid learning time – Up to 10% of working hours may be used for learning and professional development. \n Long-term growth – Take on greater responsibility and advance based on performance and ability. \n \n How to Apply \n Submit your application through our online application form: https://forms.gle/AAw2hKanLb5CSrRh8 \n Complete every required field. We won’t review incomplete applications. \n Only shortlisted applicants will be contacted regarding the next stage of the hiring process.",
       "date_posted": "2026-09-03",
       "source": "NoDesk",
-      "verified_at": "2026-09-07T14:44:49.367464+00:00"
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
     },
     {
       "id": "e2e5be11-5bce-4f71-8e2f-24ef190bea16",
@@ -880,7 +909,7 @@
       "location": "Nederland",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -911,7 +940,7 @@
       "location": "En remoto",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 105,
+      "age": 106,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -931,6 +960,40 @@
       "countries": [],
       "country_codes": [],
       "remote_scope": "Worldwide"
+    },
+    {
+      "id": "web:87eace39d06f:8c37981a6eaedb0f5429",
+      "title": "Agile Delivery Lead",
+      "company": "emagine Polska",
+      "initial": "EP",
+      "fit": 88,
+      "location": "Łódź, PL",
+      "countries": [
+        "Polonia"
+      ],
+      "country_codes": [
+        "PL"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "N/A",
+      "type": "Full-Time",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://justjoin.it/job-offer/emagine-polska-agile-delivery-lead-lodz-pm",
+      "description": "Stawka: do 132 pln/h netto + VAT, B2BLokalizacja: Hybryda (1 raz na 2 tygodnie z biura w Łodzi)Branża: BankowośćPodsumowanie: Lider dostaw Agile będzie odpowiedzialny za definiowanie i monitorowanie efektywności organizacyjnej, wprowadzanie zmian w różnych poziomach organizacyjnych oraz współpracę z zespołami w celu zwiększenia efektywności. Kluczowym celem tej roli jest doskonalenie procesów i zwiększenie satysfakcji interesariuszy.Obowiązki:Definiowanie, monitorowanie i analiza miar efektywności.Praca z kadrą menedżerską w projektowaniu i wdrażaniu zmian organizacyjnych.Analiza danych oraz przekształcanie wniosków na konkretne działania.Zarządzanie równowagą między elastycznością Agile a procesem.Poprawa efektywności organizacyjnej, m.in. poprzez skrócenie czasu dostarczania i zwiększenie produktywności zespołów.Wdrażanie opomiarowania oraz wsparcie w zwiększaniu efektywności procesów.Aktywna współpraca z zespołami w zakresie efektywności i stabilności dostarczania.Wymagania:Minimum 3–4 lata doświadczenia w roli Scrum Mastera, Agile Coacha lub podobnej roli wspierającej efektywność organizacyjną.Doświadczenie w definiowaniu, wdrażaniu, monitorowaniu i analizie metryk efektywności organizacyjnej oraz delivery.Doświadczenie we współpracy z kadrą menedżerską przy projektowaniu i wdrażaniu zmian na różnych poziomach organizacyjnych.Wysokie umiejętności analityczne oraz zdolność interpretowania danych i przekładania wniosków na konkretne działania biznesowe.Doświadczenie w identyfikowaniu wąskich gardeł oraz optymalizacji procesów end-to-end.Umiejętność zachowania równowagi pomiędzy elastycznością Agile a procesem i strukturą organizacyjną.Udokumentowane sukcesy w poprawie efektywności organizacyjnej, potwierdzone mierzalnymi rezultatami (np. skrócenie czasu dostarczania, wzrost produktywności zespołów, poprawa jakości lub przewidywalności dostarczania).Doświadczenie we wspieraniu zespołów w zwiększaniu efektywności, stabilności i przewidywalności delivery.Mile widziane:Znajomość Lean Management, Kanban oraz metod Continuous Improvement.Doświadczenie we wdrażaniu podejścia opartego o Flow Metrics (Lead Time, Cycle Time, Throughput, Predictability).Doświadczenie w środowiskach transformacji Agile na poziomie wielu zespołów lub całej organizacji.Doświadczenie we współpracy z IT Delivery Managerami lub liderami organizacji technologicznych.",
+      "date_posted": "2026-09-07T15:00:07.7581442Z",
+      "source": "Just Join IT",
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
     },
     {
       "id": "web:411a3c5a027a:alyssanobriga",
@@ -1143,8 +1206,7 @@
       "repost": false,
       "status": "new",
       "pros": [
-        "Remote",
-        "Geografie eligibila"
+        "Remote"
       ],
       "risks": [
         "Conditiile contractuale trebuie confirmate"
@@ -1153,7 +1215,7 @@
       "description": "A long-term leadership role for a grounded, systems-minded operator who can build, launch, and steward a world-class academic student experience at accredited level (higher education, postgraduate, master’s degree level). Role Overview Institute for Coaching Mastery by  Alyssa Nobriga International  is entering a new phase of growth as we expand our academic program portfolio and go through the postgraduate education accreditation process.   The Program Manager will partner closely with Alyssa, senior leadership, curriculum partners, faculty, coaches, student support, and operations department to turn a postgraduate coach certification program vision into a seamless, scalable student experience. The first few months of this role will be focused on the development and operational launch of the master’s pathway program, including curriculum coordination, student journey design, faculty workflows, delivery systems, accreditation-related coordination, and ongoing program management. As the company grows, this role may expand into broader program ownership across other programs of the institution. Core Responsibilities Program Development & Launch Translate program vision into clear timelines, workflows, launch plans, and operating systems Support curriculum planning, student journey mapping, faculty coordination, and accreditation-related project management Ensure promised program elements, resources, calendars, and student-facing materials are documented and delivered Program Delivery & Operations Own the ongoing coordination and delivery of assigned academic programs Oversee calendars, live-session logistics, LMS updates, student databases, certification processes, SOPs, and delivery workflows Monitor program health and proactively flag risks, bottlenecks, gaps, and decisions needed from leadership Student Experience & Retention Manage student support and mentoring/coaching teams to improve clarity, engagement, completion, satisfaction, retention, and re-enrollment Manage escalated student experience matters with calm, care, and brand-aligned communication Track feedback, recurring student issues, and opportunities to strengthen the journey Team Leadership & Cross-Functional Coordination Keep leadership, curriculum, faculty, coaching, support, marketing, and operations aligned Lead meetings, document decisions, follow up on action items, and maintain clear ownership across projects Support team rhythms, accountability, hiring, onboarding, training, and performance development where relevant Systems & Continuous Improvement Build scalable systems for program delivery, communication, documentation, tracking, and reporting Reduce reactive execution by creating clean SOPs, repeatable workflows, and proactive visibility Implement meaningful improvements that strengthen delivery without compromising quality Success Profile AI-first operator + experienced program leader with 3+ years of relevant industry experience (online education, coaching certification, academic programs). Highly organized, detail-oriented, and calm under pressure Strong communicator with excellent follow-through Able to own outcomes, not tasks Comfortable working with visionary founder, academic partners, accrediting bodies, faculty, coaches, and admin support professionals in a fully remote setting Experienced in program management, education operations, online learning, certification programs, higher education, or student experience Interested in a long-term role with room to grow This role is your only job. You have nothing going on the side. KPI Framework Program Delivery & Launch 95%+ of major milestones, deliverables, and launch activities completed within 6 months after onboarding 100% of essential program materials, calendars, and student-facing resources finalized within 6 months after onboarding LMS, databases, SOPs, and core operating documents maintained accurately and updated on time Student Success & Experience Student satisfaction: 95%+ positive feedback Completion rate: 93%+ Withdrawal rate: below 7% of enrollments Re-enrollment: min 5% increase year over year Escalated student issues resolved within 48 hours Team Leadership & Operations 100% of monthly 1:1s and quarterly reviews completed and documented for direct reports 85%+ of team tasks completed independently and on time Customer support initial response time maintained under 24 hours during active programming cycles Clear communication cadence maintained across teams, with visible ownership and follow-through Systems, Reporting & Improvement 1–2 meaningful process or systems automations with AI  implemented per quarter Monthly KPI and program-health reporting delivered clearly and proactively Program operations managed within approved budget parameters Key workflows and SOPs documented, maintained, and continuously refined Role Details Pacific Zone Hours (9 am - 5 pm, Mon-Fri) Remote (work from anywhere) 1099 Contract Long-term Reports to Executive Director Initial focus: Master’s pathway program development and launch Important notes for all applicants:  All remuneration is in USD, regardless of candidate location. We are unable to sponsor any visas or facilitate visa transfers. Applications and CVs must be in English to be considered. You must complete all applicant questions to be shortlisted for screening. Alyssa Nobriga asks respectfully to  only apply through the application form  and not email/apply to them directly. Recruiters and Agencies please do not contact Alyssa Nobriga directly. We read every application. Fully AI-generated answers to the applicant questions are easy to spot and will not be shortlisted — we want to hear from you, in your own words.",
       "date_posted": "2026-09-07T00:27:19.396Z",
       "source": "Dynamite Jobs",
-      "verified_at": "2026-09-07T14:44:49.367464+00:00"
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
     },
     {
       "id": "web:c1372e39e5f9:6484383bbf82eb816a04",
@@ -1170,7 +1232,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Contractor",
-      "age": 14,
+      "age": 15,
       "remote": false,
       "b2b": true,
       "repost": false,
@@ -1185,7 +1247,7 @@
       "description": "📍 Client:  lead international bank   | B2B contract 🗣️ Recruitment:  phone screen with our recruiter + 2 on-line meetings with hiring managers 🗺️ Hybrid work:  6 days per month from the office in Cracow \n Verita HR  is an international company providing recruitment support within #Fintech, #Finance and #Banking market in EMEA. We connect the most innovative organizations with the best people in the market. We conduct systematic market research, which allows our Digital Teams to be a step ahead of the competition. What's in it for you? \n \n Prestigious position at one of the world's largest banks \n Stable, long-term projects \n Hybrid work (6 days per month from the office in Cracow) and flexible working hours \n Working with modern IT technologies \n Growth and development opportunities with the possibility to move between projects \n Private healthcare and multisport card \n Referral program, free parking and company events",
       "date_posted": "2026-09-07",
       "source": "No Fluff Jobs",
-      "verified_at": "2026-09-07T14:44:49.367464+00:00"
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
     },
     {
       "id": "c9655680c7a31f4a",
@@ -1205,7 +1267,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 66,
+      "age": 67,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1265,7 +1327,7 @@
       "romania_eligible": true,
       "mode": "Remote",
       "type": "Full-Time",
-      "age": 7,
+      "age": 8,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1301,7 +1363,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 38,
+      "age": 39,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1337,7 +1399,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 38,
+      "age": 39,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1364,7 +1426,7 @@
       "location": "Brussels, Brussels Region, Belgium",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1394,7 +1456,7 @@
       "location": "21129 Hamburg",
       "mode": "Remote",
       "type": "Nespecificat",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1424,7 +1486,7 @@
       "location": "Home Office",
       "mode": "Remote",
       "type": "Nespecificat",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1454,7 +1516,7 @@
       "location": "20146 Milano",
       "mode": "Remote",
       "type": "Nespecificat",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1490,7 +1552,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full-Time",
-      "age": 86,
+      "age": 87,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1522,7 +1584,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full-Time",
-      "age": 86,
+      "age": 87,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1548,7 +1610,7 @@
       "location": "Hamburg, Hamburg, Germany",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1586,7 +1648,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 57,
+      "age": 58,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1621,7 +1683,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Nespecificat",
-      "age": 57,
+      "age": 58,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1647,7 +1709,7 @@
       "location": "Brussels, Brussels Region, Belgium",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1687,7 +1749,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1722,7 +1784,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1748,7 +1810,7 @@
       "location": "Waregem, Flemish Region, Belgium",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1786,7 +1848,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1847,7 +1909,7 @@
       "location": "BE",
       "mode": "N/A",
       "type": "Nespecificat",
-      "age": 78,
+      "age": 79,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1880,7 +1942,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Permanent",
-      "age": 110,
+      "age": 111,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1895,7 +1957,7 @@
       "description": "Hiring: SAP Service Coordinator | Permanent | Warsaw\n \nWe're looking for an experienced SAP Service Coordinator to join an established SAP Center of Excellence.\n \nLocation : Warsaw - Hybrid, 3 days per week in the office\nStart : January 2027\nDuration : Permanent role\n \nYou'll play a key role in SAP service delivery across an SAP S/4HANA RISE Private Cloud environment, covering:\n \n* Incident, Problem & Change Management\n* SAP RISE service & contract coordination\n* JIRA Service Management\n* SAP Cloud ALM\n* License management\n* Release & transport coordination\n* Service KPIs, escalations & continuous improvement\n \nKey requirements:\n \n✓ 5+ years SAP Service Management experience\n✓ SAP S/4HANA & RISE experience\n✓ JIRA Service Management - essential\n✓ ITIL experience/certification\n✓ 3+ years leadership experience\n✓ Strong stakeholder management & fluent English\n \nInterested? DM me for a confidential conversation.",
       "date_posted": "2026-09-03",
       "source": "RED Global",
-      "verified_at": "2026-09-07T14:44:49.367464+00:00"
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
     },
     {
       "id": "4398385666",
@@ -1915,7 +1977,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 38,
+      "age": 39,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -1934,6 +1996,40 @@
       "verified_at": "2026-09-06 07:16:39"
     },
     {
+      "id": "web:87eace39d06f:44d87cc6760177107a6b",
+      "title": "Scrum Master",
+      "company": "Antal Sp. z o.o.",
+      "initial": "AS",
+      "fit": 82,
+      "location": "Kraków, pl",
+      "countries": [
+        "Polonia"
+      ],
+      "country_codes": [
+        "PL"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "N/A",
+      "type": "Full-Time",
+      "age": 78,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://justjoin.it/job-offer/antal-sp-z-o-o--scrum-master-krakow-pm-4f8ee813",
+      "description": "For our client operating in the financial sector, we are seeking an experienced Scrum Master to support cybersecurity initiatives and teams. Location & Work ModelHybrid work modelPreferred location: Kraków (6 office visits per month)B2B contractBenefitsLuxMed private medical careMyBenefit cafeteria platformDedicated Contractor Care supportWhat you will be doingThe role will report to the Technical Delivery Lead working within an agile, DevSecOps software delivery environment. The role will be responsible for managing two of the scrum teams within Cybersecurity Engineering and will involve working closely with a wide range of stakeholders including Cybersecurity project teams, Control Owners and the business. The role will be accountable for the following:Guiding a scrum team to use the agile framework values, principles, and practices to plan, manage, and deliver technical solutionsEnsuring the proper use of collaborative processes and removing impediments for the scrum teamTraining, mentoring, and supporting team members to become a self-organising teamFacilitating internal communication (discussions, decision making and conflict resolution) and fostering effective collaboration)Working with product owners to manage backlogs and new requestsTracking and managing delivery dependencies between teamsCoordinating closely with other teamsEnsuring work is delviered to quality standards at the end of each sprintGuiding development teams to improve their scrum maturityHelping build a productive environment in which team members ‘own’ their deliverables and enjoy coming to workInspiring incremental change that increases the efficiency of the scrum teamWorking with other scrum masters (scrum of scrums) to collectively deliver Cybersecurity Engineering’s objectives  What you will bring to the role:Certified Scrum Master (CSM or an equivalent)Experience working as a Scrum Master for at least two years for a software development team.Excellent skills and knowledge of collaborative leadership, facilitation, situational awareness,  conflict resolution, continual improvement, empowerment, and increasing transparency;Knowledge of the patterns and techniques used in an Agile project e.g. burndown metrics,  backlog tracking, velocity, task definition, retrospectives and defect management;Demonstrable experience in managing bespoke software and/or Digital Development/Experience Design projects/implementation and integration projects, from inception through to delivery;Excellent communication and mentoring skills.Nice to have : Product Owner experienceWhy apply for an Antal job offer?When your application is successful, you will be supported by a dedicated Consultant who will stay in regular contact with you (via email or phone), help you prepare for interviews with your future employer, and ensure a smooth and professional recruitment process.About AntalAntal is a leading recruitment and HR advisory company, present in Poland since 1996 and later expanded to the Czech Republic and Hungary. Across the CEE region, we employ around 150 professionals who deliver a full range of services – from specialist and executive recruitment, employee outsourcing and HR consulting, to employer branding and market research.Our division-based structure combines deep industry expertise with functional specialisation, enabling us to provide tailored solutions for companies in every sector. We act as a trusted partner for both employers and candidates, sharing our knowledge and guiding them through every stage of the talent journey. We connect exceptional people with the right opportunities and help organisations build successful teams.Discover our latest job openings: https://en.antal.pl/candidatesFollow us on LinkedIn: https://www.linkedin.com/company/antalpoland",
+      "date_posted": "2026-09-04T09:00:05.579031Z",
+      "source": "Just Join IT",
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
+    },
+    {
       "id": "91c57e2cbb9384bd",
       "title": "IT Service manager Operation JR Inglés B2, hibrido",
       "company": "CAS TRAINING",
@@ -1942,7 +2038,7 @@
       "location": "Madrid, Madrid provincia",
       "mode": "Remote",
       "type": "Nespecificat",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -1972,7 +2068,7 @@
       "location": "Donostia-San Sebastián, Guipúzcoa provincia",
       "mode": "Remote",
       "type": "Nespecificat",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -2002,7 +2098,7 @@
       "location": "Weinfelden, TG",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 81,
+      "age": 82,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -2032,7 +2128,7 @@
       "location": "Poland",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 86,
+      "age": 87,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -2062,7 +2158,7 @@
       "location": "8045 Zürich, ZH",
       "mode": "Remote",
       "type": "Part Time",
-      "age": 105,
+      "age": 106,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -2092,7 +2188,7 @@
       "location": "Fino Mornasco, Lombardy, Italy",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -2113,6 +2209,40 @@
       "remote_scope": "Worldwide"
     },
     {
+      "id": "smartrecruiters:BoschGroup:744000147780567",
+      "title": "[2WP] 2輪 パワートレインシステムエンジニア/テクニカルプロジェクトマネージャー_Powertrain System Engineer/Technical Project Manager",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 81,
+      "location": "Yokohama, Kanagawa, Japonia",
+      "countries": [
+        "Japonia"
+      ],
+      "country_codes": [
+        "JP"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 12,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147780567--2wp-2-powertrain-system-engineer-technical-project-manager",
+      "description": "【日本を代表する二輪車メーカーと共に、未来のモビリティを創造する】 ボッシュでは、国内外の二輪車メーカー向けパワートレイン・車両制御システム開発を推進するシステムエンジニア兼テクニカルプロジェクトマネージャーを募集しています。本ポジションでは、お客様とボッシュグローバル開発チームの技術的な架け橋として、要求分析からシステム設計、検証まで幅広い業務を担当いただきます。単なるプロジェクト管理ではなく、お客様要求を理解し、システム全体の最適化をリードする重要なポジションです。 Shape the future of mobility together with leading motorcycle manufacturers in Japan We are looking for a System Development Engineer / Technical Project Manager to drive the development of advanced powertrain and vehicle control systems for leading motorcycle manufacturers in Japan. In this role, you will serve as the technical bridge between customers and Bosch's global engineering teams, taking responsibility from requirements analysis through system design, validation, and support for series production projects. You will play a key role in understanding customer needs, driving technical decisions, and optimizing complete system solutions for future motorcycle platforms. 【主な業務内容】 国内二輪車メーカーとの技術窓口 顧客要求の分析および要求管理 システム要求のソフトウェア、ハードウェア、キャリブレーション開発への展開 開発計画の立案およびプロジェクトマイルストーンの策定 必要な開発工数および開発予算の見積もり グローバル開発チームとの開発推進、開発成果物と品質/納期管理 技術課題の調整および問題解決のリード 車両評価試験およびデータ解析によるシステム性能検証 Key Responsibilities Serve as the primary technical interface for Japanese 2Wheeler OEM customers. Analyze and manage customer requirements through requirements management activities. Cascade system requirements to software, hardware, and calibration development teams. Develop project plans and define project milestones. Estimate development effort and project budgets required for development activities. Drive development activities with global engineering teams, manage development deliverables, ensuring quality and on-time delivery. Lead technical issue coordination and problem-solving activities. Verify system performance through vehicle evaluation testing and data analysis. 【この仕事の魅力】 国内主要二輪車メーカーとの最先端開発に携われる 世界中で販売される製品開発に貢献できる グローバルチームと協働しながら技術力とマネジメント力の両方を高められる 電動化、車両制御、安全技術など将来のモビリティ技術開発に携われる Why Join Bosch Work directly with leading motorcycle manufacturers in Japan and around the world. Contribute to products deployed globally and used by millions of riders. Develop both advanced technical expertise and project leadership experience in an international environment. Be part of innovations in powertrain systems, vehicle control technologies, electrification, and future mobility solutions.\n\n【必須要件】 日本語による円滑なコミュニケーション能力（ビジネスレベル） 電気電子工学、機械工学、制御工学の基礎知識 システム開発、製品開発、またはプロジェクト推進の経験 英語での業務遂行能力（TOEIC 700点相当以上） 論理的かつ体系的に業務を推進できる能力 責任感を持って業務を遂行できる方 オープンマインドでチームワークを重視できる方 新しい技術や課題に積極的に挑戦する意欲をお持ちの方 Required Qualifications Business-level Japanese communication skills (JLPT N1) Basic knowledge of Electrical Engineering or Mechanical Engineering Experience in system development, product development, or project management/coordination Ability to work effectively in English (equivalent to TOEIC score of 700 or above) Strong analytical and structured problem-solving skills Strong sense of ownership and accountability Open-minded, collaborative, and team-oriented mindset Motivation to proactively take on new technologies and challenges 【歓迎要件】 二輪車または自動車業界での開発経験 ECU、制御システム、ソフトウェア開発経験 要求管理ツール（DOORS等）の使用経験 車両評価、適合、実験業務の経験 INCA等の計測ツール使用経験 グローバルチームとの協業経験 二輪車に興味がある方 Preferred Qualifications Development experience in the motorcycle or automotive industry Hands-on experience with ECU, control systems, or software development Experience using requirements management tools (DOORS) Experience in vehicle testing, validation, calibration, or evaluation activities Familiarity with measurement and calibration tools (INCA) Experience collaborating with global and multicultural teams Passion for motorcycles and mobility technologies\n\nリモートワーク制度を導入しており、働き方は個人の裁量を尊重しています。 顧客との技術打合せや車両評価のため、国内出張の機会が多くあります。業務に応じて海外出張の機会もあります。 日本人メンバーに加え、多様な国籍のメンバーが所属する、フラットでコミュニケーションの活発なチームです。 Hybrid work is available with flexibility in how you work. Frequent domestic travel is required for customer meetings and vehicle testing. Overseas travel may be required as needed. We are a diverse team with Japanese and international members and an open communication culture.",
+      "date_posted": "2026-09-07T02:43:52.033Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
       "id": "4461417194",
       "title": "Kwery - IT Project Manager",
       "company": "JoBBsquare Belgie",
@@ -2130,7 +2260,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2185,7 +2315,7 @@
       "location": "Milan, Lombardy, Italy",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 110,
+      "age": 111,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -2208,6 +2338,74 @@
       "remote_scope": "Worldwide"
     },
     {
+      "id": "smartrecruiters:BoschGroup:744000147197800",
+      "title": "Service-Experte für das Schadenmanagement eines Premium-Automobilherstellers (m/w/div.)",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 79,
+      "location": "Magdeburg, SA, Germania",
+      "countries": [
+        "Germania"
+      ],
+      "country_codes": [
+        "DE"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 101,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147197800-service-experte-fur-das-schadenmanagement-eines-premium-automobilherstellers-m-w-div-",
+      "description": "Du übernimmst die telefonische und schriftliche Beratung von Schadenfällen zu Leasing- und Finanzierungsfahrzeugen für gewerbliche und private Kunden einer führenden Autobank. Des Weiteren prüfst du die Unterlagen auf Vollständigkeit und triffst eigenständige Entscheidungen über das weitere Vorgehen, dokumentierst die Fälle und schließt sie ab. Zudem berätst du zu den Themen Sachmängelhaftung, Ratenplanänderung und Ablöseangebot.\n\nAusbildung: abgeschlossene Berufsausbildung im kaufmännischen und technischen Bereich oder entsprechende berufliche Erfahrung Persönlichkeit: offen, zuverlässig, kundenorientiert, kommunikationsstark, Führungszeugnis erforderlich Erfahrung & Know-How: erste Erfahrungen in der telefonischen Kundenbetreuung wünschenswert, sehr gute PC-Kenntnisse, sicherer Umgang mit MS-Office Programmen\n\nVielfalt und Inklusion sind für uns keine Trends, sondern fest verankert in unserer Unternehmenskultur. Daher freuen wir uns über alle Bewerbungen: unabhängig von Geschlecht, Alter, Behinderung, Religion, ethnischer Herkunft oder sexueller Identität. Du hast Fragen zum Bewerbungsprozess? Katharina Möllers (Personalabteilung) +49 391 243 2130 In diesem Team sind wir per du. Werde ein Teil davon! Work #LikeABosch",
+      "date_posted": "2026-09-03T09:16:48.656Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147168939",
+      "title": "Junior Managers Program (Commercial and/or Technical field) - Miskolc",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 79,
+      "location": "Miskolc, Ungaria",
+      "countries": [
+        "Ungaria"
+      ],
+      "country_codes": [
+        "HU"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 103,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147168939-junior-managers-program-commercial-and-or-technical-field-miskolc",
+      "description": "Here’s what awaits you: Explore Your Potential : You’ll embark on a journey through 4-6 unique rotations , diving into diverse projects that will challenge and inspire you Learn from the Best : With the support of a dedicated mentor, you’ll tackle exciting and complex projects that sharpen your managerial and decision-making skills Go Global : Experience a six-month international assignment where you’ll broaden your perspective and gain invaluable insights into global operations Build Lasting Connections : Connect with peers and leaders across the company, creating a network that will support you throughout your career journey Your Program, Your Future : We personalize this program based on your interests, ensuring that you have the tools and experiences that align with your career aspirations Grow into Your Role : Many of our current leaders and managers started in this very program. We’re committed to helping you achieve your long-term career goals\n\nWhat We’re Looking For: We are open to candidates with both commercial and technical backgrounds, valuing diverse expertise and perspectives across different professional fields. Your Background: In case of commercial field: A degree in business, economics, IT, or a related field provides a strong foundation for success In case of technical field: A degree in engineering (mechanical, mechatronics, electrical, or industrial) sets you up for success Specialization : In case of commercial focus: business, economics, IT, or a related field provides a strong foundation for success In case of technical focus: Experience in production is a plus and will help you shine Communication Skills: You should be comfortable using English, both written and spoken — let your voice be heard Experience : Whether you’re a fresh graduate or have up to 4 years of experience , we want to hear from you Leadership Mindset : If you have a strategic approach and a passion for leading, you’re just the person we’re looking for Innovative Thinker : Bring your creativity and eagerness to learn — your ideas matter Independent Spirit: We value individuals who can take initiative and work well on their own\n\nGet to know our #LikeABosch benefits. We would like to help you GROW , so we offer you: Financial security & recognition: We review and increase your competitive base salary annually, offer performance-, loyalty-, and referral bonus. Trainings and professional development: We believe in a Life-Long Learning approach, so you can take advantage of several technical and soft skill trainings and language courses. Career development : We have a wide range of programs to choose from, even if its leadership, expert or project development you are aiming for. We also offer mentoring and coaching opportunities, we have PhD program and we offer international assignment possibilities. We would like you to ENJOY the benefits of balancing your life and your work, so we pay attention to: Your work life-balance: You can work from our activity based offices designed for creativity and efficiency or from home while enjoying flexible working hours . We offer childcare possibilities and sabbatical option. Your health and well-being: We provide free professional consultants for any personal, legal, financial or health related issues. You can benefit from our developing onsite medical center and organized regular health checkups. We also offer you several perks and benefits: You can use your annual cafeteria allowance flexibly for family support (e.g. tax-free kindergarten and nursery allowances), health care , mobility (car sharing services) and recreation . You can enjoy our onsite canteen, we support when you work from home and if you live far, we cover your commute costs . We also appreciate your loyalty with jubilee gift and extra jubilee holiday . You could join an INSPIRING community worth to belong: We are true to our values: We are committed to sustainability , we value that everyone is different and that diversity makes us truly successful. We also take social responsibility seriously and regularly organize charity actions, blood donations and support worthy causes. Team building activities and community events are also part of our everydays. We like to come together for a good summer party or family day. Are you ready to work #LikeABosch ? Please apply with your English CV! If you have any questions regarding the position or the application process, we encourage you to first visit our FAQ section [HERE] , where you may already find the answer you're looking for. If you still need assistance, please feel free to contact us at the following email address - talentacquisitionhungary@bosch.com - We'd be happy to help.",
+      "date_posted": "2026-09-03T07:31:31.339Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
       "id": "4443791233",
       "title": "Project Manager with German and English",
       "company": "Trimble Inc.",
@@ -2216,7 +2414,7 @@
       "location": "Spain",
       "mode": "Remote",
       "type": "Full Time",
-      "age": 86,
+      "age": 87,
       "remote": true,
       "b2b": false,
       "repost": false,
@@ -2238,6 +2436,74 @@
       "remote_scope": "Worldwide"
     },
     {
+      "id": "smartrecruiters:BoschGroup:744000147887399",
+      "title": "[2WP] 二輪&パワースポーツ プロジェクトマネージャー/ Two-Wheeler & Powersports Project Manager in Safety, Powertrain and Electrification",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 77,
+      "location": "Yokohama, Kanagawa, Japonia",
+      "countries": [
+        "Japonia"
+      ],
+      "country_codes": [
+        "JP"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 5,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147887399--2wp-two-wheeler-powersports-project-manager-in-safety-powertrain-and-electrification",
+      "description": "日系二輪メーカー向けプロジェクトマネージャー 　　　　　　　　　　　　　　　　　　　　　　　　　Project Manager for JOEM - 日系顧客向けパワートレイン・セーフティー及び電動製品プロジェクトマネージャー - 新規受注プロジェクト管理 - 客先計画業務 - 工場側とのプロジェクト立ち上げ業務 - 社内外とのプロジェクト会議設定 - プロジェクト予算、コスト管理 ================================================================= Safety, Powertrain & Electrification Project Manager for JOEM customer Your tasks will be: - Powertrain, Safety & Electrification Project manager - Customer interface responsible for overall project management - Launch Management and plant coordination - Organize internal and external project meetings - Change Management - Project budget planning and cost controlling\n\n- 社内外に対するコミュニケーションスキル - ボッシュプロセスに対する知識 - 営業もしくはプロジェクトマネージメントの経験 - 母国語レベルの日本語および英語のスキル - 日系メーカーとのプロジェクト経験 - 二輪車に対する知識。バイカー（希望） - 目標意識が高い事、チームワーク尊重 ======================================== - Good Communication skills with customers, as well as Bosch internally - Knowledge of Bosch processes - Experience in sales / project management - Fluent Japanese and English language skills - Experience of project coordination with JOEM customers - Knowledge in two wheeler domain, biker experience (preferred) - Target oriented mindset and ability to work in a team\n\n歓迎要件： Passion for Two-wheeler and/or Powersports 二輪車と/またはパワースポーツへの情熱 Experienced working with Japanese customers (JOEM) 日本の顧客(JOEM)との業務経験 [入社時勤務地] 横浜事務所（最寄り：中川駅） [変更の範囲] 会社の定める勤務地 [Place of Employment upon Joining the Company] Yokohama Office (Nearest Station: Nakagawa Station) [Scope of Changes] Place of employment as determined by the company.",
+      "date_posted": "2026-09-07T09:33:47.620Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "web:87eace39d06f:8814a2ea32f7b2ebc5b4",
+      "title": "Scrum Master",
+      "company": "ER Group",
+      "initial": "EG",
+      "fit": 77,
+      "location": "Warszawa, PL",
+      "countries": [
+        "Polonia"
+      ],
+      "country_codes": [
+        "PL"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "N/A",
+      "type": "Full-Time",
+      "age": 7,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Conditiile contractuale trebuie confirmate"
+      ],
+      "url": "https://justjoin.it/job-offer/er-group-scrum-master-warszawa-pm-bd8eb89c",
+      "description": "Dla naszego klienta, rozpoznawalnej firmy z branży finansowej, poszukujemy odpowiedniej osoby na stanowisko: Scrum Mastera.Zakres obowiązków: Wspieranie zespołów w efektywnym wykorzystaniu Scrum oraz rozwijaniu dojrzałości agile,Udział w projektach o charakterze innowacyjnym i R&D, wspierających rozwój nowoczesnych rozwiązań technologicznych,Ścisła współpraca z Product Ownerem w zakresie priorytetyzacji oraz utrzymania jakości Product Backlogu,Identyfikowanie barier ograniczających efektywną współpracę,Współtworzenie środowiska pracy sprzyjającego zaangażowaniu, odpowiedzialności i ciągłemu doskonaleniu,Monitorowanie efektywności zespołu i rekomendowanie działań usprawniających procesy oraz sposób pracy,Promowanie dobrych praktyk Agile i wspieranie organizacji w dalszej transformacji zwinnej.Wymagania:Minimum 4 lata doświadczenia w roli Scrum Mastera lub Agile Coacha, najlepiej w środowisku rozwijającym produkty technologiczne,Praktyczna znajomość procesu wytwarzania oprogramowania i pracy z zespołami developerskimi,Doświadczenie w inicjowaniu oraz wdrażaniu usprawnień organizacyjnych,Certyfikat PSM oraz praktyczna znajomość narzędzi Jira i Confluence,Umiejętność budowania partnerskich relacji i pracy opartej na zaufaniu,Proaktywne podejście oraz nastawienie na rozwój i ciągłe doskonalenie.Pracodawca oferuje:Stabilne zatrudnienie w oparciu o umowę o pracę lub B2B,Atrakcyjne wynagrodzenie podstawoweKlarowny system premiowyPakiet benefitów (opieka medyczna, dofinansowania z ZFŚS, ubezpieczenie grupowe i inne)Pracę w systemie hybrydowym (2 dni biuro, 3 dni zdalnie - Warszawa)Udział w szkoleniach i konferencjach branżowychDużą autonomię działania, możliwość wdrażania własnych pomysłów Możliwość kreowania nowych inicjatyw biznesowych przy pełnym wsparciu infrastruktury dużej, stabilnej organizacji (*Kandydacie, Twoja aplikacja zostanie przedstawiona naszemu klientowi tylko i wyłącznie za Twoją zgodą. Podczas rozmowy z naszym rekruterem uzyskasz wszystkie informacje o firmie i stanowisku, które pozwolą Ci podjąć decyzję. Jako agencja wyłącznie pośredniczymy w rekrutacji, finalnym pracodawcą jest klient).",
+      "date_posted": "2026-09-07T08:00:13.1738623Z",
+      "source": "Just Join IT",
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
+    },
+    {
       "id": "4462659796",
       "title": "Project Manager",
       "company": "Snowstack",
@@ -2255,7 +2521,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 38,
+      "age": 39,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2290,7 +2556,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2325,7 +2591,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2360,7 +2626,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2395,7 +2661,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2421,7 +2687,7 @@
       "location": "Anderlecht, Brussels Region, Belgium",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2459,7 +2725,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2485,7 +2751,7 @@
       "location": "Sint-Martens-Latem, Flemish Region, Belgium",
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2523,7 +2789,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2558,7 +2824,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2593,7 +2859,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2877,7 +3143,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full-Time",
-      "age": 86,
+      "age": 87,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2893,6 +3159,74 @@
       "date_posted": "2026-09-04 00:00:00",
       "source": "Luxoft",
       "verified_at": "2026-09-07T11:51:27.941817+00:00"
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147189914",
+      "title": "Project manager intern",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 77,
+      "location": "Hatvan, Ungaria",
+      "countries": [
+        "Ungaria"
+      ],
+      "country_codes": [
+        "HU"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Intern",
+      "age": 102,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147189914-project-manager-intern",
+      "description": "Your tasks, through which you can contribute to achieving our shared goals: Manage and track purchase orders, ensuring timely processing and accuracy Support KPI monitoring and reporting to improve operational performance Assist industrialization project leaders with documentation, coordination, and follow-up tasks Contribute to process optimization initiatives and cross-functional collaboration\n\nProfessional skills required for your daily work: Preferably studying engineering (mechanics or electrical) Analytical mindset Skills in MS Excel Organizational and communication skills\n\nYour future workplace offers the following: Competitive internship salary Travel cost support Free company shuttle buses Opportunity to participate in training (IT and language courses) Paid leave based on hours worked Dedicated internship program Company laptop Home office option (varies by department, subject to manager approval) Why do interns enjoy working at Bosch Hatvan? We recognize and support them They can always count on the support of their managers and colleagues They work in a flexible schedule Their professional development matters to us If you have any questions about the advertised position, or if your selection process is already underway and you'd like to inquire further, please contact us at the following email address: external.laszlo.radics@hu.bosch.com",
+      "date_posted": "2026-09-03T08:36:07.667Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "web:87eace39d06f:fa9f951a42200275f16e",
+      "title": "Scrum Master in Data Management Team",
+      "company": "Euroclear",
+      "initial": "E",
+      "fit": 76,
+      "location": "Kraków, PL",
+      "countries": [
+        "Polonia"
+      ],
+      "country_codes": [
+        "PL"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "N/A",
+      "type": "Full-Time",
+      "age": 29,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://justjoin.it/job-offer/euroclear-scrum-master-in-data-management-team-krakow-pm",
+      "description": "Your career opportunity  Join our Group Digital Capabilities (GDC) division, where we design and sustain IT solutions for financial market securities. Be part of a dynamic, collaborative team in a fast-evolving environment, shaping the future of financial technology. Ready to make an impact? We are seeking a motivated, hands-on Scrum Master with strong communication skills to guide Agile practices and ensure timely delivery across squads. Your day-to-day mission: · Coach teams in Agile principles, practices and metrics· Collaborate with the Product Owners to manage backlogs - with good data quality - and realign priorities if needed.· Identify and support in resolving team impediments· Facilitating squad ceremonies to support/develop/improve squad efficiency, autonomy and cross-functional collaboration · Ensuring compliance to Euroclear way of working within the squad· Monitor performance to drive continuous improvement· Work closely with squad leads and promote team dynamics and psychological safety· Actively participate in the Scrum Master community  What you need to have to succeed in this role: · More than 3 years’ experience as Scrum Master,· Strong stakeholder management with effective organization, negotiation, and conflict resolution skills · Demonstrated servant-leadership mindset to deliver value effectively · Experience working with Agile methodology,· Change management and facilitation experience · Establishes collaborative relationships that promote transparency, trust, and team cohesion· Strong communication skills in English   What makes you stand out · Proven experience as Scrum Master and/or agile coach · PSM1 or equivalent certification · Knowledge of tools like TFS, Azure DevOps and ServiceNow · Technical expertise and experience in the financial industry · Stakeholder management with effective organization, negotiation, and conflict resolution skills #LI-MJ1About UsWhy join usEmbark on your new adventure at Euroclear, and work at the heart of the global capital markets. We connect over 2,000 financial institutions across the globe. As an open and resilient infrastructure, we contribute to the stability of the financial markets. We help clients cut through complexity, lower costs, and mitigate risks of financial transactions. At Euroclear, we have the clear ambition to use our key role to facilitate and accelerate a sustainable global financial system. What We Offer:Work closely with inspiring, supportive and engaged colleagues from more than 80 different countries. Practice your talents in a highly professional international environment. Join a learning and development environment with an emphasis on knowledge sharing and training.Competitive salary and comprehensive benefits.Ways of workingFind your own optimal balance within our hybrid working model, where you can connect at the office 8 days a month and also benefit from remote working. Great Place to Work for AllWe are committed to creating an inclusive culture that celebrates diversity and strives to be a Great Place to Work for All. All qualified applicants will be considered for employment, regardless of any aspect that makes them unique (including race, religion, national origin, gender, sexual orientation, age, marital status, pregnancy, disability, ...). If you need any specific accommodation due to disability or any other reason, you can let the recruiter know during your application process. Our values guide how we work together and shape our future: Our mission and values - Euroclear",
+      "date_posted": "2026-09-06T10:00:09.81163Z",
+      "source": "Just Join IT",
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
     },
     {
       "id": "4334788022",
@@ -2912,7 +3246,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2947,7 +3281,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 74,
+      "age": 75,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -2984,7 +3318,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -3002,6 +3336,109 @@
       "date_posted": "2026-09-05",
       "source": "linkedin",
       "verified_at": "2026-09-05 18:37:35"
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147038859",
+      "title": "Validation & Verification Project Manager",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 75,
+      "location": "Budapest, Ungaria",
+      "countries": [
+        "Ungaria"
+      ],
+      "country_codes": [
+        "HU"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 118,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147038859-validation-verification-project-manager",
+      "description": "As a V alidation & V erification Project Manager, you will be responsible for defining and driving project-specific V & V strategies, ensuring that validation activities are executed effectively and aligned with project goals. You will work closely with international, multidisciplinary project teams and stakeholders to ensure product quality, traceability and successful project releases. Your tasks: ► Implementing project-specific V&V strategies based on product and business unit guidelines ► Maintaining V&V plans and coordinating the technical content of validation activities ► Being responsible for test resource allocation and sample management ► Ensuring testability and traceability of requirements throughout the development lifecycle ► Planning, monitoring and controlling V&V activities with respect to time, quality and budget targets ► Supporting engineers and project stakeholders with methodological and process-related expertise ► Participating in project reviews, audits and assessments, while reporting V&V status and ensuring information flow ► Driving continuous improvement of V&V strategies, methods and processes ► Supporting work product releases and project release decisions ► Collaborating with customers and representing V&V topics in technical discussions\n\n► Engineering degree ► Minimal 3 years automotive project management experience ► V&V project management experience is beneficial ► Reliability experience is beneficial ► Excellent communication and organizational skills ► Proactive, result oriented attitude ► Fluent English, German beneficial\n\nGet to know our #LikeABosch benefits. We would like to help you GROW , so we offer you: Financial security & recognition: We review and increase your competitive base salary annually, offer performance-, loyalty-, and referral bonus. Trainings and professional development: We believe in a Life-Long Learning approach, so you can take advantage of several technical and soft skill trainings and language courses. Career development : We have a wide range of programs to choose from, even if its leadership, expert or project development you are aiming for. We also offer mentoring and coaching opportunities, we have PhD program and we offer international assignment possibilities. We would like you to ENJOY the benefits of balancing your life and your work, so we pay attention to: Your work life-balance: You can work from our activity based offices designed for creativity and efficiency or from home while enjoying flexible working hours . We offer childcare possibilities and sabbatical option. Your health and well-being: We provide free professional consultants for any personal, legal, financial or health related issues. You can benefit from our developing onsite medical center and organized regular health checkups. We also offer you several perks and benefits: You can use your annual cafeteria allowance flexibly for family support (e.g. tax-free kindergarten and nursery allowances), health care , mobility (car sharing services) and recreation . You can enjoy our onsite canteen, we support when you work from home and if you live far, we cover your commute costs . We also appreciate your loyalty with jubilee gift and extra jubilee holiday . You could join an INSPIRING community worth to belong: We are true to our values: We are committed to sustainability , we value that everyone is different and that diversity makes us truly successful. We also take social responsibility seriously and regularly organize charity actions, blood donations and support worthy causes. Team building activities and community events are also part of our everydays. We like to come together for a good summer party or family day. Are you ready to work #LikeABosch ? Please apply with your English CV! If you have any questions regarding the position or the application process, we encourage you to first visit our FAQ section [HERE] , where you may already find the answer you're looking for. If you still need assistance, please feel free to contact us at the following email address - talentacquisitionhungary@bosch.com - We'd be happy to help.",
+      "date_posted": "2026-09-02T16:15:36.619Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147498529",
+      "title": "Customer Service Representative (5:00 am - 1:30 pm)",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 74,
+      "location": "Itasca, IL, Statele Unite",
+      "countries": [
+        "Statele Unite"
+      ],
+      "country_codes": [
+        "US"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 74,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147498529-customer-service-representative-5-00-am-1-30-pm-",
+      "description": "Customer Service Representative (Full-Time) plays a significant role at Roadside Protect, Bosch Service Solutions. You will be helping customers solve various roadside problems, which could considerably impact their personal or professional lives. Therefore, your ability to empathize and display social skills will be critical to building rapport with customers and getting the information you need to help them. Since Roadside Protect was founded in 2002, RP has managed more than 2,000,000 dispatches. Our key mission is to deliver a better service when it matters the most - the critical minutes when people are stranded on the road and in need of help. Responsibilities: Answer inbound calls and provide professional, empathetic customer support Accurately gather required information and enter data into dispatch systems, or perform fleet intake, gather vehicle, driver and indicant information accurately. Follow scripts, workflows, and client specific requirements Communicate clearly with customers or drivers regarding next steps, expectations and processes Escalate issues according to policy when necessary Maintain confidentiality of customer and company information Contribute to a positive team environment and uphold service standards Please note this job description is not designed to cover or contain a comprehensive listing of activities, duties or responsibilities that are required.  Duties, activities, and responsibilities may change at any time with or without notice to meet the needs of the business. Hours: Full-Time Hours: 5:00 AM - 1:30 PM Schedule Options: Monday, Tuesday, Wednesday, Friday, and Sunday Monday, Tuesday, Thursday, Friday, and Sunday Training: Initial training prepares new hires for a fast-paced roadside assistance environment, building confidence one day at a time for a span of a new hires first 6 weeks, under a training schedule. Training will cover call handling expectations, customer communication, dispatch processes, and how to work through real-life situations such as (but not limited to) soft services (jump start, lockout, etc.), towing requests, and escalations. The overall goal is to build confidence, strengthen problem-solving skills, and make sure each associate is ready to provide professional and efficient support from day one.\n\nREQUIREMENTS (education, prior experience, skills, key competencies, system knowledge): U.S Work Authorization High School Diploma or GED required High level of attention to detail and problem-solving skills Ability to comfortably work in a fast paced, time sensitive environment Proficient with using a desktop computer and MS office applications Strong interpersonal communication skills, verbal and written. Strong customer service and empathy skills Reliable, strong attendance and professionalism Ability to commute and work on-site in Itasca, IL Ability to work a set schedule. Additional language skills are beneficial, such as French or Spanish but not required. Experience in the roadside assistance or automotive industry is beneficial but not required PHYSICAL REQUIREMENTS: Prolonged periods of sitting at a desk and working on a computer. Ability to speak and communicate clearly with callers and team members for extended periods Ability to hear and comprehend verbal communications over the phone\n\nAll your information will be kept confidential according to EEO guidelines.",
+      "date_posted": "2026-09-04T12:19:20.537Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147495710",
+      "title": "Customer Service Representative (5:00 am - 1:30 pm)",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 74,
+      "location": "Itasca, IL, Statele Unite",
+      "countries": [
+        "Statele Unite"
+      ],
+      "country_codes": [
+        "US"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 74,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147495710-customer-service-representative-5-00-am-1-30-pm-",
+      "description": "Customer Service Representative (Full-Time) plays a significant role at Roadside Protect, Bosch Service Solutions. You will be helping customers solve various roadside problems, which could considerably impact their personal or professional lives. Therefore, your ability to empathize and display social skills will be critical to building rapport with customers and getting the information you need to help them. Since Roadside Protect was founded in 2002, RP has managed more than 2,000,000 dispatches. Our key mission is to deliver a better service when it matters the most - the critical minutes when people are stranded on the road and in need of help. Responsibilities: Answer inbound calls and provide professional, empathetic customer support Accurately gather required information and enter data into dispatch systems, or perform fleet intake, gather vehicle, driver and indicant information accurately. Follow scripts, workflows, and client specific requirements Communicate clearly with customers or drivers regarding next steps, expectations and processes Escalate issues according to policy when necessary Maintain confidentiality of customer and company information Contribute to a positive team environment and uphold service standards Please note this job description is not designed to cover or contain a comprehensive listing of activities, duties or responsibilities that are required.  Duties, activities, and responsibilities may change at any time with or without notice to meet the needs of the business. Hours: Full-Time Hours: 5:00 AM - 1:30 PM Schedule Options: Monday, Tuesday, Wednesday, Friday, and Sunday Monday, Tuesday, Thursday, Friday, and Sunday Training: Initial training prepares new hires for a fast-paced roadside assistance environment, building confidence one day at a time for a span of a new hires first 6 weeks, under a training schedule. Training will cover call handling expectations, customer communication, dispatch processes, and how to work through real-life situations such as (but not limited to) soft services (jump start, lockout, etc.), towing requests, and escalations. The overall goal is to build confidence, strengthen problem-solving skills, and make sure each associate is ready to provide professional and efficient support from day one.\n\nREQUIREMENTS (education, prior experience, skills, key competencies, system knowledge): U.S Work Authorization High School Diploma or GED required High level of attention to detail and problem-solving skills Ability to comfortably work in a fast paced, time sensitive environment Proficient with using a desktop computer and MS office applications Strong interpersonal communication skills, verbal and written. Strong customer service and empathy skills Reliable, strong attendance and professionalism Ability to commute and work on-site in Itasca, IL Ability to work a set schedule. Additional language skills are beneficial, such as French or Spanish but not required. Experience in the roadside assistance or automotive industry is beneficial but not required PHYSICAL REQUIREMENTS: Prolonged periods of sitting at a desk and working on a computer. Ability to speak and communicate clearly with callers and team members for extended periods Ability to hear and comprehend verbal communications over the phone\n\nAll your information will be kept confidential according to EEO guidelines.",
+      "date_posted": "2026-09-04T12:18:47.494Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
     },
     {
       "id": "YTJiN2QxZGEtOTRjYS00YzY2LWI0ZTctMzYyYWVmZDZjNWYxIDM",
@@ -3033,6 +3470,346 @@
       "remote_scope": "Unknown"
     },
     {
+      "id": "smartrecruiters:BoschGroup:744000147320369",
+      "title": "Customer Service Representative (5:00 am - 1:30 pm)",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 74,
+      "location": "Itasca, IL, Statele Unite",
+      "countries": [
+        "Statele Unite"
+      ],
+      "country_codes": [
+        "US"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 94,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147320369-customer-service-representative-5-00-am-1-30-pm-",
+      "description": "Customer Service Representative (Full-Time) plays a significant role at Roadside Protect, Bosch Service Solutions. You will be helping customers solve various roadside problems, which could considerably impact their personal or professional lives. Therefore, your ability to empathize and display social skills will be critical to building rapport with customers and getting the information you need to help them. Since Roadside Protect was founded in 2002, RP has managed more than 2,000,000 dispatches. Our key mission is to deliver a better service when it matters the most - the critical minutes when people are stranded on the road and in need of help. Responsibilities: Answer inbound calls and provide professional, empathetic customer support Accurately gather required information and enter data into dispatch systems, or perform fleet intake, gather vehicle, driver and indicant information accurately. Follow scripts, workflows, and client specific requirements Communicate clearly with customers or drivers regarding next steps, expectations and processes Escalate issues according to policy when necessary Maintain confidentiality of customer and company information Contribute to a positive team environment and uphold service standards Please note this job description is not designed to cover or contain a comprehensive listing of activities, duties or responsibilities that are required.  Duties, activities, and responsibilities may change at any time with or without notice to meet the needs of the business. Hours: Full-Time Hours: 5:00 AM - 1:30 PM Schedule Options: Monday, Tuesday, Wednesday, Friday, and Sunday Monday, Tuesday, Thursday, Friday, and Sunday Training: Initial training prepares new hires for a fast-paced roadside assistance environment, building confidence one day at a time for a span of a new hires first 6 weeks, under a training schedule. Training will cover call handling expectations, customer communication, dispatch processes, and how to work through real-life situations such as (but not limited to) soft services (jump start, lockout, etc.), towing requests, and escalations. The overall goal is to build confidence, strengthen problem-solving skills, and make sure each associate is ready to provide professional and efficient support from day one.\n\nREQUIREMENTS (education, prior experience, skills, key competencies, system knowledge): U.S Work Authorization High School Diploma or GED required High level of attention to detail and problem-solving skills Ability to comfortably work in a fast paced, time sensitive environment Proficient with using a desktop computer and MS office applications Strong interpersonal communication skills, verbal and written. Strong customer service and empathy skills Reliable, strong attendance and professionalism Ability to commute and work on-site in Itasca, IL Ability to work a set schedule. Additional language skills are beneficial, such as French or Spanish but not required. Experience in the roadside assistance or automotive industry is beneficial but not required PHYSICAL REQUIREMENTS: Prolonged periods of sitting at a desk and working on a computer. Ability to speak and communicate clearly with callers and team members for extended periods Ability to hear and comprehend verbal communications over the phone\n\nAll your information will be kept confidential according to EEO guidelines.",
+      "date_posted": "2026-09-03T17:10:29.409Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147303849",
+      "title": "Customer Service Representative (5:00 am - 1:30 pm)",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 74,
+      "location": "Itasca, IL, Statele Unite",
+      "countries": [
+        "Statele Unite"
+      ],
+      "country_codes": [
+        "US"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 95,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147303849-customer-service-representative-5-00-am-1-30-pm-",
+      "description": "Customer Service Representative (Full-Time) plays a significant role at Roadside Protect, Bosch Service Solutions. You will be helping customers solve various roadside problems, which could considerably impact their personal or professional lives. Therefore, your ability to empathize and display social skills will be critical to building rapport with customers and getting the information you need to help them. Since Roadside Protect was founded in 2002, RP has managed more than 2,000,000 dispatches. Our key mission is to deliver a better service when it matters the most - the critical minutes when people are stranded on the road and in need of help. Responsibilities: Answer inbound calls and provide professional, empathetic customer support Accurately gather required information and enter data into dispatch systems, or perform fleet intake, gather vehicle, driver and indicant information accurately. Follow scripts, workflows, and client specific requirements Communicate clearly with customers or drivers regarding next steps, expectations and processes Escalate issues according to policy when necessary Maintain confidentiality of customer and company information Contribute to a positive team environment and uphold service standards Please note this job description is not designed to cover or contain a comprehensive listing of activities, duties or responsibilities that are required.  Duties, activities, and responsibilities may change at any time with or without notice to meet the needs of the business. Hours: Full-Time Hours: 5:00 AM - 1:30 PM Schedule Options: Monday, Tuesday, Wednesday, Friday, and Sunday Monday, Tuesday, Thursday, Friday, and Sunday Training: Initial training prepares new hires for a fast-paced roadside assistance environment, building confidence one day at a time for a span of a new hires first 6 weeks, under a training schedule. Training will cover call handling expectations, customer communication, dispatch processes, and how to work through real-life situations such as (but not limited to) soft services (jump start, lockout, etc.), towing requests, and escalations. The overall goal is to build confidence, strengthen problem-solving skills, and make sure each associate is ready to provide professional and efficient support from day one.\n\nREQUIREMENTS (education, prior experience, skills, key competencies, system knowledge): U.S Work Authorization High School Diploma or GED required High level of attention to detail and problem-solving skills Ability to comfortably work in a fast paced, time sensitive environment Proficient with using a desktop computer and MS office applications Strong interpersonal communication skills, verbal and written. Strong customer service and empathy skills Reliable, strong attendance and professionalism Ability to commute and work on-site in Itasca, IL Ability to work a set schedule. Additional language skills are beneficial, such as French or Spanish but not required. Experience in the roadside assistance or automotive industry is beneficial but not required PHYSICAL REQUIREMENTS: Prolonged periods of sitting at a desk and working on a computer. Ability to speak and communicate clearly with callers and team members for extended periods Ability to hear and comprehend verbal communications over the phone\n\nAll your information will be kept confidential according to EEO guidelines.",
+      "date_posted": "2026-09-03T16:09:18.200Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147275189",
+      "title": "Customer Service Representative",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 74,
+      "location": "Itasca, IL, Statele Unite",
+      "countries": [
+        "Statele Unite"
+      ],
+      "country_codes": [
+        "US"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 96,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147275189-customer-service-representative",
+      "description": "Customer Service Representative (Full-Time) plays a significant role at Roadside Protect, Bosch Service Solutions. You will be helping customers solve various roadside problems, which could considerably impact their personal or professional lives. Therefore, your ability to empathize and display social skills will be critical to building rapport with customers and getting the information you need to help them. Since Roadside Protect was founded in 2002, RP has managed more than 2,000,000 dispatches. Our key mission is to deliver a better service when it matters the most - the critical minutes when people are stranded on the road and in need of help. Responsibilities: Answer inbound calls and provide professional, empathetic customer support Accurately gather required information and enter data into dispatch systems, or perform fleet intake, gather vehicle, driver and indicant information accurately. Follow scripts, workflows, and client specific requirements Communicate clearly with customers or drivers regarding next steps, expectations and processes Escalate issues according to policy when necessary Maintain confidentiality of customer and company information Contribute to a positive team environment and uphold service standards Please note this job description is not designed to cover or contain a comprehensive listing of activities, duties or responsibilities that are required.  Duties, activities, and responsibilities may change at any time with or without notice to meet the needs of the business. Hours: Full-Time Hours: 5:00 AM - 1:30 PM Schedule Options: Monday, Tuesday, Wednesday, Friday, and Sunday Monday, Tuesday, Thursday, Friday, and Sunday Training: Initial training prepares new hires for a fast-paced roadside assistance environment, building confidence one day at a time for a span of a new hires first 6 weeks, under a training schedule. Training will cover call handling expectations, customer communication, dispatch processes, and how to work through real-life situations such as (but not limited to) soft services (jump start, lockout, etc.), towing requests, and escalations. The overall goal is to build confidence, strengthen problem-solving skills, and make sure each associate is ready to provide professional and efficient support from day one.\n\nREQUIREMENTS (education, prior experience, skills, key competencies, system knowledge): U.S Work Authorization High School Diploma or GED required High level of attention to detail and problem-solving skills Ability to comfortably work in a fast paced, time sensitive environment Proficient with using a desktop computer and MS office applications Strong interpersonal communication skills, verbal and written. Strong customer service and empathy skills Reliable, strong attendance and professionalism Ability to commute and work on-site in Itasca, IL Ability to work a set schedule. Additional language skills are beneficial, such as French or Spanish but not required. Experience in the roadside assistance or automotive industry is beneficial but not required PHYSICAL REQUIREMENTS: Prolonged periods of sitting at a desk and working on a computer. Ability to speak and communicate clearly with callers and team members for extended periods Ability to hear and comprehend verbal communications over the phone\n\nAll your information will be kept confidential according to EEO guidelines.",
+      "date_posted": "2026-09-03T14:42:22.859Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:Netcompany1:744000147217139",
+      "title": "Service Desk Operator",
+      "company": "Netcompany",
+      "initial": "N",
+      "fit": 74,
+      "location": "Lisbon, Lisbon, Portugalia",
+      "countries": [
+        "Portugalia"
+      ],
+      "country_codes": [
+        "PT"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 100,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/Netcompany1/744000147217139-service-desk-operator",
+      "description": "What does it feel like to be a Service Desk Operator in Netcompany? As a Service Desk Operator you will: Log, categorize, prioritize, diagnose, resolve, escalate, and close incidents while maintaining ownership and communication. Provide technical expertise by handling requests regarding Windows environments, common desktop software, hardware, automated software distribution, telephony, video conferencing, and mobile devices (iPhone, iPad, Microsoft Surface Pro). Manage logging and escalation cases by accurately logging all incidents and requests, categorizing and prioritizing them appropriately. Ensure timely updates, maintain a professional attitude, and provide clear communication to customers throughout the resolution process. Support coverage. If needed you may be required to provide after-hours and on-call support. Provide onsite & IMACD Support by intervening at user locations and perform Install, Move, Add, Change, and Decommission (IMACD) tasks.\n\nWhat would make you a fit for the role: Bachelor's or Master's degree in Computer Science, IT or similar 1 year of relevant professional experience as Service Desk Operator or IT Support Specialist Very good knowledge of English and French Understanding of networking and networking protocols; Flexibility and stress resilience with ability to work in a co-operative way; Customer and Service focus with attention to detail together with problem solving skills; Spoken and written interpersonal, communication and presentation skills; What is a plus for the role: Experience with MS Office Suite and with Microsoft OS (Windows 7 and 10); Knowledge of mobile devices and mobile phone services; ticketing and CMDB tools; Experience in troubleshooting PCs/Laptops/Tablets, VPN, etc.;\n\nBeing a part of the Netcompany team, you will be provided with: Opportunity to work in a modern environment. Competitive compensation Personalized development plan for targeted career growth If you are looking forward to be part of a diverse environment, and have the opportunity to work alongside well-experienced professionals, on challenging, large-scale projects that directly impact millions of citizens around the globe, then this is the place to be! Are you ready to shape the future technological landscape in Europe? #LI-CF Please upload your CV in English via the Apply button. All applications will be treated as strictly confidential. We ensure equal opportunities, treatment, and consideration to all candidates. Discrimination based on sex, racial or ethnic origin, religion or belief, disability, age, sexual orientation or marital status, physical or mental disability, or any other factor protected by applicable laws and regulations is prohibited. As part of the Netcompany culture, we respect human rights and focus on creating a positive workplace, where all employees are valued, and where diversity and inclusion are a vital part of our everyday working experience. In the following link you may find our CV Submission privacy notice: https://netcompany.com/cv-submission-privacy-notice/",
+      "date_posted": "2026-09-03T10:46:18.248Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:Endava:744000147166675",
+      "title": "Service Desk Analyst",
+      "company": "Endava",
+      "initial": "E",
+      "fit": 74,
+      "location": "Bengaluru, Karnataka, India",
+      "countries": [
+        "India"
+      ],
+      "country_codes": [
+        "IN"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 103,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/Endava/744000147166675-service-desk-analyst",
+      "description": "We are seeking a dedicated and customer-focused Service Desk Analyst to join our team in Bengaluru, India. As a crucial member of our IT support team, you will be the first point of contact for our clients and internal employees, providing expert assistance and ensuring smooth operations across our organization. Serve as the primary contact for IT-related issues, inquiries, and service requests via various channels including phone, email, and instant messaging Log, classify, and prioritize incidents and requests using ITSM tools and following established procedures - Freshservice (freshworks) Troubleshoot and resolve IT problems or escalate complex issues to appropriate support teams Provide clear, professional guidance to customers on appropriate courses of action and expected timelines Monitor and track open tickets to ensure timely resolution and adherence to service level agreements Working in Shifts (rotational with night shift allowance)\n\n3 to 5 years of experience in managing L1 and L1.5 roles in call taking role. Advanced English language skills (both written and verbal) Strong problem-solving and analytical abilities to diagnose and resolve IT issues efficiently Customer-focused mindset Proficiency in using ITSM tools and ticketing systems Hardware, software and application troubleshooting experience. Ability to work in a fast-paced environment, manage multiple priorities, and meet tight deadlines Team player with a collaborative approach to problem-solving Relevant IT support certifications (e.g., ITIL Foundation, CompTIA A+) are a plus.\n\nAt Endava, we’re committed to creating an open, inclusive, and respectful environment where everyone feels safe, valued, and empowered to be their best. We welcome applications from people of all backgrounds, experiences, and perspectives—because we know that inclusive teams help us deliver smarter, more innovative solutions for our customers. Hiring decisions are based on merit, skills, qualifications, and potential. If you need adjustments or support during the recruitment process, please let us know.",
+      "date_posted": "2026-09-03T07:33:04.133Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:Endava:744000147169069",
+      "title": "Junior Service Desk Analyst",
+      "company": "Endava",
+      "initial": "E",
+      "fit": 74,
+      "location": "Bengaluru, Karnataka, India",
+      "countries": [
+        "India"
+      ],
+      "country_codes": [
+        "IN"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 103,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/Endava/744000147169069-junior-service-desk-analyst",
+      "description": "We are seeking a dedicated and customer-focused Junior Service Desk Analyst to join our team in Bengaluru, India. As a crucial member of our IT support team, you will be the first point of contact for our clients and internal employees, providing expert assistance and ensuring smooth operations across our organization. Serve as the primary contact for IT-related issues, inquiries, and service requests via various channels including phone, email, and instant messaging Log, classify, and prioritize incidents and requests using ITSM tools and following established procedures - Freshservice (freshworks) Troubleshoot and resolve IT problems or escalate complex issues to appropriate support teams Provide clear, professional guidance to customers on appropriate courses of action and expected timelines Collaborate with internal and external departments to deliver high-quality service and maintain user satisfaction Monitor and track open tickets to ensure timely resolution and adherence to service level agreements Working in Shifts (rotational with night shift allowance)\n\n1-3 years of experience in managing L1 Call taking role Intermidiate English language skills (both written and verbal) Strong problem-solving and analytical abilities to diagnose and resolve IT issues efficiently Customer-focused mindset Proficiency in using ITSM tools and ticketing systems Hardware, software and application troubleshooting experience. Ability to work in a fast-paced environment, manage multiple priorities, and meet tight deadlines Team player with a collaborative approach to problem-solving\n\nCandidates should meet work from home criteria. At Endava, we’re committed to creating an open, inclusive, and respectful environment where everyone feels safe, valued, and empowered to be their best. We welcome applications from people of all backgrounds, experiences, and perspectives—because we know that inclusive teams help us deliver smarter, more innovative solutions for our customers. Hiring decisions are based on merit, skills, qualifications, and potential. If you need adjustments or support during the recruitment process, please let us know.",
+      "date_posted": "2026-09-03T07:32:13.502Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147154309",
+      "title": "Data Service – AI Engineer",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 74,
+      "location": "Long Thanh, Dong Nai, Vietnam",
+      "countries": [
+        "Vietnam"
+      ],
+      "country_codes": [
+        "VN"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 105,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147154309-data-service-ai-engineer",
+      "description": "Provide, consult and develop optimal AI & data-related solutions / products for HcP that sastify business demands, cost competitiveness, timeline, efficient sustainabiliy and scalability. Ensure quality and on-time deliveries for responsible work pakage in HcP digital projects Maintain excellent operation for in-charge data services (e.g systems, tools, dashboards, platform, data pipeline, etc) inc. incident/ problem management, IT change management, CIP, etc. Knowledge management: acquire suitable knowledge/ skills for service sustain and development. Transfer knowledge as per assigment for relevant parties (proxy, newhire, user departments) Other tasks assigned by manager\n\n1. Education Degree: Bachelor or Master Degree Major: Computer Science, Applied Statistics, Mathematics, Electronics, Automation 2. Work experience At least 3-year experience in manufacturing environment Possess knowledge of statistical and predictive modeling concepts, machine learning approaches, data mining, clustering and classification techniques, recommendation and optimization algorithms Experience in programming languages, network, database and IT matter incl. international standards 3. Skills: Result Orientation Language Skills - English Programming Skills Microsoft Power Bi Digitalization Data Modeling\n\n16+day annual leave Competitive salary, bonuses and allowances Career development in the Bosch group worldwide Top employer in mechanical engineer jobs and employee development policy.",
+      "date_posted": "2026-09-03T06:01:53.294Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "recruitee:almavivadebelgique:2626209",
+      "title": "Senior Project Management Specialist  (Hybrid)",
+      "company": "Almaviva de Belgique",
+      "initial": "AD",
+      "fit": 73,
+      "location": "La Valletta, Rabat Malta, Malta; La Valletta",
+      "countries": [
+        "Malta"
+      ],
+      "country_codes": [
+        "MT"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Nespecificat",
+      "age": 0,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://almavivadebelgique.be/o/senior-project-management-specialist-hybrid",
+      "description": "-Determine and document the project’s goals, deliverables, tasks, and deadlines. -Create a detailed project plan outlining the schedule, resources, and milestones. -Assign tasks and resources effectively to team members based on their skills and project requirements.- -Monitor and manage the project resource usage to ensure resources are utilized efficiently. -Identify potential risks and develop mitigation strategies to minimize their impact. -Maintain regular communication with stakeholders to provide updates and gather feedback. -Facilitate collaboration among team members and resolve any conflicts that arise. -Track project progress against milestones and timelines to ensure timely completion. -Handle any changes in project scope, schedule, or resources effectively. -Prepare and present regular status reports to stakeholders and senior management. -Coordinate with external vendors and service providers as needed for project success. -Address and resolve any issues or roadblocks that hinder project progress. -Maintain comprehensive project documentation for future reference and compliance. -Conduct project reviews, finalize documentation, and ensure all deliverables are completed and approved. -Track and respond to tickets and service requests in a service desk context, ensuring timely and effective resolution. SPECIFIC EXPERTISE Project coordination and training procedures, preferably involving a recognised methodology; SharePoint architecture both on-premises an online; Independently perform tasks management in the SharePoint environment, Atlassian suite or similar software. Level : Senior Delivery mode: Hybrid (80% onsite Malta and 20% remote) Deadline 15/06/26 CET",
+      "date_posted": "2026-09-02 09:53:13 UTC",
+      "source": "Recruitee",
+      "verified_at": null
+    },
+    {
+      "id": "web:87eace39d06f:082fdc21cb8a26661245",
+      "title": "Project Management Specialist (Innovation & NPD)",
+      "company": "Capgemini",
+      "initial": "C",
+      "fit": 73,
+      "location": "Katowice, PL",
+      "countries": [
+        "Polonia"
+      ],
+      "country_codes": [
+        "PL"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "N/A",
+      "type": "Full-Time",
+      "age": 27,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://justjoin.it/job-offer/capgemini-project-management-specialist-innovation-npd--katowice-pm",
+      "description": "Choosing Capgemini means choosing a company where you will be empowered to shape your career in the way you’d like, where you’ll be supported and inspired by a collaborative community of colleagues around the world, and where you’ll be able to reimagine what’s possible. Join us and help the world’s leading organizations unlock the value of technology and build a more sustainable, more inclusive world.Your roleAs a Project Management Specialist, you will be responsible for coordinating and driving new product and packaging development projects for a leading Consumer Packaged Goods (CPG) client. Working closely with the Senior Innovation Manager and cross-functional teams, you will ensure projects are successfully delivered throughout the entire New Product Development (NPD) lifecycle, from concept and feasibility assessment through commercialization and market launch. This role combines project management, innovation, and commercial thinking, making it an excellent opportunity for professionals who enjoy working at the intersection of marketing, product innovation, and stakeholder collaboration.Your tasksCoordinate cross-functional New Product Development (NPD) projects from concept to market launch.Develop and maintain detailed project plans using MS Project.Monitor project schedules, milestones, critical paths, dependencies, and deliverables.Support PMO activities, including project governance, reporting, and portfolio tracking.Identify project risks, issues, and mitigation actions, ensuring their timely resolution.Facilitate project meetings and ensure effective communication across Marketing, R&D, Supply Chain, Procurement, Quality, and Commercial teams.Support portfolio prioritization, resource planning, and continuous improvement initiatives.Ensure project documentation is accurate and maintained throughout the project lifecycle.Your profile4+ years of experience in Project Management, PMO, New Product Development (NPD), or Innovation projects, preferably within the FMCG/CPG industry.Bachelor’s degree in Business, Management, Engineering, Marketing, or a related field.Solid understanding of project management methodologies and Stage-Gate/NPD processes.Hands-on experience with MS Project (preferred) and other project management tools (e.g., Asana, Monday.com, Jira, Smartsheet).Experience coordinating multiple cross-functional projects simultaneously.Strong stakeholder management and communication skills.Ability to identify risks, manage dependencies, and keep projects on track.Advanced English proficiency, both written and spokenWhat You'll love about working hereWell-being culture: medical care with Medicover, private life insurance, and Sports card. But we went one step further by creating our own Capgemini Helpline offering therapeutical support if needed and the educational podcast 'Let's talk about wellbeing' which you can listen to on Spotify.Access to over 70 training tracks with certification opportunities (e.g., GenAI, Excel, Business Analysis, Project Management) on our NEXT platform. Dive into a world of knowledge with free access to Education First languages platform, TED Talks and Udemy Business materials and trainings.Continuous feedback and ongoing performance discussions thanks to our performance management tool GetSuccess supported by a transparent performance management policy.Enjoy hybrid working model that fits your life - after completing onboarding, connect work from a modern office with ergonomic work from home, thanks to home office package (including laptop, monitor, and chair). Ask your recruiter about the details.Get to know usCapgemini is committed to diversity and inclusion, ensuring fairness in all employment practices. We evaluate individuals based on qualifications and performance, not personal characteristics, striving to create a workplace where everyone can succeed and feel valued.Do you want to get to know us better? Check our Instagram — @capgeminipl or visit our Facebook profile — Capgemini Polska. You can also find us on YouTube. About CapgeminiCapgemini is an AI-powered global business and technology transformation partner, delivering tangible business value. We imagine the future of organizations and make it real with AI, technology and people. With our strong heritage of nearly 60 years, we are a responsible and diverse group of over 420,000 team members in more than 50 countries. We deliver end-to-end services and solutions with our deep industry expertise and strong partner ecosystem, leveraging our capabilities across strategy, technology, design, engineering and business operations.",
+      "date_posted": "2026-09-06T12:00:23.783251Z",
+      "source": "Just Join IT",
+      "verified_at": "2026-09-07T15:13:22.667104+00:00"
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147037339",
+      "title": "Project Coordinator /McP kéziszerszámgyár/",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 73,
+      "location": "Miskolc, Ungaria",
+      "countries": [
+        "Ungaria"
+      ],
+      "country_codes": [
+        "HU"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 119,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147037339-project-coordinator-mcp-keziszerszamgyar-",
+      "description": "Preparatory documents for mass production Monitoring of changes Tracking of running changes Creating label BOMs, uploading artworks Launching and monitoring of change requests Coordination of new product implementation Coordination of sustainability and legal requirement changes\n\nBsc or Msc degree in a relevant field English and Hungarian language proficiency Resilience and ability to handle workload Good communication skills Teamwork MS knowledge\n\nGet to know our #LikeABosch benefits. We would like to help you GROW , so we offer you: Financial security & recognition: We review and increase your competitive base salary annually, offer performance-, loyalty-, and referral bonus. Trainings and professional development: We believe in a Life-Long Learning approach, so you can take advantage of several technical and soft skill trainings and language courses. Career development : We have a wide range of programs to choose from, even if its leadership, expert or project development you are aiming for. We also offer mentoring and coaching opportunities, we have PhD program and we offer international assignment possibilities. We would like you to ENJOY the benefits of balancing your life and your work, so we pay attention to: Your work life-balance: You can work from our activity based offices designed for creativity and efficiency or from home while enjoying flexible working hours . We offer childcare possibilities and sabbatical option. Your health and well-being: We provide free professional consultants for any personal, legal, financial or health related issues. You can benefit from our developing onsite medical center and organized regular health checkups. We also offer you several perks and benefits: You can use your annual cafeteria allowance flexibly for family support (e.g. tax-free kindergarten and nursery allowances), health care , mobility (car sharing services) and recreation . You can enjoy our onsite canteen, we support when you work from home and if you live far, we cover your commute costs . We also appreciate your loyalty with jubilee gift and extra jubilee holiday . You could join an INSPIRING community worth to belong: We are true to our values: We are committed to sustainability , we value that everyone is different and that diversity makes us truly successful. We also take social responsibility seriously and regularly organize charity actions, blood donations and support worthy causes. Team building activities and community events are also part of our everydays. We like to come together for a good summer party or family day. Are you ready to work #LikeABosch ? Please apply with your English CV! If you have any questions regarding the position or the application process, we encourage you to first visit our FAQ section [HERE] , where you may already find the answer you're looking for. If you still need assistance, please feel free to contact us at the following email address - talentacquisitionhungary@bosch.com - We'd be happy to help.",
+      "date_posted": "2026-09-02T16:09:56.312Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
       "id": "4463725178",
       "title": "Chef de projet IT / Scrum Master",
       "company": "TiTANS Consulting | TiTANS Recruitment | TiTANS Werving & Selectie | TiTANS Interim Management",
@@ -3050,7 +3827,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -3066,6 +3843,41 @@
       "date_posted": "2026-09-05",
       "source": "linkedin",
       "verified_at": "2026-09-05 18:50:56"
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147835958",
+      "title": "Technical Customer Project Manager - Power Electronics Products [プロジェクトマネージャー]",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 70,
+      "location": "Yokohama, Kanagawa, Japonia",
+      "countries": [
+        "Japonia"
+      ],
+      "country_codes": [
+        "JP"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 9,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147835958-technical-customer-project-manager-power-electronics-products-",
+      "description": "日本OEM顧客向けの 大規模 e モビリティ向けパワーエレクトロニクスプロジェクト をリードし、品質・コスト・納期・予算目標の達成と複雑な技術課題の解決を推進します。日本、ドイツ、オーストリア、インド、ハンガリーにまたがる グローバルなクロスファンクショナルチームと顧客をつなぐ中心的な役割 を担い、多様な関係者との連携を促進します。高い自律性とリーダーシップを発揮して イノベーションと事業成長を推進し、市場をリードする電動化ソリューションの実現に貢献 します。 Lead a large-scale e-mobility power electronics project for Japanese OEM customers, with full accountability for quality, cost, schedule, budget, and customer satisfaction . Serve as the key interface between customers and global cross-functional teams across Japan, Germany, Austria, India, and Hungary , driving technical alignment and resolving complex engineering challenges. Lead with a high degree of autonomy to deliver innovation, profitability, execution excellence, and market-leading electrification solutions in the rapidly evolving e-mobility market.\n\n求められる経験・スキル / Required Experience, Skills & Background: 自動車業界で 5 年以上の実務経験 を有し、複雑な製品開発および顧客プロジェクトにおける技術プロジェクトマネジメントの経験を持つ方。 日本語・英語でのビジネスレベルのコミュニケーション能力 を有し 、グローバルかつ多文化な環境で円滑に業務を遂行できる方。 優れた コミュニケーション力・交渉力 と高い分析・問題解決能力を有し、多様なステークホルダーを巻き込みながら複雑な課題を解決できる方。リスクの早期発見・対策・エスカレーションを通じて、プロジェクトを主体的に推進できる方。 5+ years of automotive industry experience , including technical project management of complex products and customer programs. Business-fluent/Advance Level Japanese and English languages are must , enabling effective technical discussions, customer engagement, and collaboration in multicultural, global teams. Strong communication, negotiation , analytical, and problem-solving skills, with the ability to engage and influence diverse stakeholders while resolving complex challenges. Proactive in identifying, mitigating, and escalating risks to drive successful project execution. 歓迎する経験・スキル・資格 / Preferred Experience, Skills & Background グローバル市場における自動車向けパワーエレクトロニクスおよび車両システムの開発・量産立上げにおいて、豊富な経験を有する方 PMP （Project Management Professional）資格保有者 Proven Project Manager with extensive experience in the development and launch of automotive power electronics and vehicle systems, successfully delivering large-scale global programs and leading cross-functional, multicultural teams across regions and organizations. PMP certified project management professional. 求めるコアコンピテンシー / Core Competencies We Seek 複雑な環境でも主体的かつ戦略的に行動できる方。 強いオーナーシップと責任感を持ち、成果創出にコミットできる方。 高い協調性を発揮し、強いチームを構築できる方。 変化の激しい環境でも柔軟かつ粘り強く対応できる方。 Strategic and self-driven in complex environments. Strong ownership and accountability for results. Collaborative leader who builds high-performing teams. Resilient and adaptable in fast-paced projects.\n\nチームカルチャー・特徴 / Team Culture & Characteristics: フラット でオープンな組織文化 高い裁量権と主体性を重視 グローバル 環境で日常的に英語を使用 国内外(ドイツ、インド、オーストリア等）の出張機会あり / 顧客先および海外Bosch拠点との連携機会あり Flat hierarchy with open communication and direct access to management. High degree of autonomy , encouraging initiative, independent thinking, and ownership. English used daily with global teams across Europe, India, and other international locations. Domestic and international travel opportunities , including customer visits and Bosch sites in Germany, Austria, India, and other global locations. 履歴書に語学力を明確にご記入ください / Please clearly describe your language skills in your resume.",
+      "date_posted": "2026-09-07T05:23:33.143Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
     },
     {
       "id": "4398392330",
@@ -3085,7 +3897,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 38,
+      "age": 39,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -3121,7 +3933,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -3157,7 +3969,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Full Time",
-      "age": 62,
+      "age": 63,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -3174,6 +3986,40 @@
       "date_posted": "2026-09-05",
       "source": "linkedin",
       "verified_at": "2026-09-05 13:25:00"
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147939199",
+      "title": "*Associate - Project Management support",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 68,
+      "location": "coimbatore, India",
+      "countries": [
+        "India"
+      ],
+      "country_codes": [
+        "IN"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 1,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147939199--associate-project-management-support",
+      "description": "Roles & Responsibilities : Creation of order feedback and confirmation of MUBL NO for that order. Approving MUBL NO in HIS, i.e., comparing the specification in HIS and the partlist in SAP. Creation of Material master in SAP Monthly and Weekly reports\n\nEducational qualification: Any Bachelor degree Experience : 3 years Mandatory/requires Skills : Basic SAP knowledge on SAP-MM Basic PowerBI MS Excel, PPT Preferred Skills :",
+      "date_posted": "2026-09-07T13:20:57.087Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
     },
     {
       "id": "smartrecruiters:BoschGroup:744000147310214",
@@ -3208,6 +4054,40 @@
       "verified_at": null
     },
     {
+      "id": "smartrecruiters:BoschGroup:744000147033121",
+      "title": "Projekt beszerző | Project purchaser",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 68,
+      "location": "Miskolc, Ungaria",
+      "countries": [
+        "Ungaria"
+      ],
+      "country_codes": [
+        "HU"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 119,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147033121-projekt-beszerzo-project-purchaser",
+      "description": "A Te feladataid: Az üzletág, divízió, a gyártó telephely és a központi beszerzési osztályok közti kapcsolattartás, kommunikáció koordinálása Sorozatgyártáshoz szükséges anyagok beszerzése, alternatív beszállítók keresése, bevezetése Projektcélok követése, elérése (költségek, minőség, idő, megtakarítások) Műszaki, technikai egyeztetések levezénylése a beszállítókkal Költségcsökkentő ötletek generálása, bevezetésének koordinálása Szériagyártás előtti együttműködés előkészítése, erősítése a beszállítókkal Beszállítókat érintő műszaki változtatások nyomon követése, koordinálása Üzletági stratégia harmonizálása a beszerzési stratégiával\n\nFelsőfokú műszaki, vagy gazdasági végzettség Tárgyalóképes angol nyelvtudás (német előnyt jelent) MS Office alkalmazások ismerete (Outlook, Excel, PowerPoint, Word, PowerBI, stb.) Utazási hajlandóság B kategóriás jogosítvány Jó kommunikációs készség, megbízható, precíz munkavégzés SAP ismeret és minőségbiztosítási gyakorlat előnyt jelentenek\n\nIsmerd meg mit jelent a Work #LikeABosch. GROW - Nálunk kibontakozhatsz. Anyagi biztonságot & elismerést biztosítunk: A versenyképes alapbéred évente felülvizsgáljuk, emellett teljesítmény-, hűség-, és ajánlási bónuszt is kínálunk. Támogatunk szakmai & karriercéljaid elérésében: Hiszünk az élethosszon át tartó fejlődésben, így folyamatos tanulási és fejlődési lehetőséget kínálunk a szakmai és személyes karrier céljaid eléréshez egyaránt. ENJOY – Velünk teljes életet élhetsz. Egyensúlyban tartunk: Rugalmas munkaidőben dolgozhatsz otthonról vagy modern, kényelmes irodáinkból egyaránt, emellett számos gyermekgondozási lehetőséget is kínálunk. Fontos vagy számunkra: Ingyenesen biztosított egészségügyi, jogi és pénzügyi tanácsadással, szűrővizsgálatokkal, valamint egyéb programokkal és előadásokkal támogatjuk mentális és fizikai egészséged megőrzését. Egyéb juttatásaink: Élvezheted számos munkavállalói kedvezményünk előnyeit, rugalmasan felhasználható, igényeidhez igazított éves cafeteria kereted, melyek mellett támogatjuk a home office-t, a bejárást, valamint telephelyi étkezésed is. INSPIRE – Inspiráló vállalati kultúránkhoz Te is büszkén tartozol majd. Hűek vagyunk az értékeinkhez: Dolgozz olyan kultúrában, amely értékeli a sokszínűséget, hisz az átláthatóságban és a fenntarthatóságban. Kapcsolódj be társadalmi felelősség vállalási programjainkba, mint például véradási kampányok és jótékonysági tevékenységek. Legnagyobb erősségünk a közösségünk: Részt vehetsz csapatépítőkön és olyan szórakoztató vállalati eseményeken, mint például családi nap, valamint csatlakozhatsz aktív belső közösségeinkhez, ahol további izgalmas programlehetőségek várnak. Csatlakozz és Work #LikeABosch . Kérlek, az angol nyelvű önéletrajzoddal jelentkezz! Ha kérdésed van a pozícióval vagy a jelentkezési folyamattal kapcsolatban, először nézd meg a GYIK (FAQ) részt [ITT] , mert lehet, hogy ott már megtalálod a választ. Ha nem találod, amit keresel, írj nekünk bizalommal az alábbi e-mail-címre – talentacquisitionhungary@bosch.com- szívesen segítünk.",
+      "date_posted": "2026-09-02T15:59:51.722Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
       "id": "5e75270d2aaa1667",
       "title": "Project & Program Manager",
       "company": "Just Eat Takeaway.com",
@@ -3225,7 +4105,7 @@
       "romania_eligible": null,
       "mode": "N/A",
       "type": "Nespecificat",
-      "age": 57,
+      "age": 58,
       "remote": false,
       "b2b": false,
       "repost": false,
@@ -3242,113 +4122,218 @@
       "date_posted": "2026-09-05T05:00:00+00:00",
       "source": "indeed",
       "verified_at": "2026-09-06 00:16:19"
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147145989",
+      "title": "[XC/PMO-JP] Internship in Project Management Office",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 67,
+      "location": "Tsuzuki-ku, Bosch Corporation, Yokohama-shi, Kanagawa, Japonia",
+      "countries": [
+        "Japonia"
+      ],
+      "country_codes": [
+        "JP"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Intern",
+      "age": 107,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147145989--xc-pmo-jp-internship-in-project-management-office",
+      "description": "Unit Code: XC/PMO-JP Challenging Internship at Bosch Japan! You will get the chance to work for a global player and be a part of a dynamic team where you can gather practical and on-the-job experience with a mix of day-to-day operations and projects. Your task(s) will include: 1. Explore and drive the use of AI in Project Management (PM), helping shape future PM tools, processes, and ways of working 2. Support of project managers regarding tools and processes 3. Follow-up KPIs and Data Quality with central PMO team 4. Support onsite and online Workshops (LL, Kick-off, Risk-Mgmt) 5. Support PMO initiatives and continuous improvement projects 6. Explore how new technologies can shape the future of Project Management and collaboration.\n\n• Required Specialized knowledge: 1. Basic knowledge in Project Management 2. Intercultural Collaboration 3. Passionate about AI and digital innovation • Preferred language abilities: 1. Fluent English required 2. German or Japanese preferred • Preferred skills: 1. Be a communicative. 2. proactive, tenacious and 3. reliable team player! • Additionally, you should: Be able to stay for a period of 6-12 months at our company Be regularly enrolled at a university during the entire internship period Be flexible, willing and motivated to live and work in a different culture\n\nTarget Internship Period: March 2027 *We offer a very competitive monthly net allowance of 200,000 Yen on a full-time scheme. We will also provide you with all necessary documents and information for a successful Designated Activities visa application. Please note that the full visa process may take up to three months. Furthermore, applicants who intend to have an internship period for 12 months/already hold residence status in Japan will receive a monthly gross allowance. **Japanese Nationals: Please note that Japanese nationals do not require a visa process. Depending on the needs of the receiving department, students fulfilling this condition may begin their internship within one month of being hired. ***Exchange students Please note that foreign nationals on a student visa with permission for part-time job (資格外活動許可) do not require a visa process. Students fulfilling these conditions will be eligible to work on a part-time scheme only. Depending on the needs of the receiving department, exchange students may begin their internship within one month of being hired. ****Non-Japanese Nationals (visa requirements): Please note that applicants who are not Japanese nationals need to be eligible to obtain the Designated Activities Visa for an internship with Bosch Japan. Therefore, only students who fulfill the following conditions are eligible to apply: A.) Enrolled student at a university at least 3 months before the internship and during the entire internship period. B.) Doing the internship will require your university to sign a document confirming that the internship represents a mandatory or strongly recommended part of your university curriculum when applying for your visa. Please be aware that we will not: A.) Carry out country specific tax treaty procedures. 特定の国の租税条約の手続きは実施しない。 B.) Carry out any refund procedures. 還付手続きも行わない。",
+      "date_posted": "2026-09-03T03:44:26.974Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147040510",
+      "title": "Project Leader for Mobility Electronics (Engineering Sensors Inertial)",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 66,
+      "location": "Budapest, Ungaria",
+      "countries": [
+        "Ungaria"
+      ],
+      "country_codes": [
+        "HU"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 118,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Mediu reglementat relevant"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147040510-project-leader-for-mobility-electronics-engineering-sensors-inertial-",
+      "description": "The Mobility Electronics (ME) division develops new electronic control units (e.g. for combustion engines, comfort functions, airbags) and a wide range of sensors (e.g. for battery charge state, inertial, pressure, NOx) in close cooperation with manufacturing. These products are engineered to a state of the art level both in technology and reliability and are to be found in cars of a very large group of manufacturers. „Intel of micromechanics“ – Bosch, as a pioneer in the R&D of semiconductor based miniature sensor systems (MEMS) has been the No.1 automotive sensor supplier in the world for years now. Leveraging 18 years of professional experience, our Hungarian team bridges the gap between our international production network (with plants in Hungary, Germany, Malaysia, and Spain) and our multidisciplinary, multinational development teams, enabling the mass manufacturing of state-of-the-art yaw-rate sensors. Join us in make driving safer together! Your tasks: ► Collaborating with multidisciplinary teams of technical experts on complex semiconductor-based sensors ► Scheduling and coordinating work packages with teams from both development and series production plants ► Leading technical discussions with Bosch-internal customers, supporting engineering departments, and production plants ► Coordinating and following up on problem-solving for quality and yield-related issues within the production plants ► Representing sensor development in various forums, such as customer visits, plant audits, and international production networks ► Managing change and implementing production improvement projects for series products\n\n► Finished Bachelor of Science (B.Sc.) degree in engineering or related field, (studies in electrical engineering or mechatronics preferred, M.Sc. is an advantage) ► Prior experience in either coordinating or expert roles within development or series production is highly advantageous ► A strong sense of ownership, demonstrated by a content-driven leadership mindset ► Strong motivation and a proven ability to expand knowledge of new technologies, technical solutions, and disciplines ► Openness to agile methodologies and teamwork ► Outstanding organizational and coordination skills, coupled with proactive task mgmt. ► Excellent communication and interpersonal skills ► Proficiency in the English language (German language skills are an advantage)\n\nGet to know our #LikeABosch benefits. We would like to help you GROW , so we offer you: Financial security & recognition: We review and increase your competitive base salary annually, offer performance-, loyalty-, and referral bonus. Trainings and professional development: We believe in a Life-Long Learning approach, so you can take advantage of several technical and soft skill trainings and language courses. Career development : We have a wide range of programs to choose from, even if its leadership, expert or project development you are aiming for. We also offer mentoring and coaching opportunities, we have PhD program and we offer international assignment possibilities. We would like you to ENJOY the benefits of balancing your life and your work, so we pay attention to: Your work life-balance: You can work from our activity based offices designed for creativity and efficiency or from home while enjoying flexible working hours . We offer childcare possibilities and sabbatical option. Your health and well-being: We provide free professional consultants for any personal, legal, financial or health related issues. You can benefit from our developing onsite medical center and organized regular health checkups. We also offer you several perks and benefits: You can use your annual cafeteria allowance flexibly for family support (e.g. tax-free kindergarten and nursery allowances), health care , mobility (car sharing services) and recreation . You can enjoy our onsite canteen, we support when you work from home and if you live far, we cover your commute costs . We also appreciate your loyalty with jubilee gift and extra jubilee holiday . You could join an INSPIRING community worth to belong: We are true to our values: We are committed to sustainability , we value that everyone is different and that diversity makes us truly successful. We also take social responsibility seriously and regularly organize charity actions, blood donations and support worthy causes. Team building activities and community events are also part of our everydays. We like to come together for a good summer party or family day. Are you ready to work #LikeABosch ? Please apply with your English CV! If you have any questions regarding the position or the application process, we encourage you to first visit our FAQ section [HERE] , where you may already find the answer you're looking for. If you still need assistance, please feel free to contact us at the following email address - talentacquisitionhungary@bosch.com - We'd be happy to help.",
+      "date_posted": "2026-09-02T16:25:38.969Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
+    },
+    {
+      "id": "smartrecruiters:BoschGroup:744000147459829",
+      "title": "Project Leader for TMS/ATS_PS_RBCW",
+      "company": "Bosch Group",
+      "initial": "BG",
+      "fit": 61,
+      "location": "Wuxi, Jiangsu, China",
+      "countries": [
+        "China"
+      ],
+      "country_codes": [
+        "CN"
+      ],
+      "remote_scope": "Country",
+      "romania_eligible": null,
+      "mode": "Onsite",
+      "type": "Full-Time",
+      "age": 78,
+      "remote": false,
+      "b2b": false,
+      "repost": false,
+      "status": "new",
+      "pros": [
+        "Titlu si responsabilitati relevante pentru profil"
+      ],
+      "risks": [
+        "Cerinta lingvistica trebuie verificata",
+        "Forma B2B nu este confirmata"
+      ],
+      "url": "https://jobs.smartrecruiters.com/BoschGroup/744000147459829-project-leader-for-tms-ats-ps-rbcw",
+      "description": "- Role: project leader of TMS/ATS parts - Common responsibility: 1.Overall project responsibility to ensure success criteria about on time, on budget and on specification, leading the project team to success 2.Managing the project risk and escalate topics to higher authorities if deviations from project targets are observed 3.Prepare and maintain all required project documentation 4.Prepare and carry out management meetings and project reviews (BOT, PRC) 5.Managing communication with customer and within the project team 6.Coordination sales planning and forecasts - Responsibility and interface towards calibration team and customer are accordance with the definition of project organization chart\n\n- Master or bachelor of engineering or similar technical oriented major - at least 2 years project management in technical oriented position or project management - Automotive experience a plus - Technical comprehension and understanding of complex processes - Good communication skills - Leadership ability - Fluent English 博世集团网上招聘数据处理同意声明 个人信息及目的：你的如下个人信息将被处理并用于招聘：姓名、电子邮箱、电话号码、所在地区、经验和教育信息、简历等应聘者自主提交的附件信息、证件号、职位、部门、计划入职日期、劳动合同持续时间、工作地点、月薪、年薪、浮动奖金比例、餐贴、车贴。 博世将依据相关的数据保护法规，在全球范围内对您的数据进行保密。招聘流程中，您的个人信息只有在必须时才会被提供给博世以外的第三方机构(如代理机构)。博世精心挑选了第三方机构并与之签订了保密合同。博世采取了种种保密措施以保护您的数据，确保其不会遭受操纵、丢失、破坏、未经授权的访问或泄漏。我们的安全措施将随着新技术的应用而不断升级。您的本地浏览器和我们的人才招募系统之间的数据传输通过https加密。 特定职位申请：申请博世集团的职位就意味着您将自己的个人信息提供给博世集团旗下相应的法律实体（具体请见博世集团法人清单）。请注意，若有任何文件或资料变更，请在所有申请书里一并变更。人力资源部门的员工可能与您联系，询问您是否同意将您的求职申请转向博世集团内部另一合适职位。如果您申请了特定职位，那么只有在您同意的情况下，博世才会将您的求职申请转向另一职位。 您可以随时撤回求职申请，博世将根据相关法律删除您的个人信息。与您的申请相关的所有资料将被保留至24个月。您的权利：若您希望停止向博世提供您的个人信息，可联系我们或通过博世网上招聘数据隐私声明中的BKMS系统提出申请。您可以在SmartRecruiters平台查阅和修改您的简历。您对您的个人信息的处理享有知情权、决定权，您有权限制或者拒绝我们对您的个人信息进行处理。您还可以更正、补充您的个人信息。 跨境传输：为了实现前述目的，我们所收集的您的个人信息可能会在多个国家或地区间进行跨境转移，例如德国、新加坡。 德国：罗伯特-博世有限公司（德国格宁根市罗伯特博世广场1号（Robert-Bosch-Platz 1, Gerlingen-Schillerhohe, Germany，邮编：70839），用于集团统一招聘管理（博世中国与数据接收方均基于该目的开展数据出境活动； 英国：SmartRecruiters（英国伯克郡温莎亚瑟路圣斯蒂芬大厦 邮政区码: SL4 1RU），用于招聘、后期交流联系及分享职位/活动信息、潜在人才社区邀请。 您可通过上述联系方式依法向境外接收方行使您在个人信息处理活动中的权利。 存储您的个人信息：我们将仅在为实现目的必要的范围内以及法律法规要求的时间内保留您的个人信息。 雇佣：被雇佣后，您提供的数据将被从当前招聘系统转移至职位所属公司的人力资源管理系统。联系方式： 请通过访问博世中国官方主页：博世在中国＞加入博世＞工作机会，在网上招聘数据隐私声明中“9.联系方式” 博世集团法人清单： 请通过访问博世中国官方主页：博世在中国＞加入博世＞工作机会，在网上招聘数据隐私声明中获取现阶段使用网上招聘系统的博世集团法人（第五页）\n\n• 该岗位内部推荐奖金为人民币3,000元整（仅限博世内部员工申请），具体请参见《博世中国内部推荐政策》 • Internal Referral bonus of this vacancy: RMB 3,000 (Valid only for Bosch associates). For the detailed regulation, please refer to Bosch China Internal Referral Policy",
+      "date_posted": "2026-09-04T09:10:50.981Z",
+      "source": "SmartRecruiters",
+      "verified_at": null
     }
   ],
   "excluded_sample": [
     {
-      "title": "Product Engineer (Full Stack)",
-      "company": "Maze",
+      "title": "Expert Java Developer (remote from Europe) - Deadline 17/09/26",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "Customer Success Associate",
-      "company": "AlphaSense",
+      "title": "Sharepoint Administrator (remote from Europe)",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "Customer Success - Australia Clients",
-      "company": "Sleek",
+      "title": "Business Analyst - Intermediate Level - Deadline 07/09/26",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "Senior Customer Experience Manager (Central)",
-      "company": "Wiz",
+      "title": "Expert Application Engineer / Administrator (2 positions) - Deadline 17/09/26",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "Senior Demand Generation Manager",
-      "company": "DataGrail",
+      "title": "Expert Application Engineer / Administrator - Deadline 14/09/26",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "Cyber Security GTM Leader",
-      "company": "Databricks",
+      "title": "Purview and Copilot Expert (remote from Europe)",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "Integratief Counselor",
-      "company": "BetterHelp",
+      "title": "Endpoint Administrator (Intune, Defender) - remote from Europe",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "Associate Solutions Architect (French or German fluency)",
-      "company": "GitLab",
+      "title": "Full Stack Developer",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "Mid Market Account Executive",
-      "company": "DataGrail",
+      "title": "Application Architect - Remote from EU",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "AI Engineer - FDE (Forward Deployed Engineer) - U.S. Federal Sector",
-      "company": "Databricks",
+      "title": "Policy Analyst Intermediate (Biotechnologies and pharmaceutical compliance) L3",
+      "company": "Almaviva de Belgique",
       "reason": "title outside target"
     },
     {
-      "title": "GZ-psycholoog",
-      "company": "BetterHelp",
+      "title": "DevOps Engineer",
+      "company": "Netcompany",
       "reason": "title outside target"
     },
     {
-      "title": "Customer Success Manager",
-      "company": "DataGrail",
+      "title": "Senior Product Manager",
+      "company": "Netcompany",
       "reason": "title outside target"
     },
     {
-      "title": "Pensions Project Manager",
-      "company": "WTW",
-      "reason": "remote not eligible from Romania"
-    },
-    {
-      "title": "Staff Product Designer",
-      "company": "Monzo",
+      "title": "Senior Scala Developer",
+      "company": "Netcompany",
       "reason": "title outside target"
     },
     {
-      "title": "Customer Success Manager, Corporate",
-      "company": "AlphaSense",
+      "title": "Senior Product Manager",
+      "company": "Netcompany",
       "reason": "title outside target"
     },
     {
-      "title": "Senior Software Engineer - REDAPL Graph Engine",
-      "company": "Datadog",
+      "title": "Senior Business Analyst",
+      "company": "Netcompany",
       "reason": "title outside target"
     },
     {
-      "title": "Presales Systems Engineer - Southern Germany",
-      "company": "Fortinet",
+      "title": "Lead Product Manager",
+      "company": "Netcompany",
       "reason": "title outside target"
     },
     {
-      "title": "Partner Sales Specialist",
-      "company": "Fortive",
+      "title": "Team Leader - IT Support (Onsite)",
+      "company": "Netcompany",
       "reason": "title outside target"
     },
     {
-      "title": "Engineering Manager - Linux Hardware Enablement",
-      "company": "Canonical",
+      "title": "Principal (German-speaking)",
+      "company": "Netcompany",
       "reason": "title outside target"
     },
     {
-      "title": "Legal Consultant - Asset Management / Securities",
-      "company": "Axiom",
+      "title": "Senior Operations & Application Support Engineer - freelance",
+      "company": "Netcompany",
+      "reason": "title outside target"
+    },
+    {
+      "title": "Operations & Application Support Engineer - freelance",
+      "company": "Netcompany",
       "reason": "title outside target"
     }
   ],
   "cross_source_duplicates_removed": 0,
   "incremental_sync": false,
-  "expired_pruned": 1,
+  "expired_pruned": 0,
   "jobspipe_usage": {
     "month_utc": "2026-09",
     "estimated_credits_used": 0,
