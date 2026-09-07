@@ -24,11 +24,10 @@ class FakeResponse:
 class SuccessFactorsTests(unittest.TestCase):
     def test_collect_parses_public_xml_feed(self):
         xml = b"""<?xml version='1.0' encoding='UTF-8'?>
-        <jobs><job><jobId>123</jobId><title>Project Manager</title>
-        <company>Example</company><city>Bucharest</city><country>RO</country>
-        <description><![CDATA[<p>Lead delivery</p>]]></description>
-        <jobtype>Full-time</jobtype><datePosted>2026-09-07</datePosted>
-        <url>https://career4.successfactors.com/job/123</url></job></jobs>"""
+        <Job-Listing><Job><ReqId>123</ReqId><JobTitle>Project Manager</JobTitle>
+        <Location>Bucharest, Romania</Location>
+        <Job-Description><![CDATA[<p>Lead delivery</p>]]></Job-Description>
+        <Posted-Date>2026-09-07</Posted-Date></Job></Job-Listing>"""
         opener = Mock(return_value=FakeResponse(xml, raw=True))
         result = successfactors.collect(
             "https://career4.successfactors.com/career", "EXAMPLE", "Example Co", opener=opener
@@ -36,11 +35,20 @@ class SuccessFactorsTests(unittest.TestCase):
         self.assertEqual(result.total_available, 1)
         record = result.records[0]
         self.assertEqual(record["id"], "successfactors:EXAMPLE:123")
-        self.assertEqual(record["countries"], ["Romania"])
+        self.assertEqual(record["location"], "Bucharest, Romania")
         self.assertIn("Lead delivery", record["description"])
+        self.assertEqual(record["date_posted"], "2026-09-07")
         request = opener.call_args.args[0]
         self.assertIn("resultType=XML", request.full_url)
         self.assertIn("company=EXAMPLE", request.full_url)
+
+    def test_legacy_lowercase_xml_is_tolerated(self):
+        xml = b"<jobs><job><jobId>1</jobId><title>PM</title><country>RO</country></job></jobs>"
+        opener = Mock(return_value=FakeResponse(xml, raw=True))
+        record = successfactors.collect(
+            "https://career4.successfactors.com/career", "EXAMPLE", "Example Co", opener=opener
+        )[0].records[0]
+        self.assertEqual(record["countries"], ["Romania"])
 
     def test_invalid_url_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "HTTPS"):
