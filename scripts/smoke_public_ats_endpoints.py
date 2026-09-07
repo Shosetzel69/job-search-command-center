@@ -46,7 +46,7 @@ def smartrecruiters():
 
 def greenhouse():
     status, payload = fetch_json(
-        "https://boards-api.greenhouse.io/v1/boards/clickhouse/jobs?content=true"
+        "https://boards-api.greenhouse.io/v1/boards/datadog/jobs?content=true"
     )
     assert status == 200 and isinstance(payload.get("jobs"), list)
     return f"{len(payload['jobs'])} postings"
