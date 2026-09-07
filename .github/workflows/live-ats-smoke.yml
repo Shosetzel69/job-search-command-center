@@ -1,0 +1,22 @@
+name: Live ATS Smoke
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/smoke_public_ats_endpoints.py'
+      - '.github/workflows/live-ats-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Run public ATS live smoke
+        run: python3 scripts/smoke_public_ats_endpoints.py
