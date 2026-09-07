@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Conectori
+
+- #60: adaugat connector Workday public CXS cu derivare tenant/site din career URL, paginare fixa de 20, detalii complete, normalizare in `CollectionResult` si teste izolate; nu este rutat sau activat in Source Registry pana la validarea live.
+
 ### Remedieri
 
 - #54: providerii generici LinkedIn, Indeed, Workday, Greenhouse, Workable, SmartRecruiters, Ashby si Lever nu mai sunt trimisi crawlerului web cat timp ruta dedicata este amanata; JobsPipe ramane dezactivat.
@@ -181,4 +185,3 @@
 ### Observatie istorica
 
 Prioritizarea initiala a maximum cinci surse a fost eliminata ulterior. Strategia curenta este `all active sources equally`.
-
