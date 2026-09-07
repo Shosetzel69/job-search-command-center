@@ -52,10 +52,7 @@ def _country_name(code):
     value = str(code or "").upper()
     if not value:
         return None
-    for name, known_code in engine.COUNTRY_NAME_TO_CODE.items():
-        if known_code == value:
-            return name
-    return value
+    return engine.COUNTRY_NAMES.get(value, value)
 
 
 def _description(detail):
