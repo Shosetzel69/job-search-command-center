@@ -1,12 +1,13 @@
 {
   "schema_version": "1.0",
-  "run_id": "github-20260907T151322Z",
+  "run_id": "github-20260907T190123Z",
   "status": "completed_with_errors",
-  "started_at": "2026-09-07T15:13:22.667104+00:00",
-  "completed_at": "2026-09-07T15:23:01.753512+00:00",
+  "started_at": "2026-09-07T19:01:23.268619+00:00",
+  "completed_at": "2026-09-07T19:12:54.270523+00:00",
   "sources": [
     "eJobs",
     "Hipo",
+    "Jobicy",
     "EURES",
     "EU Careers / EPSO",
     "EuroBrussels",
@@ -122,7 +123,7 @@
     "Fujitsu Belgium",
     "ARHS / Accenture"
   ],
-  "sources_processed": 116,
+  "sources_processed": 117,
   "failed_sources": [
     "eJobs",
     "Hipo",
@@ -177,7 +178,6 @@
     "Serco Europe",
     "CGI",
     "Sopra Steria",
-    "Thales",
     "ING Careers",
     "Deutsche Bank",
     "Societe Generale",
@@ -462,8 +462,8 @@
       "active": true,
       "status": "failed",
       "records": 2,
-      "error": "9 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
-      "failure_reason": "TimeoutError: The read operation timed out",
+      "error": "12 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+      "failure_reason": "12 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
       "web_outcome": "partial",
       "requested_url": "https://www.hipo.ro/",
       "final_url": "https://www.hipo.ro/",
@@ -471,13 +471,13 @@
       "robots_status": 200,
       "browser_attempted": true,
       "browser_status": "rendered",
-      "pages_attempted": 9,
-      "pages_fetched": 8,
+      "pages_attempted": 12,
+      "pages_fetched": 12,
       "jobs_detected": 2,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "9 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+        "12 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
@@ -494,22 +494,9 @@
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/targabsolventi/sectiune/4",
-          "requested_url": "https://www.hipo.ro/locuri-de-munca/targabsolventi/sectiune/4",
-          "final_url": "https://www.hipo.ro/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/269870/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
-          "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/269870/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/269870/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222205/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222205/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222205/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -520,9 +507,9 @@
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari---Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-%40Audit-Delivery-Academy-Bucharest/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
-          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari---Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-%40Audit-Delivery-Academy-Bucharest/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-@Audit-Delivery-Academy-Bucharest/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Altele,Internship,Management-Trainee/Campulung-Moldovenesc,Iasi,Suceava/Programe-de-internship%2c-trainee-sau-job-uri-entry-level-in-Bucovina/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Altele,Internship,Management-Trainee/Campulung-Moldovenesc,Iasi,Suceava/Programe-de-internship%2c-trainee-sau-job-uri-entry-level-in-Bucovina/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Altele,Internship,Management-Trainee/Campulung-Moldovenesc,Iasi,Suceava/Programe-de-internship%2c-trainee-sau-job-uri-entry-level-in-Bucovina/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -533,48 +520,9 @@
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest/2",
-          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest/2",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest/2",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest",
-          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest/3",
-          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest/3",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Asigurari-Intermedieri-financiare,Contabilitate-Finante,Internship/BUCURESTI,Ilfov/-Junior-Auditor-Audit-Delivery-Academy-Bucharest/3",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
-          "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
+          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222111/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222111/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222111/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -585,17 +533,108 @@
           "error": null
         },
         {
-          "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
-          "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
-          "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
-          "status": "error",
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-IT/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-IT/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-IT/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+          "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
           "records": 0,
           "browser_attempted": false,
           "browser_status": null,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/2",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/2",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/2",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/4",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/4",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/4",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/5",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/5",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/5",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/6",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/6",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/6",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/7",
+          "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/7",
+          "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/7",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
         }
       ],
       "queries": [
@@ -609,7 +648,7 @@
           "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "9 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+          "error": "12 pages attempted; 2 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -620,10 +659,18 @@
       "connector": "jobicy",
       "collection_method": "jobicy",
       "active": true,
-      "status": "skipped",
-      "records": 0,
-      "error": "Jobicy hourly polling limit; no API call",
-      "failure_reason": "Jobicy hourly polling limit; no API call"
+      "status": "completed",
+      "records": 200,
+      "error": null,
+      "failure_reason": null,
+      "queries": [
+        {
+          "query": "latest_200",
+          "status": "completed",
+          "records": 200,
+          "error": null
+        }
+      ]
     },
     {
       "source": "EURES",
@@ -2105,12 +2152,12 @@
       "status": "failed",
       "records": 0,
       "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
-      "failure_reason": "HTTP 202",
-      "web_outcome": "error",
+      "failure_reason": "Bot challenge; no bypass attempted",
+      "web_outcome": "blocked",
       "requested_url": "https://euremotejobs.com/",
       "final_url": "https://euremotejobs.com/",
-      "http_status": null,
-      "robots_status": null,
+      "http_status": 200,
+      "robots_status": 200,
       "browser_attempted": false,
       "browser_status": "not_attempted",
       "pages_attempted": 1,
@@ -2126,19 +2173,19 @@
           "query": "https://euremotejobs.com/",
           "requested_url": "https://euremotejobs.com/",
           "final_url": "https://euremotejobs.com/",
-          "status": "error",
+          "status": "blocked",
           "transport": "http",
-          "http_status": 202,
+          "http_status": 200,
           "robots_status": 200,
           "records": 0,
           "browser_attempted": false,
           "browser_status": null,
-          "error": "HTTP 202"
+          "error": "Bot challenge; no bypass attempted"
         }
       ],
       "queries": [
         {
-          "query": "error",
+          "query": "blocked",
           "status": "failed",
           "records": 0,
           "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
@@ -2303,23 +2350,23 @@
       "collection_method": "http+browser",
       "active": true,
       "status": "failed",
-      "records": 9,
-      "error": "12 pages attempted; 9 JobPosting nodes; 9 valid records; 0 expired; 0 malformed; browser fallback partial; page/time/link budget reached; coverage is partial",
-      "failure_reason": "browser: Browser render timeout",
+      "records": 5,
+      "error": "12 pages attempted; 9 JobPosting nodes; 5 valid records; 4 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+      "failure_reason": "12 pages attempted; 9 JobPosting nodes; 5 valid records; 4 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
       "web_outcome": "partial",
       "requested_url": "https://flexa.careers/jobs",
       "final_url": "https://flexa.careers/jobs",
       "http_status": 200,
       "robots_status": 200,
       "browser_attempted": true,
-      "browser_status": "partial",
+      "browser_status": "rendered",
       "pages_attempted": 12,
       "pages_fetched": 12,
       "jobs_detected": 9,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "12 pages attempted; 9 JobPosting nodes; 9 valid records; 0 expired; 0 malformed; browser fallback partial; page/time/link budget reached; coverage is partial"
+        "12 pages attempted; 9 JobPosting nodes; 5 valid records; 4 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
@@ -2332,13 +2379,13 @@
           "robots_status": 200,
           "records": 0,
           "browser_attempted": true,
-          "browser_status": "partial",
-          "error": "browser: Browser render timeout"
+          "browser_status": "rendered",
+          "error": null
         },
         {
-          "query": "https://flexa.careers/companies/categories/job-sharing",
-          "requested_url": "https://flexa.careers/companies/categories/job-sharing",
-          "final_url": "https://flexa.careers/companies/categories/job-sharing",
+          "query": "https://flexa.careers/content-hub/find-your-dream-job",
+          "requested_url": "https://flexa.careers/content-hub/find-your-dream-job",
+          "final_url": "https://flexa.careers/content-hub/find-your-dream-job",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2349,9 +2396,9 @@
           "error": null
         },
         {
-          "query": "https://flexa.careers/companies/adaptavist",
-          "requested_url": "https://flexa.careers/companies/adaptavist",
-          "final_url": "https://flexa.careers/companies/adaptavist",
+          "query": "https://flexa.careers/content-hub/thrive-in-my-career",
+          "requested_url": "https://flexa.careers/content-hub/thrive-in-my-career",
+          "final_url": "https://flexa.careers/content-hub/thrive-in-my-career",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2362,9 +2409,9 @@
           "error": null
         },
         {
-          "query": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a91ab22e13b02c997d8a9ea",
-          "requested_url": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a91ab22e13b02c997d8a9ea",
-          "final_url": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a91ab22e13b02c997d8a9ea",
+          "query": "https://flexa.careers/jobs/flexa-sales-development-representative-sdr-6a7f19ec4e6580305629f387",
+          "requested_url": "https://flexa.careers/jobs/flexa-sales-development-representative-sdr-6a7f19ec4e6580305629f387",
+          "final_url": "https://flexa.careers/jobs/flexa-sales-development-representative-sdr-6a7f19ec4e6580305629f387",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2375,9 +2422,22 @@
           "error": null
         },
         {
-          "query": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a9693db5b965d505b5544c4",
-          "requested_url": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a9693db5b965d505b5544c4",
-          "final_url": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a9693db5b965d505b5544c4",
+          "query": "https://flexa.careers/jobs/gearset-business-development-representative-6a4d349ef9224952776adc59",
+          "requested_url": "https://flexa.careers/jobs/gearset-business-development-representative-6a4d349ef9224952776adc59",
+          "final_url": "https://flexa.careers/jobs/gearset-business-development-representative-6a4d349ef9224952776adc59",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://flexa.careers/jobs/gearset-account-executive-mid-market-6a6b8142921e7a3f342bd28a",
+          "requested_url": "https://flexa.careers/jobs/gearset-account-executive-mid-market-6a6b8142921e7a3f342bd28a",
+          "final_url": "https://flexa.careers/jobs/gearset-account-executive-mid-market-6a6b8142921e7a3f342bd28a",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2388,9 +2448,22 @@
           "error": null
         },
         {
-          "query": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a9813ff45208c56d2b7029e",
-          "requested_url": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a9813ff45208c56d2b7029e",
-          "final_url": "https://flexa.careers/jobs/adaptavist-project-management-office-administrator-6a9813ff45208c56d2b7029e",
+          "query": "https://flexa.careers/jobs/boomi-mid-market-account-executive-vancouver-hybrid-future-opportunities-6a18fcfefa4e51ca42e44f08",
+          "requested_url": "https://flexa.careers/jobs/boomi-mid-market-account-executive-vancouver-hybrid-future-opportunities-6a18fcfefa4e51ca42e44f08",
+          "final_url": "https://flexa.careers/jobs/boomi-mid-market-account-executive-vancouver-hybrid-future-opportunities-6a18fcfefa4e51ca42e44f08",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://flexa.careers/jobs/boomi-corporate-account-executive-vancouver-hybrid-future-opportunities-6a5969425f0597660a5204e2",
+          "requested_url": "https://flexa.careers/jobs/boomi-corporate-account-executive-vancouver-hybrid-future-opportunities-6a5969425f0597660a5204e2",
+          "final_url": "https://flexa.careers/jobs/boomi-corporate-account-executive-vancouver-hybrid-future-opportunities-6a5969425f0597660a5204e2",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2401,9 +2474,22 @@
           "error": null
         },
         {
-          "query": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8dc2d2355913e5ca291940",
-          "requested_url": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8dc2d2355913e5ca291940",
-          "final_url": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8dc2d2355913e5ca291940",
+          "query": "https://flexa.careers/jobs/boomi-emerging-growth-account-manager-vancouver-hybrid-future-opportunities-6a188fc6c175e813e4f916bf",
+          "requested_url": "https://flexa.careers/jobs/boomi-emerging-growth-account-manager-vancouver-hybrid-future-opportunities-6a188fc6c175e813e4f916bf",
+          "final_url": "https://flexa.careers/jobs/boomi-emerging-growth-account-manager-vancouver-hybrid-future-opportunities-6a188fc6c175e813e4f916bf",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://flexa.careers/jobs/boomi-mid-market-account-executive-remote-fort-lauderdale-miami-6a6903039b1e6d1682ebeab2",
+          "requested_url": "https://flexa.careers/jobs/boomi-mid-market-account-executive-remote-fort-lauderdale-miami-6a6903039b1e6d1682ebeab2",
+          "final_url": "https://flexa.careers/jobs/boomi-mid-market-account-executive-remote-fort-lauderdale-miami-6a6903039b1e6d1682ebeab2",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2414,9 +2500,9 @@
           "error": null
         },
         {
-          "query": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8dc2d2355913e5ca291941",
-          "requested_url": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8dc2d2355913e5ca291941",
-          "final_url": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8dc2d2355913e5ca291941",
+          "query": "https://flexa.careers/jobs/boomi-mid-market-account-executive-remote-new-jersey-6a6903039b1e6d1682ebeab3",
+          "requested_url": "https://flexa.careers/jobs/boomi-mid-market-account-executive-remote-new-jersey-6a6903039b1e6d1682ebeab3",
+          "final_url": "https://flexa.careers/jobs/boomi-mid-market-account-executive-remote-new-jersey-6a6903039b1e6d1682ebeab3",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2427,53 +2513,14 @@
           "error": null
         },
         {
-          "query": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8f1147afc57554d1ecb161",
-          "requested_url": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8f1147afc57554d1ecb161",
-          "final_url": "https://flexa.careers/jobs/adaptavist-regional-head-of-project-management-office-6a8f1147afc57554d1ecb161",
+          "query": "https://flexa.careers/jobs/boomi-mid-market-account-manager-financial-services-banking-east-coast-us-6a45655ab8443974107772c7",
+          "requested_url": "https://flexa.careers/jobs/boomi-mid-market-account-manager-financial-services-banking-east-coast-us-6a45655ab8443974107772c7",
+          "final_url": "https://flexa.careers/jobs/boomi-mid-market-account-manager-financial-services-banking-east-coast-us-6a45655ab8443974107772c7",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://flexa.careers/jobs/adaptavist-services-programme-delivery-manager-f-m-d-german-speaker-6a8346fe59604e3f4d978112",
-          "requested_url": "https://flexa.careers/jobs/adaptavist-services-programme-delivery-manager-f-m-d-german-speaker-6a8346fe59604e3f4d978112",
-          "final_url": "https://flexa.careers/jobs/adaptavist-services-programme-delivery-manager-f-m-d-german-speaker-6a8346fe59604e3f4d978112",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://flexa.careers/jobs/tyk-junior-agile-delivery-coordinator-6a849f86710650ecd9f482aa",
-          "requested_url": "https://flexa.careers/jobs/tyk-junior-agile-delivery-coordinator-6a849f86710650ecd9f482aa",
-          "final_url": "https://flexa.careers/jobs/tyk-junior-agile-delivery-coordinator-6a849f86710650ecd9f482aa",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://flexa.careers/jobs/tyk-senior-project-manager-marketing-commercial-emea-6a62643df2c0e2059b387a1f",
-          "requested_url": "https://flexa.careers/jobs/tyk-senior-project-manager-marketing-commercial-emea-6a62643df2c0e2059b387a1f",
-          "final_url": "https://flexa.careers/jobs/tyk-senior-project-manager-marketing-commercial-emea-6a62643df2c0e2059b387a1f",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
+          "records": 0,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
@@ -2483,14 +2530,14 @@
         {
           "query": "web_pages",
           "status": "completed",
-          "records": 9,
+          "records": 5,
           "error": null
         },
         {
           "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 9 JobPosting nodes; 9 valid records; 0 expired; 0 malformed; browser fallback partial; page/time/link budget reached; coverage is partial"
+          "error": "12 pages attempted; 9 JobPosting nodes; 5 valid records; 4 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -2502,9 +2549,9 @@
       "collection_method": "http+browser",
       "active": true,
       "status": "failed",
-      "records": 7,
-      "error": "12 pages attempted; 7 JobPosting nodes; 7 valid records; 0 expired; 0 malformed; browser fallback blocked; page/time/link budget reached; coverage is partial",
-      "failure_reason": "browser: Browser HTTP 403; 'ascii' codec can't encode character '\\u0142' in position 10: ordinal not in range(128); 'ascii' codec can't encode character '\\xf3' in position 10: ordinal not in range(128)",
+      "records": 5,
+      "error": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; browser fallback blocked; page/time/link budget reached; coverage is partial",
+      "failure_reason": "browser: Browser HTTP 403; 'ascii' codec can't encode character '\\xf3' in position 10: ordinal not in range(128)",
       "web_outcome": "partial",
       "requested_url": "https://nofluffjobs.com/",
       "final_url": "https://nofluffjobs.com/",
@@ -2513,12 +2560,12 @@
       "browser_attempted": true,
       "browser_status": "blocked",
       "pages_attempted": 12,
-      "pages_fetched": 10,
-      "jobs_detected": 7,
+      "pages_fetched": 11,
+      "jobs_detected": 5,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "12 pages attempted; 7 JobPosting nodes; 7 valid records; 0 expired; 0 malformed; browser fallback blocked; page/time/link budget reached; coverage is partial"
+        "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; browser fallback blocked; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
@@ -2535,48 +2582,9 @@
           "error": "browser: Browser HTTP 403"
         },
         {
-          "query": "https://nofluffjobs.com/job/business-analyst-it-consultant-z-j-niemieckim-customer-intelligence-b2b-dmtech-remote",
-          "requested_url": "https://nofluffjobs.com/job/business-analyst-it-consultant-z-j-niemieckim-customer-intelligence-b2b-dmtech-remote",
-          "final_url": "https://nofluffjobs.com/job/business-analyst-it-consultant-z-j-niemieckim-customer-intelligence-b2b-dmtech-remote",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://nofluffjobs.com/job/engineering-manager-z-jezykiem-niemieckim--dmtech-wroclaw",
-          "requested_url": "https://nofluffjobs.com/job/engineering-manager-z-jezykiem-niemieckim--dmtech-wroclaw",
-          "final_url": "https://nofluffjobs.com/job/engineering-manager-z-jezykiem-niemieckim--dmtech-wroclaw",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://nofluffjobs.com//Wrocław?criteria=category=project-manager",
-          "requested_url": "https://nofluffjobs.com//Wrocław?criteria=category=project-manager",
-          "final_url": "https://nofluffjobs.com/job/engineering-manager-z-jezykiem-niemieckim--dmtech-wroclaw",
-          "status": "error",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": "'ascii' codec can't encode character '\\u0142' in position 10: ordinal not in range(128)"
-        },
-        {
-          "query": "https://nofluffjobs.com//project-manager",
-          "requested_url": "https://nofluffjobs.com//project-manager",
-          "final_url": "https://nofluffjobs.com//project-manager",
+          "query": "https://nofluffjobs.com/project-manager",
+          "requested_url": "https://nofluffjobs.com/project-manager",
+          "final_url": "https://nofluffjobs.com/project-manager",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2626,6 +2634,19 @@
           "error": "'ascii' codec can't encode character '\\xf3' in position 10: ordinal not in range(128)"
         },
         {
+          "query": "https://nofluffjobs.com//project-manager",
+          "requested_url": "https://nofluffjobs.com//project-manager",
+          "final_url": "https://nofluffjobs.com//project-manager",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
           "query": "https://nofluffjobs.com/job/agile-project-lead-boldare-gliwice-2",
           "requested_url": "https://nofluffjobs.com/job/agile-project-lead-boldare-gliwice-2",
           "final_url": "https://nofluffjobs.com/job/agile-project-lead-boldare-gliwice-2",
@@ -2652,9 +2673,9 @@
           "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/commercial-project-specialist-antal-wroclaw",
-          "requested_url": "https://nofluffjobs.com/job/commercial-project-specialist-antal-wroclaw",
-          "final_url": "https://nofluffjobs.com/job/commercial-project-specialist-antal-wroclaw",
+          "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-apreel-remote",
+          "requested_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-apreel-remote",
+          "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-apreel-remote",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2665,14 +2686,40 @@
           "error": null
         },
         {
-          "query": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
-          "requested_url": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
-          "final_url": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
+          "query": "https://nofluffjobs.com//remote?criteria=category=project-manager",
+          "requested_url": "https://nofluffjobs.com//remote?criteria=category=project-manager",
+          "final_url": "https://nofluffjobs.com//remote?criteria=category=project-manager",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://nofluffjobs.com/job/case-manager-ework-group-warszawa",
+          "requested_url": "https://nofluffjobs.com/job/case-manager-ework-group-warszawa",
+          "final_url": "https://nofluffjobs.com/job/case-manager-ework-group-warszawa",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
           "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://nofluffjobs.com//Warszawa?criteria=category=project-manager",
+          "requested_url": "https://nofluffjobs.com//Warszawa?criteria=category=project-manager",
+          "final_url": "https://nofluffjobs.com//Warszawa?criteria=category=project-manager",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
@@ -2682,14 +2729,14 @@
         {
           "query": "web_pages",
           "status": "completed",
-          "records": 7,
+          "records": 5,
           "error": null
         },
         {
           "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 7 JobPosting nodes; 7 valid records; 0 expired; 0 malformed; browser fallback blocked; page/time/link budget reached; coverage is partial"
+          "error": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; browser fallback blocked; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -2701,9 +2748,9 @@
       "collection_method": "http+browser",
       "active": true,
       "status": "failed",
-      "records": 9,
-      "error": "11 pages attempted; 9 JobPosting nodes; 9 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
-      "failure_reason": "TimeoutError: The read operation timed out",
+      "records": 11,
+      "error": "12 pages attempted; 11 JobPosting nodes; 11 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+      "failure_reason": "12 pages attempted; 11 JobPosting nodes; 11 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
       "web_outcome": "partial",
       "requested_url": "https://justjoin.it/",
       "final_url": "https://justjoin.it/",
@@ -2711,13 +2758,13 @@
       "robots_status": 200,
       "browser_attempted": true,
       "browser_status": "rendered",
-      "pages_attempted": 11,
-      "pages_fetched": 10,
-      "jobs_detected": 9,
+      "pages_attempted": 12,
+      "pages_fetched": 12,
+      "jobs_detected": 11,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "11 pages attempted; 9 JobPosting nodes; 9 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+        "12 pages attempted; 11 JobPosting nodes; 11 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
@@ -2734,9 +2781,48 @@
           "error": null
         },
         {
-          "query": "https://justjoin.it//job-offer/develtio-project-manager-warszawa-pm-d29b6a07",
-          "requested_url": "https://justjoin.it//job-offer/develtio-project-manager-warszawa-pm-d29b6a07",
-          "final_url": "https://justjoin.it/job-offer/develtio-project-manager-warszawa-pm-d29b6a07",
+          "query": "https://justjoin.it//job-offer/emagine-polska-pmo-network-h-f--paris-pm",
+          "requested_url": "https://justjoin.it//job-offer/emagine-polska-pmo-network-h-f--paris-pm",
+          "final_url": "https://justjoin.it/job-offer/emagine-polska-pmo-network-h-f--paris-pm",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://justjoin.it//job-offer/avenga-project-manager-pmo-warszawa-pm",
+          "requested_url": "https://justjoin.it//job-offer/avenga-project-manager-pmo-warszawa-pm",
+          "final_url": "https://justjoin.it/job-offer/avenga-project-manager-pmo-warszawa-pm",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://justjoin.it//job-offer/b2bnetwork-project-manager-pmo-ai-r-d--warszawa-pm",
+          "requested_url": "https://justjoin.it//job-offer/b2bnetwork-project-manager-pmo-ai-r-d--warszawa-pm",
+          "final_url": "https://justjoin.it/job-offer/b2bnetwork-project-manager-pmo-ai-r-d--warszawa-pm",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://justjoin.it//job-offer/c--test-pmo-manager-rzeszow-pm",
+          "requested_url": "https://justjoin.it//job-offer/c--test-pmo-manager-rzeszow-pm",
+          "final_url": "https://justjoin.it/job-offer/c--test-pmo-manager-rzeszow-pm",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2760,9 +2846,35 @@
           "error": null
         },
         {
+          "query": "https://justjoin.it//job-offer/dcg-project-manager-pmo-warszawa-pm",
+          "requested_url": "https://justjoin.it//job-offer/dcg-project-manager-pmo-warszawa-pm",
+          "final_url": "https://justjoin.it/job-offer/dcg-project-manager-pmo-warszawa-pm",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
           "query": "https://justjoin.it//job-offer/emagine-polska-agile-delivery-lead-lodz-pm",
           "requested_url": "https://justjoin.it//job-offer/emagine-polska-agile-delivery-lead-lodz-pm",
           "final_url": "https://justjoin.it/job-offer/emagine-polska-agile-delivery-lead-lodz-pm",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://justjoin.it//job-offer/emagine-polska-pm-pmo-analyst--warsaw-pm",
+          "requested_url": "https://justjoin.it//job-offer/emagine-polska-pm-pmo-analyst--warsaw-pm",
+          "final_url": "https://justjoin.it/job-offer/emagine-polska-pm-pmo-analyst--warsaw-pm",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -2786,6 +2898,19 @@
           "error": null
         },
         {
+          "query": "https://justjoin.it//job-offer/develtio-project-manager-warszawa-pm-d29b6a07",
+          "requested_url": "https://justjoin.it//job-offer/develtio-project-manager-warszawa-pm-d29b6a07",
+          "final_url": "https://justjoin.it/job-offer/develtio-project-manager-warszawa-pm-d29b6a07",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
           "query": "https://justjoin.it//job-offer/er-group-scrum-master-warszawa-pm-bd8eb89c",
           "requested_url": "https://justjoin.it//job-offer/er-group-scrum-master-warszawa-pm-bd8eb89c",
           "final_url": "https://justjoin.it/job-offer/er-group-scrum-master-warszawa-pm-bd8eb89c",
@@ -2797,85 +2922,20 @@
           "browser_attempted": false,
           "browser_status": null,
           "error": null
-        },
-        {
-          "query": "https://justjoin.it//job-offer/antal-sp-z-o-o--scrum-master-krakow-pm-4f8ee813",
-          "requested_url": "https://justjoin.it//job-offer/antal-sp-z-o-o--scrum-master-krakow-pm-4f8ee813",
-          "final_url": "https://justjoin.it/job-offer/antal-sp-z-o-o--scrum-master-krakow-pm-4f8ee813",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://justjoin.it//job-offer/euroclear-scrum-master-in-data-management-team-krakow-pm",
-          "requested_url": "https://justjoin.it//job-offer/euroclear-scrum-master-in-data-management-team-krakow-pm",
-          "final_url": "https://justjoin.it/job-offer/euroclear-scrum-master-in-data-management-team-krakow-pm",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://justjoin.it//job-offer/capgemini-project-management-specialist-innovation-npd--katowice-pm",
-          "requested_url": "https://justjoin.it//job-offer/capgemini-project-management-specialist-innovation-npd--katowice-pm",
-          "final_url": "https://justjoin.it/job-offer/capgemini-project-management-specialist-innovation-npd--katowice-pm",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://justjoin.it//job-offer/advox-studio-it-project-manager-warszawa-pm-99c2b6eb",
-          "requested_url": "https://justjoin.it//job-offer/advox-studio-it-project-manager-warszawa-pm-99c2b6eb",
-          "final_url": "https://justjoin.it/job-offer/advox-studio-it-project-manager-warszawa-pm-99c2b6eb",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://justjoin.it//job-offer/awareson-sp-z-o-o--it-project-manager-warszawa-pm-f83df649",
-          "requested_url": "https://justjoin.it/job-offer/awareson-sp-z-o-o--it-project-manager-warszawa-pm-f83df649",
-          "final_url": "https://justjoin.it//job-offer/awareson-sp-z-o-o--it-project-manager-warszawa-pm-f83df649",
-          "status": "error",
-          "transport": "http",
-          "http_status": 308,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": "TimeoutError: The read operation timed out"
         }
       ],
       "queries": [
         {
           "query": "web_pages",
           "status": "completed",
-          "records": 9,
+          "records": 11,
           "error": null
         },
         {
           "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "11 pages attempted; 9 JobPosting nodes; 9 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+          "error": "12 pages attempted; 11 JobPosting nodes; 11 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -3856,7 +3916,7 @@
         {
           "query": "https://torre.ai/create-job",
           "requested_url": "https://torre.ai/create-job",
-          "final_url": "https://accounts.torre.ai/email/?next=/openid/authorize%3Fscope%3Dopenid%2Bprofile%2Bemail%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Ftorre.ai%252Fcallback%253Fclient_name%253Dstarrgate%26state%3D8pDhsBhE1IIGuOu7FZ8QPL7uNNidmz4mK9_qP2IajwU%26intent%3Djob-post%253Acreate-opening%26client_id%3D541493",
+          "final_url": "https://accounts.torre.ai/email/?next=/openid/authorize%3Fscope%3Dopenid%2Bprofile%2Bemail%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Ftorre.ai%252Fcallback%253Fclient_name%253Dstarrgate%26state%3DZmbnUIWFUeU6Ao56BMvh-NyOLrEH3qYrz4CTBIU39hE%26intent%3Djob-post%253Acreate-opening%26client_id%3D541493",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -3895,7 +3955,7 @@
         {
           "query": "https://torre.ai/recruit",
           "requested_url": "https://torre.ai/recruit",
-          "final_url": "https://accounts.torre.ai/email/?next=/openid/authorize%3Fscope%3Dopenid%2Bprofile%2Bemail%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Ftorre.ai%252Fcallback%253Fclient_name%253Dstarrgate%26state%3Dp5aJVvXiJbXKY_iAIqblQnqtgYPnT74mQ7kpM-C3iQg%26intent%3Djob-post%253Acreate-opening%26client_id%3D541493",
+          "final_url": "https://accounts.torre.ai/email/?next=/openid/authorize%3Fscope%3Dopenid%2Bprofile%2Bemail%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Ftorre.ai%252Fcallback%253Fclient_name%253Dstarrgate%26state%3Dz2ufisK6d0-zuFVYzhQN6gDcZ-q1A5JJaUFaqBLOXV4%26intent%3Djob-post%253Acreate-opening%26client_id%3D541493",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4752,9 +4812,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/ai-devsecops-engineer-3044699",
-          "requested_url": "https://www.freelancermap.com/project/ai-devsecops-engineer-3044699",
-          "final_url": "https://www.freelancermap.com/project/ai-devsecops-engineer-3044699",
+          "query": "https://www.freelancermap.com/project/business-operations-analyst-3044804",
+          "requested_url": "https://www.freelancermap.com/project/business-operations-analyst-3044804",
+          "final_url": "https://www.freelancermap.com/project/business-operations-analyst-3044804",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4765,9 +4825,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/application-und-ai-resource",
-          "requested_url": "https://www.freelancermap.com/project/application-und-ai-resource",
-          "final_url": "https://www.freelancermap.com/project/application-und-ai-resource",
+          "query": "https://www.freelancermap.com/project/contract-safety-engineer-land",
+          "requested_url": "https://www.freelancermap.com/project/contract-safety-engineer-land",
+          "final_url": "https://www.freelancermap.com/project/contract-safety-engineer-land",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4778,9 +4838,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/database-administrator-3044696",
-          "requested_url": "https://www.freelancermap.com/project/database-administrator-3044696",
-          "final_url": "https://www.freelancermap.com/project/database-administrator-3044696",
+          "query": "https://www.freelancermap.com/project/credit-risk-modeler-london-hybrid-700p-d-inside-ir35",
+          "requested_url": "https://www.freelancermap.com/project/credit-risk-modeler-london-hybrid-700p-d-inside-ir35",
+          "final_url": "https://www.freelancermap.com/project/credit-risk-modeler-london-hybrid-700p-d-inside-ir35",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4791,9 +4851,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/full-stack-gitops-engineer-3044622",
-          "requested_url": "https://www.freelancermap.com/project/full-stack-gitops-engineer-3044622",
-          "final_url": "https://www.freelancermap.com/project/full-stack-gitops-engineer-3044622",
+          "query": "https://www.freelancermap.com/project/cyber-asset-management-analyst",
+          "requested_url": "https://www.freelancermap.com/project/cyber-asset-management-analyst",
+          "final_url": "https://www.freelancermap.com/project/cyber-asset-management-analyst",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4804,9 +4864,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/identity-resource",
-          "requested_url": "https://www.freelancermap.com/project/identity-resource",
-          "final_url": "https://www.freelancermap.com/project/identity-resource",
+          "query": "https://www.freelancermap.com/project/cyber-asset-management-analyst-3044795",
+          "requested_url": "https://www.freelancermap.com/project/cyber-asset-management-analyst-3044795",
+          "final_url": "https://www.freelancermap.com/project/cyber-asset-management-analyst-3044795",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4817,9 +4877,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/infrastructure-f5-engineer",
-          "requested_url": "https://www.freelancermap.com/project/infrastructure-f5-engineer",
-          "final_url": "https://www.freelancermap.com/project/infrastructure-f5-engineer",
+          "query": "https://www.freelancermap.com/project/data-architect-3044800",
+          "requested_url": "https://www.freelancermap.com/project/data-architect-3044800",
+          "final_url": "https://www.freelancermap.com/project/data-architect-3044800",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4830,9 +4890,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/java-developer-3044624",
-          "requested_url": "https://www.freelancermap.com/project/java-developer-3044624",
-          "final_url": "https://www.freelancermap.com/project/java-developer-3044624",
+          "query": "https://www.freelancermap.com/project/deputy-director-erp-workday-enterprise-resource-planning-finance-hr-sc-cleared-hybrid",
+          "requested_url": "https://www.freelancermap.com/project/deputy-director-erp-workday-enterprise-resource-planning-finance-hr-sc-cleared-hybrid",
+          "final_url": "https://www.freelancermap.com/project/deputy-director-erp-workday-enterprise-resource-planning-finance-hr-sc-cleared-hybrid",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4843,9 +4903,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/java-developer-3044627",
-          "requested_url": "https://www.freelancermap.com/project/java-developer-3044627",
-          "final_url": "https://www.freelancermap.com/project/java-developer-3044627",
+          "query": "https://www.freelancermap.com/project/desktop-support-engineer-3044816",
+          "requested_url": "https://www.freelancermap.com/project/desktop-support-engineer-3044816",
+          "final_url": "https://www.freelancermap.com/project/desktop-support-engineer-3044816",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4856,9 +4916,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/java-sdet-azure-databricks",
-          "requested_url": "https://www.freelancermap.com/project/java-sdet-azure-databricks",
-          "final_url": "https://www.freelancermap.com/project/java-sdet-azure-databricks",
+          "query": "https://www.freelancermap.com/project/digital-data-pharmacovigilance-manager",
+          "requested_url": "https://www.freelancermap.com/project/digital-data-pharmacovigilance-manager",
+          "final_url": "https://www.freelancermap.com/project/digital-data-pharmacovigilance-manager",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -4869,9 +4929,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancermap.com/project/medior-red-hat-openshift-dev-ops-engineer",
-          "requested_url": "https://www.freelancermap.com/project/medior-red-hat-openshift-dev-ops-engineer",
-          "final_url": "https://www.freelancermap.com/project/medior-red-hat-openshift-dev-ops-engineer",
+          "query": "https://www.freelancermap.com/project/fullstack-engineer-3044797",
+          "requested_url": "https://www.freelancermap.com/project/fullstack-engineer-3044797",
+          "final_url": "https://www.freelancermap.com/project/fullstack-engineer-3044797",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5344,7 +5404,7 @@
       "status": "failed",
       "records": 0,
       "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-      "failure_reason": "Page exceeds 2 MiB limit; Disallowed by robots.txt",
+      "failure_reason": "Page exceeds 2 MiB limit",
       "web_outcome": "no_extractable_jobs",
       "requested_url": "https://www.freelancer.com/jobs/",
       "final_url": "https://www.freelancer.com/jobs/",
@@ -5353,7 +5413,7 @@
       "browser_attempted": true,
       "browser_status": "rendered",
       "pages_attempted": 12,
-      "pages_fetched": 10,
+      "pages_fetched": 11,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
@@ -5375,9 +5435,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancer.com/jobs/c-programming/",
-          "requested_url": "https://www.freelancer.com/jobs/c-programming/",
-          "final_url": "https://www.freelancer.com/jobs/c-programming/",
+          "query": "https://www.freelancer.com/jobs/agile-project-management/",
+          "requested_url": "https://www.freelancer.com/jobs/agile-project-management/",
+          "final_url": "https://www.freelancer.com/jobs/agile-project-management/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5388,9 +5448,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancer.com/hire/c-programming",
-          "requested_url": "https://www.freelancer.com/hire/c-programming",
-          "final_url": "https://www.freelancer.com/jobs/c-programming/",
+          "query": "https://www.freelancer.com/hire/agile-project-management",
+          "requested_url": "https://www.freelancer.com/hire/agile-project-management",
+          "final_url": "https://www.freelancer.com/jobs/agile-project-management/",
           "status": "partial",
           "transport": "http",
           "http_status": 200,
@@ -5401,9 +5461,9 @@
           "error": "Page exceeds 2 MiB limit"
         },
         {
-          "query": "https://www.freelancer.com/job-search/C-programming/",
-          "requested_url": "https://www.freelancer.com/job-search/C-programming/",
-          "final_url": "https://www.freelancer.com/job-search/C-programming/",
+          "query": "https://www.freelancer.com/job-search/agile-crash-course-agile-project-management-agile-delivery-download/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-crash-course-agile-project-management-agile-delivery-download/",
+          "final_url": "https://www.freelancer.com/job-search/agile-crash-course-agile-project-management-agile-delivery-download/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5414,9 +5474,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancer.com/community/articles/the-net-guide-for-new-programmers",
-          "requested_url": "https://www.freelancer.com/community/articles/the-net-guide-for-new-programmers",
-          "final_url": "https://www.freelancer.com/community/articles/the-net-guide-for-new-programmers",
+          "query": "https://www.freelancer.com/job-search/agile-project-management-book/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-project-management-book/",
+          "final_url": "https://www.freelancer.com/job-search/agile-project-management-book/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5427,9 +5487,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancer.com/community/articles/what-makes-a-good-project-proposal",
-          "requested_url": "https://www.freelancer.com/community/articles/what-makes-a-good-project-proposal",
-          "final_url": "https://www.freelancer.com/community/articles/what-makes-a-good-project-proposal",
+          "query": "https://www.freelancer.com/job-search/agile-project-management-certification/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-project-management-certification/",
+          "final_url": "https://www.freelancer.com/job-search/agile-project-management-certification/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5440,9 +5500,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancer.com/community/articles/what-is-the-preferred-freelancer-program",
-          "requested_url": "https://www.freelancer.com/community/articles/what-is-the-preferred-freelancer-program",
-          "final_url": "https://www.freelancer.com/community/articles/what-is-the-preferred-freelancer-program",
+          "query": "https://www.freelancer.com/job-search/agile-project-management-course/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-project-management-course/",
+          "final_url": "https://www.freelancer.com/job-search/agile-project-management-course/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5453,22 +5513,9 @@
           "error": null
         },
         {
-          "query": "http://www.freelancer.com/search/projects/",
-          "requested_url": "https://www.freelancer.com/work/projects/?ngsw-bypass=&redirect-times=1&w=f",
-          "final_url": "https://www.freelancer.com/work/projects/?ngsw-bypass=&redirect-times=1&w=f",
-          "status": "blocked",
-          "transport": "http",
-          "http_status": 307,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": "Disallowed by robots.txt"
-        },
-        {
-          "query": "https://www.freelancer.com/community/articles/what-programming-languages-should-you-learn-first",
-          "requested_url": "https://www.freelancer.com/community/articles/what-programming-languages-should-you-learn-first",
-          "final_url": "https://www.freelancer.com/community/articles/what-programming-languages-should-you-learn-first",
+          "query": "https://www.freelancer.com/job-search/agile-project-management-creating-innovative-products-2nd-edition-pdf/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-project-management-creating-innovative-products-2nd-edition-pdf/",
+          "final_url": "https://www.freelancer.com/job-search/agile-project-management-creating-innovative-products-2nd-edition-pdf/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5479,9 +5526,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancer.com/community/development/c-programming",
-          "requested_url": "https://www.freelancer.com/community/development/c-programming",
-          "final_url": "https://www.freelancer.com/community/development/c-programming",
+          "query": "https://www.freelancer.com/job-search/agile-project-management-definition/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-project-management-definition/",
+          "final_url": "https://www.freelancer.com/job-search/agile-project-management-definition/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5492,9 +5539,9 @@
           "error": null
         },
         {
-          "query": "https://www.freelancer.com/community/articles/signs-you-should-not-take-that-programming-job",
-          "requested_url": "https://www.freelancer.com/community/articles/signs-you-should-not-take-that-programming-job",
-          "final_url": "https://www.freelancer.com/community/articles/signs-you-should-not-take-that-programming-job",
+          "query": "https://www.freelancer.com/job-search/agile-project-management-explained/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-project-management-explained/",
+          "final_url": "https://www.freelancer.com/job-search/agile-project-management-explained/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5505,9 +5552,22 @@
           "error": null
         },
         {
-          "query": "https://www.freelancer.com/community/articles/sixteen-programming-languages-for-mobile-app-development",
-          "requested_url": "https://www.freelancer.com/community/articles/sixteen-programming-languages-for-mobile-app-development",
-          "final_url": "https://www.freelancer.com/community/articles/sixteen-programming-languages-for-mobile-app-development",
+          "query": "https://www.freelancer.com/job-search/agile-project-management-for-dummies-kindle/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-project-management-for-dummies-kindle/",
+          "final_url": "https://www.freelancer.com/job-search/agile-project-management-for-dummies-kindle/",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.freelancer.com/job-search/agile-project-management-for-dummies-mark-c.-layton-pdf/",
+          "requested_url": "https://www.freelancer.com/job-search/agile-project-management-for-dummies-mark-c.-layton-pdf/",
+          "final_url": "https://www.freelancer.com/job-search/agile-project-management-for-dummies-mark-c.-layton-pdf/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -5582,48 +5642,191 @@
       "source_id": "src-30f49eb9",
       "url": "https://www.eurodyn.com/careers/",
       "connector": "web",
-      "collection_method": "http",
+      "collection_method": "http+browser",
       "active": true,
       "status": "failed",
       "records": 0,
-      "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
-      "failure_reason": "robots.txt HTTP 202; access not established",
-      "web_outcome": "blocked",
+      "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
+      "failure_reason": "Bot challenge; no bypass attempted; HTTP 404",
+      "web_outcome": "no_extractable_jobs",
       "requested_url": "https://www.eurodyn.com/careers/",
-      "final_url": null,
-      "http_status": null,
-      "robots_status": null,
-      "browser_attempted": false,
-      "browser_status": "not_attempted",
-      "pages_attempted": 1,
-      "pages_fetched": 0,
+      "final_url": "https://www.eurodyn.com/careers/",
+      "http_status": 200,
+      "robots_status": 200,
+      "browser_attempted": true,
+      "browser_status": "rendered",
+      "pages_attempted": 12,
+      "pages_fetched": 4,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
+        "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
       ],
       "page_results": [
         {
           "query": "https://www.eurodyn.com/careers/",
           "requested_url": "https://www.eurodyn.com/careers/",
-          "final_url": "https://www.eurodyn.com/robots.txt",
+          "final_url": "https://www.eurodyn.com/careers/",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": true,
+          "browser_status": "rendered",
+          "error": null
+        },
+        {
+          "query": "https://apply.workable.com/j/0296C6338B",
+          "requested_url": "https://apply.workable.com/j/0296C6338B",
+          "final_url": "https://apply.workable.com/european-dynamics/j/0296C6338B",
           "status": "blocked",
           "transport": "http",
-          "http_status": 202,
-          "robots_status": 202,
+          "http_status": 200,
+          "robots_status": 200,
           "records": 0,
           "browser_attempted": false,
           "browser_status": null,
-          "error": "robots.txt HTTP 202; access not established"
+          "error": "Bot challenge; no bypass attempted"
+        },
+        {
+          "query": "https://apply.workable.com/j/151C739477",
+          "requested_url": "https://apply.workable.com/j/151C739477",
+          "final_url": "https://apply.workable.com/european-dynamics/j/151C739477",
+          "status": "blocked",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": "Bot challenge; no bypass attempted"
+        },
+        {
+          "query": "https://apply.workable.com/j/15C289E30A",
+          "requested_url": "https://apply.workable.com/j/15C289E30A",
+          "final_url": "https://apply.workable.com/european-dynamics/j/15C289E30A",
+          "status": "blocked",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": "Bot challenge; no bypass attempted"
+        },
+        {
+          "query": "https://apply.workable.com/j/736464CD1B",
+          "requested_url": "https://apply.workable.com/j/736464CD1B",
+          "final_url": "https://apply.workable.com/european-dynamics/j/736464CD1B",
+          "status": "blocked",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": "Bot challenge; no bypass attempted"
+        },
+        {
+          "query": "https://apply.workable.com/j/8068CEBC45",
+          "requested_url": "https://apply.workable.com/j/8068CEBC45",
+          "final_url": "https://apply.workable.com/european-dynamics/j/8068CEBC45",
+          "status": "blocked",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": "Bot challenge; no bypass attempted"
+        },
+        {
+          "query": "https://apply.workable.com/j/8D4A378D4B",
+          "requested_url": "https://apply.workable.com/j/8D4A378D4B",
+          "final_url": "https://apply.workable.com/european-dynamics/j/8D4A378D4B",
+          "status": "blocked",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": "Bot challenge; no bypass attempted"
+        },
+        {
+          "query": "https://apply.workable.com/j/AB438405BD",
+          "requested_url": "https://apply.workable.com/j/AB438405BD",
+          "final_url": "https://apply.workable.com/european-dynamics/j/AB438405BD",
+          "status": "blocked",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": "Bot challenge; no bypass attempted"
+        },
+        {
+          "query": "https://www.eurodyn.com/portfolio-item/cpms/",
+          "requested_url": "https://www.eurodyn.com/portfolio-item/cpms/",
+          "final_url": "https://www.eurodyn.com/portfolio-item/cpms/",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/",
+          "requested_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/",
+          "final_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/?s=",
+          "requested_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/?s=",
+          "final_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/?s=",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/none",
+          "requested_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/none",
+          "final_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/none",
+          "status": "error",
+          "transport": "http",
+          "http_status": 404,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": "HTTP 404"
         }
       ],
       "queries": [
         {
-          "query": "blocked",
+          "query": "no_extractable_jobs",
           "status": "failed",
           "records": 0,
-          "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
+          "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
         }
       ]
     },
@@ -6161,7 +6364,7 @@
       "status": "failed",
       "records": 0,
       "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-      "failure_reason": "TimeoutError: The read operation timed out; robots.txt returned HTML instead of rules",
+      "failure_reason": "robots.txt returned HTML instead of rules",
       "web_outcome": "no_extractable_jobs",
       "requested_url": "https://www.cgi.com/en/careers",
       "final_url": "https://www.cgi.com/en/careers",
@@ -6285,7 +6488,7 @@
         {
           "query": "https://www.cgi.com/en/Careers",
           "requested_url": "https://www.cgi.com/en/Careers",
-          "final_url": "https://www.cgi.com/en/Careers",
+          "final_url": "https://www.cgi.com/en/careers",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -6297,20 +6500,20 @@
         },
         {
           "query": "https://www.cgi.com/en/our-career-opportunities",
-          "requested_url": "https://cgi.njoyn.com/corp/xweb/xweb.asp?CLID=21001&page=joblisting&lang=1",
-          "final_url": "https://www.cgi.com/en/our-career-opportunities",
-          "status": "error",
+          "requested_url": "https://www.cgi.com/en/our-career-opportunities",
+          "final_url": "https://cgi.njoyn.com/corp/xweb/xweb.asp?CLID=21001&page=joblisting&lang=1",
+          "status": "fetched",
           "transport": "http",
-          "http_status": 301,
+          "http_status": 200,
           "robots_status": 200,
           "records": 0,
           "browser_attempted": false,
           "browser_status": null,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
         },
         {
           "query": "https://www.cgi.com/fr/nos-offres-demploi",
-          "requested_url": "https://validate.perfdrive.com/?ssa=e874b885-be4d-4057-bcca-9cf1d14b7f7b&ssb=85911242778&ssc=https%3A%2F%2Fcgi.njoyn.com%2Fcorp%2Fxweb%2Fxweb.asp%3FCLID%3D21001%26page%3Djoblisting%26lang%3D2&ssi=cba8a27a-dcvu-482e-b196-bbdd660581aa&ssk=botmanager_support@radware.com&ssm=79182945342842071100726701479505&ssn=7077fe1acf9ec955631c28eac501fa3046296cfb8d53-9d72-4b76-84314c&sso=1c20b32e-316b9ffbbc89481c82f8b110db8d2804efdc3393e4f7b305&ssp=98588074891788752630178879512359860&ssq=37527529407241927293894072886399944237231&ssr=MjAuMTcxLjIwLjQ5&sst=JobSearchCollector/1.0&ssu=&ssv=&ssw=&ssx=eyJyZCI6Im5qb3luLmNvbSIsIl9fdXptZiI6IjdmOTAwMDZjZmI4ZDUzLTlkNzItNGI3Ni04MzJlLTMxNmI5ZmZiYmM4OTEtMTc4ODc5NDA3MjcxMDAtMDA0NzNlY2VlZTc1MDAyY2ZjMjEwIiwidXpteCI6IjdmYzAwMDIxZWVjM2Q3LTMzNDgtNGI1Zi04NzEwLWI2YmQwNzUxNDg4YzEtMTc4ODc5NDA3MjcxMDAtMDA0YzcyMzg4YzA3NzFkZDIwZTEwIn0=",
+          "requested_url": "https://validate.perfdrive.com/?ssa=fbb4757d-70bd-4c43-9cee-e3a8e98f1158&ssb=02879232846&ssc=https%3A%2F%2Fcgi.njoyn.com%2Fcorp%2Fxweb%2Fxweb.asp%3FCLID%3D21001%26page%3Djoblisting%26lang%3D2&ssi=617404a7-dcvu-4c48-ad4a-588605940430&ssk=botmanager_support@radware.com&ssm=64403687306835807107601651178465&ssn=21565c92d49bd57477491701bfaa7ee6166e0de28e0f-f43c-472c-8c0454&sso=b5e9b66b-6d5c37d59fa340a5d17793edff6887ca6bbba2c4e2c86ef6&ssp=09709296001788878930178885432280146&ssq=54989560774855310993307748669889871965368&ssr=MTcyLjE3Mi4yMDYuMzk=&sst=JobSearchCollector/1.0&ssu=&ssv=&ssw=&ssx=eyJ1em14IjoiN2ZjMDAwMmI4NDUzYWMtYjhhOC00M2QyLTk3MzUtYTdkNzc5NzE1NDM3MS0xNzg4ODA3NzQ4MjEwMC0wMDRlYzk5NWRjZjkzYzQwNzAzMTAiLCJyZCI6Im5qb3luLmNvbSIsIl9fdXptZiI6IjdmOTAwMDBkZTI4ZTBmLWY0M2MtNDcyYy04NjZiLTZkNWMzN2Q1OWZhMzEtMTc4ODgwNzc0ODIxMDAtMDA0NWRmNmUxNTY2ODkwMzM5MjEwIn0=",
           "final_url": "https://validate.perfdrive.com/robots.txt",
           "status": "blocked",
           "transport": "http",
@@ -6322,17 +6525,17 @@
           "error": "robots.txt returned HTML instead of rules"
         },
         {
-          "query": "https://www.cgi.com/en/article/careers/aditya-day-life-data-engineer",
-          "requested_url": "https://www.cgi.com/en/article/careers/aditya-day-life-data-engineer",
-          "final_url": "https://www.cgi.com/en/article/careers/aditya-day-life-data-engineer",
-          "status": "fetched",
+          "query": "https://cgi.njoyn.com/corp/xweb/XWeb.asp?NTKN=c&Page=JobDetails&Jobid=J0126-0634&BRID=1260359&SBDID=1&searchFilled=",
+          "requested_url": "https://validate.perfdrive.com/?ssa=39a84f69-ca37-4dd3-a77c-ffa056c001a0&ssb=09333234612&ssc=https%3A%2F%2Fcgi.njoyn.com%2Fcorp%2Fxweb%2FXWeb.asp%3FNTKN%3Dc%26Page%3DJobDetails%26Jobid%3DJ0126-0634%26BRID%3D1260359%26SBDID%3D1%26searchFilled%3D&ssi=ec2c2727-dcvu-412a-9dd8-261bbe250e30&ssk=botmanager_support@radware.com&ssm=58484673273395601109549064980766&ssn=e601dbb3bd2081350be1430b7bbe361fab14ef171ce1-f843-4b80-94706b&sso=a03835dd-3c999de7d4747505f18f570c075bd00dec8d7e8a947bbf66&ssp=14183432191788859125178883157018702&ssq=19248070774938885442307749244194287286664&ssr=MTcyLjE3Mi4yMDYuMzk=&sst=JobSearchCollector/1.0&ssu=&ssv=&ssw=&ssx=eyJ1em14IjoiN2ZjMDAwOGEzOWQ3NDUtZmVhOS00ZjY5LThjZTUtN2UzZGZiNDIyMjk2MS0xNzg4ODA3NzQ5MDE0MC0wMDRmMWQwMjc1Nzc4MWMzODdmMTAiLCJfX3V6bWYiOiI3ZjkwMDBlZjE3MWNlMS1mODQzLTRiODAtOTVkZC0zYzk5OWRlN2Q0NzQxLTE3ODg4MDc3NDkwMTQwLTAwNDVjZmE2MzFmODYwNTI1MDgxMCIsInJkIjoibmpveW4uY29tIn0=",
+          "final_url": "https://validate.perfdrive.com/robots.txt",
+          "status": "blocked",
           "transport": "http",
-          "http_status": 200,
+          "http_status": 302,
           "robots_status": 200,
           "records": 0,
           "browser_attempted": false,
           "browser_status": null,
-          "error": null
+          "error": "robots.txt returned HTML instead of rules"
         }
       ],
       "queries": [
@@ -6502,9 +6705,9 @@
           "error": null
         },
         {
-          "query": "https://careers.soprasteria.com/job/architecte-ia-industrie-pau-in-pau-france-jid-8687",
-          "requested_url": "https://careers.soprasteria.com/job/architecte-ia-industrie-pau-in-pau-france-jid-8687",
-          "final_url": "https://careers.soprasteria.com/job/architecte-ia-industrie-pau-in-pau-france-jid-8687",
+          "query": "https://careers.soprasteria.com/job/auditeur-auditrice-interne-groupe-in-paris-france-jid-7714",
+          "requested_url": "https://careers.soprasteria.com/job/auditeur-auditrice-interne-groupe-in-paris-france-jid-7714",
+          "final_url": "https://careers.soprasteria.com/job/auditeur-auditrice-interne-groupe-in-paris-france-jid-7714",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -6515,9 +6718,9 @@
           "error": null
         },
         {
-          "query": "https://careers.soprasteria.com/job/auditeur-auditrice-interne-groupe-in-paris-france-jid-7714",
-          "requested_url": "https://careers.soprasteria.com/job/auditeur-auditrice-interne-groupe-in-paris-france-jid-7714",
-          "final_url": "https://careers.soprasteria.com/job/auditeur-auditrice-interne-groupe-in-paris-france-jid-7714",
+          "query": "https://careers.soprasteria.com/job/business-analyst-analyste-fonctionnel-le-confirme-e-nantes-in-nantes-france-jid-7578",
+          "requested_url": "https://careers.soprasteria.com/job/business-analyst-analyste-fonctionnel-le-confirme-e-nantes-in-nantes-france-jid-7578",
+          "final_url": "https://careers.soprasteria.com/job/business-analyst-analyste-fonctionnel-le-confirme-e-nantes-in-nantes-france-jid-7578",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -6575,10 +6778,10 @@
       "connector": "workday",
       "collection_method": "workday",
       "active": true,
-      "status": "failed",
-      "records": 0,
-      "error": "Malformed Workday posting: invalid externalPath",
-      "failure_reason": "Malformed Workday posting: invalid externalPath",
+      "status": "completed",
+      "records": 500,
+      "error": null,
+      "failure_reason": null,
       "connector_config": {
         "connector": "workday",
         "career_url": "https://thales.wd3.myworkdayjobs.com/Careers",
@@ -6586,10 +6789,10 @@
       },
       "queries": [
         {
-          "query": "collect",
-          "status": "failed",
-          "records": 0,
-          "error": "Malformed Workday posting: invalid externalPath"
+          "query": "public_cxs",
+          "status": "completed",
+          "records": 500,
+          "error": null
         }
       ]
     },
@@ -7150,9 +7353,9 @@
           "error": null
         },
         {
-          "query": "https://careers.societegenerale.com/index%2ephp/etudiants-jeunes-diplomes/graduate-programmes",
-          "requested_url": "https://careers.societegenerale.com/index%2ephp/etudiants-jeunes-diplomes/graduate-programmes",
-          "final_url": "https://careers.societegenerale.com/index%2ephp/etudiants-jeunes-diplomes/graduate-programmes",
+          "query": "https://careers.societegenerale.com/rechercher?refinementList%5BjobType%5D%5B0%5D=Graduate%20program",
+          "requested_url": "https://careers.societegenerale.com/rechercher?refinementList%5BjobType%5D%5B0%5D=Graduate%20program",
+          "final_url": "https://careers.societegenerale.com/rechercher?refinementList%5BjobType%5D%5B0%5D=Graduate%20program",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -7896,9 +8099,9 @@
           "error": null
         },
         {
-          "query": "https://career.luxoft.com/jobs/devops-engineer-intern-27094",
-          "requested_url": "https://career.luxoft.com/jobs/devops-engineer-intern-27094",
-          "final_url": "https://career.luxoft.com/jobs/devops-engineer-intern-27094",
+          "query": "https://career.luxoft.com/jobs/senior-devops-engineer-27116",
+          "requested_url": "https://career.luxoft.com/jobs/senior-devops-engineer-27116",
+          "final_url": "https://career.luxoft.com/jobs/senior-devops-engineer-27116",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -7963,19 +8166,6 @@
           "browser_attempted": true,
           "browser_status": "rendered",
           "error": null
-        },
-        {
-          "query": "https://careers.mantu.com/brands/amaris-consulting/jobs/45021",
-          "requested_url": "https://careers.mantu.com/brands/amaris-consulting/jobs/45021",
-          "final_url": "https://careers.mantu.com/brands/amaris-consulting/jobs/45021",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": "Malformed JSON-LD"
         },
         {
           "query": "https://careers.mantu.com/brands/amaris-consulting/jobs/45023",
@@ -8106,6 +8296,19 @@
           "browser_attempted": false,
           "browser_status": null,
           "error": null
+        },
+        {
+          "query": "https://careers.mantu.com/brands/amaris-consulting/jobs/45009",
+          "requested_url": "https://careers.mantu.com/brands/amaris-consulting/jobs/45009",
+          "final_url": "https://careers.mantu.com/brands/amaris-consulting/jobs/45009",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": "Malformed JSON-LD"
         }
       ],
       "queries": [
@@ -8885,7 +9088,7 @@
       "status": "failed",
       "records": 0,
       "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-      "failure_reason": "HTTP 403",
+      "failure_reason": "HTTP 500",
       "web_outcome": "no_extractable_jobs",
       "requested_url": "https://careers.dxc.com/",
       "final_url": "https://careers.dxc.com/",
@@ -8958,14 +9161,14 @@
           "query": "https://careers.dxc.com/de/job-search-results/?category=Service%2C%20Program%20%26%20Project%20Management",
           "requested_url": "https://careers.dxc.com/de/job-search-results/?category=Service%2C%20Program%20%26%20Project%20Management",
           "final_url": "https://careers.dxc.com/de/job-search-results/?category=Service%2C%20Program%20%26%20Project%20Management",
-          "status": "blocked",
+          "status": "error",
           "transport": "http",
-          "http_status": 403,
+          "http_status": 500,
           "robots_status": 200,
           "records": 0,
           "browser_attempted": false,
           "browser_status": null,
-          "error": "HTTP 403"
+          "error": "HTTP 500"
         },
         {
           "query": "https://careers.dxc.com/de/job-cart/",
@@ -10210,7 +10413,7 @@
       "collection_method": "greenhouse",
       "active": true,
       "status": "completed",
-      "records": 443,
+      "records": 442,
       "error": null,
       "failure_reason": null,
       "connector_config": {
@@ -10222,7 +10425,7 @@
         {
           "query": "public_board",
           "status": "completed",
-          "records": 443,
+          "records": 442,
           "error": null
         }
       ]
@@ -11214,8 +11417,8 @@
       "active": true,
       "status": "failed",
       "records": 0,
-      "error": "11 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-      "failure_reason": "browser: Browser render timeout; TimeoutError: The read operation timed out",
+      "error": "12 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
+      "failure_reason": "browser: Browser render timeout",
       "web_outcome": "no_extractable_jobs",
       "requested_url": "https://www.jobs4it.gr/",
       "final_url": "https://jobs4it.gr/",
@@ -11223,13 +11426,13 @@
       "robots_status": 200,
       "browser_attempted": true,
       "browser_status": "partial",
-      "pages_attempted": 11,
-      "pages_fetched": 10,
+      "pages_attempted": 12,
+      "pages_fetched": 12,
       "jobs_detected": 1,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "11 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+        "12 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
       ],
       "page_results": [
         {
@@ -11365,15 +11568,28 @@
         {
           "query": "https://jobs4it.gr/job-region/greece-nea-ionia/",
           "requested_url": "https://jobs4it.gr/job-region/greece-nea-ionia/",
-          "final_url": "https://jobs4it.gr/job-region/cyprus/",
-          "status": "error",
+          "final_url": "https://jobs4it.gr/job-region/greece-nea-ionia/",
+          "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
           "records": 0,
           "browser_attempted": false,
           "browser_status": null,
-          "error": "TimeoutError: The read operation timed out"
+          "error": null
+        },
+        {
+          "query": "https://jobs4it.gr/job-region/greece/",
+          "requested_url": "https://jobs4it.gr/job-region/greece/",
+          "final_url": "https://jobs4it.gr/job-region/greece/",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
         }
       ],
       "queries": [
@@ -11381,7 +11597,7 @@
           "query": "no_extractable_jobs",
           "status": "failed",
           "records": 0,
-          "error": "11 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+          "error": "12 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
         }
       ]
     },
@@ -11456,9 +11672,9 @@
       "collection_method": "http+browser",
       "active": true,
       "status": "failed",
-      "records": 4,
-      "error": "12 pages attempted; 4 JobPosting nodes; 4 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
-      "failure_reason": "12 pages attempted; 4 JobPosting nodes; 4 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+      "records": 5,
+      "error": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+      "failure_reason": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
       "web_outcome": "partial",
       "requested_url": "https://www.redglobal.com/jobs/",
       "final_url": "https://www.redglobal.com/jobs",
@@ -11468,11 +11684,11 @@
       "browser_status": "rendered",
       "pages_attempted": 12,
       "pages_fetched": 12,
-      "jobs_detected": 4,
+      "jobs_detected": 5,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "12 pages attempted; 4 JobPosting nodes; 4 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+        "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
@@ -11497,6 +11713,19 @@
           "http_status": 200,
           "robots_status": 200,
           "records": 0,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.redglobal.com/jobs/job/pmo-it-shared-service-centre-/azMCoS0m",
+          "requested_url": "https://www.redglobal.com/jobs/job/pmo-it-shared-service-centre-/azMCoS0m",
+          "final_url": "https://www.redglobal.com/jobs/job/pmo-it-shared-service-centre-/azMCoS0m",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
@@ -11617,33 +11846,20 @@
           "browser_attempted": false,
           "browser_status": null,
           "error": null
-        },
-        {
-          "query": "https://www.redglobal.com/jobs/search?role=H021HnPu&page=4",
-          "requested_url": "https://www.redglobal.com/jobs/search?role=H021HnPu&page=4",
-          "final_url": "https://www.redglobal.com/jobs/search?role=H021HnPu&page=4",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
         }
       ],
       "queries": [
         {
           "query": "web_pages",
           "status": "completed",
-          "records": 4,
+          "records": 5,
           "error": null
         },
         {
           "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 4 JobPosting nodes; 4 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+          "error": "12 pages attempted; 5 JobPosting nodes; 5 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -11905,10 +12121,10 @@
       "collection_method": "http+browser",
       "active": true,
       "status": "failed",
-      "records": 0,
-      "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-      "failure_reason": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-      "web_outcome": "no_extractable_jobs",
+      "records": 11,
+      "error": "12 pages attempted; 11 JobPosting nodes; 11 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+      "failure_reason": "12 pages attempted; 11 JobPosting nodes; 11 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+      "web_outcome": "partial",
       "requested_url": "https://www.sourcegroupinternational.com/jobs/",
       "final_url": "https://www.sourcegroupinternational.com/jobs/",
       "http_status": 200,
@@ -11917,11 +12133,11 @@
       "browser_status": "rendered",
       "pages_attempted": 12,
       "pages_fetched": 12,
-      "jobs_detected": 0,
+      "jobs_detected": 11,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+        "12 pages attempted; 11 JobPosting nodes; 11 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
       ],
       "page_results": [
         {
@@ -11938,144 +12154,144 @@
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/recruitment-glossary/",
-          "requested_url": "https://www.sourcegroupinternational.com/recruitment-glossary/",
-          "final_url": "https://www.sourcegroupinternational.com/recruitment-glossary/",
+          "query": "https://www.sourcegroupinternational.com/jobs/hr-project-managers-london-31834967/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/hr-project-managers-london-31834967/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/hr-project-managers-london-31834967/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/recruitment-glossary/automated-sourcing/",
-          "requested_url": "https://www.sourcegroupinternational.com/recruitment-glossary/automated-sourcing/",
-          "final_url": "https://www.sourcegroupinternational.com/recruitment-glossary/automated-sourcing/",
+          "query": "https://www.sourcegroupinternational.com/jobs/ai-management-support-consultant-zurich-31835979/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/ai-management-support-consultant-zurich-31835979/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/ai-management-support-consultant-zurich-31835979/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/recruitment-glossary/intelligent-matching/",
-          "requested_url": "https://www.sourcegroupinternational.com/recruitment-glossary/intelligent-matching/",
-          "final_url": "https://www.sourcegroupinternational.com/recruitment-glossary/intelligent-matching/",
+          "query": "https://www.sourcegroupinternational.com/jobs/ai-security-soc-engineer-london-31835866/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/ai-security-soc-engineer-london-31835866/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/ai-security-soc-engineer-london-31835866/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/industries/technology/",
-          "requested_url": "https://www.sourcegroupinternational.com/industries/technology/",
-          "final_url": "https://www.sourcegroupinternational.com/industries/technology/",
+          "query": "https://www.sourcegroupinternational.com/jobs/alladin-business-analyst-london-31834188/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/alladin-business-analyst-london-31834188/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/alladin-business-analyst-london-31834188/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/roles/",
-          "requested_url": "https://www.sourcegroupinternational.com/roles/",
-          "final_url": "https://www.sourcegroupinternational.com/roles/",
+          "query": "https://www.sourcegroupinternational.com/jobs/business-analyst-fund-migration-london-31834186/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/business-analyst-fund-migration-london-31834186/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/business-analyst-fund-migration-london-31834186/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/project-jobs/",
-          "requested_url": "https://www.sourcegroupinternational.com/project-jobs/",
-          "final_url": "https://www.sourcegroupinternational.com/project-jobs/",
+          "query": "https://www.sourcegroupinternational.com/jobs/business-data-analyst-asset-management-london-31836974/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/business-data-analyst-asset-management-london-31836974/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/business-data-analyst-asset-management-london-31836974/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/CISO/",
-          "requested_url": "https://www.sourcegroupinternational.com/CISO/",
-          "final_url": "https://www.sourcegroupinternational.com/CISO/",
+          "query": "https://www.sourcegroupinternational.com/jobs/camunda-bpmn-zurich-31836514/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/camunda-bpmn-zurich-31836514/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/camunda-bpmn-zurich-31836514/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/angular-developer-jobs/",
-          "requested_url": "https://www.sourcegroupinternational.com/angular-developer-jobs/",
-          "final_url": "https://www.sourcegroupinternational.com/angular-developer-jobs/",
+          "query": "https://www.sourcegroupinternational.com/jobs/investment-risk-analyst-basel-31835549/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/investment-risk-analyst-basel-31835549/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/investment-risk-analyst-basel-31835549/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/application-security-developer-jobs/",
-          "requested_url": "https://www.sourcegroupinternational.com/application-security-developer-jobs/",
-          "final_url": "https://www.sourcegroupinternational.com/application-security-developer-jobs/",
+          "query": "https://www.sourcegroupinternational.com/jobs/c-software-engineer-commodities-london-31832431/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/c-software-engineer-commodities-london-31832431/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/c-software-engineer-commodities-london-31832431/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/atlassian-consultant-jobs/",
-          "requested_url": "https://www.sourcegroupinternational.com/atlassian-consultant-jobs/",
-          "final_url": "https://www.sourcegroupinternational.com/atlassian-consultant-jobs/",
+          "query": "https://www.sourcegroupinternational.com/jobs/c-software-engineer-commodities-london-31832580/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/c-software-engineer-commodities-london-31832580/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/c-software-engineer-commodities-london-31832580/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
         },
         {
-          "query": "https://www.sourcegroupinternational.com/aws-developer-jobs/",
-          "requested_url": "https://www.sourcegroupinternational.com/aws-developer-jobs/",
-          "final_url": "https://www.sourcegroupinternational.com/aws-developer-jobs/",
+          "query": "https://www.sourcegroupinternational.com/jobs/investment-risk-analyst-basel-31835550/",
+          "requested_url": "https://www.sourcegroupinternational.com/jobs/investment-risk-analyst-basel-31835550/",
+          "final_url": "https://www.sourcegroupinternational.com/jobs/investment-risk-analyst-basel-31835550/",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
@@ -12083,10 +12299,16 @@
       ],
       "queries": [
         {
-          "query": "no_extractable_jobs",
+          "query": "web_pages",
+          "status": "completed",
+          "records": 11,
+          "error": null
+        },
+        {
+          "query": "partial",
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+          "error": "12 pages attempted; 11 JobPosting nodes; 11 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
         }
       ]
     },
@@ -12145,152 +12367,35 @@
       "source_id": "src-04910401",
       "url": "https://brainsconsulting.ro/",
       "connector": "web",
-      "collection_method": "http+browser",
+      "collection_method": "http",
       "active": true,
       "status": "failed",
       "records": 0,
-      "error": "10 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
+      "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
       "failure_reason": "TimeoutError: The read operation timed out",
-      "web_outcome": "no_extractable_jobs",
+      "web_outcome": "error",
       "requested_url": "https://brainsconsulting.ro/",
-      "final_url": "https://www.brainsconsulting.ro/",
-      "http_status": 200,
-      "robots_status": 200,
-      "browser_attempted": true,
-      "browser_status": "rendered",
-      "pages_attempted": 10,
-      "pages_fetched": 9,
+      "final_url": "https://brainsconsulting.ro/",
+      "http_status": null,
+      "robots_status": null,
+      "browser_attempted": false,
+      "browser_status": "not_attempted",
+      "pages_attempted": 1,
+      "pages_fetched": 0,
       "jobs_detected": 0,
       "coverage_complete": false,
       "discovered_pages_complete": false,
       "limitations": [
-        "10 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+        "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
       ],
       "page_results": [
         {
           "query": "https://brainsconsulting.ro/",
-          "requested_url": "https://brainsconsulting.ro/",
-          "final_url": "https://www.brainsconsulting.ro/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": true,
-          "browser_status": "rendered",
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/12535-2/",
-          "requested_url": "https://www.brainsconsulting.ro/12535-2/",
-          "final_url": "https://www.brainsconsulting.ro/12535-2/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/category/locuri-de-munca/",
-          "requested_url": "https://www.brainsconsulting.ro/category/locuri-de-munca/",
-          "final_url": "https://www.brainsconsulting.ro/category/locuri-de-munca/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/curs-managementul-carierei/",
-          "requested_url": "https://www.brainsconsulting.ro/curs-managementul-carierei/",
-          "final_url": "https://www.brainsconsulting.ro/curs-managementul-carierei/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/deirdre-hennessy-managing-director-osp-recruitment-ireland/",
-          "requested_url": "https://www.brainsconsulting.ro/deirdre-hennessy-managing-director-osp-recruitment-ireland/",
-          "final_url": "https://www.brainsconsulting.ro/deirdre-hennessy-managing-director-osp-recruitment-ireland/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/despre-noi/cariere/",
-          "requested_url": "https://www.brainsconsulting.ro/despre-noi/cariere/",
-          "final_url": "https://www.brainsconsulting.ro/despre-noi/cariere/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/en/deirdre-hennessy-managing-director-osp-recruitment-ireland-2/",
-          "requested_url": "https://www.brainsconsulting.ro/en/deirdre-hennessy-managing-director-osp-recruitment-ireland-2/",
-          "final_url": "https://www.brainsconsulting.ro/en/deirdre-hennessy-managing-director-osp-recruitment-ireland-2/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/en/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands-2/",
-          "requested_url": "https://www.brainsconsulting.ro/en/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands-2/",
-          "final_url": "https://www.brainsconsulting.ro/en/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands-2/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/en/melinda-moolman-manager-mma-recruitment-uk-2/",
-          "requested_url": "https://www.brainsconsulting.ro/en/melinda-moolman-manager-mma-recruitment-uk-2/",
-          "final_url": "https://www.brainsconsulting.ro/en/melinda-moolman-manager-mma-recruitment-uk-2/",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 0,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.brainsconsulting.ro/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands/",
-          "requested_url": "https://www.brainsconsulting.ro/ioana-radulescu-head-of-recruitment-don-uitzendgroep-netherlands/",
-          "final_url": "https://www.brainsconsulting.ro/en/melinda-moolman-manager-mma-recruitment-uk-2/",
+          "requested_url": "https://www.brainsconsulting.ro/",
+          "final_url": "https://brainsconsulting.ro/",
           "status": "error",
           "transport": "http",
-          "http_status": 200,
+          "http_status": 301,
           "robots_status": 200,
           "records": 0,
           "browser_attempted": false,
@@ -12300,10 +12405,10 @@
       ],
       "queries": [
         {
-          "query": "no_extractable_jobs",
+          "query": "error",
           "status": "failed",
           "records": 0,
-          "error": "10 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+          "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
         }
       ]
     },
@@ -12448,14 +12553,14 @@
           "error": null
         },
         {
-          "query": "https://www.lawrenceharvey.com/?source=www.lawrenceharvey.com",
-          "requested_url": "https://www.lawrenceharvey.com/?source=www.lawrenceharvey.com",
-          "final_url": "https://www.lawrenceharvey.com/?source=www.lawrenceharvey.com",
+          "query": "https://www.lawrenceharvey.com/jobs/292861seniorfieldsolutionengineer",
+          "requested_url": "https://www.lawrenceharvey.com/jobs/292861seniorfieldsolutionengineer",
+          "final_url": "https://www.lawrenceharvey.com/jobs/292861seniorfieldsolutionengineer",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
           "robots_status": 200,
-          "records": 0,
+          "records": 1,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
@@ -12469,6 +12574,58 @@
           "http_status": 200,
           "robots_status": 200,
           "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.lawrenceharvey.com/jobs/329884maintegrationmanager",
+          "requested_url": "https://www.lawrenceharvey.com/jobs/329884maintegrationmanager",
+          "final_url": "https://www.lawrenceharvey.com/jobs/329884maintegrationmanager",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.lawrenceharvey.com/jobs/329950fiduciaryofficer",
+          "requested_url": "https://www.lawrenceharvey.com/jobs/329950fiduciaryofficer",
+          "final_url": "https://www.lawrenceharvey.com/jobs/329950fiduciaryofficer",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.lawrenceharvey.com/jobs/330190hrisdirector",
+          "requested_url": "https://www.lawrenceharvey.com/jobs/330190hrisdirector",
+          "final_url": "https://www.lawrenceharvey.com/jobs/330190hrisdirector",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
+          "query": "https://www.lawrenceharvey.com/?source=www.lawrenceharvey.com",
+          "requested_url": "https://www.lawrenceharvey.com/?source=www.lawrenceharvey.com",
+          "final_url": "https://www.lawrenceharvey.com/?source=www.lawrenceharvey.com",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 0,
           "browser_attempted": false,
           "browser_status": null,
           "error": null
@@ -12513,19 +12670,6 @@
           "error": null
         },
         {
-          "query": "https://www.lawrenceharvey.com/jobs/292861seniorfieldsolutionengineer",
-          "requested_url": "https://www.lawrenceharvey.com/jobs/292861seniorfieldsolutionengineer",
-          "final_url": "https://www.lawrenceharvey.com/jobs/292861seniorfieldsolutionengineer",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
           "query": "https://www.lawrenceharvey.com/jobs/322684oraclefusionreportingfdiconsultant",
           "requested_url": "https://www.lawrenceharvey.com/jobs/322684oraclefusionreportingfdiconsultant",
           "final_url": "https://www.lawrenceharvey.com/jobs/322684oraclefusionreportingfdiconsultant",
@@ -12542,45 +12686,6 @@
           "query": "https://www.lawrenceharvey.com/jobs/323150seniorembeddedsoftwareengineercyber",
           "requested_url": "https://www.lawrenceharvey.com/jobs/323150seniorembeddedsoftwareengineercyber",
           "final_url": "https://www.lawrenceharvey.com/jobs/323150seniorembeddedsoftwareengineercyber",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.lawrenceharvey.com/jobs/326695seniorsreengineer",
-          "requested_url": "https://www.lawrenceharvey.com/jobs/326695seniorsreengineer",
-          "final_url": "https://www.lawrenceharvey.com/jobs/326695seniorsreengineer",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.lawrenceharvey.com/jobs/327477aiengineer",
-          "requested_url": "https://www.lawrenceharvey.com/jobs/327477aiengineer",
-          "final_url": "https://www.lawrenceharvey.com/jobs/327477aiengineer",
-          "status": "fetched",
-          "transport": "http",
-          "http_status": 200,
-          "robots_status": 200,
-          "records": 1,
-          "browser_attempted": false,
-          "browser_status": null,
-          "error": null
-        },
-        {
-          "query": "https://www.lawrenceharvey.com/jobs/328372seniormanagerdatascience",
-          "requested_url": "https://www.lawrenceharvey.com/jobs/328372seniormanagerdatascience",
-          "final_url": "https://www.lawrenceharvey.com/jobs/328372seniormanagerdatascience",
           "status": "fetched",
           "transport": "http",
           "http_status": 200,
@@ -12814,7 +12919,7 @@
       "collection_method": "http+browser",
       "active": true,
       "status": "completed",
-      "records": 3,
+      "records": 4,
       "error": null,
       "failure_reason": null,
       "web_outcome": "extracted",
@@ -12824,13 +12929,13 @@
       "robots_status": 200,
       "browser_attempted": true,
       "browser_status": "rendered",
-      "pages_attempted": 11,
-      "pages_fetched": 11,
-      "jobs_detected": 3,
+      "pages_attempted": 12,
+      "pages_fetched": 12,
+      "jobs_detected": 4,
       "coverage_complete": false,
       "discovered_pages_complete": true,
       "limitations": [
-        "11 pages attempted; 3 JobPosting nodes; 3 valid records; 0 expired; 0 malformed; browser fallback rendered"
+        "12 pages attempted; 4 JobPosting nodes; 4 valid records; 0 expired; 0 malformed; browser fallback rendered"
       ],
       "page_results": [
         {
@@ -12951,6 +13056,19 @@
           "error": null
         },
         {
+          "query": "https://www.thaleria.com/careers/positions/application-engineer-administrator-3508",
+          "requested_url": "https://www.thaleria.com/careers/positions/application-engineer-administrator-3508",
+          "final_url": "https://www.thaleria.com/careers/positions/application-engineer-administrator-3508",
+          "status": "fetched",
+          "transport": "http",
+          "http_status": 200,
+          "robots_status": 200,
+          "records": 1,
+          "browser_attempted": false,
+          "browser_status": null,
+          "error": null
+        },
+        {
           "query": "https://www.thaleria.com/careers/positions/fullstack-java-developer-2194",
           "requested_url": "https://www.thaleria.com/careers/positions/fullstack-java-developer-2194",
           "final_url": "https://www.thaleria.com/careers/positions/fullstack-java-developer-2194",
@@ -12981,7 +13099,7 @@
         {
           "query": "web_pages",
           "status": "completed",
-          "records": 3,
+          "records": 4,
           "error": null
         }
       ]
@@ -13435,13 +13553,12 @@
       "failure_reason": "JobsPipe disabled by configuration"
     }
   ],
-  "records_inspected": 1430,
-  "jobs_published": 122,
-  "excluded": 1396,
+  "records_inspected": 2138,
+  "jobs_published": 137,
+  "excluded": 2091,
   "limitations": [
     "LinkedIn Jobs: LinkedIn provider root deferred; generic web crawling disabled while dedicated provider route is postponed",
     "Indeed: Indeed provider root deferred; generic web crawling disabled while dedicated provider route is postponed",
-    "Jobicy: Jobicy hourly polling limit; no API call",
     "Allianz Careers: connector_requires_credentials",
     "NTT: connector_requires_credentials",
     "Fortive: connector_requires_credentials",
@@ -13457,16 +13574,16 @@
   "source_strategy": "all active sources equally",
   "sources_configured": 130,
   "sources_active": 126,
-  "sources_attempted": 116,
-  "sources_succeeded": 8,
-  "sources_failed": 108,
+  "sources_attempted": 117,
+  "sources_succeeded": 10,
+  "sources_failed": 107,
   "sources_unsupported": 0,
-  "sources_skipped": 10,
+  "sources_skipped": 9,
   "sources_inactive": 4,
-  "sources_with_records": 24,
-  "sources_partial": 16,
+  "sources_with_records": 27,
+  "sources_partial": 17,
   "sources_blocked": 33,
-  "sources_no_extractable_jobs": 44,
+  "sources_no_extractable_jobs": 43,
   "jobspipe_transport": {
     "mode": "disabled",
     "provider_enabled": false
