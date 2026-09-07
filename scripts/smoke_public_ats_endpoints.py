@@ -114,7 +114,15 @@ def successfactors():
     assert status == 200
     root = ET.fromstring(body)
     jobs = root.findall(".//job")
-    assert jobs
+    if not jobs:
+        tags = []
+        for node in root.iter():
+            tag = node.tag.rsplit("}", 1)[-1]
+            if tag not in tags:
+                tags.append(tag)
+            if len(tags) >= 20:
+                break
+        raise AssertionError(f"no <job> nodes; tags={tags}")
     return f"{len(jobs)} jobs"
 
 
