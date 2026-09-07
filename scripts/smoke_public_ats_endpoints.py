@@ -113,16 +113,8 @@ def successfactors():
     status, body = fetch_bytes(url, headers={"Accept": "application/xml,text/xml"})
     assert status == 200
     root = ET.fromstring(body)
-    jobs = root.findall(".//job")
-    if not jobs:
-        tags = []
-        for node in root.iter():
-            tag = node.tag.rsplit("}", 1)[-1]
-            if tag not in tags:
-                tags.append(tag)
-            if len(tags) >= 20:
-                break
-        raise AssertionError(f"no <job> nodes; tags={tags}")
+    jobs = [node for node in root.iter() if node.tag.rsplit("}", 1)[-1].lower() == "job"]
+    assert jobs
     return f"{len(jobs)} jobs"
 
 
