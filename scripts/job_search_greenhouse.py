@@ -64,7 +64,7 @@ def normalize(item, board_token, company_name):
     posting_id = item.get("id")
     title = item.get("title")
     source_url = item.get("absolute_url")
-    if not all((posting_id, title, source_url, company_name)):
+    if posting_id is None or not title or not source_url or not company_name:
         raise ValueError("Malformed Greenhouse posting: missing id/title/url/company")
 
     location = str((item.get("location") or {}).get("name") or "").strip()
