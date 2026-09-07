@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0",
+  "routes": {
+    "Endava": {"connector": "smartrecruiters", "company_identifier": "Endava", "enabled": true},
+    "Netcompany / Intrasoft": {"connector": "smartrecruiters", "company_identifier": "Netcompany1", "enabled": true},
+    "Bosch Romania": {"connector": "smartrecruiters", "company_identifier": "BoschGroup", "enabled": true},
+    "Camunda": {"connector": "ashby", "board_name": "camunda", "enabled": true},
+    "Datadog": {"connector": "greenhouse", "board_token": "datadog", "enabled": true},
+    "Almaviva de Belgique": {"connector": "recruitee", "subdomain": "almavivadebelgique", "enabled": true},
+    "Saphetor": {"connector": "bamboohr", "subdomain": "saphetor", "enabled": true},
+    "Thales": {"connector": "workday", "career_url": "https://thales.wd3.myworkdayjobs.com/Careers", "enabled": true},
+
+    "NTT": {"connector": "phenom", "enabled": false, "disabled_reason": "connector_requires_credentials"},
+    "Allianz Careers": {"connector": "phenom", "enabled": false, "disabled_reason": "connector_requires_credentials"},
+    "Fortive": {"connector": "eightfold", "domain": "fortive", "enabled": false, "disabled_reason": "connector_requires_credentials"},
+
+    "ClickHouse": {"connector": "greenhouse", "board_token": "clickhouse", "enabled": false, "disabled_reason": "live_api_route_not_validated"}
+  }
+}
