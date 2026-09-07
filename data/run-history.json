@@ -2,12 +2,12 @@
   "schema_version": "1.0",
   "runs": [
     {
-      "run_id": "github-20260907T113136Z",
+      "run_id": "github-20260907T113502Z",
       "status": "completed_with_errors",
       "trigger": "push",
-      "started_at": "2026-09-07T11:31:36.349521+00:00",
-      "completed_at": "2026-09-07T11:34:24.528800+00:00",
-      "duration_seconds": 168,
+      "started_at": "2026-09-07T11:35:02.845945+00:00",
+      "completed_at": "2026-09-07T11:37:49.486095+00:00",
+      "duration_seconds": 166,
       "transport": "disabled",
       "sources": [
         "eJobs",
@@ -254,9 +254,9 @@
         "Fujitsu Belgium",
         "ARHS / Accenture"
       ],
-      "records_inspected": 280,
+      "records_inspected": 281,
       "jobs_published": 92,
-      "excluded": 275,
+      "excluded": 276,
       "source_results": [
         {
           "source": "LinkedIn Jobs",
@@ -485,8 +485,8 @@
           "collection_method": "http+browser",
           "active": true,
           "status": "failed",
-          "records": 2,
-          "error": "9 pages attempted; 3 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+          "records": 1,
+          "error": "7 pages attempted; 1 JobPosting nodes; 1 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
           "failure_reason": "TimeoutError: The read operation timed out",
           "web_outcome": "partial",
           "requested_url": "https://www.hipo.ro/",
@@ -495,13 +495,13 @@
           "robots_status": 200,
           "browser_attempted": true,
           "browser_status": "rendered",
-          "pages_attempted": 9,
-          "pages_fetched": 8,
-          "jobs_detected": 3,
+          "pages_attempted": 7,
+          "pages_fetched": 6,
+          "jobs_detected": 1,
           "coverage_complete": false,
           "discovered_pages_complete": false,
           "limitations": [
-            "9 pages attempted; 3 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+            "7 pages attempted; 1 JobPosting nodes; 1 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
           ],
           "page_results": [
             {
@@ -518,22 +518,9 @@
               "error": null
             },
             {
-              "query": "https://www.hipo.ro/locuri-de-munca/targabsolventi/sectiune/4",
-              "requested_url": "https://www.hipo.ro/locuri-de-munca/targabsolventi/sectiune/4",
-              "final_url": "https://www.hipo.ro/",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
-            },
-            {
-              "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/268051/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
-              "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/268051/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
-              "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/268051/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+              "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222111/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+              "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222111/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
+              "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222111/?utm_source=hipoh_boxrec&utm_medium=widget&utm_campaign=hipojobs2024",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -544,9 +531,9 @@
               "error": null
             },
             {
-              "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management---Consultanta/BUCURESTI/PMO-Quality-Engineer/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
-              "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management---Consultanta/BUCURESTI/PMO-Quality-Engineer/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
-              "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+              "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-IT/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+              "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-IT/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
+              "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship%2c-trainee-sau-joburi-entry-level-in-IT/?utm_source=hipo_joburi_recomandate_anunt&utm_medium=widget&utm_campaign=hipojobs2024",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -557,9 +544,9 @@
               "error": null
             },
             {
-              "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer/2",
-              "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer/2",
-              "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer/2",
+              "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/2",
+              "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/2",
+              "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/2",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -570,9 +557,9 @@
               "error": null
             },
             {
-              "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer",
-              "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer",
-              "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Controlul-calitatii,Inginerie,Management-Consultanta/BUCURESTI/PMO-Quality-Engineer",
+              "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT",
+              "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT",
+              "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -583,38 +570,25 @@
               "error": null
             },
             {
-              "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
-              "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
-              "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC-",
+              "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
+              "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
+              "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
               "robots_status": 200,
-              "records": 1,
+              "records": 0,
               "browser_attempted": false,
               "browser_status": null,
               "error": null
             },
             {
-              "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
-              "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
-              "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/170058/Deloitte-Regional-Audit-Delivery-Center/Junior-Audit-Analyst-with-French-|-Deloitte-RADC",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 1,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
-            },
-            {
-              "query": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222109/JumpStart---A-GenZ-Career-Hub/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie",
-              "requested_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222109/JumpStart-A-GenZ-Career-Hub/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie",
-              "final_url": "https://www.hipo.ro/locuri-de-munca/locuri_de_munca/222109/JumpStart---A-GenZ-Career-Hub/Programe-de-internship-trainee-sau-joburi-entry-level-in-Inginerie",
+              "query": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/4",
+              "requested_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/4",
+              "final_url": "https://www.hipo.ro/locuri-de-munca/cautajob/Internship,IT-Hardware,IT-Software/BUCURESTI,Iasi,Timisoara/Programe-de-internship2c-trainee-sau-joburi-entry-level-in-IT/3",
               "status": "error",
               "transport": "http",
-              "http_status": 301,
+              "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
@@ -626,14 +600,14 @@
             {
               "query": "web_pages",
               "status": "completed",
-              "records": 2,
+              "records": 1,
               "error": null
             },
             {
               "query": "partial",
               "status": "failed",
               "records": 0,
-              "error": "9 pages attempted; 3 JobPosting nodes; 2 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+              "error": "7 pages attempted; 1 JobPosting nodes; 1 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
             }
           ]
         },
@@ -2137,12 +2111,12 @@
           "status": "failed",
           "records": 0,
           "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
-          "failure_reason": "Bot challenge; no bypass attempted",
+          "failure_reason": "robots.txt HTTP 202; access not established",
           "web_outcome": "blocked",
           "requested_url": "https://euremotejobs.com/",
-          "final_url": "https://euremotejobs.com/",
-          "http_status": 200,
-          "robots_status": 200,
+          "final_url": null,
+          "http_status": null,
+          "robots_status": null,
           "browser_attempted": false,
           "browser_status": "not_attempted",
           "pages_attempted": 1,
@@ -2157,15 +2131,15 @@
             {
               "query": "https://euremotejobs.com/",
               "requested_url": "https://euremotejobs.com/",
-              "final_url": "https://euremotejobs.com/",
+              "final_url": "https://euremotejobs.com/robots.txt",
               "status": "blocked",
               "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
+              "http_status": 202,
+              "robots_status": 202,
               "records": 0,
               "browser_attempted": false,
               "browser_status": null,
-              "error": "Bot challenge; no bypass attempted"
+              "error": "robots.txt HTTP 202; access not established"
             }
           ],
           "queries": [
@@ -2536,7 +2510,7 @@
           "status": "failed",
           "records": 7,
           "error": "12 pages attempted; 7 JobPosting nodes; 7 valid records; 0 expired; 0 malformed; browser fallback blocked; page/time/link budget reached; coverage is partial",
-          "failure_reason": "browser: Browser HTTP 403; 'ascii' codec can't encode character '\\u0142' in position 10: ordinal not in range(128)",
+          "failure_reason": "browser: Browser HTTP 403",
           "web_outcome": "partial",
           "requested_url": "https://nofluffjobs.com/",
           "final_url": "https://nofluffjobs.com/",
@@ -2545,7 +2519,7 @@
           "browser_attempted": true,
           "browser_status": "blocked",
           "pages_attempted": 12,
-          "pages_fetched": 11,
+          "pages_fetched": 12,
           "jobs_detected": 7,
           "coverage_complete": false,
           "discovered_pages_complete": false,
@@ -2565,58 +2539,6 @@
               "browser_attempted": true,
               "browser_status": "blocked",
               "error": "browser: Browser HTTP 403"
-            },
-            {
-              "query": "https://nofluffjobs.com/job/business-analyst-it-consultant-z-j-niemieckim-customer-intelligence-b2b-dmtech-remote",
-              "requested_url": "https://nofluffjobs.com/job/business-analyst-it-consultant-z-j-niemieckim-customer-intelligence-b2b-dmtech-remote",
-              "final_url": "https://nofluffjobs.com/job/business-analyst-it-consultant-z-j-niemieckim-customer-intelligence-b2b-dmtech-remote",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 1,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
-            },
-            {
-              "query": "https://nofluffjobs.com/job/engineering-manager-z-jezykiem-niemieckim--dmtech-wroclaw",
-              "requested_url": "https://nofluffjobs.com/job/engineering-manager-z-jezykiem-niemieckim--dmtech-wroclaw",
-              "final_url": "https://nofluffjobs.com/job/engineering-manager-z-jezykiem-niemieckim--dmtech-wroclaw",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 1,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
-            },
-            {
-              "query": "https://nofluffjobs.com//Wrocław?criteria=category=project-manager",
-              "requested_url": "https://nofluffjobs.com//Wrocław?criteria=category=project-manager",
-              "final_url": "https://nofluffjobs.com/job/engineering-manager-z-jezykiem-niemieckim--dmtech-wroclaw",
-              "status": "error",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": "'ascii' codec can't encode character '\\u0142' in position 10: ordinal not in range(128)"
-            },
-            {
-              "query": "https://nofluffjobs.com//project-manager",
-              "requested_url": "https://nofluffjobs.com//project-manager",
-              "final_url": "https://nofluffjobs.com//project-manager",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
             },
             {
               "query": "https://nofluffjobs.com/job/agile-project-lead-boldare-gliwice-2",
@@ -2645,22 +2567,22 @@
               "error": null
             },
             {
-              "query": "https://nofluffjobs.com/job/commercial-project-specialist-antal-wroclaw",
-              "requested_url": "https://nofluffjobs.com/job/commercial-project-specialist-antal-wroclaw",
-              "final_url": "https://nofluffjobs.com/job/commercial-project-specialist-antal-wroclaw",
+              "query": "https://nofluffjobs.com//project-manager",
+              "requested_url": "https://nofluffjobs.com//project-manager",
+              "final_url": "https://nofluffjobs.com//project-manager",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
               "robots_status": 200,
-              "records": 1,
+              "records": 0,
               "browser_attempted": false,
               "browser_status": null,
               "error": null
             },
             {
-              "query": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
-              "requested_url": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
-              "final_url": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
+              "query": "https://nofluffjobs.com/job/cybersecurity-project-manager-link-group-remote-1",
+              "requested_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-link-group-remote-1",
+              "final_url": "https://nofluffjobs.com/job/cybersecurity-project-manager-link-group-remote-1",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -2679,6 +2601,58 @@
               "http_status": 200,
               "robots_status": 200,
               "records": 0,
+              "browser_attempted": false,
+              "browser_status": null,
+              "error": null
+            },
+            {
+              "query": "https://nofluffjobs.com/job/case-manager-ework-group-warszawa",
+              "requested_url": "https://nofluffjobs.com/job/case-manager-ework-group-warszawa",
+              "final_url": "https://nofluffjobs.com/job/case-manager-ework-group-warszawa",
+              "status": "fetched",
+              "transport": "http",
+              "http_status": 200,
+              "robots_status": 200,
+              "records": 1,
+              "browser_attempted": false,
+              "browser_status": null,
+              "error": null
+            },
+            {
+              "query": "https://nofluffjobs.com//Warszawa?criteria=category=project-manager",
+              "requested_url": "https://nofluffjobs.com//Warszawa?criteria=category=project-manager",
+              "final_url": "https://nofluffjobs.com//Warszawa?criteria=category=project-manager",
+              "status": "fetched",
+              "transport": "http",
+              "http_status": 200,
+              "robots_status": 200,
+              "records": 0,
+              "browser_attempted": false,
+              "browser_status": null,
+              "error": null
+            },
+            {
+              "query": "https://nofluffjobs.com/job/agile-project-lead-boldare-warszawa-1",
+              "requested_url": "https://nofluffjobs.com/job/agile-project-lead-boldare-warszawa-1",
+              "final_url": "https://nofluffjobs.com/job/agile-project-lead-boldare-warszawa-1",
+              "status": "fetched",
+              "transport": "http",
+              "http_status": 200,
+              "robots_status": 200,
+              "records": 1,
+              "browser_attempted": false,
+              "browser_status": null,
+              "error": null
+            },
+            {
+              "query": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
+              "requested_url": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
+              "final_url": "https://nofluffjobs.com/job/change-manager-link-group-remote-3",
+              "status": "fetched",
+              "transport": "http",
+              "http_status": 200,
+              "robots_status": 200,
+              "records": 1,
               "browser_attempted": false,
               "browser_status": null,
               "error": null
@@ -2733,9 +2707,9 @@
           "collection_method": "http+browser",
           "active": true,
           "status": "failed",
-          "records": 8,
-          "error": "10 pages attempted; 8 JobPosting nodes; 8 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
-          "failure_reason": "TimeoutError: The read operation timed out",
+          "records": 10,
+          "error": "12 pages attempted; 10 JobPosting nodes; 10 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial",
+          "failure_reason": "Source time budget exhausted",
           "web_outcome": "partial",
           "requested_url": "https://justjoin.it/",
           "final_url": "https://justjoin.it/",
@@ -2743,13 +2717,13 @@
           "robots_status": 200,
           "browser_attempted": true,
           "browser_status": "rendered",
-          "pages_attempted": 10,
-          "pages_fetched": 9,
-          "jobs_detected": 8,
+          "pages_attempted": 12,
+          "pages_fetched": 11,
+          "jobs_detected": 10,
           "coverage_complete": false,
           "discovered_pages_complete": false,
           "limitations": [
-            "10 pages attempted; 8 JobPosting nodes; 8 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+            "12 pages attempted; 10 JobPosting nodes; 10 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
           ],
           "page_results": [
             {
@@ -2871,30 +2845,56 @@
             },
             {
               "query": "https://justjoin.it//job-offer/billennium-it-project-manager-delivery-support--poland-remote--pm-b4763414",
-              "requested_url": "https://justjoin.it/job-offer/billennium-it-project-manager-delivery-support--poland-remote--pm-b4763414",
-              "final_url": "https://justjoin.it//job-offer/billennium-it-project-manager-delivery-support--poland-remote--pm-b4763414",
-              "status": "error",
+              "requested_url": "https://justjoin.it//job-offer/billennium-it-project-manager-delivery-support--poland-remote--pm-b4763414",
+              "final_url": "https://justjoin.it/job-offer/billennium-it-project-manager-delivery-support--poland-remote--pm-b4763414",
+              "status": "fetched",
+              "transport": "http",
+              "http_status": 200,
+              "robots_status": 200,
+              "records": 1,
+              "browser_attempted": false,
+              "browser_status": null,
+              "error": null
+            },
+            {
+              "query": "https://justjoin.it//job-offer/astek-polska-it-project-manager-ka-warszawa-mazowieckie--pm",
+              "requested_url": "https://justjoin.it//job-offer/astek-polska-it-project-manager-ka-warszawa-mazowieckie--pm",
+              "final_url": "https://justjoin.it/job-offer/astek-polska-it-project-manager-ka-warszawa-mazowieckie--pm",
+              "status": "fetched",
+              "transport": "http",
+              "http_status": 200,
+              "robots_status": 200,
+              "records": 1,
+              "browser_attempted": false,
+              "browser_status": null,
+              "error": null
+            },
+            {
+              "query": "https://justjoin.it//job-offer/b2bnetwork-it-project-manager-f-m--warszawa-pm",
+              "requested_url": "https://justjoin.it/job-offer/b2bnetwork-it-project-manager-f-m--warszawa-pm",
+              "final_url": "https://justjoin.it//job-offer/b2bnetwork-it-project-manager-f-m--warszawa-pm",
+              "status": "partial",
               "transport": "http",
               "http_status": 308,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
               "browser_status": null,
-              "error": "TimeoutError: The read operation timed out"
+              "error": "Source time budget exhausted"
             }
           ],
           "queries": [
             {
               "query": "web_pages",
               "status": "completed",
-              "records": 8,
+              "records": 10,
               "error": null
             },
             {
               "query": "partial",
               "status": "failed",
               "records": 0,
-              "error": "10 pages attempted; 8 JobPosting nodes; 8 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
+              "error": "12 pages attempted; 10 JobPosting nodes; 10 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial"
             }
           ]
         },
@@ -3875,7 +3875,7 @@
             {
               "query": "https://torre.ai/create-job",
               "requested_url": "https://torre.ai/create-job",
-              "final_url": "https://accounts.torre.ai/email/?next=/openid/authorize%3Fscope%3Dopenid%2Bprofile%2Bemail%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Ftorre.ai%252Fcallback%253Fclient_name%253Dstarrgate%26state%3Dpqdc0gCYGm6iTExDbQh0I4b2J7H965HVjre39Txqu20%26intent%3Djob-post%253Acreate-opening%26client_id%3D541493",
+              "final_url": "https://accounts.torre.ai/email/?next=/openid/authorize%3Fscope%3Dopenid%2Bprofile%2Bemail%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Ftorre.ai%252Fcallback%253Fclient_name%253Dstarrgate%26state%3DyZLZKDpPqAXmcUWyw-G7nHnf9mbIBhNZ95kLBdVGz08%26intent%3Djob-post%253Acreate-opening%26client_id%3D541493",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -3914,7 +3914,7 @@
             {
               "query": "https://torre.ai/recruit",
               "requested_url": "https://torre.ai/recruit",
-              "final_url": "https://accounts.torre.ai/email/?next=/openid/authorize%3Fscope%3Dopenid%2Bprofile%2Bemail%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Ftorre.ai%252Fcallback%253Fclient_name%253Dstarrgate%26state%3DB2Nm9YEtUGA98rciRmxvaTpU6OfBFAgRDAh0uiMAy_0%26intent%3Djob-post%253Acreate-opening%26client_id%3D541493",
+              "final_url": "https://accounts.torre.ai/email/?next=/openid/authorize%3Fscope%3Dopenid%2Bprofile%2Bemail%26response_type%3Dcode%26redirect_uri%3Dhttps%253A%252F%252Ftorre.ai%252Fcallback%253Fclient_name%253Dstarrgate%26state%3Dnv4s__mdTq_YAyIqLHKsIYEl-ia2sBaUIDVa0Jp2UM8%26intent%3Djob-post%253Acreate-opening%26client_id%3D541493",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -4875,9 +4875,9 @@
               "error": null
             },
             {
-              "query": "https://www.freelancermap.com/project/principal-workday-financials-data-consultant",
-              "requested_url": "https://www.freelancermap.com/project/principal-workday-financials-data-consultant",
-              "final_url": "https://www.freelancermap.com/project/principal-workday-financials-data-consultant",
+              "query": "https://www.freelancermap.com/project/male-support-worker-3044479",
+              "requested_url": "https://www.freelancermap.com/project/male-support-worker-3044479",
+              "final_url": "https://www.freelancermap.com/project/male-support-worker-3044479",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -5601,191 +5601,48 @@
           "source_id": "https://www.eurodyn.com/careers/",
           "url": "https://www.eurodyn.com/careers/",
           "connector": "web",
-          "collection_method": "http+browser",
+          "collection_method": "http",
           "active": true,
           "status": "failed",
           "records": 0,
-          "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-          "failure_reason": "Bot challenge; no bypass attempted; HTTP 404",
-          "web_outcome": "no_extractable_jobs",
+          "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed",
+          "failure_reason": "robots.txt HTTP 202; access not established",
+          "web_outcome": "blocked",
           "requested_url": "https://www.eurodyn.com/careers/",
-          "final_url": "https://www.eurodyn.com/careers/",
-          "http_status": 200,
-          "robots_status": 200,
-          "browser_attempted": true,
-          "browser_status": "rendered",
-          "pages_attempted": 12,
-          "pages_fetched": 4,
+          "final_url": null,
+          "http_status": null,
+          "robots_status": null,
+          "browser_attempted": false,
+          "browser_status": "not_attempted",
+          "pages_attempted": 1,
+          "pages_fetched": 0,
           "jobs_detected": 0,
           "coverage_complete": false,
           "discovered_pages_complete": false,
           "limitations": [
-            "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+            "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
           ],
           "page_results": [
             {
               "query": "https://www.eurodyn.com/careers/",
               "requested_url": "https://www.eurodyn.com/careers/",
-              "final_url": "https://www.eurodyn.com/careers/",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": true,
-              "browser_status": "rendered",
-              "error": null
-            },
-            {
-              "query": "https://apply.workable.com/j/0296C6338B",
-              "requested_url": "https://apply.workable.com/j/0296C6338B",
-              "final_url": "https://apply.workable.com/european-dynamics/j/0296C6338B",
+              "final_url": "https://www.eurodyn.com/robots.txt",
               "status": "blocked",
               "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
+              "http_status": 202,
+              "robots_status": 202,
               "records": 0,
               "browser_attempted": false,
               "browser_status": null,
-              "error": "Bot challenge; no bypass attempted"
-            },
-            {
-              "query": "https://apply.workable.com/j/151C739477",
-              "requested_url": "https://apply.workable.com/j/151C739477",
-              "final_url": "https://apply.workable.com/european-dynamics/j/151C739477",
-              "status": "blocked",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": "Bot challenge; no bypass attempted"
-            },
-            {
-              "query": "https://apply.workable.com/j/15C289E30A",
-              "requested_url": "https://apply.workable.com/j/15C289E30A",
-              "final_url": "https://apply.workable.com/european-dynamics/j/15C289E30A",
-              "status": "blocked",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": "Bot challenge; no bypass attempted"
-            },
-            {
-              "query": "https://apply.workable.com/j/736464CD1B",
-              "requested_url": "https://apply.workable.com/j/736464CD1B",
-              "final_url": "https://apply.workable.com/european-dynamics/j/736464CD1B",
-              "status": "blocked",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": "Bot challenge; no bypass attempted"
-            },
-            {
-              "query": "https://apply.workable.com/j/8068CEBC45",
-              "requested_url": "https://apply.workable.com/j/8068CEBC45",
-              "final_url": "https://apply.workable.com/european-dynamics/j/8068CEBC45",
-              "status": "blocked",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": "Bot challenge; no bypass attempted"
-            },
-            {
-              "query": "https://apply.workable.com/j/8D4A378D4B",
-              "requested_url": "https://apply.workable.com/j/8D4A378D4B",
-              "final_url": "https://apply.workable.com/european-dynamics/j/8D4A378D4B",
-              "status": "blocked",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": "Bot challenge; no bypass attempted"
-            },
-            {
-              "query": "https://apply.workable.com/j/AB438405BD",
-              "requested_url": "https://apply.workable.com/j/AB438405BD",
-              "final_url": "https://apply.workable.com/european-dynamics/j/AB438405BD",
-              "status": "blocked",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": "Bot challenge; no bypass attempted"
-            },
-            {
-              "query": "https://www.eurodyn.com/portfolio-item/cpms/",
-              "requested_url": "https://www.eurodyn.com/portfolio-item/cpms/",
-              "final_url": "https://www.eurodyn.com/portfolio-item/cpms/",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
-            },
-            {
-              "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/",
-              "requested_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/",
-              "final_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
-            },
-            {
-              "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/?s=",
-              "requested_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/?s=",
-              "final_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/?s=",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
-            },
-            {
-              "query": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/none",
-              "requested_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/none",
-              "final_url": "https://www.eurodyn.com/services/bespoke-development-turn-key-projects/none",
-              "status": "error",
-              "transport": "http",
-              "http_status": 404,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": "HTTP 404"
+              "error": "robots.txt HTTP 202; access not established"
             }
           ],
           "queries": [
             {
-              "query": "no_extractable_jobs",
+              "query": "blocked",
               "status": "failed",
               "records": 0,
-              "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+              "error": "1 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed"
             }
           ]
         },
@@ -6497,7 +6354,7 @@
             },
             {
               "query": "https://www.cgi.com/fr/nos-offres-demploi",
-              "requested_url": "https://validate.perfdrive.com/?ssa=844baac7-7a23-49a7-a032-0e9e96fe2496&ssb=53314221381&ssc=https%3A%2F%2Fcgi.njoyn.com%2Fcorp%2Fxweb%2Fxweb.asp%3FCLID%3D21001%26page%3Djoblisting%26lang%3D2&ssi=3a4d638a-dcvu-4e38-8b71-574f188db912&ssk=botmanager_support@radware.com&ssm=79129404919836495101163979145499&ssn=81111c007e0218f3f9e95635b3a7ea55bfa06a984e4e-ef66-4b4b-a8affe&sso=2619185f-b1944174bdc66648059d2b34f1bf069b05d28aa71fc0c168&ssp=45589472711788751562178877118616862&ssq=90072488076952383423580769440926026079790&ssr=MTcyLjE4Mi4xOTUuMzQ=&sst=JobSearchCollector/1.0&ssu=&ssv=&ssw=&ssx=eyJyZCI6Im5qb3luLmNvbSIsIl9fdXptZiI6IjdmOTAwMDZhOTg0ZTRlLWVmNjYtNGI0Yi1hODVmLWIxOTQ0MTc0YmRjNjEtMTc4ODc4MDc2OTA2NjAtMDA0OTVkYmQyYjg2MjQ2YTA3ZjEwIiwidXpteCI6IjdmYzAwMGM5ZGFlZWQ2LWFkNmItNDc5Yy1hYTRkLTU4YjM5MDcwNTY5YzEtMTc4ODc4MDc2OTA2NjAtMDA0MWJhYmM3YzUxMmQ1M2NhYzEwIn0=",
+              "requested_url": "https://validate.perfdrive.com/?ssa=e880560c-b8d3-494c-a39c-6ae489fb8c56&ssb=41786255178&ssc=https%3A%2F%2Fcgi.njoyn.com%2Fcorp%2Fxweb%2Fxweb.asp%3FCLID%3D21001%26page%3Djoblisting%26lang%3D2&ssi=3c7b56d8-dcvu-4d05-a06b-fff665f040f1&ssk=botmanager_support@radware.com&ssm=23711194030147136105558804605613&ssn=bc637ab64568cea85a60722593c0b8523ff486656c92-69b0-429c-9bf9fe&sso=c5b78a59-1ce62373af01a107ec0501e0efcab84f15075d300c7b1b0f&ssp=65281688041788790780178876327510871&ssq=12617408097451476674380974385901875888306&ssr=MTcyLjE4NC4yNDcuNA==&sst=JobSearchCollector/1.0&ssu=&ssv=&ssw=&ssx=eyJfX3V6bWYiOiI3ZjkwMDA4NjY1NmM5Mi02OWIwLTQyOWMtOWE1OS0xY2U2MjM3M2FmMDExLTE3ODg3ODA5NzQzOTAwLTAwNDMyNjQwYWMwZjY0NjkzNzYxMCIsInJkIjoibmpveW4uY29tIiwidXpteCI6IjdmYzAwMDZmZWJlMGYwLTQyZjgtNGMwNy04OTYxLWQzNDk3NTA1ZTMyMTEtMTc4ODc4MDk3NDM5MDAtMDA0MjdiZWYyOTFhNDJkZGM4YzEwIn0=",
               "final_url": "https://validate.perfdrive.com/robots.txt",
               "status": "blocked",
               "transport": "http",
@@ -6510,7 +6367,7 @@
             },
             {
               "query": "https://cgi.njoyn.com/corp/xweb/XWeb.asp?NTKN=c&Page=JobDetails&Jobid=J0126-0634&BRID=1260359&SBDID=1&searchFilled=",
-              "requested_url": "https://validate.perfdrive.com/?ssa=b5d85027-ad6a-431b-bebd-35e03c448699&ssb=53314221381&ssc=https%3A%2F%2Fcgi.njoyn.com%2Fcorp%2Fxweb%2FXWeb.asp%3FNTKN%3Dc%26Page%3DJobDetails%26Jobid%3DJ0126-0634%26BRID%3D1260359%26SBDID%3D1%26searchFilled%3D&ssi=3331ef77-dcvu-4e8f-9858-14d3551ac260&ssk=botmanager_support@radware.com&ssm=79129404919836495101163979145499&ssn=81111c004ff96622d5eee14003fdea55bfa028e12eae-1894-446d-a8affe&sso=2619102a-d008fff6a8656648059dea63aeaa919ad517a7e11fc0c168&ssp=45589472711788751562178877118616862&ssq=90072488076952383423580769440926026079790&ssr=MTcyLjE4Mi4xOTUuMzQ=&sst=JobSearchCollector/1.0&ssu=&ssv=&ssw=&ssx=eyJyZCI6Im5qb3luLmNvbSIsIl9fdXptZiI6IjdmOTAwMDI4ZTEyZWFlLTE4OTQtNDQ2ZC1hMDJhLWQwMDhmZmY2YTg2NTEtMTc4ODc4MDc2OTgzODAtMDA0ODFjMzNjODUwZTQ3ZjFjOTEwIiwidXpteCI6IjdmYzAwMGY4MmQ2YTkzLTQ1ZDEtNDc0OC1iYTg0LWM5MGJkNDZmNWUxNzEtMTc4ODc4MDc2OTgzODAtMDA0NDU0OTEwNjE0Yzg1NGFhYjEwIn0=",
+              "requested_url": "https://validate.perfdrive.com/?ssa=255864d4-5f05-4a9a-89e2-49add2a5068d&ssb=20063282478&ssc=https%3A%2F%2Fcgi.njoyn.com%2Fcorp%2Fxweb%2FXWeb.asp%3FNTKN%3Dc%26Page%3DJobDetails%26Jobid%3DJ0126-0634%26BRID%3D1260359%26SBDID%3D1%26searchFilled%3D&ssi=db3f8a0a-dcvu-4591-857c-7f1ed828c189&ssk=botmanager_support@radware.com&ssm=36085418296988733106751079187528&ssn=a71ec29ee07e5080fbee1d22ef87f71f8e0561dfbf18-00d5-46b5-82891b&sso=ffee1898-0e15340e6f181cbfd9bff3d05c3a83b6a93a0cf99f6ae341&ssp=46765096011788719793178870655166993&ssq=64898568097565425387780975488209731824933&ssr=MTcyLjE4NC4yNDcuNA==&sst=JobSearchCollector/1.0&ssu=&ssv=&ssw=&ssx=eyJyZCI6Im5qb3luLmNvbSIsIl9fdXptZiI6IjdmOTAwMDYxZGZiZjE4LTAwZDUtNDZiNS04ODk4LTBlMTUzNDBlNmYxODEtMTc4ODc4MDk3NTA3NzAtMDA0ZjE0MDM1MDM1Y2I4MWI1NjEwIiwidXpteCI6IjdmYzAwMGIwY2UyNGUyLTMxZGMtNGI2NS05ZjlmLThlOTVhOWNlZTYyNjEtMTc4ODc4MDk3NTA3NzAtMDA0N2I4MGY5ZDFjM2ZiNjJjMDEwIn0=",
               "final_url": "https://validate.perfdrive.com/robots.txt",
               "status": "blocked",
               "transport": "http",
@@ -6740,7 +6597,7 @@
           "status": "failed",
           "records": 0,
           "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-          "failure_reason": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
+          "failure_reason": "TimeoutError: The read operation timed out",
           "web_outcome": "no_extractable_jobs",
           "requested_url": "https://www.netcompany.com/careers",
           "final_url": "https://netcompany.com/careers/",
@@ -6749,7 +6606,7 @@
           "browser_attempted": true,
           "browser_status": "rendered",
           "pages_attempted": 12,
-          "pages_fetched": 12,
+          "pages_fetched": 11,
           "jobs_detected": 0,
           "coverage_complete": false,
           "discovered_pages_complete": false,
@@ -6903,15 +6760,15 @@
             {
               "query": "https://netcompany.com/careers/vacancies/",
               "requested_url": "https://netcompany.com/careers/vacancies/",
-              "final_url": "https://netcompany.com/careers/vacancies/",
-              "status": "fetched",
+              "final_url": "https://netcompany.com/careers/the-inside-view/",
+              "status": "error",
               "transport": "http",
               "http_status": 200,
               "robots_status": 404,
               "records": 0,
               "browser_attempted": false,
               "browser_status": null,
-              "error": null
+              "error": "TimeoutError: The read operation timed out"
             }
           ],
           "queries": [
@@ -6983,7 +6840,7 @@
           "status": "failed",
           "records": 0,
           "error": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
-          "failure_reason": "IncompleteRead: IncompleteRead(0 bytes read)",
+          "failure_reason": "12 pages attempted; 0 JobPosting nodes; 0 valid records; 0 expired; 0 malformed; browser fallback rendered; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
           "web_outcome": "no_extractable_jobs",
           "requested_url": "https://careers.ing.com/",
           "final_url": "https://careers.ing.com/en",
@@ -6992,7 +6849,7 @@
           "browser_attempted": true,
           "browser_status": "rendered",
           "pages_attempted": 12,
-          "pages_fetched": 11,
+          "pages_fetched": 12,
           "jobs_detected": 0,
           "coverage_complete": false,
           "discovered_pages_complete": false,
@@ -7146,15 +7003,15 @@
             {
               "query": "https://careers.ing.com/de/international-talent-programme",
               "requested_url": "https://careers.ing.com/de/international-talent-programme",
-              "final_url": "https://careers.ing.com/de/human-resources-programme",
-              "status": "error",
+              "final_url": "https://careers.ing.com/de/international-talent-programme",
+              "status": "fetched",
               "transport": "http",
               "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
               "browser_status": null,
-              "error": "IncompleteRead: IncompleteRead(0 bytes read)"
+              "error": null
             }
           ],
           "queries": [
@@ -7530,9 +7387,9 @@
               "error": null
             },
             {
-              "query": "https://careers.societegenerale.com/rechercher?refinementList%5BjobType%5D%5B0%5D=Graduate%20program",
-              "requested_url": "https://careers.societegenerale.com/rechercher?refinementList%5BjobType%5D%5B0%5D=Graduate%20program",
-              "final_url": "https://careers.societegenerale.com/rechercher?refinementList%5BjobType%5D%5B0%5D=Graduate%20program",
+              "query": "https://careers.societegenerale.com/index%2ephp/etudiants-jeunes-diplomes/graduate-programmes",
+              "requested_url": "https://careers.societegenerale.com/index%2ephp/etudiants-jeunes-diplomes/graduate-programmes",
+              "final_url": "https://careers.societegenerale.com/index%2ephp/etudiants-jeunes-diplomes/graduate-programmes",
               "status": "fetched",
               "transport": "http",
               "http_status": 200,
@@ -11157,11 +11014,11 @@
             },
             {
               "query": "https://www.github.careers/jobs",
-              "requested_url": "https://www.github.careers/careers-home/jobs",
-              "final_url": "https://www.github.careers/jobs",
+              "requested_url": "https://www.github.careers/jobs",
+              "final_url": "https://www.github.careers/careers-home/jobs/locations",
               "status": "partial",
               "transport": "http",
-              "http_status": 302,
+              "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
@@ -11171,10 +11028,10 @@
             {
               "query": "https://www.github.careers/careers-home/jobs/categories/Design",
               "requested_url": "https://www.github.careers/careers-home/jobs/categories/Design",
-              "final_url": "https://www.github.careers/jobs",
+              "final_url": "https://www.github.careers/careers-home/jobs/locations",
               "status": "partial",
               "transport": "http",
-              "http_status": 302,
+              "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
@@ -11184,10 +11041,10 @@
             {
               "query": "https://www.github.careers/careers-home/jobs/categories/Engineering",
               "requested_url": "https://www.github.careers/careers-home/jobs/categories/Engineering",
-              "final_url": "https://www.github.careers/jobs",
+              "final_url": "https://www.github.careers/careers-home/jobs/locations",
               "status": "partial",
               "transport": "http",
-              "http_status": 302,
+              "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
@@ -11197,10 +11054,10 @@
             {
               "query": "https://www.github.careers/careers-home/jobs/categories/Human+Resources",
               "requested_url": "https://www.github.careers/careers-home/jobs/categories/Human+Resources",
-              "final_url": "https://www.github.careers/jobs",
+              "final_url": "https://www.github.careers/careers-home/jobs/locations",
               "status": "partial",
               "transport": "http",
-              "http_status": 302,
+              "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
@@ -11210,10 +11067,10 @@
             {
               "query": "https://www.github.careers/careers-home/jobs/categories/Machine+learning+%26+AI",
               "requested_url": "https://www.github.careers/careers-home/jobs/categories/Machine+learning+%26+AI",
-              "final_url": "https://www.github.careers/jobs",
+              "final_url": "https://www.github.careers/careers-home/jobs/locations",
               "status": "partial",
               "transport": "http",
-              "http_status": 302,
+              "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
@@ -11223,10 +11080,10 @@
             {
               "query": "https://www.github.careers/careers-home/jobs/categories/Marketing",
               "requested_url": "https://www.github.careers/careers-home/jobs/categories/Marketing",
-              "final_url": "https://www.github.careers/jobs",
+              "final_url": "https://www.github.careers/careers-home/jobs/locations",
               "status": "partial",
               "transport": "http",
-              "http_status": 302,
+              "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
@@ -11236,10 +11093,10 @@
             {
               "query": "https://www.github.careers/careers-home/jobs/categories/Sales",
               "requested_url": "https://www.github.careers/careers-home/jobs/categories/Sales",
-              "final_url": "https://www.github.careers/jobs",
+              "final_url": "https://www.github.careers/careers-home/jobs/locations",
               "status": "partial",
               "transport": "http",
-              "http_status": 302,
+              "http_status": 200,
               "robots_status": 200,
               "records": 0,
               "browser_attempted": false,
@@ -12499,7 +12356,7 @@
           "active": true,
           "status": "failed",
           "records": 0,
-          "error": "11 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
+          "error": "10 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required",
           "failure_reason": "browser: Browser render timeout; TimeoutError: The read operation timed out",
           "web_outcome": "no_extractable_jobs",
           "requested_url": "https://www.jobs4it.gr/",
@@ -12508,13 +12365,13 @@
           "robots_status": 200,
           "browser_attempted": true,
           "browser_status": "partial",
-          "pages_attempted": 11,
-          "pages_fetched": 10,
+          "pages_attempted": 10,
+          "pages_fetched": 9,
           "jobs_detected": 1,
           "coverage_complete": false,
           "discovered_pages_complete": false,
           "limitations": [
-            "11 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+            "10 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
           ],
           "page_results": [
             {
@@ -12637,20 +12494,7 @@
             {
               "query": "https://jobs4it.gr/job-region/cyprus/",
               "requested_url": "https://jobs4it.gr/job-region/cyprus/",
-              "final_url": "https://jobs4it.gr/job-region/cyprus/",
-              "status": "fetched",
-              "transport": "http",
-              "http_status": 200,
-              "robots_status": 200,
-              "records": 0,
-              "browser_attempted": false,
-              "browser_status": null,
-              "error": null
-            },
-            {
-              "query": "https://jobs4it.gr/job-region/greece-nea-ionia/",
-              "requested_url": "https://jobs4it.gr/job-region/greece-nea-ionia/",
-              "final_url": "https://jobs4it.gr/job-region/cyprus/",
+              "final_url": "https://jobs4it.gr/job-region/cyprus-nicosia/",
               "status": "error",
               "transport": "http",
               "http_status": 200,
@@ -12666,7 +12510,7 @@
               "query": "no_extractable_jobs",
               "status": "failed",
               "records": 0,
-              "error": "11 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
+              "error": "10 pages attempted; 1 JobPosting nodes; 0 valid records; 0 expired; 1 malformed; browser fallback partial; page/time/link budget reached; coverage is partial; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
             }
           ]
         },
@@ -14729,8 +14573,8 @@
       "sources_inactive": 0,
       "sources_with_records": 18,
       "sources_partial": 16,
-      "sources_blocked": 36,
-      "sources_no_extractable_jobs": 54,
+      "sources_blocked": 37,
+      "sources_no_extractable_jobs": 53,
       "source_strategy": "all active sources equally"
     },
     {
