@@ -57,7 +57,9 @@
   ],
   "excluded_regions": [],
   "excluded_country_codes": [
-    "TM"
+    "BG",
+    "AF",
+    "DK"
   ],
   "search_country_codes": [
     "RO",
