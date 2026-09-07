@@ -503,7 +503,7 @@
       "category": "Banking si enterprise",
       "name": "Allianz Careers",
       "url": "https://careers.allianz.com/",
-      "active": true,
+      "active": false,
       "connector_available": true
     },
     {
@@ -567,7 +567,7 @@
       "category": "Servicii IT si consultanta",
       "name": "NTT",
       "url": "https://careers.services.global.ntt/",
-      "active": true,
+      "active": false,
       "connector_available": true
     },
     {
@@ -695,7 +695,7 @@
       "category": "Servicii IT si consultanta",
       "name": "Fortive",
       "url": "https://careers.fortive.com/",
-      "active": true,
+      "active": false,
       "connector_available": true
     },
     {
@@ -719,7 +719,7 @@
       "category": "Companii remote-first",
       "name": "ClickHouse",
       "url": "https://clickhouse.com/company/careers",
-      "active": true,
+      "active": false,
       "connector_available": true
     },
     {
