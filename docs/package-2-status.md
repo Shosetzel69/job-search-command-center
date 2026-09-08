@@ -17,7 +17,7 @@ Status: `DONE`
 
 ## 2A - Administrare / contracts / source governance
 
-Status: `CORE MERGED / 2A8 READY FOR IMPLEMENTATION`
+Status: `CORE MERGED / 2A8 IN IMPLEMENTATION`
 
 Livrat in `main`:
 
@@ -32,7 +32,6 @@ Livrat in `main`:
 - CRUD categorii;
 - Command API source governance actions;
 - teste frontend/backend;
-- ARCHITECTURE v1.5;
 - hotfix #114/#115 pentru protected asset `source-categories.json`;
 - production UI reconfirmat functional de owner dupa hotfix.
 
@@ -44,35 +43,35 @@ Ramas in 2A:
 
 ### 2A8 - Nomenclatoare canonice
 
-Status: `ANALYSIS COMPLETE / READY FOR IMPLEMENTATION`
+Status: `IN IMPLEMENTATION`
 
-Scop:
+Branch: `feature/116-canonical-nomenclatures`
 
-- `data/nomenclatures.json` schema 1.0;
-- domains: regions, countries, work_modes, contract_types, application_statuses, seniority infrastructure;
-- system/semantic vs extensible;
-- geografie canonica cu parity migration;
-- Remote/Hybrid/Onsite canonice; N/A doar tehnic;
-- contract types Permanent/Temporar/Contract/Freelance + `unknown` tehnic;
-- referential integrity 409;
-- runtime assets manifest/parity guard;
-- E2E controlat.
+Implementat pana acum:
 
-Issues:
+- #117: `data/nomenclatures.json` schema 1.0 creat;
+- domenii canonice: regions, countries, work_modes, contract_types, application_statuses, seniority infrastructure;
+- clasificare `system` / `extensible`;
+- coduri stabile separate de label;
+- membership EU/US/ASIA capturat in contract;
+- CI valideaza schema, unicitatea codurilor/labelurilor si referintele geografice;
+- `docs/data-contract.md` sincronizat.
 
-- #116 umbrella;
-- #117 contract;
-- #118 geografie;
-- #119 work modes + contract types;
-- #120 Admin + integrity;
-- #121 runtime asset safety;
-- #122 migration + E2E.
+Ordine ramasa:
+
+1. #118 geografie canonica si parity migration;
+2. #119 work modes + contract types;
+3. #120 Admin Nomenclatoare + integritate referentiala;
+4. #121 runtime asset manifest/CI guard;
+5. #122 migration + E2E.
+
+Issues: #116-#122.
 
 Documente:
 
 - `docs/analysis/2026-09-09-canonical-nomenclatures.md`;
 - `docs/package-2a8-implementation-plan.md`;
-- `ARCHITECTURE.md` v1.6 target architecture.
+- `ARCHITECTURE.md` v1.6.
 
 ## 2B - Scheduler controlat
 
