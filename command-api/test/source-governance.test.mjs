@@ -82,3 +82,17 @@ test('legacy executable source is normalized as approved/validated', () => {
   assert.equal(source.approval_status, 'approved');
   assert.equal(source.active, true);
 });
+
+test('Monster stays operationally excluded even if legacy catalog says active', () => {
+  const source = normalizeSource({
+    id:'src-monster',
+    name:'Monster',
+    url:'https://www.monster.com/jobs/',
+    category:'Job boards si agregatoare',
+    active:true,
+  });
+  assert.equal(source.policy_excluded, true);
+  assert.equal(source.active, false);
+  assert.match(source.validation_reason, /Exclus operational/);
+  assert.throws(() => applySourceAction(source, 'activate'), /exclusa operational/);
+});
