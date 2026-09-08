@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adminSourceSummary, categoryDuplicate, sortCategories } from '../src/admin-model.mjs';
+import { adminSourceSummary, categoryDuplicate, sortCategories, sourceGovernanceActions } from '../src/admin-model.mjs';
 
 test('admin source summary separates active, validation and problem states', () => {
   const summary = adminSourceSummary([
@@ -26,4 +26,12 @@ test('categories are ordered by canonical order then label', () => {
     { id:'a', label:'A', order:10 },
   ]);
   assert.deepEqual(rows.map(row => row.id), ['a','c','b']);
+});
+
+test('governance actions keep validation approval activation and disable distinct', () => {
+  assert.deepEqual(sourceGovernanceActions({ active:false, validationStatus:'pending', approvalStatus:'pending' }), ['submit_validation','reject']);
+  assert.deepEqual(sourceGovernanceActions({ active:false, validationStatus:'validating', approvalStatus:'pending' }), ['mark_validated','mark_requires_connector','reject']);
+  assert.deepEqual(sourceGovernanceActions({ active:false, validationStatus:'validated', approvalStatus:'pending' }), ['approve','reject']);
+  assert.deepEqual(sourceGovernanceActions({ active:false, validationStatus:'validated', approvalStatus:'approved' }), ['activate','reject']);
+  assert.deepEqual(sourceGovernanceActions({ active:true, validationStatus:'validated', approvalStatus:'approved' }), ['disable','reject']);
 });
