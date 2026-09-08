@@ -6,6 +6,7 @@ const PROTECTED_DATA = new Set([
   '/data/run-history.json',
   '/data/search-config.json',
   '/data/sources.json',
+  '/data/source-categories.json',
   '/data/applications.json',
 ]);
 
