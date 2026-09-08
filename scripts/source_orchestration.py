@@ -22,6 +22,7 @@ SOURCES_PATH = engine.DATA / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
+POLICY_EXCLUDED_SOURCE_NAMES = {"monster"}
 
 DEFERRED_PROVIDER_ROOTS = {
     "linkedin.com": ("LinkedIn", "jobs"),
@@ -39,6 +40,10 @@ DEFERRED_PROVIDER_ROOTS = {
     "www.lever.co": ("Lever", "root"),
     "lever.co": ("Lever", "root"),
 }
+
+
+def policy_excluded(source):
+    return str(source.get("name") or "").strip().casefold() in POLICY_EXCLUDED_SOURCE_NAMES
 
 
 def connector_for(source):
@@ -92,12 +97,17 @@ def build_plan(catalog):
             route_key = "ats:" + source.get("name", "")
         else:
             route_key = source.get("url") if connector == "web" else connector or ("deferred:" + deferred if deferred else None)
+        excluded_by_policy = policy_excluded(source)
         item = {"source": source.get("name") or source.get("url") or "Unknown",
                 "source_id": source.get("id") or source.get("url"), "url": source.get("url"),
                 "connector": "deferred" if deferred else connector,
                 "collection_method": "deferred" if deferred else connector,
-                "active": source.get("active") is not False, "status": "pending",
-                "records": 0, "error": None, "failure_reason": None}
+                "active": source.get("active") is not False and not excluded_by_policy, "status": "pending",
+                "records": 0, "error": None, "failure_reason": None,
+                "policy_excluded": excluded_by_policy}
+        if excluded_by_policy:
+            reason = "Excluded operationally by project source policy"
+            item.update(status="inactive", error=reason, failure_reason=reason)
         if route:
             item["connector_config"] = route
             if route.get("enabled") is False:
