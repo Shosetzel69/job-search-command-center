@@ -10,6 +10,8 @@ on:
       - "shared/**"
       - "requirements-search.txt"
       - "data/sources.json"
+      - "data/source-categories.json"
+      - "data/applications.json"
       - "data/search-config.json"
       - "data/run-history.json"
       - ".github/workflows/command-api-check.yml"
@@ -22,6 +24,8 @@ on:
       - "shared/**"
       - "requirements-search.txt"
       - "data/sources.json"
+      - "data/source-categories.json"
+      - "data/applications.json"
       - "data/search-config.json"
       - "data/run-history.json"
       - ".github/workflows/command-api-check.yml"
@@ -71,27 +75,40 @@ jobs:
           workflow = Path('.github/workflows/job-search-full.yml').read_text(encoding='utf-8')
           assert 'workflow_dispatch:' in workflow, 'Full search must expose workflow_dispatch'
           assert '\n  push:' not in workflow, 'Full search must not run on push'
-          assert '\n  schedule:' not in workflow, 'Full search scheduler is disabled in Package 1'
+          assert '\n  schedule:' not in workflow, 'Full search scheduler is disabled in Package 1/2A'
           assert 'run_trigger:' in workflow and 'manual-ui' in workflow, 'Canonical manual trigger is missing'
-          print('Full search is manual-only')
+          print('Full search remains manual-only in Package 2A')
           PY
 
       - name: Run search logic regression tests
         run: python3 -m unittest discover -s scripts -p "test_*.py"
 
-      - name: Validate JSON files
+      - name: Validate JSON contracts
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
-          for path in [
+
+          paths = [
               Path("data/search-config.json"),
               Path("data/run-history.json"),
               Path("data/sources.json"),
+              Path("data/source-categories.json"),
               Path("data/applications.json"),
-          ]:
-              json.loads(path.read_text(encoding="utf-8"))
+          ]
+          payloads = {}
+          for path in paths:
+              payloads[path.name] = json.loads(path.read_text(encoding="utf-8"))
               print(f"valid JSON: {path}")
+
+          assert payloads["sources.json"].get("schema_version") == "1.0"
+          assert payloads["applications.json"].get("schema_version") == "1.0"
+          categories = payloads["source-categories.json"]
+          assert categories.get("schema_version") == "1.0"
+          assert categories.get("count") == len(categories.get("categories", []))
+          labels = [str(item.get("label", "")).strip().casefold() for item in categories.get("categories", [])]
+          assert all(labels) and len(labels) == len(set(labels))
+          print("Package 2A data contracts are versioned and consistent")
           PY
 
       - name: Set up Node.js

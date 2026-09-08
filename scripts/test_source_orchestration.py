@@ -109,6 +109,16 @@ class OrchestrationTests(unittest.TestCase):
         self.jobicy.assert_not_called()
         self.assertEqual(status["sources_attempted"], 0)
 
+    def test_policy_excluded_monster_is_never_attempted_even_if_catalog_active(self):
+        catalog = copy.deepcopy(CATALOG)
+        catalog["sources"].append({"name": "Monster", "url": "https://www.monster.com/jobs/", "active": True})
+        plan = orchestration.build_plan(catalog)
+        monster = next(item for item in plan if item["source"] == "Monster")
+        self.assertFalse(monster["active"])
+        self.assertEqual(monster["status"], "inactive")
+        self.assertTrue(monster["policy_excluded"])
+        self.assertIn("project source policy", monster["error"])
+
     def test_direct_quota_guard_does_not_block_jobicy(self):
         state = optimized.load_state(NOW)
         state["usage"]["provider_quota_exhausted_month"] = "2026-09"
