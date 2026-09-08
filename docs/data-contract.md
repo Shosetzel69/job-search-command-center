@@ -164,7 +164,8 @@ Campuri sursa canonice dupa normalizarea Package 2A:
 - `validation_status`;
 - `approval_status`;
 - `last_validated_at`;
-- `validation_reason`.
+- `validation_reason`;
+- `policy_excluded` - camp aditiv derivat de Command API pentru sursele blocate prin politica operationala.
 
 `validation_status`:
 
@@ -187,9 +188,11 @@ Reguli:
 - aprobarea si activarea sunt actiuni distincte;
 - URL duplicat interzis;
 - `connector_available` si `collection_method` nu sunt controlate liber de utilizator;
-- campul legacy `priority` nu face parte din contractul canonic.
+- campul legacy `priority` nu face parte din contractul canonic;
+- o excludere operationala de politica prevaleaza peste valoarea legacy `active=true` si blocheaza colectarea/activarea;
+- Monster este exclus operational conform regulii curente a proiectului, inclusiv daca o intrare legacy il marcheaza `active=true`.
 
-Catalogul legacy poate fi citit si este normalizat compatibil la prima mutatie prin Command API.
+Catalogul legacy poate fi citit si este normalizat compatibil la prima mutatie prin Command API. Search orchestration aplica aceeasi regula de excludere operationala independent de normalizarea catalogului, astfel incat o valoare legacy sa nu poata reactiva sursa accidental.
 
 ## 8. `data/source-categories.json`
 
@@ -265,6 +268,7 @@ Build-ul publica numai:
 
 - `source`, `source_id`, `connector`, `collection_method`;
 - `status`, `records`, `error`, `failure_reason`;
+- `policy_excluded`;
 - `url`, `web_outcome`;
 - `pages_attempted`, `pages_fetched`, `jobs_detected`;
 - `limitations`, `page_results`, `queries`.
