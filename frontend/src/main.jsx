@@ -2,28 +2,18 @@ import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AdminShell from './admin-shell.jsx';
+import { COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES, REGION_OPTIONS } from './nomenclature-runtime.mjs';
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
 
 const DATA_SCHEMA = '1.0';
 const ALL_WORK_MODES = ['Remote', 'Hybrid', 'Onsite', 'N/A'];
-const REGION_OPTIONS = ['EU', 'US', 'ASIA'];
 const EXCLUSION_SUGGESTIONS = [
   'Star Storage si companiile grupului',
   'Implementari ERP care cer experienta specializata ampla',
   'Roluri non-IT',
   'Roluri exclusiv onsite in afara Bucurestiului',
 ];
-
-const COUNTRY_NAMES = {
-  RO:'Romania', BE:'Belgia', LU:'Luxemburg', FR:'Franta', DE:'Germania', NL:'Tarile de Jos', PL:'Polonia', PT:'Portugalia', ES:'Spania', IT:'Italia', IE:'Irlanda', AT:'Austria', CZ:'Cehia', SK:'Slovacia', HU:'Ungaria', BG:'Bulgaria', GR:'Grecia', HR:'Croatia', SI:'Slovenia', EE:'Estonia', LV:'Letonia', LT:'Lituania', DK:'Danemarca', SE:'Suedia', FI:'Finlanda', NO:'Norvegia', CH:'Elvetia', CY:'Cipru', MT:'Malta', US:'Statele Unite', GB:'Regatul Unit', UA:'Ucraina', TR:'Turcia', AE:'Emiratele Arabe Unite', IN:'India', CN:'China', JP:'Japonia', SG:'Singapore', KR:'Coreea de Sud', HK:'Hong Kong', IL:'Israel', SA:'Arabia Saudita', QA:'Qatar', MY:'Malaezia', TH:'Thailanda', VN:'Vietnam', ID:'Indonezia', PH:'Filipine', PK:'Pakistan', BD:'Bangladesh', AF:'Afganistan', AM:'Armenia', AZ:'Azerbaidjan', BH:'Bahrain', BT:'Bhutan', BN:'Brunei', KH:'Cambodgia', GE:'Georgia', IR:'Iran', IQ:'Irak', JO:'Iordania', KZ:'Kazahstan', KW:'Kuweit', KG:'Kargazstan', LA:'Laos', LB:'Liban', MO:'Macao', MV:'Maldive', MN:'Mongolia', MM:'Myanmar', NP:'Nepal', KP:'Coreea de Nord', OM:'Oman', PS:'Palestina', LK:'Sri Lanka', SY:'Siria', TW:'Taiwan', TJ:'Tadjikistan', TL:'Timorul de Est', TM:'Turkmenistan', UZ:'Uzbekistan', YE:'Yemen',
-};
-const COUNTRY_OPTIONS = Object.entries(COUNTRY_NAMES).sort((a,b) => a[1].localeCompare(b[1],'ro'));
-const REGION_COUNTRIES = {
-  EU: new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']),
-  US: new Set(['US']),
-  ASIA: new Set(['AF','AM','AZ','BH','BD','BT','BN','KH','CN','GE','HK','IN','ID','IR','IQ','IL','JP','JO','KZ','KW','KG','LA','LB','MO','MY','MV','MN','MM','NP','KP','OM','PS','PH','QA','SA','SG','KR','LK','SY','TW','TJ','TH','TL','TR','TM','AE','UZ','VN','YE']),
-};
 
 const cx = (...classes) => classes.filter(Boolean).join(' ');
 
