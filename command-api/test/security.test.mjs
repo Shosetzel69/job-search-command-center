@@ -22,6 +22,23 @@ test('all protected data assets reject missing bearer token before asset lookup'
   }
 });
 
+test('nomenclature admin API rejects missing bearer token before GitHub access', async () => {
+  for (const [method,path] of [
+    ['GET','/nomenclatures'],
+    ['POST','/nomenclatures/application_statuses'],
+    ['PUT','/nomenclatures/regions/EU'],
+    ['DELETE','/nomenclatures/application_statuses/applied'],
+  ]) {
+    const response = await secureEntry.fetch(new Request(`https://app.example.test${path}`, {
+      method,
+      headers: method === 'GET' ? {} : { 'Content-Type':'application/json' },
+      body: method === 'GET' ? undefined : JSON.stringify({ label:'Test' }),
+    }), env);
+    assert.equal(response.status, 401, `${method} ${path} must require authentication`);
+    assert.match(response.headers.get('cache-control') || '', /no-store/i);
+  }
+});
+
 test('internal data assets are never part of the protected/public manifest', () => {
   for (const file of INTERNAL_DATA_FILES) {
     assert.equal(PROTECTED_DATA_FILES.includes(file), false, `${file} must remain internal`);
