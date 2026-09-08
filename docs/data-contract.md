@@ -1,16 +1,24 @@
 # Contracte date JSON
 
-Versiune aplicatie: `0.05`
+Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-09-06`
+Ultima actualizare: `2026-09-08`
 
 ## 1. Reguli
 
-Contractele principale folosesc `schema_version = "1.0"`. Timestamp-urile generate de motor sunt UTC ISO-8601.
+Contractele publicate frontend-ului folosesc `schema_version = "1.0"`.
 
-Frontend-ul valideaza explicit schema pentru `jobs.json`, `run-status.json`, `run-history.json` si `search-config.json`.
+Frontend-ul si CI valideaza:
 
-`applications.json` ramane contract legacy. `sources.json` este acceptat legacy la citire si este normalizat la schema 1.0 la prima modificare persistenta prin Command API.
+- `jobs.json`;
+- `run-status.json`;
+- `run-history.json`;
+- `search-config.json`;
+- `sources.json`;
+- `source-categories.json`;
+- `applications.json`.
+
+Timestamp-urile generate de motor sunt UTC ISO-8601.
 
 ## 2. `data/jobs.json`
 
@@ -25,66 +33,44 @@ Root principal:
 - `excluded_count`;
 - `jobs`.
 
-Optionale: `collection_freshness_hours`, `incremental_sync`, `expired_pruned`, `jobspipe_usage`, `excluded_sample`.
-
 Campuri job principale:
 
-- `id`;
-- `title`;
-- `company`;
-- `fit`;
-- `location`;
-- `countries` - lista completa de tari normalizate;
-- `country_codes` - coduri ISO alpha-2;
-- `remote_scope` - `Worldwide`, `EU`, `EMEA`, `Country` sau `Unknown`;
-- `romania_eligible` pentru joburile Remote;
-- `mode` - `Remote`, `Hybrid`, `Onsite`, `N/A`;
-- `type`;
-- `age`;
-- `remote`;
-- `b2b`;
-- `repost`;
-- `status`;
-- `pros`;
-- `risks`;
-- `url`;
-- `description`;
-- `date_posted`;
-- `source`;
-- `verified_at`.
+- `id`, `title`, `company`, `fit`;
+- `location`, `countries`, `country_codes`, `remote_scope`;
+- `mode`, `type`, `date_posted`, `age`;
+- `remote`, `b2b`, `repost`, `status`;
+- `pros`, `risks`, `description`;
+- `url`, `source`, `verified_at`.
 
-Pentru compatibilitate cu joburile istorice retinute incremental, validarea accepta temporar lipsa campurilor geografice noi; la procesarea unei rulari noi acestea sunt adaugate/normalizate.
+Campurile geografice istorice pot lipsi temporar pentru joburi pastrate incremental; o rulare noua le normalizeaza.
 
 ## 3. `data/run-status.json`
 
 Campuri principale:
 
 - `schema_version`;
-- `run_id`;
-- `status`;
-- `started_at`;
-- `completed_at`;
-- `sources`;
-- `sources_processed`;
-- `failed_sources`;
-- `records_inspected`;
-- `jobs_published`;
-- `excluded`;
+- `run_id`, `status`;
+- `started_at`, `completed_at`;
+- `sources`, `sources_processed`, `failed_sources`;
+- `records_inspected`, `jobs_published`, `excluded`;
 - `limitations`.
 
-Optionale:
+Stari active acceptate de UI:
 
-- `source_results`;
-- `jobspipe_optimization` pentru Direct;
-- `jobspipe_transport` pentru modul efectiv si metadate.
+- `queued`;
+- `pending`;
+- `running`;
+- `in_progress`.
 
-JobsPipe este numarat o singura data in `sources_processed` chiar daca transportul Apify executa mai multe query-uri.
+Stari terminale:
 
-Status: `running`, `completed`, `completed_with_errors`, `failed`.
+- `completed`;
+- `completed_with_errors`;
+- `failed`.
+
+Campuri aditive pentru observabilitate pot include `source_results` si contoare `sources_*`.
 
 ## 4. `data/run-history.json`
-
-Contract:
 
 ```json
 {
@@ -95,163 +81,192 @@ Contract:
 
 `runs` contine maximum 10 intrari, cea mai recenta prima.
 
-Campuri intrare:
+Campuri uzuale:
 
-- `run_id`;
-- `status`;
-- `trigger`;
-- `started_at`;
-- `completed_at`;
-- `duration_seconds`;
-- `transport`;
-- `sources`;
-- `sources_processed`;
-- `failed_sources`;
-- `records_inspected`;
-- `jobs_published`;
-- `excluded`;
-- `source_results`;
-- `limitations`;
-- `publication`.
-
-O intrare vizibila in aplicatie are `publication = "published"`, deoarece istoricul este publicat in acelasi commit de date cu rezultatele si statusul.
+- `run_id`, `status`, `trigger`;
+- `started_at`, `completed_at`, `duration_seconds`;
+- `sources`, `sources_processed`, `failed_sources`;
+- `records_inspected`, `jobs_published`, `excluded`;
+- `source_results`, `limitations`, `publication`.
 
 ## 5. `data/search-config.json`
 
-Sursa canonica pentru motor si valorile implicite UI.
+Sursa canonica pentru criteriile motorului si valorile initiale UI.
 
 Campuri geografice:
 
 - `target_regions`;
 - `target_country_codes`;
 - `excluded_regions`;
-- `excluded_country_codes`.
+- `excluded_country_codes`;
+- `search_country_codes` pentru compatibilitate temporara.
 
-Compatibilitate: `search_country_codes` ramane momentan sincronizat cu selectia explicita de tari pentru componentele legacy.
+Campuri principale:
 
-Campuri JobsPipe:
+- `role_groups`;
+- `work_modes`;
+- `freshness_hours`;
+- `collection_freshness_hours`;
+- `fit_threshold`;
+- `keep_reposts`;
+- `rate_min_eur_day`, `rate_max_eur_day`;
+- `immediate_start`;
+- `source_strategy`;
+- `exclusions`.
+
+JobsPipe:
 
 - `jobspipe_mode`;
 - `jobspipe_apify_max_items_per_run`;
 - `jobspipe_credit_budget_per_run`;
-- `jobspipe_monthly_credit_guard`;
-- `jobspipe_incremental_overlap_minutes`.
+- `jobspipe_monthly_credit_guard`.
 
-Valori curente relevante:
+In Package 2 `jobspipe_mode` ramane `disabled`.
 
-- `target_regions = []`;
-- `target_country_codes = [RO, BE, LU]`;
-- `excluded_regions = []`;
-- `excluded_country_codes = []`;
-- `freshness_hours = 24`;
-- `collection_freshness_hours = 120`;
-- `fit_threshold = 80`;
-- `rate_min_eur_day = 250`;
-- `rate_max_eur_day = 650`;
-- `jobspipe_mode = apify`;
-- `jobspipe_apify_max_items_per_run = 100`;
-- `jobspipe_credit_budget_per_run = 14`;
-- `jobspipe_monthly_credit_guard = 950`;
-- `jobspipe_incremental_overlap_minutes = 2`;
-- `source_strategy = "all active sources equally"`.
+## 6. `PUT /config`
 
-## 6. Mapare `PUT /config`
-
-Payload UI -> configuratie:
+Mapare UI principala:
 
 - `rolePm` -> `role_groups.pm.enabled`;
 - `roleDelivery` -> `role_groups.delivery.enabled`;
 - `roleService` -> `role_groups.service.enabled`;
 - `roleScrum` -> `role_groups.scrum.enabled`;
 - `roleProgram` -> `role_groups.program.enabled`;
-- `workRemote` -> `work_modes.remote`;
-- `workHybrid` -> `work_modes.hybrid`;
+- `workRemote` / `workHybrid` -> `work_modes`;
 - `freshness` -> `freshness_hours`;
 - `fitThreshold` -> `fit_threshold`;
 - `keepReposts` -> `keep_reposts`;
-- `rateMin` -> `rate_min_eur_day`;
-- `rateMax` -> `rate_max_eur_day`;
+- `rateMin` / `rateMax` -> rate B2B;
 - `immediateStart` -> `immediate_start`;
-- `jobspipeMode` -> `jobspipe_mode`;
-- `jobspipeApifyMaxItems` -> `jobspipe_apify_max_items_per_run`;
-- `jobspipeDirectRunBudget` -> `jobspipe_credit_budget_per_run`;
-- `jobspipeDirectMonthlyGuard` -> `jobspipe_monthly_credit_guard`;
-- `exclusions` -> `exclusions`;
-- `targetRegions` -> `target_regions`;
-- `targetCountries` -> `target_country_codes` si temporar `search_country_codes`;
-- `excludedRegions` -> `excluded_regions`;
-- `excludedCountries` -> `excluded_country_codes`.
+- `targetRegions` / `targetCountries` -> geografie inclusa;
+- `excludedRegions` / `excludedCountries` -> geografie exclusa;
+- `exclusions` -> reguli textuale aprobate.
 
-Valori permise:
+Persistarea configuratiei nu porneste full search.
 
-- regiuni: `EU`, `US`, `ASIA`;
-- tari: coduri ISO alpha-2;
-- `freshness`: 24, 36, 48, 120;
-- `jobspipeMode`: `disabled`, `apify`, `direct`;
-- `jobspipeApifyMaxItems`: 100-20.000;
-- `jobspipeDirectRunBudget`: 1-1.000;
-- `jobspipeDirectMonthlyGuard`: 1-100.000.
+## 7. `data/sources.json`
 
-## 7. `data/search-state.json`
+Root:
 
-Fisier intern pentru JobsPipe Direct: progres incremental, cursor, watermark, first-seen, estimare quota si circuit breaker. Nu este publicat in Cloudflare Static Assets.
+- `schema_version`;
+- `count`;
+- `sources`.
 
-## 8. `data/sources.json`
+Campuri sursa canonice dupa normalizarea Package 2A:
 
-Forma canonica dupa prima modificare persistenta:
+- `id`;
+- `name`;
+- `url`;
+- `category`;
+- `active`;
+- `collection_method`;
+- `connector_available`;
+- `validation_status`;
+- `approval_status`;
+- `last_validated_at`;
+- `validation_reason`.
 
-- root: `schema_version`, `count`, `sources`;
-- sursa: `id`, `name`, `url`, `category`, `active`, `connector_available`.
+`validation_status`:
+
+- `pending`;
+- `validating`;
+- `validated`;
+- `requires_connector`;
+- `rejected`.
+
+`approval_status`:
+
+- `pending`;
+- `approved`;
+- `rejected`.
 
 Reguli:
 
-- ID stabil;
-- URL http/https valid;
+- sursa noua = `pending`, `pending`, `active=false`;
+- activarea necesita `validated + approved`;
+- aprobarea si activarea sunt actiuni distincte;
 - URL duplicat interzis;
-- `connector_available` nu este setat de utilizator;
-- campul legacy `priority` este eliminat la normalizare;
-- stergerea este efectiva din registrul curent.
+- `connector_available` si `collection_method` nu sunt controlate liber de utilizator;
+- campul legacy `priority` nu face parte din contractul canonic.
+
+Catalogul legacy poate fi citit si este normalizat compatibil la prima mutatie prin Command API.
+
+## 8. `data/source-categories.json`
+
+Contract:
+
+```json
+{
+  "schema_version": "1.0",
+  "count": 0,
+  "categories": []
+}
+```
+
+Camp categorie:
+
+- `id`;
+- `label`;
+- `active`;
+- `order`.
+
+Reguli:
+
+- `label` este unic case/trim-insensitive;
+- o sursa noua/mutata poate folosi numai o categorie existenta si activa;
+- redenumirea actualizeaza referintele surselor;
+- stergerea este blocata cat timp exista surse asociate.
 
 ## 9. `data/applications.json`
 
-Contract legacy pentru istoricul aplicarilor. Frontend-ul consuma companie, rol, locatie, data aplicarii, referinta, status, urmatorul status check, URL si ID/campuri geografice cand exista.
+Contract:
 
-## 10. Publicare
+```json
+{
+  "schema_version": "1.0",
+  "applications": []
+}
+```
 
-Static Assets protejate includ:
+Campuri folosite in prezent:
+
+- `id` optional;
+- `company`;
+- `title`;
+- `location`;
+- `countries` optional;
+- `applied_at`;
+- `reference` optional;
+- `status`;
+- `next_status_check` optional;
+- `url` optional.
+
+## 10. `data/search-state.json`
+
+Fisier intern pentru starea JobsPipe Direct/cursor/usage. Nu este publicat in Cloudflare Static Assets.
+
+## 11. Publicare protected assets
+
+Build-ul publica numai:
 
 - `jobs.json`;
 - `run-status.json`;
 - `run-history.json`;
 - `applications.json`;
 - `sources.json`;
+- `source-categories.json`;
 - `search-config.json`.
 
 `search-state.json` este exclus intentionat.
 
+## 12. Extensii observabilitate/colectare existente
 
-## Extensie compatibila surse (#49)
+`source_results` poate include campuri aditive precum:
 
-Schema ramane `1.0`; campuri aditive in `run-status.json` si intrarile `run-history.json`:
+- `source`, `source_id`, `connector`, `collection_method`;
+- `status`, `records`, `error`, `failure_reason`;
+- `url`, `web_outcome`;
+- `pages_attempted`, `pages_fetched`, `jobs_detected`;
+- `limitations`, `page_results`, `queries`.
 
-- `source_strategy`: strategia executata;
-- `sources_configured`, `sources_active`, `sources_inactive`: intrari in catalog;
-- `sources_attempted` = `sources_processed`: surse executate efectiv, indiferent de numarul interogarilor;
-- `sources_succeeded`: toate interogarile sursei reusite;
-- `sources_failed`: cel putin o interogare esuata, inclusiv succes partial;
-- `sources_unsupported`: surse active fara connector;
-- `sources_skipped`: surse active omise cu motiv (quota, cooldown, mod disabled, alias);
-- `source_results`: o intrare per sursa, cu `source`, `source_id`, `connector`, `active`, `status`, `records`, `error`; pentru executii, `queries` pastreaza detaliile interogarilor.
-
-Invarianta: attempted = succeeded + failed; active = attempted + unsupported + skipped.
-Istoricul vechi fara aceste campuri ramane lizibil; UI nu inventeaza contoare lipsa.
-`search-state.json` adauga `source_last_attempt.jobicy`, timestamp UTC privat pentru limita de polling.
-
-## Extensie colectare web (#49)
-
-`source_results` adauga `url`, `web_outcome`, `pages_attempted`, `pages_fetched`, `jobs_detected`, `coverage_complete`, `discovered_pages_complete`, `limitations`, `page_results`.
-`page_results` contine `query` (URL solicitat), `final_url` cand este disponibil, `status`, `records`, `error`.
-`status=completed` inseamna anunturi extrase fara erori/limite sau numai anunturi structurate expirate in paginile vizitate. `failed` poate avea rezultate valide partiale, publicate prin pipeline, plus un motiv explicit. `no_extractable_jobs` nu inseamna ca site-ul nu are joburi.
-Contoarele attempted/succeeded/failed pastreaza semantica anterioara. Fiecare sursa web este numarata individual.
-
-Contoare aditive dupa validarea live: `sources_with_records` (inclusiv rezultate partiale), `sources_partial`, `sources_blocked`, `sources_no_extractable_jobs`. Nu sunt categorii disjuncte fata de succeeded/failed: partial este inclus in failed, dar poate furniza records publicabile.
+Lipsa acestor campuri in istoricul vechi ramane compatibila; UI nu inventeaza valori absente.
