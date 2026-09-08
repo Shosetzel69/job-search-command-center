@@ -7,7 +7,7 @@ const frontendDistDir = resolve(repoRoot, 'frontend', 'dist');
 const dataDir = resolve(repoRoot, 'data');
 const publicDir = resolve(projectDir, 'public');
 const publicDataDir = resolve(publicDir, 'data');
-const dataFiles = ['jobs.json','run-status.json','run-history.json','applications.json','sources.json','search-config.json'];
+const dataFiles = ['jobs.json','run-status.json','run-history.json','applications.json','sources.json','source-categories.json','search-config.json'];
 
 if (!existsSync(frontendDistDir)) throw new Error(`Frontend build directory not found: ${frontendDistDir}`);
 rmSync(publicDir, { recursive: true, force: true });
