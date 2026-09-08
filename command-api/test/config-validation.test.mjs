@@ -1,11 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 import {
   applyUserConfigPatch,
   validateEffectiveSearchConfig,
   validateUserConfigPatch,
 } from '../src/index.js';
+
+const nomenclatures = JSON.parse(readFileSync(resolve(process.cwd(), '../data/nomenclatures.json'), 'utf8'));
 
 function baseConfig() {
   return {
@@ -24,21 +28,21 @@ function baseConfig() {
 }
 
 test('valid configuration keeps explicit target geography', () => {
-  const config = validateEffectiveSearchConfig(baseConfig());
+  const config = validateEffectiveSearchConfig(baseConfig(), nomenclatures);
   assert.deepEqual(config.target_country_codes, ['RO', 'BE', 'LU']);
 });
 
 test('empty target geography is rejected', () => {
   const config = { ...baseConfig(), target_country_codes: [], search_country_codes: [], target_regions: [] };
-  assert.throws(() => validateEffectiveSearchConfig(config), /cel putin o tara sau regiune/i);
+  assert.throws(() => validateEffectiveSearchConfig(config, nomenclatures), /cel putin o tara sau regiune/i);
 });
 
 test('country inclusion and exclusion conflict is rejected', () => {
   const config = { ...baseConfig(), excluded_country_codes: ['RO'] };
-  assert.throws(() => validateEffectiveSearchConfig(config), /inclusa si exclusa/i);
+  assert.throws(() => validateEffectiveSearchConfig(config, nomenclatures), /inclusa si exclusa/i);
 });
 
-test('region-country overlap is rejected', () => {
+test('region-country overlap is rejected from canonical membership', () => {
   const config = {
     ...baseConfig(),
     target_regions: ['EU'],
@@ -46,19 +50,35 @@ test('region-country overlap is rejected', () => {
     search_country_codes: [],
     excluded_country_codes: ['RO'],
   };
-  assert.throws(() => validateEffectiveSearchConfig(config), /conflict/i);
+  assert.throws(() => validateEffectiveSearchConfig(config, nomenclatures), /conflict/i);
+});
+
+test('Asia canonical membership includes Pakistan', () => {
+  const config = {
+    ...baseConfig(),
+    target_regions: ['ASIA'],
+    target_country_codes: [],
+    search_country_codes: [],
+    excluded_country_codes: ['PK'],
+  };
+  assert.throws(() => validateEffectiveSearchConfig(config, nomenclatures), /conflict/i);
+});
+
+test('unsupported country code is rejected even when syntactically valid', () => {
+  const patch = validateUserConfigPatch({ targetCountries:['ZZ'], targetRegions:[] }, nomenclatures);
+  assert.fail(`Expected validation to reject ZZ, got ${JSON.stringify(patch)}`);
 });
 
 test('patch applies geography canonically to both target fields', () => {
-  const patch = validateUserConfigPatch({ targetCountries: ['RO', 'BE'], targetRegions: [] });
+  const patch = validateUserConfigPatch({ targetCountries: ['RO', 'BE'], targetRegions: [] }, nomenclatures);
   const config = applyUserConfigPatch(baseConfig(), patch);
-  validateEffectiveSearchConfig(config);
+  validateEffectiveSearchConfig(config, nomenclatures);
   assert.deepEqual(config.target_country_codes, ['RO', 'BE']);
   assert.deepEqual(config.search_country_codes, ['RO', 'BE']);
 });
 
 test('patch cannot turn effective target into implicit worldwide', () => {
-  const patch = validateUserConfigPatch({ targetCountries: [], targetRegions: [] });
+  const patch = validateUserConfigPatch({ targetCountries: [], targetRegions: [] }, nomenclatures);
   const config = applyUserConfigPatch(baseConfig(), patch);
-  assert.throws(() => validateEffectiveSearchConfig(config), /cel putin o tara sau regiune/i);
+  assert.throws(() => validateEffectiveSearchConfig(config, nomenclatures), /cel putin o tara sau regiune/i);
 });
