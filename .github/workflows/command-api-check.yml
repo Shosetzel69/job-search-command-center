@@ -99,6 +99,10 @@ jobs:
         with:
           node-version: 24
 
+      - name: Run frontend unit tests
+        working-directory: frontend
+        run: npm test
+
       - name: Install Worker dependencies
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
