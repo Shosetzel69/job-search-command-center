@@ -17,6 +17,8 @@ from job_identity import deduplicate
 NOW = datetime(2026, 9, 6, 16, tzinfo=timezone.utc)
 CONFIG = {"schema_version": "1.0", "source_strategy": "all active sources equally",
           "jobspipe_mode": "apify", "freshness_hours": 24,
+          "target_regions": [], "target_country_codes": ["RO"],
+          "excluded_regions": [], "excluded_country_codes": [],
           "role_groups": {"pm": {"enabled": True, "titles": ["IT Project Manager"]}}}
 CATALOG = {"sources": [
     {"name": "JobsPipe", "url": "https://jobspipe.dev/", "active": True},
