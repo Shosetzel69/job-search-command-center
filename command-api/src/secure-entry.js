@@ -1,14 +1,7 @@
+import { protectedDataPaths } from '../../shared/runtime-data.mjs';
 import commandApi from './index.js';
 
-const PROTECTED_DATA = new Set([
-  '/data/jobs.json',
-  '/data/run-status.json',
-  '/data/run-history.json',
-  '/data/search-config.json',
-  '/data/sources.json',
-  '/data/source-categories.json',
-  '/data/applications.json',
-]);
+const PROTECTED_DATA = protectedDataPaths();
 
 function noStoreResponse(response) {
   const headers = new Headers(response.headers);
