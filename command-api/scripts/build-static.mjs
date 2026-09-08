@@ -1,5 +1,6 @@
-import { cpSync, existsSync, mkdirSync, rmSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { normalizeSourceCatalog } from '../src/source-governance.js';
 
 const projectDir = process.cwd();
 const repoRoot = resolve(projectDir, '..');
@@ -15,7 +16,13 @@ mkdirSync(publicDataDir, { recursive: true });
 cpSync(frontendDistDir, publicDir, { recursive: true });
 for (const file of dataFiles) {
   const source = resolve(dataDir, file);
+  const target = resolve(publicDataDir, file);
   if (!existsSync(source)) throw new Error(`Required data file not found: ${source}`);
-  cpSync(source, resolve(publicDataDir, file));
+  if (file === 'sources.json') {
+    const payload = JSON.parse(readFileSync(source, 'utf-8'));
+    writeFileSync(target, `${JSON.stringify(normalizeSourceCatalog(payload), null, 2)}\n`, 'utf-8');
+  } else {
+    cpSync(source, target);
+  }
 }
 console.log(`React static site assembled in ${publicDir}`);
