@@ -11,6 +11,7 @@ on:
       - "requirements-search.txt"
       - "data/sources.json"
       - "data/source-categories.json"
+      - "data/nomenclatures.json"
       - "data/applications.json"
       - "data/search-config.json"
       - "data/run-history.json"
@@ -25,6 +26,7 @@ on:
       - "requirements-search.txt"
       - "data/sources.json"
       - "data/source-categories.json"
+      - "data/nomenclatures.json"
       - "data/applications.json"
       - "data/search-config.json"
       - "data/run-history.json"
@@ -94,6 +96,7 @@ jobs:
               Path("data/run-history.json"),
               Path("data/sources.json"),
               Path("data/source-categories.json"),
+              Path("data/nomenclatures.json"),
               Path("data/applications.json"),
           ]
           payloads = {}
@@ -103,12 +106,53 @@ jobs:
 
           assert payloads["sources.json"].get("schema_version") == "1.0"
           assert payloads["applications.json"].get("schema_version") == "1.0"
+
           categories = payloads["source-categories.json"]
           assert categories.get("schema_version") == "1.0"
           assert categories.get("count") == len(categories.get("categories", []))
           labels = [str(item.get("label", "")).strip().casefold() for item in categories.get("categories", [])]
           assert all(labels) and len(labels) == len(set(labels))
-          print("Package 2A data contracts are versioned and consistent")
+
+          nomenclatures = payloads["nomenclatures.json"]
+          assert nomenclatures.get("schema_version") == "1.0"
+          domains = nomenclatures.get("domains") or {}
+          required_domains = {
+              "regions", "countries", "work_modes", "contract_types",
+              "application_statuses", "seniority",
+          }
+          assert set(domains) == required_domains
+          for domain_name, domain in domains.items():
+              assert domain.get("kind") in {"system", "extensible"}, domain_name
+              assert isinstance(domain.get("extensible"), bool), domain_name
+              assert (domain.get("kind") == "extensible") == domain.get("extensible"), domain_name
+              values = domain.get("values")
+              assert isinstance(values, list), domain_name
+              codes = [str(item.get("code", "")).strip() for item in values]
+              labels = [str(item.get("label", "")).strip().casefold() for item in values]
+              assert all(codes) and len(codes) == len(set(codes)), domain_name
+              assert all(labels) and len(labels) == len(set(labels)), domain_name
+              for item in values:
+                  assert isinstance(item.get("active"), bool), (domain_name, item)
+                  assert isinstance(item.get("sort_order"), int), (domain_name, item)
+
+          countries = {item["code"] for item in domains["countries"]["values"]}
+          regions = {item["code"]: item for item in domains["regions"]["values"]}
+          assert set(regions) == {"EU", "US", "ASIA"}
+          assert regions["EU"]["label"] == "Uniunea Europeana"
+          for region in regions.values():
+              members = region.get("country_codes") or []
+              assert members and len(members) == len(set(members))
+              assert set(members) <= countries
+
+          work_modes = {item["code"] for item in domains["work_modes"]["values"]}
+          assert work_modes == {"remote", "hybrid", "onsite"}
+          contract_types = {item["code"] for item in domains["contract_types"]["values"]}
+          assert contract_types == {"permanent", "temporary", "contract", "freelance"}
+          application_statuses = {item["code"] for item in domains["application_statuses"]["values"]}
+          assert "applied" in application_statuses
+          assert domains["seniority"]["values"] == []
+
+          print("Package 2A/2A8 data contracts are versioned and consistent")
           PY
 
       - name: Set up Node.js
