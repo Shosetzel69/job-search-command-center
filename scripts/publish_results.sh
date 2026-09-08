@@ -12,6 +12,12 @@ files=(
   data/search-state.json
 )
 
+base_sha="$(git rev-parse HEAD)"
+declare -A base_blobs
+for file in "${files[@]}"; do
+  base_blobs["$file"]="$(git rev-parse "$base_sha:$file" 2>/dev/null || printf '__missing__')"
+done
+
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 
@@ -31,6 +37,15 @@ published=false
 for attempt in $(seq 1 "$max_attempts"); do
   echo "Publish attempt $attempt/$max_attempts"
   git fetch "$remote" "$branch"
+
+  for file in "${files[@]}"; do
+    remote_blob="$(git rev-parse "$remote/$branch:$file" 2>/dev/null || printf '__missing__')"
+    if [ "$remote_blob" != "${base_blobs[$file]}" ]; then
+      echo "Concurrent data conflict detected for $file; refusing to overwrite $remote/$branch" >&2
+      exit 1
+    fi
+  done
+
   git reset --hard "$remote/$branch"
 
   for file in "${files[@]}"; do
