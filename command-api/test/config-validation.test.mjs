@@ -65,8 +65,10 @@ test('Asia canonical membership includes Pakistan', () => {
 });
 
 test('unsupported country code is rejected even when syntactically valid', () => {
-  const patch = validateUserConfigPatch({ targetCountries:['ZZ'], targetRegions:[] }, nomenclatures);
-  assert.fail(`Expected validation to reject ZZ, got ${JSON.stringify(patch)}`);
+  assert.throws(
+    () => validateUserConfigPatch({ targetCountries:['ZZ'], targetRegions:[] }, nomenclatures),
+    /unsupported country code/i,
+  );
 });
 
 test('patch applies geography canonically to both target fields', () => {
