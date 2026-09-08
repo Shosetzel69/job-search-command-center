@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
+import NomenclaturesAdmin from './nomenclatures-admin.jsx';
 import {
   ADMIN_SECTIONS,
   SOURCE_SECTIONS,
@@ -298,7 +299,7 @@ export default function AdminShell({
     {section === 'overview' && <Overview sources={governedSources} runStatus={runStatus} onNavigate={setSection}/>} 
     {section === 'update' && <UpdateData runStatus={runStatus} running={running} onRun={onRun}/>} 
     {section === 'sources' && <SourcesAdmin {...props}/>} 
-    {section === 'nomenclatures' && <Nomenclatures/>} 
+    {section === 'nomenclatures' && <NomenclaturesAdmin token={token} notify={notify}/>} 
     {section === 'logs' && <Logs runs={runHistory}/>} 
   </div>;
 }
