@@ -15,7 +15,8 @@ function baseConfig() {
   return {
     schema_version: '1.0',
     role_groups: {},
-    work_modes: { remote: true, hybrid: true },
+    work_modes: { remote: true, hybrid: true, onsite: false },
+    contract_types: ['permanent', 'temporary', 'contract', 'freelance'],
     rate_min_eur_day: 250,
     rate_max_eur_day: 650,
     target_regions: [],
@@ -83,4 +84,26 @@ test('patch cannot turn effective target into implicit worldwide', () => {
   const patch = validateUserConfigPatch({ targetCountries: [], targetRegions: [] }, nomenclatures);
   const config = applyUserConfigPatch(baseConfig(), patch);
   assert.throws(() => validateEffectiveSearchConfig(config, nomenclatures), /cel putin o tara sau regiune/i);
+});
+
+test('onsite is persisted independently from remote and hybrid', () => {
+  const patch = validateUserConfigPatch({ workOnsite:true }, nomenclatures);
+  const config = applyUserConfigPatch(baseConfig(), patch);
+  assert.equal(config.work_modes.onsite, true);
+});
+
+test('contract types are validated against active canonical codes', () => {
+  const patch = validateUserConfigPatch({ contractTypes:['contract','freelance'] }, nomenclatures);
+  const config = applyUserConfigPatch(baseConfig(), patch);
+  assert.deepEqual(config.contract_types, ['contract','freelance']);
+  assert.throws(
+    () => validateUserConfigPatch({ contractTypes:['internship'] }, nomenclatures),
+    /unsupported contract type/i,
+  );
+});
+
+test('legacy JobsPipe run budget maps to its own config field', () => {
+  const patch = validateUserConfigPatch({ jobspipeDirectRunBudget:23 }, nomenclatures);
+  const config = applyUserConfigPatch(baseConfig(), patch);
+  assert.equal(config.jobspipe_credit_budget_per_run, 23);
 });
