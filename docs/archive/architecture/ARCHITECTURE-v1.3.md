@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.4`
+Versiune document: `v1.3`
 Versiune aplicatie de referinta: `0.05`
-Ultima actualizare: `2026-09-08`
+Ultima actualizare: `2026-09-06`
 
 ## Preambul
 
@@ -81,7 +81,7 @@ Principii:
 |---|---|---|
 | `frontend` | UI, filtre locale, autentificare Google, vizualizare si configurare | Nu acceseaza GitHub direct si nu ruleaza motorul de cautare |
 | `Cloudflare Worker / Command API` | autentificare, autorizare, protectie date, comenzi, configuratie, CRUD Surse | Nu executa matching/scoring |
-| `GitHub Actions` | orchestration, secrets provider, executie search engine, publicare rezultate | Nu implementeaza logica UI |
+| `GitHub Actions` | scheduling, orchestration, secrets provider, executie search engine, publicare rezultate | Nu implementeaza logica UI |
 | `search engine` | normalizare, geografie, dedupe/repost, filtrare si scoring | Nu gestioneaza autentificarea |
 | `connectors` | colecteaza date de la providerii externi | Nu decid FIT sau prioritatea finala |
 | `runtime data` | persistenta starii si rezultatelor in fisiere JSON versionate | Nu reprezinta o baza de date relationala |
@@ -152,12 +152,6 @@ Endpoint-uri curente:
 
 Worker-ul nu executa motorul de cautare.
 
-Semantica comenzilor in Pachetul 1:
-
-- `PUT /config` valideaza si persista configuratia, fara dispatch;
-- `POST /commands/run` valideaza criteriile efective, persista modificarile transmise daca este necesar, blocheaza o rulare concurenta si face un singur `workflow_dispatch`;
-- targetul geografic gol este invalid.
-
 ---
 
 ## 6. GitHub Actions
@@ -166,11 +160,15 @@ Workflow principal:
 
 `.github/workflows/job-search-full.yml`
 
-Trigger operational curent:
+Trigger-uri:
 
-- numai `workflow_dispatch`.
+- `workflow_dispatch`;
+- schedule;
+- modificari relevante in configuratie sau motor.
 
-In Pachetul 1 de stabilizare, full search nu ruleaza la `push` si nu are `schedule`. Salvarea configuratiei nu declanseaza cautarea. Rularea este pornita explicit prin Command API si foloseste triggerul canonic `manual-ui`.
+Schedule curent:
+
+`0 6,15 * * * UTC`
 
 Responsabilitati:
 
@@ -218,7 +216,7 @@ Collect
   -> Publish
 ```
 
-Geo-eligibility este evaluata separat de FIT. Configuratia trebuie sa contina cel putin o tara sau regiune tinta; un target gol nu este interpretat ca Worldwide. Pentru Hybrid/Onsite, geografia necunoscuta nu este presupusa eligibila.
+Geo-eligibility este evaluata separat de FIT.
 
 ---
 
@@ -388,9 +386,6 @@ Frontend
 Frontend
    |
    v
-PUT /config
-   |
-   v
 Cloudflare Worker
    |
    v
@@ -400,8 +395,6 @@ GitHub Contents API
    |
    +--> data/sources.json
 ```
-
-Persistarea configuratiei nu porneste full search.
 
 ### 9.3 Lansare manuala
 
@@ -414,18 +407,12 @@ POST /commands/run
    v
 Cloudflare Worker
    |
-   +--> valideaza / persista criteriile curente
-   |
-   +--> verifica rulare concurenta
-   |
    v
-workflow_dispatch (manual-ui)
+GitHub Actions
    |
    v
 Search Engine
 ```
-
-O actiune explicita de rulare produce maximum un dispatch.
 
 ---
 
@@ -546,8 +533,6 @@ CI valideaza cel putin:
 - testele de regresie search logic;
 - fisierele JSON;
 - React/Vite production build;
-- teste Command API, inclusiv validare configuratie si cazuri negative de securitate;
-- guard CI pentru full search manual-only;
 - Cloudflare Worker dry-run.
 
 Pentru logica critica trebuie mentinute teste pentru:
@@ -643,7 +628,7 @@ JobsPipe si Jobicy au connectori implementati. JobsPipe este momentan dezactivat
 - [x] Command API
 - [x] GitHub Actions orchestration
 - [x] Manual search trigger
-- [ ] Scheduled search - dezactivat in Pachetul 1 de stabilizare
+- [x] Scheduled search
 
 ### Search engine
 
@@ -707,7 +692,7 @@ Politica de pastrare:
 
 Versiune document:
 
-**v1.4**
+**v1.3**
 
 Versiune aplicatie de referinta:
 

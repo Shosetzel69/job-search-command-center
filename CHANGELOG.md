@@ -8,6 +8,13 @@
 
 ### Remedieri
 
+- #79 / Pachetul 1: full search este manual-only; eliminate trigger-ele `push` si `schedule`, iar `PUT /config` nu mai porneste cautarea.
+- #79 / Pachetul 1: `POST /commands/run` foloseste criteriile curente, blocheaza concurenta si produce un singur dispatch `manual-ui`.
+- #79 / Pachetul 1: geografia devine fail-safe: target explicit obligatoriu, RO/BE/LU restaurat, iar Hybrid/Onsite cu geografie necunoscuta nu este presupus eligibil.
+- #79 / Pachetul 1: adaugate teste de regresie, securitate si guard CI pentru a preveni reintroducerea trigger-elor automate.
+- #33 / Pachetul 1: publicarea rezultatelor pastreaza commit-urile concurente non-data prin retry si opreste explicit publicarea daca fisierele canonice de rezultate au fost modificate concurent; acoperit prin test Git real, fara force push.
+- #81: documentata configuratia Cloudflare Workers Builds: root-ul proiectului trebuie sa fie `command-api`; rularea Wrangler din repository root fara config produce `Missing entry-point to Worker script or to assets directory`.
+
 - #54: providerii generici LinkedIn, Indeed, Workday, Greenhouse, Workable, SmartRecruiters, Ashby si Lever nu mai sunt trimisi crawlerului web cat timp ruta dedicata este amanata; JobsPipe ramane dezactivat.
 - #54: adaugat fallback Chromium/Playwright pentru prima pagina dinamica accesibila fara `JobPosting`, fara bypass robots/login/CAPTCHA si cu maximum 2 sesiuni browser simultan.
 - #54: restransa descoperirea linkurilor non-job (`pricing`, `products`, `resources`, `webinars`, `status`, `demo`, `career-advice` etc.) si extins diagnosticul per sursa cu metoda, URL final, HTTP/robots, browser si motivul esecului.

@@ -1,4 +1,4 @@
-import registry from './source-connectors.json';
+import registry from './source-connectors.json' with { type: 'json' };
 
 export function sourceConnector(url) {
   try {

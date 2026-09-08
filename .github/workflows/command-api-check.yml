@@ -64,6 +64,18 @@ jobs:
           print("Python modules, geography configuration and run history are valid")
           PY
 
+      - name: Guard full search manual-only trigger
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          workflow = Path('.github/workflows/job-search-full.yml').read_text(encoding='utf-8')
+          assert 'workflow_dispatch:' in workflow, 'Full search must expose workflow_dispatch'
+          assert '\n  push:' not in workflow, 'Full search must not run on push'
+          assert '\n  schedule:' not in workflow, 'Full search scheduler is disabled in Package 1'
+          assert 'run_trigger:' in workflow and 'manual-ui' in workflow, 'Canonical manual trigger is missing'
+          print('Full search is manual-only')
+          PY
+
       - name: Run search logic regression tests
         run: python3 -m unittest discover -s scripts -p "test_*.py"
 
@@ -91,7 +103,10 @@ jobs:
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
 
+      - name: Run Command API unit tests
+        working-directory: command-api
+        run: npm test
+
       - name: Validate React frontend and Worker build
         working-directory: command-api
         run: npm run check
-

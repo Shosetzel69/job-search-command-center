@@ -1,7 +1,7 @@
 # Command API
 
 Versiune aplicatie: `0.05`
-Ultima actualizare: `2026-09-06`
+Ultima actualizare: `2026-09-08`
 
 ## 1. Scop
 
@@ -11,23 +11,55 @@ Responsabilitati:
 
 - validare/autorizare Google;
 - protectie `/data/*`;
-- `Ruleaza verificarea`;
+- rulare manuala `Ruleaza verificarea`;
 - persistare configuratie in `data/search-config.json`;
 - CRUD persistent pentru `data/sources.json`;
-- acces la GitHub Actions si GitHub Contents API.
+- acces server-side la GitHub Actions si GitHub Contents API.
 
 Nu este motorul de cautare si nu este o baza de date.
 
-## 2. Componente
+## 2. Regula de executie - Package 1
+
+Salvarea configuratiei si executia cautarii sunt operatii separate.
+
+```text
+Salveaza preferintele
+-> PUT /config
+-> validare
+-> persistare
+-> STOP
+
+Ruleaza verificarea
+-> POST /commands/run
+-> validare criterii curente
+-> persistare daca exista modificari
+-> verificare run activ
+-> workflow_dispatch(run_trigger=manual-ui)
+-> 202 Accepted
+```
+
+Reguli:
+
+- `PUT /config` nu lanseaza full search;
+- commit/push de configuratie, surse, cod sau documentatie nu lanseaza full search;
+- scheduler-ul este OFF in Package 1;
+- full search se lanseaza numai prin `workflow_dispatch`;
+- o singura rulare poate fi `queued`/`in_progress`;
+- o a doua comanda returneaza 409;
+- configuratia invalida returneaza 400 si nu face dispatch;
+- targetul geografic nu poate fi complet gol;
+- `Worldwide` nu este dedus din lipsa targetului de cautare.
+
+## 3. Componente
 
 - `command-api/src/index.js` - auth, Command API, GitHub API, configuratie si Surse;
 - `command-api/src/secure-entry.js` - protectia `/data/*` + delegare;
 - `command-api/wrangler.jsonc` - configuratie Worker/Static Assets;
 - `command-api/scripts/build-static.mjs` - asamblarea bundle-ului public.
 
-## 3. Autentificare Google
+## 4. Autentificare Google
 
-Browserul trimite Google ID token:
+Browserul trimite:
 
 ```text
 Authorization: Bearer <GOOGLE_ID_TOKEN>
@@ -42,7 +74,7 @@ Worker-ul verifica:
 
 Tokenul ramane numai in memoria frontend-ului.
 
-## 4. Endpoint-uri publice
+## 5. Endpoint-uri publice
 
 ### `GET /health`
 
@@ -50,15 +82,15 @@ Returneaza starea minima a Worker-ului si daca auth/GitHub sunt configurate.
 
 ### `GET /auth/config`
 
-Returneaza `GOOGLE_CLIENT_ID` si starea de configurare necesara Google Sign-In.
+Returneaza `GOOGLE_CLIENT_ID` si starea necesara Google Sign-In.
 
-## 5. Endpoint autentificare
+## 6. Endpoint autentificare
 
 ### `POST /auth/session`
 
 Necesita bearer Google valid si confirma utilizatorul autorizat.
 
-## 6. Date protejate
+## 7. Date protejate
 
 Rutele protejate sunt:
 
@@ -73,20 +105,35 @@ Reguli:
 
 - numai GET;
 - cale necunoscuta -> 404;
-- token lipsa/invalid -> auth error;
+- token lipsa/invalid -> 401/403;
 - `cache-control: no-store`;
 - `x-content-type-options: nosniff`.
 
 `search-state.json` nu este publicat.
 
-## 7. Comenzi protejate
+## 8. Comenzi protejate
 
 ### `POST /commands/run`
 
-1. verifica workflow runs recente;
-2. daca exista `queued` sau `in_progress`, returneaza 409;
-3. altfel executa `workflow_dispatch` pe `main`;
-4. returneaza 202.
+Body-ul JSON este optional. Frontend-ul curent trimite criteriile curente din UI.
+
+Flux:
+
+1. verifica daca exista run `queued` sau `in_progress`;
+2. valideaza criteriile primite sau configuratia canonica existenta;
+3. daca criteriile primite difera, le persista in `data/search-config.json`;
+4. lanseaza exact un `workflow_dispatch` cu `run_trigger=manual-ui`;
+5. returneaza 202.
+
+Raspuns exemplu:
+
+```json
+{
+  "status": "accepted",
+  "trigger": "manual-ui",
+  "config_commit": "<sha-or-null>"
+}
+```
 
 ### `PUT /config`
 
@@ -100,8 +147,7 @@ Accepta campurile aprobate din UI:
 - interval B2B;
 - disponibilitate imediata;
 - excluderi de business;
-- `jobspipeMode`;
-- limite Apify/Direct;
+- `jobspipeMode` si limitele asociate;
 - `targetRegions`;
 - `targetCountries`;
 - `excludedRegions`;
@@ -111,12 +157,13 @@ Reguli geografice server-side:
 
 - regiuni permise: `EU`, `US`, `ASIA`;
 - codurile de tara trebuie sa fie ISO alpha-2;
+- trebuie sa existe cel putin o tara sau regiune tinta;
 - aceeasi tara/regiune nu poate fi simultan inclusa si exclusa;
 - suprapunerea regiune inclusa/tara exclusa sau invers este respinsa cu 400.
 
-Configuratia este scrisa prin GitHub Contents API. Commit-ul `data/search-config.json` declanseaza workflow-ul de cautare.
+Configuratia este scrisa prin GitHub Contents API numai daca s-a modificat. Salvarea nu face dispatch.
 
-## 8. CRUD Surse
+## 9. CRUD Surse
 
 Toate endpoint-urile necesita utilizator autorizat.
 
@@ -129,70 +176,55 @@ Creeaza o sursa cu:
 - `url`;
 - `category`;
 - `active`;
-- `connector_available=false` pentru o sursa noua manual.
+- `connector_available` derivat din ruta tehnica disponibila.
 
 URL duplicat -> 409.
 
 ### `PUT /sources/:id`
 
-Permite editarea:
-
-- nume;
-- URL;
-- categorie;
-- activa/inactiva.
-
-ID-ul si `connector_available` sunt pastrate. URL duplicat -> 409.
+Permite editarea numelui, URL-ului, categoriei si starii active/inactive. URL duplicat -> 409.
 
 ### `DELETE /sources/:id`
 
-Sterge efectiv sursa din registrul curent. Istoricul ramane in Git.
+Sterge sursa din registrul curent. Istoricul ramane in Git.
 
-### Normalizare catalog
+Modificarile Source Registry nu lanseaza full search in Package 1.
 
-La prima mutatie, catalogul legacy este normalizat la:
+## 10. Trigger si loguri
 
-```json
-{
-  "schema_version": "1.0",
-  "count": 129,
-  "sources": [
-    {
-      "id": "src-...",
-      "name": "...",
-      "url": "https://...",
-      "category": "...",
-      "active": true,
-      "connector_available": false
-    }
-  ]
-}
-```
+Trigger canonic pentru Package 1:
 
-Campul legacy `priority` nu este pastrat in modelul normalizat.
+`manual-ui`
 
-## 9. GitHub access
+Runner-ul persista trigger-ul in:
 
-Worker-ul foloseste fine-grained PAT din Cloudflare Secret:
+- `data/run-status.json`;
+- `data/run-history.json`.
 
-`GITHUB_TOKEN`
+`config` nu este trigger valid pentru full search.
+
+`scheduled` este rezervat Package 2, cand automatizarea configurabila va fi implementata.
+
+## 11. GitHub access
+
+Worker-ul foloseste `GITHUB_TOKEN` din Cloudflare Secret.
 
 Permisiuni necesare:
 
 - Actions: write;
 - Contents: write.
 
-PAT-ul nu este livrat browserului.
+Tokenul nu este livrat browserului.
 
-## 10. Origin si CORS
+## 12. Origin si CORS
 
 `FRONTEND_ORIGIN` este verificat pentru cererile privilegiate.
 
-Metode CORS permise: GET, POST, PUT, DELETE, OPTIONS.
+Metode permise: GET, POST, PUT, DELETE, OPTIONS.
 
 Origin strain -> 403. CORS nu inlocuieste autentificarea.
 
-## 11. Variabile si secrete
+## 13. Variabile si secrete
 
 ### Cloudflare Secrets
 
@@ -207,47 +239,23 @@ Origin strain -> 403. CORS nu inlocuieste autentificarea.
 - `GITHUB_REPO`;
 - `GITHUB_REF`;
 - `GITHUB_WORKFLOW`;
-- `SEARCH_CONFIG_PATH`.
-
-`SOURCES_PATH` este optional; implicit `data/sources.json`.
+- `SEARCH_CONFIG_PATH`;
+- optional `SOURCES_PATH`.
 
 Provider secrets `APIFY_TOKEN` si `JOBSPIPE_API_KEY` raman numai in GitHub Actions Secrets.
 
-## 12. Frontend auth lifecycle
+## 14. Testare
 
-```text
-GET /auth/config
-  -> Google Sign-In
-  -> POST /auth/session
-  -> auth valid
-  -> token in memorie
-  -> incarca /data/*
-```
+CI valideaza minimum:
 
-Eroarea de date dupa login nu produce logout automat.
+- Python syntax/config;
+- target geografic valid;
+- regression test pentru job Hybrid JP exclus din target RO/BE/LU;
+- full search fara trigger `push` sau `schedule`;
+- Command API config validation;
+- protected data fara bearer -> 401;
+- origin nepermis -> 403;
+- React/Vite build;
+- Worker dry-run.
 
-## 13. Build si deploy
-
-`npm run build`:
-
-1. construieste frontend React/Vite;
-2. copiaza Static Assets;
-3. copiaza cele 6 fisiere JSON protejate necesare, inclusiv `run-history.json`.
-
-## 14. Limitari MVP
-
-- mecanismul de autorizare curent permite un singur utilizator prin configuratia `ALLOWED_GOOGLE_SUB`;
-- suportul multi-user este `UNDER ANALYSIS` conform `ARCHITECTURE.md`;
-- fara sesiuni server-side;
-- fara refresh token propriu;
-- fara baza de date Worker;
-- arhivarea joburilor ramane locala;
-- sursa in catalog nu implica automat connector;
-- fara MCP.
-
-## 15. Status verificare
-
-- Python/search logic: validat CI;
-- React/Vite: validat CI;
-- Worker dry-run: validat CI;
-- test E2E complet pentru release 0.05: de confirmat pe deploy-ul live.
+Validarea E2E finala este definita in #24 si #79.
