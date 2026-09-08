@@ -113,6 +113,10 @@ def append_run_history() -> None:
     except Exception:
         history = {}
 
+    trigger = os.environ.get("RUN_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME") or "unknown"
+    status["trigger"] = trigger
+    engine.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
     runs = history.get("runs") if isinstance(history.get("runs"), list) else []
     started = engine.parse_posted_datetime(status.get("started_at"))
     completed = engine.parse_posted_datetime(status.get("completed_at"))
@@ -123,7 +127,7 @@ def append_run_history() -> None:
     entry = {
         "run_id": status.get("run_id"),
         "status": status.get("status"),
-        "trigger": os.environ.get("GITHUB_EVENT_NAME") or os.environ.get("RUN_TRIGGER") or "unknown",
+        "trigger": trigger,
         "started_at": status.get("started_at"),
         "completed_at": status.get("completed_at"),
         "duration_seconds": duration_seconds,
@@ -136,8 +140,6 @@ def append_run_history() -> None:
         "excluded": int(status.get("excluded") or 0),
         "source_results": status.get("source_results") or [],
         "limitations": status.get("limitations") or [],
-        # A history entry becomes visible to the application only through the same
-        # successful Git data commit that publishes the run status and job results.
         "publication": "published",
     }
     entry.update({key: status[key] for key in (*orchestration.COUNTERS, "source_strategy") if key in status})
@@ -182,4 +184,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
