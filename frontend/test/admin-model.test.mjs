@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adminSourceSummary, categoryDuplicate, sortCategories, sourceGovernanceActions } from '../src/admin-model.mjs';
+import { adminSourceSummary, categoryDuplicate, sortCategories, sourceGovernanceActions, sourcePolicyExcluded } from '../src/admin-model.mjs';
 
 test('admin source summary separates active, validation and problem states', () => {
   const summary = adminSourceSummary([
@@ -34,4 +34,11 @@ test('governance actions keep validation approval activation and disable distinc
   assert.deepEqual(sourceGovernanceActions({ active:false, validationStatus:'validated', approvalStatus:'pending' }), ['approve','reject']);
   assert.deepEqual(sourceGovernanceActions({ active:false, validationStatus:'validated', approvalStatus:'approved' }), ['activate','reject']);
   assert.deepEqual(sourceGovernanceActions({ active:true, validationStatus:'validated', approvalStatus:'approved' }), ['disable','reject']);
+});
+
+test('Monster is displayed as policy excluded and cannot expose activation actions', () => {
+  const monster = { name:'Monster', active:true, validationStatus:'validated', approvalStatus:'approved' };
+  assert.equal(sourcePolicyExcluded(monster), true);
+  assert.deepEqual(sourceGovernanceActions(monster), []);
+  assert.deepEqual(adminSourceSummary([monster]), { active:0, validating:0, problems:0, approvedInactive:1 });
 });
