@@ -1,4 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { activeCodes, assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
 import {
   applySourceAction,
   assertUniqueCategoryLabel,
@@ -16,12 +17,6 @@ import {
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const GITHUB_API_VERSION = '2026-03-10';
-
-const REGION_COUNTRIES = {
-  EU: new Set(['AT','BE','BG','HR','CY','CZ','DK','EE','FI','FR','DE','GR','HU','IE','IT','LV','LT','LU','MT','NL','PL','PT','RO','SK','SI','ES','SE']),
-  US: new Set(['US']),
-  ASIA: new Set(['AF','AM','AZ','BH','BD','BT','BN','KH','CN','GE','HK','IN','ID','IR','IQ','IL','JP','JO','KZ','KW','KG','LA','LB','MO','MY','MV','MN','MM','NP','KP','OM','PK','PS','PH','QA','SA','SG','KR','LK','SY','TW','TJ','TH','TL','TR','TM','AE','UZ','VN','YE']),
-};
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -165,6 +160,16 @@ async function writeRepoJson(env, path, sha, payload, message) {
   });
 }
 
+async function readNomenclatures(env) {
+  const path = env.NOMENCLATURES_PATH || 'data/nomenclatures.json';
+  const { sha, payload } = await readRepoJson(env, path);
+  try {
+    return { path, sha, payload:assertNomenclatures(payload) };
+  } catch (error) {
+    throw Object.assign(new Error(`Invalid nomenclatures contract: ${error.message}`), { status: 409 });
+  }
+}
+
 function uniqueStrings(input, { max = 100, maxLength = 100, uppercase = false } = {}) {
   if (!Array.isArray(input) || input.length > max || input.some(x => typeof x !== 'string' || x.length > maxLength)) {
     throw Object.assign(new Error('Invalid list value'), { status: 400 });
@@ -176,36 +181,45 @@ function uniqueStrings(input, { max = 100, maxLength = 100, uppercase = false } 
   return [...new Set(values)];
 }
 
-function assertGeographyNoConflict(patch) {
+function assertGeographyNoConflict(patch, nomenclatures) {
+  const { validCountries, validRegions, membership } = geographyIndex(nomenclatures);
   const targetsR = new Set((patch.targetRegions || []).map(x => x.toUpperCase()));
   const excludedR = new Set((patch.excludedRegions || []).map(x => x.toUpperCase()));
   const targetsC = new Set((patch.targetCountries || []).map(x => x.toUpperCase()));
   const excludedC = new Set((patch.excludedCountries || []).map(x => x.toUpperCase()));
   for (const r of [...targetsR, ...excludedR]) {
-    if (!REGION_COUNTRIES[r]) throw Object.assign(new Error(`Unsupported region: ${r}`), { status: 400 });
+    if (!validRegions.has(r)) throw Object.assign(new Error(`Unsupported region: ${r}`), { status: 400 });
   }
   for (const c of [...targetsC, ...excludedC]) {
-    if (!/^[A-Z]{2}$/.test(c)) throw Object.assign(new Error(`Invalid country code: ${c}`), { status: 400 });
+    if (!validCountries.has(c)) throw Object.assign(new Error(`Unsupported country code: ${c}`), { status: 400 });
   }
   for (const c of targetsC) if (excludedC.has(c)) throw Object.assign(new Error('Aceeasi tara nu poate fi inclusa si exclusa.'), { status: 400 });
   for (const r of targetsR) if (excludedR.has(r)) throw Object.assign(new Error('Aceeasi regiune nu poate fi inclusa si exclusa.'), { status: 400 });
   for (const r of targetsR) for (const c of excludedC) {
-    if (REGION_COUNTRIES[r].has(c)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
+    if (membership.get(r)?.has(c)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
   }
   for (const r of excludedR) for (const c of targetsC) {
-    if (REGION_COUNTRIES[r].has(c)) throw Object.assign(new Error('Exista un conflict intre regiunea exclusa si o tara inclusa.'), { status: 400 });
+    if (membership.get(r)?.has(c)) throw Object.assign(new Error('Exista un conflict intre regiunea exclusa si o tara inclusa.'), { status: 400 });
   }
 }
 
-function validateUserConfigPatch(input) {
+function validateUserConfigPatch(input, nomenclatures) {
+  assertNomenclatures(nomenclatures);
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw Object.assign(new Error('Invalid configuration payload'), { status: 400 });
   }
   const output = {};
-  const booleanKeys = ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','keepReposts','immediateStart','jobspipeEnabled'];
+  const booleanKeys = ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','workOnsite','keepReposts','immediateStart','jobspipeEnabled'];
   for (const key of booleanKeys) if (key in input) {
     if (typeof input[key] !== 'boolean') throw Object.assign(new Error(`${key} must be boolean`), { status: 400 });
     output[key] = input[key];
+  }
+  if ('contractTypes' in input) {
+    const values = uniqueStrings(input.contractTypes, { max:20, maxLength:40 }).map(value => value.toLowerCase());
+    const allowed = activeCodes(nomenclatures, 'contract_types');
+    const unsupported = values.filter(value => !allowed.has(value));
+    if (unsupported.length) throw Object.assign(new Error(`Unsupported contract type: ${unsupported.join(', ')}`), { status:400 });
+    output.contractTypes = values;
   }
   if ('jobspipeMode' in input) {
     const value = String(input.jobspipeMode || '').toLowerCase();
@@ -245,11 +259,11 @@ function validateUserConfigPatch(input) {
     throw Object.assign(new Error('rateMin cannot exceed rateMax'), { status: 400 });
   }
   if ('exclusions' in input) output.exclusions = uniqueStrings(input.exclusions, { max: 20, maxLength: 200 });
-  if ('targetRegions' in input) output.targetRegions = uniqueStrings(input.targetRegions, { max: 3, maxLength: 10, uppercase: true });
+  if ('targetRegions' in input) output.targetRegions = uniqueStrings(input.targetRegions, { max: 10, maxLength: 20, uppercase: true });
   if ('targetCountries' in input) output.targetCountries = uniqueStrings(input.targetCountries, { max: 100, maxLength: 2, uppercase: true });
-  if ('excludedRegions' in input) output.excludedRegions = uniqueStrings(input.excludedRegions, { max: 3, maxLength: 10, uppercase: true });
+  if ('excludedRegions' in input) output.excludedRegions = uniqueStrings(input.excludedRegions, { max: 10, maxLength: 20, uppercase: true });
   if ('excludedCountries' in input) output.excludedCountries = uniqueStrings(input.excludedCountries, { max: 100, maxLength: 2, uppercase: true });
-  assertGeographyNoConflict(output);
+  assertGeographyNoConflict(output, nomenclatures);
   return output;
 }
 
@@ -263,6 +277,8 @@ function applyUserConfigPatch(config, patch) {
   config.work_modes ||= {};
   if ('workRemote' in patch) config.work_modes.remote = patch.workRemote;
   if ('workHybrid' in patch) config.work_modes.hybrid = patch.workHybrid;
+  if ('workOnsite' in patch) config.work_modes.onsite = patch.workOnsite;
+  if ('contractTypes' in patch) config.contract_types = patch.contractTypes;
   if ('freshness' in patch) config.freshness_hours = patch.freshness;
   if ('fitThreshold' in patch) config.fit_threshold = patch.fitThreshold;
   if ('keepReposts' in patch) config.keep_reposts = patch.keepReposts;
@@ -286,7 +302,9 @@ function applyUserConfigPatch(config, patch) {
   return config;
 }
 
-function validateEffectiveSearchConfig(config) {
+function validateEffectiveSearchConfig(config, nomenclatures) {
+  const { validCountries, validRegions, membership } = geographyIndex(nomenclatures);
+  const allowedContractTypes = activeCodes(nomenclatures, 'contract_types');
   if (!config || config.schema_version !== '1.0') {
     throw Object.assign(new Error('Unsupported search configuration schema'), { status: 409 });
   }
@@ -294,30 +312,37 @@ function validateEffectiveSearchConfig(config) {
   const excludedRegions = new Set((config.excluded_regions || []).map(x => String(x).trim().toUpperCase()).filter(Boolean));
   const targetCountries = new Set((config.target_country_codes || config.search_country_codes || []).map(x => String(x).trim().toUpperCase()).filter(Boolean));
   const excludedCountries = new Set((config.excluded_country_codes || []).map(x => String(x).trim().toUpperCase()).filter(Boolean));
-  for (const region of [...targetRegions, ...excludedRegions]) if (!REGION_COUNTRIES[region]) throw Object.assign(new Error(`Unsupported region: ${region}`), { status: 400 });
-  for (const country of [...targetCountries, ...excludedCountries]) if (!/^[A-Z]{2}$/.test(country)) throw Object.assign(new Error(`Invalid country code: ${country}`), { status: 400 });
+  for (const region of [...targetRegions, ...excludedRegions]) if (!validRegions.has(region)) throw Object.assign(new Error(`Unsupported region: ${region}`), { status: 400 });
+  for (const country of [...targetCountries, ...excludedCountries]) if (!validCountries.has(country)) throw Object.assign(new Error(`Unsupported country code: ${country}`), { status: 400 });
   if (!targetRegions.size && !targetCountries.size) throw Object.assign(new Error('Selecteaza cel putin o tara sau regiune tinta.'), { status: 400 });
   for (const country of targetCountries) if (excludedCountries.has(country)) throw Object.assign(new Error('Aceeasi tara nu poate fi inclusa si exclusa.'), { status: 400 });
   for (const region of targetRegions) if (excludedRegions.has(region)) throw Object.assign(new Error('Aceeasi regiune nu poate fi inclusa si exclusa.'), { status: 400 });
-  for (const region of targetRegions) for (const country of excludedCountries) if (REGION_COUNTRIES[region].has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
-  for (const region of excludedRegions) for (const country of targetCountries) if (REGION_COUNTRIES[region].has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea exclusa si o tara inclusa.'), { status: 400 });
+  for (const region of targetRegions) for (const country of excludedCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
+  for (const region of excludedRegions) for (const country of targetCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea exclusa si o tara inclusa.'), { status: 400 });
+  const configuredContractTypes = config.contract_types == null ? [...allowedContractTypes] : config.contract_types;
+  if (!Array.isArray(configuredContractTypes)) throw Object.assign(new Error('contract_types must be a list'), { status:400 });
+  for (const value of configuredContractTypes) if (!allowedContractTypes.has(String(value).toLowerCase())) throw Object.assign(new Error(`Unsupported contract type: ${value}`), { status:400 });
+  const modes = config.work_modes || {};
+  for (const key of ['remote','hybrid','onsite']) if (key in modes && typeof modes[key] !== 'boolean') throw Object.assign(new Error(`work_modes.${key} must be boolean`), { status:400 });
   if (Number(config.rate_min_eur_day || 0) > Number(config.rate_max_eur_day || 0)) throw Object.assign(new Error('rateMin cannot exceed rateMax'), { status: 400 });
   return config;
 }
 
-async function updateSearchConfig(env, patch) {
+async function updateSearchConfig(env, patch, nomenclatures = null) {
+  const canonical = nomenclatures || (await readNomenclatures(env)).payload;
   const path = env.SEARCH_CONFIG_PATH;
   const { sha, payload: config } = await readRepoJson(env, path);
   const before = JSON.stringify(config);
-  const updated = validateEffectiveSearchConfig(applyUserConfigPatch(config, patch));
+  const updated = validateEffectiveSearchConfig(applyUserConfigPatch(config, patch), canonical);
   if (JSON.stringify(updated) === before) return { config: updated, commit: null, changed: false };
   const result = await writeRepoJson(env, path, sha, updated, 'Update search config from command API');
   return { config: updated, commit: result?.commit?.sha || null, changed: true };
 }
 
-async function readSearchConfig(env) {
+async function readSearchConfig(env, nomenclatures = null) {
+  const canonical = nomenclatures || (await readNomenclatures(env)).payload;
   const { payload } = await readRepoJson(env, env.SEARCH_CONFIG_PATH);
-  return validateEffectiveSearchConfig(payload);
+  return validateEffectiveSearchConfig(payload, canonical);
 }
 
 async function optionalJsonBody(request) {
@@ -377,7 +402,7 @@ async function renameSourceCategoryReferences(env, oldLabel, newLabel) {
   return result?.commit?.sha || null;
 }
 
-export { applyUserConfigPatch, assertGeographyNoConflict, validateEffectiveSearchConfig, validateUserConfigPatch };
+export { applyUserConfigPatch, assertGeographyNoConflict, readNomenclatures, validateEffectiveSearchConfig, validateUserConfigPatch };
 
 export default {
   async fetch(request, env) {
@@ -407,21 +432,23 @@ export default {
       if (request.method === 'POST' && url.pathname === '/commands/run') {
         if (await hasActiveRun(env)) throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
         const input = await optionalJsonBody(request);
+        const nomenclatures = (await readNomenclatures(env)).payload;
         let configCommit = null;
         if (input !== null) {
-          const patch = validateUserConfigPatch(input);
-          const result = await updateSearchConfig(env, patch);
+          const patch = validateUserConfigPatch(input, nomenclatures);
+          const result = await updateSearchConfig(env, patch, nomenclatures);
           configCommit = result.commit;
         } else {
-          await readSearchConfig(env);
+          await readSearchConfig(env, nomenclatures);
         }
         await dispatchRun(env, 'manual-ui', false);
         return json({ status:'accepted', requested_by:user.sub, trigger:'manual-ui', config_commit:configCommit }, 202, cors);
       }
 
       if (request.method === 'PUT' && url.pathname === '/config') {
-        const input = validateUserConfigPatch(await request.json());
-        const result = await updateSearchConfig(env, input);
+        const nomenclatures = (await readNomenclatures(env)).payload;
+        const input = validateUserConfigPatch(await request.json(), nomenclatures);
+        const result = await updateSearchConfig(env, input, nomenclatures);
         return json({ status:'saved', commit:result.commit, changed:result.changed }, 200, cors);
       }
 

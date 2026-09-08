@@ -92,7 +92,8 @@ class GeographyTests(unittest.TestCase):
             "collection_freshness_hours": 120,
             "fit_threshold": 60,
             "keep_reposts": True,
-            "work_modes": {"remote": True, "hybrid": True},
+            "work_modes": {"remote": True, "hybrid": True, "onsite": False},
+            "contract_types": ["permanent", "temporary", "contract", "freelance"],
             "target_regions": [],
             "target_country_codes": ["RO", "BE", "LU"],
             "excluded_regions": [],
@@ -127,18 +128,39 @@ class GeographyTests(unittest.TestCase):
         self.assertFalse(engine.geography_matches(set(), "Unknown", config, False))
 
 
+class CanonicalNomenclatureTests(unittest.TestCase):
+    def test_work_mode_alias_maps_to_onsite(self) -> None:
+        self.assertEqual(
+            engine.canonical_nomenclatures.normalize_work_mode("in-office", engine.NOMENCLATURES),
+            "onsite",
+        )
+
+    def test_known_contract_type_maps_to_canonical_code(self) -> None:
+        self.assertEqual(
+            engine.canonical_nomenclatures.normalize_contract_type(["contract"], engine.NOMENCLATURES),
+            "contract",
+        )
+
+    def test_unknown_contract_type_is_not_forced(self) -> None:
+        self.assertEqual(
+            engine.canonical_nomenclatures.normalize_contract_type(["full_time_provider_specific"], engine.NOMENCLATURES),
+            "unknown",
+        )
+
+
 class OutputTests(unittest.TestCase):
     def test_jobspipe_apify_counts_as_jobspipe_source(self) -> None:
         self.assertEqual(engine.canonical_source_name("jobspipe-apify"), "JobsPipe")
         self.assertEqual(engine.canonical_source_name("jobspipe"), "JobsPipe")
 
-    def test_process_records_publishes_country_fields(self) -> None:
+    def test_process_records_publishes_country_and_contract_fields(self) -> None:
         config = {
             "freshness_hours": 24,
             "collection_freshness_hours": 120,
             "fit_threshold": 80,
             "keep_reposts": True,
-            "work_modes": {"remote": True, "hybrid": True},
+            "work_modes": {"remote": True, "hybrid": True, "onsite": False},
+            "contract_types": ["permanent", "temporary", "contract", "freelance"],
             "target_regions": [],
             "target_country_codes": ["RO"],
             "excluded_regions": [],
@@ -153,6 +175,7 @@ class OutputTests(unittest.TestCase):
             "location": "Bucharest",
             "remote": False,
             "work_arrangement": "hybrid",
+            "employment_statuses": ["contract"],
             "description": "IT project delivery in a regulated bank.",
             "date_posted": "2026-09-06T08:00:00+00:00",
             "sources": [{"provider": "jobspipe"}],
@@ -162,6 +185,40 @@ class OutputTests(unittest.TestCase):
         self.assertEqual(output["results"], 1)
         self.assertEqual(output["jobs"][0]["country_codes"], ["RO"])
         self.assertEqual(output["jobs"][0]["countries"], ["Romania"])
+        self.assertEqual(output["jobs"][0]["contract_type"], "contract")
+        self.assertEqual(output["jobs"][0]["employment_type_raw"], "contract")
+
+    def test_unknown_contract_type_survives_without_forced_classification(self) -> None:
+        config = {
+            "freshness_hours": 24,
+            "collection_freshness_hours": 120,
+            "fit_threshold": 80,
+            "keep_reposts": True,
+            "work_modes": {"remote": True, "hybrid": True, "onsite": False},
+            "contract_types": ["contract"],
+            "target_regions": [],
+            "target_country_codes": ["RO"],
+            "excluded_regions": [],
+            "excluded_country_codes": [],
+            "role_groups": {"pm": {"enabled": True, "titles": ["IT Project Manager"]}},
+        }
+        record = {
+            "id": "unknown-contract",
+            "job_title": "IT Project Manager",
+            "company": "Example",
+            "country_code": "RO",
+            "location": "Bucharest",
+            "work_arrangement": "hybrid",
+            "employment_statuses": ["provider-special"],
+            "description": "IT project delivery.",
+            "date_posted": "2026-09-06T08:00:00+00:00",
+            "sources": [{"provider": "web"}],
+        }
+        collection = [engine.CollectionResult("web:test", "target_geography", True, [record], 1)]
+        output = engine.process_records(config, collection, datetime(2026, 9, 6, 9, 0, tzinfo=timezone.utc))
+        self.assertEqual(output["results"], 1)
+        self.assertEqual(output["jobs"][0]["contract_type"], "unknown")
+        self.assertEqual(output["jobs"][0]["employment_type_raw"], "provider-special")
 
 
 if __name__ == "__main__":

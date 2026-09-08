@@ -16,6 +16,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from job_identity import deduplicate
+import nomenclatures as canonical_nomenclatures
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
@@ -24,53 +25,14 @@ JOBS_PATH = DATA / "jobs.json"
 STATUS_PATH = DATA / "run-status.json"
 SCHEMA_VERSION = "1.0"
 
-EU_COUNTRY_CODES = {
-    "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE",
-    "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT",
-    "RO", "SK", "SI", "ES", "SE",
-}
-ASIA_COUNTRY_CODES = {
-    "AF", "AM", "AZ", "BH", "BD", "BT", "BN", "KH", "CN", "GE", "HK",
-    "IN", "ID", "IR", "IQ", "IL", "JP", "JO", "KZ", "KW", "KG", "LA",
-    "LB", "MO", "MY", "MV", "MN", "MM", "NP", "KP", "OM", "PK", "PS",
-    "PH", "QA", "SA", "SG", "KR", "LK", "SY", "TW", "TJ", "TH", "TL",
-    "TR", "TM", "AE", "UZ", "VN", "YE",
-}
-REGION_COUNTRIES = {
-    "EU": EU_COUNTRY_CODES,
-    "US": {"US"},
-    "ASIA": ASIA_COUNTRY_CODES,
-}
-
-COUNTRY_NAMES = {
-    "RO": "Romania", "BE": "Belgia", "LU": "Luxemburg", "FR": "Franta",
-    "DE": "Germania", "NL": "Tarile de Jos", "PL": "Polonia", "PT": "Portugalia",
-    "ES": "Spania", "IT": "Italia", "IE": "Irlanda", "AT": "Austria", "CZ": "Cehia",
-    "SK": "Slovacia", "HU": "Ungaria", "BG": "Bulgaria", "GR": "Grecia",
-    "HR": "Croatia", "SI": "Slovenia", "EE": "Estonia", "LV": "Letonia",
-    "LT": "Lituania", "DK": "Danemarca", "SE": "Suedia", "FI": "Finlanda",
-    "NO": "Norvegia", "CH": "Elvetia", "CY": "Cipru", "MT": "Malta",
-    "US": "Statele Unite", "GB": "Regatul Unit", "UA": "Ucraina", "TR": "Turcia",
-    "AE": "Emiratele Arabe Unite", "IN": "India", "CN": "China", "JP": "Japonia",
-    "SG": "Singapore", "KR": "Coreea de Sud", "HK": "Hong Kong", "IL": "Israel",
-    "SA": "Arabia Saudita", "QA": "Qatar", "MY": "Malaezia", "TH": "Thailanda",
-    "VN": "Vietnam", "ID": "Indonezia", "PH": "Filipine", "PK": "Pakistan",
-    "BD": "Bangladesh",
-}
-COUNTRY_NAME_TO_CODE = {name.lower(): code for code, name in COUNTRY_NAMES.items()}
-COUNTRY_NAME_TO_CODE.update({
-    "belgium": "BE", "france": "FR", "germany": "DE", "netherlands": "NL",
-    "poland": "PL", "portugal": "PT", "spain": "ES", "italy": "IT",
-    "ireland": "IE", "austria": "AT", "czech republic": "CZ", "czechia": "CZ",
-    "slovakia": "SK", "hungary": "HU", "bulgaria": "BG", "greece": "GR",
-    "croatia": "HR", "slovenia": "SI", "estonia": "EE", "latvia": "LV",
-    "lithuania": "LT", "denmark": "DK", "sweden": "SE", "finland": "FI",
-    "norway": "NO", "switzerland": "CH", "united states": "US", "usa": "US",
-    "united kingdom": "GB", "uk": "GB", "india": "IN", "china": "CN",
-    "japan": "JP", "singapore": "SG", "south korea": "KR", "hong kong": "HK",
-    "turkey": "TR", "türkiye": "TR", "ukraine": "UA", "united arab emirates": "AE",
-    "uae": "AE",
-})
+NOMENCLATURES = canonical_nomenclatures.load_nomenclatures()
+REGION_COUNTRIES = canonical_nomenclatures.region_countries(NOMENCLATURES)
+COUNTRY_NAMES = canonical_nomenclatures.country_names(NOMENCLATURES)
+COUNTRY_NAME_TO_CODE = canonical_nomenclatures.country_name_to_code(NOMENCLATURES)
+ACTIVE_COUNTRY_CODES = canonical_nomenclatures.active_country_codes(NOMENCLATURES)
+ACTIVE_REGION_CODES = canonical_nomenclatures.active_region_codes(NOMENCLATURES)
+ACTIVE_CONTRACT_TYPES = canonical_nomenclatures.active_codes("contract_types", NOMENCLATURES)
+EU_COUNTRY_CODES = REGION_COUNTRIES["EU"]
 
 
 @dataclass
@@ -195,15 +157,25 @@ def excluded_country_codes(config: dict[str, Any]) -> set[str]:
     return codes
 
 
+def configured_contract_types(config: dict[str, Any]) -> set[str]:
+    values = config.get("contract_types")
+    if values is None:
+        return set(ACTIVE_CONTRACT_TYPES)
+    return {str(value).strip().lower() for value in values if str(value).strip()}
+
+
 def validate_geography_config(config: dict[str, Any]) -> None:
     target_regions = configured_target_regions(config)
     excluded_regions = configured_excluded_regions(config)
     target_countries = configured_target_country_codes(config)
     excluded_countries = configured_excluded_country_codes(config)
 
-    unsupported = (target_regions | excluded_regions) - set(REGION_COUNTRIES)
-    if unsupported:
-        raise RuntimeError(f"Unsupported geographic region: {', '.join(sorted(unsupported))}")
+    unsupported_regions = (target_regions | excluded_regions) - ACTIVE_REGION_CODES
+    if unsupported_regions:
+        raise RuntimeError(f"Unsupported geographic region: {', '.join(sorted(unsupported_regions))}")
+    unsupported_countries = (target_countries | excluded_countries) - ACTIVE_COUNTRY_CODES
+    if unsupported_countries:
+        raise RuntimeError(f"Unsupported country code: {', '.join(sorted(unsupported_countries))}")
     if not target_regions and not target_countries:
         raise RuntimeError("At least one target region or country is required")
     if target_regions & excluded_regions:
@@ -224,6 +196,14 @@ def load_config() -> dict[str, Any]:
         raise RuntimeError("role_groups must be an object")
     if not isinstance(config.get("work_modes"), dict):
         raise RuntimeError("work_modes must be an object")
+    for key in ("remote", "hybrid", "onsite"):
+        if key in config["work_modes"] and not isinstance(config["work_modes"][key], bool):
+            raise RuntimeError(f"work_modes.{key} must be boolean")
+
+    contract_types = configured_contract_types(config)
+    unsupported_contract_types = contract_types - ACTIVE_CONTRACT_TYPES
+    if unsupported_contract_types:
+        raise RuntimeError(f"Unsupported contract type: {', '.join(sorted(unsupported_contract_types))}")
 
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
     if mode not in {"disabled", "apify", "direct"}:
@@ -278,7 +258,7 @@ def normalize_job_geography(job: dict[str, Any], remote: bool) -> tuple[list[str
     raw_codes = [job.get("country_code"), job.get("job_country_code"), *list_values(job.get("country_codes"))]
     for value in raw_codes:
         code = str(value or "").strip().upper()
-        if len(code) == 2 and code not in country_codes:
+        if code in ACTIVE_COUNTRY_CODES and code not in country_codes:
             country_codes.append(code)
 
     countries = list_values(job.get("countries"))
@@ -324,13 +304,10 @@ def geography_matches(job_codes: set[str], remote_scope: str, config: dict[str, 
     excluded_codes = excluded_country_codes(config)
     excluded_regions = configured_excluded_regions(config)
 
-    # Defense in depth: an invalid empty target never means worldwide.
     if not target_codes and not target_regions:
         return False
-
     if remote and remote_scope == "Worldwide":
         return True
-
     if remote and remote_scope in {"EU", "EMEA"}:
         if "EU" in excluded_regions or "RO" in excluded_codes:
             return False
@@ -340,7 +317,6 @@ def geography_matches(job_codes: set[str], remote_scope: str, config: dict[str, 
     if not allowed_codes and job_codes:
         return False
     if not job_codes:
-        # Unknown Hybrid/Onsite geography cannot be proven eligible for a targeted search.
         return False
     return bool(allowed_codes & target_codes)
 
@@ -357,6 +333,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     fit_threshold = int(config.get("fit_threshold", 80))
     keep_reposts = bool(config.get("keep_reposts", True))
     work_modes = config.get("work_modes") or {}
+    selected_contract_types = configured_contract_types(config)
     target_codes = set(resolve_target_country_codes(config))
     excluded_company, excluded_role, deep_erp = compile_config_patterns(config)
     target_title = re.compile(r"\b(project|program|programme|delivery|service|scrum|pmo)\b", re.I)
@@ -378,13 +355,25 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
         description = str(job.get("description") or "")
         text = f"{title} {description}"
         location = job.get("location") or job.get("short_location") or "Nespecificat"
-        remote = bool(job.get("remote")) or str(job.get("work_arrangement") or "").lower() == "remote"
-        hybrid = bool(job.get("hybrid")) or str(job.get("work_arrangement") or "").lower() == "hybrid"
+        arrangement_raw = str(job.get("work_arrangement") or job.get("work_mode") or "").strip()
+        remote = bool(job.get("remote")) or arrangement_raw.lower() == "remote"
+        hybrid = bool(job.get("hybrid")) or arrangement_raw.lower() == "hybrid"
+        if remote:
+            arrangement_code = "remote"
+        elif hybrid:
+            arrangement_code = "hybrid"
+        else:
+            arrangement_code = canonical_nomenclatures.normalize_work_mode(arrangement_raw, NOMENCLATURES)
         countries, country_codes, remote_scope, romania_eligible = normalize_job_geography(job, remote)
         codes = set(country_codes)
         posted = job.get("date_posted") or job.get("posted_at")
         posted_dt = parse_posted_datetime(posted)
         origin = job.get("_collection_source")
+        employment_statuses = list_values(job.get("employment_statuses"))
+        if not employment_statuses:
+            employment_statuses = list_values(job.get("employment_type") or job.get("employment_status") or job.get("job_type"))
+        contract_type = canonical_nomenclatures.normalize_contract_type(employment_statuses, NOMENCLATURES)
+        employment_raw = ", ".join(employment_statuses) or None
         key = (origin, job.get("id")) if job.get("id") else (
             re.sub(r"\W+", " ", title.lower()).strip(),
             company.lower(),
@@ -404,10 +393,14 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             reason = "non-IT role"
         elif deep_erp and deep_erp.search(text) and re.search(r"implement|consultant|specialist|functional", text, re.I):
             reason = "deep ERP/SAP implementation"
-        elif remote and not work_modes.get("remote", True):
+        elif arrangement_code == "remote" and not work_modes.get("remote", True):
             reason = "remote disabled by configuration"
-        elif hybrid and not work_modes.get("hybrid", True):
+        elif arrangement_code == "hybrid" and not work_modes.get("hybrid", True):
             reason = "hybrid disabled by configuration"
+        elif arrangement_code == "onsite" and not work_modes.get("onsite", False):
+            reason = "onsite disabled by configuration"
+        elif contract_type != "unknown" and selected_contract_types and contract_type not in selected_contract_types:
+            reason = "contract type disabled by configuration"
         elif remote and not romania_eligible:
             reason = "remote not eligible from Romania"
         elif not geography_matches(codes, remote_scope, config, remote):
@@ -452,19 +445,14 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             score -= 12
         score = max(40, min(96, score))
 
+        arrangement = {
+            "remote": "Remote",
+            "hybrid": "Hybrid",
+            "onsite": "Onsite",
+        }.get(arrangement_code, "N/A")
+        employment_label = canonical_nomenclatures.contract_type_label(contract_type, NOMENCLATURES)
+        employment = employment_label or (employment_raw.replace("_", " ").title() if employment_raw else "Nespecificat")
         age = max(0, int((now - posted_dt).total_seconds() // 3600)) if posted_dt else 0
-        arrangement_raw = str(job.get("work_arrangement") or "").strip().lower()
-        if remote:
-            arrangement = "Remote"
-        elif hybrid:
-            arrangement = "Hybrid"
-        elif arrangement_raw in {"onsite", "on-site", "office", "in-office"}:
-            arrangement = "Onsite"
-        else:
-            arrangement = "N/A"
-
-        employment_statuses = list_values(job.get("employment_statuses"))
-        employment = ", ".join(employment_statuses) or "Nespecificat"
         url = job.get("final_url") or job.get("source_url") or job.get("url")
 
         pros: list[str] = []
@@ -487,7 +475,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
         provider = (job.get("sources") or [{}])[0].get("provider")
         if provider == "indeed" and not job.get("final_url"):
             risks.append("Link direct catre angajator neconfirmat")
-        if not re.search(r"contract|freelance|b2b", text, re.I):
+        if contract_type not in {"contract", "freelance"} and not re.search(r"contract|freelance|b2b", text, re.I):
             risks.append("Forma B2B nu este confirmata")
         if not risks:
             risks.append("Conditiile contractuale trebuie confirmate")
@@ -504,10 +492,12 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             "remote_scope": remote_scope,
             "romania_eligible": romania_eligible if remote else None,
             "mode": arrangement,
-            "type": employment.replace("_", " ").title(),
+            "type": employment,
+            "contract_type": contract_type,
+            "employment_type_raw": employment_raw,
             "age": age,
             "remote": remote,
-            "b2b": any(value.lower() in {"contract", "contractor", "freelance"} for value in employment_statuses),
+            "b2b": contract_type in {"contract", "freelance"} or any(value.lower() in {"contract", "contractor", "freelance"} for value in employment_statuses),
             "repost": bool(job.get("reposted")),
             "status": "new" if score >= fit_threshold else "review",
             "pros": pros[:2],
@@ -537,6 +527,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
                 "excluded_country_codes": sorted(configured_excluded_country_codes(config)),
             },
             "work_mode_priority": config.get("work_mode_priority") or [],
+            "contract_types": sorted(selected_contract_types),
             "source_strategy": config.get("source_strategy") or "all active sources equally",
             "display_freshness_hours": display_freshness_hours,
             "fit_threshold": fit_threshold,
@@ -614,6 +605,7 @@ def validate_output() -> None:
 
     assert config.get("schema_version") == SCHEMA_VERSION
     validate_geography_config(config)
+    assert not (configured_contract_types(config) - ACTIVE_CONTRACT_TYPES)
     assert jobs.get("schema_version") == SCHEMA_VERSION
     assert status.get("schema_version") == SCHEMA_VERSION
     assert not (root_required - jobs.keys()), root_required - jobs.keys()
@@ -628,6 +620,8 @@ def validate_output() -> None:
             assert isinstance(job["countries"], list)
         if "country_codes" in job:
             assert isinstance(job["country_codes"], list)
+        if "contract_type" in job:
+            assert job["contract_type"] in ACTIVE_CONTRACT_TYPES | {"unknown"}
 
 
 def main() -> int:

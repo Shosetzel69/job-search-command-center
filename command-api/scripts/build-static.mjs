@@ -1,5 +1,6 @@
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import { normalizeSourceCatalog } from '../src/source-governance.js';
 
 const projectDir = process.cwd();
@@ -8,13 +9,12 @@ const frontendDistDir = resolve(repoRoot, 'frontend', 'dist');
 const dataDir = resolve(repoRoot, 'data');
 const publicDir = resolve(projectDir, 'public');
 const publicDataDir = resolve(publicDir, 'data');
-const dataFiles = ['jobs.json','run-status.json','run-history.json','applications.json','sources.json','source-categories.json','search-config.json'];
 
 if (!existsSync(frontendDistDir)) throw new Error(`Frontend build directory not found: ${frontendDistDir}`);
 rmSync(publicDir, { recursive: true, force: true });
 mkdirSync(publicDataDir, { recursive: true });
 cpSync(frontendDistDir, publicDir, { recursive: true });
-for (const file of dataFiles) {
+for (const file of PROTECTED_DATA_FILES) {
   const source = resolve(dataDir, file);
   const target = resolve(publicDataDir, file);
   if (!existsSync(source)) throw new Error(`Required data file not found: ${source}`);

@@ -1,20 +1,23 @@
+import { protectedDataPaths } from '../../shared/runtime-data.mjs';
 import commandApi from './index.js';
+import nomenclatureApi from './nomenclature-api.js';
 
-const PROTECTED_DATA = new Set([
-  '/data/jobs.json',
-  '/data/run-status.json',
-  '/data/run-history.json',
-  '/data/search-config.json',
-  '/data/sources.json',
-  '/data/source-categories.json',
-  '/data/applications.json',
-]);
+const PROTECTED_DATA = protectedDataPaths();
 
 function noStoreResponse(response) {
   const headers = new Headers(response.headers);
   headers.set('cache-control', 'no-store');
   headers.set('x-content-type-options', 'nosniff');
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
+function copyAuthCors(response, authResponse) {
+  const headers = new Headers(response.headers);
+  for (const name of ['access-control-allow-origin', 'vary']) {
+    const value = authResponse.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new Response(response.body, { status:response.status, statusText:response.statusText, headers });
 }
 
 async function verifyProtectedDataRequest(request, env) {
@@ -44,6 +47,15 @@ export default {
       const assetRequest = new Request(request.url, { method: 'GET', headers: { Accept: request.headers.get('Accept') || 'application/json' } });
       return noStoreResponse(await env.ASSETS.fetch(assetRequest));
     }
+
+    if (url.pathname === '/nomenclatures' || url.pathname.startsWith('/nomenclatures/')) {
+      if (request.method === 'OPTIONS') return commandApi.fetch(request, env);
+      const authResponse = await verifyProtectedDataRequest(request, env);
+      if (!authResponse.ok) return noStoreResponse(authResponse);
+      const response = await nomenclatureApi.fetch(request, env);
+      return noStoreResponse(copyAuthCors(response, authResponse));
+    }
+
     return commandApi.fetch(request, env);
   },
 };
