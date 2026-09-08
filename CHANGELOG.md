@@ -15,6 +15,7 @@
 
 ### Remedieri
 
+- #114: adaugat `source-categories.json` in allowlist-ul protected data al Worker-ului; eliminat 404-ul care bloca incarcarea tuturor paginilor dupa deploy-ul Package 2A si adaugat test de regresie pentru toate asset-urile protejate.
 - #83 / Pachetul 2A0: UI urmareste rularea manuala pana la un status terminal real, cu backoff controlat, recuperare a starii active dupa reload si tratament distinct pentru `completed_with_errors`; eliminata limita fixa de aproximativ 5 minute.
 - #79 / Pachetul 1: full search este manual-only; eliminate trigger-ele `push` si `schedule`, iar `PUT /config` nu mai porneste cautarea.
 - #79 / Pachetul 1: `POST /commands/run` foloseste criteriile curente, blocheaza concurenta si produce un singur dispatch `manual-ui`.
