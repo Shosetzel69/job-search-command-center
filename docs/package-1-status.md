@@ -39,16 +39,24 @@ Plan: `docs/package-1-implementation-plan.md`
 
 Issue #81: `Workers Builds: job-search-command-api` din Cloudflare Git integration este red.
 
-Bisection:
-- `a9ed0c0` -> Cloudflare SUCCESS;
-- `09b73c2` -> Cloudflare FAILURE;
-- diferenta dintre cele doua commit-uri este exclusiv `docs/package-1-implementation-plan.md`.
+Cauza concreta identificata din Cloudflare Build Details:
+- deploy command executat: `npx wrangler versions upload`;
+- executia are loc din root-ul repository-ului;
+- configuratia Worker este `command-api/wrangler.jsonc`;
+- entry point-ul canonic este `command-api/src/secure-entry.js`;
+- Wrangler raporteaza `Missing entry-point to Worker script or to assets directory` deoarece nu vede configuratia din `command-api`.
 
-Un retry ulterior pe un commit docs-only reproduce aceeasi situatie: GitHub CI SUCCESS / Cloudflare FAILURE. Prin urmare, nu exista in acest moment dovada ca esecul Cloudflare este produs de codul Pachetului 1. Este necesar logul Cloudflare Build Details pentru cauza concreta.
+Configuratia Cloudflare necesara:
+- Root directory: `command-api`;
+- Deploy command: `npx wrangler versions upload`.
+
+Alternativa tehnica echivalenta din repository root este `npx wrangler versions upload --config command-api/wrangler.jsonc`, dar Root directory = `command-api` este preferat deoarece `package.json` si build scripts sunt definite acolo.
+
+Cerinta este documentata si in `command-api/BUILD_TRIGGER.md`.
 
 ## De validat in release
 
-- rezolvare #81 si Cloudflare Workers Build green;
+- corectare Root directory in Cloudflare si build green pentru #81;
 - deploy Cloudflare dupa merge;
 - `/health` live pentru #17;
 - E2E #24: `Save -> 0 run`, `Run -> exact 1 run`;
