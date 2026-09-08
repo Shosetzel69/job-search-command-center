@@ -91,7 +91,10 @@ jobs:
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
 
+      - name: Run Command API unit tests
+        working-directory: command-api
+        run: npm test
+
       - name: Validate React frontend and Worker build
         working-directory: command-api
         run: npm run check
-
