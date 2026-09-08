@@ -77,11 +77,14 @@ async function hasActiveRun(env) {
   const payload = await githubRequest(env, `/actions/workflows/${workflow}/runs?per_page=10`);
   return (payload?.workflow_runs || []).some(run => run.status === 'queued' || run.status === 'in_progress');
 }
-async function dispatchRun(env) {
-  if (await hasActiveRun(env)) throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
+async function dispatchRun(env, runTrigger = 'manual-ui', checkActive = true) {
+  if (checkActive && await hasActiveRun(env)) throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
+  if (!['manual-ui','scheduled','system'].includes(runTrigger)) throw Object.assign(new Error('Invalid run trigger'), { status: 400 });
   const workflow = encodeURIComponent(env.GITHUB_WORKFLOW);
   return githubRequest(env, `/actions/workflows/${workflow}/dispatches`, {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ref: env.GITHUB_REF }),
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ref: env.GITHUB_REF, inputs: { run_trigger: runTrigger } }),
   });
 }
 
@@ -193,12 +196,42 @@ function applyUserConfigPatch(config, patch) {
   return config;
 }
 
+function validateEffectiveSearchConfig(config) {
+  if (!config || config.schema_version !== '1.0') throw Object.assign(new Error('Unsupported search configuration schema'), { status: 409 });
+  const targetRegions = new Set((config.target_regions || []).map(x => String(x).trim().toUpperCase()).filter(Boolean));
+  const excludedRegions = new Set((config.excluded_regions || []).map(x => String(x).trim().toUpperCase()).filter(Boolean));
+  const targetCountries = new Set((config.target_country_codes || config.search_country_codes || []).map(x => String(x).trim().toUpperCase()).filter(Boolean));
+  const excludedCountries = new Set((config.excluded_country_codes || []).map(x => String(x).trim().toUpperCase()).filter(Boolean));
+  for (const region of [...targetRegions, ...excludedRegions]) if (!REGION_COUNTRIES[region]) throw Object.assign(new Error(`Unsupported region: ${region}`), { status: 400 });
+  for (const country of [...targetCountries, ...excludedCountries]) if (!/^[A-Z]{2}$/.test(country)) throw Object.assign(new Error(`Invalid country code: ${country}`), { status: 400 });
+  if (!targetRegions.size && !targetCountries.size) throw Object.assign(new Error('Selecteaza cel putin o tara sau regiune tinta.'), { status: 400 });
+  for (const country of targetCountries) if (excludedCountries.has(country)) throw Object.assign(new Error('Aceeasi tara nu poate fi inclusa si exclusa.'), { status: 400 });
+  for (const region of targetRegions) if (excludedRegions.has(region)) throw Object.assign(new Error('Aceeasi regiune nu poate fi inclusa si exclusa.'), { status: 400 });
+  for (const region of targetRegions) for (const country of excludedCountries) if (REGION_COUNTRIES[region].has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
+  for (const region of excludedRegions) for (const country of targetCountries) if (REGION_COUNTRIES[region].has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea exclusa si o tara inclusa.'), { status: 400 });
+  if (Number(config.rate_min_eur_day || 0) > Number(config.rate_max_eur_day || 0)) throw Object.assign(new Error('rateMin cannot exceed rateMax'), { status: 400 });
+  return config;
+}
+
 async function updateSearchConfig(env, patch) {
   const path = env.SEARCH_CONFIG_PATH;
   const { sha, payload: config } = await readRepoJson(env, path);
-  if (config.schema_version !== '1.0') throw Object.assign(new Error('Unsupported search configuration schema'), { status: 409 });
-  const updated = applyUserConfigPatch(config, patch);
-  return writeRepoJson(env, path, sha, updated, 'Update search config from command API');
+  const before = JSON.stringify(config);
+  const updated = validateEffectiveSearchConfig(applyUserConfigPatch(config, patch));
+  if (JSON.stringify(updated) === before) return { config: updated, commit: null, changed: false };
+  const result = await writeRepoJson(env, path, sha, updated, 'Update search config from command API');
+  return { config: updated, commit: result?.commit?.sha || null, changed: true };
+}
+
+async function readSearchConfig(env) {
+  const { payload } = await readRepoJson(env, env.SEARCH_CONFIG_PATH);
+  return validateEffectiveSearchConfig(payload);
+}
+
+async function optionalJsonBody(request) {
+  const text = await request.text();
+  if (!text.trim()) return null;
+  try { return JSON.parse(text); } catch { throw Object.assign(new Error('Invalid JSON payload'), { status: 400 }); }
 }
 
 function stableSourceId(url) {
@@ -254,6 +287,8 @@ async function mutateSources(env, mutation) {
   return { catalog: updated, commit: result?.commit?.sha || null };
 }
 
+export { applyUserConfigPatch, assertGeographyNoConflict, validateEffectiveSearchConfig, validateUserConfigPatch };
+
 export default {
   async fetch(request, env) {
     const cors = corsHeaders(request, env);
@@ -271,11 +306,23 @@ export default {
       }
       const user = await authenticate(request, env);
       if (request.method === 'POST' && url.pathname === '/commands/run') {
-        await dispatchRun(env); return json({ status:'accepted', requested_by:user.sub }, 202, cors);
+        if (await hasActiveRun(env)) throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
+        const input = await optionalJsonBody(request);
+        let configCommit = null;
+        if (input !== null) {
+          const patch = validateUserConfigPatch(input);
+          const result = await updateSearchConfig(env, patch);
+          configCommit = result.commit;
+        } else {
+          await readSearchConfig(env);
+        }
+        await dispatchRun(env, 'manual-ui', false);
+        return json({ status:'accepted', requested_by:user.sub, trigger:'manual-ui', config_commit:configCommit }, 202, cors);
       }
       if (request.method === 'PUT' && url.pathname === '/config') {
-        const input = validateUserConfigPatch(await request.json()); const result = await updateSearchConfig(env, input);
-        return json({ status:'saved', commit:result?.commit?.sha || null }, 200, cors);
+        const input = validateUserConfigPatch(await request.json());
+        const result = await updateSearchConfig(env, input);
+        return json({ status:'saved', commit:result.commit, changed:result.changed }, 200, cors);
       }
       if (request.method === 'POST' && url.pathname === '/sources') {
         const source = validateSourceInput(await request.json(), false);
@@ -312,4 +359,3 @@ export default {
     }
   },
 };
-
