@@ -26,9 +26,12 @@ Current runner is already catalog-driven:
 - routes include web, Jobicy and ATS connectors;
 - ATS connectors currently referenced include SmartRecruiters, Workday, Greenhouse, Ashby, Recruitee and BambooHR;
 - source counters distinguish configured/active/attempted/succeeded/failed/unsupported/skipped/inactive;
-- JobsPipe can remain disabled.
+- JobsPipe remains disabled.
 
-Conclusion: #49 must not be implemented as if the engine still processed only JobsPipe. Its remaining scope is coverage, correctness of routing/statuses and multi-source validation.
+Owner decision 2026-09-08: **#49 is excluded from Package 2 and must not be implemented.**
+Package 2 does not attempt complete `all active sources equally` coverage, full Source Registry/connector reconciliation for every active source, or a dedicated full-coverage multi-source E2E.
+
+Connector work may continue only for connectors explicitly in scope through #3/#56/#60 and source governance. That work must not silently expand into #49.
 
 ## 1.2 Source Registry
 `data/sources.json` already contains:
@@ -50,6 +53,11 @@ Conclusion: #25/#26 are partially implemented and require delta implementation, 
 
 Decision: split admin-related UI into local React modules/components using existing dependencies only. Do not introduce React Router or another dependency without explicit approval.
 
+## 1.5 Polling bug
+#83 is a confirmed P1 UI bug. Current manual-run polling can stop after about five minutes while the backend continues running.
+
+Decision: fix #83 first, before extending Overview/Logs/Admin, because those views must consume a trustworthy run state.
+
 ---
 
 # 2. Delivery model
@@ -57,6 +65,9 @@ Decision: split admin-related UI into local React modules/components using exist
 Package 2 is delivered in small release slices. Each slice gets its own implementation branch and PR.
 
 ```text
+2A0 Polling/run-state stabilization (#83)
+        |
+        v
 2A1 Contracts + Admin shell
         |
         v
@@ -66,7 +77,7 @@ Package 2 is delivered in small release slices. Each slice gets its own implemen
 2B Automation scheduler
         |
         v
-2C Connectors + registry activation + multi-source validation
+2C Approved connectors + controlled activation
         |
         v
 2D Dedup + FIT + KPI + release management
@@ -78,7 +89,28 @@ No single Package 2 mega-PR.
 
 ---
 
-# 3. Release 2A1 - Contracts + Admin shell
+# 3. Release 2A0 - Polling/run-state stabilization
+
+## Issue
+#83.
+
+## Scope
+- remove the functional fixed timeout `60 x 5s` from manual run tracking;
+- UI keeps `Rulare in curs` until a real terminal state is observed;
+- terminal states: `completed`, `completed_with_errors`, `failed`;
+- distinguish `completed_with_errors` from both full success and total failure;
+- after completion reload run-status/run-history and refresh `Ultima rulare` automatically;
+- page reload during a run recovers current run state from backend;
+- use controlled polling/backoff, not an aggressive uncontrolled loop;
+- add frontend test for a simulated run longer than five minutes;
+- tests must not launch a real full search.
+
+## Gate
+#83 must be green before Admin Overview/Logs reuse this execution state.
+
+---
+
+# 4. Release 2A1 - Contracts + Admin shell
 
 ## Issues
 #77, #25, #26, partial #39.
@@ -176,7 +208,7 @@ Do not expose GitHub credentials to frontend.
 
 ---
 
-# 4. Release 2A2 - Source CRUD + categories + approval + logs
+# 5. Release 2A2 - Source CRUD + categories + approval + logs
 
 ## Issues
 #40, #76, #39, #77.
@@ -192,13 +224,13 @@ Do not expose GitHub credentials to frontend.
 ## Categories
 MVP target is explicit canonical category management, not text free-form.
 
-Because #77 requires empty categories/global rename/delete, Package 2 should evolve beyond the #76 derived-only model.
+Because #77 requires empty categories/global rename/delete, Package 2 evolves beyond the #76 derived-only model.
 
-Proposed contract:
-- add `data/source-categories.json` only if implementation analysis confirms empty categories/global rename cannot remain safely derived;
-- otherwise keep categories embedded in sources for the first sub-release and migrate in a dedicated follow-up.
-
-Decision gate before code: choose one canonical model and update architecture/data-contract first. Do not maintain two competing category truths.
+Canonical decision for Package 2:
+- use `data/source-categories.json` as the category source of truth;
+- sources reference a stable category identifier;
+- migration preserves current labels and source assignments;
+- do not keep two competing category truths.
 
 ## Approval flow
 ```text
@@ -227,7 +259,7 @@ Show explicit trigger `manual-ui` or `scheduled`.
 
 ---
 
-# 5. Release 2B - Automation scheduler
+# 6. Release 2B - Automation scheduler
 
 ## Issue
 #77.
@@ -301,10 +333,12 @@ Default: OFF.
 
 ---
 
-# 6. Release 2C - Connectors + multi-source coverage
+# 7. Release 2C - Approved connectors + controlled activation
 
 ## Issues
-#3, #49, #56, #60.
+#3, #56, #60.
+
+**#49 is explicitly excluded.** This release does not implement complete multi-source coverage.
 
 ## First action
 Inventory current connector code and current registry routes before creating new adapters.
@@ -336,16 +370,16 @@ implement
 
 Never change Source Registry first for a connector that is not validated.
 
-## Coverage batches
+## Connector batches
 Implement/validate in small batches by transport family:
-1. public APIs/feeds;
-2. ATS boards;
+1. public APIs/feeds explicitly approved;
+2. ATS boards explicitly approved;
 3. company career sites with reusable connector;
 4. generic web fallback eligible sites;
 5. blocked/restricted sources remain deferred.
 
 ## Status contract
-Per source:
+For sources touched by Package 2 connector work, preserve explicit states where applicable:
 - inactive;
 - pending;
 - completed;
@@ -354,37 +388,28 @@ Per source:
 - unsupported/deferred;
 - blocked;
 - no_extractable_jobs;
-- partial where applicable.
+- partial.
 
-Run counters must be real and internally consistent.
-
-## #49 redefinition
-Success is NOT `sources_processed > 1` alone.
-Success requires:
-- plan built from catalog;
-- multiple independent source routes where available;
-- explicit unsupported/deferred reasons;
-- source-level failures isolated;
-- records per source;
-- cross-provider output deduplicated;
-- no silent substitutions such as counting an aggregator as all catalog sources.
+This status work applies to the connectors/sources actually in scope and must not be expanded into complete catalog reconciliation under #49.
 
 ## JobsPipe
 Keep disabled throughout Package 2 unless a separate explicit decision reopens it.
 
 ---
 
-# 7. Release 2D - Data quality + FIT + local UX
+# 8. Release 2D - Data quality + FIT + local UX
 
 ## Issues
 #4, #75, #34, #9.
 
-## Dedup first
-Before recalibrating FIT on a broader source set:
+## Dedup
+For connector outputs actually used in Package 2:
 - stable cross-provider identity;
 - first_seen preserved across runs;
 - repost history;
 - explicit cross-provider tests.
+
+This does not imply implementing #49 or complete source coverage.
 
 ## FIT v2
 FIT remains preference/relevance score, separate from ATS.
@@ -407,7 +432,7 @@ Create single technical version source and tags/release notes per published rele
 
 ---
 
-# 8. Release 2E - ATS Match v1 parallel track
+# 9. Release 2E - ATS Match v1 parallel track
 
 ## Issue
 #74.
@@ -444,12 +469,13 @@ PDF/DOCX parsing may require browser libraries. Adding dependencies requires exp
 
 ---
 
-# 9. Branch and PR strategy
+# 10. Branch and PR strategy
 
 Preparation branch:
 - `feature/package-2-preparation`
 
 Suggested implementation branches after GO:
+- `fix/package-2a0-run-polling`
 - `feature/package-2a1-admin-contracts`
 - `feature/package-2a2-source-governance`
 - `feature/package-2b-scheduler`
@@ -468,7 +494,14 @@ Each PR:
 
 ---
 
-# 10. Release gates
+# 11. Release gates
+
+## Gate 2A0
+- manual run remains visible beyond five minutes;
+- terminal state drives UI completion;
+- refresh during active run recovers backend state;
+- completed_with_errors distinct;
+- no real full search in automated tests.
 
 ## Gate 2A
 - admin shell works;
@@ -484,14 +517,14 @@ Each PR:
 - no concurrent full runs.
 
 ## Gate 2C
-- connector inventory reconciled;
+- connector inventory completed for connectors in scope;
 - validated connectors activated only after tests;
-- multi-source run counters correct;
-- source errors isolated;
-- JobsPipe remains disabled.
+- connector failures isolated;
+- JobsPipe remains disabled;
+- no #49 acceptance criterion is imported into this gate.
 
 ## Gate 2D
-- cross-provider dedup stable;
+- cross-provider dedup stable for used connectors;
 - FIT v2 calibrated on fixtures;
 - KPI filters local-only;
 - release version consistent.
@@ -504,29 +537,31 @@ Each PR:
 
 ---
 
-# 11. Estimated effort by release
+# 12. Estimated effort by release
 
 | Release | Estimate |
 |---|---:|
+| 2A0 Polling/run state | 3-6h |
 | 2A1 Admin + contracts | 12-18h |
 | 2A2 Source governance | 14-22h |
 | 2B Scheduler | 8-12h |
-| 2C Connectors/coverage | 20-32h |
+| 2C Approved connectors | 12-22h |
 | 2D Dedup/FIT/KPI/release | 12-18h |
 | 2E ATS v1 | parallel / 16-26h depending on parser decision |
 
-Roadmap package estimate remains approximately 70-110h for the core medium-term scope; ATS can increase the upper bound depending on parsing implementation.
+The previous 2C coverage estimate is reduced because #49 is excluded. Re-estimate after connector inventory.
 
 ---
 
-# 12. GO checklist
+# 13. GO checklist
 
 Before implementation starts:
 - [ ] Package 1 current live run completed.
 - [ ] Package 1 result review completed.
 - [ ] #79/#81 disposition confirmed.
-- [ ] #49 updated to current AS-IS.
+- [ ] #83 included as first runtime fix.
+- [ ] #49 explicitly excluded and parked.
 - [ ] #77 context updated to mark Package 1 trigger work completed.
-- [ ] category canonical model decided before 2A2.
+- [ ] category canonical model confirmed before 2A2.
 - [ ] no new dependency approved implicitly.
 - [ ] explicit user GO for first implementation slice.
