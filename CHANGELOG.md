@@ -4,6 +4,9 @@
 
 ### Functionalitati
 
+- #120 / Pachetul 2A8: `Administrare -> Nomenclatoare` este functional; domeniile system si extensible au operatii diferentiate, iar deactivate/delete pe valori referentiate este blocat cu `409 Conflict` si lista referintelor, fara modificarea silent a configuratiei.
+- #119 / Pachetul 2A8: modurile de lucru canonice sunt `Remote/Hibrid/Onsite`, iar tipurile de contract `Permanent/Temporar/Contract/Freelance`; joburile publica `contract_type` si `employment_type_raw`, cu `unknown` pentru cazurile nedeterminate.
+- #118 / Pachetul 2A8: geografia foloseste acelasi contract canonic in React, Command API si Python pentru tari, regiuni si membership; `EU` ramane Uniunea Europeana, iar divergenta legacy ASIA/PK din frontend a fost eliminata.
 - #117 / Pachetul 2A8: adaugat `data/nomenclatures.json` schema 1.0 ca sursa canonica pentru `regions`, `countries`, `work_modes`, `contract_types`, `application_statuses` si infrastructura `seniority`; domeniile sunt clasificate explicit `system` sau `extensible`, cu coduri tehnice stabile separate de label-uri.
 - #85 / Pachetul 2A: adaugata zona `Administrare` cu Overview, Actualizare date, Surse, Nomenclatoare si Loguri; vechile pagini Surse/Loguri sunt integrate sub o singura intrare de administrare.
 - #90/#91: Source Registry foloseste stari distincte pentru validare, aprobare si activare; sursele noi sunt create `pending` si inactive, iar aprobarea nu activeaza automat sursa.
@@ -16,6 +19,7 @@
 
 ### Remedieri
 
+- #121 / Pachetul 2A8: build-ul Static Assets, allowlist-ul `/data/*` si testele de securitate folosesc manifestul comun `shared/runtime-data.mjs`; `nomenclatures.json` este protejat coerent, iar `search-state.json` ramane intern.
 - #114: adaugat `source-categories.json` in allowlist-ul protected data al Worker-ului; eliminat 404-ul care bloca incarcarea tuturor paginilor dupa deploy-ul Package 2A si adaugat test de regresie pentru toate asset-urile protejate.
 - #83 / Pachetul 2A0: UI urmareste rularea manuala pana la un status terminal real, cu backoff controlat, recuperare a starii active dupa reload si tratament distinct pentru `completed_with_errors`; eliminata limita fixa de aproximativ 5 minute.
 - #79 / Pachetul 1: full search este manual-only; eliminate trigger-ele `push` si `schedule`, iar `PUT /config` nu mai porneste cautarea.
