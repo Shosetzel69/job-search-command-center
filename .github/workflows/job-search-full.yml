@@ -1,27 +1,17 @@
 name: Full job search
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/job-search-full.yml"
-      - "requirements-search.txt"
-      - "data/search-config.json"
-      - "scripts/job_search.py"
-      - "scripts/job_search_optimized.py"
-      - "scripts/job_search_apify.py"
-      - "scripts/job_search_runner.py"
-      - "scripts/source_orchestration.py"
-      - "scripts/job_search_jobicy.py"
-      - "scripts/job_search_web.py"
-      - "scripts/web_browser.py"
-      - "scripts/web_transport.py"
-      - "scripts/job_identity.py"
-      - "shared/**"
-      - "data/sources.json"
   workflow_dispatch:
-  schedule:
-    - cron: "0 6,15 * * *"
+    inputs:
+      run_trigger:
+        description: Canonical run trigger
+        required: false
+        default: manual-ui
+        type: choice
+        options:
+          - manual-ui
+          - scheduled
+          - system
 
 concurrency:
   group: full-job-search
@@ -37,7 +27,7 @@ jobs:
     env:
       JOBSPIPE_API_KEY: ${{ secrets.JOBSPIPE_API_KEY }}
       APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-      RUN_TRIGGER: ${{ github.event_name }}
+      RUN_TRIGGER: ${{ inputs.run_trigger || 'manual-ui' }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -111,4 +101,3 @@ jobs:
         run: |
           echo "All configured collection queries failed. Run status was persisted."
           exit 1
-
