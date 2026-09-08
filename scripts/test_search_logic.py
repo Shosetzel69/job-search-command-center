@@ -38,10 +38,10 @@ class GeographyTests(unittest.TestCase):
         self.assertEqual(scope, "Country")
         self.assertFalse(eligible)
 
-    def test_worldwide_survives_regional_exclusion(self) -> None:
+    def test_worldwide_survives_regional_exclusion_with_explicit_target(self) -> None:
         config = {
             "target_regions": [],
-            "target_country_codes": [],
+            "target_country_codes": ["RO"],
             "excluded_regions": ["EU"],
             "excluded_country_codes": [],
         }
@@ -74,6 +74,57 @@ class GeographyTests(unittest.TestCase):
         }
         with self.assertRaises(RuntimeError):
             engine.validate_geography_config(config)
+
+    def test_empty_target_geography_is_rejected(self) -> None:
+        config = {
+            "target_regions": [],
+            "target_country_codes": [],
+            "excluded_regions": [],
+            "excluded_country_codes": [],
+        }
+        with self.assertRaisesRegex(RuntimeError, "At least one target"):
+            engine.validate_geography_config(config)
+        self.assertFalse(engine.geography_matches({"JP"}, "Country", config, False))
+
+    def test_hybrid_japan_is_excluded_for_ro_be_lu_targets(self) -> None:
+        config = {
+            "freshness_hours": 24,
+            "collection_freshness_hours": 120,
+            "fit_threshold": 60,
+            "keep_reposts": True,
+            "work_modes": {"remote": True, "hybrid": True},
+            "target_regions": [],
+            "target_country_codes": ["RO", "BE", "LU"],
+            "excluded_regions": [],
+            "excluded_country_codes": [],
+            "role_groups": {"pm": {"enabled": True, "titles": ["Technical Project Manager"]}},
+        }
+        record = {
+            "id": "bosch-yokohama-regression",
+            "job_title": "System Engineer/Technical Project Manager",
+            "company": "Example Automotive",
+            "country_code": "JP",
+            "location": "Yokohama, Japan",
+            "remote": False,
+            "hybrid": True,
+            "work_arrangement": "hybrid",
+            "description": "Technical project management for embedded systems.",
+            "date_posted": "2026-09-08T08:00:00+00:00",
+            "sources": [{"provider": "web"}],
+        }
+        collection = [engine.CollectionResult("web:test", "regression", True, [record], 1)]
+        output = engine.process_records(config, collection, datetime(2026, 9, 8, 9, 0, tzinfo=timezone.utc))
+        self.assertEqual(output["results"], 0)
+        self.assertTrue(any(item.get("reason") == "outside target or excluded geography" for item in output["excluded_sample"]))
+
+    def test_unknown_nonremote_geography_is_not_assumed_eligible(self) -> None:
+        config = {
+            "target_regions": [],
+            "target_country_codes": ["RO"],
+            "excluded_regions": [],
+            "excluded_country_codes": [],
+        }
+        self.assertFalse(engine.geography_matches(set(), "Unknown", config, False))
 
 
 class OutputTests(unittest.TestCase):
