@@ -1,10 +1,10 @@
 # Package 2 - status implementare
 
-Ultima actualizare: 2026-09-08
+Ultima actualizare: 2026-09-09
 
 ## Scope
 
-Package 2 este livrat incremental. #49 este exclus explicit.
+Package 2 este livrat incremental. #49 este exclus explicit. JobsPipe ramane disabled.
 
 ## 2A0 - Run state
 
@@ -13,18 +13,15 @@ Status: `DONE`
 - polling pana la stare terminala reala;
 - recuperare dupa refresh;
 - backoff controlat;
-- CI + Cloudflare verzi;
 - PR #84 integrat.
 
 ## 2A - Administrare / contracts / source governance
 
-Status: `IN DEVELOPMENT`
+Status: `CORE MERGED / 2A8 READY FOR IMPLEMENTATION`
 
-Branch: `feature/package-2a1-admin-contracts`
-PR: #112
+Livrat in `main`:
 
-Implementat pe branch:
-
+- PR #112 Administrare / source governance;
 - `Administrare` ca intrare unica UI;
 - Overview / Actualizare date / Surse / Nomenclatoare / Loguri;
 - Surse / Aprobare surse / Categorii surse;
@@ -34,20 +31,52 @@ Implementat pe branch:
 - sursa noua pending + inactive;
 - CRUD categorii;
 - Command API source governance actions;
-- teste frontend/backend fara dependinte noi;
-- contractele noi incluse in protected assets si CI;
-- ARCHITECTURE v1.5, v1.4 arhivat.
+- teste frontend/backend;
+- ARCHITECTURE v1.5;
+- hotfix #114/#115 pentru protected asset `source-categories.json`;
+- production UI reconfirmat functional de owner dupa hotfix.
 
 Ramas in 2A:
 
-- cleanup semantic Source Registry (#93);
-- review final PR;
-- merge/deploy;
-- E2E controlat (#96).
+- #93 cleanup semantic Source Registry;
+- #116 Package 2A8 nomenclatoare canonice;
+- #96/#122 E2E final.
+
+### 2A8 - Nomenclatoare canonice
+
+Status: `ANALYSIS COMPLETE / READY FOR IMPLEMENTATION`
+
+Scop:
+
+- `data/nomenclatures.json` schema 1.0;
+- domains: regions, countries, work_modes, contract_types, application_statuses, seniority infrastructure;
+- system/semantic vs extensible;
+- geografie canonica cu parity migration;
+- Remote/Hybrid/Onsite canonice; N/A doar tehnic;
+- contract types Permanent/Temporar/Contract/Freelance + `unknown` tehnic;
+- referential integrity 409;
+- runtime assets manifest/parity guard;
+- E2E controlat.
+
+Issues:
+
+- #116 umbrella;
+- #117 contract;
+- #118 geografie;
+- #119 work modes + contract types;
+- #120 Admin + integrity;
+- #121 runtime asset safety;
+- #122 migration + E2E.
+
+Documente:
+
+- `docs/analysis/2026-09-09-canonical-nomenclatures.md`;
+- `docs/package-2a8-implementation-plan.md`;
+- `ARCHITECTURE.md` v1.6 target architecture.
 
 ## 2B - Scheduler controlat
 
-Status: `PLANNED`
+Status: `PLANNED AFTER 2A8`
 
 - automation config implicit OFF;
 - interval 1/2/4/8/12/24h;
@@ -96,5 +125,8 @@ Issues: #89, #111, #113.
 - JobsPipe ramane disabled;
 - #49 nu se implementeaza in Package 2;
 - CI nu face live crawl;
-- Save/config/source/category != Run;
-- fara dependinte noi fara aprobare explicita.
+- Save/config/source/category/nomenclature != Run;
+- full search ramane manual-only pana la 2B;
+- fara dependinte noi fara aprobare explicita;
+- target geografic gol ramane invalid;
+- niciun cleanup/migrare de referinte nu se face silent.
