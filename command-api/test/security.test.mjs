@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 
+import { INTERNAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import commandApi from '../src/index.js';
 import secureEntry from '../src/secure-entry.js';
 
@@ -10,22 +11,22 @@ const env = {
   ALLOWED_GOOGLE_SUB: 'allowed-test-user',
 };
 
-const protectedDataPaths = [
-  '/data/jobs.json',
-  '/data/run-status.json',
-  '/data/run-history.json',
-  '/data/search-config.json',
-  '/data/sources.json',
-  '/data/source-categories.json',
-  '/data/applications.json',
-];
+const protectedDataPaths = PROTECTED_DATA_FILES.map(file => `/data/${file}`);
 
 test('all protected data assets reject missing bearer token before asset lookup', async () => {
+  assert.ok(protectedDataPaths.includes('/data/nomenclatures.json'));
   for (const path of protectedDataPaths) {
     const response = await secureEntry.fetch(new Request(`https://app.example.test${path}`), env);
     assert.equal(response.status, 401, `${path} must be protected and must not return 404`);
     assert.match(response.headers.get('cache-control') || '', /no-store/i);
   }
+});
+
+test('internal data assets are never part of the protected/public manifest', () => {
+  for (const file of INTERNAL_DATA_FILES) {
+    assert.equal(PROTECTED_DATA_FILES.includes(file), false, `${file} must remain internal`);
+  }
+  assert.ok(INTERNAL_DATA_FILES.includes('search-state.json'));
 });
 
 test('unknown data asset is not exposed', async () => {
