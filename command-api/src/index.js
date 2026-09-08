@@ -1,5 +1,5 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
-import { assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
+import { activeCodes, assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
 import {
   applySourceAction,
   assertUniqueCategoryLabel,
@@ -209,10 +209,17 @@ function validateUserConfigPatch(input, nomenclatures) {
     throw Object.assign(new Error('Invalid configuration payload'), { status: 400 });
   }
   const output = {};
-  const booleanKeys = ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','keepReposts','immediateStart','jobspipeEnabled'];
+  const booleanKeys = ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','workOnsite','keepReposts','immediateStart','jobspipeEnabled'];
   for (const key of booleanKeys) if (key in input) {
     if (typeof input[key] !== 'boolean') throw Object.assign(new Error(`${key} must be boolean`), { status: 400 });
     output[key] = input[key];
+  }
+  if ('contractTypes' in input) {
+    const values = uniqueStrings(input.contractTypes, { max:20, maxLength:40 }).map(value => value.toLowerCase());
+    const allowed = activeCodes(nomenclatures, 'contract_types');
+    const unsupported = values.filter(value => !allowed.has(value));
+    if (unsupported.length) throw Object.assign(new Error(`Unsupported contract type: ${unsupported.join(', ')}`), { status:400 });
+    output.contractTypes = values;
   }
   if ('jobspipeMode' in input) {
     const value = String(input.jobspipeMode || '').toLowerCase();
@@ -270,6 +277,8 @@ function applyUserConfigPatch(config, patch) {
   config.work_modes ||= {};
   if ('workRemote' in patch) config.work_modes.remote = patch.workRemote;
   if ('workHybrid' in patch) config.work_modes.hybrid = patch.workHybrid;
+  if ('workOnsite' in patch) config.work_modes.onsite = patch.workOnsite;
+  if ('contractTypes' in patch) config.contract_types = patch.contractTypes;
   if ('freshness' in patch) config.freshness_hours = patch.freshness;
   if ('fitThreshold' in patch) config.fit_threshold = patch.fitThreshold;
   if ('keepReposts' in patch) config.keep_reposts = patch.keepReposts;
@@ -279,7 +288,7 @@ function applyUserConfigPatch(config, patch) {
   if ('jobspipeMode' in patch) config.jobspipe_mode = patch.jobspipeMode;
   if ('jobspipeEnabled' in patch && !('jobspipeMode' in patch)) config.jobspipe_mode = patch.jobspipeEnabled ? 'direct' : 'disabled';
   if ('jobspipeApifyMaxItems' in patch) config.jobspipe_apify_max_items_per_run = patch.jobspipeApifyMaxItems;
-  if ('jobspipeDirectRunBudget' in patch) config.jobspipe_credit_budget_per_run = patch.jobspipeDirectMonthlyGuard;
+  if ('jobspipeDirectRunBudget' in patch) config.jobspipe_credit_budget_per_run = patch.jobspipeDirectRunBudget;
   if ('jobspipeDirectMonthlyGuard' in patch) config.jobspipe_monthly_credit_guard = patch.jobspipeDirectMonthlyGuard;
   if ('exclusions' in patch) config.exclusions = patch.exclusions;
   if ('targetRegions' in patch) config.target_regions = patch.targetRegions;
@@ -295,6 +304,7 @@ function applyUserConfigPatch(config, patch) {
 
 function validateEffectiveSearchConfig(config, nomenclatures) {
   const { validCountries, validRegions, membership } = geographyIndex(nomenclatures);
+  const allowedContractTypes = activeCodes(nomenclatures, 'contract_types');
   if (!config || config.schema_version !== '1.0') {
     throw Object.assign(new Error('Unsupported search configuration schema'), { status: 409 });
   }
@@ -309,6 +319,11 @@ function validateEffectiveSearchConfig(config, nomenclatures) {
   for (const region of targetRegions) if (excludedRegions.has(region)) throw Object.assign(new Error('Aceeasi regiune nu poate fi inclusa si exclusa.'), { status: 400 });
   for (const region of targetRegions) for (const country of excludedCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
   for (const region of excludedRegions) for (const country of targetCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea exclusa si o tara inclusa.'), { status: 400 });
+  const configuredContractTypes = config.contract_types == null ? [...allowedContractTypes] : config.contract_types;
+  if (!Array.isArray(configuredContractTypes)) throw Object.assign(new Error('contract_types must be a list'), { status:400 });
+  for (const value of configuredContractTypes) if (!allowedContractTypes.has(String(value).toLowerCase())) throw Object.assign(new Error(`Unsupported contract type: ${value}`), { status:400 });
+  const modes = config.work_modes || {};
+  for (const key of ['remote','hybrid','onsite']) if (key in modes && typeof modes[key] !== 'boolean') throw Object.assign(new Error(`work_modes.${key} must be boolean`), { status:400 });
   if (Number(config.rate_min_eur_day || 0) > Number(config.rate_max_eur_day || 0)) throw Object.assign(new Error('rateMin cannot exceed rateMax'), { status: 400 });
   return config;
 }
