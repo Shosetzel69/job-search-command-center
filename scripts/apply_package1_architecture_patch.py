@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
+# One-time trigger after workflow creation.
 ARCH = Path('ARCHITECTURE.md')
 ARCHIVE = Path('docs/archive/architecture/ARCHITECTURE-v1.3.md')
 CHANGELOG = Path('CHANGELOG.md')
