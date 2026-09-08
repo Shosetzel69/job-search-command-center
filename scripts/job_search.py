@@ -204,6 +204,8 @@ def validate_geography_config(config: dict[str, Any]) -> None:
     unsupported = (target_regions | excluded_regions) - set(REGION_COUNTRIES)
     if unsupported:
         raise RuntimeError(f"Unsupported geographic region: {', '.join(sorted(unsupported))}")
+    if not target_regions and not target_countries:
+        raise RuntimeError("At least one target region or country is required")
     if target_regions & excluded_regions:
         raise RuntimeError("Geographic inclusion/exclusion conflict")
     if target_countries & excluded_countries:
@@ -296,7 +298,6 @@ def normalize_job_geography(job: dict[str, Any], remote: bool) -> tuple[list[str
     if remote and job.get("romania_eligible") is False:
         return countries, country_codes, "Country" if country_codes else "Unknown", False
 
-    # An explicit country restriction takes precedence over generic scope wording.
     if country_codes:
         return countries, country_codes, "Country", "RO" in country_codes
 
@@ -313,7 +314,6 @@ def normalize_job_geography(job: dict[str, Any], remote: bool) -> tuple[list[str
     elif re.search(r"\b(EU|European Union|Europe only|within Europe|across Europe|Europe)\b", scope_text, re.I):
         scope = "EU"
     else:
-        # Confirmed rule: remote without a stated territory is Worldwide.
         scope = "Worldwide"
     return countries, country_codes, scope, True
 
@@ -324,25 +324,24 @@ def geography_matches(job_codes: set[str], remote_scope: str, config: dict[str, 
     excluded_codes = excluded_country_codes(config)
     excluded_regions = configured_excluded_regions(config)
 
+    # Defense in depth: an invalid empty target never means worldwide.
+    if not target_codes and not target_regions:
+        return False
+
     if remote and remote_scope == "Worldwide":
-        # Confirmed rule: a regional exclusion does not eliminate Worldwide remote.
         return True
 
     if remote and remote_scope in {"EU", "EMEA"}:
         if "EU" in excluded_regions or "RO" in excluded_codes:
             return False
-        if not target_codes and not target_regions:
-            return True
         return "EU" in target_regions or bool(target_codes & EU_COUNTRY_CODES)
 
     allowed_codes = job_codes - excluded_codes
     if not allowed_codes and job_codes:
         return False
-    if not target_codes:
-        return True
     if not job_codes:
-        # Unknown geography is retained rather than assigned an invented country.
-        return True
+        # Unknown Hybrid/Onsite geography cannot be proven eligible for a targeted search.
+        return False
     return bool(allowed_codes & target_codes)
 
 
@@ -614,6 +613,7 @@ def validate_output() -> None:
     }
 
     assert config.get("schema_version") == SCHEMA_VERSION
+    validate_geography_config(config)
     assert jobs.get("schema_version") == SCHEMA_VERSION
     assert status.get("schema_version") == SCHEMA_VERSION
     assert not (root_required - jobs.keys()), root_required - jobs.keys()
@@ -678,4 +678,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
