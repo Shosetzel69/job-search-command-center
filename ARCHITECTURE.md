@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.5`
+Versiune document: `v1.6`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-08`
+Ultima actualizare: `2026-09-09`
 
 ## 1. Rol
 
@@ -12,7 +12,9 @@ Documente complementare:
 
 - `GOVERNANCE.md` — proces, aprobare, branching si DoD;
 - `.ai-instructions.md` — reguli obligatorii pentru AI;
-- `docs/data-contract.md` — contractele runtime JSON.
+- `docs/data-contract.md` — contractele runtime JSON;
+- `docs/analysis/2026-09-09-canonical-nomenclatures.md` — analiza Package 2A8;
+- `docs/package-2a8-implementation-plan.md` — planul de implementare aprobat.
 
 ## 2. Principii
 
@@ -31,18 +33,19 @@ Principii:
 - Save/configuration != Run;
 - secretele nu ajung in browser;
 - persistenta curenta ramane JSON versionat in repository;
-- costul operational este mentinut redus.
+- costul operational este mentinut redus;
+- pentru domeniile controlate, datele canonice nu se dubleaza functional intre React, Worker si Python.
 
 ## 3. Componente
 
 | Componenta | Responsabilitate |
 |---|---|
 | `frontend` | autentificare, joburi, filtre locale, criterii, aplicari, Administrare |
-| `Cloudflare Worker / Command API` | auth, autorizare, protectie date, comenzi, configuratie, source governance |
+| `Cloudflare Worker / Command API` | auth, autorizare, protectie date, comenzi, configuratie, source governance, nomenclatoare |
 | `GitHub Actions` | orchestration full search, secrets runtime, publicare rezultate |
 | `search engine` | colectare, normalizare, geografie, dedupe/repost, filtrare, FIT |
 | `connectors` | transport/provider specific, fara FIT |
-| `data/*.json` | persistenta runtime/versionata |
+| `data/*.json` | persistenta runtime/versionata si domenii canonice |
 
 ## 4. Frontend
 
@@ -60,7 +63,7 @@ Navigatie principala:
 - Criterii de selectie;
 - Administrare.
 
-`Administrare` are structura:
+`Administrare`:
 
 ```text
 Administrare
@@ -80,53 +83,42 @@ Reguli:
 - Google ID token ramane numai in memoria paginii;
 - filtrele/KPI locale nu declanseaza provider request;
 - modificarile administrative nu pornesc full search;
-- `Ruleaza verificarea` / `Ruleaza acum` este comanda explicita de executie.
+- `Ruleaza verificarea` / `Ruleaza acum` este comanda explicita de executie;
+- dupa Package 2A8, UI nu mai detine liste functionale independente pentru regions/countries/work_modes/contract_types.
 
 ## 5. Command API
 
-Entry point:
+Entry point: `command-api/src/secure-entry.js`.
 
-`command-api/src/secure-entry.js`
+Logica principala: `command-api/src/index.js`.
 
-Logica principala:
+Source governance: `command-api/src/source-governance.js`.
 
-`command-api/src/index.js`
-
-Source governance:
-
-`command-api/src/source-governance.js`
-
-Endpoint-uri:
+Endpoint-uri curente:
 
 - `GET /health`;
 - `GET /auth/config`;
 - `POST /auth/session`;
 - `POST /commands/run`;
 - `PUT /config`;
-- `POST /sources`;
-- `PUT /sources/:id`;
-- `DELETE /sources/:id`;
-- `POST /sources/:id/actions`;
-- `GET /source-categories`;
-- `POST /source-categories`;
-- `PUT /source-categories/:id`;
-- `DELETE /source-categories/:id`;
+- CRUD/action Surse;
+- CRUD Categorii surse;
 - `GET /data/*` prin Worker/protected assets.
+
+Package 2A8 adauga endpoint-uri autentificate pentru citirea si administrarea nomenclatoarelor conform modelului system/extensible. Contractul exact este definit in #117/#120 si `docs/data-contract.md` inainte de cod.
 
 Semantica executiei:
 
 - `PUT /config` valideaza/persista si nu face dispatch;
-- source/category CRUD nu face dispatch;
+- source/category/nomenclature CRUD nu face dispatch;
 - `POST /commands/run` verifica rulare concurenta si produce maximum un `workflow_dispatch` cu `run_trigger=manual-ui`;
 - target geografic gol este invalid.
 
 ## 6. Source governance
 
-Catalogul si executia sunt concepte distincte:
+`Source catalog != Operational connector`.
 
-`Source catalog != Operational connector`
-
-Sursa noua este creata:
+Sursa noua:
 
 ```text
 validation_status = pending
@@ -134,7 +126,7 @@ approval_status = pending
 active = false
 ```
 
-Fluxul canonic:
+Flux:
 
 ```text
 pending
@@ -146,36 +138,114 @@ validated
   -> active
 ```
 
-Campurile sunt distincte:
-
-- `validation_status` — validare tehnica;
-- `approval_status` — decizie owner/admin;
-- `active` — participare operationala.
-
 Reguli:
 
-- o sursa nu poate deveni activa daca nu este `validated` si `approved`;
+- activarea necesita `validated + approved`;
 - aprobarea nu activeaza automat sursa;
-- categoria trebuie sa existe in `source-categories.json` si sa fie activa la adaugarea/mutarea unei surse;
+- categoria trebuie sa existe si sa fie activa;
 - URL-urile duplicate sunt respinse;
 - stergerea unei categorii este blocata daca exista surse asociate;
-- validarea tehnica automata a surselor noi este implementata in Package 2C, nu in 2A.
+- validarea tehnica automata a surselor noi ramane Package 2C.
 
-Catalogul legacy este normalizat compatibil la prima mutatie prin Command API.
+## 7. Nomenclatoare canonice — Package 2A8
 
-## 7. GitHub Actions
+### 7.1 Decizie
 
-Full search:
+Se introduce `data/nomenclatures.json`, schema `1.0`, ca sursa canonica de date pentru domeniile controlate explicit:
 
-`.github/workflows/job-search-full.yml`
+- `regions`;
+- `countries`;
+- `work_modes`;
+- `contract_types`;
+- `application_statuses`;
+- `seniority` ca infrastructura, fara filtru functional in 2A8.
 
-In Package 2A triggerul operational ramane numai:
+Nu intra in acest contract: role groups/titles, freshness, FIT threshold, rate, immediate start, exclusions si JobsPipe settings.
 
-- `workflow_dispatch`.
+### 7.2 Model system vs extensible
+
+Nomenclatoarele cu semantica folosita de business logic sunt `system/semantic`. Codurile lor nu se creeaza/sterg arbitrar din UI.
+
+Initial system/semantic:
+
+- countries;
+- regions;
+- work_modes;
+- contract_types;
+- seniority.
+
+Un domeniu poate fi extensibil numai daca este declarat explicit si consumatorii pot trata codurile generic. `application_statuses` poate evolua astfel; prima migrare pastreaza obligatoriu `applied` si nu inventeaza alte statusuri.
+
+Fiecare valoare are minimum:
+
+- `code` stabil;
+- `label` user-friendly;
+- `active`;
+- `sort_order`;
+- metadata tehnica optionala, inclusiv `aliases` sau membership.
+
+Label-ul poate fi schimbat fara schimbarea codului tehnic.
+
+### 7.3 Geografie canonica
+
+- `EU` inseamna Uniunea Europeana, nu continentul Europa;
+- un eventual `EUROPE` va fi cod separat;
+- `US` pastreaza semantica actuala;
+- `ASIA` pastreaza membership-ul curent in migrarea 2A8;
+- `Worldwide` si `EMEA` raman remote scopes, nu target regions in 2A8;
+- membership-ul `region -> country_codes` este definit o singura data in nomenclator;
+- React, Command API si Python citesc aceleasi date canonice, dar isi pastreaza algoritmii specifici stratului;
+- target gol si conflictele include/exclude raman fail-safe.
+
+### 7.4 Work modes
+
+Coduri canonice:
+
+- `remote`;
+- `hybrid`;
+- `onsite`.
+
+`N/A` ramane stare tehnica pentru date nedeterminate, nu optiune normala de selectie.
+
+`search-config.json` ramane compatibil cu structura curenta si se extinde cu `work_modes.onsite`.
+
+### 7.5 Contract types
+
+Coduri canonice initiale:
+
+- `permanent`;
+- `temporary`;
+- `contract`;
+- `freelance`.
+
+Jobul publicat primeste `contract_type`. Valoarea provider-specific poate fi pastrata separat ca `employment_type_raw` sau echivalent documentat. Normalizarea este conservatoare; lipsa certitudinii produce `unknown`.
+
+### 7.6 Integritate referentiala
+
+Deactivate/delete pe o valoare deja folosita nu modifica silent configuratia.
+
+Comportament tinta:
+
+```text
+request deactivate/delete
+        -> reference check
+        -> 409 Conflict + referinte
+        -> modificare/migrare explicita de catre utilizator
+```
+
+Aceasta regula este obligatorie pentru geografie si orice valoare referentiata de `search-config.json`.
+
+## 8. GitHub Actions
+
+Full search: `.github/workflows/job-search-full.yml`.
+
+Trigger operational curent:
+
+- `workflow_dispatch` only.
 
 Nu exista `push` sau `schedule` pe workflow-ul greu.
 
-Schedulerul lightweight este Package 2B si trebuie sa ramana separat de full search. Daca automatizarea este OFF sau nu este due, schedulerul nu apeleaza provideri.
+Schedulerul lightweight este Package 2B si ramane separat de full search. Cand automation este OFF sau not due, nu se apeleaza provideri.
 
 Publicarea rezultatelor:
 
@@ -183,11 +253,9 @@ Publicarea rezultatelor:
 - retry maximum 3 la modificari concurente non-data;
 - conflict pe fisiere canonice de rezultate => fail explicit.
 
-## 8. Search engine
+## 9. Search engine
 
-Entry point:
-
-`scripts/job_search_runner.py`
+Entry point: `scripts/job_search_runner.py`.
 
 Pipeline:
 
@@ -206,40 +274,36 @@ Componente principale:
 - `job_search.py` — model comun, geografie, filtrare, scoring;
 - `source_orchestration.py` — plan/rutare/raportare surse;
 - `job_identity.py` — identitate/deduplicare;
-- `job_search_jobicy.py` — Jobicy;
-- `job_search_web.py` + `web_transport.py` + `web_browser.py` — colectare web bounded;
-- connectorii ATS dedicati din `scripts/job_search_*.py`;
+- connectorii dedicati `scripts/job_search_*.py`;
 - `shared/source-connectors.json` — rutare comuna.
 
-Geo-eligibility este fail-safe:
+Dupa 2A8, runner-ul incarca nomenclatoarele canonice pentru membership geografic, aliases si valorile semantice migrate. Algoritmul Python ramane separat; datele nu se copiaza in constante paralele.
 
-- trebuie sa existe cel putin o tara/regiune tinta;
+Geo-eligibility ramane fail-safe:
+
+- exista cel putin o tara/regiune tinta;
 - Hybrid/Onsite cu geografie necunoscuta nu este presupus eligibil;
 - geografia este evaluata inainte de FIT.
 
-## 9. Connectors
+## 10. Connectors
 
 Connectorii livreaza `CollectionResult` si nu dubleaza geografie/FIT/dedup.
 
 Un connector nou care respecta contractul existent nu necesita ADR. Schimbarea contractului comun necesita ADR.
 
-JobsPipe:
+JobsPipe ramane:
 
 ```text
 jobspipe_mode = disabled
 ```
 
-Codul Direct/Apify poate ramane in repository, dar nu este apelat cat timp modul este disabled.
+Package 2 exclude explicit implementarea generica #49.
 
-Provider roots generic amanate raman in afara crawlerului generic cand este necesara ruta dedicata. Package 2 exclude explicit implementarea generica #49.
+Package 2C activeaza surse numai dupa `implementat + testat + validat + aprobat`.
 
-Package 2C activeaza surse numai dupa:
+## 11. Runtime data
 
-`implementat + testat + validat + aprobat`.
-
-## 10. Runtime data
-
-Fisiere publicate/protejate pentru frontend:
+Fisiere publicate/protejate curente:
 
 - `data/jobs.json`;
 - `data/run-status.json`;
@@ -249,15 +313,27 @@ Fisiere publicate/protejate pentru frontend:
 - `data/source-categories.json`;
 - `data/applications.json`.
 
-Fisiere interne:
+Package 2A8 adauga:
 
-- `data/search-state.json` — stare interna JobsPipe Direct; nu este publicat frontend-ului.
+- `data/nomenclatures.json`.
 
-Contractele publice folosesc `schema_version` si sunt validate in CI/frontend.
+Fisier intern:
 
-## 11. Run state
+- `data/search-state.json` — nu este publicat frontend-ului.
 
-Stari active recunoscute de UI:
+### Runtime asset manifest
+
+#121 introduce manifest comun sau CI parity guard intre:
+
+- fisierele copiate in `command-api/public/data`;
+- protected-data allowlist;
+- contractele validate in CI/frontend.
+
+Obiectivul este prevenirea repetarii regresiei #114. `search-state.json` ramane explicit exclus.
+
+## 12. Run state
+
+Stari active:
 
 - `queued`;
 - `pending`;
@@ -270,80 +346,81 @@ Stari terminale:
 - `completed_with_errors`;
 - `failed`.
 
-Frontend-ul urmareste o rulare pana la stare terminala reala, fara timeout functional fix de 5 minute, si poate relua urmarirea dupa refresh.
+Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmarirea dupa refresh.
 
-## 12. Autentificare si securitate
-
-Autentificare:
+## 13. Autentificare si securitate
 
 - Google Identity Services;
-- Worker valideaza semnatura JWT, issuer, audience si identitatea autorizata.
-
-Secrete Cloudflare:
-
-- `GITHUB_TOKEN`;
-- configuratia privata de autorizare.
-
-Secrete GitHub Actions:
-
-- provider secrets necesare conectorilor aprobati.
-
-Reguli:
-
-- fara secrete in cod/documentatie;
+- Worker valideaza semnatura JWT, issuer, audience si identitatea autorizata;
 - credentialele GitHub nu ajung in browser;
 - `/data/*` necesita autentificare;
-- `search-state.json` nu este publicat;
+- protected data foloseste `no-store`;
+- fara secrete in cod/documentatie;
 - HTTPS obligatoriu.
 
-## 13. Build/deploy
+## 14. Build/deploy
 
-Cloudflare Workers Builds ruleaza din `command-api`.
+Cloudflare Workers Builds are configuratie operationala cu working directory diferit pe trigger.
 
-Comenzile validate operational:
+Production:
+
+- Root directory: `command-api`;
+- Deploy command:
+
+```bash
+npm install --ignore-scripts --no-audit --no-fund && npx wrangler deploy
+```
+
+Preview/version, conform configuratiei validate existente:
 
 ```bash
 cd command-api && npm install --ignore-scripts --no-audit --no-fund && npx wrangler versions upload
 ```
 
-pentru preview/version si:
+Asimetria este intentional documentata deoarece trigger-ele Cloudflare au working directory diferit in configuratia curenta.
 
-```bash
-cd command-api && npm install --ignore-scripts --no-audit --no-fund && npx wrangler deploy
-```
+Build-ul Worker executa build-ul Vite si copiaza numai runtime assets aprobate.
 
-pentru productie.
-
-Build-ul Worker executa build-ul Vite si copiaza numai fisierele runtime aprobate in `command-api/public/data`.
-
-## 14. CI
+## 15. CI
 
 CI include:
 
 - sintaxa/config Python;
 - regresii search logic;
-- guard full-search manual-only in 2A;
+- guard full-search manual-only;
 - validare contracte JSON;
 - teste frontend Node;
 - teste Command API Node;
 - Vite production build;
 - Wrangler dry-run.
 
+Package 2A8 adauga:
+
+- parity tests geografie;
+- teste nomenclature -> UI/API/runner;
+- runtime asset parity guard;
+- teste referential integrity;
+- contract type normalization tests.
+
 CI nu face crawl live si nu porneste full search.
 
-## 15. Persistenta si limite arhitecturale
+## 16. Persistenta si limite arhitecturale
 
 Nu exista baza de date activa.
 
-Trecerea la alta persistenta, multi-user sau storage privat pentru CV sunt schimbari arhitecturale si necesita analiza/ADR conform guvernantei.
+Trecerea la alta persistenta, multi-user sau storage privat pentru CV necesita analiza/ADR conform guvernantei.
 
-ATS Match v1 este separat de FIT. Orice dependinta noua de parsing PDF/DOCX necesita aprobare explicita inainte de implementare.
+Introducerea `nomenclatures.json` nu schimba boundary-ul arhitectural si nu necesita ADR separat: ramane in modelul existent JSON versionat + Command API + static frontend + Python runner.
 
-## 16. Status Package 2
+ATS Match v1 este separat de FIT. Orice dependinta noua de parsing PDF/DOCX necesita aprobare explicita.
+
+## 17. Status Package 2
 
 - 2A0 polling robust: implementat;
-- 2A Administrare/contracts/source governance: in Development;
-- 2B scheduler controlled: planificat;
+- 2A core Administrare/contracts/source governance: integrat in `main` prin PR #112;
+- hotfix protected assets #114/#115: implementat si production green;
+- 2A8 nomenclatoare canonice #116/#117-#122: analiza finalizata, pregatit pentru implementare;
+- 2B scheduler controlled: planificat dupa 2A8;
 - 2C conectori aprobati: planificat;
 - 2D data quality/FIT v2: planificat;
 - 2E ATS v1: planificat, cu dependency gate;
