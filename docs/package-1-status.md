@@ -22,16 +22,18 @@ Plan: `docs/package-1-implementation-plan.md`
 - CI verifica explicit ca full search ramane manual-only;
 - UI afiseaza deja tara in liste si detalii si foloseste logurile/counterele existente;
 - `ARCHITECTURE.md` actualizat la v1.4; v1.3 arhivat conform guvernantei;
-- `CHANGELOG.md` actualizat in `[Unreleased]`.
+- `CHANGELOG.md` actualizat in `[Unreleased]`;
+- #33 revalidat si inchis: commit-urile concurente non-data sunt pastrate prin retry, iar modificarile concurente ale fisierelor de rezultate blocheaza explicit publicarea fara suprascriere si fara force push.
 
 ## Validare finalizata in PR
 
 - GitHub CI complet green pe head-ul Pachetului 1;
-- 105 teste Python green;
+- 108 teste Python green;
 - teste Command API Node green;
 - React/Vite production build green;
 - Cloudflare Worker `wrangler deploy --dry-run` green;
-- guard CI confirma ca full search nu are `push` sau `schedule`.
+- guard CI confirma ca full search nu are `push` sau `schedule`;
+- test Git real pentru #33 confirma retry pe commit concurent de documentatie si blocarea conflictului real de date.
 
 ## Blocker extern de release
 
@@ -42,12 +44,11 @@ Bisection:
 - `09b73c2` -> Cloudflare FAILURE;
 - diferenta dintre cele doua commit-uri este exclusiv `docs/package-1-implementation-plan.md`.
 
-Prin urmare, nu exista in acest moment dovada ca esecul Cloudflare este produs de codul Pachetului 1. Este necesar logul Cloudflare Build Details pentru cauza concreta.
+Un retry ulterior pe un commit docs-only reproduce aceeasi situatie: GitHub CI SUCCESS / Cloudflare FAILURE. Prin urmare, nu exista in acest moment dovada ca esecul Cloudflare este produs de codul Pachetului 1. Este necesar logul Cloudflare Build Details pentru cauza concreta.
 
 ## De validat in release
 
 - rezolvare #81 si Cloudflare Workers Build green;
-- revalidare #33 pentru publish concurent;
 - deploy Cloudflare dupa merge;
 - `/health` live pentru #17;
 - E2E #24: `Save -> 0 run`, `Run -> exact 1 run`;
