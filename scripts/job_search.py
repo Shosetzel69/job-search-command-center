@@ -16,6 +16,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 from job_identity import deduplicate
+import nomenclatures as canonical_nomenclatures
 
 ROOT = Path(__file__).resolve().parents[1]
 DATA = ROOT / "data"
@@ -24,53 +25,13 @@ JOBS_PATH = DATA / "jobs.json"
 STATUS_PATH = DATA / "run-status.json"
 SCHEMA_VERSION = "1.0"
 
-EU_COUNTRY_CODES = {
-    "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE",
-    "GR", "HU", "IE", "IT", "LV", "LT", "LU", "MT", "NL", "PL", "PT",
-    "RO", "SK", "SI", "ES", "SE",
-}
-ASIA_COUNTRY_CODES = {
-    "AF", "AM", "AZ", "BH", "BD", "BT", "BN", "KH", "CN", "GE", "HK",
-    "IN", "ID", "IR", "IQ", "IL", "JP", "JO", "KZ", "KW", "KG", "LA",
-    "LB", "MO", "MY", "MV", "MN", "MM", "NP", "KP", "OM", "PK", "PS",
-    "PH", "QA", "SA", "SG", "KR", "LK", "SY", "TW", "TJ", "TH", "TL",
-    "TR", "TM", "AE", "UZ", "VN", "YE",
-}
-REGION_COUNTRIES = {
-    "EU": EU_COUNTRY_CODES,
-    "US": {"US"},
-    "ASIA": ASIA_COUNTRY_CODES,
-}
-
-COUNTRY_NAMES = {
-    "RO": "Romania", "BE": "Belgia", "LU": "Luxemburg", "FR": "Franta",
-    "DE": "Germania", "NL": "Tarile de Jos", "PL": "Polonia", "PT": "Portugalia",
-    "ES": "Spania", "IT": "Italia", "IE": "Irlanda", "AT": "Austria", "CZ": "Cehia",
-    "SK": "Slovacia", "HU": "Ungaria", "BG": "Bulgaria", "GR": "Grecia",
-    "HR": "Croatia", "SI": "Slovenia", "EE": "Estonia", "LV": "Letonia",
-    "LT": "Lituania", "DK": "Danemarca", "SE": "Suedia", "FI": "Finlanda",
-    "NO": "Norvegia", "CH": "Elvetia", "CY": "Cipru", "MT": "Malta",
-    "US": "Statele Unite", "GB": "Regatul Unit", "UA": "Ucraina", "TR": "Turcia",
-    "AE": "Emiratele Arabe Unite", "IN": "India", "CN": "China", "JP": "Japonia",
-    "SG": "Singapore", "KR": "Coreea de Sud", "HK": "Hong Kong", "IL": "Israel",
-    "SA": "Arabia Saudita", "QA": "Qatar", "MY": "Malaezia", "TH": "Thailanda",
-    "VN": "Vietnam", "ID": "Indonezia", "PH": "Filipine", "PK": "Pakistan",
-    "BD": "Bangladesh",
-}
-COUNTRY_NAME_TO_CODE = {name.lower(): code for code, name in COUNTRY_NAMES.items()}
-COUNTRY_NAME_TO_CODE.update({
-    "belgium": "BE", "france": "FR", "germany": "DE", "netherlands": "NL",
-    "poland": "PL", "portugal": "PT", "spain": "ES", "italy": "IT",
-    "ireland": "IE", "austria": "AT", "czech republic": "CZ", "czechia": "CZ",
-    "slovakia": "SK", "hungary": "HU", "bulgaria": "BG", "greece": "GR",
-    "croatia": "HR", "slovenia": "SI", "estonia": "EE", "latvia": "LV",
-    "lithuania": "LT", "denmark": "DK", "sweden": "SE", "finland": "FI",
-    "norway": "NO", "switzerland": "CH", "united states": "US", "usa": "US",
-    "united kingdom": "GB", "uk": "GB", "india": "IN", "china": "CN",
-    "japan": "JP", "singapore": "SG", "south korea": "KR", "hong kong": "HK",
-    "turkey": "TR", "türkiye": "TR", "ukraine": "UA", "united arab emirates": "AE",
-    "uae": "AE",
-})
+NOMENCLATURES = canonical_nomenclatures.load_nomenclatures()
+REGION_COUNTRIES = canonical_nomenclatures.region_countries(NOMENCLATURES)
+COUNTRY_NAMES = canonical_nomenclatures.country_names(NOMENCLATURES)
+COUNTRY_NAME_TO_CODE = canonical_nomenclatures.country_name_to_code(NOMENCLATURES)
+ACTIVE_COUNTRY_CODES = canonical_nomenclatures.active_country_codes(NOMENCLATURES)
+ACTIVE_REGION_CODES = canonical_nomenclatures.active_region_codes(NOMENCLATURES)
+EU_COUNTRY_CODES = REGION_COUNTRIES["EU"]
 
 
 @dataclass
@@ -201,9 +162,12 @@ def validate_geography_config(config: dict[str, Any]) -> None:
     target_countries = configured_target_country_codes(config)
     excluded_countries = configured_excluded_country_codes(config)
 
-    unsupported = (target_regions | excluded_regions) - set(REGION_COUNTRIES)
-    if unsupported:
-        raise RuntimeError(f"Unsupported geographic region: {', '.join(sorted(unsupported))}")
+    unsupported_regions = (target_regions | excluded_regions) - ACTIVE_REGION_CODES
+    if unsupported_regions:
+        raise RuntimeError(f"Unsupported geographic region: {', '.join(sorted(unsupported_regions))}")
+    unsupported_countries = (target_countries | excluded_countries) - ACTIVE_COUNTRY_CODES
+    if unsupported_countries:
+        raise RuntimeError(f"Unsupported country code: {', '.join(sorted(unsupported_countries))}")
     if not target_regions and not target_countries:
         raise RuntimeError("At least one target region or country is required")
     if target_regions & excluded_regions:
@@ -278,7 +242,7 @@ def normalize_job_geography(job: dict[str, Any], remote: bool) -> tuple[list[str
     raw_codes = [job.get("country_code"), job.get("job_country_code"), *list_values(job.get("country_codes"))]
     for value in raw_codes:
         code = str(value or "").strip().upper()
-        if len(code) == 2 and code not in country_codes:
+        if code in ACTIVE_COUNTRY_CODES and code not in country_codes:
             country_codes.append(code)
 
     countries = list_values(job.get("countries"))
