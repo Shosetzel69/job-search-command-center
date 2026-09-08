@@ -4,12 +4,11 @@ Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
 Ultima actualizare: `2026-09-09`
 
-## 1. Reguli
+## 1. Reguli generale
 
-Contractele publicate frontend-ului folosesc `schema_version = "1.0"`.
+Contractele runtime publicate frontend-ului folosesc `schema_version = "1.0"`.
 
-Frontend-ul si CI valideaza:
-
+Protected runtime contracts:
 - `jobs.json`;
 - `run-status.json`;
 - `run-history.json`;
@@ -19,12 +18,12 @@ Frontend-ul si CI valideaza:
 - `nomenclatures.json`;
 - `applications.json`.
 
-Timestamp-urile generate de motor sunt UTC ISO-8601.
+Manifestul canonic pentru publicare/protectie este `shared/runtime-data.mjs`.
+`search-state.json` este intern si nu este publicat.
 
 ## 2. `data/jobs.json`
 
-Root principal:
-
+Root minim:
 - `schema_version`;
 - `generated_at`;
 - `freshness_hours`;
@@ -34,23 +33,28 @@ Root principal:
 - `excluded_count`;
 - `jobs`.
 
-Campuri job principale:
-
+Job:
 - `id`, `title`, `company`, `fit`;
 - `location`, `countries`, `country_codes`, `remote_scope`;
-- `mode`, `type`, `date_posted`, `age`;
+- `mode`, `date_posted`, `age`;
+- `contract_type`;
+- `employment_type_raw`;
 - `remote`, `b2b`, `repost`, `status`;
 - `pros`, `risks`, `description`;
 - `url`, `source`, `verified_at`.
 
-Package 2A8 introduce incremental campurile canonice `contract_type` si, unde este util pentru trasabilitate, `employment_type_raw`. `contract_type=unknown` este valoare tehnica pentru cazurile in care sursa nu permite o clasificare sigura.
+`contract_type` foloseste:
+- `permanent`;
+- `temporary`;
+- `contract`;
+- `freelance`;
+- `unknown` numai ca valoare tehnica cand clasificarea nu este sigura.
 
-Campurile geografice istorice pot lipsi temporar pentru joburi pastrate incremental; o rulare noua le normalizeaza.
+`employment_type_raw` pastreaza valoarea provider-specific pentru trasabilitate.
 
 ## 3. `data/run-status.json`
 
 Campuri principale:
-
 - `schema_version`;
 - `run_id`, `status`;
 - `started_at`, `completed_at`;
@@ -58,20 +62,8 @@ Campuri principale:
 - `records_inspected`, `jobs_published`, `excluded`;
 - `limitations`.
 
-Stari active acceptate de UI:
-
-- `queued`;
-- `pending`;
-- `running`;
-- `in_progress`.
-
-Stari terminale:
-
-- `completed`;
-- `completed_with_errors`;
-- `failed`.
-
-Campuri aditive pentru observabilitate pot include `source_results` si contoare `sources_*`.
+Stari active UI: `queued`, `pending`, `running`, `in_progress`.
+Stari terminale: `completed`, `completed_with_errors`, `failed`.
 
 ## 4. `data/run-history.json`
 
@@ -82,34 +74,44 @@ Campuri aditive pentru observabilitate pot include `source_results` si contoare 
 }
 ```
 
-`runs` contine maximum 10 intrari, cea mai recenta prima.
-
-Campuri uzuale:
-
-- `run_id`, `status`, `trigger`;
-- `started_at`, `completed_at`, `duration_seconds`;
-- `sources`, `sources_processed`, `failed_sources`;
-- `records_inspected`, `jobs_published`, `excluded`;
-- `source_results`, `limitations`, `publication`.
+Maximum 10 rulari, cea mai recenta prima.
 
 ## 5. `data/search-config.json`
 
-Sursa canonica pentru selectiile efective ale motorului. Valorile controlate folosite in aceste selectii sunt definite de `data/nomenclatures.json`.
+Sursa canonica pentru selectiile efective ale motorului. Valorile controlate sunt definite de `data/nomenclatures.json`.
 
-Campuri geografice:
-
+Geografie:
 - `target_regions`;
 - `target_country_codes`;
 - `excluded_regions`;
 - `excluded_country_codes`;
-- `search_country_codes` pentru compatibilitate temporara.
+- `search_country_codes` - compatibilitate temporara.
 
-Campuri principale:
+Work modes:
 
+```json
+{
+  "work_modes": {
+    "remote": true,
+    "hybrid": true,
+    "onsite": false
+  }
+}
+```
+
+Tipuri contract:
+
+```json
+{
+  "contract_types": ["permanent", "temporary", "contract", "freelance"]
+}
+```
+
+`unknown`/`N/A` nu sunt optiuni normale de selectie.
+
+Alte campuri principale:
 - `role_groups`;
-- `work_modes`;
-- `freshness_hours`;
-- `collection_freshness_hours`;
+- `freshness_hours`, `collection_freshness_hours`;
 - `fit_threshold`;
 - `keep_reposts`;
 - `rate_min_eur_day`, `rate_max_eur_day`;
@@ -117,20 +119,9 @@ Campuri principale:
 - `source_strategy`;
 - `exclusions`.
 
-Package 2A8 extinde compatibil `work_modes` cu `onsite` si adauga selectia pentru tipurile canonice de contract fara a transforma `N/A`/`unknown` in optiuni normale de selectie.
-
-JobsPipe:
-
-- `jobspipe_mode`;
-- `jobspipe_apify_max_items_per_run`;
-- `jobspipe_credit_budget_per_run`;
-- `jobspipe_monthly_credit_guard`.
-
-In Package 2 `jobspipe_mode` ramane `disabled`.
+JobsPipe ramane `disabled` in Package 2.
 
 ## 6. `data/nomenclatures.json`
-
-Sursa canonica de date pentru domeniile controlate din Package 2A8.
 
 Root:
 
@@ -142,7 +133,6 @@ Root:
 ```
 
 Domenii obligatorii:
-
 - `regions`;
 - `countries`;
 - `work_modes`;
@@ -150,43 +140,102 @@ Domenii obligatorii:
 - `application_statuses`;
 - `seniority`.
 
-Fiecare domeniu are:
-
+Domeniu:
 - `kind`: `system` sau `extensible`;
 - `extensible`: boolean coerent cu `kind`;
-- `values`: lista valorilor canonice;
-- optional `technical_values` pentru valori interne care nu sunt optiuni normale de selectie.
+- `values`: lista valorilor;
+- optional `technical_values`.
 
-Fiecare valoare are minimum:
-
+Valoare:
 - `code` stabil;
 - `label` user-friendly;
 - `active`;
-- `sort_order`.
+- `sort_order`;
+- optional `aliases`;
+- optional `country_codes` pentru membership regional.
 
-Metadata optionala:
+### Reguli system / semantic
 
-- `aliases` pentru normalizarea valorilor provider-specific;
-- `country_codes` pentru membership-ul unei regiuni.
+Initial system:
+- regions;
+- countries;
+- work_modes;
+- contract_types;
+- seniority.
 
-Reguli:
+Pentru acestea:
+- codul nu se modifica;
+- Add/Delete sunt blocate;
+- label/order pot fi modificate;
+- deactivate este permis numai daca nu exista referinte.
 
-- `system`: codurile nu se adauga/sterg arbitrar din UI;
-- `extensible`: pot primi valori noi numai daca business logic trateaza codurile generic;
-- codurile sunt unice in domeniu;
-- label-urile sunt unice case/trim-insensitive in domeniu;
-- schimbarea label-ului nu schimba codul;
-- `EU` inseamna Uniunea Europeana; `US` si `ASIA` isi pastreaza semantica existenta;
-- membership-ul regiunilor referentiaza numai coduri existente in `countries`;
-- `work_modes`: `remote`, `hybrid`, `onsite`; `unknown` este tehnic;
-- `contract_types`: `permanent`, `temporary`, `contract`, `freelance`; `unknown` este tehnic;
-- `application_statuses` pastreaza minimum `applied`;
-- `seniority` exista ca infrastructura, fara filtru functional in 2A8;
-- dezactivarea/stergerea unei valori referentiate de configuratie nu se face silent; API trebuie sa raspunda controlat, tinta fiind `409 Conflict` cu referintele relevante.
+### Reguli extensible
 
-## 7. `PUT /config`
+`application_statuses` este extensibil.
 
-Mapare UI principala:
+Permite:
+- Add;
+- edit label/order;
+- activate/deactivate;
+- Delete numai daca valoarea nu este referentiata.
+
+Codul existent `applied` ramane obligatoriu valid cat timp este folosit de istoricul aplicarilor.
+
+### Geografie
+
+- `EU` = Uniunea Europeana, nu continentul Europa;
+- `US` pastreaza semantica existenta;
+- `ASIA` pastreaza membership-ul motorului la migrare;
+- `Worldwide` si `EMEA` sunt remote scopes, nu regions target;
+- membership-ul regiune -> `country_codes` este canonic;
+- target geografic gol ramane invalid.
+
+### Work modes
+
+Coduri selectabile:
+- `remote`;
+- `hybrid`;
+- `onsite`.
+
+`unknown` este tehnic si nu este optiune normala.
+
+### Contract types
+
+Coduri selectabile:
+- `permanent`;
+- `temporary`;
+- `contract`;
+- `freelance`.
+
+`unknown` este tehnic.
+
+### Seniority
+
+Domeniul exista ca infrastructura, cu `values=[]` in 2A8. Nu este filtru functional.
+
+## 7. Integritate referentiala nomenclatoare
+
+Deactivate/Delete pe o valoare folosita nu modifica silent alte contracte.
+
+Command API returneaza `409 Conflict` + `references`.
+
+Referinte verificate:
+- regions -> `search-config.target_regions`, `search-config.excluded_regions`;
+- countries -> target/search/excluded country codes + membership in regiuni active;
+- work modes -> `search-config.work_modes.<code>` daca este activ;
+- contract types -> `search-config.contract_types`;
+- application statuses -> `applications.status`.
+
+Exemplu:
+
+```json
+{
+  "error": "Valoarea este folosita si nu poate fi dezactivata.",
+  "references": ["search-config.target_regions"]
+}
+```
+
+## 8. Mapare `PUT /config`
 
 - `rolePm` -> `role_groups.pm.enabled`;
 - `roleDelivery` -> `role_groups.delivery.enabled`;
@@ -194,6 +243,7 @@ Mapare UI principala:
 - `roleScrum` -> `role_groups.scrum.enabled`;
 - `roleProgram` -> `role_groups.program.enabled`;
 - `workRemote` / `workHybrid` / `workOnsite` -> `work_modes`;
+- `contractTypes` -> `contract_types`;
 - `freshness` -> `freshness_hours`;
 - `fitThreshold` -> `fit_threshold`;
 - `keepReposts` -> `keep_reposts`;
@@ -201,89 +251,36 @@ Mapare UI principala:
 - `immediateStart` -> `immediate_start`;
 - `targetRegions` / `targetCountries` -> geografie inclusa;
 - `excludedRegions` / `excludedCountries` -> geografie exclusa;
-- `exclusions` -> reguli textuale aprobate.
+- `exclusions` -> reguli aprobate.
 
-Persistarea configuratiei nu porneste full search.
+Save nu porneste full search.
 
-## 8. `data/sources.json`
+## 9. `data/sources.json`
 
-Root:
+Root: `schema_version`, `count`, `sources`.
 
-- `schema_version`;
-- `count`;
-- `sources`.
-
-Campuri sursa canonice dupa normalizarea Package 2A:
-
-- `id`;
-- `name`;
-- `url`;
-- `category`;
+Campuri canonice:
+- `id`, `name`, `url`, `category`;
 - `active`;
-- `collection_method`;
-- `connector_available`;
-- `validation_status`;
-- `approval_status`;
-- `last_validated_at`;
-- `validation_reason`;
-- `policy_excluded` - camp aditiv derivat de Command API pentru sursele blocate prin politica operationala.
+- `collection_method`, `connector_available`;
+- `validation_status`, `approval_status`;
+- `last_validated_at`, `validation_reason`.
 
-`validation_status`:
+Sursa noua = pending + neaprobata + inactiva.
+Activarea necesita validated + approved.
+Monster ramane exclus operational.
 
-- `pending`;
-- `validating`;
-- `validated`;
-- `requires_connector`;
-- `rejected`.
-
-`approval_status`:
-
-- `pending`;
-- `approved`;
-- `rejected`.
-
-Reguli:
-
-- sursa noua = `pending`, `pending`, `active=false`;
-- activarea necesita `validated + approved`;
-- aprobarea si activarea sunt actiuni distincte;
-- URL duplicat interzis;
-- `connector_available` si `collection_method` nu sunt controlate liber de utilizator;
-- campul legacy `priority` nu face parte din contractul canonic;
-- o excludere operationala de politica prevaleaza peste valoarea legacy `active=true` si blocheaza colectarea/activarea;
-- Monster este exclus operational conform regulii curente a proiectului, inclusiv daca o intrare legacy il marcheaza `active=true`.
-
-Catalogul legacy poate fi citit si este normalizat compatibil la prima mutatie prin Command API. Search orchestration aplica aceeasi regula de excludere operationala independent de normalizarea catalogului, astfel incat o valoare legacy sa nu poata reactiva sursa accidental.
-
-## 9. `data/source-categories.json`
-
-Contract:
-
-```json
-{
-  "schema_version": "1.0",
-  "count": 0,
-  "categories": []
-}
-```
+## 10. `data/source-categories.json`
 
 Camp categorie:
-
 - `id`;
 - `label`;
 - `active`;
 - `order`.
 
-Reguli:
+Label unic case/trim-insensitive. Stergerea este blocata cat timp exista surse asociate.
 
-- `label` este unic case/trim-insensitive;
-- o sursa noua/mutata poate folosi numai o categorie existenta si activa;
-- redenumirea actualizeaza referintele surselor;
-- stergerea este blocata cat timp exista surse asociate.
-
-## 10. `data/applications.json`
-
-Contract:
+## 11. `data/applications.json`
 
 ```json
 {
@@ -292,40 +289,16 @@ Contract:
 }
 ```
 
-Campuri folosite in prezent:
+Campuri curente: `id`, `company`, `title`, `location`, `countries`, `applied_at`, `reference`, `status`, `next_status_check`, `url`.
 
-- `id` optional;
-- `company`;
-- `title`;
-- `location`;
-- `countries` optional;
-- `applied_at`;
-- `reference` optional;
-- `status`;
-- `next_status_check` optional;
-- `url` optional.
+`status` trebuie sa existe in `nomenclatures.application_statuses`. Valoarea existenta este `applied`.
 
-`status` trebuie sa corespunda unui cod valid din `nomenclatures.application_statuses`; valoarea existenta `applied` este pastrata.
+## 12. Runtime asset safety
 
-## 11. `data/search-state.json`
+`shared/runtime-data.mjs` este sursa comuna pentru:
+- build static assets;
+- Worker protected allowlist;
+- regression tests.
 
-Fisier intern pentru starea JobsPipe Direct/cursor/usage. Nu este publicat in Cloudflare Static Assets.
-
-## 12. Publicare protected assets
-
-Pana la #121, build-ul publica lista explicita existenta. `nomenclatures.json` va fi inclus in protected runtime assets impreuna cu un manifest/parity guard care elimina divergenta dintre build, allowlist si CI.
-
-`search-state.json` este exclus intentionat.
-
-## 13. Extensii observabilitate/colectare existente
-
-`source_results` poate include campuri aditive precum:
-
-- `source`, `source_id`, `connector`, `collection_method`;
-- `status`, `records`, `error`, `failure_reason`;
-- `policy_excluded`;
-- `url`, `web_outcome`;
-- `pages_attempted`, `pages_fetched`, `jobs_detected`;
-- `limitations`, `page_results`, `queries`.
-
-Lipsa acestor campuri in istoricul vechi ramane compatibila; UI nu inventeaza valori absente.
+Un protected asset nou nu mai necesita trei liste functionale independente.
+`search-state.json` este exclus explicit.
