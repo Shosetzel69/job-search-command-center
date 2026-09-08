@@ -10,10 +10,27 @@ const env = {
   ALLOWED_GOOGLE_SUB: 'allowed-test-user',
 };
 
-test('protected data without bearer token is rejected', async () => {
-  const response = await secureEntry.fetch(new Request('https://app.example.test/data/jobs.json'), env);
-  assert.equal(response.status, 401);
-  assert.match(response.headers.get('cache-control') || '', /no-store/i);
+const protectedDataPaths = [
+  '/data/jobs.json',
+  '/data/run-status.json',
+  '/data/run-history.json',
+  '/data/search-config.json',
+  '/data/sources.json',
+  '/data/source-categories.json',
+  '/data/applications.json',
+];
+
+test('all protected data assets reject missing bearer token before asset lookup', async () => {
+  for (const path of protectedDataPaths) {
+    const response = await secureEntry.fetch(new Request(`https://app.example.test${path}`), env);
+    assert.equal(response.status, 401, `${path} must be protected and must not return 404`);
+    assert.match(response.headers.get('cache-control') || '', /no-store/i);
+  }
+});
+
+test('unknown data asset is not exposed', async () => {
+  const response = await secureEntry.fetch(new Request('https://app.example.test/data/unknown.json'), env);
+  assert.equal(response.status, 404);
 });
 
 test('privileged request from a forbidden origin is rejected before auth', async () => {
