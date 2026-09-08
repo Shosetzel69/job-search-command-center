@@ -26,6 +26,14 @@ export function domainValues(payload, name, { activeOnly = false } = {}) {
   return activeOnly ? values.filter(item => item.active === true) : values;
 }
 
+export function domainOptions(payload, name) {
+  return domainValues(payload, name, { activeOnly: true }).map(item => [item.code, item.label]);
+}
+
+export function activeCodes(payload, name) {
+  return new Set(domainValues(payload, name, { activeOnly: true }).map(item => String(item.code)));
+}
+
 export function valueByCode(payload, domainName, code, { requireActive = false } = {}) {
   const normalized = String(code || '').trim().toUpperCase();
   const item = domainValues(payload, domainName).find(value => String(value.code || '').trim().toUpperCase() === normalized);
@@ -38,11 +46,11 @@ export function countryLabel(payload, code) {
 }
 
 export function countryOptions(payload) {
-  return domainValues(payload, 'countries', { activeOnly: true }).map(item => [item.code, item.label]);
+  return domainOptions(payload, 'countries');
 }
 
 export function regionOptions(payload) {
-  return domainValues(payload, 'regions', { activeOnly: true }).map(item => [item.code, item.label]);
+  return domainOptions(payload, 'regions');
 }
 
 export function regionMembership(payload) {
@@ -70,8 +78,8 @@ export function geographyConflicts(criteria, payload) {
 }
 
 export function geographyIndex(payload) {
-  const validCountries = new Set(domainValues(payload, 'countries', { activeOnly: true }).map(item => String(item.code).toUpperCase()));
+  const validCountries = new Set([...activeCodes(payload, 'countries')].map(code => code.toUpperCase()));
   const membership = regionMembership(payload);
-  const validRegions = new Set(domainValues(payload, 'regions', { activeOnly: true }).map(item => String(item.code).toUpperCase()));
+  const validRegions = new Set([...activeCodes(payload, 'regions')].map(code => code.toUpperCase()));
   return { validCountries, validRegions, membership };
 }
