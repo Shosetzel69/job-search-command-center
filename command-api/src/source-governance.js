@@ -4,6 +4,7 @@ export const SOURCE_SCHEMA = '1.0';
 export const CATEGORY_SCHEMA = '1.0';
 export const VALIDATION_STATUSES = new Set(['pending','validating','validated','requires_connector','rejected']);
 export const APPROVAL_STATUSES = new Set(['pending','approved','rejected']);
+export const POLICY_EXCLUDED_SOURCE_NAMES = new Set(['monster']);
 
 function fail(message, status = 400) {
   throw Object.assign(new Error(message), { status });
@@ -97,8 +98,13 @@ export function findCategoryByLabel(catalog, label, { requireActive = false } = 
   return category;
 }
 
+export function isPolicyExcludedSource(source) {
+  return POLICY_EXCLUDED_SOURCE_NAMES.has(String(source?.name || '').trim().toLocaleLowerCase('ro-RO'));
+}
+
 export function normalizeSource(source, { legacyApproved = true } = {}) {
   const url = String(source?.url || '').trim();
+  const name = String(source?.name || 'Sursa').trim();
   const collectionMethod = source?.collection_method || sourceCollectionMethod(url) || null;
   const connectorAvailable = Boolean(collectionMethod);
   const explicitValidation = String(source?.validation_status || '');
@@ -111,11 +117,13 @@ export function normalizeSource(source, { legacyApproved = true } = {}) {
   const approvalStatus = APPROVAL_STATUSES.has(explicitApproval)
     ? explicitApproval
     : legacyApproved ? 'approved' : 'pending';
-  const active = source?.active === true && approvalStatus === 'approved' && validationStatus === 'validated';
+  const policyExcluded = isPolicyExcludedSource({ name });
+  const active = !policyExcluded && source?.active === true && approvalStatus === 'approved' && validationStatus === 'validated';
+  const validationReason = source?.validation_reason ? String(source.validation_reason).slice(0, 500) : null;
   return {
     id: String(source?.id || stableSourceId(url)),
     category: String(source?.category || 'Altele').trim(),
-    name: String(source?.name || 'Sursa').trim(),
+    name,
     url,
     active,
     collection_method: collectionMethod,
@@ -123,7 +131,8 @@ export function normalizeSource(source, { legacyApproved = true } = {}) {
     validation_status: validationStatus,
     approval_status: approvalStatus,
     last_validated_at: source?.last_validated_at || null,
-    validation_reason: source?.validation_reason ? String(source.validation_reason).slice(0, 500) : null,
+    validation_reason: policyExcluded ? 'Exclus operational conform politicii curente.' : validationReason,
+    policy_excluded: policyExcluded,
   };
 }
 
@@ -182,7 +191,7 @@ export function applySourceAction(source, action, { now = new Date().toISOString
       if (next.validation_status !== 'validating' && next.validation_status !== 'pending') fail('Sursa nu este in flux de validare.', 409);
       next.validation_status = 'validated';
       next.last_validated_at = now;
-      next.validation_reason = reason ? String(reason).slice(0, 500) : null;
+      next.validation_reason = next.policy_excluded ? 'Exclus operational conform politicii curente.' : (reason ? String(reason).slice(0, 500) : null);
       next.active = false;
       return next;
     case 'mark_requires_connector':
@@ -204,6 +213,7 @@ export function applySourceAction(source, action, { now = new Date().toISOString
       next.validation_reason = reason ? String(reason).slice(0, 500) : next.validation_reason;
       return next;
     case 'activate':
+      if (next.policy_excluded) fail('Sursa este exclusa operational prin politica proiectului.', 409);
       if (next.validation_status !== 'validated' || next.approval_status !== 'approved') fail('Sursa trebuie validata si aprobata inainte de activare.', 409);
       next.active = true;
       return next;
