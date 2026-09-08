@@ -1,261 +1,205 @@
 # Command API
 
-Versiune aplicatie: `0.05`
-Ultima actualizare: `2026-09-08`
+Versiune aplicatie: `0.06-dev`
+Ultima actualizare: `2026-09-09`
 
-## 1. Scop
+## Scop
 
-Command API permite frontend-ului React sa execute actiuni privilegiate si sa acceseze date protejate fara a expune credentiale GitHub in browser.
+Command API executa actiunile privilegiate ale frontend-ului fara a expune credentiale GitHub in browser.
 
 Responsabilitati:
-
-- validare/autorizare Google;
+- autentificare/autorizare Google;
 - protectie `/data/*`;
-- rulare manuala `Ruleaza verificarea`;
-- persistare configuratie in `data/search-config.json`;
-- CRUD persistent pentru `data/sources.json`;
-- acces server-side la GitHub Actions si GitHub Contents API.
+- persistenta `search-config.json`;
+- comanda manuala de full search;
+- Source Registry + categorii;
+- Nomenclatoare canonice + integritate referentiala;
+- acces server-side la GitHub Actions/Contents API.
 
-Nu este motorul de cautare si nu este o baza de date.
+Command API nu este motorul de cautare si nu este baza de date.
 
-## 2. Regula de executie - Package 1
-
-Salvarea configuratiei si executia cautarii sunt operatii separate.
+## Regula Save != Run
 
 ```text
-Salveaza preferintele
--> PUT /config
--> validare
--> persistare
+PUT /config
+-> valideaza
+-> persista
 -> STOP
 
-Ruleaza verificarea
--> POST /commands/run
--> validare criterii curente
--> persistare daca exista modificari
--> verificare run activ
+POST /commands/run
+-> valideaza configuratia
+-> blocheaza daca exista run activ
 -> workflow_dispatch(run_trigger=manual-ui)
--> 202 Accepted
 ```
 
-Reguli:
+Modificarile de config, surse, categorii sau nomenclatoare nu pornesc full search.
 
-- `PUT /config` nu lanseaza full search;
-- commit/push de configuratie, surse, cod sau documentatie nu lanseaza full search;
-- scheduler-ul este OFF in Package 1;
-- full search se lanseaza numai prin `workflow_dispatch`;
-- o singura rulare poate fi `queued`/`in_progress`;
-- o a doua comanda returneaza 409;
-- configuratia invalida returneaza 400 si nu face dispatch;
-- targetul geografic nu poate fi complet gol;
-- `Worldwide` nu este dedus din lipsa targetului de cautare.
+## Autentificare
 
-## 3. Componente
-
-- `command-api/src/index.js` - auth, Command API, GitHub API, configuratie si Surse;
-- `command-api/src/secure-entry.js` - protectia `/data/*` + delegare;
-- `command-api/wrangler.jsonc` - configuratie Worker/Static Assets;
-- `command-api/scripts/build-static.mjs` - asamblarea bundle-ului public.
-
-## 4. Autentificare Google
-
-Browserul trimite:
+Browser:
 
 ```text
 Authorization: Bearer <GOOGLE_ID_TOKEN>
 ```
 
-Worker-ul verifica:
+Worker verifica Google JWKS, issuer, `GOOGLE_CLIENT_ID` si `ALLOWED_GOOGLE_SUB`.
 
-- semnatura prin Google JWKS;
-- issuer Google;
-- audience = `GOOGLE_CLIENT_ID`;
-- `payload.sub = ALLOWED_GOOGLE_SUB`.
+## Endpoint-uri publice
 
-Tokenul ramane numai in memoria frontend-ului.
+- `GET /health`
+- `GET /auth/config`
 
-## 5. Endpoint-uri publice
+## Endpoint autentificare
 
-### `GET /health`
+- `POST /auth/session`
 
-Returneaza starea minima a Worker-ului si daca auth/GitHub sunt configurate.
+## Date protejate
 
-### `GET /auth/config`
+Manifestul canonic este `shared/runtime-data.mjs`.
 
-Returneaza `GOOGLE_CLIENT_ID` si starea necesara Google Sign-In.
-
-## 6. Endpoint autentificare
-
-### `POST /auth/session`
-
-Necesita bearer Google valid si confirma utilizatorul autorizat.
-
-## 7. Date protejate
-
-Rutele protejate sunt:
-
-- `GET /data/jobs.json`;
-- `GET /data/run-status.json`;
-- `GET /data/run-history.json`;
-- `GET /data/search-config.json`;
-- `GET /data/sources.json`;
-- `GET /data/applications.json`.
+Protected assets includ:
+- `jobs.json`;
+- `run-status.json`;
+- `run-history.json`;
+- `search-config.json`;
+- `sources.json`;
+- `source-categories.json`;
+- `nomenclatures.json`;
+- `applications.json`.
 
 Reguli:
-
 - numai GET;
-- cale necunoscuta -> 404;
 - token lipsa/invalid -> 401/403;
+- path necunoscut -> 404;
 - `cache-control: no-store`;
 - `x-content-type-options: nosniff`.
 
-`search-state.json` nu este publicat.
+`search-state.json` ramane intern.
 
-## 8. Comenzi protejate
-
-### `POST /commands/run`
-
-Body-ul JSON este optional. Frontend-ul curent trimite criteriile curente din UI.
-
-Flux:
-
-1. verifica daca exista run `queued` sau `in_progress`;
-2. valideaza criteriile primite sau configuratia canonica existenta;
-3. daca criteriile primite difera, le persista in `data/search-config.json`;
-4. lanseaza exact un `workflow_dispatch` cu `run_trigger=manual-ui`;
-5. returneaza 202.
-
-Raspuns exemplu:
-
-```json
-{
-  "status": "accepted",
-  "trigger": "manual-ui",
-  "config_commit": "<sha-or-null>"
-}
-```
+## Configuratie
 
 ### `PUT /config`
 
-Accepta campurile aprobate din UI:
+Campuri UI principale:
+- role groups;
+- `workRemote`, `workHybrid`, `workOnsite`;
+- `contractTypes`;
+- freshness/FIT/reposts/rate/immediate start;
+- excluderi;
+- `targetRegions`, `targetCountries`;
+- `excludedRegions`, `excludedCountries`;
+- JobsPipe settings existente, cu JobsPipe ramas disabled in Package 2.
 
-- roluri urmarite;
-- Remote/Hibrid;
-- freshness;
-- prag FIT;
-- repostari;
-- interval B2B;
-- disponibilitate imediata;
-- excluderi de business;
-- `jobspipeMode` si limitele asociate;
-- `targetRegions`;
-- `targetCountries`;
-- `excludedRegions`;
-- `excludedCountries`.
+Validarea pentru regions/countries/contract types foloseste `data/nomenclatures.json`, nu liste independente in Worker.
 
-Reguli geografice server-side:
+Reguli geografice:
+- target complet gol -> 400;
+- cod/regiune inexistenta sau inactiva -> 400;
+- include/exclude conflict -> 400;
+- suprapunere regiune/tara -> 400.
 
-- regiuni permise: `EU`, `US`, `ASIA`;
-- codurile de tara trebuie sa fie ISO alpha-2;
-- trebuie sa existe cel putin o tara sau regiune tinta;
-- aceeasi tara/regiune nu poate fi simultan inclusa si exclusa;
-- suprapunerea regiune inclusa/tara exclusa sau invers este respinsa cu 400.
+### `POST /commands/run`
 
-Configuratia este scrisa prin GitHub Contents API numai daca s-a modificat. Salvarea nu face dispatch.
+Porneste exact un full search manual dupa validarea configuratiei. Run activ -> 409.
 
-## 9. CRUD Surse
+## Source Registry
 
-Toate endpoint-urile necesita utilizator autorizat.
+Endpoint-uri principale:
+- `POST /sources`;
+- `PUT /sources/:id`;
+- `DELETE /sources/:id`;
+- `POST /sources/:id/actions`;
+- `GET/POST /source-categories`;
+- `PUT/DELETE /source-categories/:id`.
 
-### `POST /sources`
+Sursa noua porneste `pending`, neaprobata si inactiva. Aprobare != activare.
 
-Creeaza o sursa cu:
+## Nomenclatoare canonice
 
-- `id` stabil;
-- `name`;
-- `url`;
-- `category`;
-- `active`;
-- `connector_available` derivat din ruta tehnica disponibila.
+Toate endpoint-urile necesita autentificare.
 
-URL duplicat -> 409.
+### `GET /nomenclatures`
 
-### `PUT /sources/:id`
+Returneaza catalogul `data/nomenclatures.json`.
 
-Permite editarea numelui, URL-ului, categoriei si starii active/inactive. URL duplicat -> 409.
+### `POST /nomenclatures/:domain`
 
-### `DELETE /sources/:id`
+Adauga valoare numai daca domeniul este `extensible=true`.
 
-Sterge sursa din registrul curent. Istoricul ramane in Git.
+Domeniile system/semantic resping Add cu 409.
 
-Modificarile Source Registry nu lanseaza full search in Package 1.
+### `PUT /nomenclatures/:domain/:code`
 
-## 10. Trigger si loguri
+Operatii permise:
+- label;
+- `sort_order`;
+- active/inactive daca integritatea referentiala permite.
 
-Trigger canonic pentru Package 1:
+Codul tehnic este immutable.
 
-`manual-ui`
+### `DELETE /nomenclatures/:domain/:code`
 
-Runner-ul persista trigger-ul in:
+Disponibil numai pentru domenii extensibile si numai daca valoarea nu este referentiata.
 
-- `data/run-status.json`;
-- `data/run-history.json`.
+### Integritate referentiala
 
-`config` nu este trigger valid pentru full search.
+Deactivate/Delete pe valoare folosita -> `409 Conflict`:
 
-`scheduled` este rezervat Package 2, cand automatizarea configurabila va fi implementata.
+```json
+{
+  "error": "Valoarea este folosita si nu poate fi dezactivata.",
+  "references": [
+    "search-config.target_regions"
+  ]
+}
+```
 
-## 11. GitHub access
+Referinte verificate:
+- regions -> target/excluded regions;
+- countries -> target/search/excluded countries + membership in regiuni active;
+- work modes -> `search-config.work_modes.<code>` cand este activ;
+- contract types -> `search-config.contract_types`;
+- application statuses -> `applications.status`;
+- seniority -> fara referinte functionale in 2A8.
 
-Worker-ul foloseste `GITHUB_TOKEN` din Cloudflare Secret.
+API nu modifica automat configuratia pentru a rezolva conflictul.
 
-Permisiuni necesare:
+## Origin / CORS
 
-- Actions: write;
-- Contents: write.
+`FRONTEND_ORIGIN` este verificat pentru cereri privilegiate.
+Metode: GET, POST, PUT, DELETE, OPTIONS.
+Origin strain -> 403.
 
-Tokenul nu este livrat browserului.
+## Variabile / secrets
 
-## 12. Origin si CORS
-
-`FRONTEND_ORIGIN` este verificat pentru cererile privilegiate.
-
-Metode permise: GET, POST, PUT, DELETE, OPTIONS.
-
-Origin strain -> 403. CORS nu inlocuieste autentificarea.
-
-## 13. Variabile si secrete
-
-### Cloudflare Secrets
-
+Cloudflare secrets:
 - `GITHUB_TOKEN`;
 - `ALLOWED_GOOGLE_SUB`.
 
-### Variabile non-secret
-
+Variabile:
 - `GOOGLE_CLIENT_ID`;
 - `FRONTEND_ORIGIN`;
-- `GITHUB_OWNER`;
-- `GITHUB_REPO`;
-- `GITHUB_REF`;
-- `GITHUB_WORKFLOW`;
+- `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_REF`, `GITHUB_WORKFLOW`;
 - `SEARCH_CONFIG_PATH`;
-- optional `SOURCES_PATH`.
+- `SOURCES_PATH`;
+- `SOURCE_CATEGORIES_PATH`;
+- `NOMENCLATURES_PATH`;
+- `APPLICATIONS_PATH`.
 
-Provider secrets `APIFY_TOKEN` si `JOBSPIPE_API_KEY` raman numai in GitHub Actions Secrets.
+Provider secrets raman in GitHub Actions Secrets.
 
-## 14. Testare
+## Testare
 
-CI valideaza minimum:
-
-- Python syntax/config;
-- target geografic valid;
-- regression test pentru job Hybrid JP exclus din target RO/BE/LU;
-- full search fara trigger `push` sau `schedule`;
-- Command API config validation;
-- protected data fara bearer -> 401;
-- origin nepermis -> 403;
-- React/Vite build;
+CI verifica minimum:
+- Python config/search regressions;
+- geografie canonica/parity;
+- full search manual-only;
+- frontend unit tests;
+- Command API config/nomenclature governance tests;
+- 409 references;
+- toate protected assets fara bearer -> 401;
+- nomenclature admin API fara bearer -> 401;
+- frontend build;
 - Worker dry-run.
 
-Validarea E2E finala este definita in #24 si #79.
+E2E final Package 2A8 este #122.
