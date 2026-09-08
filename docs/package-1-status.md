@@ -20,12 +20,33 @@ Plan: `docs/package-1-implementation-plan.md`
 - teste unitare Command API pentru geografie;
 - teste negative pentru protected data fara bearer si origin nepermis;
 - CI verifica explicit ca full search ramane manual-only;
-- UI afiseaza deja tara in liste si detalii si foloseste logurile/counterele existente.
+- UI afiseaza deja tara in liste si detalii si foloseste logurile/counterele existente;
+- `ARCHITECTURE.md` actualizat la v1.4; v1.3 arhivat conform guvernantei;
+- `CHANGELOG.md` actualizat in `[Unreleased]`.
 
-## De validat in PR / release
+## Validare finalizata in PR
 
-- CI complet Python + Node + React/Vite + Worker;
-- review diff;
+- GitHub CI complet green pe head-ul Pachetului 1;
+- 105 teste Python green;
+- teste Command API Node green;
+- React/Vite production build green;
+- Cloudflare Worker `wrangler deploy --dry-run` green;
+- guard CI confirma ca full search nu are `push` sau `schedule`.
+
+## Blocker extern de release
+
+Issue #81: `Workers Builds: job-search-command-api` din Cloudflare Git integration este red.
+
+Bisection:
+- `a9ed0c0` -> Cloudflare SUCCESS;
+- `09b73c2` -> Cloudflare FAILURE;
+- diferenta dintre cele doua commit-uri este exclusiv `docs/package-1-implementation-plan.md`.
+
+Prin urmare, nu exista in acest moment dovada ca esecul Cloudflare este produs de codul Pachetului 1. Este necesar logul Cloudflare Build Details pentru cauza concreta.
+
+## De validat in release
+
+- rezolvare #81 si Cloudflare Workers Build green;
 - revalidare #33 pentru publish concurent;
 - deploy Cloudflare dupa merge;
 - `/health` live pentru #17;
