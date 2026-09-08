@@ -7,6 +7,7 @@ import {
   categoryDuplicate,
   sortCategories,
   sourceApprovalLabel,
+  sourceGovernanceActions,
   sourceValidationLabel,
 } from './admin-model.mjs';
 
@@ -202,18 +203,22 @@ function Registry({ sources, categories, token, notify, setSources, setCategorie
 }
 
 function Approval({ sources, token, notify, setSources }) {
-  const rows = sources.filter(source => !source.active || source.validationStatus !== 'validated' || source.approvalStatus !== 'approved');
+  const rows = sources;
   const apply = payload => setSources((payload?.catalog?.sources || []).map(normalizeSource));
-  const action = async (source, actionName) => {
+  const action = async (source, actionName, reason = null) => {
     try {
-      const payload = await api(`/sources/${encodeURIComponent(source.id)}/actions`, token, { method:'POST', body:JSON.stringify({ action:actionName }) });
+      const body = reason ? { action:actionName, reason } : { action:actionName };
+      const payload = await api(`/sources/${encodeURIComponent(source.id)}/actions`, token, { method:'POST', body:JSON.stringify(body) });
       apply(payload); notify(`Actiune aplicata: ${actionName}.`,'success');
     } catch (error) { notify(`Actiunea nu a putut fi aplicata: ${error.message}`,'error'); }
   };
   return <div className="space-y-3">
-    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">2A implementeaza workflow-ul de guvernanta. Validarea tehnica automata a URL/API/ATS este conectata in 2C; o sursa `validating` nu este activata automat.</div>
-    {rows.map(source => <section key={source.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-col gap-3 lg:flex-row lg:items-center"><div className="min-w-0 flex-1"><div className="font-semibold text-slate-900">{source.name}</div><div className="mt-1 text-xs text-slate-500">{source.category} · {source.url}</div><div className="mt-2 flex flex-wrap gap-2"><Pill tone={source.validationStatus === 'validated' ? 'green' : source.validationStatus === 'requires_connector' ? 'amber' : source.validationStatus === 'rejected' ? 'red' : 'blue'}>{sourceValidationLabel(source.validationStatus)}</Pill><Pill tone={source.approvalStatus === 'approved' ? 'green' : source.approvalStatus === 'rejected' ? 'red' : 'slate'}>{sourceApprovalLabel(source.approvalStatus)}</Pill>{source.validationReason && <span className="text-xs text-amber-700">{source.validationReason}</span>}</div></div><div className="flex flex-wrap gap-2">{source.validationStatus === 'pending' && <button onClick={() => action(source,'submit_validation')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Trimite la validare</button>}{['requires_connector','rejected'].includes(source.validationStatus) && <button onClick={() => action(source,'revalidate')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Retrimite la validare</button>}{source.validationStatus === 'validated' && source.approvalStatus !== 'approved' && <button onClick={() => action(source,'approve')} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Aproba</button>}{source.validationStatus === 'validated' && source.approvalStatus === 'approved' && !source.active && <button onClick={() => action(source,'activate')} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Activeaza</button>}{source.active && <button onClick={() => action(source,'disable')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Dezactiveaza</button>}{source.approvalStatus !== 'rejected' && <button onClick={() => action(source,'reject')} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-700">Respinge</button>}</div></div></section>)}
-    {!rows.length && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Nu exista surse in asteptare.</div>}
+    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">2A implementeaza contractul si tranzitiile manuale de guvernanta. Validarea tehnica automata URL/API/ATS intra in 2C; nicio sursa nu este activata automat.</div>
+    {rows.map(source => {
+      const actions = sourceGovernanceActions(source);
+      return <section key={source.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-col gap-3 lg:flex-row lg:items-center"><div className="min-w-0 flex-1"><div className="font-semibold text-slate-900">{source.name}</div><div className="mt-1 text-xs text-slate-500">{source.category} · {source.url}</div><div className="mt-2 flex flex-wrap gap-2"><Pill tone={source.validationStatus === 'validated' ? 'green' : source.validationStatus === 'requires_connector' ? 'amber' : source.validationStatus === 'rejected' ? 'red' : 'blue'}>{sourceValidationLabel(source.validationStatus)}</Pill><Pill tone={source.approvalStatus === 'approved' ? 'green' : source.approvalStatus === 'rejected' ? 'red' : 'slate'}>{sourceApprovalLabel(source.approvalStatus)}</Pill>{source.active ? <Pill tone="green">Activa</Pill> : <Pill>Inactiva</Pill>}{source.validationReason && <span className="text-xs text-amber-700">{source.validationReason}</span>}</div></div><div className="flex flex-wrap gap-2">{actions.includes('submit_validation') && <button onClick={() => action(source,'submit_validation')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Trimite la validare</button>}{actions.includes('mark_validated') && <button onClick={() => action(source,'mark_validated')} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Marcheaza validata</button>}{actions.includes('mark_requires_connector') && <button onClick={() => action(source,'mark_requires_connector',window.prompt('Motiv / connector necesar (optional)') || null)} className="rounded-xl border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700">Necesita connector</button>}{actions.includes('revalidate') && <button onClick={() => action(source,'revalidate')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Retrimite la validare</button>}{actions.includes('approve') && <button onClick={() => action(source,'approve')} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Aproba</button>}{actions.includes('activate') && <button onClick={() => action(source,'activate')} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Activeaza</button>}{actions.includes('disable') && <button onClick={() => action(source,'disable')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Dezactiveaza</button>}{actions.includes('reject') && <button onClick={() => action(source,'reject',window.prompt('Motiv respingere (optional)') || null)} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-700">Respinge</button>}</div></div></section>;
+    })}
+    {!rows.length && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Nu exista surse in registru.</div>}
   </div>;
 }
 
