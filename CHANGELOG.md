@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Functionalitati
+
+- #85 / Pachetul 2A: adaugata zona `Administrare` cu Overview, Actualizare date, Surse, Nomenclatoare si Loguri; vechile pagini Surse/Loguri sunt integrate sub o singura intrare de administrare.
+- #90/#91: Source Registry foloseste stari distincte pentru validare, aprobare si activare; sursele noi sunt create `pending` si inactive, iar aprobarea nu activeaza automat sursa.
+- #76/#90: adaugat `source-categories.json` schema 1.0 si CRUD controlat pentru categorii; formularul de sursa foloseste selectie din taxonomie, cu actiune explicita pentru categorie noua.
+- #25/#92: `applications.json` este versionat la schema 1.0 si validat de frontend/CI.
+
 ### Conectori
 
 - #58: adaugat connector SmartRecruiters Public Posting API cu paginare, detalii complete, normalizare in `CollectionResult` si teste izolate; nu este rutat sau activat in Source Registry pana la validarea live.
@@ -31,6 +38,7 @@
 
 ### Documentatie
 
+- Pachetul 2A: `ARCHITECTURE.md` actualizat la v1.5, v1.4 arhivat; documentate contractele `sources`, `source-categories` si `applications`, plus statusul livrarii Package 2.
 - Definit fluxul formal `Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare` si interzisa trecerea directa din idei sau analiza in Development.
 - Adaugate criteriile de maturitate pentru transferul unei idei in `Analiza` si formatul scurt de sumar pentru transfer.
 - Aliniate `GOVERNANCE.md`, `.ai-instructions.md`, `CONTRIBUTING.md` si `README.md` cu noul flux de lucru.
