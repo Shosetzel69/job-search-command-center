@@ -2,7 +2,7 @@
 
 Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-09-08`
+Ultima actualizare: `2026-09-09`
 
 ## 1. Reguli
 
@@ -16,6 +16,7 @@ Frontend-ul si CI valideaza:
 - `search-config.json`;
 - `sources.json`;
 - `source-categories.json`;
+- `nomenclatures.json`;
 - `applications.json`.
 
 Timestamp-urile generate de motor sunt UTC ISO-8601.
@@ -41,6 +42,8 @@ Campuri job principale:
 - `remote`, `b2b`, `repost`, `status`;
 - `pros`, `risks`, `description`;
 - `url`, `source`, `verified_at`.
+
+Package 2A8 introduce incremental campurile canonice `contract_type` si, unde este util pentru trasabilitate, `employment_type_raw`. `contract_type=unknown` este valoare tehnica pentru cazurile in care sursa nu permite o clasificare sigura.
 
 Campurile geografice istorice pot lipsi temporar pentru joburi pastrate incremental; o rulare noua le normalizeaza.
 
@@ -91,7 +94,7 @@ Campuri uzuale:
 
 ## 5. `data/search-config.json`
 
-Sursa canonica pentru criteriile motorului si valorile initiale UI.
+Sursa canonica pentru selectiile efective ale motorului. Valorile controlate folosite in aceste selectii sunt definite de `data/nomenclatures.json`.
 
 Campuri geografice:
 
@@ -114,6 +117,8 @@ Campuri principale:
 - `source_strategy`;
 - `exclusions`.
 
+Package 2A8 extinde compatibil `work_modes` cu `onsite` si adauga selectia pentru tipurile canonice de contract fara a transforma `N/A`/`unknown` in optiuni normale de selectie.
+
 JobsPipe:
 
 - `jobspipe_mode`;
@@ -123,7 +128,63 @@ JobsPipe:
 
 In Package 2 `jobspipe_mode` ramane `disabled`.
 
-## 6. `PUT /config`
+## 6. `data/nomenclatures.json`
+
+Sursa canonica de date pentru domeniile controlate din Package 2A8.
+
+Root:
+
+```json
+{
+  "schema_version": "1.0",
+  "domains": {}
+}
+```
+
+Domenii obligatorii:
+
+- `regions`;
+- `countries`;
+- `work_modes`;
+- `contract_types`;
+- `application_statuses`;
+- `seniority`.
+
+Fiecare domeniu are:
+
+- `kind`: `system` sau `extensible`;
+- `extensible`: boolean coerent cu `kind`;
+- `values`: lista valorilor canonice;
+- optional `technical_values` pentru valori interne care nu sunt optiuni normale de selectie.
+
+Fiecare valoare are minimum:
+
+- `code` stabil;
+- `label` user-friendly;
+- `active`;
+- `sort_order`.
+
+Metadata optionala:
+
+- `aliases` pentru normalizarea valorilor provider-specific;
+- `country_codes` pentru membership-ul unei regiuni.
+
+Reguli:
+
+- `system`: codurile nu se adauga/sterg arbitrar din UI;
+- `extensible`: pot primi valori noi numai daca business logic trateaza codurile generic;
+- codurile sunt unice in domeniu;
+- label-urile sunt unice case/trim-insensitive in domeniu;
+- schimbarea label-ului nu schimba codul;
+- `EU` inseamna Uniunea Europeana; `US` si `ASIA` isi pastreaza semantica existenta;
+- membership-ul regiunilor referentiaza numai coduri existente in `countries`;
+- `work_modes`: `remote`, `hybrid`, `onsite`; `unknown` este tehnic;
+- `contract_types`: `permanent`, `temporary`, `contract`, `freelance`; `unknown` este tehnic;
+- `application_statuses` pastreaza minimum `applied`;
+- `seniority` exista ca infrastructura, fara filtru functional in 2A8;
+- dezactivarea/stergerea unei valori referentiate de configuratie nu se face silent; API trebuie sa raspunda controlat, tinta fiind `409 Conflict` cu referintele relevante.
+
+## 7. `PUT /config`
 
 Mapare UI principala:
 
@@ -132,7 +193,7 @@ Mapare UI principala:
 - `roleService` -> `role_groups.service.enabled`;
 - `roleScrum` -> `role_groups.scrum.enabled`;
 - `roleProgram` -> `role_groups.program.enabled`;
-- `workRemote` / `workHybrid` -> `work_modes`;
+- `workRemote` / `workHybrid` / `workOnsite` -> `work_modes`;
 - `freshness` -> `freshness_hours`;
 - `fitThreshold` -> `fit_threshold`;
 - `keepReposts` -> `keep_reposts`;
@@ -144,7 +205,7 @@ Mapare UI principala:
 
 Persistarea configuratiei nu porneste full search.
 
-## 7. `data/sources.json`
+## 8. `data/sources.json`
 
 Root:
 
@@ -194,7 +255,7 @@ Reguli:
 
 Catalogul legacy poate fi citit si este normalizat compatibil la prima mutatie prin Command API. Search orchestration aplica aceeasi regula de excludere operationala independent de normalizarea catalogului, astfel incat o valoare legacy sa nu poata reactiva sursa accidental.
 
-## 8. `data/source-categories.json`
+## 9. `data/source-categories.json`
 
 Contract:
 
@@ -220,7 +281,7 @@ Reguli:
 - redenumirea actualizeaza referintele surselor;
 - stergerea este blocata cat timp exista surse asociate.
 
-## 9. `data/applications.json`
+## 10. `data/applications.json`
 
 Contract:
 
@@ -244,25 +305,19 @@ Campuri folosite in prezent:
 - `next_status_check` optional;
 - `url` optional.
 
-## 10. `data/search-state.json`
+`status` trebuie sa corespunda unui cod valid din `nomenclatures.application_statuses`; valoarea existenta `applied` este pastrata.
+
+## 11. `data/search-state.json`
 
 Fisier intern pentru starea JobsPipe Direct/cursor/usage. Nu este publicat in Cloudflare Static Assets.
 
-## 11. Publicare protected assets
+## 12. Publicare protected assets
 
-Build-ul publica numai:
-
-- `jobs.json`;
-- `run-status.json`;
-- `run-history.json`;
-- `applications.json`;
-- `sources.json`;
-- `source-categories.json`;
-- `search-config.json`.
+Pana la #121, build-ul publica lista explicita existenta. `nomenclatures.json` va fi inclus in protected runtime assets impreuna cu un manifest/parity guard care elimina divergenta dintre build, allowlist si CI.
 
 `search-state.json` este exclus intentionat.
 
-## 12. Extensii observabilitate/colectare existente
+## 13. Extensii observabilitate/colectare existente
 
 `source_results` poate include campuri aditive precum:
 
