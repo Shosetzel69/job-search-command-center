@@ -24,6 +24,16 @@ export function adminSourceSummary(sources = []) {
   };
 }
 
+export function sourceGovernanceActions(source = {}) {
+  if (source.active) return ['disable','reject'];
+  if (source.validationStatus === 'pending') return ['submit_validation','reject'];
+  if (source.validationStatus === 'validating') return ['mark_validated','mark_requires_connector','reject'];
+  if (['requires_connector','rejected'].includes(source.validationStatus)) return ['revalidate'];
+  if (source.validationStatus === 'validated' && source.approvalStatus !== 'approved') return ['approve','reject'];
+  if (source.validationStatus === 'validated' && source.approvalStatus === 'approved') return ['activate','reject'];
+  return [];
+}
+
 export function sortCategories(categories = []) {
   return [...categories].sort((a,b) => Number(a.order ?? 0) - Number(b.order ?? 0) || String(a.label).localeCompare(String(b.label), 'ro'));
 }
