@@ -44,6 +44,10 @@ def domain_values(name: str, *, active_only: bool = False, payload: dict[str, An
     return [item for item in values if item.get("active") is True] if active_only else values
 
 
+def active_codes(name: str, payload: dict[str, Any] | None = None) -> set[str]:
+    return {str(item["code"]) for item in domain_values(name, active_only=True, payload=payload)}
+
+
 def region_countries(payload: dict[str, Any] | None = None) -> dict[str, set[str]]:
     return {
         str(item["code"]).upper(): {str(code).upper() for code in item.get("country_codes", [])}
@@ -70,11 +74,11 @@ def country_name_to_code(payload: dict[str, Any] | None = None) -> dict[str, str
 
 
 def active_region_codes(payload: dict[str, Any] | None = None) -> set[str]:
-    return {str(item["code"]).upper() for item in domain_values("regions", active_only=True, payload=payload)}
+    return {code.upper() for code in active_codes("regions", payload)}
 
 
 def active_country_codes(payload: dict[str, Any] | None = None) -> set[str]:
-    return {str(item["code"]).upper() for item in domain_values("countries", active_only=True, payload=payload)}
+    return {code.upper() for code in active_codes("countries", payload)}
 
 
 def work_mode_aliases(payload: dict[str, Any] | None = None) -> dict[str, str]:
@@ -97,3 +101,29 @@ def contract_type_aliases(payload: dict[str, Any] | None = None) -> dict[str, st
             if text:
                 output[text] = code
     return output
+
+
+def normalize_work_mode(value: Any, payload: dict[str, Any] | None = None) -> str:
+    text = str(value or "").strip().lower()
+    return work_mode_aliases(payload).get(text, "unknown")
+
+
+def normalize_contract_type(values: Any, payload: dict[str, Any] | None = None) -> str:
+    raw_values = values if isinstance(values, list) else ([] if values in (None, "") else [values])
+    aliases = contract_type_aliases(payload)
+    matches: set[str] = set()
+    for value in raw_values:
+        text = str(value or "").strip().lower().replace("_", " ")
+        if text in aliases:
+            matches.add(aliases[text])
+        compact = " ".join(text.split())
+        if compact in aliases:
+            matches.add(aliases[compact])
+    return next(iter(matches)) if len(matches) == 1 else "unknown"
+
+
+def contract_type_label(code: str, payload: dict[str, Any] | None = None) -> str | None:
+    for item in domain_values("contract_types", payload=payload):
+        if str(item.get("code")) == code:
+            return str(item.get("label"))
+    return None
