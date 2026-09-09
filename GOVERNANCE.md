@@ -1,7 +1,7 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.1`
-Ultima actualizare: `2026-09-06`
+Versiune document: `v1.2`
+Ultima actualizare: `2026-09-09`
 
 ## 1. Principiu
 
@@ -174,6 +174,8 @@ Documentatia trebuie sa fie simpla si concisa. Daca nu exista informatie pentru 
 Documentatia descrie implementarea reala. Functionalitatile planificate sunt marcate explicit ca neimplementate.
 
 La schimbari materiale se actualizeaza documentele afectate si, daca este relevant, `CHANGELOG.md`.
+
+Pentru orice implementare sau schimbare functionala, documentatia de analiza asociata se actualizeaza in aceeasi interventie, fara solicitare separata din partea owner-ului. Actualizarea trebuie sa reflecte decizia finala, diferentele fata de analiza initiala si statusul rezultat. Daca nu exista o analiza asociata, nu se creeaza artificial un document numai pentru a satisface aceasta regula; se actualizeaza documentele canonice relevante.
 
 Nu se creeaza commit numai pentru documentatie daca nu exista o diferenta materiala de documentat.
 
