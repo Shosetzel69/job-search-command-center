@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.7`
+Versiune document: `v1.6`
 Versiune aplicatie de referinta: `0.06-dev`
 Ultima actualizare: `2026-09-09`
 
@@ -14,9 +14,7 @@ Documente complementare:
 - `.ai-instructions.md` — reguli obligatorii pentru AI;
 - `docs/data-contract.md` — contractele runtime JSON;
 - `docs/analysis/2026-09-09-canonical-nomenclatures.md` — analiza Package 2A8;
-- `docs/package-2a8-implementation-plan.md` — planul de implementare aprobat;
-- `docs/adr/ADR-002-ai-github-bridge.md` — decizia pentru identitati GitHub App operationale;
-- `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub.
+- `docs/package-2a8-implementation-plan.md` — planul de implementare aprobat.
 
 ## 2. Principii
 
@@ -36,8 +34,7 @@ Principii:
 - secretele nu ajung in browser;
 - persistenta curenta ramane JSON versionat in repository;
 - costul operational este mentinut redus;
-- pentru domeniile controlate, datele canonice nu se dubleaza functional intre React, Worker si Python;
-- infrastructura AI pentru GitHub este separata de Command API si nu devine proxy GitHub generic.
+- pentru domeniile controlate, datele canonice nu se dubleaza functional intre React, Worker si Python.
 
 ## 3. Componente
 
@@ -49,7 +46,6 @@ Principii:
 | `search engine` | colectare, normalizare, geografie, dedupe/repost, filtrare, FIT |
 | `connectors` | transport/provider specific, fara FIT |
 | `data/*.json` | persistenta runtime/versionata si domenii canonice |
-| `ai-github-bridge` | infrastructura separata de engineering/governance pentru operatii GitHub allowlisted sub identitati GitHub App distincte |
 
 ## 4. Frontend
 
@@ -362,20 +358,11 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 - fara secrete in cod/documentatie;
 - HTTPS obligatoriu.
 
-Pentru `ai-github-bridge`:
-
-- bridge bearer credentials sunt separate pentru ChatGPT si Claude;
-- actorul este derivat server-side din credential, nu din payload;
-- GitHub App private keys sunt Worker secrets;
-- JWT si installation tokens nu sunt returnate clientului si nu sunt logate;
-- repository-ul este hard-allowlisted;
-- MVP-ul nu expune files/branches/PR/admin/secrets/deploy.
-
 ## 14. Build/deploy
 
 Cloudflare Workers Builds are configuratie operationala cu working directory diferit pe trigger.
 
-Production Command API:
+Production:
 
 - Root directory: `command-api`;
 - Deploy command:
@@ -393,18 +380,6 @@ cd command-api && npm install --ignore-scripts --no-audit --no-fund && npx wrang
 Asimetria este intentional documentata deoarece trigger-ele Cloudflare au working directory diferit in configuratia curenta.
 
 Build-ul Worker executa build-ul Vite si copiaza numai runtime assets aprobate.
-
-`ai-github-bridge` are lifecycle separat si nu foloseste build-ul frontend:
-
-```bash
-cd ai-github-bridge
-npm install --ignore-scripts --no-audit --no-fund
-npm test
-npm run check
-npm run deploy
-```
-
-Deploy-ul bridge necesita configurarea prealabila a celor patru secrets descrise in `docs/ai-github-bridge.md`.
 
 ## 15. CI
 
@@ -427,8 +402,6 @@ Package 2A8 adauga:
 - teste referential integrity;
 - contract type normalization tests.
 
-`ai-github-bridge` are workflow CI separat cu teste Node izolate si Wrangler dry-run. Testele nu apeleaza GitHub real.
-
 CI nu face crawl live si nu porneste full search.
 
 ## 16. Persistenta si limite arhitecturale
@@ -446,43 +419,9 @@ ATS Match v1 este separat de FIT. Orice dependinta noua de parsing PDF/DOCX nece
 - 2A0 polling robust: implementat;
 - 2A core Administrare/contracts/source governance: integrat in `main` prin PR #112;
 - hotfix protected assets #114/#115: implementat si production green;
-- 2A8 nomenclatoare canonice #116/#117-#122: implementare integrata, E2E PROD final ramane gate-ul de inchidere;
+- 2A8 nomenclatoare canonice #116/#117-#122: analiza finalizata, pregatit pentru implementare;
 - 2B scheduler controlled: planificat dupa 2A8;
 - 2C conectori aprobati: planificat;
 - 2D data quality/FIT v2: planificat;
 - 2E ATS v1: planificat, cu dependency gate;
 - #49: exclus din Package 2.
-
-## 18. AI GitHub Bridge
-
-Decizie: `ADR-002-ai-github-bridge.md`.
-
-Boundary:
-
-```text
-ChatGPT / Claude integration
-        -> ai-github-bridge
-        -> GitHub App JWT
-        -> installation token
-        -> GitHub REST API
-```
-
-Bridge-ul este infrastructura de engineering/governance si ramane separat de runtime-ul functional al Job Search Command Center.
-
-MVP allowlist:
-
-- `GET /health` public;
-- `GET /v1/issues/:number`;
-- `POST /v1/issues`;
-- `PATCH /v1/issues/:number`.
-
-Repository v1:
-
-`Shosetzel69/job-search-command-center`
-
-Identitati:
-
-- ChatGPT credential -> `jobsearch-chatgpt-agent[bot]`;
-- Claude credential -> `jobsearch-claude-agent[bot]`.
-
-Extinderea spre comments, files, branches, pull requests sau checks necesita contract explicit, teste de branch/main safety si actualizarea ADR/documentatiei relevante.

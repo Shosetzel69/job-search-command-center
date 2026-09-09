@@ -1,0 +1,111 @@
+openapi: 3.1.0
+info:
+  title: Job Search AI GitHub Bridge
+  version: 0.1.0
+  description: Restricted GitHub issue operations for the Job Search Command Center AI agents.
+servers:
+  - url: https://ai-github-bridge.myeboda.workers.dev
+paths:
+  /health:
+    get:
+      operationId: bridgeHealth
+      security: []
+      responses:
+        "200":
+          description: Bridge is available.
+  /v1/issues/{number}:
+    get:
+      operationId: getIssue
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      responses:
+        "200":
+          description: Issue details.
+        "401":
+          description: Invalid bridge credential.
+        "404":
+          description: Issue or operation not found.
+    patch:
+      operationId: updateIssue
+      parameters:
+        - name: number
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              properties:
+                title:
+                  type: string
+                  maxLength: 256
+                body:
+                  type: string
+                  maxLength: 60000
+                state:
+                  type: string
+                  enum: [open, closed]
+                labels:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: string
+                    maxLength: 50
+      responses:
+        "200":
+          description: Updated issue.
+        "400":
+          description: Invalid request.
+        "401":
+          description: Invalid bridge credential.
+  /v1/issues:
+    post:
+      operationId: createIssue
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [title]
+              properties:
+                title:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                body:
+                  type: string
+                  maxLength: 60000
+                labels:
+                  type: array
+                  maxItems: 20
+                  items:
+                    type: string
+                    maxLength: 50
+      responses:
+        "201":
+          description: Created issue.
+        "400":
+          description: Invalid request.
+        "401":
+          description: Invalid bridge credential.
+components:
+  securitySchemes:
+    bridgeBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: opaque
+security:
+  - bridgeBearer: []

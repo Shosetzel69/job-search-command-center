@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "ai-github-bridge",
+  "main": "src/index.js",
+  "compatibility_date": "2026-09-09",
+  "workers_dev": true,
+  "vars": {
+    "GITHUB_REPOSITORY": "Shosetzel69/job-search-command-center",
+    "CHATGPT_GITHUB_APP_ID": "4884202",
+    "CHATGPT_GITHUB_INSTALLATION_ID": "160337921",
+    "CLAUDE_GITHUB_APP_ID": "4887682",
+    "CLAUDE_GITHUB_INSTALLATION_ID": "160379580"
+  }
+}
