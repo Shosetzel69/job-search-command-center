@@ -4,6 +4,7 @@
 
 ### Functionalitati
 
+- #132: adaugat MVP `ai-github-bridge`, Worker Cloudflare separat pentru operatii GitHub issues allowlisted sub identitati GitHub App distincte ChatGPT/Claude; actorul este derivat din credential, repository-ul este fix, iar `ai-generated` este impus automat.
 - #120 / Pachetul 2A8: `Administrare -> Nomenclatoare` este functional; domeniile system si extensible au operatii diferentiate, iar deactivate/delete pe valori referentiate este blocat cu `409 Conflict` si lista referintelor, fara modificarea silent a configuratiei.
 - #119 / Pachetul 2A8: modurile de lucru canonice sunt `Remote/Hibrid/Onsite`, iar tipurile de contract `Permanent/Temporar/Contract/Freelance`; joburile publica `contract_type` si `employment_type_raw`, cu `unknown` pentru cazurile nedeterminate.
 - #118 / Pachetul 2A8: geografia foloseste acelasi contract canonic in React, Command API si Python pentru tari, regiuni si membership; `EU` ramane Uniunea Europeana, iar divergenta legacy ASIA/PK din frontend a fost eliminata.
@@ -44,6 +45,7 @@
 
 ### Documentatie
 
+- #132: adaugate ADR-002, analiza/runtime docs pentru `ai-github-bridge`; `ARCHITECTURE.md` actualizat la v1.7 si v1.6 arhivat.
 - Pachetul 2A8: documentat contractul canonic pentru nomenclatoare, distinctia `system/semantic` vs `extensible`, geografia canonica, tipurile de lucru/contract si regulile de integritate referentiala.
 - Pachetul 2A: `ARCHITECTURE.md` actualizat la v1.5, v1.4 arhivat; documentate contractele `sources`, `source-categories` si `applications`, plus statusul livrarii Package 2.
 - Definit fluxul formal `Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare` si interzisa trecerea directa din idei sau analiza in Development.
