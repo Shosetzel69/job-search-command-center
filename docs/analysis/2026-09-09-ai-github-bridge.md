@@ -3,7 +3,7 @@
 Data: 2026-09-09
 Actualizare: 2026-09-10
 Issues: #132 #136
-Status: APPROVED / REMOTE MCP IN IMPLEMENTATION
+Status: APPROVED / MERGED / PENDING LIVE DEPLOY VALIDATION
 
 ## Problema
 
@@ -97,14 +97,25 @@ Testele existente raman izolate si folosesc mock HTTP pentru GitHub.
 - grantul OAuth valid este legat server-side de actorul Claude;
 - build/dry-run al Worker-ului cu MCP SDK.
 
+CI pentru PR #137 si post-merge pe commitul `e2561c851d2f737f3a3b649faa63e94eff41695b` este green.
+
+## Status operational 2026-09-10
+
+- #136 este integrat in `main` prin PR #137;
+- namespace-ul Cloudflare KV pentru `OAUTH_KV` este creat si binding-ul este versionat in `wrangler.jsonc`;
+- `MCP_OWNER_ACCESS_CODE` a fost configurat ca Worker secret de owner;
+- Cloudflare Workers Builds este conectat la repository pentru `ai-github-bridge` cu production branch `main` si root directory `/ai-github-bridge/`;
+- primul deploy live al noului MCP este inca de executat si validat.
+
 Validarea live finala necesita:
 
-1. configurare `OAUTH_KV`;
-2. configurare `MCP_OWNER_ACCESS_CODE`;
-3. deploy Worker;
-4. conectare Claude Web la `/mcp`;
-5. `read_file` real;
-6. create issue real cu autor exact `jobsearch-claude-agent[bot]`.
+1. deploy Worker din `main`;
+2. conectare Claude Web la `/mcp`;
+3. `read_file` real;
+4. create issue real cu autor exact `jobsearch-claude-agent[bot]`;
+5. confirmarea ca niciun secret nu este expus.
+
+Issue #136 ramane deschis pana la validarea criteriilor de acceptare.
 
 ## Relatia cu #125
 
