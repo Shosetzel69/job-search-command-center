@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.3`
+Versiune document: `v1.4`
 Ultima actualizare: `2026-09-10`
 
 ## 1. Principiu
@@ -182,6 +182,21 @@ Refactorizarea in afara scope-ului aprobat se propune separat. Daca este necesar
 - fiecare Issue ramane deschis pana la validarea criteriilor de acceptare;
 - PR-ul trebuie sa permita verificarea clara a modificarilor fata de baseline-ul GitHub de la care a pornit taskul;
 - modificarile care depasesc scope-ul Issue-ului nu se includ silent in acelasi PR.
+
+### 5.1 Branch Target Safety Rule
+
+Orice operatie de write executata de AI prin GitHub API trebuie sa aiba un branch tinta explicit si verificat inainte de modificare.
+
+Reguli obligatorii:
+
+- `main` nu este niciodata tinta directa pentru `create_file`, `update_file`, `delete_file`, `update_ref` sau operatii echivalente;
+- inainte de orice write, AI verifica existenta branch-ului tinta si baseline-ul/SHA-ul de la care acesta porneste;
+- parametrul de branch nu se omite la operatiile de continut; nu se permite fallback implicit la default branch;
+- daca branch-ul tinta lipseste, este invalid sau nu poate fi verificat, operatia se opreste; AI nu incearca o alta tinta si nu cade pe `main`;
+- fisierele de test, temporare, marker-ele si trigger-ele de deploy se creeaza numai pe branch dedicat;
+- `main` se modifica exclusiv prin merge-ul unui pull request aprobat;
+- dupa orice write, AI verifica faptul ca modificarea a ajuns pe branch-ul asteptat si ca `main` nu contine schimbari neintentionate;
+- daca o operatie neintentionata ajunge totusi pe `main`, aceasta se raporteaza imediat owner-ului si se corecteaza prin branch + PR; istoricul nu se rescrie fara aprobare explicita.
 
 ## 6. Testare
 
