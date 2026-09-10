@@ -1,7 +1,7 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.2`
-Ultima actualizare: `2026-09-09`
+Versiune document: `v1.3`
+Ultima actualizare: `2026-09-10`
 
 ## 1. Principiu
 
@@ -118,6 +118,19 @@ Precedenta:
 
 Daca documentatia contrazice codul sau doua documente se contrazic, discrepanta se semnaleaza si se clarifica inainte de modificari functionale.
 
+### 3.1 Baseline tehnic obligatoriu
+
+Pentru orice analiza tehnica, implementare, review sau fix, starea curenta din GitHub este baseline-ul operational care trebuie verificat inainte de actiune.
+
+Reguli:
+
+- conversatiile, memoria AI, rezumatele si copiile locale sunt context, nu sursa de adevar tehnic;
+- AI verifica `main` curent si fisierele relevante din repository inainte de a propune sau modifica implementarea;
+- inainte de modificare se citesc minimum `ARCHITECTURE.md`, `GOVERNANCE.md`, `.ai-instructions.md`, Issue-ul aprobat si codul afectat;
+- daca memoria/conversatia contrazice repository-ul, repository-ul verificat are prioritate ca stare curenta;
+- daca repository-ul contrazice documentatia canonica aprobata, schimbarea se opreste si discrepanta se clarifica; AI nu decide singur care varianta devine noul adevar;
+- o copie locala a repository-ului nu este niciodata canonica si nu poate fi folosita ca justificare pentru a suprascrie starea GitHub.
+
 ## 4. Arhitectura
 
 Schimbarile arhitecturale majore necesita aprobare explicita si ADR inainte de implementare.
@@ -135,6 +148,30 @@ Un connector nou care respecta contractul existent nu necesita ADR.
 
 Daca o schimbare tehnica ar necesita cresterea versiunii majore a `ARCHITECTURE.md`, aceasta trebuie semnalata explicit owner-ului inainte de implementare, cu motiv si impact.
 
+### 4.1 Implementation Preservation Rule
+
+Aprobarea unei cerinte functionale autorizeaza numai modificarile necesare pentru rezultatul aprobat. Daca cerinta nu solicita explicit schimbarea mecanismului de implementare, mecanismul existent se pastreaza.
+
+Fara aprobare explicita separata nu se schimba, doar pentru ca o alternativa pare mai buna:
+
+- boundary-uri intre componente;
+- responsabilitati intre frontend, Worker, Actions, search engine si connectors;
+- contracte/API-uri si fluxuri de date;
+- persistenta si sursa canonica a datelor;
+- autentificare/autorizare;
+- orchestrare si mecanism de deploy;
+- provider, runtime, framework sau stack;
+- dependinte si biblioteci;
+- algoritmi sau semantics deja aprobate, daca ticketul nu cere schimbarea lor.
+
+O alternativa tehnica material diferita se trateaza ca change request separat: analiza impactului, optiuni, recomandare si aprobare explicita inainte de implementare.
+
+### 4.2 No Opportunistic Refactoring
+
+Un bugfix, feature sau task de mentenanta nu autorizeaza refactorizarea oportunista a codului adiacent, redesign-ul, reorganizarea componentelor sau "curatarea" arhitecturala.
+
+Refactorizarea in afara scope-ului aprobat se propune separat. Daca este necesara pentru a putea implementa cerinta, necesitatea si impactul se documenteaza si se aproba inainte de modificare.
+
 ## 5. Cod, Issues si branching
 
 - `main` trebuie sa ramana coerent si deployable;
@@ -142,7 +179,9 @@ Daca o schimbare tehnica ar necesita cresterea versiunii majore a `ARCHITECTURE.
 - orice schimbare aprobata se face pe branch dedicat si se integreaza prin pull request;
 - cerintele, defectele si change request-urile relevante se urmaresc prin GitHub Issues;
 - codul functional nu se modifica in cadrul unei actualizari strict documentare;
-- fiecare Issue ramane deschis pana la validarea criteriilor de acceptare.
+- fiecare Issue ramane deschis pana la validarea criteriilor de acceptare;
+- PR-ul trebuie sa permita verificarea clara a modificarilor fata de baseline-ul GitHub de la care a pornit taskul;
+- modificarile care depasesc scope-ul Issue-ului nu se includ silent in acelasi PR.
 
 ## 6. Testare
 
@@ -179,7 +218,26 @@ Pentru orice implementare sau schimbare functionala, documentatia de analiza aso
 
 Nu se creeaza commit numai pentru documentatie daca nu exista o diferenta materiala de documentat.
 
-## 9. Versionare
+## 9. Deploy si promovare
+
+### 9.1 Deploy Immutability Rule
+
+Deploy-ul nu este o etapa de development si nu poate introduce modificari noi.
+
+Pentru PROD:
+
+`PR aprobat -> merge commit -> CI -> deploy exact al commitului/artefactului rezultat`
+
+Reguli:
+
+- nu se fac patch-uri locale, editari manuale sau modificari intermediare intre merge si deploy;
+- un artefact diferit de cel rezultat din commitul aprobat nu se promoveaza ca acelasi release;
+- daca apare o problema dupa merge, se creeaza fix separat prin branch + PR, apoi se face un nou deploy;
+- deploy-ul manual dintr-o copie locala modificata este interzis pentru PROD;
+- copia locala poate fi folosita pentru development/testare, dar nu ca sursa de release;
+- dupa deploy se pastreaza trasabilitatea la commitul GitHub si, unde platforma ofera, Version ID / Build ID / deployment URL.
+
+## 10. Versionare
 
 Versiunea aplicatiei foloseste formatul `X.XX` conform regulii curente a proiectului.
 

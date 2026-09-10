@@ -45,6 +45,7 @@
 
 ### Documentatie
 
+- Governance: introdus baseline obligatoriu pe starea GitHub, `Implementation Preservation Rule`, interdictia refactorizarii oportuniste si `Deploy Immutability Rule`; conversatia/memoria/copii locale raman context, nu adevar tehnic.
 - #132: adaugate ADR-002, analiza/runtime docs pentru `ai-github-bridge`; `ARCHITECTURE.md` actualizat la v1.7 si v1.6 arhivat.
 - Pachetul 2A8: documentat contractul canonic pentru nomenclatoare, distinctia `system/semantic` vs `extensible`, geografia canonica, tipurile de lucru/contract si regulile de integritate referentiala.
 - Pachetul 2A: `ARCHITECTURE.md` actualizat la v1.5, v1.4 arhivat; documentate contractele `sources`, `source-categories` si `applications`, plus statusul livrarii Package 2.
@@ -87,7 +88,7 @@
 - Remote cu tari explicite necesita Romania intre tarile acceptate.
 - Remote EU/EMEA foloseste restrictia declarata.
 - Remote Worldwide ramane eligibil la excluderi regionale.
-- Conflictele includere/excludere sunt blocate in UI, Command API si configuratia motorului.
+- Conflictele includeere/excludere sunt blocate in UI, Command API si configuratia motorului.
 
 ### Rulare si loguri
 
