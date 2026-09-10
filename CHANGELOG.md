@@ -47,6 +47,7 @@
 
 ### Documentatie
 
+- Clarificata capabilitatea Claude de testare web/browser: `ARCHITECTURE.md` -> v1.11 si `.ai-instructions.md` -> v1.8. Browser/UI testing este mod QA suportat atunci cand sesiunea Claude il expune si preflight-ul confirma accesul; DevTools/Network, shell/CLI/Playwright, GitHub Actions si Cloudflare raman capabilitati separate. Toate testele Claude viitoare trebuie sa declare conditiile de browser, autentificare, evidence, rollback si owner gate.
 - #145: revizuite si aliniate documentele proiectului afectate de configuratia finala AI GitHub; `ARCHITECTURE.md` -> v1.9, `GOVERNANCE.md` -> v1.5, `.ai-instructions.md` -> v1.6; README, CONTRIBUTING, ADR-002 si analizele bridge/MCP descriu acum starea operationala reala.
 - #141/#144: documentate `Branch Target Safety Rule` si `Issue Metadata Preservation Rule`; operatiile de continut nu folosesc direct `main`, iar titlul/label-urile unui Issue existent se pastreaza implicit.
 - #136: actualizate analiza si documentatia operationala pentru Remote MCP Claude; adaugate dependintele MCP/OAuth si pasii de configurare `OAUTH_KV` + `MCP_OWNER_ACCESS_CODE`.
