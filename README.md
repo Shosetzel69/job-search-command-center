@@ -2,19 +2,19 @@
 
 Aplicatie pentru monitorizarea si evaluarea rolurilor de Project Management.
 
-Versiune curenta: `0.05`
+Versiune curenta: `0.06-dev`
 
 ## Obiectiv
 
 - roluri PM / IT PM / Delivery / Service / Scrum / Program;
-- Remote prioritar, apoi Hybrid;
-- selectie geografica pe regiuni si tari;
+- Remote prioritar, apoi Hybrid/Onsite conform criteriilor;
+- selectie geografica pe regiuni si tari canonice;
 - B2B tinta 250-650 EUR/zi;
 - FIT, riscuri, descriere, tara/tari si link de job;
 - repostari marcate;
-- rulare programata si manuala;
-- istoric pentru ultimele 10 rulari;
-- registru de surse administrabil din UI.
+- full search manual controlat; scheduler separat planificat;
+- istoric pentru ultimele rulari;
+- registru de surse si nomenclatoare administrabile din UI.
 
 ## Flux de lucru
 
@@ -24,15 +24,46 @@ Fluxul de guvernanta este:
 
 Nu exista implementare directa din `Ideas / Requirements` sau `Analiza`.
 
-Regulile complete sunt definite in `GOVERNANCE.md`.
+Pentru modificari GitHub:
+
+`Issue -> branch dedicat verificat -> modificare/teste -> PR -> merge -> deploy`
+
+Nu se face write direct pe `main`. La actualizarea unui Issue existent, titlul si label-urile se pastreaza implicit daca owner-ul nu cere explicit altceva.
+
+Regulile complete sunt definite in `GOVERNANCE.md`, `.ai-instructions.md` si `CONTRIBUTING.md`.
 
 ## Arhitectura MVP
 
-`React + Tailwind + Vite -> Cloudflare Worker -> GitHub Actions -> motor cautare -> data/*.json -> main -> Cloudflare deploy`
+Runtime functional:
 
-Repository privat. Fara GitHub Pages si fara baza de date activa.
+`React + Tailwind + Vite -> Cloudflare Worker / Command API -> GitHub Actions -> motor cautare -> data/*.json -> main -> Cloudflare deploy`
+
+Engineering/governance AI separat:
+
+`AI client -> ai-github-bridge -> GitHub App dedicat -> GitHub API`
+
+Repository privat. Fara GitHub Pages si fara baza de date activa pentru aplicatia functionala.
 
 Documentul canonic de arhitectura este `ARCHITECTURE.md` din radacina repository-ului.
+
+## AI GitHub Bridge
+
+`ai-github-bridge` este un Cloudflare Worker separat de `command-api` si nu face parte din runtime-ul functional al aplicatiei.
+
+Remote MCP Claude este operational si validat live:
+
+`Claude Web -> OAuth 2.1 -> /mcp -> jobsearch-claude-agent[bot] -> GitHub API`
+
+Tools curente:
+
+- `read_file`;
+- `get_issue`;
+- `create_issue`;
+- `update_issue`.
+
+Issue #143 a validat live identitatea `jobsearch-claude-agent[bot]` pentru create/update/close. Remote MCP nu permite in prezent write pe files/branches/PR.
+
+Detalii: `docs/ai-github-bridge.md`, `docs/adr/ADR-002-ai-github-bridge.md`.
 
 ## Search engine
 
@@ -44,34 +75,31 @@ Pipeline:
 
 Componente principale:
 
-- `job_search.py` - normalizare, geografie, filtrare, scoring;
-- `job_search_optimized.py` - JobsPipe Direct;
-- `job_search_apify.py` - JobsPipe prin Apify;
-- `job_search_runner.py` - selector transport, orchestrare si run history;
-- `test_search_logic.py` - teste de regresie.
+- `job_search.py` - model comun, geografie, filtrare, scoring;
+- `source_orchestration.py` - plan/rutare/raportare surse;
+- `job_identity.py` - identitate/deduplicare;
+- connectorii dedicati `scripts/job_search_*.py`;
+- `shared/source-connectors.json` - rutare comuna.
 
 ## JobsPipe
 
-Transporturi: `disabled`, `apify`, `direct`.
+Transporturi suportate in cod: `disabled`, `apify`, `direct`.
 
-Stare curenta:
+Stare curenta canonica:
 
-- `jobspipe_mode=apify`;
-- `jobspipe_apify_max_items_per_run=100`;
-- Apify foloseste Actorul oficial `jobspipe~jobspipe-job-search`;
-- Direct ramane fallback;
-- JobsPipe este o singura sursa operationala, indiferent de transport.
+`jobspipe_mode = disabled`
 
-## Functionalitati 0.05
+JobsPipe nu este activat operational in Package 2.
 
-- KPI-uri interactive ca filtre rapide;
-- tara in liste si toate tarile in detalii;
-- criterii `EU`, `US`, `Asia` + tari individuale;
-- excluderi teritoriale;
-- numar surse procesate in status;
-- pagina `Loguri`, maximum 10 rulari;
-- CRUD persistent pentru Surse;
-- publicare cu retry daca `main` se modifica concurent.
+## Functionalitati curente
+
+- zona `Administrare` pentru surse, categorii, nomenclatoare si loguri;
+- geografie canonica comuna React / Command API / Python;
+- moduri de lucru `Remote/Hibrid/Onsite`;
+- tipuri de contract canonice;
+- Source Registry cu validare, aprobare si activare separate;
+- polling robust pentru rularea manuala;
+- publicare cu protectie la modificari concurente.
 
 ## Date si securitate
 
@@ -82,21 +110,18 @@ Protejate prin Cloudflare Worker:
 - `run-history.json`;
 - `search-config.json`;
 - `sources.json`;
-- `applications.json`.
+- `source-categories.json`;
+- `applications.json`;
+- `nomenclatures.json`.
 
 `search-state.json` ramane intern.
 
-Secrete:
-
-- `APIFY_TOKEN` si `JOBSPIPE_API_KEY` -> GitHub Actions Secrets;
-- `GITHUB_TOKEN` -> Cloudflare Secret;
-- `ALLOWED_GOOGLE_SUB` -> Cloudflare Secret;
-- Google ID token -> numai memoria paginii.
+Secretele runtime si GitHub App nu se introduc in frontend, JSON publicabil sau documentatie.
 
 ## Documentatie
 
 - `ARCHITECTURE.md` - arhitectura canonica;
-- `GOVERNANCE.md` - reguli de guvernanta si flux de maturizare a cerintelor;
+- `GOVERNANCE.md` - reguli de guvernanta, branching si control;
 - `.ai-instructions.md` - guardrails si reguli de lucru pentru AI;
 - `CONTRIBUTING.md` - mod de lucru;
 - `CHANGELOG.md` - istoric schimbari relevante;
@@ -104,12 +129,13 @@ Secrete:
 - `docs/functionalitati.md` - comportament curent;
 - `docs/command-api.md` - API si autentificare;
 - `docs/data-contract.md` - contracte JSON;
-- `docs/source-strategy.md` - surse si transporturi.
+- `docs/source-strategy.md` - surse si transporturi;
+- `docs/ai-github-bridge.md` - bridge-ul AI GitHub si Remote MCP.
 
 `docs/architecture.md` exista doar ca redirect documentar catre `ARCHITECTURE.md`.
 
-## Rulare
+## Rulare si CI
 
-Workflow-ul `Full job search` ruleaza la 06:00 si 15:00 UTC si poate fi pornit manual din UI.
+Workflow-ul greu `Full job search` este `workflow_dispatch` only. Nu are trigger `push` sau `schedule`.
 
-CI valideaza Python, teste search logic, JSON, React/Vite si Cloudflare Worker dry-run.
+CI valideaza Python, search logic, JSON, React/Vite, Command API si Cloudflare Worker dry-run. `ai-github-bridge` are workflow CI separat cu teste Node izolate si Wrangler dry-run.
