@@ -777,12 +777,6 @@
           "label": "Aplicat",
           "active": true,
           "sort_order": 10
-        },
-        {
-          "code": "1",
-          "label": "22",
-          "active": true,
-          "sort_order": 20
         }
       ]
     },
