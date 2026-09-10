@@ -1,7 +1,7 @@
 import { McpServer } from "@modelcontextprotocol/server";
 import { createMcpHandler, getMcpAuthContext } from "agents/mcp/server";
 import { z } from "zod";
-import { handleRequest, pemToPkcs8 } from "./index.js";
+import { pemToPkcs8 } from "./index.js";
 
 const REPOSITORY = "Shosetzel69/job-search-command-center";
 const MAX_FILE_BYTES = 1024 * 1024;
@@ -76,20 +76,55 @@ function assertClaudeAuthorization() {
   if (auth?.props?.actor !== "claude") throw new Error("MCP authorization is not valid for Claude");
 }
 
-async function callExistingBridge(env, path, method = "GET", body) {
-  if (!env.CLAUDE_BRIDGE_TOKEN) throw new Error("Claude bridge credential is not configured");
-  const request = new Request(`https://bridge.internal${path}`, {
+function normalizedIssue(issue) {
+  return {
+    number: issue.number,
+    title: issue.title,
+    state: issue.state,
+    body: issue.body ?? null,
+    html_url: issue.html_url,
+    author: issue.user?.login ?? null,
+    labels: Array.isArray(issue.labels)
+      ? issue.labels.map((label) => (typeof label === "string" ? label : label?.name)).filter(Boolean)
+      : [],
+    created_at: issue.created_at ?? null,
+    updated_at: issue.updated_at ?? null,
+  };
+}
+
+function ensureAiGeneratedLabel(labels) {
+  const normalized = Array.isArray(labels) ? labels : [];
+  return [...new Set([...normalized, "ai-generated"])];
+}
+
+export async function githubIssueRequest(env, method, issueNumber = null, body = undefined, deps = {}) {
+  const tokenProvider = deps.tokenProvider || installationToken;
+  const fetchImpl = deps.fetchImpl || fetch;
+  const token = await tokenProvider(env);
+  const suffix = issueNumber === null ? "" : `/${issueNumber}`;
+
+  let requestBody = body;
+  if (method === "POST") {
+    requestBody = { ...(body || {}), labels: ensureAiGeneratedLabel(body?.labels) };
+  } else if (method === "PATCH" && body?.labels !== undefined) {
+    requestBody = { ...body, labels: ensureAiGeneratedLabel(body.labels) };
+  }
+
+  const response = await fetchImpl(`https://api.github.com/repos/${REPOSITORY}/issues${suffix}`, {
     method,
     headers: {
-      authorization: `Bearer ${env.CLAUDE_BRIDGE_TOKEN}`,
-      ...(body ? { "content-type": "application/json" } : {}),
+      authorization: `Bearer ${token}`,
+      accept: "application/vnd.github+json",
+      "x-github-api-version": "2022-11-28",
+      "user-agent": "jobsearch-claude-agent",
+      ...(requestBody !== undefined ? { "content-type": "application/json" } : {}),
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...(requestBody !== undefined ? { body: JSON.stringify(requestBody) } : {}),
   });
-  const response = await handleRequest(request, env);
+
   const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(payload?.message || "Bridge request failed");
-  return payload;
+  if (!response.ok) throw new Error(payload?.message || "GitHub issue request failed");
+  return { actor: "claude", issue: normalizedIssue(payload) };
 }
 
 async function readRepositoryFile(env, path, ref, startLine, endLine) {
@@ -149,7 +184,7 @@ function fail(error) {
 }
 
 export function createClaudeMcpServer(env) {
-  const server = new McpServer({ name: "Job Search GitHub - Claude", version: "0.2.0" });
+  const server = new McpServer({ name: "Job Search GitHub - Claude", version: "0.2.1" });
 
   server.registerTool(
     "read_file",
@@ -182,7 +217,7 @@ export function createClaudeMcpServer(env) {
     async ({ issue_number }) => {
       try {
         assertClaudeAuthorization();
-        return ok(await callExistingBridge(env, `/v1/issues/${issue_number}`));
+        return ok(await githubIssueRequest(env, "GET", issue_number));
       } catch (error) {
         return fail(error);
       }
@@ -202,7 +237,7 @@ export function createClaudeMcpServer(env) {
     async ({ title, body, labels }) => {
       try {
         assertClaudeAuthorization();
-        return ok(await callExistingBridge(env, "/v1/issues", "POST", { title, ...(body !== undefined ? { body } : {}), ...(labels !== undefined ? { labels } : {}) }));
+        return ok(await githubIssueRequest(env, "POST", null, { title, ...(body !== undefined ? { body } : {}), ...(labels !== undefined ? { labels } : {}) }));
       } catch (error) {
         return fail(error);
       }
@@ -224,7 +259,8 @@ export function createClaudeMcpServer(env) {
     async ({ issue_number, ...changes }) => {
       try {
         assertClaudeAuthorization();
-        return ok(await callExistingBridge(env, `/v1/issues/${issue_number}`, "PATCH", changes));
+        if (Object.keys(changes).length === 0) throw new Error("At least one field is required");
+        return ok(await githubIssueRequest(env, "PATCH", issue_number, changes));
       } catch (error) {
         return fail(error);
       }
