@@ -456,22 +456,46 @@ ATS Match v1 este separat de FIT. Orice dependinta noua de parsing PDF/DOCX nece
 - hotfix protected assets #114/#115: implementat si production green;
 - 2A8 nomenclatoare canonice #116/#117-#122: implementare integrata, E2E PROD final ramane gate-ul de inchidere;
 - 2B scheduler controlled: planificat dupa 2A8;
-- 2C conectori activati gradual dupa validare;
-- #49 ramane exclus explicit din implementare.
+- 2C conectori aprobati: planificat;
+- 2D data quality/FIT v2: planificat;
+- 2E ATS v1: planificat, cu dependency gate;
+- #49: exclus din Package 2.
 
-## 18. AI GitHub integration
+## 18. AI GitHub Bridge
 
-Boundary-ul aprobat prin ADR-002 ramane:
+Decizie: `ADR-002-ai-github-bridge.md`.
+
+Boundary:
 
 ```text
-AI client
-  -> ai-github-bridge
-  -> GitHub App dedicat
-  -> GitHub API
-  -> Shosetzel69/job-search-command-center
+ChatGPT / Claude integration
+        -> ai-github-bridge
+        -> GitHub App JWT
+        -> installation token
+        -> GitHub REST API
 ```
 
-Remote MCP #136 este o interfata suplimentara peste acelasi boundary, nu o componenta noua.
+Bridge-ul este infrastructura de engineering/governance si ramane separat de runtime-ul functional al Job Search Command Center.
+
+MVP allowlist REST:
+
+- `GET /health` public;
+- `GET /v1/issues/:number`;
+- `POST /v1/issues`;
+- `PATCH /v1/issues/:number`.
+
+Repository v1:
+
+`Shosetzel69/job-search-command-center`
+
+Identitati:
+
+- ChatGPT credential -> `jobsearch-chatgpt-agent[bot]`;
+- Claude credential -> `jobsearch-claude-agent[bot]`.
+
+### 18.1 Remote MCP #136
+
+Remote MCP este o interfata suplimentara peste acelasi boundary, nu o componenta noua.
 
 Faza 1:
 
@@ -483,4 +507,6 @@ Claude Web
   -> GitHub
 ```
 
-Extinderea catre ChatGPT reutilizeaza acelasi mecanism cu actor separat dupa validarea Claude. Orice crestere a suprafetei de write catre code/branches/PR necesita change separat si aprobare explicita.
+OAuth state/token storage foloseste `OAUTH_KV`. Faza 1 expune numai `read_file`, `get_issue`, `create_issue` si `update_issue`; write pe files/branches/PR ramane exclus.
+
+Extinderea spre ChatGPT, comments, files, branches, pull requests sau checks necesita contract explicit, teste de branch/main safety si actualizarea ADR/documentatiei relevante.
