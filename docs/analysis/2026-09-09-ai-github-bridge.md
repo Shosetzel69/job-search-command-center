@@ -2,8 +2,8 @@
 
 Data: 2026-09-09
 Actualizare: 2026-09-10
-Issues: #132 #136
-Status: APPROVED / MERGED / PENDING LIVE DEPLOY VALIDATION
+Issues: #132 #136 #140 #143
+Status: APPROVED / MERGED / DEPLOYED / LIVE VALIDATED
 
 ## Problema
 
@@ -27,7 +27,7 @@ MVP-ul #132 a redus suprafata initiala la issues:
 
 Actorul REST este derivat din bearer credentialul bridge; clientul nu poate selecta arbitrar identitatea.
 
-Issue #136 adauga peste acelasi Worker o interfata standard Remote MCP pentru conectarea Claude Web si, ulterior, ChatGPT. Boundary-ul arhitectural nu se schimba:
+Issue #136 adauga peste acelasi Worker o interfata standard Remote MCP pentru Claude Web. Boundary-ul arhitectural ramane:
 
 `AI client -> ai-github-bridge -> GitHub App dedicat -> GitHub API -> repository allowlisted`
 
@@ -43,7 +43,7 @@ Transport:
 - OAuth 2.1 pentru client -> MCP;
 - GitHub App authentication separata pentru MCP -> GitHub.
 
-Faza 1 este Claude-only si expune:
+Configuratia operationala curenta este Claude-only si expune:
 
 - `read_file` - read-only, UTF-8, repository fix;
 - `get_issue`;
@@ -52,7 +52,7 @@ Faza 1 este Claude-only si expune:
 
 Identitatea downstream este hard-bound server-side la `jobsearch-claude-agent[bot]`.
 
-Write pe files, branches si pull requests nu intra in Faza 1.
+Write pe files, branches si pull requests nu intra in scope-ul curent.
 
 ## Autentificare owner
 
@@ -70,53 +70,76 @@ Secretul owner nu este trimis modelului si nu este returnat in raspunsuri/loguri
 - OAuth access/refresh tokens gestionate de provider si KV;
 - fara generic GitHub proxy;
 - operatii MCP allowlisted;
-- `ai-generated` impus pentru create/update labels prin contractul bridge existent;
+- `ai-generated` impus server-side la creare si pastrat/adaugat daca labels sunt trimise explicit la update;
 - actor Claude determinat server-side;
-- fara code write in Faza 1;
+- fara code write prin MCP in scope-ul curent;
 - audit fara request body si fara credentials.
+
+## Implementare finala issue tools
+
+Implementarea initiala a `get_issue`, `create_issue` si `update_issue` folosea un self-call intern din MCP catre interfata REST a aceluiasi Worker.
+
+Validarea live a aratat:
+
+- `read_file` functiona;
+- issue tools returnau `Unexpected bridge error`.
+
+PR #140 a eliminat self-call-ul intern. Toate cele patru tools folosesc acum autentificarea GitHub App Claude si apeleaza GitHub API direct.
+
+Fluxul pentru issue tools este:
+
+`MCP tool -> GitHub App JWT -> installation token -> GitHub Issues API`
+
+Aceasta este o corectie de implementare in interiorul aceluiasi boundary, nu o schimbare arhitecturala.
 
 ## Dependinte
 
-MVP #132 nu avea dependinte runtime noi. Extinderea #136 adauga dependinte oficiale pentru Remote MCP:
+Extinderea #136 foloseste:
 
 - `agents` 0.22.0;
 - `@modelcontextprotocol/server` 2.0.0;
 - `zod` 4.5.4;
-- `@cloudflare/workers-oauth-provider` 0.10.0.
+- `@cloudflare/workers-oauth-provider` 0.10.3.
 
 Wrangler ramane 4.129.0.
 
 ## Testare
 
-Testele existente raman izolate si folosesc mock HTTP pentru GitHub.
+Testele automate sunt izolate si folosesc mocks pentru GitHub.
 
-#136 adauga teste pentru:
+Acoperire relevanta:
 
 - owner access code absent/invalid;
 - secretul owner nu apare in pagina de autorizare;
 - grantul OAuth valid este legat server-side de actorul Claude;
-- build/dry-run al Worker-ului cu MCP SDK.
-
-CI pentru PR #137 si post-merge pe commitul `e2561c851d2f737f3a3b649faa63e94eff41695b` este green.
+- tool surface MCP;
+- GET/POST/PATCH issue calls directe;
+- erori GitHub API;
+- Wrangler dry-run.
 
 ## Status operational 2026-09-10
 
-- #136 este integrat in `main` prin PR #137;
-- namespace-ul Cloudflare KV pentru `OAUTH_KV` este creat si binding-ul este versionat in `wrangler.jsonc`;
-- `MCP_OWNER_ACCESS_CODE` a fost configurat ca Worker secret de owner;
-- Cloudflare Workers Builds este conectat la repository pentru `ai-github-bridge` cu production branch `main` si root directory `/ai-github-bridge/`;
-- primul deploy live al noului MCP este inca de executat si validat.
+- #136 integrat prin PR #137;
+- `OAUTH_KV` creat si versionat in `wrangler.jsonc`;
+- `MCP_OWNER_ACCESS_CODE` configurat ca Worker secret de owner;
+- Cloudflare Workers Builds conectat la repository pentru `ai-github-bridge` cu production branch `main` si root `/ai-github-bridge/`;
+- deploy live executat;
+- Claude Web conectat prin OAuth la `/mcp`;
+- `read_file`: PASS;
+- `get_issue`: PASS dupa #140;
+- `create_issue`: PASS, issue #143;
+- autor #143: `jobsearch-claude-agent[bot]`: PASS;
+- `update_issue` + close #143: PASS;
+- titlul si label-urile #143 pastrate: PASS.
 
-Validarea live finala necesita:
+## Mod de lucru rezultat
 
-1. deploy Worker din `main`;
-2. conectare Claude Web la `/mcp`;
-3. `read_file` real;
-4. create issue real cu autor exact `jobsearch-claude-agent[bot]`;
-5. confirmarea ca niciun secret nu este expus.
-
-Issue #136 ramane deschis pana la validarea criteriilor de acceptare.
+- GitHub ramane baseline-ul tehnic;
+- modificarile de continut se fac numai pe branch explicit verificat, niciodata direct pe `main`;
+- Issues relevante urmaresc schimbarea;
+- la update de Issue, titlul si label-urile se pastreaza implicit si se modifica numai la cerere/aprobare explicita;
+- `main` se modifica exclusiv prin PR/merge conform `GOVERNANCE.md`.
 
 ## Relatia cu #125
 
-#136 nu implementeaza DEV/TEST/PROD pentru aplicatie. Bridge-ul ramane infrastructura separata, iar deploy-ul lui respecta governance-ul propriu si Deploy Immutability Rule.
+#136 nu implementeaza DEV/TEST/PROD pentru aplicatie. Bridge-ul ramane infrastructura separata, iar deploy-ul lui respecta Deploy Immutability Rule.

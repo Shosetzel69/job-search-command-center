@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.9`
+Versiune document: `v1.8`
 Versiune aplicatie de referinta: `0.06-dev`
 Ultima actualizare: `2026-09-10`
 
@@ -16,8 +16,7 @@ Documente complementare:
 - `docs/analysis/2026-09-09-canonical-nomenclatures.md` — analiza Package 2A8;
 - `docs/package-2a8-implementation-plan.md` — planul de implementare aprobat;
 - `docs/adr/ADR-002-ai-github-bridge.md` — decizia pentru identitati GitHub App operationale;
-- `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
-- `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
+- `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub.
 
 ## 2. Principii
 
@@ -373,11 +372,9 @@ Pentru `ai-github-bridge`:
 - interfata Remote MCP foloseste Streamable HTTP stateless la `/mcp`;
 - MCP client -> Worker foloseste OAuth 2.1, cu grant single-owner si actor asociat server-side;
 - OAuth state/token storage foloseste Cloudflare KV prin binding-ul `OAUTH_KV`;
-- `MCP_OWNER_ACCESS_CODE` ramane Worker secret si nu este transmis modelului;
-- Remote MCP operational curent este Claude-only si expune `read_file`, `get_issue`, `create_issue`, `update_issue`;
-- toate cele patru tools folosesc GitHub App Claude server-side; issue tools apeleaza direct GitHub API, fara self-call MCP -> REST;
+- Faza 1 Remote MCP este Claude-only si expune `read_file`, `get_issue`, `create_issue`, `update_issue`;
 - `read_file` este strict read-only; files/branches/PR write raman excluse;
-- identitatea downstream este `jobsearch-claude-agent[bot]` si nu poate fi selectata din payload;
+- identitatea downstream pentru Faza 1 este `jobsearch-claude-agent[bot]` si nu poate fi selectata din payload;
 - bridge-ul nu expune proxy GitHub generic.
 
 ## 14. Build/deploy
@@ -403,25 +400,17 @@ Asimetria este intentional documentata deoarece trigger-ele Cloudflare au workin
 
 Build-ul Worker executa build-ul Vite si copiaza numai runtime assets aprobate.
 
-`ai-github-bridge` are lifecycle separat si nu foloseste build-ul frontend.
-
-Configuratie Cloudflare Workers Builds validata pentru bridge:
-
-- production branch: `main`;
-- root directory: `/ai-github-bridge/`;
-- deploy command: `npx wrangler deploy`;
-- non-production/version command: `npx wrangler versions upload`.
-
-Validare locala/CI a bridge-ului:
+`ai-github-bridge` are lifecycle separat si nu foloseste build-ul frontend:
 
 ```bash
 cd ai-github-bridge
 npm install --ignore-scripts --no-audit --no-fund
 npm test
 npm run check
+npm run deploy
 ```
 
-Deploy-ul bridge necesita secrets GitHub App, `MCP_OWNER_ACCESS_CODE` si binding-ul `OAUTH_KV` descrise in `docs/ai-github-bridge.md`. Remote MCP Claude este deployat si validat live.
+Deploy-ul bridge necesita configurarea secrets GitHub App existente, `MCP_OWNER_ACCESS_CODE` si binding-ul `OAUTH_KV` descrise in `docs/ai-github-bridge.md`.
 
 ## 15. CI
 
@@ -444,7 +433,7 @@ Package 2A8 adauga:
 - teste referential integrity;
 - contract type normalization tests.
 
-`ai-github-bridge` are workflow CI separat cu teste Node izolate si Wrangler dry-run. Testele nu apeleaza GitHub real si acopera OAuth, tool surface MCP si issue calls GET/POST/PATCH directe.
+`ai-github-bridge` are workflow CI separat cu teste Node izolate si Wrangler dry-run. Testele nu apeleaza GitHub real.
 
 CI nu face crawl live si nu porneste full search.
 
@@ -504,35 +493,20 @@ Identitati:
 - ChatGPT credential -> `jobsearch-chatgpt-agent[bot]`;
 - Claude credential -> `jobsearch-claude-agent[bot]`.
 
-### 18.1 Remote MCP Claude #136 - operational
+### 18.1 Remote MCP #136
 
 Remote MCP este o interfata suplimentara peste acelasi boundary, nu o componenta noua.
 
-Flux operational:
+Faza 1:
 
 ```text
 Claude Web
   -> OAuth 2.1
   -> /mcp (Streamable HTTP, stateless)
-  -> GitHub App Claude
-  -> installation token
-  -> GitHub API
   -> jobsearch-claude-agent[bot]
+  -> GitHub
 ```
 
-OAuth state/token storage foloseste `OAUTH_KV`. Remote MCP expune numai `read_file`, `get_issue`, `create_issue` si `update_issue`; write pe files/branches/PR ramane exclus.
+OAuth state/token storage foloseste `OAUTH_KV`. Faza 1 expune numai `read_file`, `get_issue`, `create_issue` si `update_issue`; write pe files/branches/PR ramane exclus.
 
-Dupa validarea initiala, PR #140 a eliminat self-call-ul intern MCP -> REST pentru issue tools. `get_issue`, `create_issue` si `update_issue` folosesc acum direct acelasi mecanism GitHub App/installation token ca `read_file`.
-
-Validare live 2026-09-10:
-
-- OAuth Claude Web: PASS;
-- `read_file`: PASS;
-- `get_issue`: PASS;
-- `create_issue`: PASS;
-- `update_issue` + close: PASS;
-- issue de validare: #143;
-- autor: `jobsearch-claude-agent[bot]`;
-- titlu si labels pastrate la update.
-
-Remote MCP ChatGPT nu este activ in configuratia curenta. Extinderea spre ChatGPT, comments, files, branches, pull requests sau checks necesita contract explicit, teste de branch/main safety si actualizarea ADR/documentatiei relevante.
+Extinderea spre ChatGPT, comments, files, branches, pull requests sau checks necesita contract explicit, teste de branch/main safety si actualizarea ADR/documentatiei relevante.

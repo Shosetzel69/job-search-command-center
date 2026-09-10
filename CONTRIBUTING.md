@@ -26,13 +26,38 @@ Pentru orice cerinta noua:
 ## 2. Schimbari de cod si documentatie
 
 1. Cerintele si defectele relevante se urmaresc prin GitHub Issues.
-2. Nu se face push direct pe `main`.
+2. Nu se face push/write direct pe `main`.
 3. Orice schimbare aprobata foloseste branch dedicat si pull request.
-4. `main` trebuie sa ramana coerent si deployable.
-5. Frontend/Worker se valideaza prin GitHub Actions.
-6. Secretele si datele personale nu se adauga in repository.
+4. Inainte de orice write prin GitHub API se verifica existenta branch-ului tinta si baseline-ul/SHA-ul sau.
+5. Operatiile de continut trebuie sa specifice explicit branch-ul; lipsa/invaliditatea branch-ului opreste operatia, fara fallback pe default branch.
+6. Dupa write se verifica branch-ul tinta si absenta unei modificari neintentionate pe `main`.
+7. `main` trebuie sa ramana coerent si deployable.
+8. Frontend/Worker se valideaza prin GitHub Actions.
+9. Secretele si datele personale nu se adauga in repository.
 
-## 3. Documentatie
+Regula completa este in `GOVERNANCE.md` -> `Branch Target Safety Rule`.
+
+## 3. Lucru cu Issues
+
+- orice Issue/PR generat de AI foloseste label-ul `ai-generated`;
+- la actualizarea unui Issue existent, titlul si label-urile se pastreaza implicit;
+- titlul sau label-urile se modifica numai la cererea sau aprobarea explicita a owner-ului;
+- schimbarea body-ului, inchiderea sau redeschiderea Issue-ului nu autorizeaza implicit schimbarea titlului/label-urilor;
+- Issue-ul ramane deschis pana la validarea criteriilor de acceptare.
+
+## 4. Acces AI la GitHub
+
+`ai-github-bridge` este infrastructura separata pentru operatii GitHub allowlisted sub identitati GitHub App dedicate.
+
+Remote MCP Claude este operational:
+
+`Claude Web -> OAuth 2.1 -> ai-github-bridge /mcp -> jobsearch-claude-agent[bot] -> GitHub API`
+
+Tools curente: `read_file`, `get_issue`, `create_issue`, `update_issue`.
+
+Nu exista write pe files/branches/PR prin Remote MCP in scope-ul curent. Pentru detalii tehnice: `ARCHITECTURE.md` si `docs/ai-github-bridge.md`.
+
+## 5. Documentatie
 
 - documentele in limba romana se scriu fara diacritice;
 - documentatia trebuie sa fie simpla si concisa;
@@ -44,7 +69,7 @@ Pentru orice cerinta noua:
 - taskul de review poate identifica discrepante si propune modificari, dar orice modificare urmeaza regulile de aprobare, versionare, branch si pull request ale proiectului;
 - daca nu exista modificari materiale, nu se creeaza commit doar pentru documentatie.
 
-## 4. Contracte si versiuni
+## 6. Contracte si versiuni
 
 - contractele JSON principale folosesc `schema_version`;
 - schimbarile incompatibile necesita versiune noua de contract;
@@ -52,10 +77,11 @@ Pentru orice cerinta noua:
 - documentele cu versiune proprie isi actualizeaza versiunea la fiecare modificare materiala;
 - changelog-ul se actualizeaza la schimbari semnificative.
 
-## 5. Securitate
+## 7. Securitate
 
 - Google token ramane numai in memoria paginii;
 - `GITHUB_TOKEN` ramane Cloudflare Secret;
 - cheile providerilor raman GitHub Actions Secrets;
 - datele `/data/*` raman protejate Worker-first;
+- GitHub App private keys, bridge tokens, OAuth tokens si `MCP_OWNER_ACCESS_CODE` nu se copiaza in repository, documentatie sau prompturi;
 - niciun secret nu se copiaza in frontend, JSON publicabil sau documentatie.
