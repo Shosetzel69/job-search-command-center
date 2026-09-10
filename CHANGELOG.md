@@ -4,6 +4,7 @@
 
 ### Functionalitati
 
+- #136: adaugat Remote MCP stateless pe `ai-github-bridge` pentru Claude Web, cu OAuth 2.1, `read_file` read-only si operatii issues allowlisted sub identitatea `jobsearch-claude-agent[bot]`.
 - #132: adaugat MVP `ai-github-bridge`, Worker Cloudflare separat pentru operatii GitHub issues allowlisted sub identitati GitHub App distincte ChatGPT/Claude; actorul este derivat din credential, repository-ul este fix, iar `ai-generated` este impus automat.
 - #120 / Pachetul 2A8: `Administrare -> Nomenclatoare` este functional; domeniile system si extensible au operatii diferentiate, iar deactivate/delete pe valori referentiate este blocat cu `409 Conflict` si lista referintelor, fara modificarea silent a configuratiei.
 - #119 / Pachetul 2A8: modurile de lucru canonice sunt `Remote/Hibrid/Onsite`, iar tipurile de contract `Permanent/Temporar/Contract/Freelance`; joburile publica `contract_type` si `employment_type_raw`, cu `unknown` pentru cazurile nedeterminate.
@@ -45,6 +46,7 @@
 
 ### Documentatie
 
+- #136: actualizate analiza si documentatia operationala pentru Remote MCP Claude; adaugate dependintele MCP/OAuth si pasii de configurare `OAUTH_KV` + `MCP_OWNER_ACCESS_CODE`.
 - Governance: introdus baseline obligatoriu pe starea GitHub, `Implementation Preservation Rule`, interdictia refactorizarii oportuniste si `Deploy Immutability Rule`; conversatia/memoria/copii locale raman context, nu adevar tehnic.
 - #132: adaugate ADR-002, analiza/runtime docs pentru `ai-github-bridge`; `ARCHITECTURE.md` actualizat la v1.7 si v1.6 arhivat.
 - Pachetul 2A8: documentat contractul canonic pentru nomenclatoare, distinctia `system/semantic` vs `extensible`, geografia canonica, tipurile de lucru/contract si regulile de integritate referentiala.
@@ -88,7 +90,7 @@
 - Remote cu tari explicite necesita Romania intre tarile acceptate.
 - Remote EU/EMEA foloseste restrictia declarata.
 - Remote Worldwide ramane eligibil la excluderi regionale.
-- Conflictele includeere/excludere sunt blocate in UI, Command API si configuratia motorului.
+- Conflictele includere/excludere sunt blocate in UI, Command API si configuratia motorului.
 
 ### Rulare si loguri
 
