@@ -1,6 +1,6 @@
 # AI GitHub Bridge
 
-Status: MVP REST implementat; Remote MCP Claude in implementare prin #136.
+Status: MVP REST implementat; Remote MCP Claude integrat in `main`, pending deploy live si validare operationala.
 Refs: #127 #132 #136 ADR-002
 
 ## Rol
@@ -63,9 +63,8 @@ Bridge-ul genereaza server-side JWT-ul GitHub App si installation token-ul short
 - `CHATGPT_GITHUB_APP_ID`;
 - `CHATGPT_GITHUB_INSTALLATION_ID`;
 - `CLAUDE_GITHUB_APP_ID`;
-- `CLAUDE_GITHUB_INSTALLATION_ID`.
-
-Pentru Remote MCP se adauga binding-ul KV `OAUTH_KV` dupa crearea namespace-ului Cloudflare.
+- `CLAUDE_GITHUB_INSTALLATION_ID`;
+- binding-ul KV `OAUTH_KV`.
 
 ## Secrets obligatorii
 
@@ -112,12 +111,13 @@ Testele nu fac request real la GitHub.
 
 ## Configurare Remote MCP
 
-Inainte de deploy:
+Configuratia operationala pregatita la 2026-09-10:
 
-1. creeaza Cloudflare KV namespace `OAUTH_KV`;
-2. adauga ID-ul namespace-ului ca binding `OAUTH_KV` in `wrangler.jsonc`;
-3. seteaza Worker secret `MCP_OWNER_ACCESS_CODE`;
-4. confirma ca secrets GitHub App Claude si `CLAUDE_BRIDGE_TOKEN` exista deja.
+1. Cloudflare KV namespace creat si legat ca `OAUTH_KV` in `wrangler.jsonc`;
+2. Worker secret `MCP_OWNER_ACCESS_CODE` configurat de owner;
+3. Cloudflare Workers Builds conectat la repository, production branch `main`, root directory `/ai-github-bridge/`;
+4. deploy command `npx wrangler deploy`;
+5. non-production version command `npx wrangler versions upload`.
 
 Dupa deploy, Claude Web se conecteaza la:
 
@@ -128,7 +128,10 @@ Validarea finala:
 1. OAuth owner reusit;
 2. `read_file` pe `GOVERNANCE.md`;
 3. `create_issue` de test;
-4. autor issue exact `jobsearch-claude-agent[bot]`.
+4. autor issue exact `jobsearch-claude-agent[bot]`;
+5. niciun secret expus.
+
+Issue #136 ramane deschis pana cand validarea live este completa.
 
 ## Extinderi ulterioare
 
