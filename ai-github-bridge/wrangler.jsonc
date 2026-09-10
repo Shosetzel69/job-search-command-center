@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "ai-github-bridge",
-  "main": "src/index.js",
+  "main": "src/worker.js",
   "compatibility_date": "2026-09-09",
   "workers_dev": true,
   "vars": {
