@@ -4,7 +4,7 @@
 
 ### Functionalitati
 
-- #136: adaugat Remote MCP stateless pe `ai-github-bridge` pentru Claude Web, cu OAuth 2.1, `read_file` read-only si operatii issues allowlisted sub identitatea `jobsearch-claude-agent[bot]`.
+- #136: Remote MCP Claude este deployat si validat live pe `ai-github-bridge`, cu OAuth 2.1, `read_file`, `get_issue`, `create_issue` si `update_issue` sub identitatea `jobsearch-claude-agent[bot]`; validarea operationala a fost finalizata prin issue #143.
 - #132: adaugat MVP `ai-github-bridge`, Worker Cloudflare separat pentru operatii GitHub issues allowlisted sub identitati GitHub App distincte ChatGPT/Claude; actorul este derivat din credential, repository-ul este fix, iar `ai-generated` este impus automat.
 - #120 / Pachetul 2A8: `Administrare -> Nomenclatoare` este functional; domeniile system si extensible au operatii diferentiate, iar deactivate/delete pe valori referentiate este blocat cu `409 Conflict` si lista referintelor, fara modificarea silent a configuratiei.
 - #119 / Pachetul 2A8: modurile de lucru canonice sunt `Remote/Hibrid/Onsite`, iar tipurile de contract `Permanent/Temporar/Contract/Freelance`; joburile publica `contract_type` si `employment_type_raw`, cu `unknown` pentru cazurile nedeterminate.
@@ -21,6 +21,7 @@
 
 ### Remedieri
 
+- #140: eliminat self-call-ul intern MCP -> REST pentru `get_issue`, `create_issue` si `update_issue`; issue tools folosesc acum direct GitHub App Claude -> installation token -> GitHub API, rezolvand `Unexpected bridge error` observat live.
 - #121 / Pachetul 2A8: build-ul Static Assets, allowlist-ul `/data/*` si testele de securitate folosesc manifestul comun `shared/runtime-data.mjs`; `nomenclatures.json` este protejat coerent, iar `search-state.json` ramane intern.
 - #114: adaugat `source-categories.json` in allowlist-ul protected data al Worker-ului; eliminat 404-ul care bloca incarcarea tuturor paginilor dupa deploy-ul Package 2A si adaugat test de regresie pentru toate asset-urile protejate.
 - #83 / Pachetul 2A0: UI urmareste rularea manuala pana la un status terminal real, cu backoff controlat, recuperare a starii active dupa reload si tratament distinct pentru `completed_with_errors`; eliminata limita fixa de aproximativ 5 minute.
@@ -46,6 +47,8 @@
 
 ### Documentatie
 
+- #145: revizuite si aliniate documentele proiectului afectate de configuratia finala AI GitHub; `ARCHITECTURE.md` -> v1.9, `GOVERNANCE.md` -> v1.5, `.ai-instructions.md` -> v1.6; README, CONTRIBUTING, ADR-002 si analizele bridge/MCP descriu acum starea operationala reala.
+- #141/#144: documentate `Branch Target Safety Rule` si `Issue Metadata Preservation Rule`; operatiile de continut nu folosesc direct `main`, iar titlul/label-urile unui Issue existent se pastreaza implicit.
 - #136: actualizate analiza si documentatia operationala pentru Remote MCP Claude; adaugate dependintele MCP/OAuth si pasii de configurare `OAUTH_KV` + `MCP_OWNER_ACCESS_CODE`.
 - Governance: introdus baseline obligatoriu pe starea GitHub, `Implementation Preservation Rule`, interdictia refactorizarii oportuniste si `Deploy Immutability Rule`; conversatia/memoria/copii locale raman context, nu adevar tehnic.
 - #132: adaugate ADR-002, analiza/runtime docs pentru `ai-github-bridge`; `ARCHITECTURE.md` actualizat la v1.7 si v1.6 arhivat.
