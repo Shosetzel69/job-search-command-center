@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.8`
+Versiune document: `v1.7`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-10`
+Ultima actualizare: `2026-09-09`
 
 ## 1. Rol
 
@@ -49,7 +49,7 @@ Principii:
 | `search engine` | colectare, normalizare, geografie, dedupe/repost, filtrare, FIT |
 | `connectors` | transport/provider specific, fara FIT |
 | `data/*.json` | persistenta runtime/versionata si domenii canonice |
-| `ai-github-bridge` | infrastructura separata de engineering/governance pentru operatii GitHub allowlisted sub identitati GitHub App distincte; expune REST controlat si Remote MCP stateless |
+| `ai-github-bridge` | infrastructura separata de engineering/governance pentru operatii GitHub allowlisted sub identitati GitHub App distincte |
 
 ## 4. Frontend
 
@@ -364,18 +364,12 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 
 Pentru `ai-github-bridge`:
 
-- bridge bearer credentials sunt separate pentru ChatGPT si Claude pe interfata REST existenta;
-- actorul REST este derivat server-side din credential, nu din payload;
+- bridge bearer credentials sunt separate pentru ChatGPT si Claude;
+- actorul este derivat server-side din credential, nu din payload;
 - GitHub App private keys sunt Worker secrets;
 - JWT si installation tokens nu sunt returnate clientului si nu sunt logate;
 - repository-ul este hard-allowlisted;
-- interfata Remote MCP foloseste Streamable HTTP stateless la `/mcp`;
-- MCP client -> Worker foloseste OAuth 2.1, cu grant single-owner si actor asociat server-side;
-- OAuth state/token storage foloseste Cloudflare KV prin binding-ul `OAUTH_KV`;
-- Faza 1 Remote MCP este Claude-only si expune `read_file`, `get_issue`, `create_issue`, `update_issue`;
-- `read_file` este strict read-only; files/branches/PR write raman excluse;
-- identitatea downstream pentru Faza 1 este `jobsearch-claude-agent[bot]` si nu poate fi selectata din payload;
-- bridge-ul nu expune proxy GitHub generic.
+- MVP-ul nu expune files/branches/PR/admin/secrets/deploy.
 
 ## 14. Build/deploy
 
@@ -410,7 +404,7 @@ npm run check
 npm run deploy
 ```
 
-Deploy-ul bridge necesita configurarea secrets GitHub App existente, `MCP_OWNER_ACCESS_CODE` si binding-ul `OAUTH_KV` descrise in `docs/ai-github-bridge.md`.
+Deploy-ul bridge necesita configurarea prealabila a celor patru secrets descrise in `docs/ai-github-bridge.md`.
 
 ## 15. CI
 
@@ -439,11 +433,9 @@ CI nu face crawl live si nu porneste full search.
 
 ## 16. Persistenta si limite arhitecturale
 
-Nu exista baza de date activa pentru aplicatia Job Search Command Center.
+Nu exista baza de date activa.
 
-Trecerea aplicatiei la alta persistenta, multi-user sau storage privat pentru CV necesita analiza/ADR conform guvernantei.
-
-Cloudflare KV `OAUTH_KV` este exclusiv storage tehnic al infrastructurii Remote MCP/OAuth si nu devine persistenta functionala a aplicatiei.
+Trecerea la alta persistenta, multi-user sau storage privat pentru CV necesita analiza/ADR conform guvernantei.
 
 Introducerea `nomenclatures.json` nu schimba boundary-ul arhitectural si nu necesita ADR separat: ramane in modelul existent JSON versionat + Command API + static frontend + Python runner.
 
@@ -477,7 +469,7 @@ ChatGPT / Claude integration
 
 Bridge-ul este infrastructura de engineering/governance si ramane separat de runtime-ul functional al Job Search Command Center.
 
-MVP allowlist REST:
+MVP allowlist:
 
 - `GET /health` public;
 - `GET /v1/issues/:number`;
@@ -493,20 +485,4 @@ Identitati:
 - ChatGPT credential -> `jobsearch-chatgpt-agent[bot]`;
 - Claude credential -> `jobsearch-claude-agent[bot]`.
 
-### 18.1 Remote MCP #136
-
-Remote MCP este o interfata suplimentara peste acelasi boundary, nu o componenta noua.
-
-Faza 1:
-
-```text
-Claude Web
-  -> OAuth 2.1
-  -> /mcp (Streamable HTTP, stateless)
-  -> jobsearch-claude-agent[bot]
-  -> GitHub
-```
-
-OAuth state/token storage foloseste `OAUTH_KV`. Faza 1 expune numai `read_file`, `get_issue`, `create_issue` si `update_issue`; write pe files/branches/PR ramane exclus.
-
-Extinderea spre ChatGPT, comments, files, branches, pull requests sau checks necesita contract explicit, teste de branch/main safety si actualizarea ADR/documentatiei relevante.
+Extinderea spre comments, files, branches, pull requests sau checks necesita contract explicit, teste de branch/main safety si actualizarea ADR/documentatiei relevante.

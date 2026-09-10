@@ -1,84 +1,111 @@
 # Analiza - GitHub App bridge pentru identitati AI
 
 Data: 2026-09-09
-Issue: #132
-Status: APPROVED / IMPLEMENTATION IN PROGRESS
+Actualizare: 2026-09-10
+Issues: #132 #136
+Status: APPROVED / REMOTE MCP IN IMPLEMENTATION
 
 ## Problema
 
-GitHub Apps distincte pentru ChatGPT si Claude au fost validate prin #128 si #131, dar integrarea GitHub standard din chat nu foloseste direct credentialele acestor Apps.
+GitHub Apps distincte pentru ChatGPT si Claude au fost validate prin #128 si #131, dar integrarile standard din chat nu folosesc direct credentialele acestor Apps.
 
 ## Decizie aprobata
 
-Owner GO: 2026-09-09.
+Owner GO: 2026-09-09 pentru bridge si 2026-09-10 pentru extinderea Remote MCP.
 
-Se foloseste un Cloudflare Worker dedicat `ai-github-bridge`, separat de `command-api`.
+Se foloseste un singur Cloudflare Worker dedicat `ai-github-bridge`, separat de `command-api`.
 
 ADR: `docs/adr/ADR-002-ai-github-bridge.md`.
 
-## Diferente fata de analiza initiala
+## Evolutie fata de MVP #132
 
-Analiza initiala #132 enumera un contract v1 mai larg, cu issues, files, branches, PR si checks.
-
-Pentru MVP-ul aprobat la implementare, suprafata a fost redusa intentionat la issues:
+MVP-ul #132 a redus suprafata initiala la issues:
 
 - get issue;
 - create issue;
 - update issue.
 
-Motiv: validarea identitatii operationale si a modelului de securitate trebuie facuta inainte de extinderea write-surface catre repository content si branches.
+Actorul REST este derivat din bearer credentialul bridge; clientul nu poate selecta arbitrar identitatea.
 
-Actorul nu este primit printr-un camp `actor`; este derivat din bearer credentialul bridge. Aceasta elimina posibilitatea ca un client autentificat cu credentialul unui agent sa solicite identitatea celuilalt agent.
+Issue #136 adauga peste acelasi Worker o interfata standard Remote MCP pentru conectarea Claude Web si, ulterior, ChatGPT. Boundary-ul arhitectural nu se schimba:
+
+`AI client -> ai-github-bridge -> GitHub App dedicat -> GitHub API -> repository allowlisted`
+
+Nu se introduce un Worker nou, proxy generic sau runtime local.
+
+## Contract Remote MCP #136
+
+Transport:
+
+- Streamable HTTP;
+- endpoint `/mcp`;
+- stateless;
+- OAuth 2.1 pentru client -> MCP;
+- GitHub App authentication separata pentru MCP -> GitHub.
+
+Faza 1 este Claude-only si expune:
+
+- `read_file` - read-only, UTF-8, repository fix;
+- `get_issue`;
+- `create_issue`;
+- `update_issue`.
+
+Identitatea downstream este hard-bound server-side la `jobsearch-claude-agent[bot]`.
+
+Write pe files, branches si pull requests nu intra in Faza 1.
+
+## Autentificare owner
+
+OAuth MCP foloseste `@cloudflare/workers-oauth-provider` cu storage `OAUTH_KV`.
+
+Autorizarea este single-owner: pagina `/authorize` cere un secret separat `MCP_OWNER_ACCESS_CODE`, stocat exclusiv ca Cloudflare Worker secret. Dupa validare, grantul OAuth primeste server-side `props.actor = claude`.
+
+Secretul owner nu este trimis modelului si nu este returnat in raspunsuri/loguri.
 
 ## Contract de securitate rezultat
 
 - repository fix `Shosetzel69/job-search-command-center`;
-- doua bearer credentials independente;
-- private keys numai ca Worker secrets;
-- JWT si installation token generate server-side;
+- GitHub App private keys numai ca Worker secrets;
+- JWT si installation tokens generate server-side;
+- OAuth access/refresh tokens gestionate de provider si KV;
 - fara generic GitHub proxy;
-- request body limitat la 64 KiB;
-- campuri allowlisted pentru create/update issue;
-- label `ai-generated` adaugat/pastrat automat;
-- audit fara request body si fara credentials;
-- operatiile neallowlisted sunt respinse inainte de apel GitHub.
+- operatii MCP allowlisted;
+- `ai-generated` impus pentru create/update labels prin contractul bridge existent;
+- actor Claude determinat server-side;
+- fara code write in Faza 1;
+- audit fara request body si fara credentials.
 
 ## Dependinte
 
-Nu se adauga biblioteci runtime noi.
+MVP #132 nu avea dependinte runtime noi. Extinderea #136 adauga dependinte oficiale pentru Remote MCP:
 
-Semnarea JWT foloseste Web Crypto nativ. Cheile GitHub App in format PKCS#1 sunt convertite local in PKCS#8 pentru `crypto.subtle.importKey`.
+- `agents` 0.22.0;
+- `@modelcontextprotocol/server` 2.0.0;
+- `zod` 4.5.4;
+- `@cloudflare/workers-oauth-provider` 0.10.0.
 
-Wrangler ramane aceeasi dependinta de development deja folosita de proiect, versiunea 4.129.0.
+Wrangler ramane 4.129.0.
 
 ## Testare
 
-Testele sunt izolate si folosesc mock HTTP pentru GitHub.
+Testele existente raman izolate si folosesc mock HTTP pentru GitHub.
 
-Acopera:
+#136 adauga teste pentru:
 
-- health public;
-- auth lipsa;
-- ChatGPT identity routing;
-- Claude identity routing;
-- repository hard allowlist;
-- generic proxy blocked;
-- schema update restrictionata;
-- GitHub auth failure sanitizat;
-- PKCS#1 private key support.
+- owner access code absent/invalid;
+- secretul owner nu apare in pagina de autorizare;
+- grantul OAuth valid este legat server-side de actorul Claude;
+- build/dry-run al Worker-ului cu MCP SDK.
 
-## Ce ramane dupa merge
+Validarea live finala necesita:
 
-Implementarea codului nu finalizeaza #127/#132 pana nu exista configurarea operationala:
-
-1. creare/deploy Worker Cloudflare;
-2. configurare celor patru Worker secrets;
-3. smoke real ChatGPT;
-4. smoke real Claude;
-5. conectare tool/plugin ChatGPT la endpoint;
-6. mecanism operational Claude;
-7. actualizare governance finala si inchidere tichete.
+1. configurare `OAUTH_KV`;
+2. configurare `MCP_OWNER_ACCESS_CODE`;
+3. deploy Worker;
+4. conectare Claude Web la `/mcp`;
+5. `read_file` real;
+6. create issue real cu autor exact `jobsearch-claude-agent[bot]`.
 
 ## Relatia cu #125
 
-MVP-ul nu implementeaza DEV/TEST/PROD. Bridge-ul este separat structural astfel incat mediile sa poata fi introduse ulterior. Credentialele PROD nu trebuie reutilizate pentru bridge DEV cand #125 va fi implementat.
+#136 nu implementeaza DEV/TEST/PROD pentru aplicatie. Bridge-ul ramane infrastructura separata, iar deploy-ul lui respecta governance-ul propriu si Deploy Immutability Rule.
