@@ -779,12 +779,6 @@
           "sort_order": 10
         },
         {
-          "code": "1",
-          "label": "31231231231231",
-          "active": true,
-          "sort_order": 20
-        },
-        {
           "code": "e2e_web_20260910232245",
           "label": "E2E Web Test 20260910232245",
           "active": true,
