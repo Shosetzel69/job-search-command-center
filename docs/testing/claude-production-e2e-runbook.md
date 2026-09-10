@@ -40,7 +40,9 @@ Validate the currently implemented production version only. Do not test future/u
 ## Mandatory architecture boundary
 Before execution, read `ARCHITECTURE.md` section **19 - Boundary de testare Claude**.
 
-The project guarantees Claude only the current Remote MCP capabilities documented there. Browser/computer-use, DevTools/network inspection, shell/CLI, GitHub Actions access and Cloudflare access are not guaranteed by the project architecture.
+Claude web/browser testing is a supported QA execution mode for this project when the active Claude session exposes browser/web interaction and the capability preflight confirms it. This browser capability is separate from the Remote MCP GitHub integration.
+
+Remote MCP provides repository/issue access. Browser/web interaction provides UI testing. DevTools/network inspection, shell/CLI/Playwright, GitHub Actions access and Cloudflare access are separate capabilities and must not be inferred from browser availability.
 
 A missing executor capability is **BLOCKED**, not a product **FAIL**. Never infer a bug only because the current Claude session cannot perform a step.
 
@@ -52,12 +54,21 @@ Before any product test, report this table:
 |---|---|---|---|
 | GitHub MCP read_file/get_issue | Yes | YES/NO | BLOCKED if required evidence cannot be obtained |
 | Browser/UI interaction | Yes for UI E2E | YES/NO | UI scenarios BLOCKED |
+| Target URL accessible in Claude browser | Yes for UI E2E | YES/NO | UI scenarios BLOCKED |
 | Existing authenticated browser session | Conditional | YES/NO | OWNER ACTION for login |
 | DevTools / Network inspection | Optional | YES/NO | HTTP-level assertions BLOCKED; UI assertion may continue |
 | Shell / CLI / Playwright runtime | No for this run | YES/NO | Do not attempt; use CI/other executor |
 | GitHub Actions controls/logs | Optional for live-run evidence | YES/NO | Mark corresponding evidence BLOCKED |
 | Cloudflare dashboard/logs | Optional | YES/NO | Mark corresponding evidence BLOCKED |
 ```
+
+Web testing conditions:
+- Browser/UI interaction must be available in the current Claude session.
+- The target URL must be reachable from that browser.
+- Use an existing authenticated session where possible.
+- If interactive Google login is required, stop for `OWNER ACTION`; do not request credentials or tokens.
+- Browser availability does not imply DevTools/Network/Console access.
+- Session state must not be assumed to persist between Claude sessions; perform this preflight every run.
 
 Rules:
 - Continue with every scenario that is executable with the capabilities actually available.
@@ -295,6 +306,7 @@ Overall: PASS / FAIL / PASS WITH BLOCKED ITEMS
 |---|---|---|
 | GitHub MCP | | |
 | Browser/UI | | |
+| Target URL accessible | | |
 | Authenticated session | | |
 | DevTools/Network | | |
 | GitHub Actions evidence | | |
