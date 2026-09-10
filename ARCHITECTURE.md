@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.7`
+Versiune document: `v1.8`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-09`
+Ultima actualizare: `2026-09-10`
 
 ## 1. Rol
 
@@ -49,7 +49,7 @@ Principii:
 | `search engine` | colectare, normalizare, geografie, dedupe/repost, filtrare, FIT |
 | `connectors` | transport/provider specific, fara FIT |
 | `data/*.json` | persistenta runtime/versionata si domenii canonice |
-| `ai-github-bridge` | infrastructura separata de engineering/governance pentru operatii GitHub allowlisted sub identitati GitHub App distincte |
+| `ai-github-bridge` | infrastructura separata de engineering/governance pentru operatii GitHub allowlisted sub identitati GitHub App distincte; expune REST controlat si Remote MCP stateless |
 
 ## 4. Frontend
 
@@ -364,12 +364,18 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 
 Pentru `ai-github-bridge`:
 
-- bridge bearer credentials sunt separate pentru ChatGPT si Claude;
-- actorul este derivat server-side din credential, nu din payload;
+- bridge bearer credentials sunt separate pentru ChatGPT si Claude pe interfata REST existenta;
+- actorul REST este derivat server-side din credential, nu din payload;
 - GitHub App private keys sunt Worker secrets;
 - JWT si installation tokens nu sunt returnate clientului si nu sunt logate;
 - repository-ul este hard-allowlisted;
-- MVP-ul nu expune files/branches/PR/admin/secrets/deploy.
+- interfata Remote MCP foloseste Streamable HTTP stateless la `/mcp`;
+- MCP client -> Worker foloseste OAuth 2.1, cu grant single-owner si actor asociat server-side;
+- OAuth state/token storage foloseste Cloudflare KV prin binding-ul `OAUTH_KV`;
+- Faza 1 Remote MCP este Claude-only si expune `read_file`, `get_issue`, `create_issue`, `update_issue`;
+- `read_file` este strict read-only; files/branches/PR write raman excluse;
+- identitatea downstream pentru Faza 1 este `jobsearch-claude-agent[bot]` si nu poate fi selectata din payload;
+- bridge-ul nu expune proxy GitHub generic.
 
 ## 14. Build/deploy
 
@@ -404,7 +410,7 @@ npm run check
 npm run deploy
 ```
 
-Deploy-ul bridge necesita configurarea prealabila a celor patru secrets descrise in `docs/ai-github-bridge.md`.
+Deploy-ul bridge necesita configurarea secrets GitHub App existente, `MCP_OWNER_ACCESS_CODE` si binding-ul `OAUTH_KV` descrise in `docs/ai-github-bridge.md`.
 
 ## 15. CI
 
@@ -433,9 +439,11 @@ CI nu face crawl live si nu porneste full search.
 
 ## 16. Persistenta si limite arhitecturale
 
-Nu exista baza de date activa.
+Nu exista baza de date activa pentru aplicatia Job Search Command Center.
 
-Trecerea la alta persistenta, multi-user sau storage privat pentru CV necesita analiza/ADR conform guvernantei.
+Trecerea aplicatiei la alta persistenta, multi-user sau storage privat pentru CV necesita analiza/ADR conform guvernantei.
+
+Cloudflare KV `OAUTH_KV` este exclusiv storage tehnic al infrastructurii Remote MCP/OAuth si nu devine persistenta functionala a aplicatiei.
 
 Introducerea `nomenclatures.json` nu schimba boundary-ul arhitectural si nu necesita ADR separat: ramane in modelul existent JSON versionat + Command API + static frontend + Python runner.
 
@@ -448,41 +456,31 @@ ATS Match v1 este separat de FIT. Orice dependinta noua de parsing PDF/DOCX nece
 - hotfix protected assets #114/#115: implementat si production green;
 - 2A8 nomenclatoare canonice #116/#117-#122: implementare integrata, E2E PROD final ramane gate-ul de inchidere;
 - 2B scheduler controlled: planificat dupa 2A8;
-- 2C conectori aprobati: planificat;
-- 2D data quality/FIT v2: planificat;
-- 2E ATS v1: planificat, cu dependency gate;
-- #49: exclus din Package 2.
+- 2C conectori activati gradual dupa validare;
+- #49 ramane exclus explicit din implementare.
 
-## 18. AI GitHub Bridge
+## 18. AI GitHub integration
 
-Decizie: `ADR-002-ai-github-bridge.md`.
-
-Boundary:
+Boundary-ul aprobat prin ADR-002 ramane:
 
 ```text
-ChatGPT / Claude integration
-        -> ai-github-bridge
-        -> GitHub App JWT
-        -> installation token
-        -> GitHub REST API
+AI client
+  -> ai-github-bridge
+  -> GitHub App dedicat
+  -> GitHub API
+  -> Shosetzel69/job-search-command-center
 ```
 
-Bridge-ul este infrastructura de engineering/governance si ramane separat de runtime-ul functional al Job Search Command Center.
+Remote MCP #136 este o interfata suplimentara peste acelasi boundary, nu o componenta noua.
 
-MVP allowlist:
+Faza 1:
 
-- `GET /health` public;
-- `GET /v1/issues/:number`;
-- `POST /v1/issues`;
-- `PATCH /v1/issues/:number`.
+```text
+Claude Web
+  -> OAuth 2.1
+  -> /mcp (Streamable HTTP, stateless)
+  -> jobsearch-claude-agent[bot]
+  -> GitHub
+```
 
-Repository v1:
-
-`Shosetzel69/job-search-command-center`
-
-Identitati:
-
-- ChatGPT credential -> `jobsearch-chatgpt-agent[bot]`;
-- Claude credential -> `jobsearch-claude-agent[bot]`.
-
-Extinderea spre comments, files, branches, pull requests sau checks necesita contract explicit, teste de branch/main safety si actualizarea ADR/documentatiei relevante.
+Extinderea catre ChatGPT reutilizeaza acelasi mecanism cu actor separat dupa validarea Claude. Orice crestere a suprafetei de write catre code/branches/PR necesita change separat si aprobare explicita.
