@@ -41,7 +41,7 @@
   "work_modes": {
     "remote": true,
     "hybrid": true,
-    "onsite": false
+    "onsite": true
   },
   "contract_types": [
     "permanent",
