@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.9`
+Versiune document: `v1.10`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-10`
+Ultima actualizare: `2026-09-11`
 
 ## 1. Rol
 
@@ -536,3 +536,98 @@ Validare live 2026-09-10:
 - titlu si labels pastrate la update.
 
 Remote MCP ChatGPT nu este activ in configuratia curenta. Extinderea spre ChatGPT, comments, files, branches, pull requests sau checks necesita contract explicit, teste de branch/main safety si actualizarea ADR/documentatiei relevante.
+
+## 19. Boundary de testare Claude
+
+Aceasta sectiune descrie exclusiv capabilitatile garantate de integrarea Claude definita de proiect. Nu face afirmatii despre toate capabilitatile produsului Claude in afara acestei arhitecturi.
+
+### 19.1 Capabilitati garantate de proiect
+
+Prin Remote MCP Claude sunt garantate numai:
+
+- citirea fisierelor din repository prin `read_file`;
+- citirea Issue-urilor prin `get_issue`;
+- crearea Issue-urilor prin `create_issue`;
+- actualizarea Issue-urilor prin `update_issue`;
+- executia acestor operatii sub identitatea `jobsearch-claude-agent[bot]`.
+
+Orice alta capabilitate trebuie tratata ca indisponibila sau negarantata pana cand este implementata si validata explicit in arhitectura proiectului.
+
+### 19.2 Capabilitati negarantate in arhitectura curenta
+
+Remote MCP Claude nu ofera in prezent:
+
+- shell/terminal local;
+- executie directa `npm`, `node`, `python`, `pytest`, `Playwright` sau alte comenzi din repository;
+- browser automation sau Computer Use ca parte a MCP-ului proiectului;
+- acces garantat la browser DevTools, Network sau Console;
+- acces la Cloudflare Dashboard, Worker logs, settings sau secrets;
+- acces la GitHub Actions pentru dispatch, rerun, logs, checks sau artifacts;
+- write pe fisiere, branch-uri sau pull requests;
+- acces la token-uri Google, cookies, bearer tokens, GitHub App private keys, installation tokens sau alte secrete;
+- bypass pentru login Google sau alte interactiuni care necesita actiunea owner-ului.
+
+Daca sesiunea Claude ofera separat browser/computer-use sau alte instrumente, acestea pot fi folosite numai dupa un preflight explicit. Ele nu devin implicit parte din arhitectura proiectului si nu pot fi presupuse de un test viitor.
+
+### 19.3 Regula obligatorie pentru proiectarea testelor Claude
+
+Toate testele, runbook-urile si ticket-ele de QA destinate executiei de catre Claude trebuie scrise in limita capabilitatilor de mai sus.
+
+Reguli:
+
+- numai capabilitatile garantate pot fi pasi autonomi obligatorii;
+- orice pas care necesita browser, DevTools, retea, shell, GitHub Actions, Cloudflare sau alta capabilitate negarantata trebuie marcat explicit `CONDITIONAL` si verificat la preflight;
+- lipsa unei capabilitati a executorului produce `BLOCKED`, nu `FAIL` al produsului;
+- `FAIL` se foloseste numai cand comportamentul produsului a fost observat si contrazice rezultatul asteptat;
+- un test nu cere niciodata Claude sa extraga, afiseze sau primeasca secrete pentru a depasi o limitare;
+- autentificarea interactiva este `OWNER ACTION`: Claude se opreste, cere autentificarea si continua numai dupa confirmare;
+- o asertiune HTTP exacta, de exemplu `409`, este obligatorie numai daca executorul are acces validat la request/response; altfel se valideaza comportamentul UI disponibil si asertiunea HTTP se marcheaza `BLOCKED`;
+- testele nu presupun ca Claude poate rula testele CLI sau Playwright din repository; acestea raman responsabilitatea CI sau a unui executor cu runtime explicit;
+- testele nu presupun acces direct la Cloudflare sau GitHub Actions; dovezile din aceste sisteme trebuie furnizate printr-un canal disponibil sau verificate de alt executor;
+- actiunile cu efect operational semnificativ, inclusiv Full job search, deploy sau mutatii greu reversibile, necesita gate-ul de owner definit in test, chiar daca o capabilitate viitoare le-ar permite tehnic;
+- orice mutatie permisa in PROD trebuie sa aiba baseline, rollback explicit si verificare finala; imposibilitatea rollback-ului este `CRITICAL`.
+
+### 19.4 Structura minima a unui test destinat lui Claude
+
+Fiecare test nou destinat lui Claude trebuie sa contina minimum:
+
+1. `Executor`: Claude;
+2. `Environment`: DEV / TEST / PROD;
+3. `Required capabilities`: lista explicita;
+4. `Preflight`: verificarea capabilitatilor disponibile in sesiunea concreta;
+5. `Steps` si `Expected result`;
+6. `Evidence`: ce poate fi observat si prin ce canal;
+7. `Capability fallback`: ce se intampla daca o capabilitate optionala lipseste;
+8. clasificare `PASS / FAIL / BLOCKED / N/A`;
+9. `Mutations / rollback`, daca testul schimba stare;
+10. `Owner gate`, daca exista operatii sensibile.
+
+Un test nu poate fi declarat PASS daca o asertiune obligatorie nu a putut fi executata. In acest caz rezultatul este `BLOCKED` sau `PASS WITH BLOCKED ITEMS`, dupa natura gate-ului.
+
+### 19.5 Separarea defectului de limitarea executorului
+
+Raportarea QA trebuie sa separe explicit:
+
+```text
+Product behavior
+!=
+Executor capability
+```
+
+Exemple:
+
+- Claude nu are DevTools -> `BLOCKED` pentru verificarea HTTP, nu bug;
+- login-ul necesita owner -> `OWNER ACTION`, nu bug;
+- UI afiseaza valoare gresita observabila -> `FAIL`, bug candidat;
+- o comanda CLI nu poate fi rulata de Claude MCP -> verificare CI/alt executor, nu bug.
+
+### 19.6 Evolutie
+
+Daca Remote MCP Claude primeste ulterior tool-uri noi, de exemplu browser control, Actions/checks, comments, file write, branch/PR sau un test runner dedicat, capabilitatea devine utilizabila ca pas obligatoriu numai dupa:
+
+1. implementare;
+2. validare live;
+3. actualizarea acestei sectiuni si a documentatiei asociate;
+4. actualizarea regulilor de testare AI.
+
+Pana atunci, toate testele noi se proiecteaza dupa boundary-ul curent, nu dupa capabilitati presupuse ale modelului sau ale interfetei Claude.
