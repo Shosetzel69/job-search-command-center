@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.4`
+Versiune document: `v1.5`
 Ultima actualizare: `2026-09-10`
 
 ## 1. Principiu
@@ -197,6 +197,15 @@ Reguli obligatorii:
 - `main` se modifica exclusiv prin merge-ul unui pull request aprobat;
 - dupa orice write, AI verifica faptul ca modificarea a ajuns pe branch-ul asteptat si ca `main` nu contine schimbari neintentionate;
 - daca o operatie neintentionata ajunge totusi pe `main`, aceasta se raporteaza imediat owner-ului si se corecteaza prin branch + PR; istoricul nu se rescrie fara aprobare explicita.
+
+### 5.2 Issue Metadata Preservation Rule
+
+La actualizarea unui Issue existent, titlul si label-urile se pastreaza implicit.
+
+- titlul sau label-urile se modifica numai la cererea sau aprobarea explicita a owner-ului;
+- o solicitare de modificare a body-ului, de inchidere sau de redeschidere nu autorizeaza implicit schimbarea titlului sau a label-urilor;
+- inchiderea unui Issue se face numai dupa validarea criteriilor de acceptare;
+- eticheta `ai-generated` se pastreaza pentru Issues/PR-uri generate de AI.
 
 ## 6. Testare
 
