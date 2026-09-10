@@ -2,7 +2,7 @@
 
 Status: Accepted
 Data: 2026-09-09
-Refs: #127 #132 #128 #131
+Refs: #127 #132 #128 #131 #136 #140 #143
 
 ## Context
 
@@ -142,3 +142,28 @@ Mitigari:
 - search engine: fara modificari;
 - GitHub Apps validate in #127: reutilizate ca identitati;
 - `ARCHITECTURE.md`: adauga bridge-ul ca infrastructura de engineering/governance, nu ca runtime functional al aplicatiei.
+
+## Addendum operational - 2026-09-10
+
+Issue #136 a extins acelasi Worker cu Remote MCP stateless la `/mcp` pentru Claude Web, cu OAuth 2.1 si storage tehnic OAuth in Cloudflare KV `OAUTH_KV`.
+
+Fluxul operational validat este:
+
+`Claude Web -> OAuth 2.1 -> /mcp -> GitHub App Claude -> installation token -> GitHub API`
+
+Tools MCP validate live:
+
+- `read_file`;
+- `get_issue`;
+- `create_issue`;
+- `update_issue`.
+
+Identitatea downstream este hard-bound server-side la `jobsearch-claude-agent[bot]`.
+
+Implementarea initiala a issue tools folosea un self-call intern MCP -> REST in acelasi Worker. Dupa eroarea live `Unexpected bridge error`, PR #140 a eliminat acel hop si a mutat issue tools pe apel direct GitHub App -> GitHub API, acelasi model de autentificare folosit de `read_file`.
+
+Aceasta corectie nu schimba decizia ADR: boundary-ul ramane `AI client -> ai-github-bridge -> GitHub App -> GitHub API`.
+
+Validarea live a fost finalizata cu issue #143, creat de `jobsearch-claude-agent[bot]`, apoi actualizat si inchis prin MCP. Titlul si label-urile au ramas neschimbate.
+
+Remote MCP ChatGPT nu este activ in configuratia curenta. Orice extindere a MCP spre ChatGPT sau spre files/branches/PR necesita change separat si actualizare de contract/documentatie.
