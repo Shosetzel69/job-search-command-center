@@ -46,7 +46,8 @@
   "contract_types": [
     "permanent",
     "contract",
-    "freelance"
+    "freelance",
+    "temporary"
   ],
   "freshness_hours": 120,
   "collection_freshness_hours": 120,
