@@ -22,6 +22,7 @@ Ultima actualizare: `2026-09-06`
 - multiselect Remote/Hibrid/Onsite/N/A;
 - sortare FIT;
 - reset filtre, inclusiv filtrul KPI;
+- `De evaluat`: badge-ul din navigatie numara aceleasi joburi `review` eligibile dupa freshness si mod de lucru ca lista inainte de filtrele text/quick;
 - tara afisata separat in liste;
 - multi-country afisat compact `prima tara + N`;
 - tabel compact cu arhivare locala, aplicare si detalii;

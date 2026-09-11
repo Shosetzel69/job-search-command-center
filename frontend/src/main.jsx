@@ -6,6 +6,7 @@ import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
 import { googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
+import { reviewRowsForFilters } from './review-selection.mjs';
 
 const DATA_SCHEMA = '1.0';
 const modeDisplayValue = code => code === 'hybrid' ? 'Hybrid' : code === 'remote' ? 'Remote' : code === 'onsite' ? 'Onsite' : code;
@@ -167,14 +168,15 @@ function App(){
   const retryData=useCallback(()=>{if(auth.token)loadData(auth.token).then(()=>notify('Datele au fost reincarcate.','success')).catch(error=>notify(`Incarcarea a esuat: ${error.message}`,'error'));},[auth.token,loadData,notify]);
 
   const activeJobs=useMemo(()=>jobs.filter(job=>!archivedKeys.includes(jobKey(job))),[jobs,archivedKeys]);
-  const baseRows=useMemo(()=>view==='applications'?applications:view==='review'?activeJobs.filter(job=>job.status==='review'):activeJobs,[view,applications,activeJobs]);
+  const reviewRows=useMemo(()=>reviewRowsForFilters(activeJobs,filters,ageHours),[activeJobs,filters.freshness,filters.workModes]);
+  const baseRows=useMemo(()=>view==='applications'?applications:view==='review'?reviewRows:activeJobs,[view,applications,reviewRows,activeJobs]);
   const threshold=savedCriteria.fitThreshold||80;
-  const modeFreshRows=useMemo(()=>view==='applications'?baseRows:baseRows.filter(job=>ageHours(job.date_posted,job.age)<=filters.freshness&&filters.workModes.includes(job.mode)),[view,baseRows,filters.freshness,filters.workModes]);
+  const modeFreshRows=useMemo(()=>(view==='applications'||view==='review')?baseRows:baseRows.filter(job=>ageHours(job.date_posted,job.age)<=filters.freshness&&filters.workModes.includes(job.mode)),[view,baseRows,filters.freshness,filters.workModes]);
   const filteredRows=useMemo(()=>{if(view==='applications')return[...baseRows];const q=filters.search.trim().toLowerCase();const rows=modeFreshRows.filter(job=>{const quick=filters.quick==='all'||(filters.quick==='high'&&job.fit!==null&&job.fit>=threshold)||(filters.quick==='b2b'&&job.b2b);const kpi=kpiFilter==='all'||(kpiFilter==='new'&&ageHours(job.date_posted,job.age)<=24)||(kpiFilter==='high'&&job.fit!==null&&job.fit>=threshold)||(kpiFilter==='repost'&&job.repost)||(kpiFilter==='remote'&&job.mode==='Remote');const text=`${job.title} ${job.company} ${job.description} ${job.source} ${job.location} ${(job.countries||[]).join(' ')}`.toLowerCase();return quick&&kpi&&(!q||text.includes(q));});return[...rows].sort(filters.sort==='fit-asc'?(a,b)=>(a.fit??Number.MAX_SAFE_INTEGER)-(b.fit??Number.MAX_SAFE_INTEGER)||a.age-b.age:(a,b)=>(b.fit??-1)-(a.fit??-1)||a.age-b.age);},[view,baseRows,modeFreshRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
   const quickCounts=useMemo(()=>({all:modeFreshRows.length,high:modeFreshRows.filter(j=>j.fit!==null&&j.fit>=threshold).length,b2b:modeFreshRows.filter(j=>j.b2b).length}),[modeFreshRows,threshold]);
   const dashboardJobs=useMemo(()=>activeJobs.filter(job=>filters.workModes.includes(job.mode)),[activeJobs,filters.workModes]);
   const metrics=useMemo(()=>({jobs:dashboardJobs.filter(j=>ageHours(j.date_posted,j.age)<=24).length,high:dashboardJobs.filter(j=>j.fit>=threshold).length,reposts:dashboardJobs.filter(j=>j.repost).length,remote:dashboardJobs.filter(j=>j.mode==='Remote').length,threshold}),[dashboardJobs,threshold]);
-  const counts=useMemo(()=>({jobs:activeJobs.length,review:activeJobs.filter(j=>j.status==='review').length,applications:applications.length}),[activeJobs,applications]);
+  const counts=useMemo(()=>({jobs:activeJobs.length,review:reviewRows.length,applications:applications.length}),[activeJobs,reviewRows,applications]);
   const archiveJob=job=>{const next=[...new Set([...archivedKeys,jobKey(job)])];setArchivedKeys(next);localStorage.setItem('archivedJobKeys',JSON.stringify(next));notify('Job arhivat local.','info');};
 
   const pollRun=useCallback(async(previousRunId,previousCompletedAt)=>{const generation=++pollGenerationRef.current;const baseline={runId:previousRunId??null,completedAt:previousCompletedAt??null};for(let attempt=0;generation===pollGenerationRef.current;attempt+=1){await new Promise(resolve=>setTimeout(resolve,pollingDelayMs(attempt)));if(generation!==pollGenerationRef.current)return null;try{const status=await fetchJson(`/data/run-status.json?t=${Date.now()}`,auth.token);setRunStatus(status);if(!terminalForBaseline(status,baseline))continue;await loadData(auth.token);const notice=completionNotice(status);notify(notice.message,notice.type);return status;}catch(error){if(error?.status===401||error?.status===403){notify('Urmarirea rularii s-a oprit deoarece sesiunea nu mai este autorizata.','error');return null;}}}return null;},[auth.token,loadData,notify]);
