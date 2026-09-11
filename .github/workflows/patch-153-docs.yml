@@ -1,0 +1,47 @@
+name: Patch 153 docs
+
+on:
+  push:
+    branches:
+      - fix/153-auth-reload
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/153-auth-reload
+      - name: Apply scoped #153 documentation patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          command_api = Path('docs/command-api.md')
+          text = command_api.read_text()
+          old = "Worker verifica Google JWKS, issuer, `GOOGLE_CLIENT_ID` si `ALLOWED_GOOGLE_SUB`.\n"
+          new = old + "\nLa autentificare reusita, frontend-ul poate retine local numai adresa de email autorizata ca `login_hint` non-secret pentru Google Identity Services. Google ID token nu este persistat: ramane exclusiv in memoria paginii. La reload, frontend-ul poate cere Google Identity Services sa emita un credential nou pentru contul cunoscut; credentialul este revalidat integral prin `POST /auth/session`. Logout explicit dezactiveaza auto-select pentru a evita reautentificarea imediata.\n"
+          if text.count(old) != 1:
+              raise SystemExit('docs/command-api.md auth anchor mismatch')
+          command_api.write_text(text.replace(old, new, 1))
+
+          changelog = Path('CHANGELOG.md')
+          text = changelog.read_text()
+          anchor = "### Remedieri\n\n"
+          entry = "- #153: reload-ul poate reobtine un Google ID token prin Google Identity Services folosind numai emailul contului autorizat ca `login_hint`; tokenul nu este persistat, iar `/auth/session` continua sa valideze server-side `ALLOWED_GOOGLE_SUB`. Logout explicit dezactiveaza auto-select.\n"
+          if text.count(anchor) != 1:
+              raise SystemExit('CHANGELOG remediation anchor mismatch')
+          changelog.write_text(text.replace(anchor, anchor + entry, 1))
+          PY
+      - name: Remove temporary patch workflow and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-153-docs.yml
+          git add docs/command-api.md CHANGELOG.md
+          git commit -m "[DOC][#153] Document auth reload behavior"
+          git push origin HEAD:fix/153-auth-reload
