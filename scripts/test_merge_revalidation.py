@@ -63,7 +63,7 @@ def retained_job(
         "status": "new",
         "pros": [],
         "risks": [],
-        "url": "https://example.test/job",
+        "url": f"https://example.test/{job_id}",
         "description": "Technical project management.",
         "date_posted": "2026-09-11T05:00:00+00:00",
         "source": "test",
