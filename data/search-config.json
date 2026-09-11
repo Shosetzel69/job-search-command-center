@@ -45,7 +45,6 @@
   },
   "contract_types": [
     "permanent",
-    "temporary",
     "contract",
     "freelance"
   ],
