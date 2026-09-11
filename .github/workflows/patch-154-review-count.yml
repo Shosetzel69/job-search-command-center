@@ -1,0 +1,69 @@
+name: Patch 154 review count
+
+on:
+  push:
+    branches:
+      - fix/154-review-count
+    paths:
+      - .github/workflows/patch-154-review-count.yml
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/154-review-count
+      - name: Apply scoped patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/main.jsx')
+          text = path.read_text()
+
+          old = "import { googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';"
+          new = old + "\nimport { reviewRowsForFilters } from './review-selection.mjs';"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "const baseRows=useMemo(()=>view==='applications'?applications:view==='review'?activeJobs.filter(job=>job.status==='review'):activeJobs,[view,applications,activeJobs]);"
+          new = "const reviewRows=useMemo(()=>reviewRowsForFilters(activeJobs,filters,ageHours),[activeJobs,filters.freshness,filters.workModes]);\n  const baseRows=useMemo(()=>view==='applications'?applications:view==='review'?reviewRows:activeJobs,[view,applications,reviewRows,activeJobs]);"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "const modeFreshRows=useMemo(()=>view==='applications'?baseRows:baseRows.filter(job=>ageHours(job.date_posted,job.age)<=filters.freshness&&filters.workModes.includes(job.mode)),[view,baseRows,filters.freshness,filters.workModes]);"
+          new = "const modeFreshRows=useMemo(()=>(view==='applications'||view==='review')?baseRows:baseRows.filter(job=>ageHours(job.date_posted,job.age)<=filters.freshness&&filters.workModes.includes(job.mode)),[view,baseRows,filters.freshness,filters.workModes]);"
+          assert old in text
+          text = text.replace(old, new, 1)
+
+          old = "const counts=useMemo(()=>({jobs:activeJobs.length,review:activeJobs.filter(j=>j.status==='review').length,applications:applications.length}),[activeJobs,applications]);"
+          new = "const counts=useMemo(()=>({jobs:activeJobs.length,review:reviewRows.length,applications:applications.length}),[activeJobs,reviewRows,applications]);"
+          assert old in text
+          text = text.replace(old, new, 1)
+          path.write_text(text)
+
+          path = Path('CHANGELOG.md')
+          text = path.read_text()
+          marker = "### Remedieri\n\n"
+          assert marker in text
+          text = text.replace(marker, marker + "- #154: badge-ul `De evaluat` foloseste aceeasi eligibilitate de freshness si mod de lucru ca lista; resetarea filtrelor produce un contor coerent cu randurile eligibile.\n", 1)
+          path.write_text(text)
+
+          path = Path('docs/functionalitati.md')
+          text = path.read_text()
+          marker = "- reset filtre, inclusiv filtrul KPI;\n"
+          assert marker in text
+          text = text.replace(marker, marker + "- `De evaluat`: badge-ul din navigatie numara aceleasi joburi `review` eligibile dupa freshness si mod de lucru ca lista inainte de filtrele text/quick;\n", 1)
+          path.write_text(text)
+          PY
+
+          rm .github/workflows/patch-154-review-count.yml
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add frontend/src/main.jsx CHANGELOG.md docs/functionalitati.md .github/workflows/patch-154-review-count.yml
+          git commit -m "[FIX][#154] Align review badge and list semantics"
+          git push origin HEAD:fix/154-review-count
