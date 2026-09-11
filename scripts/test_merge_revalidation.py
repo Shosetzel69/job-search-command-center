@@ -101,7 +101,10 @@ class MergeRevalidationTests(unittest.TestCase):
 
     def test_existing_eu_and_us_jobs_remain_eligible(self) -> None:
         output = self.merge_existing(
-            [retained_job("fr-old", "FR"), retained_job("us-old", "US")],
+            [
+                retained_job("fr-old", "FR", company="Example France"),
+                retained_job("us-old", "US", company="Example US"),
+            ],
             base_config(),
         )
         self.assertEqual(output["results"], 2)
