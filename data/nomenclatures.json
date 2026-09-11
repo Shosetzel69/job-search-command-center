@@ -777,12 +777,6 @@
           "label": "Aplicat",
           "active": true,
           "sort_order": 10
-        },
-        {
-          "code": "1",
-          "label": "E2E Test 1789115648377",
-          "active": true,
-          "sort_order": 0
         }
       ]
     },
