@@ -6,6 +6,7 @@ from __future__ import annotations
 import json
 import math
 import os
+import re
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -285,6 +286,63 @@ def job_key(job: dict[str, Any]) -> str:
     )
 
 
+def existing_job_rejection_reason(job: dict[str, Any], config: dict[str, Any]) -> str | None:
+    """Reapply mutable search criteria to a normalized job retained from a prior run."""
+    title = str(job.get("title") or "").strip()
+    company = str(job.get("company") or "").strip()
+    description = str(job.get("description") or "")
+    text = f"{title} {description}"
+
+    remote = bool(job.get("remote"))
+    mode_label = str(job.get("mode") or "").strip().casefold()
+    mode_code = {
+        "remote": "remote",
+        "hybrid": "hybrid",
+        "hibrid": "hybrid",
+        "onsite": "onsite",
+        "on-site": "onsite",
+    }.get(mode_label)
+    if remote:
+        mode_code = "remote"
+
+    country_codes = {
+        str(value).strip().upper()
+        for value in (job.get("country_codes") or [])
+        if str(value).strip()
+    }
+    remote_scope = str(job.get("remote_scope") or "").strip() or (
+        "Worldwide" if remote and not country_codes else "Country" if country_codes else "Unknown"
+    )
+
+    contract_type = str(job.get("contract_type") or "").strip().lower()
+    if not contract_type:
+        contract_type = engine.canonical_nomenclatures.normalize_contract_type(
+            [job.get("type")] if job.get("type") else [],
+            engine.NOMENCLATURES,
+        )
+    selected_contract_types = engine.configured_contract_types(config)
+    work_modes = config.get("work_modes") or {}
+    excluded_company, excluded_role, deep_erp = engine.compile_config_patterns(config)
+
+    if excluded_company and excluded_company.search(company):
+        return "excluded company"
+    if excluded_role and excluded_role.search(title):
+        return "non-IT role"
+    if deep_erp and deep_erp.search(text) and re.search(r"implement|consultant|specialist|functional", text, re.I):
+        return "deep ERP/SAP implementation"
+    if mode_code in {"remote", "hybrid", "onsite"} and not work_modes.get(mode_code, mode_code != "onsite"):
+        return f"{mode_code} disabled by configuration"
+    if contract_type != "unknown" and selected_contract_types and contract_type not in selected_contract_types:
+        return "contract type disabled by configuration"
+    if remote and job.get("romania_eligible") is False:
+        return "remote not eligible from Romania"
+    if not engine.geography_matches(country_codes, remote_scope, config, remote):
+        return "outside target or excluded geography"
+    if not bool(config.get("keep_reposts", True)) and bool(job.get("repost")):
+        return "repost disabled by configuration"
+    return None
+
+
 def merge_with_existing(
     new_output: dict[str, Any],
     state: dict[str, Any],
@@ -309,6 +367,8 @@ def merge_with_existing(
     retained: list[dict[str, Any]] = []
     retained_keys: set[str] = set()
     expired = 0
+    criteria_pruned = 0
+    criteria_pruned_reasons: dict[str, int] = {}
 
     for key, job in merged.items():
         first_seen.setdefault(key, now.isoformat())
@@ -324,6 +384,13 @@ def merge_with_existing(
         job.setdefault("country_codes", [])
         if "remote_scope" not in job:
             job["remote_scope"] = "Worldwide" if job.get("remote") and not job.get("country_codes") else "Unknown"
+
+        rejection_reason = existing_job_rejection_reason(job, config)
+        if rejection_reason:
+            criteria_pruned += 1
+            criteria_pruned_reasons[rejection_reason] = criteria_pruned_reasons.get(rejection_reason, 0) + 1
+            continue
+
         retained.append(job)
         retained_keys.add(key)
 
@@ -345,6 +412,8 @@ def merge_with_existing(
     new_output["collection_freshness_hours"] = collection_hours
     new_output["incremental_sync"] = True
     new_output["expired_pruned"] = expired
+    new_output["criteria_revalidated_pruned"] = criteria_pruned
+    new_output["criteria_revalidation_reasons"] = criteria_pruned_reasons
     new_output["jobspipe_usage"] = {
         "month_utc": state.get("usage", {}).get("month_utc"),
         "estimated_credits_used": state.get("usage", {}).get("estimated_credits_used", 0),
@@ -459,4 +528,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
