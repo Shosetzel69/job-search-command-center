@@ -1,0 +1,77 @@
+name: Patch 153 auth reload
+
+on:
+  push:
+    branches:
+      - fix/153-auth-reload
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/153-auth-reload
+      - name: Apply scoped #153 patch
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('frontend/src/main.jsx')
+          text = path.read_text()
+
+          replacements = [
+              (
+                  "import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';",
+                  "import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';\nimport { googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';",
+              ),
+              (
+                  "function GoogleSignIn({clientId,onCredential,disabled}){const ref=useRef(null);useEffect(()=>{let active=true;if(!clientId||disabled)return undefined;loadGoogleIdentityScript().then(()=>{if(!active||!ref.current)return;window.google.accounts.id.initialize({client_id:clientId,callback:({credential})=>onCredential(credential),auto_select:false,cancel_on_tap_outside:true});ref.current.innerHTML='';window.google.accounts.id.renderButton(ref.current,{theme:'outline',size:'large',shape:'rectangular',text:'signin_with'});}).catch(()=>{});return()=>{active=false;};},[clientId,disabled,onCredential]);return<div ref={ref} className={disabled?'pointer-events-none opacity-60':''}/>;}",
+                  "function GoogleSignIn({clientId,loginHint,allowAutoRestore,onCredential,disabled}){const ref=useRef(null);useEffect(()=>{let active=true;if(!clientId||disabled)return undefined;loadGoogleIdentityScript().then(()=>{if(!active||!ref.current)return;const options=googleIdentityOptions({clientId,loginHint,allowAutoRestore,onCredential});window.google.accounts.id.initialize(options);ref.current.innerHTML='';window.google.accounts.id.renderButton(ref.current,{theme:'outline',size:'large',shape:'rectangular',text:'signin_with'});if(options.auto_select)window.google.accounts.id.prompt();}).catch(()=>{});return()=>{active=false;};},[clientId,loginHint,allowAutoRestore,disabled,onCredential]);return<div ref={ref} className={disabled?'pointer-events-none opacity-60':''}/>;}",
+              ),
+              (
+                  "function SignedOutScreen({clientId,authError,authStatus,onCredential})",
+                  "function SignedOutScreen({clientId,loginHint,allowAutoRestore,authError,authStatus,onCredential})",
+              ),
+              (
+                  "<GoogleSignIn clientId={clientId} onCredential={onCredential} disabled={authStatus==='authenticating'}/>",
+                  "<GoogleSignIn clientId={clientId} loginHint={loginHint} allowAutoRestore={allowAutoRestore} onCredential={onCredential} disabled={authStatus==='authenticating'}/>",
+              ),
+              (
+                  "  const[clientId,setClientId]=useState(null),[auth,setAuth]=useState({status:'signed-out',token:null,email:null,error:null}),[dataState,setDataState]=useState({status:'idle',error:null});",
+                  "  const[clientId,setClientId]=useState(null),[auth,setAuth]=useState({status:'signed-out',token:null,email:null,error:null}),[dataState,setDataState]=useState({status:'idle',error:null});\n  const[loginHint,setLoginHint]=useState(()=>readGoogleLoginHint()),[allowAutoRestore,setAllowAutoRestore]=useState(true);",
+              ),
+              (
+                  "  const handleCredential=useCallback(async credential=>{setAuth({status:'authenticating',token:null,email:null,error:null});try{const session=await commandApi('/auth/session',credential,{method:'POST'});setAuth({status:'authenticated',token:credential,email:session?.email||null,error:null});try{await loadData(credential);notify('Autentificare Google reusita.','success');}catch(error){notify(`Autentificarea a reusit, dar datele nu s-au incarcat: ${error.message}`,'error');}}catch(error){const message=error.status===403?'Contul Google nu este autorizat pentru aceasta aplicatie.':`Autentificare esuata: ${error.message}`;setAuth({status:'signed-out',token:null,email:null,error:message});}},[loadData,notify]);",
+                  "  const handleCredential=useCallback(async credential=>{setAuth({status:'authenticating',token:null,email:null,error:null});try{const session=await commandApi('/auth/session',credential,{method:'POST'});const email=session?.email||null;if(email){const remembered=rememberGoogleLoginHint(email);if(remembered)setLoginHint(remembered);}setAllowAutoRestore(true);setAuth({status:'authenticated',token:credential,email,error:null});try{await loadData(credential);notify('Autentificare Google reusita.','success');}catch(error){notify(`Autentificarea a reusit, dar datele nu s-au incarcat: ${error.message}`,'error');}}catch(error){const message=error.status===403?'Contul Google nu este autorizat pentru aceasta aplicatie.':`Autentificare esuata: ${error.message}`;setAuth({status:'signed-out',token:null,email:null,error:message});}},[loadData,notify]);",
+              ),
+              (
+                  "  const logout=useCallback(()=>{pollGenerationRef.current+=1;try{window.google?.accounts?.id?.disableAutoSelect();}catch{}setAuth({status:'signed-out',token:null,email:null,error:null});setDataState({status:'idle',error:null});clearData();setDetailJob(null);setRunning(false);notify('Contul Google a fost deconectat.','info');},[clearData,notify]);",
+                  "  const logout=useCallback(()=>{pollGenerationRef.current+=1;setAllowAutoRestore(false);try{window.google?.accounts?.id?.disableAutoSelect();}catch{}setAuth({status:'signed-out',token:null,email:null,error:null});setDataState({status:'idle',error:null});clearData();setDetailJob(null);setRunning(false);notify('Contul Google a fost deconectat.','info');},[clearData,notify]);",
+              ),
+              (
+                  "if(auth.status!=='authenticated')return<><SignedOutScreen clientId={clientId} authError={auth.error} authStatus={auth.status} onCredential={handleCredential}/><Toast toast={toast}/></>;",
+                  "if(auth.status!=='authenticated')return<><SignedOutScreen clientId={clientId} loginHint={loginHint} allowAutoRestore={allowAutoRestore} authError={auth.error} authStatus={auth.status} onCredential={handleCredential}/><Toast toast={toast}/></>;",
+              ),
+          ]
+
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'Expected one match, found {count}: {old[:80]}')
+              text = text.replace(old, new, 1)
+
+          path.write_text(text)
+          PY
+      - name: Remove temporary patch workflow and commit
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-153-auth.yml
+          git add frontend/src/main.jsx
+          git commit -m "[FIX][#153] Restore Google auth after reload"
+          git push origin HEAD:fix/153-auth-reload
