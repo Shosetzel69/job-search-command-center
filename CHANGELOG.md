@@ -21,6 +21,7 @@
 
 ### Remedieri
 
+- #153: reload-ul poate reobtine un Google ID token prin Google Identity Services folosind numai emailul contului autorizat ca `login_hint`; tokenul nu este persistat, iar `/auth/session` continua sa valideze server-side `ALLOWED_GOOGLE_SUB`. Logout explicit dezactiveaza auto-select.
 - #140: eliminat self-call-ul intern MCP -> REST pentru `get_issue`, `create_issue` si `update_issue`; issue tools folosesc acum direct GitHub App Claude -> installation token -> GitHub API, rezolvand `Unexpected bridge error` observat live.
 - #121 / Pachetul 2A8: build-ul Static Assets, allowlist-ul `/data/*` si testele de securitate folosesc manifestul comun `shared/runtime-data.mjs`; `nomenclatures.json` este protejat coerent, iar `search-state.json` ramane intern.
 - #114: adaugat `source-categories.json` in allowlist-ul protected data al Worker-ului; eliminat 404-ul care bloca incarcarea tuturor paginilor dupa deploy-ul Package 2A si adaugat test de regresie pentru toate asset-urile protejate.
