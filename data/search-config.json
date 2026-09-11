@@ -57,13 +57,14 @@
   "rate_max_eur_day": 650,
   "immediate_start": true,
   "target_regions": [
-    "EU"
+    "EU",
+    "US"
   ],
   "target_country_codes": [],
-  "excluded_regions": [],
-  "excluded_country_codes": [
-    "AF"
+  "excluded_regions": [
+    "ASIA"
   ],
+  "excluded_country_codes": [],
   "search_country_codes": [],
   "eligible_remote_country_codes": [
     "RO",
