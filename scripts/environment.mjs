@@ -66,7 +66,10 @@ async function main() {
     }
     const runtime = resolveEnvironment(manifest, requireEnvironment(args.env), sourceSha);
     assertPhase4LiveGate(runtime.environment, false);
-    console.log(JSON.stringify(await statusDev(runtime), null, 2));
+    const liveStatus = await statusDev(runtime);
+    if (liveStatus.auth_configured !== true) throw new Error('DEV is not ready: Google authentication is not fully configured');
+    if (liveStatus.github_configured !== true) throw new Error('DEV is not ready: runtime GitHub credential is not configured');
+    console.log(JSON.stringify(liveStatus, null, 2));
     return;
   }
 
