@@ -1,9 +1,9 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { runtimeDataFiles } from './plans.mjs';
-import { serializeSeed } from './seed.mjs';
+import { serializeSeed, shouldRefreshPristineSeed } from './seed.mjs';
 import { SHA_RE, redact } from './contract.mjs';
 import { assertPhase5LiveGate, verifyLocalSourceSha } from './live.mjs';
 
@@ -49,6 +49,19 @@ function ensureRuntimeRepository(runtime) {
   }
 }
 
+function shouldWriteSeed(target, file, runtime) {
+  if (!existsSync(target)) return true;
+  try {
+    const payload = JSON.parse(readFileSync(target, 'utf8'));
+    return shouldRefreshPristineSeed(file, payload, {
+      environment: runtime.environment,
+      searchMode: runtime.searchMode,
+    });
+  } catch {
+    return false;
+  }
+}
+
 function syncRuntimeFiles(runtime) {
   const temp = mkdtempSync(resolve(tmpdir(), 'job-search-runtime-bootstrap-'));
   try {
@@ -57,9 +70,10 @@ function syncRuntimeFiles(runtime) {
     const now = new Date().toISOString();
     for (const dataPath of runtimeDataFiles()) {
       const target = resolve(temp, dataPath);
-      if (existsSync(target)) continue;
+      const file = basename(dataPath);
+      if (!shouldWriteSeed(target, file, runtime)) continue;
       mkdirSync(resolve(target, '..'), { recursive: true });
-      writeFileSync(target, serializeSeed(basename(dataPath), {
+      writeFileSync(target, serializeSeed(file, {
         sourceSha: runtime.sourceSha,
         generatedAt: now,
         environment: runtime.environment,
