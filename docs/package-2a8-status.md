@@ -1,21 +1,23 @@
 # Package 2A8 - status implementare
 
-Ultima actualizare: 2026-09-09
+Ultima actualizare: 2026-09-13
 
 ## Scope
 
 Umbrella: #116.
-Branch: `feature/116-canonical-nomenclatures`.
-PR: #124.
+Implementation PR: #124.
+Final E2E: #122 / #126.
+Status: `DONE / PROD E2E PASS`.
 
 ## Stare
 
-- #117 Contract canonic nomenclatoare: `DONE`;
-- #118 Geografie canonica: `DONE - CI/preview green`;
-- #119 Work modes + contract types: `DONE - CI/preview green`;
-- #120 Admin + integritate referentiala: `DONE - CI/preview green`;
-- #121 Runtime asset safety: `DONE`;
-- #122 Migrare + E2E: `NEXT`.
+- #117 Contract canonic nomenclatoare: `DONE / CLOSED`;
+- #118 Geografie canonica: `DONE / CLOSED`;
+- #119 Work modes + contract types: `DONE / CLOSED`;
+- #120 Admin + integritate referentiala: `DONE / CLOSED`;
+- #121 Runtime asset safety: `DONE / CLOSED`;
+- #122 Migrare + E2E: `PASS - ready to close`;
+- #126 PROD smoke: `PASS`.
 
 ## Livrat
 
@@ -25,24 +27,34 @@ PR: #124.
 - tipuri contract canonice `permanent`, `temporary`, `contract`, `freelance`;
 - `contract_type` + `employment_type_raw` in normalizarea joburilor;
 - `Administrare -> Nomenclatoare` functional;
-- codurile system sunt immutable si nu au Add/Delete;
-- domeniile extensibile permit Add/Edit/Activate/Deactivate/Delete;
+- codurile system sunt immutable;
+- domeniile extensibile permit operatiile aprobate;
 - deactivate/delete pe valoare referentiata -> 409 + lista referintelor;
-- `applied` este protejat de istoricul aplicarilor;
+- `applied` ramane valid;
 - manifest unic pentru protected runtime assets;
-- niciuna dintre operatiile de nomenclator nu face dispatch full search.
+- niciuna dintre operatiile de nomenclator/config nu face dispatch Full Search.
 
-## Urmatorul gate
+## E2E final
 
-#122 executa migrarea/E2E finala si verifica parity + zero trigger neintentionat. Maximum un full search controlat numai daca este necesar pentru verificarea finala.
+#126 a executat E2E-01..E2E-12 in PROD:
+
+- toate PASS;
+- zero Full Search neintentionat;
+- baseline/final run id identic;
+- toate mutatiile temporare au fost restaurate;
+- protected data, Admin, nomenclatoare, geografie, work modes, contract types, referential integrity, applications, logs si reload au fost validate.
+
+Defectele ramase din #126 sunt P3/cosmetice si nu blocheaza stabilizarea.
 
 ## Guardrails
 
 - #49 exclus;
 - JobsPipe disabled;
-- fara dependinte noi;
+- fara dependinte noi introduse de 2A8;
 - fara live crawl in CI;
 - Save/config/source/category/nomenclature != Run;
-- full search ramane manual-only pana la Package 2B.
+- Full Search ramane manual-only pana la Package 2B.
 
-Separarea DEV/TEST/PROD este analizata separat in #125 si nu modifica runtime-ul in PR #124.
+Separarea DEV/TEST/PROD este urmarita separat prin #161 si nu face parte din Package 2A8.
+
+Raport closeout: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
