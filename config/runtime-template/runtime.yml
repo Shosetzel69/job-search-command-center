@@ -1,0 +1,78 @@
+name: Runtime execution
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_trigger:
+        description: Canonical run trigger
+        required: false
+        default: manual-ui
+        type: choice
+        options: [manual-ui, scheduled, system]
+      source_sha:
+        description: Immutable source commit SHA
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: runtime-${{ vars.APP_ENV || 'unknown' }}
+  cancel-in-progress: false
+
+jobs:
+  runtime:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      APP_ENV: ${{ vars.APP_ENV }}
+      SEARCH_MODE: ${{ vars.SEARCH_MODE }}
+      SOURCE_REPOSITORY: ${{ vars.SOURCE_REPOSITORY }}
+    steps:
+      - name: Validate runtime identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
+          test -n "$APP_ENV" || { echo "APP_ENV is required" >&2; exit 1; }
+          test -n "$SEARCH_MODE" || { echo "SEARCH_MODE is required" >&2; exit 1; }
+          test -n "$SOURCE_REPOSITORY" || { echo "SOURCE_REPOSITORY is required" >&2; exit 1; }
+          if [ "$APP_ENV" = "dev" ] && [ "$SEARCH_MODE" != "disabled" ]; then
+            echo "DEV must remain SEARCH_MODE=disabled during Phase 4" >&2
+            exit 1
+          fi
+
+      - name: Guard disabled search policy
+        if: ${{ vars.SEARCH_MODE == 'disabled' }}
+        run: |
+          echo "Full Search is disabled for this runtime. No search execution occurred."
+          exit 1
+
+      - name: Check out runtime repository
+        if: ${{ vars.SEARCH_MODE != 'disabled' }}
+        uses: actions/checkout@v4
+        with:
+          path: runtime
+          fetch-depth: 0
+
+      - name: Check out exact source commit read-only
+        if: ${{ vars.SEARCH_MODE != 'disabled' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SOURCE_REPOSITORY }}
+          ref: ${{ inputs.source_sha }}
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          path: source
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Verify source checkout
+        if: ${{ vars.SEARCH_MODE != 'disabled' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(git -C source rev-parse HEAD)"
+          test "${actual,,}" = "${SOURCE_SHA,,}" || { echo "Source checkout mismatch" >&2; exit 1; }
+          echo "Runtime wrapper verified immutable source identity. Search execution is enabled only by the environment phase that authorizes its policy."

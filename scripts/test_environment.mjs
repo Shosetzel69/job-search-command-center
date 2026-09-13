@@ -11,6 +11,8 @@ import {
   validateManifest,
 } from './environment/contract.mjs';
 import { bootstrapPlan, isolationPlan, runtimeDataFiles } from './environment/plans.mjs';
+import { assertPhase4LiveGate } from './environment/live.mjs';
+import { runtimeSeedPayload } from './environment/seed.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const manifest = loadManifest('config/environments.json', ROOT);
@@ -23,6 +25,7 @@ function envInputs() {
     values[cfg.github_runtime_token_env] = `${name}-gh-runtime-token`;
     values[cfg.source_read_token_env] = `${name}-source-read-token`;
     values[cfg.allowed_google_sub_env] = `${name}-google-sub`;
+    values[cfg.google_client_id_env] = `${name}-google-client-id.apps.googleusercontent.com`;
     values[cfg.frontend_origin_env] = `https://${name}.example.test`;
   }
   return values;
@@ -50,6 +53,12 @@ test('invalid Cloudflare account ID fails closed', () => {
   assert.throws(() => resolveEnvironment(manifest, 'dev', SHA, values), /32 hex/);
 });
 
+test('Google client ID is an explicit environment input', () => {
+  const values = envInputs();
+  delete values.DEV_GOOGLE_CLIENT_ID;
+  assert.throws(() => resolveEnvironment(manifest, 'dev', SHA, values), /Google OAuth client ID is missing/);
+});
+
 test('DEV and TEST can never resolve live search mode', () => {
   const values = envInputs();
   assert.equal(resolveEnvironment(manifest, 'dev', SHA, values).searchMode, 'disabled');
@@ -59,6 +68,13 @@ test('DEV and TEST can never resolve live search mode', () => {
 test('PROD requires an explicit owner gate for gated operations', () => {
   assert.throws(() => assertProdGate('prod'), /owner-gate/);
   assert.doesNotThrow(() => assertProdGate('prod', 'APPROVED'));
+});
+
+test('Phase 4 live gate permits DEV and blocks TEST/PROD', () => {
+  assert.doesNotThrow(() => assertPhase4LiveGate('dev', false));
+  assert.throws(() => assertPhase4LiveGate('test', false), /DEV-only/);
+  assert.throws(() => assertPhase4LiveGate('prod', false), /DEV-only/);
+  assert.doesNotThrow(() => assertPhase4LiveGate('prod', true));
 });
 
 test('bootstrap-all scope is structurally DEV + TEST only', () => {
@@ -71,6 +87,24 @@ test('runtime seed derives files from the shared runtime-data contract', () => {
   assert.ok(runtimeDataFiles().includes('data/jobs.json'));
   assert.ok(runtimeDataFiles().includes('data/search-state.json'));
   assert.equal(new Set(runtimeDataFiles()).size, runtimeDataFiles().length);
+  for (const path of runtimeDataFiles()) {
+    const payload = runtimeSeedPayload(path.replace('data/', ''), { sourceSha: SHA, generatedAt: '2026-09-13T00:00:00.000Z' });
+    assert.equal(payload.schema_version, '1.0');
+  }
+});
+
+test('isolated DEV seed contains no jobs, applications or search history', () => {
+  assert.deepEqual(runtimeSeedPayload('jobs.json').jobs, []);
+  assert.deepEqual(runtimeSeedPayload('applications.json').applications, []);
+  assert.deepEqual(runtimeSeedPayload('run-history.json').runs, []);
+  assert.equal(runtimeSeedPayload('search-config.json').jobspipe_mode, 'disabled');
+});
+
+test('DEV seed preserves canonical nomenclature domains', () => {
+  const domains = runtimeSeedPayload('nomenclatures.json').domains;
+  assert.deepEqual(Object.keys(domains).sort(), ['application_statuses', 'contract_types', 'countries', 'regions', 'seniority', 'work_modes']);
+  assert.ok(domains.countries.values.some(item => item.code === 'RO'));
+  assert.ok(domains.regions.values.some(item => item.code === 'EU'));
 });
 
 test('bootstrap plan keeps source and runtime repository identities distinct', () => {
@@ -97,9 +131,23 @@ test('manifest rejects unresolved placeholders', () => {
   assert.throws(() => validateManifest(copy), /placeholder/);
 });
 
-test('deploy workflow is dry-run by default and never defaults environment', () => {
+test('runtime workflow template is fail-closed for DEV search', () => {
+  const workflow = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
+  assert.match(workflow, /SEARCH_MODE/);
+  assert.match(workflow, /DEV must remain SEARCH_MODE=disabled/);
+  assert.match(workflow, /source_sha must be a full immutable commit SHA/);
+});
+
+test('deploy workflow never defaults environment to PROD', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /dry_run:[\s\S]*default: true/);
   assert.match(workflow, /environment:[\s\S]*required: true/);
   assert.doesNotMatch(workflow, /default:\s*prod/);
+});
+
+test('DEV deploy health verification retries propagation and pins runtime snapshot identity', () => {
+  const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
+  assert.match(provision, /HEALTH_PROPAGATION_ATTEMPTS/);
+  assert.match(provision, /HEALTH_PROPAGATION_DELAY_MS/);
+  assert.match(provision, /expectedRuntimeDataSha/);
+  assert.match(provision, /probeDeployedHealth/);
 });

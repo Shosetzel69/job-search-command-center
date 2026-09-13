@@ -47,7 +47,7 @@ export function validateManifest(manifest) {
     const required = [
       'runtime_repository', 'runtime_ref', 'workflow', 'worker_name', 'search_mode',
       'cloudflare_account_id_env', 'cloudflare_token_env', 'github_runtime_token_env',
-      'source_read_token_env', 'allowed_google_sub_env', 'frontend_origin_env',
+      'source_read_token_env', 'allowed_google_sub_env', 'google_client_id_env', 'frontend_origin_env',
     ];
     for (const field of required) {
       const value = String(cfg?.[field] || '').trim();
@@ -105,6 +105,7 @@ export function resolveEnvironment(manifest, name, sourceSha, processEnv = proce
     githubRuntimeToken: null,
     sourceReadToken: null,
     allowedGoogleSub: null,
+    googleClientId: null,
     frontendOrigin: null,
   };
 
@@ -115,6 +116,7 @@ export function resolveEnvironment(manifest, name, sourceSha, processEnv = proce
     resolved.githubRuntimeToken = requiredRuntimeValue(processEnv, cfg.github_runtime_token_env, 'GitHub runtime token');
     resolved.sourceReadToken = requiredRuntimeValue(processEnv, cfg.source_read_token_env, 'Source read token');
     resolved.allowedGoogleSub = requiredRuntimeValue(processEnv, cfg.allowed_google_sub_env, 'Allowed Google subject');
+    resolved.googleClientId = requiredRuntimeValue(processEnv, cfg.google_client_id_env, 'Google OAuth client ID');
     resolved.frontendOrigin = requiredRuntimeValue(processEnv, cfg.frontend_origin_env, 'Frontend origin');
     let origin;
     try { origin = new URL(resolved.frontendOrigin); } catch { throw new Error(`Frontend origin must be a valid URL (${cfg.frontend_origin_env})`); }
