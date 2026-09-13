@@ -172,4 +172,14 @@ jobs:
           source_permission="$(GH_TOKEN="$DEV_GITHUB_RUNTIME_TOKEN" gh repo view Shosetzel69/job-search-command-center --json viewerPermission --jq .viewerPermission 2>/dev/null || echo NONE)"
           case "$source_permission" in WRITE|MAINTAIN|ADMIN) echo "DEV runtime token must not have source write permission" >&2; exit 1 ;; esac
           GH_TOKEN="$DEV_SOURCE_READ_TOKEN" gh api "repos/Shosetzel69/job-search-command-center/commits/$SOURCE_SHA" --silent
-          npm run env:status -- --env dev --source-sha "$SOURCE_SHA"
+          for attempt in 1 2 3 4 5 6; do
+            if npm run env:status -- --env dev --source-sha "$SOURCE_SHA"; then
+              exit 0
+            fi
+            if [ "$attempt" -eq 6 ]; then
+              echo "DEV readiness did not converge after 30 seconds" >&2
+              exit 1
+            fi
+            echo "DEV readiness not converged yet; retrying in 5 seconds (attempt $attempt/6)"
+            sleep 5
+          done
