@@ -143,3 +143,11 @@ test('deploy workflow never defaults environment to PROD', () => {
   assert.match(workflow, /environment:[\s\S]*required: true/);
   assert.doesNotMatch(workflow, /default:\s*prod/);
 });
+
+test('DEV deploy health verification retries propagation and pins runtime snapshot identity', () => {
+  const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
+  assert.match(provision, /HEALTH_PROPAGATION_ATTEMPTS/);
+  assert.match(provision, /HEALTH_PROPAGATION_DELAY_MS/);
+  assert.match(provision, /expectedRuntimeDataSha/);
+  assert.match(provision, /probeDeployedHealth/);
+});
