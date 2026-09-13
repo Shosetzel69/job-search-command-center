@@ -5,10 +5,14 @@ import { basename, resolve } from 'node:path';
 import { runtimeDataFiles } from './plans.mjs';
 import { serializeSeed } from './seed.mjs';
 import { SHA_RE, redact } from './contract.mjs';
-import { assertPhase4LiveGate, verifyLocalSourceSha } from './live.mjs';
+import { assertPhase5LiveGate, verifyLocalSourceSha } from './live.mjs';
 
 const HEALTH_PROPAGATION_ATTEMPTS = 10;
 const HEALTH_PROPAGATION_DELAY_MS = 3000;
+
+function envLabel(runtime) {
+  return String(runtime.environment || 'unknown').toUpperCase();
+}
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
@@ -35,7 +39,12 @@ function ensureRuntimeRepository(runtime) {
   } catch (error) {
     const stderr = String(error?.stderr || '');
     if (!/not found|could not resolve|HTTP 404/i.test(stderr)) throw error;
-    run('gh', ['repo', 'create', runtime.runtimeRepository, '--private', '--description', 'Isolated DEV runtime for Job Search Command Center', '--add-readme']);
+    run('gh', [
+      'repo', 'create', runtime.runtimeRepository,
+      '--private',
+      '--description', `Isolated ${envLabel(runtime)} runtime for Job Search Command Center`,
+      '--add-readme',
+    ]);
     return true;
   }
 }
@@ -59,7 +68,11 @@ function syncRuntimeFiles(runtime) {
 
     run('git', ['add', '.'], { cwd: temp });
     if (run('git', ['status', '--porcelain'], { cwd: temp }).trim()) {
-      run('git', ['-c', 'user.name=job-search-environment-tool', '-c', 'user.email=environment-tool@users.noreply.github.com', 'commit', '-m', '[BOOTSTRAP] Initialize isolated DEV runtime'], { cwd: temp });
+      run('git', [
+        '-c', 'user.name=job-search-environment-tool',
+        '-c', 'user.email=environment-tool@users.noreply.github.com',
+        'commit', '-m', `[BOOTSTRAP] Initialize isolated ${envLabel(runtime)} runtime`,
+      ], { cwd: temp });
       run('git', ['push', 'origin', 'HEAD:main'], { cwd: temp });
     }
   } finally {
@@ -132,8 +145,9 @@ function deployWorker(runtime) {
 }
 
 async function probeHealthOnce(runtime, expectedRuntimeDataSha = null) {
+  const label = envLabel(runtime);
   const response = await fetch(new URL('/health', runtime.frontendOrigin), { headers: { accept: 'application/json' } });
-  if (!response.ok) throw new Error(`DEV /health failed (${response.status})`);
+  if (!response.ok) throw new Error(`${label} /health failed (${response.status})`);
   const payload = await response.json();
   const expected = {
     environment: runtime.environment,
@@ -143,9 +157,9 @@ async function probeHealthOnce(runtime, expectedRuntimeDataSha = null) {
   };
   if (expectedRuntimeDataSha) expected.runtime_data_sha = expectedRuntimeDataSha;
   for (const [key, value] of Object.entries(expected)) {
-    if (payload[key] !== value) throw new Error(`DEV health mismatch for ${key}: expected ${value}, got ${payload[key]}`);
+    if (payload[key] !== value) throw new Error(`${label} health mismatch for ${key}: expected ${value}, got ${payload[key]}`);
   }
-  if (!SHA_RE.test(String(payload.runtime_data_sha || ''))) throw new Error('DEV /health runtime_data_sha is invalid');
+  if (!SHA_RE.test(String(payload.runtime_data_sha || ''))) throw new Error(`${label} /health runtime_data_sha is invalid`);
   return payload;
 }
 
@@ -171,8 +185,8 @@ async function probeDeployedHealth(runtime, runtimeDataSha) {
   });
 }
 
-export async function provisionDev(runtime) {
-  assertPhase4LiveGate(runtime.environment, false);
+export async function provisionEnvironment(runtime) {
+  assertPhase5LiveGate(runtime.environment, false);
   const created = ensureRuntimeRepository(runtime);
   syncRuntimeFiles(runtime);
   configureRuntimeVariables(runtime);
@@ -192,8 +206,8 @@ export async function provisionDev(runtime) {
   };
 }
 
-export async function deployDev(runtime) {
-  assertPhase4LiveGate(runtime.environment, false);
+export async function deployEnvironment(runtime) {
+  assertPhase5LiveGate(runtime.environment, false);
   const runtimeDataSha = deployWorker(runtime);
   const health = await probeDeployedHealth(runtime, runtimeDataSha);
   return {
@@ -209,7 +223,7 @@ export async function deployDev(runtime) {
   };
 }
 
-export async function statusDev(runtime) {
-  assertPhase4LiveGate(runtime.environment, false);
+export async function statusEnvironment(runtime) {
+  assertPhase5LiveGate(runtime.environment, false);
   return probeHealth(runtime);
 }

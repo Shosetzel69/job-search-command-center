@@ -11,7 +11,7 @@ import {
   validateManifest,
 } from './environment/contract.mjs';
 import { bootstrapPlan, isolationPlan, runtimeDataFiles } from './environment/plans.mjs';
-import { assertPhase4LiveGate } from './environment/live.mjs';
+import { assertPhase5LiveGate } from './environment/live.mjs';
 import { runtimeSeedPayload } from './environment/seed.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -55,8 +55,8 @@ test('invalid Cloudflare account ID fails closed', () => {
 
 test('Google client ID is an explicit environment input', () => {
   const values = envInputs();
-  delete values.DEV_GOOGLE_CLIENT_ID;
-  assert.throws(() => resolveEnvironment(manifest, 'dev', SHA, values), /Google OAuth client ID is missing/);
+  delete values.TEST_GOOGLE_CLIENT_ID;
+  assert.throws(() => resolveEnvironment(manifest, 'test', SHA, values), /Google OAuth client ID is missing/);
 });
 
 test('DEV and TEST can never resolve live search mode', () => {
@@ -65,16 +65,23 @@ test('DEV and TEST can never resolve live search mode', () => {
   assert.equal(resolveEnvironment(manifest, 'test', SHA, values).searchMode, 'smoke');
 });
 
+test('TEST resolves only the canonical isolated TEST runtime target', () => {
+  const runtime = resolveEnvironment(manifest, 'test', SHA, envInputs());
+  assert.equal(runtime.environment, 'test');
+  assert.equal(runtime.runtimeRepository, 'Shosetzel69/job-search-runtime-test');
+  assert.equal(runtime.searchMode, 'smoke');
+});
+
 test('PROD requires an explicit owner gate for gated operations', () => {
   assert.throws(() => assertProdGate('prod'), /owner-gate/);
   assert.doesNotThrow(() => assertProdGate('prod', 'APPROVED'));
 });
 
-test('Phase 4 live gate permits DEV and blocks TEST/PROD', () => {
-  assert.doesNotThrow(() => assertPhase4LiveGate('dev', false));
-  assert.throws(() => assertPhase4LiveGate('test', false), /DEV-only/);
-  assert.throws(() => assertPhase4LiveGate('prod', false), /DEV-only/);
-  assert.doesNotThrow(() => assertPhase4LiveGate('prod', true));
+test('Phase 5 live gate permits DEV/TEST and blocks PROD', () => {
+  assert.doesNotThrow(() => assertPhase5LiveGate('dev', false));
+  assert.doesNotThrow(() => assertPhase5LiveGate('test', false));
+  assert.throws(() => assertPhase5LiveGate('prod', false), /DEV\/TEST only/);
+  assert.doesNotThrow(() => assertPhase5LiveGate('prod', true));
 });
 
 test('bootstrap-all scope is structurally DEV + TEST only', () => {
@@ -93,25 +100,25 @@ test('runtime seed derives files from the shared runtime-data contract', () => {
   }
 });
 
-test('isolated DEV seed contains no jobs, applications or search history', () => {
+test('isolated non-PROD seed contains no jobs, applications or search history', () => {
   assert.deepEqual(runtimeSeedPayload('jobs.json').jobs, []);
   assert.deepEqual(runtimeSeedPayload('applications.json').applications, []);
   assert.deepEqual(runtimeSeedPayload('run-history.json').runs, []);
   assert.equal(runtimeSeedPayload('search-config.json').jobspipe_mode, 'disabled');
 });
 
-test('DEV seed preserves canonical nomenclature domains', () => {
+test('isolated seed preserves canonical nomenclature domains', () => {
   const domains = runtimeSeedPayload('nomenclatures.json').domains;
   assert.deepEqual(Object.keys(domains).sort(), ['application_statuses', 'contract_types', 'countries', 'regions', 'seniority', 'work_modes']);
   assert.ok(domains.countries.values.some(item => item.code === 'RO'));
   assert.ok(domains.regions.values.some(item => item.code === 'EU'));
 });
 
-test('bootstrap plan keeps source and runtime repository identities distinct', () => {
-  const runtime = resolveEnvironment(manifest, 'dev', SHA, envInputs());
+test('bootstrap plan keeps source and TEST runtime repository identities distinct', () => {
+  const runtime = resolveEnvironment(manifest, 'test', SHA, envInputs());
   const plan = bootstrapPlan(runtime);
   assert.notEqual(runtime.sourceRepository, runtime.runtimeRepository);
-  assert.equal(plan.find(item => item.id === 'runtime-repository').target, 'Shosetzel69/job-search-runtime-dev');
+  assert.equal(plan.find(item => item.id === 'runtime-repository').target, 'Shosetzel69/job-search-runtime-test');
 });
 
 test('static isolation plan covers DEV->TEST, DEV->PROD and TEST->PROD', () => {
@@ -121,7 +128,7 @@ test('static isolation plan covers DEV->TEST, DEV->PROD and TEST->PROD', () => {
 
 test('manifest rejects non-canonical runtime targets', () => {
   const copy = JSON.parse(JSON.stringify(manifest));
-  copy.environments.dev.runtime_repository = 'Shosetzel69/job-search-runtime-prod';
+  copy.environments.test.runtime_repository = 'Shosetzel69/job-search-runtime-prod';
   assert.throws(() => validateManifest(copy), /canonical environment target/);
 });
 
@@ -131,10 +138,11 @@ test('manifest rejects unresolved placeholders', () => {
   assert.throws(() => validateManifest(copy), /placeholder/);
 });
 
-test('runtime workflow template is fail-closed for DEV search', () => {
+test('runtime workflow template enforces DEV disabled and TEST smoke policies', () => {
   const workflow = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
-  assert.match(workflow, /SEARCH_MODE/);
   assert.match(workflow, /DEV must remain SEARCH_MODE=disabled/);
+  assert.match(workflow, /TEST must remain SEARCH_MODE=smoke/);
+  assert.match(workflow, /TEST smoke policy verified immutable source checkout only/);
   assert.match(workflow, /source_sha must be a full immutable commit SHA/);
 });
 
@@ -144,10 +152,22 @@ test('deploy workflow never defaults environment to PROD', () => {
   assert.doesNotMatch(workflow, /default:\s*prod/);
 });
 
-test('DEV deploy health verification retries propagation and pins runtime snapshot identity', () => {
+test('Phase 5 deploy workflow uses one generic DEV/TEST live path and keeps PROD blocked', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /Resolve live DEV\/TEST configuration/);
+  assert.match(workflow, /Execute live environment action/);
+  assert.match(workflow, /Phase 5 live execution permits DEV\/TEST only; PROD remains blocked/);
+  assert.doesNotMatch(workflow, /Execute live DEV action/);
+  assert.match(workflow, /TEST must use a Cloudflare account distinct from DEV/);
+  assert.match(workflow, /TEST must use a runtime token distinct from DEV/);
+});
+
+test('environment deploy health verification retries propagation and pins runtime snapshot identity', () => {
   const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
   assert.match(provision, /HEALTH_PROPAGATION_ATTEMPTS/);
   assert.match(provision, /HEALTH_PROPAGATION_DELAY_MS/);
   assert.match(provision, /expectedRuntimeDataSha/);
   assert.match(provision, /probeDeployedHealth/);
+  assert.match(provision, /provisionEnvironment/);
+  assert.match(provision, /deployEnvironment/);
 });

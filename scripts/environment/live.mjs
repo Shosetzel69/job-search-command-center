@@ -4,10 +4,12 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { SHA_RE } from './contract.mjs';
 
-export function assertPhase4LiveGate(environment, dryRun) {
+const PHASE5_LIVE_ENVIRONMENTS = new Set(['dev', 'test']);
+
+export function assertPhase5LiveGate(environment, dryRun) {
   if (dryRun === true) return;
-  if (environment !== 'dev') {
-    throw new Error(`Phase 4 live execution is DEV-only; ${String(environment).toUpperCase()} remains blocked`);
+  if (!PHASE5_LIVE_ENVIRONMENTS.has(environment)) {
+    throw new Error(`Phase 5 live execution permits DEV/TEST only; ${String(environment).toUpperCase()} remains blocked`);
   }
 }
 

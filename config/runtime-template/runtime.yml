@@ -39,10 +39,21 @@ jobs:
           test -n "$APP_ENV" || { echo "APP_ENV is required" >&2; exit 1; }
           test -n "$SEARCH_MODE" || { echo "SEARCH_MODE is required" >&2; exit 1; }
           test -n "$SOURCE_REPOSITORY" || { echo "SOURCE_REPOSITORY is required" >&2; exit 1; }
-          if [ "$APP_ENV" = "dev" ] && [ "$SEARCH_MODE" != "disabled" ]; then
-            echo "DEV must remain SEARCH_MODE=disabled during Phase 4" >&2
-            exit 1
-          fi
+          case "$APP_ENV" in
+            dev)
+              test "$SEARCH_MODE" = "disabled" || { echo "DEV must remain SEARCH_MODE=disabled" >&2; exit 1; }
+              ;;
+            test)
+              test "$SEARCH_MODE" = "smoke" || { echo "TEST must remain SEARCH_MODE=smoke" >&2; exit 1; }
+              ;;
+            prod)
+              test "$SEARCH_MODE" = "live" || { echo "PROD must use SEARCH_MODE=live" >&2; exit 1; }
+              ;;
+            *)
+              echo "Unknown APP_ENV: $APP_ENV" >&2
+              exit 1
+              ;;
+          esac
 
       - name: Guard disabled search policy
         if: ${{ vars.SEARCH_MODE == 'disabled' }}
@@ -75,4 +86,13 @@ jobs:
           set -euo pipefail
           actual="$(git -C source rev-parse HEAD)"
           test "${actual,,}" = "${SOURCE_SHA,,}" || { echo "Source checkout mismatch" >&2; exit 1; }
-          echo "Runtime wrapper verified immutable source identity. Search execution is enabled only by the environment phase that authorizes its policy."
+
+      - name: TEST smoke boundary
+        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' }}
+        run: |
+          echo "TEST smoke policy verified immutable source checkout only. Full Search was not executed."
+
+      - name: Runtime execution handoff
+        if: ${{ vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        run: |
+          echo "Runtime wrapper verified immutable source identity. PROD execution remains governed by the production phase/cutover gate."
