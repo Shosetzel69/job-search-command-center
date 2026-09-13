@@ -1,0 +1,86 @@
+name: Environment automation dry-run
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Phase 3 automation action
+        required: true
+        type: choice
+        options: [validate, bootstrap, deploy, status, isolation-test]
+      environment:
+        description: Explicit target environment
+        required: true
+        type: choice
+        options: [dev, test, prod]
+      source_sha:
+        description: Immutable source commit SHA
+        required: true
+        type: string
+      dry_run:
+        description: Phase 3 must not provision resources
+        required: true
+        default: true
+        type: boolean
+      owner_gate:
+        description: Must be APPROVED for any PROD gated operation
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  environment-automation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Guard Phase 3 dry-run only
+        run: |
+          test "${{ inputs.dry_run }}" = "true" || { echo "Phase 3 live provisioning is blocked" >&2; exit 1; }
+          if [ "${{ inputs.environment }}" = "prod" ] && [ "${{ inputs.owner_gate }}" != "APPROVED" ]; then
+            echo "PROD requires explicit owner gate" >&2
+            exit 1
+          fi
+
+      - name: Run environment contract tests
+        run: npm run test:environment
+
+      - name: Validate selected environment contract
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          DEV_CLOUDFLARE_ACCOUNT_ID: "11111111111111111111111111111111"
+          TEST_CLOUDFLARE_ACCOUNT_ID: "22222222222222222222222222222222"
+          PROD_CLOUDFLARE_ACCOUNT_ID: "33333333333333333333333333333333"
+          DEV_CLOUDFLARE_TOKEN: dry-run-dev-cf
+          TEST_CLOUDFLARE_TOKEN: dry-run-test-cf
+          PROD_CLOUDFLARE_TOKEN: dry-run-prod-cf
+          DEV_GITHUB_RUNTIME_TOKEN: dry-run-dev-gh
+          TEST_GITHUB_RUNTIME_TOKEN: dry-run-test-gh
+          PROD_GITHUB_RUNTIME_TOKEN: dry-run-prod-gh
+          DEV_SOURCE_READ_TOKEN: dry-run-dev-source
+          TEST_SOURCE_READ_TOKEN: dry-run-test-source
+          PROD_SOURCE_READ_TOKEN: dry-run-prod-source
+          DEV_ALLOWED_GOOGLE_SUB: dry-run-dev-sub
+          TEST_ALLOWED_GOOGLE_SUB: dry-run-test-sub
+          PROD_ALLOWED_GOOGLE_SUB: dry-run-prod-sub
+          DEV_FRONTEND_ORIGIN: https://dev.example.invalid
+          TEST_FRONTEND_ORIGIN: https://test.example.invalid
+          PROD_FRONTEND_ORIGIN: https://prod.example.invalid
+        run: |
+          EXTRA=()
+          if [ "${{ inputs.environment }}" = "prod" ]; then EXTRA+=(--owner-gate "${{ inputs.owner_gate }}"); fi
+          case "${{ inputs.action }}" in
+            validate) npm run env:validate -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" "${EXTRA[@]}" ;;
+            bootstrap) npm run env:bootstrap -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run "${EXTRA[@]}" ;;
+            deploy) npm run env:deploy -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run "${EXTRA[@]}" ;;
+            status) npm run env:status -- --source-sha "$SOURCE_SHA" --dry-run ;;
+            isolation-test) npm run env:isolation-test -- --source-sha "$SOURCE_SHA" --dry-run ;;
+            *) echo "Unsupported action" >&2; exit 1 ;;
+          esac
