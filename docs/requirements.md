@@ -1,7 +1,7 @@
 # Cerinte - Job Search Command Center
 
-Versiune aplicatie: `0.05`
-Ultima actualizare: `2026-09-06`
+Versiune aplicatie: `0.06-dev`
+Ultima actualizare: `2026-09-13`
 
 ## Regula de lucru pentru cerinte
 
@@ -21,23 +21,26 @@ Daca nu exista informatie pentru un camp sau o sectiune obligatorie, se folosest
 ## 1. Informatii Generale si Prezentare Generala
 
 **Proiect:** Job Search Command Center  
-**Versiune aplicatie:** 0.05  
+**Versiune aplicatie:** 0.06-dev  
 **Scop:** monitorizarea, filtrarea, evaluarea si prioritizarea rolurilor de Project Management pe baza criteriilor definite de utilizator.
 
 Aplicatia nu este un motor de cautare generic. Sistemul colecteaza joburi din sursele operationale, le normalizeaza, aplica eligibilitatea geografica, deduplicarea/repostarea, filtrarea si scoring-ul FIT, apoi publica rezultatele pentru evaluare.
+
+Baseline-ul stabilizat foloseste Full Search manual-only. Salvarea configuratiei, modificarile administrative, commit-urile si push-urile nu declanseaza cautarea completa.
 
 ## 2. Obiective si Declaratia Nevoilor
 
 ### 2.1 Obiective
 
-- colectarea periodica si manuala a joburilor relevante;
+- colectarea controlata a joburilor relevante;
 - prioritizarea rolurilor PM / IT PM / Delivery / Service / Scrum / Program;
 - Remote prioritar, apoi Hybrid;
 - selectie geografica pe regiuni si tari;
 - evaluare FIT, argumente pro si riscuri;
 - pastrarea descrierii si a linkului de job cand sursa le furnizeaza;
 - urmarirea rularilor si a surselor procesate;
-- administrarea criteriilor si a catalogului de surse din UI.
+- administrarea criteriilor, surselor, categoriilor si nomenclatoarelor din UI;
+- separarea stricta intre configurare si executia Full Search.
 
 ### 2.2 Needs Statement
 
@@ -45,26 +48,31 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 
 ## 3. Domeniul de Aplicare
 
-### 3.1 In-scope pentru versiunea 0.05
+### 3.1 In-scope pentru baseline-ul stabilizat 0.06-dev
 
 - colectare joburi din connectorii operationali;
 - normalizare, geo-eligibility, deduplicare/repost, filtrare si scoring;
-- UI pentru Joburi noi, De evaluat, Aplicari, Criterii de selectie, Surse si Loguri;
+- UI pentru Joburi noi, De evaluat, Aplicari, Criterii de selectie si Administrare;
+- Administrare: Overview, Actualizare date, Surse, Nomenclatoare, Loguri;
 - configurare criterii si excluderi;
-- CRUD persistent pentru catalogul Surse;
-- rulare manuala si programata;
+- CRUD persistent pentru catalogul Surse si categoriile de surse;
+- nomenclatoare canonice pentru regions, countries, work_modes, contract_types, application_statuses si infrastructura seniority;
+- Full Search manual prin comanda explicita;
 - Google Sign-In si acces protejat la date;
 - persistenta curenta in fisiere JSON versionate in GitHub.
 
-### 3.2 Out-of-scope / neimplementat in versiunea 0.05
+### 3.2 Out-of-scope / neimplementat in baseline-ul stabilizat
 
+- scheduler functional pentru Full Search; acesta ramane Package 2B, implicit OFF;
 - baza de date activa;
 - arhitectura multi-user - `UNDER ANALYSIS`;
-- MCP;
 - notificari/email automate;
-- connector generic URL/scraping;
 - editarea server-side a aplicarilor;
-- persistenta server-side pentru arhivarea rapida a joburilor.
+- persistenta server-side pentru arhivarea rapida a joburilor;
+- separarea runtime DEV/TEST/PROD - aprobata arhitectural separat si urmarita prin #161;
+- extinderea completa #49 `all active sources equally`; #49 ramane parcat prin decizia ownerului.
+
+Nota: Remote MCP / `ai-github-bridge` este infrastructura operationala de engineering/governance si nu face parte din runtime-ul functional al aplicatiei.
 
 ## 4. Cerinte Functionale
 
@@ -72,7 +80,7 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 
 | ID | Titlu | Descriere | Categorie | Sursa | Prioritate |
 |---|---|---|---|---|---|
-| CFR-01 | Colectare surse | Colectare din sursele conectate si active. | Functionala | ##### | ##### |
+| CFR-01 | Colectare surse | Colectare din sursele cu ruta operationala conform Source Registry si politicii curente. | Functionala | ##### | ##### |
 | CFR-02 | Fereastra colectare | Fereastra maxima de colectare este 5 zile. | Functionala | ##### | ##### |
 | CFR-03 | Timestamp lipsa | Lipsa timestamp-ului nu exclude automat rezultatul daca sursa limiteaza deja vechimea. | Functionala | ##### | ##### |
 | CFR-04 | Normalizare si deduplicare | Joburile sunt normalizate si deduplicate. | Functionala | ##### | ##### |
@@ -81,10 +89,10 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 | CFR-07 | Link job | Se foloseste linkul disponibil pentru job. | Functionala | ##### | ##### |
 | CFR-08 | Descriere job | Descrierea este pastrata cand sursa o furnizeaza. | Functionala | ##### | ##### |
 | CFR-09 | Excluderi automate | Excluderile automate au justificare verificabila. | Functionala | ##### | ##### |
-| CFR-43 | Mod JobsPipe | JobsPipe suporta `disabled`, `apify`, `direct`. | Functionala | ##### | ##### |
-| CFR-44 | JobsPipe Apify | Modul `apify` foloseste Actorul `jobspipe~jobspipe-job-search` si `APIFY_TOKEN` secret. | Functionala | ##### | ##### |
-| CFR-46 | Plafon Apify | Plafonul Apify este configurabil intre 100 si 20.000 joburi brute/rulare. | Functionala | ##### | ##### |
-| CFR-47 | JobsPipe Direct | Direct foloseste preview, `discovered_at_gte`, cursor si stare persistenta. | Functionala | ##### | ##### |
+| CFR-43 | Mod JobsPipe | JobsPipe suporta `disabled`, `apify`, `direct`; baseline-ul stabilizat este `disabled`. | Functionala | ##### | ##### |
+| CFR-44 | JobsPipe Apify | Daca este aprobat ulterior, modul `apify` foloseste Actorul `jobspipe~jobspipe-job-search` si `APIFY_TOKEN` secret. | Functionala | ##### | ##### |
+| CFR-46 | Plafon Apify | Daca Apify este activat, plafonul este configurabil intre 100 si 20.000 joburi brute/rulare. | Functionala | ##### | ##### |
+| CFR-47 | JobsPipe Direct | Daca Direct este activat, foloseste preview, `discovered_at_gte`, cursor si stare persistenta. | Functionala | ##### | ##### |
 | CFR-48 | Protectie quota Direct | Direct are buget/rulare, guard lunar si circuit breaker. | Functionala | ##### | ##### |
 | CFR-49 | JobsPipe disabled | `disabled` produce zero cereri JobsPipe/Apify si pastreaza rezultatele existente. | Functionala | ##### | ##### |
 | CFR-69 | Campuri geografice | Fiecare job publicat poate contine `countries`, `country_codes` si `remote_scope` normalizate. | Functionala | ##### | ##### |
@@ -92,25 +100,26 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 | CFR-71 | Remote cu tari | Remote cu tari explicite este eligibil numai daca Romania este acceptata. | Functionala | ##### | ##### |
 | CFR-72 | Remote EU/EMEA | Remote `EU`/`EMEA` este evaluat conform restrictiei explicite. | Functionala | ##### | ##### |
 | CFR-73 | Worldwide si excluderi | `Remote Worldwide` nu este eliminat doar pentru ca o regiune este exclusa. | Functionala | ##### | ##### |
-| CFR-74 | Selectie geografica | Selectia geografica foloseste regiuni `EU`, `US`, `Asia` si/sau tari individuale. | Functionala | ##### | ##### |
+| CFR-74 | Selectie geografica | Selectia geografica foloseste regiuni canonice `EU`, `US`, `ASIA` si/sau tari individuale. | Functionala | ##### | ##### |
 | CFR-75 | Conflict geografic | Conflictele includere/excludere geografica sunt respinse. | Functionala | ##### | ##### |
+| CFR-90 | Revalidare joburi retinute | Joburile pastrate din rulari anterioare sunt reevaluate fata de criteriile curente inainte de publicare. | Functionala | #160 | P1 |
 
 ### 4.2 Interfata
 
 | ID | Titlu | Descriere | Categorie | Sursa | Prioritate |
 |---|---|---|---|---|---|
-| CFR-10 | Pagini aplicatie | Pagini: Joburi noi, De evaluat, Aplicari, Criterii de selectie, Surse, Loguri. | Functionala | ##### | ##### |
+| CFR-10 | Pagini aplicatie | Pagini principale: Joburi noi, De evaluat, Aplicari, Criterii de selectie si Administrare. | Functionala | ##### | ##### |
 | CFR-11 | Editare criterii | Criteriile si excluderile sunt editabile din UI. | Functionala | ##### | ##### |
 | CFR-13 | Date Aplicari | Aplicarile vin din `data/applications.json`. | Functionala | ##### | ##### |
 | CFR-14 | Continut privat | Continutul privat este ascuns fara autentificare. | Functionala | ##### | ##### |
 | CFR-17 | Filtru vechime | Filtru vechime 24h/36h/48h/5 zile. | Functionala | ##### | ##### |
 | CFR-18 | Freshness implicit | 24h este implicit; configuratia accepta 24/36/48/120. | Functionala | ##### | ##### |
-| CFR-19 | Work mode | Multiselect Remote/Hibrid/Onsite/N/A. | Functionala | ##### | ##### |
+| CFR-19 | Work mode | Multiselect canonic Remote/Hibrid/Onsite; `unknown`/N/A ramane stare tehnica, nu optiune normala. | Functionala | #119 | ##### |
 | CFR-21 | Filtre cumulative | Filtrele se aplica cumulativ. | Functionala | ##### | ##### |
 | CFR-22 | Sortare FIT | FIT este sortabil; implicit descrescator. | Functionala | ##### | ##### |
 | CFR-25 | Aliniere pagini | Paginile sunt aliniate sus. | Functionala | ##### | ##### |
-| CFR-50 | Selector JobsPipe | Selector JobsPipe Oprit/Apify/Direct este mapat la `jobspipe_mode`. | Functionala | ##### | ##### |
-| CFR-51 | Limite JobsPipe | UI configureaza plafonul Apify si limitele Direct. | Functionala | ##### | ##### |
+| CFR-50 | Selector JobsPipe | Selector JobsPipe Oprit/Apify/Direct este mapat la `jobspipe_mode`; baseline-ul este Oprit. | Functionala | ##### | ##### |
+| CFR-51 | Limite JobsPipe | UI poate configura limitele providerilor daca un mod JobsPipe este aprobat/activat. | Functionala | ##### | ##### |
 | CFR-56 | Profil utilizator | Profil compact cu dropdown/logout. | Functionala | ##### | ##### |
 | CFR-57 | Culori UI | Albastru pentru actiune primara/focus; verde pentru activ/succes. | Functionala | ##### | ##### |
 | CFR-59 | Latime continut | Continut maximum 1400 px. | Functionala | ##### | ##### |
@@ -125,10 +134,13 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 | CFR-80 | Excluderi teritoriale | Excluderile teritoriale accepta regiuni si tari; conflictul cu includerile blocheaza salvarea. | Functionala | ##### | ##### |
 | CFR-81 | Card Excluderi | Cardul Excluderi este compact. | Functionala | ##### | ##### |
 | CFR-82 | Surse procesate | Zona Ultima rulare afiseaza numarul surselor procesate. | Functionala | ##### | ##### |
-| CFR-83 | JobsPipe sursa unica | JobsPipe este o singura sursa operationala indiferent daca transportul este Apify sau Direct. | Functionala | ##### | ##### |
+| CFR-83 | JobsPipe sursa unica | JobsPipe este o singura sursa logica indiferent daca transportul este Apify sau Direct. | Functionala | ##### | ##### |
 | CFR-84 | Loguri | Pagina Loguri afiseaza ultimele 10 rulari de cautare si detaliile fiecarei rulari. | Functionala | ##### | ##### |
-| CFR-85 | CRUD Surse | Pagina Surse permite adaugare, editare, activare/dezactivare si stergere persistenta. | Functionala | ##### | ##### |
-| CFR-86 | Surse neoperationale | URL-urile duplicate sunt blocate, iar sursele fara connector sunt marcate ca neoperationale. | Functionala | ##### | ##### |
+| CFR-85 | CRUD Surse | Administrare -> Surse permite adaugare, editare, activare/dezactivare si stergere persistenta conform source governance. | Functionala | ##### | ##### |
+| CFR-86 | Surse neoperationale | URL-urile duplicate sunt blocate, iar sursele fara ruta operationala sunt marcate corespunzator. | Functionala | ##### | ##### |
+| CFR-91 | Administrare | Exista shell Administrare cu Overview, Actualizare date, Surse, Nomenclatoare si Loguri. | Functionala | #85 | P1 |
+| CFR-92 | Nomenclatoare canonice | UI foloseste domeniile canonice regions, countries, work_modes, contract_types, application_statuses si seniority infrastructure. | Functionala | #116 | P1 |
+| CFR-93 | Integritate nomenclatoare | O valoare referentiata nu poate fi dezactivata/stearsa silent; API raspunde 409 cu referinte. | Functionala | #120 | P1 |
 
 ### 4.3 Autentificare si date
 
@@ -137,8 +149,8 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 | CFR-26 | Google Identity | Autentificarea foloseste Google Identity Services. | Functionala | ##### | ##### |
 | CFR-27 | Identitate autorizata | Mecanismul curent permite acces numai pentru `sub = ALLOWED_GOOGLE_SUB`. Suportul multi-user este `UNDER ANALYSIS`. | Functionala | ##### | ##### |
 | CFR-28 | Date protejate | `/data/*.json` protejate necesita bearer Google valid. | Functionala | ##### | ##### |
-| CFR-30 | Token in memorie | Tokenul Google ramane numai in memoria React. | Functionala | ##### | ##### |
-| CFR-31 | Logout | Logout elimina datele din memorie. | Functionala | ##### | ##### |
+| CFR-30 | Token in memorie | Google ID token nu este persistat in localStorage/sessionStorage. | Functionala | ##### | ##### |
+| CFR-31 | Logout | Logout elimina starea autentificata si dezactiveaza auto-select. | Functionala | ##### | ##### |
 | CFR-32 | Actiune autentificata | `Ruleaza verificarea` nu apare neautentificat. | Functionala | ##### | ##### |
 | CFR-34 | Blocare rulare dubla | Actiunea de rulare este blocata in timpul unei rulari. | Functionala | ##### | ##### |
 | CFR-52 | Incarcare dupa auth | Datele protejate nu sunt cerute inainte de validarea sesiunii. | Functionala | ##### | ##### |
@@ -148,6 +160,7 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 | CFR-67 | Blocare sesiune | Numai esecul `/auth/session` blocheaza sesiunea autentificata. | Functionala | ##### | ##### |
 | CFR-68 | Erori vizibile | Erorile de auth/data raman vizibile. | Functionala | ##### | ##### |
 | CFR-87 | Run history protejat | `run-history.json` este protejat la fel ca celelalte date private. | Functionala | ##### | ##### |
+| CFR-94 | Reload auth | La reload, fluxul Google favorizeaza contul autorizat prin login hint si revalideaza server-side noul credential. | Functionala | #153 | P1 |
 
 ### 4.4 Comenzi si configurare
 
@@ -155,11 +168,12 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 |---|---|---|---|---|---|
 | CFR-38 | Lansare cautare | `Ruleaza verificarea` porneste workflow-ul prin Command API. | Functionala | ##### | ##### |
 | CFR-39 | Duplicate run | Nu se porneste o a doua rulare daca una este `queued`/`in_progress`. | Functionala | ##### | ##### |
-| CFR-40 | Polling status | Frontend-ul face polling pe `run-status.json` si reincarca datele. | Functionala | ##### | ##### |
-| CFR-41 | Salvare preferinte | `Salveaza preferintele` persista prin `PUT /config`. | Functionala | ##### | ##### |
-| CFR-42 | Config trigger | Commit-ul `search-config.json` declanseaza workflow-ul. | Functionala | ##### | ##### |
+| CFR-40 | Polling status | Frontend-ul urmareste `run-status.json` pana la stare terminala si reincarca datele. | Functionala | #83 | ##### |
+| CFR-41 | Salvare preferinte | `Salveaza preferintele` persista prin `PUT /config` si nu porneste Full Search. | Functionala | #18 | P1 |
+| CFR-42 | Full Search manual-only | Full Search este pornit numai explicit prin `POST /commands/run` / `workflow_dispatch`; commit/push/config/admin nu il declanseaza. | Functionala | #79 | P1 |
 | CFR-88 | CRUD Surse API | CRUD-ul Surse foloseste Command API autentificat si GitHub Contents API; credentialele GitHub nu ajung in browser. | Functionala | ##### | ##### |
-| CFR-89 | Retry publicare | Publicarea rezultatelor reincearca de maximum 3 ori daca `main` se modifica in timpul publicarii. | Functionala | ##### | ##### |
+| CFR-89 | Retry publicare | Publicarea rezultatelor reincearca controlat daca `main` se modifica in timpul publicarii si nu foloseste force push. | Functionala | #33 | ##### |
+| CFR-95 | Trigger canonic | Rularea manuala este inregistrata cu trigger canonic `manual-ui`. | Functionala | #79 | P1 |
 
 ## 5. Cerinte Non-Functionale
 
@@ -168,39 +182,37 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 | CNF-01 | UI responsive | Interfata este responsive. | Non-functionala | ##### | ##### |
 | CNF-02 | Fara secrete | Nu se introduc secrete in repository/frontend. | Non-functionala | ##### | ##### |
 | CNF-03 | Token fara localStorage | Google ID token nu intra in `localStorage`. | Non-functionala | ##### | ##### |
-| CNF-04 | GitHub secret | GitHub PAT este Cloudflare Secret. | Non-functionala | ##### | ##### |
+| CNF-04 | GitHub secret | Credentialele GitHub privilegiate raman server-side ca secrets. | Non-functionala | ##### | ##### |
 | CNF-05 | Validare JWT | Worker-ul verifica semnatura Google JWT, issuer, audience si configuratia de autorizare curenta. | Non-functionala | ##### | ##### |
 | CNF-06 | Stil arhitectural | Arhitectura este `static-first + serverless command/access-control`. | Non-functionala | ##### | ##### |
 | CNF-07 | Headers date | Datele protejate folosesc `no-store` si `nosniff`. | Non-functionala | ##### | ##### |
-| CNF-08 | Cost operational | Cost operational minim. | Non-functionala | ##### | ##### |
+| CNF-08 | Cost operational | Cost operational minim; providerii cu cost nu sunt activati implicit. | Non-functionala | ##### | ##### |
 | CNF-10 | Filtre locale | Filtrele locale nu declanseaza GitHub Actions. | Non-functionala | ##### | ##### |
-| CNF-11 | Protectie quota | Direct protejeaza quota; Apify foloseste plafon tehnic de volum. | Non-functionala | ##### | ##### |
+| CNF-11 | Protectie quota | Orice provider quota/cost-based trebuie sa respecte limitele configurate. | Non-functionala | ##### | ##### |
 | CNF-12 | Search state privat | `search-state.json` nu este publicat. | Non-functionala | ##### | ##### |
 | CNF-13 | Disabled fara request | Modul `disabled` garanteaza zero cereri JobsPipe/Apify. | Non-functionala | ##### | ##### |
 | CNF-14 | Fara monkey-patching | Fara interceptari globale `fetch`/monkey-patching pentru auth. | Non-functionala | ##### | ##### |
 | CNF-15 | Frontend stack | React functional components + Tailwind + Vite. | Non-functionala | ##### | ##### |
 | CNF-17 | CI schimbari majore | Schimbarile majore sunt validate CI. | Non-functionala | ##### | ##### |
-| CNF-18 | Provider secrets | `APIFY_TOKEN` si `JOBSPIPE_API_KEY` raman numai in GitHub Actions Secrets. | Non-functionala | ##### | ##### |
-| CNF-19 | CI tehnic | CI valideaza Python, regulile geografice, JSON, React/Vite si Worker dry-run. | Non-functionala | ##### | ##### |
+| CNF-18 | Provider secrets | Secretele providerilor raman numai server-side/GitHub Actions Secrets. | Non-functionala | ##### | ##### |
+| CNF-19 | CI tehnic | CI valideaza Python, regulile geografice, JSON, React/Vite, Worker build si guard-ul manual-only. | Non-functionala | ##### | ##### |
 
 ## 6. Restrictii, Ipoteze si Dependinte
 
-### 6.1 Configuratie curenta
+### 6.1 Configuratie / politica baseline stabilizata
 
 - roluri: PM, IT PM, Technical/Agile PM, Delivery, Service, Scrum, Program/PMO;
-- tari selectate initial: RO, BE, LU;
-- regiuni selectate initial: niciuna;
-- excluderi teritoriale initiale: niciuna;
 - Remote prioritar, apoi Hybrid;
 - FIT ridicat: 80;
 - B2B: 250-650 EUR/zi;
 - freshness UI: 24h;
 - colectare maxima: 120h;
 - repostari: pastrate si marcate;
-- JobsPipe: `jobspipe_mode=apify`;
-- plafon Apify curent: 100 joburi brute/rulare;
-- Direct fallback: 14 credite/rulare, guard lunar 950, overlap 2 minute;
+- JobsPipe: `jobspipe_mode=disabled`;
+- scheduler Full Search: OFF / neimplementat in baseline;
 - istoric loguri: maximum 10 rulari.
+
+Selectiile concrete curente din `data/search-config.json` sunt runtime data si pot fi modificate din UI; acest document defineste contractul, nu snapshot-ul exact al fiecarei selectii.
 
 ### 6.2 Excluderi de business curente
 
@@ -210,14 +222,15 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 
 ### 6.3 Restrictii
 
-- numai JobsPipe are connector operational;
-- catalogul legacy `sources.json` este normalizat/versionat la prima modificare persistenta din UI;
+- catalogul Source Registry poate contine surse fara ruta operationala; activarea nu echivaleaza automat cu validarea unui connector;
+- #49 este parcat si exclus din Package 2 pana la o noua decizie explicita;
 - arhivarea joburilor este locala;
 - aplicarile nu sunt editabile server-side;
 - fara baza de date activa;
 - mecanismul de autorizare curent permite un singur utilizator; multi-user este `UNDER ANALYSIS`;
-- fara MCP;
-- validarea E2E live pentru versiunea 0.05 este de confirmat.
+- Full Search ramane manual-only pana la implementarea separata a Package 2B;
+- JobsPipe ramane disabled in baseline;
+- stabilizarea functionala a baseline-ului a fost validata in PROD la 2026-09-11; raport final: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
 
 ### 6.4 Ipoteze
 
@@ -228,15 +241,23 @@ Utilizatorul are nevoie de un sistem care reduce volumul de joburi nerelevante s
 - Cloudflare Worker / Static Assets;
 - GitHub Actions si GitHub Contents API;
 - Google Identity Services;
-- JobsPipe;
-- Apify pentru transportul activ curent;
-- repository GitHub privat pentru configuratie, runtime data si istoric.
+- repository GitHub privat pentru configuratie, runtime data si istoric;
+- providerii/connectorii aprobati individual conform Source Registry.
 
+## 7. Clarificare #49
 
-## Clarificare bug #49 - executia strategiei existente
+Issue #49 nu face parte din baseline-ul de stabilizare si este exclus explicit din Package 2 prin decizia ownerului. Nu exista cerinta curenta ca toate sursele active sa fie colectate egal sau ca un Full Search sa dovedeasca acoperire completa a catalogului. Connectorii individuali pot fi implementati si validati separat, apoi activati controlat.
 
-`all active sources equally` inseamna colectarea tuturor surselor active cu connector implementat, fara prioritate 1-5. Catalogul controleaza selectia efectiva. Sursele nesuportate si omiterile justificate sunt raportate explicit; nu sunt numarate ca incercate. Un agregator nu substituie verificarea surselor pe care le indexeaza. Esuarea unei surse nu anuleaza celelalte rezultate; esecul total nu inlocuieste rezultatele valide. Deduplicarea precede publicarea. Criteriile complete si acceptanta raman in issue #49; E2E de confirmat.
+## 8. Stare stabilizare
 
-## Clarificare aprobata - surse web (#49)
+Baseline-ul functional este declarat `STABLE / CLOSE` la 2026-09-13 pe baza:
 
-Owner-ul a precizat ca obiectivul include sursele web fara API/connector dedicat si a aprobat implementarea. Toate URL-urile web active trebuie incercate; collectorul trebuie sa ajunga la anunturi si descrieri. Accesibilitatea paginii nu echivaleaza cu verificarea joburilor. Restrictiile, blocajele, extractia nesuportata si acoperirea partiala se raporteaza distinct. #49 a fost redeschis; acceptanta nu poate fi bazata doar pe adaugarea unui API suplimentar.
+- CI si build green;
+- browser PROD E2E;
+- Package 2A8 E2E PASS;
+- remediere si retest pentru #153 si #154;
+- Full Search controlat `workflow_dispatch` run #51 finalizat cu succes;
+- #160 remediat prin PR #163, cu regression tests/CI green;
+- zero P0/P1 cunoscute ramase deschise.
+
+Nu exista un Full Search live suplimentar dupa fixul #160; acest lucru este retinut ca gap de verificare live acceptat, nu ca defect cunoscut. Orice regresie observata ulterior se trateaza ca bug nou, nu redeschide automat stabilizarea inchisa.
