@@ -4,6 +4,7 @@
 
 ### Functionalitati
 
+- #161 / Phase 2: introdus contract environment-aware fail-closed (`APP_ENV`, runtime repo/ref, immutable `SOURCE_SHA`, `RUNTIME_DATA_SHA`, `SEARCH_MODE`, `FRONTEND_ORIGIN`), `/health` identity, dispatch cu `source_sha` si marker UI DEV/TEST; fara provisioning DEV/TEST si fara schimbarea functionala a PROD.
 - #136: Remote MCP Claude este deployat si validat live pe `ai-github-bridge`, cu OAuth 2.1, `read_file`, `get_issue`, `create_issue` si `update_issue` sub identitatea `jobsearch-claude-agent[bot]`; validarea operationala a fost finalizata prin issue #143.
 - #132: adaugat MVP `ai-github-bridge`, Worker Cloudflare separat pentru operatii GitHub issues allowlisted sub identitati GitHub App distincte ChatGPT/Claude; actorul este derivat din credential, repository-ul este fix, iar `ai-generated` este impus automat.
 - #120 / Pachetul 2A8: `Administrare -> Nomenclatoare` este functional; domeniile system si extensible au operatii diferentiate, iar deactivate/delete pe valori referentiate este blocat cu `409 Conflict` si lista referintelor, fara modificarea silent a configuratiei.

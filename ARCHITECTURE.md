@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.11`
+Versiune document: `v1.12`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-11`
+Ultima actualizare: `2026-09-13`
 
 ## 1. Rol
 
@@ -16,6 +16,7 @@ Documente complementare:
 - `docs/analysis/2026-09-09-canonical-nomenclatures.md` — analiza Package 2A8;
 - `docs/package-2a8-implementation-plan.md` — planul de implementare aprobat;
 - `docs/adr/ADR-002-ai-github-bridge.md` — decizia pentru identitati GitHub App operationale;
+- `docs/adr/ADR-003-environment-isolation.md` — decizia acceptata pentru izolarea DEV / TEST / PROD;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
@@ -687,3 +688,47 @@ Extinderea Remote MCP cu tool-uri noi si evolutia capabilitatilor browser Claude
 Un nou tool MCP devine parte garantata din arhitectura proiectului numai dupa implementare + validare live + actualizarea documentatiei. Pentru browser/web testing, capabilitatea este deja acceptata ca mod de executie QA, dar disponibilitatea concreta se confirma la fiecare sesiune prin preflight.
 
 Toate testele viitoare pentru Claude se scriu conform acestor conditii.
+
+## 19. Phase 2 - Environment-awareness (#161)
+
+Baseline: `865aebfc73f3b78491972c2d0989c2f9e052c500`; G0 si G1 COMPLETE.
+
+Phase 2 introduce numai contractul environment-aware. Nu provision-eaza DEV/TEST si nu muta runtime data.
+
+Concepte separate explicit:
+
+```text
+APP_ENV
+GITHUB_RUNTIME_OWNER
+GITHUB_RUNTIME_REPO
+GITHUB_RUNTIME_REF
+GITHUB_WORKFLOW
+SOURCE_SHA
+RUNTIME_DATA_SHA
+SEARCH_MODE
+FRONTEND_ORIGIN
+```
+
+Reguli implementate:
+- lipsa/invaliditatea environment identity -> fail closed;
+- fara fallback implicit la PROD;
+- `SOURCE_SHA` este immutable si este transportat de `POST /commands/run` pana in `workflow_dispatch`;
+- workflow-ul valideaza `source_sha` si executa codul din checkout-ul exact al acelui SHA;
+- runtime Contents read/write folosesc exclusiv runtime repository/ref explicit;
+- Command API si Nomenclature API folosesc acelasi transport `runtime-github.js`;
+- `/health` expune environment, source SHA, runtime repo/ref, runtime data SHA si search mode fara secrete;
+- DEV/TEST au marker UI `[ DEV ]` / `[ TEST ]`; PROD nu afiseaza marker non-production.
+
+Mapping tranzitoriu Phase 2 PROD:
+
+```text
+APP_ENV=prod
+GITHUB_RUNTIME_OWNER=Shosetzel69
+GITHUB_RUNTIME_REPO=job-search-command-center
+GITHUB_RUNTIME_REF=main
+SEARCH_MODE=live
+```
+
+`SOURCE_SHA` si `RUNTIME_DATA_SHA` sunt generate la build din SHA-ul real al checkout-ului, nu hard-codate. In Phase 2, source si runtime data sunt inca in acelasi repository; separarea fizica este Phase 3+.
+
+**Gate G2:** toate testele/CI/build trebuie sa fie green si PROD trebuie sa ramana functional identic baseline-ului stabilizat. Dupa G2 se opreste; provisioning-ul necesita faza urmatoare explicita.

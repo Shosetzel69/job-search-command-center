@@ -12,7 +12,7 @@ files=(
   data/search-state.json
 )
 
-base_sha="$(git rev-parse HEAD)"
+base_sha="${PUBLISH_BASE_SHA:-$(git rev-parse HEAD)}"
 declare -A base_blobs
 for file in "${files[@]}"; do
   base_blobs["$file"]="$(git rev-parse "$base_sha:$file" 2>/dev/null || printf '__missing__')"

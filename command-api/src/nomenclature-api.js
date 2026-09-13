@@ -4,8 +4,9 @@ import {
   deleteNomenclatureValue,
   updateNomenclatureValue,
 } from './nomenclature-governance.js';
-
-const GITHUB_API_VERSION = '2026-03-10';
+import { assertEnvironmentConfig } from './environment-config.js';
+import { BUILD_IDENTITY } from './build-identity.generated.js';
+import { readRuntimeJson, writeRuntimeJson } from './runtime-github.js';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -18,68 +19,16 @@ function json(body, status = 200) {
   });
 }
 
-function githubHeaders(env) {
-  return {
-    Accept:'application/vnd.github+json',
-    Authorization:`Bearer ${env.GITHUB_TOKEN}`,
-    'X-GitHub-Api-Version':GITHUB_API_VERSION,
-    'User-Agent':'job-search-command-api',
-  };
-}
-
-function githubBase(env) {
-  return `https://api.github.com/repos/${encodeURIComponent(env.GITHUB_OWNER)}/${encodeURIComponent(env.GITHUB_REPO)}`;
-}
-
-async function githubRequest(env, path, init = {}) {
-  if (!env.GITHUB_TOKEN) throw Object.assign(new Error('GitHub token is not configured'), { status:503 });
-  const response = await fetch(`${githubBase(env)}${path}`, {
-    ...init,
-    headers:{ ...githubHeaders(env), ...(init.headers || {}) },
-  });
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 1000);
-    throw Object.assign(new Error(`GitHub ${response.status}: ${detail}`), { status:response.status === 409 ? 409 : 502 });
-  }
-  if (response.status === 204) return null;
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
-}
-
-function decodeBase64Utf8(value) {
-  const binary = atob(String(value || '').replace(/\n/g, ''));
-  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-function encodeBase64Utf8(value) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 0x8000) binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
-  return btoa(binary);
-}
-
-function encodePath(path) {
-  return path.split('/').map(encodeURIComponent).join('/');
+function runtimeConfig(env) {
+  return assertEnvironmentConfig(env, BUILD_IDENTITY);
 }
 
 async function readRepoJson(env, path) {
-  const result = await githubRequest(env, `/contents/${encodePath(path)}?ref=${encodeURIComponent(env.GITHUB_REF)}`);
-  if (!result?.sha || !result?.content) throw Object.assign(new Error(`Repository file could not be loaded: ${path}`), { status:502 });
-  return { sha:result.sha, payload:JSON.parse(decodeBase64Utf8(result.content)) };
+  return readRuntimeJson(env, runtimeConfig(env), path);
 }
 
 async function writeRepoJson(env, path, sha, payload, message) {
-  const result = await githubRequest(env, `/contents/${encodePath(path)}`, {
-    method:'PUT',
-    headers:{ 'Content-Type':'application/json' },
-    body:JSON.stringify({
-      message,
-      content:encodeBase64Utf8(`${JSON.stringify(payload, null, 2)}\n`),
-      sha,
-      branch:env.GITHUB_REF,
-    }),
-  });
+  const result = await writeRuntimeJson(env, runtimeConfig(env), path, sha, payload, message);
   return result?.commit?.sha || null;
 }
 
@@ -111,6 +60,7 @@ async function parseJson(request) {
 export default {
   async fetch(request, env) {
     try {
+      runtimeConfig(env);
       const url = new URL(request.url);
       if (request.method === 'GET' && url.pathname === '/nomenclatures') {
         const { catalog } = await readCatalog(env);

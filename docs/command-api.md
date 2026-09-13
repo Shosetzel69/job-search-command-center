@@ -1,7 +1,7 @@
 # Command API
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-09`
+Ultima actualizare: `2026-09-13`
 
 ## Scop
 
@@ -29,7 +29,7 @@ PUT /config
 POST /commands/run
 -> valideaza configuratia
 -> blocheaza daca exista run activ
--> workflow_dispatch(run_trigger=manual-ui)
+-> workflow_dispatch(run_trigger=manual-ui, source_sha=SOURCE_SHA)
 ```
 
 Modificarile de config, surse, categorii sau nomenclatoare nu pornesc full search.
@@ -102,7 +102,7 @@ Reguli geografice:
 
 ### `POST /commands/run`
 
-Porneste exact un full search manual dupa validarea configuratiei. Run activ -> 409.
+Porneste exact un full search manual dupa validarea configuratiei. Run activ -> 409. Dispatch-ul transporta obligatoriu `source_sha` exact al Worker-ului; workflow-ul valideaza SHA-ul si face checkout la acel commit inainte de executie.
 
 ## Source Registry
 
@@ -181,7 +181,10 @@ Cloudflare secrets:
 Variabile:
 - `GOOGLE_CLIENT_ID`;
 - `FRONTEND_ORIGIN`;
-- `GITHUB_OWNER`, `GITHUB_REPO`, `GITHUB_REF`, `GITHUB_WORKFLOW`;
+- `APP_ENV`;
+- `GITHUB_RUNTIME_OWNER`, `GITHUB_RUNTIME_REPO`, `GITHUB_RUNTIME_REF`;
+- `GITHUB_WORKFLOW`;
+- `SEARCH_MODE`;
 - `SEARCH_CONFIG_PATH`;
 - `SOURCES_PATH`;
 - `SOURCE_CATEGORIES_PATH`;
@@ -189,6 +192,44 @@ Variabile:
 - `APPLICATIONS_PATH`.
 
 Provider secrets raman in GitHub Actions Secrets.
+
+`SOURCE_SHA` si `RUNTIME_DATA_SHA` nu sunt hard-codate in `wrangler.jsonc`. In Phase 2 ele sunt generate la build din commit-ul real al checkout-ului; in mapping-ul tranzitoriu PROD, runtime data sunt inca in acelasi repository/ref, deci snapshot-ul servit este identificat de acelasi commit. Daca Phase 3 separa runtime repository-ul, `RUNTIME_DATA_SHA` devine input explicit al build-ului.
+
+## Environment identity - Phase 2 / #161
+
+Configuratia este fail-closed. Lipsa sau invaliditatea oricarui element de identitate opreste request-ul; nu exista fallback implicit la PROD sau `main`.
+
+Contract:
+
+```text
+APP_ENV = dev | test | prod
+GITHUB_RUNTIME_OWNER
+GITHUB_RUNTIME_REPO
+GITHUB_RUNTIME_REF
+GITHUB_WORKFLOW
+SOURCE_SHA (40-char immutable commit SHA)
+RUNTIME_DATA_SHA (40-char immutable commit SHA)
+SEARCH_MODE = disabled | smoke | live
+FRONTEND_ORIGIN
+```
+
+Command API si Nomenclature API folosesc acelasi modul `runtime-github.js` pentru GitHub Contents read/write. `GITHUB_REF` legacy nu mai este folosit functional.
+
+`GET /health` expune numai metadata non-secret:
+
+```json
+{
+  "status": "ok",
+  "environment": "prod",
+  "source_sha": "<sha>",
+  "runtime_repo": "Shosetzel69/job-search-command-center",
+  "runtime_ref": "main",
+  "runtime_data_sha": "<sha>",
+  "search_mode": "live"
+}
+```
+
+DEV/TEST nu pot folosi `SEARCH_MODE=live`; PROD necesita `live`. Full Search este blocat de Command API daca search mode nu este `live`.
 
 ## Testare
 

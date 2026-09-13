@@ -12,6 +12,10 @@ on:
           - manual-ui
           - scheduled
           - system
+      source_sha:
+        description: Immutable source commit SHA accepted by the Worker
+        required: true
+        type: string
 
 concurrency:
   group: full-job-search
@@ -28,9 +32,34 @@ jobs:
       JOBSPIPE_API_KEY: ${{ secrets.JOBSPIPE_API_KEY }}
       APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
       RUN_TRIGGER: ${{ inputs.run_trigger || 'manual-ui' }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      RUNTIME_REF: ${{ github.ref_name }}
+      PUBLISH_BRANCH: ${{ github.ref_name }}
     steps:
-      - name: Check out repository
+      - name: Validate source identity
+        run: |
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
+            echo "source_sha must be a full immutable commit SHA" >&2
+            exit 1
+          fi
+
+      - name: Check out exact source commit
         uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify source checkout and load runtime data snapshot
+        run: |
+          actual="$(git rev-parse HEAD)"
+          if [ "${actual,,}" != "${SOURCE_SHA,,}" ]; then
+            echo "Checked-out source SHA does not match requested source_sha" >&2
+            exit 1
+          fi
+          git fetch origin "$RUNTIME_REF"
+          runtime_sha="$(git rev-parse "origin/$RUNTIME_REF")"
+          echo "PUBLISH_BASE_SHA=$runtime_sha" >> "$GITHUB_ENV"
+          git checkout "origin/$RUNTIME_REF" -- data
 
       - name: Validate search engine syntax
         run: python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_apify.py scripts/job_search_runner.py scripts/source_orchestration.py scripts/job_search_web.py scripts/web_browser.py scripts/web_transport.py scripts/test_publish_concurrency.py

@@ -6,7 +6,15 @@ import commandApi from '../src/index.js';
 import secureEntry from '../src/secure-entry.js';
 
 const env = {
+  APP_ENV: 'test',
   FRONTEND_ORIGIN: 'https://app.example.test',
+  GITHUB_RUNTIME_OWNER: 'runtime-owner',
+  GITHUB_RUNTIME_REPO: 'runtime-repo',
+  GITHUB_RUNTIME_REF: 'main',
+  GITHUB_WORKFLOW: 'job-search-full.yml',
+  SOURCE_SHA: 'a'.repeat(40),
+  RUNTIME_DATA_SHA: 'b'.repeat(40),
+  SEARCH_MODE: 'smoke',
   GOOGLE_CLIENT_ID: 'test-client-id',
   ALLOWED_GOOGLE_SUB: 'allowed-test-user',
 };
