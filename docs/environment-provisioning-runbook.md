@@ -1,6 +1,6 @@
 # Environment Provisioning Runbook - DEV / TEST / PROD
 
-Status: Planned / implementation gate
+Status: Phase 3 automation implemented / provisioning not started
 Data initiala: 2026-09-11
 Revizie finala: 2026-09-13
 ADR: `docs/adr/ADR-003-environment-isolation.md`
@@ -184,6 +184,8 @@ Runtime -> source foloseste read-only access distinct per environment. Preferat:
 Implementarea documenteaza rotatia/revocarea deploy keys si a bootstrap credentials.
 
 ## 6. Environment tool - contract
+
+Phase 3 status: contractul parametrizat, manifestul canonic, comenzile npm si workflow-ul generic dry-run sunt implementate. Live provisioning/deploy este blocat intentionat pana la Phase 4/5/6; Phase 3 nu creeaza si nu modifica resurse runtime.
 
 Un singur entry point, de exemplu:
 

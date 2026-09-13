@@ -85,3 +85,21 @@ Nu exista write pe files/branches/PR prin Remote MCP in scope-ul curent. Pentru 
 - datele `/data/*` raman protejate Worker-first;
 - GitHub App private keys, bridge tokens, OAuth tokens si `MCP_OWNER_ACCESS_CODE` nu se copiaza in repository, documentatie sau prompturi;
 - niciun secret nu se copiaza in frontend, JSON publicabil sau documentatie.
+
+## 8. Environment automation (Phase 3)
+
+Comenzi canonice:
+
+```text
+npm run env:validate -- --env dev|test|prod --source-sha <full-sha>
+npm run env:bootstrap -- --env dev|test|prod --source-sha <full-sha> --dry-run
+npm run env:bootstrap-all -- --source-sha <full-sha> --dry-run
+npm run env:deploy -- --env dev|test|prod --source-sha <full-sha> --dry-run
+npm run env:status -- --source-sha <full-sha> --dry-run
+npm run env:isolation-test -- --source-sha <full-sha> --dry-run
+npm run test:environment
+```
+
+In Phase 3, bootstrap/deploy/status/isolation ruleaza numai dry-run. PROD necesita suplimentar `--owner-gate APPROVED`; aceasta confirmare nu autorizeaza cutover-ul PROD, care ramane gate separat in Phase 6/7.
+
+Lipsa `--env`, un ref mutabil in loc de SHA complet, un target runtime gresit sau credential/config lipsa produce FAIL. `bootstrap-all` nu include PROD.

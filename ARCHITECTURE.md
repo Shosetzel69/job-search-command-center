@@ -1,6 +1,6 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.12`
+Versiune document: `v1.13`
 Versiune aplicatie de referinta: `0.06-dev`
 Ultima actualizare: `2026-09-13`
 
@@ -732,3 +732,34 @@ SEARCH_MODE=live
 `SOURCE_SHA` si `RUNTIME_DATA_SHA` sunt generate la build din SHA-ul real al checkout-ului, nu hard-codate. In Phase 2, source si runtime data sunt inca in acelasi repository; separarea fizica este Phase 3+.
 
 **Gate G2:** toate testele/CI/build trebuie sa fie green si PROD trebuie sa ramana functional identic baseline-ului stabilizat. Dupa G2 se opreste; provisioning-ul necesita faza urmatoare explicita.
+
+## 20. Phase 3 - Environment automation (#161)
+
+Gate G2 este PASS. Phase 3 introduce automatizarea parametrizata fara provisioning de resurse si fara mutarea PROD.
+
+Artefacte canonice:
+
+```text
+config/environments.json
+scripts/environment.mjs
+scripts/environment/contract.mjs
+scripts/environment/plans.mjs
+scripts/environment/report.mjs
+.github/workflows/deploy-environment.yml
+```
+
+Contract:
+- environment-ul este obligatoriu si poate fi numai `dev|test|prod`;
+- `SOURCE_SHA` este obligatoriu si trebuie sa fie SHA complet immutable;
+- runtime repository este mapat canonic per environment;
+- DEV foloseste `SEARCH_MODE=disabled`, TEST `smoke`, PROD `live`;
+- lipsa account ID / credential / origin produce FAIL;
+- `bootstrap-all` include structural numai DEV + TEST;
+- orice operatie PROD necesita owner gate explicit;
+- Phase 3 permite numai validate/dry-run; live bootstrap/deploy ramane blocat pana la faza environment-specific;
+- runtime data seed se deriva din `shared/runtime-data.mjs`, nu din trei liste copiate;
+- nicio resursa runtime DEV/TEST/PROD nu este creata de Phase 3.
+
+Workflow-ul `deploy-environment.yml` este manual-only si `dry_run=true` implicit. G3 cere validarea statica/dry-run pentru toate cele trei environments si zero mutatii PROD.
+
+**Gate G3:** automation + CI + dry-run PASS. Dupa G3 se opreste; bootstrap DEV necesita Phase 4 / GO conform planului #161.

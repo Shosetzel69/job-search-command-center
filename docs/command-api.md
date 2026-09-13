@@ -246,3 +246,17 @@ CI verifica minimum:
 - Worker dry-run.
 
 E2E final Package 2A8 este #122.
+
+## Environment automation - Phase 3 / #161
+
+Phase 3 nu modifica endpoint-urile Command API. Automatizarea foloseste contractul identity introdus in Phase 2 si il trateaza ca input obligatoriu pentru viitoarele deploy-uri environment-specific.
+
+Manifest: `config/environments.json`.
+
+CLI: `scripts/environment.mjs`.
+
+Reguli relevante pentru Command API:
+- `APP_ENV`, runtime repo/ref, `SOURCE_SHA`, `RUNTIME_DATA_SHA`, `SEARCH_MODE` si `FRONTEND_ORIGIN` raman fail-closed;
+- Phase 3 nu schimba mapping-ul operational PROD curent;
+- niciun live bootstrap/deploy nu este permis in Phase 3;
+- viitoarele Phase 4+ trebuie sa configureze Worker-ul exclusiv cu valorile environment-ului selectat si sa confirme identity prin `/health`.
