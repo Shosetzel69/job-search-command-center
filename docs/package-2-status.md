@@ -1,6 +1,6 @@
 # Package 2 - status implementare
 
-Ultima actualizare: 2026-09-09
+Ultima actualizare: 2026-09-13
 
 ## Scope
 
@@ -8,7 +8,7 @@ Package 2 este livrat incremental. #49 este exclus explicit. JobsPipe ramane dis
 
 ## 2A0 - Run state
 
-Status: `DONE`
+Status: `DONE / STABLE`
 
 - polling pana la stare terminala reala;
 - recuperare dupa refresh;
@@ -17,96 +17,76 @@ Status: `DONE`
 
 ## 2A - Administrare / contracts / source governance
 
-Status: `CORE MERGED / 2A8 IN IMPLEMENTATION`
+Status: `CORE + 2A8 DELIVERED / STABILIZED`
 
 Livrat in `main`:
 
-- PR #112 Administrare / source governance;
-- `Administrare` ca intrare unica UI;
+- Administrare ca intrare unica UI;
 - Overview / Actualizare date / Surse / Nomenclatoare / Loguri;
 - Surse / Aprobare surse / Categorii surse;
 - `applications.json` schema 1.0;
 - `source-categories.json` schema 1.0;
-- validation/approval/active separate;
-- sursa noua pending + inactive;
-- CRUD categorii;
-- Command API source governance actions;
-- teste frontend/backend;
-- hotfix #114/#115 pentru protected asset `source-categories.json`;
-- production UI reconfirmat functional de owner dupa hotfix.
+- lifecycle validation/approval/active separat;
+- CRUD categorii si source governance prin Command API;
+- polling robust;
+- protected runtime assets;
+- nomenclatoare canonice Package 2A8;
+- E2E PROD Package 2A8 PASS prin #126.
 
-Ramas in 2A:
+### Follow-up care nu blocheaza stabilizarea
 
-- #93 cleanup semantic Source Registry;
-- #116 Package 2A8 nomenclatoare canonice;
-- #96/#122 E2E final.
+- #93 cleanup semantic Source Registry ramane deschis separat;
+- defectele P3 de polish observate in #126 pot fi tratate separat.
 
-### 2A8 - Nomenclatoare canonice
+#93 nu invalideaza baseline-ul functional si nu blocheaza trecerea la urmatorul pachet.
 
-Status: `IN IMPLEMENTATION`
+## 2A8 - Nomenclatoare canonice
 
-Branch: `feature/116-canonical-nomenclatures`
+Status: `DONE / PROD E2E PASS`
 
-Implementat pana acum:
+Livrat:
 
-- #117: `data/nomenclatures.json` schema 1.0 creat;
-- domenii canonice: regions, countries, work_modes, contract_types, application_statuses, seniority infrastructure;
-- clasificare `system` / `extensible`;
-- coduri stabile separate de label;
-- membership EU/US/ASIA capturat in contract;
-- CI valideaza schema, unicitatea codurilor/labelurilor si referintele geografice;
-- `docs/data-contract.md` sincronizat.
-
-Ordine ramasa:
-
-1. #118 geografie canonica si parity migration;
-2. #119 work modes + contract types;
-3. #120 Admin Nomenclatoare + integritate referentiala;
-4. #121 runtime asset manifest/CI guard;
-5. #122 migration + E2E.
-
-Issues: #116-#122.
-
-Documente:
-
-- `docs/analysis/2026-09-09-canonical-nomenclatures.md`;
-- `docs/package-2a8-implementation-plan.md`;
-- `ARCHITECTURE.md` v1.6.
+- `data/nomenclatures.json` schema 1.0;
+- domains: regions, countries, work_modes, contract_types, application_statuses, seniority infrastructure;
+- clasificare system/extensible;
+- geografie canonica React / Command API / Python;
+- Remote/Hibrid/Onsite; unknown tehnic;
+- contract types canonice;
+- `contract_type` + raw provider value;
+- Administrare -> Nomenclatoare functional;
+- 409 + references pentru valori utilizate;
+- manifest/parity guard pentru runtime assets;
+- zero dispatch la operatii de config/admin;
+- #117-#121 CLOSED;
+- #122 satisfacut prin smoke-ul PROD #126.
 
 ## 2B - Scheduler controlat
 
-Status: `PLANNED AFTER 2A8`
+Status: `PLANNED / NOT STARTED`
 
 - automation config implicit OFF;
 - interval 1/2/4/8/12/24h;
-- scheduler lightweight separat de full search;
+- scheduler lightweight separat de Full Search;
 - no-op cand OFF/not due;
 - exact un dispatch `scheduled` cand due.
 
-Issues: #86, #97-#101.
-
 ## 2C - Conectori aprobati
 
-Status: `PLANNED`
+Status: `PLANNED / PARTIAL TECHNICAL FOUNDATION`
 
-- inventar/gate;
-- loturi mici de validare;
-- ATS publice concrete;
-- Workday CXS pe tenant-uri concrete;
-- activare numai dupa implementare + teste + validare + aprobare.
-
-Issues: #87, #102-#105.
+- connectorii se implementeaza si valideaza in loturi mici;
+- activarea Source Registry se face numai dupa implementare + teste + validare + aprobare;
+- JobsPipe ramane disabled;
+- #49 nu este obiectiv implicit.
 
 ## 2D - Data quality / FIT / UX
 
 Status: `PLANNED`
 
-- dedup cross-provider pentru connectorii folositi;
+- dedup cross-provider;
 - first_seen/repost history;
 - FIT v2 explicabil;
 - KPI local + release management.
-
-Issues: #88, #106-#110.
 
 ## 2E - ATS Match v1
 
@@ -115,17 +95,19 @@ Status: `PLANNED / DEPENDENCY GATE`
 - ATS separat de FIT;
 - scoring determinist;
 - privacy boundary single-user;
-- orice dependinta noua PDF/DOCX necesita aprobare explicita inainte de implementare.
-
-Issues: #89, #111, #113.
+- orice dependinta noua PDF/DOCX necesita aprobare explicita.
 
 ## Guardrails active
 
-- JobsPipe ramane disabled;
-- #49 nu se implementeaza in Package 2;
+- JobsPipe disabled;
+- #49 parcat/exclus din Package 2;
 - CI nu face live crawl;
 - Save/config/source/category/nomenclature != Run;
-- full search ramane manual-only pana la 2B;
+- Full Search ramane manual-only pana la 2B;
 - fara dependinte noi fara aprobare explicita;
-- target geografic gol ramane invalid;
+- target geografic gol invalid;
 - niciun cleanup/migrare de referinte nu se face silent.
+
+## Stabilization gate
+
+Package 1 + Package 2A/2A8 sunt declarate stabile la 2026-09-13. Detalii: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
