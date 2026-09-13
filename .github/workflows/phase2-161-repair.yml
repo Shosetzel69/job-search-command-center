@@ -59,12 +59,30 @@ jobs:
           });
           EOF
 
-      - name: Commit validated Phase 2 implementation
+      - name: Commit validated Phase 2 source changes
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/workflows/phase2-161-apply.yml .github/workflows/phase2-161-repair.yml scripts/apply_phase2_161.py
-          git add command-api frontend scripts .github/workflows/job-search-full.yml ARCHITECTURE.md docs/command-api.md CHANGELOG.md
+          git add \
+            command-api/src/environment-config.js \
+            command-api/src/runtime-github.js \
+            command-api/src/build-identity.generated.js \
+            command-api/scripts/write-build-identity.mjs \
+            command-api/src/index.js \
+            command-api/src/nomenclature-api.js \
+            command-api/package.json \
+            command-api/wrangler.jsonc \
+            command-api/test/environment-config.test.mjs \
+            command-api/test/runtime-github.test.mjs \
+            command-api/test/security.test.mjs \
+            scripts/job_search_runner.py \
+            scripts/publish_results.sh \
+            frontend/src/environment-marker.mjs \
+            frontend/src/main.jsx \
+            frontend/test/environment-marker.test.mjs \
+            ARCHITECTURE.md \
+            docs/command-api.md \
+            CHANGELOG.md
           git diff --cached --check
           git commit -m '[FEAT][#161] Add Phase 2 environment-awareness contract'
           git push origin HEAD:feat/161-phase2-environment-awareness
