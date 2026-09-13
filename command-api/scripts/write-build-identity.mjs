@@ -13,11 +13,16 @@ if (requestedSourceSha && requestedSourceSha !== sourceSha) {
   throw new Error(`SOURCE_SHA ${requestedSourceSha} does not match checked-out source ${sourceSha}`);
 }
 
-// Phase 2 transition: runtime data are built from the same repository checkout.
-// Phase 3 must provide RUNTIME_DATA_SHA explicitly once runtime repositories are separated.
-const runtimeDataSha = String(process.env.RUNTIME_DATA_SHA || sourceSha).trim().toLowerCase();
+const appEnv = String(process.env.APP_ENV || 'prod').trim().toLowerCase();
+const requestedRuntimeDataSha = String(process.env.RUNTIME_DATA_SHA || '').trim().toLowerCase();
+if (appEnv !== 'prod' && !requestedRuntimeDataSha) {
+  throw new Error(`RUNTIME_DATA_SHA is required for isolated ${appEnv.toUpperCase()} builds`);
+}
+
+// Transitional PROD keeps the existing source/runtime mapping until Phase 6/7.
+const runtimeDataSha = requestedRuntimeDataSha || sourceSha;
 if (!SHA_RE.test(runtimeDataSha)) throw new Error('RUNTIME_DATA_SHA must be a full 40-character commit SHA');
 
 const output = `export const BUILD_IDENTITY = Object.freeze({\n  sourceSha: '${sourceSha}',\n  runtimeDataSha: '${runtimeDataSha}',\n});\n`;
 writeFileSync(resolve(projectDir, 'src/build-identity.generated.js'), output, 'utf8');
-console.log(`Build identity: SOURCE_SHA=${sourceSha} RUNTIME_DATA_SHA=${runtimeDataSha}`);
+console.log(`Build identity: APP_ENV=${appEnv} SOURCE_SHA=${sourceSha} RUNTIME_DATA_SHA=${runtimeDataSha}`);
