@@ -1,110 +1,130 @@
 # ADR-003 - Medii DEV / TEST / PROD complet izolate
 
-Status: Accepted
-Data: 2026-09-11
+Status: Accepted - implementation gate
+Data initiala: 2026-09-11
+Revizie finala: 2026-09-13
 Refs: #161
 
 ## Context
 
 Aplicatia ruleaza in prezent ca un singur stack operational: Cloudflare Worker `job-search-command-api`, frontend React/Vite livrat ca Worker Static Assets, date runtime in repository-ul principal si search engine orchestrat prin GitHub Actions.
 
-Owner-ul a aprobat introducerea a trei medii complet separate: DEV, TEST si PROD.
+Owner-ul a aprobat introducerea a trei medii runtime separate: DEV, TEST si PROD.
 
 Separarea nu trebuie sa fie doar de naming. Un credential DEV compromis sau o configuratie DEV gresita nu trebuie sa permita modificarea resurselor TEST sau PROD. Aceeasi regula se aplica TEST fata de PROD.
 
 Proiectul pastreaza principiul `free architecture`: cost operational preferabil 0; costul poate fi introdus numai cu beneficiu clar si aprobare separata.
 
+Stabilizarea baseline-ului curent a fost inchisa la 2026-09-13. Implementarea mediilor incepe numai dupa merge-ul acestui ADR si owner GO pentru #161.
+
+## Scope-ul izolarii
+
+`Complet izolate` inseamna izolarea runtime si a credentialelor de write, nu duplicarea intregului control-plane.
+
+Sunt separate obligatoriu:
+- Cloudflare account si Worker runtime;
+- runtime repository si date;
+- credentiale GitHub cu drepturi de write;
+- credentiale Cloudflare de deploy;
+- secrets si provider credentials;
+- search execution state si rezultate;
+- OAuth client/origin configuration unde este necesar;
+- health/evidence per environment.
+
+Raman shared by design:
+- source repository-ul canonic;
+- owner identity GitHub/Cloudflare;
+- source commit history;
+- template-urile si automation logic;
+- GitHub Actions billing/quota la nivelul planului owner-ului;
+- `ai-github-bridge`, cat timp ramane engineering/control-plane infrastructure si nu runtime dependency.
+
+Aceste elemente shared nu au voie sa ofere credentiale runtime DEV cu acces de write spre TEST/PROD sau TEST spre PROD.
+
 ## Problema
 
 Configuratia actuala are coupling incompatibil cu izolarea ceruta:
-
-- `GITHUB_REF` controleaza atat accesul la date, cat si workflow dispatch;
-- datele runtime sunt in acelasi repository cu source code-ul;
+- `GITHUB_REF` controleaza simultan date si workflow dispatch;
+- runtime data sunt in acelasi repository cu source code-ul;
 - build-ul Worker copiaza `data/*` in Static Assets;
-- full search ruleaza in repository-ul principal si publica inapoi in acelasi repository;
-- un singur Cloudflare account nu ofera izolarea credentialelor de deploy la nivel de Worker, deoarece `Workers Scripts Write` este permisiune account-scoped;
-- GitHub Environments nu trebuie sa fie o dependinta obligatorie, deoarece pentru repository privat necesita un plan GitHub care poate introduce cost.
+- full search ruleaza in source repository si publica inapoi in acelasi repository;
+- Cloudflare `Workers Scripts Write` este account-scoped;
+- source repository-ul are in prezent Git integration care poate produce preview deployments pentru `job-search-command-api`;
+- un singur SHA runtime nu identifica astazi explicit atat codul de UI/API, cat si codul search executat.
 
 ## Obiectiv
 
-Trei stack-uri runtime independente, cu aceeasi baza de cod si aceleasi template-uri de automatizare:
-
 ```text
-SOURCE CODE / templates
-          |
-    +-----+-----+
-    |     |     |
-   DEV   TEST  PROD
+                    SOURCE / CONTROL-PLANE
+                code + tests + templates
+                           |
+             +-------------+-------------+
+             |             |             |
+            DEV           TEST          PROD
+         runtime repo   runtime repo   runtime repo
+         CF account     CF account     CF account
 ```
 
-Runtime data, secretele, credentialele de write, joburile de search si deploy target-urile nu sunt promovate intre medii.
-
-Promovarea muta numai identitatea codului/build-ului aprobat.
+Promotion muta numai un `SOURCE_SHA` immutable aprobat. Runtime data nu sunt promovate intre medii.
 
 ## Optiuni analizate
 
-### A. Un Cloudflare account + Wrangler environments + date in acelasi repository
-
-Avantaje:
-- configurare simpla;
-- putine resurse;
-- suport nativ Wrangler `--env`.
-
-Dezavantaje:
-- `Workers Scripts Write` este account-scoped, deci credentialul DEV poate avea blast radius asupra Worker-ului PROD;
-- un token GitHub pe acelasi repository nu poate fi restrictionat la un director `data/dev`;
-- izolarea depinde de configuratie si naming, nu de permissions.
-
-Respinsa pentru cerinta de separare totala.
+### A. Un Cloudflare account + Wrangler environments + acelasi datastore
+Respinsa: deploy credential-ul are blast radius la nivel de account, iar izolarea ar depinde de naming/config.
 
 ### B. Workers separati in acelasi Cloudflare account + runtime repositories separate
-
-Avantaje:
-- datele GitHub pot fi izolate prin permissions;
-- cost 0 probabil.
-
-Dezavantaje:
-- deploy credential Cloudflare ramane account-scoped;
-- nu satisface criteriul strict DEV credential != PROD capability.
-
-Respinsa ca arhitectura tinta.
+Respinsa ca arhitectura tinta: datele GitHub pot fi separate, dar deploy credential-ul Cloudflare ramane account-scoped.
 
 ### C. Cloudflare accounts separate + runtime repositories separate
+Aleasa.
 
 Avantaje:
-- boundary real de permissions pentru Cloudflare;
-- boundary real de permissions pentru date si Actions;
-- provider secrets pot ramane exclusiv in repository-ul runtime al mediului;
-- compromiterea unui environment nu ofera implicit credentiale spre altul;
-- Cloudflare permite conturi Free separate; owner-ul poate folosi contul existent pentru PROD si doua conturi Free noi pentru DEV si TEST.
+- boundary real de permissions Cloudflare;
+- boundary real de permissions GitHub pentru runtime data;
+- secrets si provider credentials per environment;
+- compromiterea unui environment nu ofera implicit write in altul;
+- compatibila cu tinta de cost 0 folosind conturi Free separate.
 
-Dezavantaje:
-- doua conturi Cloudflare noi de creat;
+Trade-off-uri:
+- doua conturi Cloudflare suplimentare;
 - trei runtime repositories;
-- bootstrap mai complex;
-- trebuie automatizate template-urile pentru a evita administrarea manuala repetitiva.
-
-Aleasa.
+- bootstrap si orchestration mai complexe;
+- Static Assets necesita sincronizare explicita cu runtime data.
 
 ## Decizie
 
-Se adopta optiunea C.
-
-### Source repository
+### 1. Source repository
 
 `Shosetzel69/job-search-command-center` ramane repository-ul canonic pentru:
-
 - source code;
 - teste;
 - documentatie;
-- reusable workflow / template logic;
-- scripturile de provisioning si deployment.
+- template-uri;
+- provisioning/deployment logic.
 
 Nu devine datastore comun pentru cele trei runtime-uri.
 
-### Runtime repositories
+Dupa cutover-ul PROD, source repository-ul NU mai are voie sa deployeze direct `job-search-command-api` in niciun mediu prin Cloudflare Git integration sau alta cale implicita.
 
-Se creeaza trei repository-uri private dedicate:
+Flux permis dupa cutover:
+
+```text
+source commit -> runtime workflow -> environment Cloudflare account
+```
+
+Flux interzis:
+
+```text
+source push/PR -> direct command-api deploy
+```
+
+`ai-github-bridge` nu este afectat de aceasta regula cat timp ramane control-plane separat.
+
+Acceptance obligatoriu dupa cutover: push/PR in source repository produce zero deployment `job-search-command-api` in DEV/TEST/PROD.
+
+### 2. Runtime repositories
+
+Se creeaza trei repository-uri private:
 
 ```text
 job-search-runtime-dev
@@ -112,21 +132,19 @@ job-search-runtime-test
 job-search-runtime-prod
 ```
 
-Fiecare contine exclusiv starea runtime si wrapper-ul minim necesar executiei acelui environment.
-
-Fiecare repository are propriile:
-
-- `data/*.json`;
+Fiecare detine exclusiv:
+- `data/*.json` runtime;
+- wrapper workflow minim;
 - Actions secrets;
 - provider credentials;
-- workflow execution history;
-- write token/context nativ al repository-ului.
+- execution history;
+- credentialele proprii de deploy.
 
 `GITHUB_TOKEN` al workflow-ului runtime scrie numai in repository-ul caller.
 
 Nu exista copiere automata DEV -> TEST -> PROD pentru date.
 
-### Cloudflare accounts
+### 3. Cloudflare accounts
 
 Se folosesc trei Cloudflare accounts distincte:
 
@@ -136,222 +154,239 @@ Job Search TEST
 Job Search PROD
 ```
 
-Contul Cloudflare actual devine PROD. Owner-ul creeaza doua conturi Free suplimentare pentru DEV si TEST.
+Contul actual devine PROD. Se creeaza doua conturi Free suplimentare pentru DEV si TEST.
 
-Motiv: permisiunea de deploy Worker este account-scoped. Conturile separate transforma boundary-ul DEV/TEST/PROD intr-un boundary de permissions.
+Fiecare account contine propriul `job-search-command-api`, propriile secrets si credential de deploy.
 
-Fiecare account contine propriul `command-api` Worker si propriile Worker secrets.
+Un runtime deploy credential trebuie sa aiba acces numai la account-ul environment-ului sau.
 
-Numele Worker-ului poate fi acelasi in fiecare account deoarece account-ul este boundary-ul principal. URL-ul trebuie sa ramana distinct si verificabil.
+### 4. Access runtime -> source
 
-### Runtime deployment credential
+Runtime workflows executa codul canonic fara sa copieze business logic in cele trei runtime repositories.
 
-Fiecare runtime repository detine numai credentialul Cloudflare pentru account-ul corespunzator.
+Model:
+1. workflow-ul porneste in runtime repository;
+2. primeste obligatoriu `SOURCE_SHA` complet si immutable;
+3. checkout runtime repository;
+4. checkout source repository exact la `SOURCE_SHA`, read-only;
+5. ruleaza scripturile/build-ul din acel checkout;
+6. publica numai in runtime repository-ul caller;
+7. deployeaza numai in Cloudflare account-ul caller.
 
-```text
-runtime-dev  -> Cloudflare DEV only
-runtime-test -> Cloudflare TEST only
-runtime-prod -> Cloudflare PROD only
-```
+Accesul runtime -> source este read-only si environment-specific. Preferat: deploy key read-only distinct per runtime repository. PAT classic este interzis.
 
-Un credential DEV nu trebuie configurat cu acces la account-ul TEST sau PROD.
+Deploy keys sunt credentiale long-lived; implementarea trebuie sa documenteze revocarea si rotatia lor.
 
-### Source access din runtime workflows
+### 5. Reusable workflow / template
 
-Runtime workflows trebuie sa poata executa codul canonic fara a copia implementation logic in trei repository-uri.
+Runtime repositories contin wrapper minim generat dintr-un template unic.
 
-Model tinta:
+Business logic nu este duplicata in wrapper.
 
-1. runtime workflow porneste in repository-ul environment-ului;
-2. checkout runtime repository;
-3. checkout source repository la un SHA/tag explicit;
-4. ruleaza logica din source repository;
-5. publica rezultatele numai in runtime repository-ul caller;
-6. construieste/deployeaza Worker-ul numai in Cloudflare account-ul environment-ului.
+Daca se foloseste GitHub reusable workflow din source repository, referinta workflow-ului trebuie sa fie pinuita la un ref immutable compatibil cu `SOURCE_SHA`. Nu este permis ca search/build-ul sa ruleze din `main` in timp ce Worker-ul declara alt `SOURCE_SHA`.
 
-Accesul runtime -> source trebuie sa fie read-only si environment-specific. Varianta preferata este cate un deploy key read-only distinct pentru fiecare runtime repository. Nu se foloseste PAT classic.
+Varianta simpla acceptata este wrapper generic + checkout source la `SOURCE_SHA` + executia scripturilor din checkout.
 
-### Reusable workflow
+### 6. GitHub Environments
 
-Logica GitHub Actions se centralizeaza in source repository ca reusable workflow / template canonic.
+Nu sunt dependinta obligatorie. Izolarea de baza se obtine prin runtime repositories separate, repository secrets separate si credentials separate.
 
-Cele trei runtime repositories contin numai wrapper minim, generat automat din acelasi template.
+Pot fi adaugate ulterior ca defense-in-depth fara schimbarea boundary-urilor.
 
-Source repository trebuie configurat sa permita folosirea reusable workflows de catre repository-uri private detinute de acelasi owner.
+### 7. Command API si identity contract
 
-### GitHub Environments
-
-Nu sunt dependinta obligatorie a arhitecturii.
-
-Motiv: pentru repository privat, configurarea GitHub Environments poate depinde de planul GitHub. Izolarea se obtine prin repository-uri separate, repository-level secrets si credentials separate.
-
-Daca owner-ul are ulterior un plan care include private Environments, acestea pot fi adaugate ca defense-in-depth fara schimbarea boundary-urilor de baza.
-
-### Command API
-
-Configuratia trebuie sa separe explicit conceptele astazi comprimate in `GITHUB_REF`.
-
-Contract minim conceptual:
+Conceptele astazi comprimate in `GITHUB_REF` se separa explicit:
 
 ```text
 APP_ENV
 GITHUB_RUNTIME_REPO
 GITHUB_RUNTIME_REF
 GITHUB_WORKFLOW
-SOURCE_VERSION / BUILD_SHA
+SOURCE_SHA
+RUNTIME_DATA_SHA
 SEARCH_MODE
 ```
 
-Numele finale pot respecta conventiile codului, dar responsabilitatile nu pot fi recombinate.
+`SOURCE_SHA` este SHA-ul exact al source code-ului deployat si executat.
 
-Tokenul GitHub al fiecarui Worker este scoped exclusiv la runtime repository-ul acelui environment.
+`RUNTIME_DATA_SHA` este commit-ul runtime repository-ului din care a fost construit snapshot-ul de date servit de Worker.
 
-### Static Assets si runtime data
+Niciunul nu poate avea fallback implicit la `main` pentru executie PROD.
 
-Se pastreaza modelul Worker Static Assets daca implementarea poate mentine izolarea fara duplicare de cod.
+### 8. Run identity contract
 
-Build-ul environment-ului primeste date numai din runtime repository-ul acelui environment si le copiaza in `command-api/public/data` prin mecanismul existent/adaptat.
-
-Dupa publicarea datelor de search, workflow-ul environment-ului trebuie sa declanseze rebuild/deploy pentru acelasi environment astfel incat asset snapshot-ul sa fie sincronizat.
-
-Schimbarea catre un datastore nou sau catre fetch runtime direct din GitHub nu este aprobata de acest ADR si necesita change separat daca devine necesara.
-
-### Search execution
-
-Politica implicita:
+Orice `POST /commands/run` trebuie sa fie legat de codul Worker-ului care accepta comanda:
 
 ```text
-DEV  -> full live search disabled; mock/smoke controlat
-TEST -> smoke/controlled search
+Worker health SOURCE_SHA=abc123
+        -> POST /commands/run
+        -> workflow_dispatch(source_sha=abc123)
+        -> checkout source @ abc123
+```
+
+Obligatoriu:
+- `run-status.json` include `source_sha`;
+- `run-history.json` include `source_sha`;
+- workflow-ul refuza lipsa/mismatch-ul `source_sha`;
+- checkout-ul search nu foloseste implicit `main`;
+- `/health` confirma acelasi `source_sha`.
+
+### 9. Static Assets si runtime data
+
+Build-ul environment-ului primeste date numai din runtime repository-ul environment-ului.
+
+Snapshot identity:
+1. checkout source @ `SOURCE_SHA`;
+2. checkout runtime data la commit `RUNTIME_DATA_SHA`;
+3. build Static Assets;
+4. deploy Worker;
+5. `/health` expune ambele SHA-uri.
+
+Dupa publicarea rezultatelor search:
+1. runtime workflow commit-uieste datele;
+2. obtine noul `RUNTIME_DATA_SHA`;
+3. rebuild/deploy pentru acelasi environment;
+4. verifica `/health.runtime_data_sha`.
+
+Daca redeploy-ul esueaza, runtime repository poate avea date mai noi decat Worker-ul servit. Aceasta stare trebuie raportata explicit `DEGRADED/STALE_ASSET`, nu mascata ca succes.
+
+Schimbarea la un datastore nou nu este aprobata de acest ADR.
+
+### 10. Search execution policy
+
+```text
+DEV  -> live full search disabled implicit; mock/smoke controlat
+TEST -> controlled/smoke search
 PROD -> live search
 ```
 
-Provider secrets sunt separate per runtime repository. Daca un provider nu permite trei credentials distincte, exceptia se documenteaza explicit inainte de activare; nu se presupune sharing silent.
+Provider secrets sunt separate per runtime repository. Orice exceptie de sharing impusa de provider se documenteaza explicit inainte de activare.
 
-### OAuth / Google
+### 11. OAuth / Google
 
-Fiecare environment foloseste propriul OAuth client/origin configuration. Client ID-urile pot apartine aceluiasi Google Cloud project, deoarece nu reprezinta write credential spre datele altui environment, dar origin-urile si client configuration trebuie separate.
+Fiecare environment foloseste propriul OAuth client/origin configuration. Client IDs pot apartine aceluiasi Google Cloud project, dar origin-urile/configuratia sunt separate.
 
-`ALLOWED_GOOGLE_SUB` si orice secret Worker se configureaza separat in fiecare Cloudflare account.
+`ALLOWED_GOOGLE_SUB` si Worker secrets sunt configurate separat in fiecare Cloudflare account.
 
-### ai-github-bridge
+### 12. ai-github-bridge
 
-`ai-github-bridge` ramane engineering/control-plane infrastructure si nu este runtime dependency a aplicatiei. Nu se multiplica DEV/TEST/PROD prin acest ADR.
+Ramane control-plane infrastructure si nu se multiplica DEV/TEST/PROD prin acest ADR.
 
-Daca in viitor bridge-ul devine componenta runtime a aplicatiei, separarea lui se trateaza ca change arhitectural separat.
+Daca devine runtime dependency, necesita change arhitectural separat.
 
 ## Automatizare obligatorie
 
-Nu se implementeaza trei scripturi copiate.
-
-Se construieste un singur environment tool parametrizat, cu operatii echivalente:
+Un singur environment tool parametrizat:
 
 ```text
 env validate <dev|test|prod>
 env bootstrap <dev|test|prod>
 env bootstrap-all
-env deploy <dev|test|prod> --source-ref <sha>
+env deploy <dev|test|prod> --source-sha <sha>
 env status
 env isolation-test
 ```
 
-Config non-secret este tinut intr-un manifest canonic. Secretele nu se comit.
+Regula speciala:
 
-Nicio comanda nu are voie sa foloseasca PROD ca default implicit.
+```text
+env bootstrap-all -> DEV + TEST only
+```
+
+PROD NU este inclus in nicio comanda convenience/all.
+
+PROD necesita comanda explicita `--env prod`, source SHA explicit si owner GO separat.
+
+Nicio comanda nu foloseste PROD ca default.
 
 ## Provisioning manual inevitabil
 
-Pentru conturile Cloudflare self-service, crearea noilor Free accounts se face din dashboard. API-ul general de creare account este disponibil tenant admins, deci bootstrap-ul normal nu trebuie sa presupuna ca poate crea aceste accounts programatic.
-
-Owner action unica inainte de bootstrap automat:
-
+Owner action initial:
 1. pastreaza account-ul actual ca PROD;
 2. creeaza `Job Search DEV`;
 3. creeaza `Job Search TEST`;
-4. furnizeaza scriptului cele trei Cloudflare account IDs si bootstrap credentials necesare.
+4. furnizeaza account IDs si bootstrap credentials necesare.
 
-Restul provisioning-ului trebuie automatizat cat mai mult posibil.
+Bootstrap credentials largi nu se stocheaza in runtime repositories si se revoca/rotesc dupa provisioning daca nu mai sunt necesare.
 
 ## Promotion model
 
 ```text
-source SHA X
-   |
-   +-> DEV  build X
-   |
-   +-> TEST build X
-   |
-   +-> PROD build X
+SOURCE_SHA X
+   +-> DEV
+   +-> TEST
+   +-> PROD
 ```
 
-Acelasi source SHA este promovat. Nu se merge pe ramuri permanente care contin implementari diferite per environment.
-
-Environment data nu este promovata.
+Acelasi SHA este promovat. Nu se promoveaza branch-uri mutable si nu se promoveaza runtime data.
 
 ## Safety rules
 
-Deployment-ul trebuie sa fail closed daca:
-
-- environment-ul nu este explicit;
-- Cloudflare account ID nu corespunde environment-ului;
+Deployment-ul fail closed daca:
+- environment lipseste;
+- `SOURCE_SHA` lipseste sau nu este commit SHA valid;
+- account ID nu corespunde environment-ului;
 - runtime repository nu corespunde environment-ului;
+- credentialul are scope neasteptat;
 - exista placeholder/config lipsa;
-- credentialul runtime nu poate demonstra accesul asteptat;
 - DEV/TEST incearca target PROD;
-- health metadata dupa deploy nu corespunde manifestului;
-- source SHA deployat nu este cel solicitat.
+- health environment/source/runtime SHA nu corespund build-ului solicitat;
+- search policy nu corespunde environment-ului.
 
-Pentru PROD este necesar owner GO conform governance-ului existent.
+PROD necesita owner GO explicit.
 
 ## Acceptance boundary
 
-Izolarea este acceptata numai daca testele negative demonstreaza:
-
+Izolarea este acceptata numai daca se demonstreaza:
 - DEV nu poate scrie TEST;
 - DEV nu poate scrie PROD;
 - TEST nu poate scrie PROD;
-- DEV deployment credential nu poate modifica Cloudflare TEST/PROD;
-- TEST deployment credential nu poate modifica Cloudflare PROD;
-- runtime workflow nu poate publica date in alt runtime repository cu credentialele sale normale;
-- datele nu sunt mutate de promotion;
-- fiecare `/health` identifica environment-ul, build SHA si runtime target-ul corect.
+- DEV Cloudflare credential nu poate modifica TEST/PROD;
+- TEST Cloudflare credential nu poate modifica PROD;
+- runtime workflow nu poate publica in alt runtime repository;
+- promotion nu muta date;
+- `/health` identifica `environment`, `source_sha`, `runtime_repo`, `runtime_data_sha`, `search_mode`;
+- Run executa exact `source_sha` declarat de Worker;
+- push/PR in source repository nu produce direct `job-search-command-api` deployment dupa cutover;
+- compromiterea credentialelor DEV nu ofera o cale de write in TEST/PROD cu acele credentiale.
 
 ## Consecinte
 
 Pozitive:
-- blast radius redus la un singur environment;
+- blast radius redus la un environment;
 - izolarea este impusa de provider permissions;
-- nu este necesar GitHub Pro doar pentru environment secrets;
-- codul si automation logic raman centralizate;
-- provisioning-ul poate fi repetabil si auditat.
+- codul ramane unic;
+- deploy/search sunt auditabile prin SHA immutable;
+- drift-ul Static Assets poate fi detectat prin `runtime_data_sha`.
 
 Trade-off-uri:
 - doua Cloudflare accounts suplimentare;
 - trei runtime repositories;
-- workflow orchestration mai complex;
-- deployment-ul trebuie sa sincronizeze Static Assets dupa schimbarea datelor;
-- bootstrap-ul initial necesita cateva owner actions care nu pot fi automatizate in mod normal.
+- orchestration mai complex;
+- bootstrap initial necesita owner actions;
+- GitHub owner identity si plan/quota raman shared control-plane.
 
-## Impact asupra documentelor si codului
+## Impact implementare #161
 
-Implementarea #161 va afecta cel putin:
-
+Cel putin:
 - `ARCHITECTURE.md`;
 - `docs/command-api.md`;
 - `CONTRIBUTING.md`;
 - `CHANGELOG.md`;
-- `command-api/wrangler.jsonc` sau generatorul lui;
-- Command API environment configuration;
-- build/static data flow;
-- GitHub Actions search/deploy orchestration;
-- scripturile de provisioning.
+- Command API environment/run identity;
+- `/health` contract;
+- Static Assets build flow;
+- GitHub Actions runtime orchestration;
+- Cloudflare Git integration pentru `job-search-command-api` la cutover;
+- provisioning/deployment scripts.
 
-Acest ADR documenteaza arhitectura tinta. Nu afirma ca cele trei medii exista deja.
+Acest ADR defineste tinta. Nu afirma ca mediile exista deja.
 
 ## Referinte externe verificate
 
 - Cloudflare Wrangler environments: https://developers.cloudflare.com/workers/wrangler/environments/
 - Cloudflare API token permissions: https://developers.cloudflare.com/fundamentals/api/reference/permissions/
-- Cloudflare Free accounts dashboard creation: https://developers.cloudflare.com/changelog/post/2026-08-04-free-dashboard-button/
-- GitHub Actions access across private repositories: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/enabling-features-for-your-repository/managing-github-actions-settings-for-a-repository
-- GitHub deployment environments plan constraints: https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
+- Cloudflare Free accounts: https://developers.cloudflare.com/changelog/post/2026-08-04-free-dashboard-button/
+- GitHub Actions private repository sharing: https://docs.github.com/en/actions/how-tos/reuse-automations/share-across-private-repositories
+- GitHub Environments: https://docs.github.com/en/actions/how-tos/deploy/configure-and-manage-deployments/manage-environments
+- GitHub deploy keys: https://docs.github.com/en/authentication/connecting-to-github-with-ssh/managing-deploy-keys

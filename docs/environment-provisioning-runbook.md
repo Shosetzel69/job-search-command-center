@@ -1,27 +1,29 @@
 # Environment Provisioning Runbook - DEV / TEST / PROD
 
 Status: Planned / implementation gate
-Data: 2026-09-11
+Data initiala: 2026-09-11
+Revizie finala: 2026-09-13
 ADR: `docs/adr/ADR-003-environment-isolation.md`
 Implementation: #161
 
 ## 1. Scop
 
-Procedura defineste pregatirea, crearea, validarea si promovarea celor trei medii complet izolate.
+Procedura defineste pregatirea, crearea, validarea, promovarea si cutover-ul celor trei medii runtime izolate.
 
-Acest document este contract operational pentru Development. Nu declara mediile ca fiind deja create.
+Documentul este contract operational pentru Development. Nu declara mediile ca fiind deja create.
 
 Principii:
-
 - acelasi source code;
 - trei runtime stacks separate;
-- trei data stores/repositories separate;
+- trei runtime repositories separate;
 - trei Cloudflare accounts separate;
 - credentiale de write separate;
-- fara fallback implicit la PROD;
+- `SOURCE_SHA` immutable pentru build si Run;
+- `RUNTIME_DATA_SHA` pentru snapshot-ul de date servit;
+- fara fallback implicit la PROD sau `main`;
 - fara copiere manuala repetitiva a configuratiei;
 - provisioning idempotent unde API-urile permit;
-- PROD existent nu este modificat in faza de pregatire DEV/TEST.
+- PROD actual nu se modifica in faza DEV/TEST.
 
 ## 2. Resurse tinta
 
@@ -31,7 +33,9 @@ Principii:
 Shosetzel69/job-search-command-center
 ```
 
-Contine cod, documentatie, teste, templates si automation logic.
+Contine cod, teste, documentatie, templates si automation logic.
+
+Dupa cutover-ul PROD, source repository-ul nu mai deployeaza direct `job-search-command-api` prin Cloudflare Git integration.
 
 ### 2.2 Runtime repositories
 
@@ -43,7 +47,7 @@ Shosetzel69/job-search-runtime-prod
 
 Toate private.
 
-Structura minima generata in fiecare:
+Structura minima:
 
 ```text
 .github/workflows/runtime.yml
@@ -60,7 +64,7 @@ data/
 README.md
 ```
 
-Lista finala `data/*` trebuie derivata din contractul canonic existent, nu hard-coded independent in trei locuri.
+Lista finala `data/*` se deriva din contractul canonic existent, nu se hard-codeaza independent in trei locuri.
 
 ### 2.3 Cloudflare accounts
 
@@ -70,58 +74,55 @@ Job Search TEST
 Job Search PROD
 ```
 
-- account-ul Cloudflare existent devine PROD;
-- se creeaza doua Free accounts noi: DEV si TEST;
+- account-ul actual devine PROD;
+- se creeaza doua Free accounts noi pentru DEV si TEST;
 - fiecare account contine numai runtime resources ale environment-ului sau.
 
 ### 2.4 Worker
 
-Numele recomandat in fiecare account:
+Nume recomandat in fiecare account:
 
 ```text
 job-search-command-api
 ```
 
-Account-ul este boundary-ul principal; acelasi nume simplifica template-ul.
+Account-ul este boundary-ul principal. URL-ul/origin-ul trebuie sa fie distinct si verificabil per environment.
 
-URL-urile vor fi diferite deoarece accounts/workers.dev subdomains sunt diferite.
+## 3. Manual vs automatizat
 
-## 3. Ce se face manual si ce se automatizeaza
-
-### Owner action - manual, inevitabil
+### 3.1 Owner actions manuale
 
 Inainte de bootstrap:
+1. stabilizarea curenta este inchisa;
+2. ADR-003 este merged;
+3. owner GO pentru #161;
+4. creeaza Cloudflare account `Job Search DEV`;
+5. creeaza Cloudflare account `Job Search TEST`;
+6. pastreaza account-ul actual ca `Job Search PROD`;
+7. noteaza cele trei Cloudflare account IDs;
+8. creeaza/autorizeaza bootstrap credentials necesare;
+9. confirma ca PROD ramane neschimbat pana la cutover.
 
-1. confirma ca stabilizarea curenta este inchisa;
-2. creeaza Cloudflare Free account `Job Search DEV`;
-3. creeaza Cloudflare Free account `Job Search TEST`;
-4. pastreaza account-ul actual ca `Job Search PROD`;
-5. noteaza cele trei Cloudflare account IDs;
-6. creeaza/autorizeaza credentialul bootstrap necesar provisioning-ului;
-7. confirma ca PROD poate ramane neschimbat pana la faza de cutover.
-
-Crearea self-service a Free accounts nu se presupune automatizabila prin API normal.
-
-### Automatizat
+### 3.2 Automatizat
 
 Environment tool trebuie sa poata:
-
 - crea/verifica runtime repositories;
-- initializa structura si datele seed;
-- genera wrapper workflows dintr-un template unic;
-- genera deploy keys read-only pentru acces runtime -> source;
-- configura source repository pentru Actions access din private repos ale aceluiasi owner;
-- seta repository secrets fara a le scrie in fisiere versionate;
+- initializa datele seed;
+- genera wrapper workflow dintr-un template unic;
+- configura source read-only access;
+- seta repository secrets fara a le versiona;
 - valida Cloudflare account IDs;
 - crea/deploya Worker in account-ul corect;
-- seta Worker secrets;
+- seta Worker vars/secrets;
 - verifica `/health`;
 - executa negative isolation tests;
-- produce un raport final fara valori secrete.
+- produce raport machine-readable si human-readable fara secrete.
+
+Bootstrap credentials largi nu se stocheaza in runtime repositories si se revoca/rotesc dupa provisioning daca nu mai sunt necesare.
 
 ## 4. Manifest canonic
 
-Se implementeaza un singur manifest non-secret, de exemplu:
+Exemplu:
 
 ```text
 config/environments.json
@@ -155,21 +156,15 @@ Schema conceptuala:
 }
 ```
 
-Valorile secrete nu apar in manifest.
+Secretele nu apar in manifest.
 
-## 5. Secret input
+## 5. Secret input si least privilege
 
-Secretele de bootstrap pot fi furnizate prin environment variables sau fisier local ignorat de Git.
-
-Numele exacte se stabilesc in Development, dar contractul trebuie sa distinga explicit:
+Contractul trebuie sa distinga explicit:
 
 ```text
 BOOTSTRAP_GITHUB_TOKEN
 BOOTSTRAP_CLOUDFLARE_TOKEN
-
-DEV_GITHUB_RUNTIME_TOKEN / generated credential
-TEST_GITHUB_RUNTIME_TOKEN / generated credential
-PROD_GITHUB_RUNTIME_TOKEN / generated credential
 
 DEV_CLOUDFLARE_TOKEN
 TEST_CLOUDFLARE_TOKEN
@@ -182,19 +177,21 @@ PROD_ALLOWED_GOOGLE_SUB
 provider secrets per environment
 ```
 
-Daca tool-ul genereaza credentials, valoarea se scrie direct in secret store-ul destinatie si nu se afiseaza in log.
+Runtime workflow foloseste `GITHUB_TOKEN` nativ pentru write numai in repository-ul caller.
 
-Un bootstrap credential cu drepturi largi trebuie revocat/rotit dupa provisioning daca nu mai este necesar.
+Runtime -> source foloseste read-only access distinct per environment. Preferat: deploy key read-only. PAT classic nu se foloseste.
+
+Implementarea documenteaza rotatia/revocarea deploy keys si a bootstrap credentials.
 
 ## 6. Environment tool - contract
 
-Se implementeaza un singur entry point. Exemplu:
+Un singur entry point, de exemplu:
 
 ```text
 scripts/environment.mjs
 ```
 
-Nu se creeaza `setup-dev.sh`, `setup-test.sh`, `setup-prod.sh` cu logica duplicata.
+Nu se creeaza scripturi DEV/TEST/PROD cu logica duplicata.
 
 ### 6.1 validate
 
@@ -205,18 +202,18 @@ npm run env:validate -- --env prod
 ```
 
 Verifica minimum:
-
 - environment explicit si valid;
 - manifest valid;
 - account ID prezent;
-- runtime repo corect pentru environment;
-- Worker name/origin coerent;
+- runtime repo corespunde environment-ului;
+- Worker/origin coerent;
 - credentialele obligatorii exista;
-- credentialul GitHub nu are write in alt runtime repo;
-- credentialul Cloudflare apartine account-ului asteptat;
-- source ref exista;
+- GitHub write credential nu poate scrie alt runtime repo;
+- Cloudflare token apartine account-ului asteptat;
+- source SHA exista;
 - nu exista placeholder nerezolvat;
-- PROD nu este default.
+- PROD nu este default;
+- search policy este compatibila cu environment-ul.
 
 Exit code != 0 la orice abatere.
 
@@ -224,25 +221,24 @@ Exit code != 0 la orice abatere.
 
 ```text
 npm run env:bootstrap -- --env dev
+npm run env:bootstrap -- --env test
 ```
 
 Operatie idempotenta:
+1. `validate` preflight;
+2. verifica/creeaza runtime repo;
+3. initializeaza fisierele runtime din seed aprobat;
+4. configureaza read-only source access;
+5. instaleaza wrapper workflow generat;
+6. configureaza environment-specific secrets;
+7. verifica Cloudflare account;
+8. creeaza Worker daca lipseste;
+9. configureaza Worker vars/secrets;
+10. deploy initial cu `SOURCE_SHA` explicit;
+11. verifica health identity;
+12. produce raport.
 
-1. ruleaza `validate` preflight;
-2. verifica/exista runtime repo;
-3. creeaza runtime repo daca lipseste;
-4. initializeaza fisierele runtime din seed/template aprobat;
-5. genereaza/configureaza read-only source access;
-6. instaleaza wrapper workflow generat din template;
-7. configureaza environment-specific repository secrets;
-8. verifica Cloudflare account;
-9. creeaza Worker daca lipseste;
-10. configureaza Worker vars/secrets;
-11. deploy initial;
-12. verifica health;
-13. produce raport.
-
-Daca resursa exista, tool-ul o valideaza si o aduce la starea declarata numai in limitele scope-ului aprobat; nu o sterge/recreeaza implicit.
+Resursele existente nu sunt sterse/recreate implicit.
 
 ### 6.3 bootstrap-all
 
@@ -250,109 +246,121 @@ Daca resursa exista, tool-ul o valideaza si o aduce la starea declarata numai in
 npm run env:bootstrap-all
 ```
 
-Executa intern aceeasi functie `bootstrap(environment)` pentru `dev`, `test`, `prod`.
-
-Nu contine trei blocuri de logica separate.
-
-Inainte de PROD trebuie sa existe owner GO. Fara GO, `bootstrap-all` se opreste dupa TEST si raporteaza PROD pending.
-
-### 6.4 deploy
+Executa numai:
 
 ```text
-npm run env:deploy -- --env dev --source-ref <commit-sha>
+bootstrap(dev)
+bootstrap(test)
+```
+
+**PROD este exclus structural din `bootstrap-all`.**
+
+Nu exista flag care transforma silent `bootstrap-all` in DEV+TEST+PROD.
+
+### 6.4 PROD bootstrap
+
+PROD necesita actiune separata si owner GO explicit:
+
+```text
+npm run env:bootstrap -- --env prod --source-sha <full-sha>
+```
+
+Tool-ul trebuie sa refuze PROD daca owner gate-ul definit de governance nu este satisfacut.
+
+### 6.5 deploy
+
+```text
+npm run env:deploy -- --env dev --source-sha <full-commit-sha>
 ```
 
 Reguli:
-
-- source ref explicit;
-- SHA rezolvat si logat;
-- runtime data vine exclusiv din runtime repo-ul environment-ului;
-- build-ul foloseste acelasi source SHA in toate mediile;
+- `SOURCE_SHA` explicit si immutable;
+- branch/tag/mutable ref nu este acceptat ca identity finala de deployment;
+- runtime data vin numai din runtime repo-ul environment-ului;
+- build-ul foloseste exact `SOURCE_SHA`;
 - deploy token corespunde Cloudflare account-ului environment-ului;
-- post-deploy `/health` trebuie sa confirme environment + SHA;
-- nu exista `--env prod` implicit;
-- PROD necesita owner GO conform governance.
+- `/health` confirma `environment`, `source_sha`, `runtime_repo`, `runtime_data_sha`, `search_mode`;
+- PROD necesita owner GO;
+- lipsa `--env` sau `--source-sha` = FAIL.
 
-### 6.5 status
+### 6.6 status
 
 ```text
 npm run env:status
 ```
 
-Output fara secrete:
+Output minim:
 
 ```text
-ENV   SOURCE_SHA   RUNTIME_REPO                  CF_ACCOUNT   WORKER                   HEALTH
-DEV   abc123       job-search-runtime-dev        ...123       job-search-command-api   OK
-TEST  abc123       job-search-runtime-test       ...456       job-search-command-api   OK
-PROD  9fd321       job-search-runtime-prod       ...789       job-search-command-api   OK
+ENV   SOURCE_SHA   RUNTIME_DATA_SHA   RUNTIME_REPO             CF_ACCOUNT   HEALTH
+DEV   abc123...    def456...          job-search-runtime-dev   ...123       OK
+TEST  abc123...    987abc...          job-search-runtime-test  ...456       OK
+PROD  9fd321...    555aaa...          job-search-runtime-prod  ...789       OK
 ```
 
-Trebuie sa marcheze diferentele dintre source SHA-uri, configuratie si health.
+Trebuie sa marcheze drift-ul dintre source SHA, runtime data SHA, manifest si health.
 
-### 6.6 isolation-test
+### 6.7 isolation-test
 
 ```text
 npm run env:isolation-test
 ```
 
-Executa numai probe sigure/non-destructive sau probe create explicit pentru test.
-
-Minimum:
-
-- DEV credential -> write TEST: trebuie refuzat;
-- DEV credential -> write PROD: trebuie refuzat;
-- TEST credential -> write PROD: trebuie refuzat;
-- DEV Cloudflare credential -> PROD account: trebuie refuzat;
-- TEST Cloudflare credential -> PROD account: trebuie refuzat;
-- wrong runtime repo in manifest: preflight FAIL;
-- wrong account ID: preflight FAIL;
+Probe sigure/non-destructive:
+- DEV GitHub credential -> write TEST: refuz;
+- DEV GitHub credential -> write PROD: refuz;
+- TEST GitHub credential -> write PROD: refuz;
+- DEV Cloudflare credential -> TEST/PROD: refuz;
+- TEST Cloudflare credential -> PROD: refuz;
+- wrong runtime repo in manifest: FAIL;
+- wrong account ID: FAIL;
 - missing env: FAIL;
-- health mismatch dupa deploy: FAIL.
+- missing/wrong source SHA: FAIL;
+- health source SHA mismatch: FAIL;
+- health runtime data SHA mismatch: FAIL;
+- DEV/TEST live policy invalid: FAIL.
 
 Testul nu modifica date business reale.
 
 ## 7. Runtime workflow
 
-Fiecare runtime repository contine wrapper minim generat.
-
-Conceptual:
+Wrapper minimal:
 
 ```text
 workflow_dispatch / approved trigger
         |
+        +-> validate explicit SOURCE_SHA
         +-> checkout runtime repo
         +-> checkout source repo @ SOURCE_SHA read-only
         +-> validate runtime contract
-        +-> run search/build logic din source
-        +-> publish data in caller runtime repo
-        +-> rebuild/deploy Worker in caller Cloudflare account
-        +-> health check
+        +-> execute source scripts @ SOURCE_SHA
+        +-> publish data in caller runtime repo only
+        +-> capture new RUNTIME_DATA_SHA
+        +-> rebuild/deploy caller Worker only
+        +-> health identity check
 ```
 
 Provider secrets sunt citite numai din runtime repository-ul caller.
 
-Wrapper-ul nu contine logica business duplicata.
+Wrapper-ul nu contine business logic duplicata.
+
+Daca se foloseste reusable workflow din source repository, el trebuie pinuit la ref immutable compatibil cu release-ul. Nu se admite `uses: ...@main` pentru executia unui release care declara alt `SOURCE_SHA`.
 
 ## 8. Source access
 
-Varianta preferata: trei deploy keys read-only distincte atasate source repository-ului.
+Preferat:
 
 ```text
-runtime-dev  -> key DEV  -> source READ
-runtime-test -> key TEST -> source READ
-runtime-prod -> key PROD -> source READ
+runtime-dev  -> read-only key DEV  -> source
+runtime-test -> read-only key TEST -> source
+runtime-prod -> read-only key PROD -> source
 ```
 
-Private keys sunt secrets in runtime repositories. Public keys sunt deploy keys read-only pe source repo.
+Private keys sunt secrets in runtime repositories; public keys sunt read-only deploy keys pe source repo.
 
-Nu se foloseste PAT classic.
-
-Orice alternativa trebuie sa pastreze acelasi nivel de least privilege.
+Orice alternativa necesita acelasi nivel de least privilege.
 
 ## 9. Command API configuration
-
-Configuratia finala trebuie sa faca imposibila confuzia dintre source si runtime.
 
 Minimum semantic:
 
@@ -362,112 +370,135 @@ GITHUB_RUNTIME_OWNER=Shosetzel69
 GITHUB_RUNTIME_REPO=job-search-runtime-<env>
 GITHUB_RUNTIME_REF=main
 GITHUB_WORKFLOW=runtime.yml
-SOURCE_VERSION=<sha>
+SOURCE_SHA=<full-sha>
+RUNTIME_DATA_SHA=<runtime-commit-sha>
 SEARCH_MODE=<policy>
-FRONTEND_ORIGIN=<environment URL>
+FRONTEND_ORIGIN=<environment-url>
 ```
 
-Tokenul Worker are acces exclusiv la runtime repo-ul environment-ului.
+Tokenul Worker are write exclusiv in runtime repo-ul environment-ului.
 
-## 10. Static data build
+## 10. Run identity
 
-Modelul actual copiaza fisierele protejate in Worker Static Assets. Pentru a pastra mecanismul:
+`POST /commands/run` nu poate executa `main` implicit.
 
-1. checkout source repo;
-2. checkout runtime repo;
-3. build-ul foloseste runtime `data/` ca input;
-4. frontend build ruleaza o singura data pentru environment;
-5. protected data sunt copiate in asset snapshot;
-6. Worker este deployat;
-7. dupa orice search care modifica runtime data, acelasi runtime workflow redeployeaza Worker-ul environment-ului.
+Flux obligatoriu:
 
-Development trebuie sa implementeze input path parametrizat. Nu se copiaza permanent runtime data in source repository.
+```text
+GET /health -> source_sha = abc123
+POST /commands/run
+workflow_dispatch(source_sha=abc123)
+checkout source @ abc123
+```
 
-## 11. Procedura DEV
+`run-status.json` si `run-history.json` includ `source_sha`.
 
-Dupa stabilizare:
+Workflow-ul refuza lipsa sau mismatch-ul de `source_sha`.
 
-1. owner GO pentru #161;
-2. completeaza account ID DEV in manifest/local config;
-3. ruleaza validate DEV;
+## 11. Static data build si consistency
+
+Build:
+1. checkout source @ `SOURCE_SHA`;
+2. checkout runtime repo la `RUNTIME_DATA_SHA`;
+3. build frontend/Worker;
+4. copiaza protected runtime data in Static Assets;
+5. deploy;
+6. `/health` confirma cele doua SHA-uri.
+
+Dupa search:
+1. publica runtime data numai in caller repo;
+2. obtine noul `RUNTIME_DATA_SHA`;
+3. rebuild/deploy acelasi environment;
+4. confirma `/health.runtime_data_sha`.
+
+Daca commit-ul runtime reuseste dar redeploy-ul esueaza, statusul este explicit `DEGRADED/STALE_ASSET`. Nu se raporteaza Run ca complet sincronizat.
+
+## 12. Procedura DEV
+
+1. owner GO #161;
+2. completeaza DEV account ID;
+3. validate DEV;
 4. bootstrap DEV;
-5. configureaza OAuth client/origin DEV daca nu este automatizabil;
-6. ruleaza health;
-7. ruleaza isolation tests DEV -> TEST/PROD;
-8. executa smoke functional DEV;
-9. marcheaza DEV ready numai dupa PASS.
+5. configureaza OAuth DEV;
+6. health identity check;
+7. isolation DEV -> TEST/PROD;
+8. smoke functional;
+9. DEV ready numai dupa PASS.
 
 PROD nu se modifica.
 
-## 12. Procedura TEST
+## 13. Procedura TEST
 
 Numai dupa DEV PASS:
-
 1. validate TEST;
 2. bootstrap TEST;
-3. configureaza OAuth client/origin TEST;
-4. deploy exact acelasi source SHA validat in DEV;
-5. ruleaza health;
-6. ruleaza isolation tests TEST -> PROD;
-7. executa smoke/E2E TEST;
-8. marcheaza release candidate ready.
+3. configureaza OAuth TEST;
+4. deploy exact acelasi `SOURCE_SHA` validat in DEV;
+5. health identity check;
+6. isolation TEST -> PROD;
+7. smoke/E2E TEST;
+8. release candidate ready numai dupa PASS.
 
-## 13. Procedura PROD
+## 14. Procedura PROD
 
-Numai dupa DEV + TEST PASS si owner GO explicit:
-
-1. inventar/backup PROD actual;
-2. validate configuratia PROD tinta;
-3. bootstrap `job-search-runtime-prod` fara a distruge sursa actuala;
-4. seed/migrare controlata a datelor PROD;
+Numai dupa DEV + TEST PASS si owner GO separat:
+1. inventar complet PROD actual;
+2. backup/recovery verification;
+3. pregatire `job-search-runtime-prod` fara distrugerea sursei actuale;
+4. seed/migrare controlata numai a datelor PROD;
 5. configureaza credentialele PROD;
-6. deploy acelasi source SHA validat in TEST;
-7. health + functional smoke;
-8. verifica datele si search execution;
+6. deploy exact `SOURCE_SHA` validat in TEST;
+7. health/auth/protected-assets smoke;
+8. verifica search execution cu acelasi `SOURCE_SHA`;
 9. cutover;
-10. pastreaza rollback target pana la validarea finala;
-11. numai dupa acceptare se elimina mecanismele vechi devenite redundante.
+10. dezactiveaza calea directa source repo -> Cloudflare Git deployment pentru `job-search-command-api`;
+11. verifica: push/PR in source repo produce zero command-api deployment;
+12. pastreaza rollback target pana la acceptarea finala;
+13. elimina mecanismele vechi redundante numai dupa acceptare.
 
-## 14. Rollback
+`ai-github-bridge` nu este dezactivat de acest pas.
 
-Rollback-ul de cod inseamna redeploy al ultimului source SHA PROD validat.
+## 15. Rollback
 
-Rollback-ul nu copiaza date din TEST sau DEV.
+Rollback cod = redeploy ultimul `SOURCE_SHA` PROD validat.
 
-Runtime data rollback, daca este necesar, foloseste istoric/backup PROD exclusiv.
+Rollback data = backup/history din runtime PROD exclusiv.
 
-## 15. Cost control
+Nu se copiaza date DEV/TEST in PROD.
+
+Daca noul runtime PROD esueaza inainte de finalizarea cutover-ului, se revine la target-ul PROD anterior si calea veche ramane disponibila pana la decizia de acceptare.
+
+## 16. Cost control
 
 Target: cost 0.
 
-- Cloudflare: Free accounts pentru cele trei medii;
-- GitHub: private runtime repos; se urmareste consumul Actions inclus in plan;
-- DEV full live search dezactivat implicit;
-- TEST foloseste smoke/controlled search;
+- Cloudflare: conturi Free separate;
+- GitHub: runtime repos private, consum Actions monitorizat;
+- DEV live full search disabled implicit;
+- TEST controlled search;
 - provider calls costisitoare nu se tripleaza automat.
 
-Orice componenta care introduce cost nou se opreste pentru aprobare inainte de activare.
+Orice cost nou necesita aprobare inainte de activare.
 
-## 16. Evidence la finalul bootstrap
+## 17. Evidence
 
-Tool-ul trebuie sa genereze un raport machine-readable si unul scurt human-readable cu:
-
+Raportul final al fiecarui bootstrap/deploy contine:
 - environment;
-- source SHA;
+- `SOURCE_SHA`;
+- `RUNTIME_DATA_SHA`;
 - runtime repo;
-- Cloudflare account ID mascat partial;
-- Worker name;
-- Worker URL;
+- Cloudflare account ID mascat;
+- Worker name/URL;
 - search mode;
 - health result;
-- isolation test result;
+- isolation result;
 - timestamp;
 - fara secrete.
 
-## 17. Gate-uri
+## 18. Gate-uri
 
 ```text
-CURRENT STABILIZATION
+STABILIZATION CLOSED
         |
         v
 ADR-003 merged
@@ -476,16 +507,25 @@ ADR-003 merged
 #161 owner GO
         |
         v
+environment-awareness + automation
+        |
+        v
 DEV bootstrap + isolation PASS
         |
         v
-TEST bootstrap + isolation + E2E PASS
+TEST same SOURCE_SHA + isolation + E2E PASS
         |
         v
 PROD owner GO
         |
         v
 PROD migration/cutover
+        |
+        v
+source direct command-api deploy disabled
+        |
+        v
+final isolation + identity PASS
 ```
 
-Orice FAIL opreste promovarea.
+Orice FAIL critic opreste promovarea.
