@@ -134,3 +134,42 @@ jobs:
             isolation-test) echo "Use independent G4 QA for provider isolation" >&2; exit 1 ;;
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
+
+      - name: Configure DEV runtime/Worker secrets
+        if: ${{ inputs.dry_run == false && inputs.environment == 'dev' && inputs.action == 'bootstrap' }}
+        env:
+          GH_TOKEN: ${{ secrets.BOOTSTRAP_GITHUB_TOKEN }}
+          SOURCE_READ_TOKEN: ${{ secrets.DEV_SOURCE_READ_TOKEN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.DEV_CLOUDFLARE_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_ID }}
+          RUNTIME_TOKEN: ${{ secrets.DEV_GITHUB_RUNTIME_TOKEN }}
+          ALLOWED_GOOGLE_SUB: ${{ secrets.DEV_ALLOWED_GOOGLE_SUB }}
+        shell: bash
+        working-directory: command-api
+        run: |
+          set -euo pipefail
+          printf '%s' "$SOURCE_READ_TOKEN" | gh secret set SOURCE_READ_TOKEN --repo Shosetzel69/job-search-runtime-dev
+          printf '%s' "$RUNTIME_TOKEN" | npx wrangler secret put GITHUB_TOKEN --name job-search-command-api
+          printf '%s' "$ALLOWED_GOOGLE_SUB" | npx wrangler secret put ALLOWED_GOOGLE_SUB --name job-search-command-api
+
+      - name: Verify DEV credential roles and final health
+        if: ${{ inputs.dry_run == false && inputs.environment == 'dev' && inputs.action == 'bootstrap' }}
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          DEV_CLOUDFLARE_ACCOUNT_ID: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_ID }}
+          DEV_CLOUDFLARE_TOKEN: ${{ secrets.DEV_CLOUDFLARE_TOKEN }}
+          DEV_GITHUB_RUNTIME_TOKEN: ${{ secrets.DEV_GITHUB_RUNTIME_TOKEN }}
+          DEV_SOURCE_READ_TOKEN: ${{ secrets.DEV_SOURCE_READ_TOKEN }}
+          DEV_ALLOWED_GOOGLE_SUB: ${{ secrets.DEV_ALLOWED_GOOGLE_SUB }}
+          DEV_GOOGLE_CLIENT_ID: ${{ vars.DEV_GOOGLE_CLIENT_ID }}
+          DEV_FRONTEND_ORIGIN: ${{ vars.DEV_FRONTEND_ORIGIN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.DEV_CLOUDFLARE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_permission="$(GH_TOKEN="$DEV_GITHUB_RUNTIME_TOKEN" gh repo view Shosetzel69/job-search-runtime-dev --json viewerPermission --jq .viewerPermission)"
+          case "$runtime_permission" in WRITE|MAINTAIN|ADMIN) ;; *) echo "DEV runtime token lacks runtime write permission" >&2; exit 1 ;; esac
+          source_permission="$(GH_TOKEN="$DEV_GITHUB_RUNTIME_TOKEN" gh repo view Shosetzel69/job-search-command-center --json viewerPermission --jq .viewerPermission 2>/dev/null || echo NONE)"
+          case "$source_permission" in WRITE|MAINTAIN|ADMIN) echo "DEV runtime token must not have source write permission" >&2; exit 1 ;; esac
+          GH_TOKEN="$DEV_SOURCE_READ_TOKEN" gh api "repos/Shosetzel69/job-search-command-center/commits/$SOURCE_SHA" --silent
+          npm run env:status -- --env dev --source-sha "$SOURCE_SHA"
