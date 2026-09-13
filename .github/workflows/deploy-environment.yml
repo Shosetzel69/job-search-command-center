@@ -1,10 +1,10 @@
-name: Environment automation dry-run
+name: Environment automation
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: Phase 3 automation action
+        description: Environment automation action
         required: true
         type: choice
         options: [validate, bootstrap, deploy, status, isolation-test]
@@ -18,7 +18,7 @@ on:
         required: true
         type: string
       dry_run:
-        description: Phase 3 must not provision resources
+        description: Non-mutating validation/plan
         required: true
         default: true
         type: boolean
@@ -33,26 +33,42 @@ permissions:
 jobs:
   environment-automation:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
 
-      - name: Guard Phase 3 dry-run only
+      - name: Guard immutable source and Phase 4 live scope
+        shell: bash
         run: |
-          test "${{ inputs.dry_run }}" = "true" || { echo "Phase 3 live provisioning is blocked" >&2; exit 1; }
+          set -euo pipefail
+          [[ "${{ inputs.source_sha }}" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
+          actual="$(git rev-parse HEAD)"
+          test "${actual,,}" = "${{ inputs.source_sha }}" || { echo "checkout does not match source_sha" >&2; exit 1; }
+          if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.environment }}" != "dev" ]; then
+            echo "Phase 4 live execution is DEV-only" >&2
+            exit 1
+          fi
+          if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.action }}" = "isolation-test" ]; then
+            echo "Provider isolation verification is reserved for independent G4 QA; development runs only the static isolation contract" >&2
+            exit 1
+          fi
           if [ "${{ inputs.environment }}" = "prod" ] && [ "${{ inputs.owner_gate }}" != "APPROVED" ]; then
-            echo "PROD requires explicit owner gate" >&2
+            echo "PROD requires explicit owner gate even for validation" >&2
             exit 1
           fi
 
       - name: Run environment contract tests
         run: npm run test:environment
 
-      - name: Validate selected environment contract
+      - name: Execute dry-run / static validation
+        if: ${{ inputs.dry_run == true }}
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           DEV_CLOUDFLARE_ACCOUNT_ID: "11111111111111111111111111111111"
@@ -70,17 +86,51 @@ jobs:
           DEV_ALLOWED_GOOGLE_SUB: dry-run-dev-sub
           TEST_ALLOWED_GOOGLE_SUB: dry-run-test-sub
           PROD_ALLOWED_GOOGLE_SUB: dry-run-prod-sub
+          DEV_GOOGLE_CLIENT_ID: dry-run-dev.apps.googleusercontent.com
+          TEST_GOOGLE_CLIENT_ID: dry-run-test.apps.googleusercontent.com
+          PROD_GOOGLE_CLIENT_ID: dry-run-prod.apps.googleusercontent.com
           DEV_FRONTEND_ORIGIN: https://dev.example.invalid
           TEST_FRONTEND_ORIGIN: https://test.example.invalid
           PROD_FRONTEND_ORIGIN: https://prod.example.invalid
+        shell: bash
         run: |
+          set -euo pipefail
           EXTRA=()
           if [ "${{ inputs.environment }}" = "prod" ]; then EXTRA+=(--owner-gate "${{ inputs.owner_gate }}"); fi
           case "${{ inputs.action }}" in
-            validate) npm run env:validate -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" "${EXTRA[@]}" ;;
+            validate) npm run env:validate -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run "${EXTRA[@]}" ;;
             bootstrap) npm run env:bootstrap -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run "${EXTRA[@]}" ;;
             deploy) npm run env:deploy -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run "${EXTRA[@]}" ;;
-            status) npm run env:status -- --source-sha "$SOURCE_SHA" --dry-run ;;
+            status) npm run env:status -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run ;;
             isolation-test) npm run env:isolation-test -- --source-sha "$SOURCE_SHA" --dry-run ;;
+            *) echo "Unsupported action" >&2; exit 1 ;;
+          esac
+
+      - name: Install Command API deployment dependencies
+        if: ${{ inputs.dry_run == false && inputs.environment == 'dev' && (inputs.action == 'bootstrap' || inputs.action == 'deploy') }}
+        run: npm --prefix command-api install --ignore-scripts --no-audit --no-fund
+
+      - name: Execute live DEV action
+        if: ${{ inputs.dry_run == false && inputs.environment == 'dev' }}
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          DEV_CLOUDFLARE_ACCOUNT_ID: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_ID }}
+          DEV_CLOUDFLARE_TOKEN: ${{ secrets.DEV_CLOUDFLARE_TOKEN }}
+          DEV_GITHUB_RUNTIME_TOKEN: ${{ secrets.DEV_GITHUB_RUNTIME_TOKEN }}
+          DEV_SOURCE_READ_TOKEN: ${{ secrets.DEV_SOURCE_READ_TOKEN }}
+          DEV_ALLOWED_GOOGLE_SUB: ${{ secrets.DEV_ALLOWED_GOOGLE_SUB }}
+          DEV_GOOGLE_CLIENT_ID: ${{ vars.DEV_GOOGLE_CLIENT_ID }}
+          DEV_FRONTEND_ORIGIN: ${{ vars.DEV_FRONTEND_ORIGIN }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.DEV_CLOUDFLARE_TOKEN }}
+          GH_TOKEN: ${{ secrets.BOOTSTRAP_GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.action }}" in
+            validate) npm run env:validate -- --env dev --source-sha "$SOURCE_SHA" ;;
+            bootstrap) npm run env:bootstrap -- --env dev --source-sha "$SOURCE_SHA" ;;
+            deploy) npm run env:deploy -- --env dev --source-sha "$SOURCE_SHA" ;;
+            status) npm run env:status -- --env dev --source-sha "$SOURCE_SHA" ;;
+            isolation-test) echo "Use independent G4 QA for provider isolation" >&2; exit 1 ;;
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
