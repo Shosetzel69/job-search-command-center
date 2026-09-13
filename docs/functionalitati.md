@@ -1,7 +1,8 @@
 # Functionalitati
 
-Versiune aplicatie: `0.05`
-Ultima actualizare: `2026-09-06`
+Versiune aplicatie: `0.06-dev`
+Ultima actualizare: `2026-09-13`
+Status baseline: `STABLE / CLOSE`
 
 ## 1. Acces
 
@@ -9,7 +10,9 @@ Ultima actualizare: `2026-09-06`
 - mecanismul de autorizare curent permite un singur utilizator prin Google `sub`;
 - suportul multi-user este `UNDER ANALYSIS` conform `ARCHITECTURE.md`;
 - continut privat ascuns pana la autentificare;
-- token numai in memoria paginii;
+- Google ID token nu este persistat in localStorage/sessionStorage;
+- dupa login se poate retine local numai emailul autorizat ca `login_hint` non-secret;
+- la reload, Google Identity Services reobtine un credential care este revalidat server-side;
 - profil + logout;
 - retry separat pentru erori de incarcare date.
 
@@ -19,18 +22,22 @@ Ultima actualizare: `2026-09-06`
 - KPI numai in `Joburi noi`;
 - KPI `Roluri noi`, `Fit ridicat`, `Repostari`, `Remote` sunt filtre rapide single-select;
 - filtre text, FIT, B2B, vechime 24h/36h/48h/5 zile;
-- multiselect Remote/Hibrid/Onsite/N/A;
+- multiselect Remote/Hibrid/Onsite;
+- `unknown`/N/A este stare tehnica pentru date incomplete, nu optiune normala de selectie;
 - sortare FIT;
 - reset filtre, inclusiv filtrul KPI;
-- `De evaluat`: badge-ul din navigatie numara aceleasi joburi `review` eligibile dupa freshness si mod de lucru ca lista inainte de filtrele text/quick;
+- `De evaluat`: badge-ul si baza listei folosesc aceeasi eligibilitate pentru status review, freshness si mod de lucru;
 - tara afisata separat in liste;
 - multi-country afisat compact `prima tara + N`;
 - tabel compact cu arhivare locala, aplicare si detalii;
-- drawer cu locatie, lista completa de tari, remote scope, descriere, pro, riscuri, sursa si link job.
+- drawer cu locatie, lista completa de tari, remote scope, descriere, pro, riscuri, sursa si link job;
+- joburile retinute din rulari anterioare sunt reevaluate fata de criteriile curente inainte de publicare (#160/#163).
 
 ## 3. Aplicari
 
 - `Aplicari` citeste `data/applications.json`;
+- schema este versionata;
+- statusul canonic `applied` ramane compatibil;
 - afiseaza tara cand aceasta poate fi determinata din datele aplicarii/jobului;
 - aplicarile nu sunt editabile server-side din UI.
 
@@ -39,13 +46,13 @@ Ultima actualizare: `2026-09-06`
 UI permite configurarea:
 
 - grupuri de roluri;
-- Remote / Hibrid;
-- regiuni `EU`, `US`, `Asia`;
+- Remote / Hibrid / Onsite;
+- regiuni canonice `EU`, `US`, `ASIA`;
 - tari individuale;
 - excluderi teritoriale pe regiuni si tari;
-- JobsPipe: Oprit / Apify / Direct;
-- plafon Apify;
-- buget si prag lunar Direct;
+- tipuri contract canonice Permanent / Temporar / Contract / Freelance;
+- JobsPipe: Oprit / Apify / Direct, cu baseline Oprit;
+- limite provider atunci cand un mod este aprobat/activat;
 - freshness;
 - prag FIT;
 - repostari;
@@ -57,44 +64,85 @@ Reguli:
 
 - `Worldwide` si `EMEA` sunt scope-uri Remote, nu regiuni selectabile in criteriul principal;
 - Remote fara teritoriu explicit = `Worldwide`;
-- Remote cu tari explicite necesita Romania in lista acceptata;
+- Remote cu tari explicite necesita Romania in lista acceptata conform regulii curente;
+- targetul geografic complet gol este invalid;
 - conflictul dintre includeri si excluderi geografice blocheaza salvarea;
-- cardul Excluderi este compact.
+- cardul Excluderi este compact;
+- `Salveaza preferintele` face `PUT /config` si se opreste;
+- Save nu porneste Full Search.
 
-`Salveaza preferintele` trimite `PUT /config`; configuratia este salvata in `data/search-config.json`, iar commit-ul declanseaza workflow-ul de cautare.
+## 5. Administrare
 
-## 5. Surse
+Structura canonica:
 
-Pagina `Surse`:
+```text
+Administrare
+|- Overview
+|- Actualizare date
+|- Surse
+|- Nomenclatoare
+`- Loguri
+```
 
-- citeste `data/sources.json`;
+### 5.1 Surse
+
+- registru persistent `data/sources.json`;
 - cautare si sortare;
-- adaugare sursa;
-- editare nume, URL, categorie si stare activa/inactiva;
-- activare/dezactivare persistenta;
-- stergere efectiva dupa confirmare;
-- blocheaza URL duplicat;
-- afiseaza separat daca exista connector operational.
+- adaugare/editare sursa;
+- activare/dezactivare conform lifecycle-ului aprobat;
+- categorii controlate in `data/source-categories.json`;
+- validare/aprobare/activare sunt stari distincte;
+- URL-urile duplicate sunt blocate;
+- o sursa poate exista in catalog fara ruta operationala;
+- connectorul se implementeaza si se valideaza inainte de activare operationala;
+- modificarile Surse/Categorii nu pornesc Full Search.
 
-Modificarile sunt facute prin Command API autentificat. `localStorage` nu mai este sursa canonica pentru registrul Surse.
+Issue #93 ramane cleanup semantic de registry si nu este blocker pentru baseline-ul stabilizat.
 
-O sursa adaugata manual poate exista in catalog fara connector; nu devine automat operationala.
+### 5.2 Nomenclatoare
+
+Sursa canonica: `data/nomenclatures.json`, schema 1.0.
+
+Domenii:
+
+- regions;
+- countries;
+- work_modes;
+- contract_types;
+- application_statuses;
+- seniority - infrastructura, fara filtru activ in baseline.
+
+Reguli:
+
+- codurile system/semantic sunt stabile;
+- label-ul este separat de cod;
+- numai domeniile extensibile aprobate permit valori noi;
+- deactivate/delete pe valoare referentiata este respins cu HTTP 409 + referinte;
+- configuratia nu este modificata silent;
+- modificarile de nomenclator nu pornesc Full Search.
 
 ## 6. Rulare si status
 
-`Ruleaza verificarea`:
+`Ruleaza verificarea` / `Ruleaza acum`:
 
 - necesita autentificare;
 - executa `POST /commands/run`;
+- valideaza configuratia curenta;
 - evita pornirea unei a doua rulari active;
-- face polling pe `run-status.json`;
+- declanseaza maximum un `workflow_dispatch` cu trigger canonic `manual-ui`;
+- frontend-ul urmareste run-ul pana la stare terminala reala si recupereaza starea dupa refresh;
 - reincarca datele dupa publicare.
 
-Zona `Ultima rulare` afiseaza si numarul surselor procesate. JobsPipe reprezinta o singura sursa indiferent de transportul Apify/Direct.
+Full Search este `manual-only` in baseline-ul stabilizat:
 
-Publicarea datelor reincearca de maximum 3 ori daca `main` se modifica intre colectare si push.
+- fara trigger `push`;
+- fara trigger `schedule`;
+- commit-urile de config/cod/admin nu lanseaza cautarea;
+- scheduler-ul este Package 2B si este neimplementat/OFF in baseline.
 
-Rulare programata: 06:00 si 15:00 UTC.
+Zona `Ultima rulare` afiseaza starea si numarul surselor procesate.
+
+Publicarea datelor foloseste protectii de concurenta/retry si nu foloseste force push.
 
 ## 7. Loguri
 
@@ -102,26 +150,26 @@ Pagina `Loguri`:
 
 - foloseste `data/run-history.json`;
 - pastreaza maximum 10 rulari de cautare;
-- afiseaza status, trigger, ora, durata, transport, surse procesate, joburi inspectate/publicate/excluse;
-- permite extinderea unei rulari pentru source results, erori si limitari;
+- afiseaza status, trigger, ora, durata, surse procesate, rezultate si erori sanitizate;
+- permite inspectarea source results si limitarilor;
 - istoricul este protejat prin Cloudflare Worker.
 
-## 8. JobsPipe
+## 8. JobsPipe si provideri
 
-Transporturi disponibile:
+Moduri suportate contractual:
 
-- `disabled` - fara cereri JobsPipe/Apify;
-- `apify` - transport activ curent;
-- `direct` - fallback/diagnostic.
+- `disabled` - zero cereri JobsPipe/Apify;
+- `apify` - disponibil numai daca este activat explicit;
+- `direct` - disponibil numai daca este activat explicit.
 
-Stare curenta:
+Stare baseline:
 
-- `jobspipe_mode=apify`;
-- `jobspipe_apify_max_items_per_run=100`.
+- `jobspipe_mode=disabled`;
+- JobsPipe nu este provider principal;
+- connectorii directi/gratuiti sunt preferati acolo unde exista;
+- providerii cu quota/cost se activeaza numai controlat si cu guard-uri de cost.
 
-Apify foloseste Actorul `jobspipe~jobspipe-job-search` si `APIFY_TOKEN` din GitHub Actions Secrets. Colectarea Remote este larga, iar eligibilitatea geografica finala este aplicata in pipeline-ul comun.
-
-Direct pastreaza preview, polling incremental, cursor backlog, buget per run, guard lunar si circuit breaker; foloseste `JOBSPIPE_API_KEY`.
+Strategia providerilor este urmarita separat in `docs/source-strategy.md` si #142.
 
 ## 9. Persistenta
 
@@ -132,28 +180,56 @@ Canonica in GitHub JSON:
 - istoric 10 rulari;
 - configuratie;
 - aplicari;
-- catalog surse.
+- catalog surse;
+- categorii surse;
+- nomenclatoare.
 
-Starea JobsPipe Direct este in `search-state.json` intern.
+`search-state.json` ramane intern si nepublicat.
 
 Locala in browser: arhivarea rapida a joburilor.
 
-## 10. Limitari
+Nu exista baza de date activa in baseline.
 
-- numai JobsPipe are connector operational;
-- catalogul Surse legacy este normalizat/versionat la prima modificare persistenta;
-- arhivarea nu este persistata server-side;
+## 10. Infrastructura AI / engineering
+
+`ai-github-bridge` si Remote MCP sunt infrastructura de engineering/governance, separate de runtime-ul functional al aplicatiei.
+
+Stare:
+
+- bridge dedicat Cloudflare Worker;
+- GitHub Apps separate pentru identitati AI;
+- Remote MCP Claude deployat si validat live;
+- repository allowlisted;
+- secretele si installation tokens raman server-side.
+
+Aceste componente nu sunt dependinta functionala pentru cautarea joburilor.
+
+## 11. Limitari si backlog
+
+- #49 este parcat si exclus din Package 2; nu este criteriu de stabilizare;
+- #93 ramane cleanup semantic Source Registry;
+- scheduler-ul configurabil ramane Package 2B;
+- connectorii suplimentari se valideaza/activeaza incremental in Package 2C;
+- ATS/FIT/CV library raman track-uri ulterioare;
+- separarea DEV/TEST/PROD este aprobata arhitectural si urmarita prin #161, dar nu face parte din baseline-ul runtime curent;
 - aplicarile nu sunt editabile server-side;
-- fara baza de date activa;
-- mecanismul de autorizare curent este pentru un singur utilizator; multi-user este `UNDER ANALYSIS`;
-- fara MCP;
-- validarea E2E live pentru 0.05 este de confirmat.
+- mecanismul de autorizare curent este single-user.
 
+## 12. Validare stabilizare
 
-## Remediere #49 (Unreleased)
+Baseline-ul a fost validat prin:
 
-Runner-ul foloseste sursele active din catalog, cu JobsPipe si Jobicy colectate independent. Suportul connectorului este derivat identic in UI, Worker si Python. Loguri afiseaza configurate/active/incercate/reusite/esuate/nesuportate/omise, motive si rezultate per sursa. Deduplicarea acopera rezultatele noi si cele retinute din rulari anterioare. Testele izolate acopera succes, esec partial/total, deaktivare, quota, cooldown si duplicate. E2E dupa merge: de confirmat.
+- repository/CI audit;
+- browser PROD E2E;
+- Package 2A8 E2E PASS;
+- retesturi PASS pentru #153 auth reload si #154 De evaluat;
+- Full Search controlat `workflow_dispatch` run #51 finalizat cu succes;
+- #160 remediat prin PR #163 cu regression tests/CI green;
+- zero Full Search neintentionat in scenariile de configurare/admin;
+- cleanup complet al mutatiilor temporare.
 
-## Colectare web (#49)
+Stare finala la 2026-09-13: `STABLE / CLOSE`.
 
-Collector comun pentru sursele HTTP(S) active fara API dedicat: descoperire cariere/anunturi/paginare, extractie JobPosting JSON-LD, normalizare in pipeline. Loguri include outcome web, pagini si limite; Surse distinge API/Web. Testele sunt izolate, cu cazuri de blocaj, partial, schema invalida, geografie si acces la retea privata. Validarea live a acoperirii ramane de confirmat.
+Gap acceptat: nu exista o a doua rulare Full Search live dupa fixul #160. Fixul este merged si acoperit de regression tests green; absenta retestului live este retinuta in raportul de closeout, nu reprezinta un defect cunoscut deschis.
+
+Raport: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
