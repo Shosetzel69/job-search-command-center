@@ -107,6 +107,22 @@ test('isolated non-PROD seed contains no jobs, applications or search history', 
   assert.equal(runtimeSeedPayload('search-config.json').jobspipe_mode, 'disabled');
 });
 
+test('TEST seed metadata is TEST/smoke and never inherits DEV identity', () => {
+  const options = {
+    sourceSha: SHA,
+    generatedAt: '2026-09-13T00:00:00.000Z',
+    environment: 'test',
+    searchMode: 'smoke',
+  };
+  const jobs = runtimeSeedPayload('jobs.json', options);
+  const status = runtimeSeedPayload('run-status.json', options);
+  const config = runtimeSeedPayload('search-config.json', options);
+  assert.deepEqual(jobs.criteria, { environment: 'test', search_mode: 'smoke' });
+  assert.equal(status.run_id, 'test-seed');
+  assert.deepEqual(status.limitations, ['Isolated TEST seed. Search policy: smoke.']);
+  assert.equal(config.source_strategy, 'TEST seed - smoke policy');
+});
+
 test('isolated seed preserves canonical nomenclature domains', () => {
   const domains = runtimeSeedPayload('nomenclatures.json').domains;
   assert.deepEqual(Object.keys(domains).sort(), ['application_statuses', 'contract_types', 'countries', 'regions', 'seniority', 'work_modes']);
@@ -170,4 +186,6 @@ test('environment deploy health verification retries propagation and pins runtim
   assert.match(provision, /probeDeployedHealth/);
   assert.match(provision, /provisionEnvironment/);
   assert.match(provision, /deployEnvironment/);
+  assert.match(provision, /environment: runtime\.environment/);
+  assert.match(provision, /searchMode: runtime\.searchMode/);
 });
