@@ -7,6 +7,9 @@ import { serializeSeed } from './seed.mjs';
 import { SHA_RE, redact } from './contract.mjs';
 import { assertPhase4LiveGate, verifyLocalSourceSha } from './live.mjs';
 
+const HEALTH_PROPAGATION_ATTEMPTS = 10;
+const HEALTH_PROPAGATION_DELAY_MS = 3000;
+
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
     cwd: options.cwd || process.cwd(),
@@ -18,6 +21,10 @@ function run(command, args, options = {}) {
 
 function json(command, args, options) {
   return JSON.parse(run(command, args, options));
+}
+
+function sleep(ms) {
+  return new Promise(resolvePromise => setTimeout(resolvePromise, ms));
 }
 
 function ensureRuntimeRepository(runtime) {
@@ -124,7 +131,7 @@ function deployWorker(runtime) {
   }
 }
 
-async function probeHealth(runtime) {
+async function probeHealthOnce(runtime, expectedRuntimeDataSha = null) {
   const response = await fetch(new URL('/health', runtime.frontendOrigin), { headers: { accept: 'application/json' } });
   if (!response.ok) throw new Error(`DEV /health failed (${response.status})`);
   const payload = await response.json();
@@ -134,11 +141,34 @@ async function probeHealth(runtime) {
     runtime_repo: runtime.runtimeRepository,
     search_mode: runtime.searchMode,
   };
+  if (expectedRuntimeDataSha) expected.runtime_data_sha = expectedRuntimeDataSha;
   for (const [key, value] of Object.entries(expected)) {
     if (payload[key] !== value) throw new Error(`DEV health mismatch for ${key}: expected ${value}, got ${payload[key]}`);
   }
   if (!SHA_RE.test(String(payload.runtime_data_sha || ''))) throw new Error('DEV /health runtime_data_sha is invalid');
   return payload;
+}
+
+async function probeHealth(runtime, { attempts = 1, delayMs = 0, expectedRuntimeDataSha = null } = {}) {
+  let lastError;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await probeHealthOnce(runtime, expectedRuntimeDataSha);
+    } catch (error) {
+      lastError = error;
+      if (attempt === attempts) throw error;
+      await sleep(delayMs);
+    }
+  }
+  throw lastError;
+}
+
+async function probeDeployedHealth(runtime, runtimeDataSha) {
+  return probeHealth(runtime, {
+    attempts: HEALTH_PROPAGATION_ATTEMPTS,
+    delayMs: HEALTH_PROPAGATION_DELAY_MS,
+    expectedRuntimeDataSha: runtimeDataSha,
+  });
 }
 
 export async function provisionDev(runtime) {
@@ -147,7 +177,7 @@ export async function provisionDev(runtime) {
   syncRuntimeFiles(runtime);
   configureRuntimeVariables(runtime);
   const runtimeDataSha = deployWorker(runtime);
-  const health = await probeHealth(runtime);
+  const health = await probeDeployedHealth(runtime, runtimeDataSha);
   return {
     status: 'PASS',
     action: 'bootstrap',
@@ -165,7 +195,7 @@ export async function provisionDev(runtime) {
 export async function deployDev(runtime) {
   assertPhase4LiveGate(runtime.environment, false);
   const runtimeDataSha = deployWorker(runtime);
-  const health = await probeHealth(runtime);
+  const health = await probeDeployedHealth(runtime, runtimeDataSha);
   return {
     status: 'PASS',
     action: 'deploy',
