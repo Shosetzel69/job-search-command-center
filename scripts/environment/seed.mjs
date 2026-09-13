@@ -152,6 +152,33 @@ export function runtimeSeedPayload(file, {
   }
 }
 
+export function shouldRefreshPristineSeed(file, payload, { environment, searchMode }) {
+  if (!payload || typeof payload !== 'object') return false;
+  if (file === 'jobs.json') {
+    const pristine = Array.isArray(payload.jobs) && payload.jobs.length === 0
+      && payload.records_inspected === 0 && payload.results === 0;
+    return pristine && (
+      payload.criteria?.environment !== environment
+      || payload.criteria?.search_mode !== searchMode
+    );
+  }
+  if (file === 'run-status.json') {
+    const pristine = typeof payload.run_id === 'string' && payload.run_id.endsWith('-seed')
+      && Array.isArray(payload.sources) && payload.sources.length === 0
+      && payload.records_inspected === 0 && payload.jobs_published === 0;
+    return pristine && payload.run_id !== `${environment}-seed`;
+  }
+  if (file === 'search-config.json') {
+    const pristine = typeof payload.source_strategy === 'string'
+      && /^(DEV|TEST) seed - /.test(payload.source_strategy)
+      && payload.jobspipe_mode === 'disabled'
+      && payload.jobspipe_credit_budget_per_run === 0
+      && payload.jobspipe_monthly_credit_guard === 0;
+    return pristine && payload.source_strategy !== `${String(environment).toUpperCase()} seed - ${searchMode} policy`;
+  }
+  return false;
+}
+
 export function serializeSeed(file, options) {
   return `${JSON.stringify(runtimeSeedPayload(file, options), null, 2)}\n`;
 }
