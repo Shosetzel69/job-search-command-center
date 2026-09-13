@@ -122,7 +122,7 @@ jobs:
           DEV_GOOGLE_CLIENT_ID: ${{ vars.DEV_GOOGLE_CLIENT_ID }}
           DEV_FRONTEND_ORIGIN: ${{ vars.DEV_FRONTEND_ORIGIN }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.DEV_CLOUDFLARE_TOKEN }}
-          GH_TOKEN: ${{ secrets.BOOTSTRAP_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEV_GITHUB_RUNTIME_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -138,7 +138,7 @@ jobs:
       - name: Configure DEV runtime/Worker secrets
         if: ${{ inputs.dry_run == false && inputs.environment == 'dev' && inputs.action == 'bootstrap' }}
         env:
-          GH_TOKEN: ${{ secrets.BOOTSTRAP_GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.DEV_GITHUB_RUNTIME_TOKEN }}
           SOURCE_READ_TOKEN: ${{ secrets.DEV_SOURCE_READ_TOKEN }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.DEV_CLOUDFLARE_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_ID }}
