@@ -14,9 +14,11 @@ import {
   validateCategoryInput,
   validateSourceInput,
 } from './source-governance.js';
+import { assertEnvironmentConfig } from './environment-config.js';
+import { BUILD_IDENTITY } from './build-identity.generated.js';
+import { dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-github.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
-const GITHUB_API_VERSION = '2026-03-10';
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -69,95 +71,24 @@ async function authenticate(request, env) {
   return payload;
 }
 
-function githubHeaders(env) {
-  return {
-    Accept: 'application/vnd.github+json',
-    Authorization: `Bearer ${env.GITHUB_TOKEN}`,
-    'X-GitHub-Api-Version': GITHUB_API_VERSION,
-    'User-Agent': 'job-search-command-api',
-  };
-}
-
-function githubBase(env) {
-  return `https://api.github.com/repos/${encodeURIComponent(env.GITHUB_OWNER)}/${encodeURIComponent(env.GITHUB_REPO)}`;
-}
-
-async function githubRequest(env, path, init = {}) {
-  if (!env.GITHUB_TOKEN) throw Object.assign(new Error('GitHub token is not configured'), { status: 503 });
-  const response = await fetch(`${githubBase(env)}${path}`, {
-    ...init,
-    headers: { ...githubHeaders(env), ...(init.headers || {}) },
-  });
-  if (!response.ok) {
-    const detail = (await response.text()).slice(0, 1000);
-    const status = response.status === 409 ? 409 : 502;
-    throw Object.assign(new Error(`GitHub ${response.status}: ${detail}`), { status });
-  }
-  if (response.status === 204) return null;
-  const text = await response.text();
-  return text ? JSON.parse(text) : null;
+function runtimeConfig(env) {
+  return assertEnvironmentConfig(env, BUILD_IDENTITY);
 }
 
 async function hasActiveRun(env) {
-  const workflow = encodeURIComponent(env.GITHUB_WORKFLOW);
-  const payload = await githubRequest(env, `/actions/workflows/${workflow}/runs?per_page=10`);
-  return (payload?.workflow_runs || []).some(run => run.status === 'queued' || run.status === 'in_progress');
+  return hasActiveWorkflowRun(env, runtimeConfig(env));
 }
 
 async function dispatchRun(env, runTrigger = 'manual-ui', checkActive = true) {
-  if (checkActive && await hasActiveRun(env)) {
-    throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
-  }
-  if (!['manual-ui','scheduled','system'].includes(runTrigger)) {
-    throw Object.assign(new Error('Invalid run trigger'), { status: 400 });
-  }
-  const workflow = encodeURIComponent(env.GITHUB_WORKFLOW);
-  return githubRequest(env, `/actions/workflows/${workflow}/dispatches`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ ref: env.GITHUB_REF, inputs: { run_trigger: runTrigger } }),
-  });
-}
-
-function decodeBase64Utf8(value) {
-  const binary = atob(value.replace(/\n/g, ''));
-  const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
-  return new TextDecoder().decode(bytes);
-}
-
-function encodeBase64Utf8(value) {
-  const bytes = new TextEncoder().encode(value);
-  let binary = '';
-  const chunk = 0x8000;
-  for (let i = 0; i < bytes.length; i += chunk) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
-  }
-  return btoa(binary);
-}
-
-function encodePath(path) {
-  return path.split('/').map(encodeURIComponent).join('/');
+  return dispatchWorkflow(env, runtimeConfig(env), runTrigger, checkActive);
 }
 
 async function readRepoJson(env, path) {
-  const current = await githubRequest(env, `/contents/${encodePath(path)}?ref=${encodeURIComponent(env.GITHUB_REF)}`);
-  if (!current?.sha || !current?.content) {
-    throw Object.assign(new Error(`Repository file could not be loaded: ${path}`), { status: 502 });
-  }
-  return { sha: current.sha, payload: JSON.parse(decodeBase64Utf8(current.content)) };
+  return readRuntimeJson(env, runtimeConfig(env), path);
 }
 
 async function writeRepoJson(env, path, sha, payload, message) {
-  return githubRequest(env, `/contents/${encodePath(path)}`, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      message,
-      content: encodeBase64Utf8(`${JSON.stringify(payload, null, 2)}\n`),
-      sha,
-      branch: env.GITHUB_REF,
-    }),
-  });
+  return writeRuntimeJson(env, runtimeConfig(env), path, sha, payload, message);
 }
 
 async function readNomenclatures(env) {
@@ -406,16 +337,28 @@ export { applyUserConfigPatch, assertGeographyNoConflict, readNomenclatures, val
 
 export default {
   async fetch(request, env) {
-    const cors = corsHeaders(request, env);
-    if (request.method === 'OPTIONS') {
-      if (request.headers.get('Origin') !== env.FRONTEND_ORIGIN) return new Response(null, { status: 403 });
-      return new Response(null, { status: 204, headers: cors });
-    }
-
+    let cors = {};
     try {
+      const runtime = runtimeConfig(env);
+      cors = corsHeaders(request, env);
+      if (request.method === 'OPTIONS') {
+        if (request.headers.get('Origin') !== runtime.frontendOrigin) return new Response(null, { status: 403 });
+        return new Response(null, { status: 204, headers: cors });
+      }
+
       const url = new URL(request.url);
       if (request.method === 'GET' && url.pathname === '/health') {
-        return json({ status:'ok', auth_configured:googleConfigured(env), github_configured:Boolean(env.GITHUB_TOKEN) }, 200, cors);
+        return json({
+          status:'ok',
+          environment:runtime.appEnv,
+          source_sha:runtime.sourceSha,
+          runtime_repo:runtime.runtimeRepository,
+          runtime_ref:runtime.runtimeRef,
+          runtime_data_sha:runtime.runtimeDataSha,
+          search_mode:runtime.searchMode,
+          auth_configured:googleConfigured(env),
+          github_configured:Boolean(env.GITHUB_TOKEN),
+        }, 200, cors);
       }
       if (request.method === 'GET' && url.pathname === '/auth/config') {
         return json({ client_id:env.GOOGLE_CLIENT_ID || null, configured:googleConfigured(env) }, googleConfigured(env) ? 200 : 503, cors);
@@ -430,6 +373,7 @@ export default {
       const user = await authenticate(request, env);
 
       if (request.method === 'POST' && url.pathname === '/commands/run') {
+        if (runtime.searchMode !== 'live') throw Object.assign(new Error('Full search is disabled for this environment'), { status: 409 });
         if (await hasActiveRun(env)) throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
         const input = await optionalJsonBody(request);
         const nomenclatures = (await readNomenclatures(env)).payload;
@@ -442,7 +386,7 @@ export default {
           await readSearchConfig(env, nomenclatures);
         }
         await dispatchRun(env, 'manual-ui', false);
-        return json({ status:'accepted', requested_by:user.sub, trigger:'manual-ui', config_commit:configCommit }, 202, cors);
+        return json({ status:'accepted', requested_by:user.sub, trigger:'manual-ui', source_sha:runtime.sourceSha, config_commit:configCommit }, 202, cors);
       }
 
       if (request.method === 'PUT' && url.pathname === '/config') {

@@ -114,7 +114,10 @@ def append_run_history() -> None:
         history = {}
 
     trigger = os.environ.get("RUN_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME") or "unknown"
+    source_sha = (os.environ.get("SOURCE_SHA") or "").strip().lower()
     status["trigger"] = trigger
+    if source_sha:
+        status["source_sha"] = source_sha
     engine.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
 
     runs = history.get("runs") if isinstance(history.get("runs"), list) else []
@@ -128,6 +131,7 @@ def append_run_history() -> None:
         "run_id": status.get("run_id"),
         "status": status.get("status"),
         "trigger": trigger,
+        "source_sha": status.get("source_sha"),
         "started_at": status.get("started_at"),
         "completed_at": status.get("completed_at"),
         "duration_seconds": duration_seconds,
