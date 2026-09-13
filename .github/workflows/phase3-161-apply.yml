@@ -53,12 +53,12 @@ jobs:
           npm test
           npm run check
 
-      - name: Commit validated Phase 3 integration
+      - name: Commit validated Phase 3 documentation
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git rm .github/workflows/phase3-161-apply.yml scripts/apply_phase3_docs.py
-          git add ARCHITECTURE.md CONTRIBUTING.md CHANGELOG.md docs/environment-provisioning-runbook.md docs/command-api.md .github/workflows/command-api-check.yml config/environments.json package.json scripts/environment.mjs scripts/environment scripts/test_environment.mjs .github/workflows/deploy-environment.yml
+          git restore .github/workflows/command-api-check.yml
+          git add ARCHITECTURE.md CONTRIBUTING.md CHANGELOG.md docs/environment-provisioning-runbook.md docs/command-api.md
           git diff --cached --check
-          git commit -m '[FEAT][#161] Complete Phase 3 environment automation'
+          git commit -m '[DOCS][#161] Document Phase 3 environment automation'
           git push origin HEAD:feat/161-phase3-environment-automation
