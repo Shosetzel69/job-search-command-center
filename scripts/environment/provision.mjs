@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, resolve } from 'node:path';
 import { runtimeDataFiles } from './plans.mjs';
@@ -36,6 +36,7 @@ function ensureRuntimeRepository(runtime) {
 function syncRuntimeFiles(runtime) {
   const temp = mkdtempSync(resolve(tmpdir(), 'job-search-runtime-bootstrap-'));
   try {
+    run('gh', ['auth', 'setup-git']);
     run('gh', ['repo', 'clone', runtime.runtimeRepository, temp, '--', '--depth=1']);
     const now = new Date().toISOString();
     for (const dataPath of runtimeDataFiles()) {
@@ -67,6 +68,7 @@ function configureRuntimeVariables(runtime) {
 
 function runtimeSnapshot(runtime) {
   const temp = mkdtempSync(resolve(tmpdir(), 'job-search-runtime-snapshot-'));
+  run('gh', ['auth', 'setup-git']);
   run('gh', ['repo', 'clone', runtime.runtimeRepository, temp, '--', '--depth=1', '--branch', runtime.runtimeRef]);
   const sha = run('git', ['rev-parse', 'HEAD'], { cwd: temp }).trim().toLowerCase();
   if (!SHA_RE.test(sha)) throw new Error('Could not resolve immutable RUNTIME_DATA_SHA');
