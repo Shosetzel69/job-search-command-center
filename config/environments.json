@@ -1,0 +1,45 @@
+{
+  "schema_version": "1.0",
+  "source_repository": "Shosetzel69/job-search-command-center",
+  "environments": {
+    "dev": {
+      "runtime_repository": "Shosetzel69/job-search-runtime-dev",
+      "runtime_ref": "main",
+      "workflow": "runtime.yml",
+      "worker_name": "job-search-command-api",
+      "search_mode": "disabled",
+      "cloudflare_account_id_env": "DEV_CLOUDFLARE_ACCOUNT_ID",
+      "cloudflare_token_env": "DEV_CLOUDFLARE_TOKEN",
+      "github_runtime_token_env": "DEV_GITHUB_RUNTIME_TOKEN",
+      "source_read_token_env": "DEV_SOURCE_READ_TOKEN",
+      "allowed_google_sub_env": "DEV_ALLOWED_GOOGLE_SUB",
+      "frontend_origin_env": "DEV_FRONTEND_ORIGIN"
+    },
+    "test": {
+      "runtime_repository": "Shosetzel69/job-search-runtime-test",
+      "runtime_ref": "main",
+      "workflow": "runtime.yml",
+      "worker_name": "job-search-command-api",
+      "search_mode": "smoke",
+      "cloudflare_account_id_env": "TEST_CLOUDFLARE_ACCOUNT_ID",
+      "cloudflare_token_env": "TEST_CLOUDFLARE_TOKEN",
+      "github_runtime_token_env": "TEST_GITHUB_RUNTIME_TOKEN",
+      "source_read_token_env": "TEST_SOURCE_READ_TOKEN",
+      "allowed_google_sub_env": "TEST_ALLOWED_GOOGLE_SUB",
+      "frontend_origin_env": "TEST_FRONTEND_ORIGIN"
+    },
+    "prod": {
+      "runtime_repository": "Shosetzel69/job-search-runtime-prod",
+      "runtime_ref": "main",
+      "workflow": "runtime.yml",
+      "worker_name": "job-search-command-api",
+      "search_mode": "live",
+      "cloudflare_account_id_env": "PROD_CLOUDFLARE_ACCOUNT_ID",
+      "cloudflare_token_env": "PROD_CLOUDFLARE_TOKEN",
+      "github_runtime_token_env": "PROD_GITHUB_RUNTIME_TOKEN",
+      "source_read_token_env": "PROD_SOURCE_READ_TOKEN",
+      "allowed_google_sub_env": "PROD_ALLOWED_GOOGLE_SUB",
+      "frontend_origin_env": "PROD_FRONTEND_ORIGIN"
+    }
+  }
+}
