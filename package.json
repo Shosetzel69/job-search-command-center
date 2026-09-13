@@ -1,0 +1,14 @@
+{
+  "name": "job-search-command-center-environment-automation",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "env:validate": "node scripts/environment.mjs validate",
+    "env:bootstrap": "node scripts/environment.mjs bootstrap",
+    "env:bootstrap-all": "node scripts/environment.mjs bootstrap-all",
+    "env:deploy": "node scripts/environment.mjs deploy",
+    "env:status": "node scripts/environment.mjs status",
+    "env:isolation-test": "node scripts/environment.mjs isolation-test",
+    "test:environment": "node --test scripts/test_environment.mjs"
+  }
+}
