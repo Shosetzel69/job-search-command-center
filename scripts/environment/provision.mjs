@@ -59,7 +59,12 @@ function syncRuntimeFiles(runtime) {
       const target = resolve(temp, dataPath);
       if (existsSync(target)) continue;
       mkdirSync(resolve(target, '..'), { recursive: true });
-      writeFileSync(target, serializeSeed(basename(dataPath), { sourceSha: runtime.sourceSha, generatedAt: now }), 'utf8');
+      writeFileSync(target, serializeSeed(basename(dataPath), {
+        sourceSha: runtime.sourceSha,
+        generatedAt: now,
+        environment: runtime.environment,
+        searchMode: runtime.searchMode,
+      }), 'utf8');
     }
 
     const workflow = resolve(temp, '.github', 'workflows', runtime.workflow);
