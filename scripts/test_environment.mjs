@@ -12,7 +12,7 @@ import {
 } from './environment/contract.mjs';
 import { bootstrapPlan, isolationPlan, runtimeDataFiles } from './environment/plans.mjs';
 import { assertPhase5LiveGate } from './environment/live.mjs';
-import { runtimeSeedPayload } from './environment/seed.mjs';
+import { runtimeSeedPayload, shouldRefreshPristineSeed } from './environment/seed.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
 const manifest = loadManifest('config/environments.json', ROOT);
@@ -123,6 +123,18 @@ test('TEST seed metadata is TEST/smoke and never inherits DEV identity', () => {
   assert.equal(config.source_strategy, 'TEST seed - smoke policy');
 });
 
+test('pristine mismatched TEST seed can be refreshed but operational data cannot', () => {
+  const runtime = { environment: 'test', searchMode: 'smoke' };
+  const devJobsSeed = runtimeSeedPayload('jobs.json', { environment: 'dev', searchMode: 'disabled' });
+  assert.equal(shouldRefreshPristineSeed('jobs.json', devJobsSeed, runtime), true);
+  const operationalJobs = { ...devJobsSeed, records_inspected: 1, jobs: [{ id: 'keep-me' }] };
+  assert.equal(shouldRefreshPristineSeed('jobs.json', operationalJobs, runtime), false);
+  const devStatusSeed = runtimeSeedPayload('run-status.json', { environment: 'dev', searchMode: 'disabled' });
+  assert.equal(shouldRefreshPristineSeed('run-status.json', devStatusSeed, runtime), true);
+  const devConfigSeed = runtimeSeedPayload('search-config.json', { environment: 'dev', searchMode: 'disabled' });
+  assert.equal(shouldRefreshPristineSeed('search-config.json', devConfigSeed, runtime), true);
+});
+
 test('isolated seed preserves canonical nomenclature domains', () => {
   const domains = runtimeSeedPayload('nomenclatures.json').domains;
   assert.deepEqual(Object.keys(domains).sort(), ['application_statuses', 'contract_types', 'countries', 'regions', 'seniority', 'work_modes']);
@@ -188,4 +200,5 @@ test('environment deploy health verification retries propagation and pins runtim
   assert.match(provision, /deployEnvironment/);
   assert.match(provision, /environment: runtime\.environment/);
   assert.match(provision, /searchMode: runtime\.searchMode/);
+  assert.match(provision, /shouldRefreshPristineSeed/);
 });
