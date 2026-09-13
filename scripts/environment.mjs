@@ -2,16 +2,18 @@
 import { loadManifest, parseArgs, requireEnvironment, requireSourceSha, resolveEnvironment, assertProdGate } from './environment/contract.mjs';
 import { bootstrapPlan, deployPlan, isolationPlan } from './environment/plans.mjs';
 import { printPlan, printValidation, statusRow } from './environment/report.mjs';
+import { assertPhase4LiveGate } from './environment/live.mjs';
+import { provisionDev, deployDev, statusDev } from './environment/provision.mjs';
 
 function usage() {
-  console.log(`Usage:\n  node scripts/environment.mjs validate --env dev --source-sha <sha> [--dry-run]\n  node scripts/environment.mjs bootstrap --env dev --source-sha <sha> --dry-run\n  node scripts/environment.mjs bootstrap-all --source-sha <sha> --dry-run\n  node scripts/environment.mjs deploy --env dev --source-sha <sha> --dry-run\n  node scripts/environment.mjs status --source-sha <sha> --dry-run\n  node scripts/environment.mjs isolation-test --source-sha <sha> --dry-run\n\nPhase 3 permits dry-run/validation only. Live provisioning starts at the environment-specific phase gate.`);
+  console.log(`Usage:\n  node scripts/environment.mjs validate --env dev --source-sha <sha> [--dry-run]\n  node scripts/environment.mjs bootstrap --env dev --source-sha <sha> [--dry-run]\n  node scripts/environment.mjs bootstrap-all --source-sha <sha> --dry-run\n  node scripts/environment.mjs deploy --env dev --source-sha <sha> [--dry-run]\n  node scripts/environment.mjs status --env dev --source-sha <sha> [--dry-run]\n  node scripts/environment.mjs isolation-test --source-sha <sha> --dry-run\n\nPhase 4 permits live execution only for DEV. TEST/PROD remain blocked. bootstrap-all and isolation-test remain non-mutating.`);
 }
 
 function requireDryRun(args, action) {
-  if (args.dry_run !== true) throw new Error(`${action} live execution is gated until DEV/TEST provisioning phase; use --dry-run`);
+  if (args.dry_run !== true) throw new Error(`${action} remains dry-run only in Phase 4`);
 }
 
-function main() {
+async function main() {
   const args = parseArgs(process.argv.slice(2));
   const command = args._[0];
   if (!command || command === 'help') return usage();
@@ -22,14 +24,17 @@ function main() {
     const envName = requireEnvironment(args.env);
     const runtime = resolveEnvironment(manifest, envName, sourceSha);
     assertProdGate(runtime.environment, args.owner_gate);
+    if (args.dry_run !== true) assertPhase4LiveGate(runtime.environment, false);
     return printValidation(runtime);
   }
 
   if (command === 'bootstrap') {
-    requireDryRun(args, 'bootstrap');
     const runtime = resolveEnvironment(manifest, requireEnvironment(args.env), sourceSha);
     assertProdGate(runtime.environment, args.owner_gate);
-    return printPlan('bootstrap', runtime, bootstrapPlan(runtime));
+    if (args.dry_run === true) return printPlan('bootstrap', runtime, bootstrapPlan(runtime));
+    assertPhase4LiveGate(runtime.environment, false);
+    console.log(JSON.stringify(await provisionDev(runtime), null, 2));
+    return;
   }
 
   if (command === 'bootstrap-all') {
@@ -42,19 +47,26 @@ function main() {
   }
 
   if (command === 'deploy') {
-    requireDryRun(args, 'deploy');
     const runtime = resolveEnvironment(manifest, requireEnvironment(args.env), sourceSha);
     assertProdGate(runtime.environment, args.owner_gate);
-    return printPlan('deploy', runtime, deployPlan(runtime));
+    if (args.dry_run === true) return printPlan('deploy', runtime, deployPlan(runtime));
+    assertPhase4LiveGate(runtime.environment, false);
+    console.log(JSON.stringify(await deployDev(runtime), null, 2));
+    return;
   }
 
   if (command === 'status') {
-    requireDryRun(args, 'status');
-    const rows = ['dev', 'test', 'prod'].map(envName => {
-      const runtime = resolveEnvironment(manifest, envName, sourceSha);
-      return statusRow(runtime);
-    });
-    console.table(rows);
+    if (args.dry_run === true) {
+      const rows = ['dev', 'test', 'prod'].map(envName => {
+        const runtime = resolveEnvironment(manifest, envName, sourceSha);
+        return statusRow(runtime);
+      });
+      console.table(rows);
+      return;
+    }
+    const runtime = resolveEnvironment(manifest, requireEnvironment(args.env), sourceSha);
+    assertPhase4LiveGate(runtime.environment, false);
+    console.log(JSON.stringify(await statusDev(runtime), null, 2));
     return;
   }
 
@@ -73,9 +85,7 @@ function main() {
   throw new Error(`Unknown command: ${command}`);
 }
 
-try {
-  main();
-} catch (error) {
+main().catch(error => {
   console.error(`ENVIRONMENT_AUTOMATION_FAIL: ${error instanceof Error ? error.message : String(error)}`);
   process.exitCode = 1;
-}
+});
