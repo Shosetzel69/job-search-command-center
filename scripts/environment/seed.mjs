@@ -56,14 +56,20 @@ function nomenclaturesSeed() {
   };
 }
 
-export function runtimeSeedPayload(file, { sourceSha, generatedAt = new Date().toISOString() } = {}) {
+export function runtimeSeedPayload(file, {
+  sourceSha,
+  generatedAt = new Date().toISOString(),
+  environment = 'dev',
+  searchMode = environment === 'test' ? 'smoke' : 'disabled',
+} = {}) {
+  const label = String(environment).toUpperCase();
   switch (file) {
     case 'jobs.json':
       return {
         schema_version: SCHEMA,
         generated_at: generatedAt,
         freshness_hours: 24,
-        criteria: { environment: 'dev', search_mode: 'disabled' },
+        criteria: { environment, search_mode: searchMode },
         records_inspected: 0,
         results: 0,
         excluded_count: 0,
@@ -72,7 +78,7 @@ export function runtimeSeedPayload(file, { sourceSha, generatedAt = new Date().t
     case 'run-status.json':
       return {
         schema_version: SCHEMA,
-        run_id: 'dev-seed',
+        run_id: `${environment}-seed`,
         status: 'completed',
         started_at: generatedAt,
         completed_at: generatedAt,
@@ -82,7 +88,7 @@ export function runtimeSeedPayload(file, { sourceSha, generatedAt = new Date().t
         records_inspected: 0,
         jobs_published: 0,
         excluded: 0,
-        limitations: ['Isolated DEV seed. Full Search is disabled.'],
+        limitations: [`Isolated ${label} seed. Search policy: ${searchMode}.`],
         source_sha: sourceSha || null,
       };
     case 'run-history.json':
@@ -113,7 +119,7 @@ export function runtimeSeedPayload(file, { sourceSha, generatedAt = new Date().t
         search_country_codes: ['RO'],
         eligible_remote_country_codes: ['RO'],
         work_mode_priority: ['Remote', 'Hybrid'],
-        source_strategy: 'DEV seed - search disabled',
+        source_strategy: `${label} seed - ${searchMode} policy`,
         web_browser_fallback_enabled: false,
         exclusions: [],
         excluded_company_patterns: [],
