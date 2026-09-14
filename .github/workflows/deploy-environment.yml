@@ -7,7 +7,7 @@ on:
         description: Environment automation action
         required: true
         type: choice
-        options: [validate, bootstrap, deploy, status, isolation-test]
+        options: [validate, bootstrap, deploy, status, isolation-test, prod-preflight]
       environment:
         description: Explicit target environment
         required: true
@@ -44,7 +44,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Guard immutable source and Phase 5 live scope
+      - name: Guard immutable source and pre-cutover live scope
         shell: bash
         run: |
           set -euo pipefail
@@ -52,7 +52,15 @@ jobs:
           actual="$(git rev-parse HEAD)"
           test "${actual,,}" = "${{ inputs.source_sha }}" || { echo "checkout does not match source_sha" >&2; exit 1; }
           if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.environment }}" = "prod" ]; then
-            echo "Phase 5 live execution permits DEV/TEST only; PROD remains blocked" >&2
+            echo "Phase 6 permits PROD preparation only; live PROD execution remains blocked until separate Phase 7 GO" >&2
+            exit 1
+          fi
+          if [ "${{ inputs.action }}" = "prod-preflight" ] && [ "${{ inputs.environment }}" != "prod" ]; then
+            echo "prod-preflight requires environment=prod" >&2
+            exit 1
+          fi
+          if [ "${{ inputs.action }}" = "prod-preflight" ] && [ "${{ inputs.dry_run }}" != "true" ]; then
+            echo "prod-preflight is non-mutating and requires dry_run=true" >&2
             exit 1
           fi
           if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.action }}" = "isolation-test" ]; then
@@ -60,7 +68,7 @@ jobs:
             exit 1
           fi
           if [ "${{ inputs.environment }}" = "prod" ] && [ "${{ inputs.owner_gate }}" != "APPROVED" ]; then
-            echo "PROD requires explicit owner gate even for validation" >&2
+            echo "PROD requires explicit owner gate even for validation/preparation" >&2
             exit 1
           fi
 
@@ -103,6 +111,7 @@ jobs:
             deploy) npm run env:deploy -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run "${EXTRA[@]}" ;;
             status) npm run env:status -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run ;;
             isolation-test) npm run env:isolation-test -- --source-sha "$SOURCE_SHA" --dry-run ;;
+            prod-preflight) npm run env:prod-preflight -- --source-sha "$SOURCE_SHA" --dry-run --owner-gate "${{ inputs.owner_gate }}" ;;
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
 
@@ -202,6 +211,7 @@ jobs:
             deploy) npm run env:deploy -- --env "$TARGET_ENV" --source-sha "$SOURCE_SHA" ;;
             status) npm run env:status -- --env "$TARGET_ENV" --source-sha "$SOURCE_SHA" ;;
             isolation-test) echo "Use independent QA for provider isolation" >&2; exit 1 ;;
+            prod-preflight) echo "prod-preflight is dry-run only" >&2; exit 1 ;;
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
 
