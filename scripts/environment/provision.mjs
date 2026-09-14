@@ -5,7 +5,7 @@ import { basename, resolve } from 'node:path';
 import { runtimeDataFiles } from './plans.mjs';
 import { serializeSeed, shouldRefreshPristineSeed } from './seed.mjs';
 import { SHA_RE, redact } from './contract.mjs';
-import { assertPhase5LiveGate, verifyLocalSourceSha } from './live.mjs';
+import { assertPreCutoverLiveGate, verifyLocalSourceSha } from './live.mjs';
 
 const HEALTH_PROPAGATION_ATTEMPTS = 10;
 const HEALTH_PROPAGATION_DELAY_MS = 3000;
@@ -205,7 +205,7 @@ async function probeDeployedHealth(runtime, runtimeDataSha) {
 }
 
 export async function provisionEnvironment(runtime) {
-  assertPhase5LiveGate(runtime.environment, false);
+  assertPreCutoverLiveGate(runtime.environment, false);
   const created = ensureRuntimeRepository(runtime);
   syncRuntimeFiles(runtime);
   configureRuntimeVariables(runtime);
@@ -226,7 +226,7 @@ export async function provisionEnvironment(runtime) {
 }
 
 export async function deployEnvironment(runtime) {
-  assertPhase5LiveGate(runtime.environment, false);
+  assertPreCutoverLiveGate(runtime.environment, false);
   const runtimeDataSha = deployWorker(runtime);
   const health = await probeDeployedHealth(runtime, runtimeDataSha);
   return {
@@ -243,6 +243,6 @@ export async function deployEnvironment(runtime) {
 }
 
 export async function statusEnvironment(runtime) {
-  assertPhase5LiveGate(runtime.environment, false);
+  assertPreCutoverLiveGate(runtime.environment, false);
   return probeHealth(runtime);
 }
