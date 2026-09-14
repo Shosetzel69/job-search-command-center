@@ -11,7 +11,8 @@ import {
   validateManifest,
 } from './environment/contract.mjs';
 import { bootstrapPlan, isolationPlan, runtimeDataFiles } from './environment/plans.mjs';
-import { assertPhase5LiveGate } from './environment/live.mjs';
+import { assertPreCutoverLiveGate } from './environment/live.mjs';
+import { buildProdPreparationReport } from './environment/prod-preflight.mjs';
 import { runtimeSeedPayload, shouldRefreshPristineSeed } from './environment/seed.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -77,11 +78,34 @@ test('PROD requires an explicit owner gate for gated operations', () => {
   assert.doesNotThrow(() => assertProdGate('prod', 'APPROVED'));
 });
 
-test('Phase 5 live gate permits DEV/TEST and blocks PROD', () => {
-  assert.doesNotThrow(() => assertPhase5LiveGate('dev', false));
-  assert.doesNotThrow(() => assertPhase5LiveGate('test', false));
-  assert.throws(() => assertPhase5LiveGate('prod', false), /DEV\/TEST only/);
-  assert.doesNotThrow(() => assertPhase5LiveGate('prod', true));
+test('pre-cutover live gate permits DEV/TEST and blocks PROD', () => {
+  assert.doesNotThrow(() => assertPreCutoverLiveGate('dev', false));
+  assert.doesNotThrow(() => assertPreCutoverLiveGate('test', false));
+  assert.throws(() => assertPreCutoverLiveGate('prod', false), /Phase 7 GO/);
+  assert.doesNotThrow(() => assertPreCutoverLiveGate('prod', true));
+});
+
+test('Phase 6 PROD preparation identifies legacy source-backed runtime and isolated target', () => {
+  const wrangler = JSON.parse(readFileSync(resolve(ROOT, 'command-api/wrangler.jsonc'), 'utf8'));
+  const report = buildProdPreparationReport({ manifest, wrangler, sourceSha: SHA });
+  assert.equal(report.status, 'PASS');
+  assert.equal(report.phase, 6);
+  assert.equal(report.live_prod_mutation_authorized, false);
+  assert.equal(report.phase7_cutover_authorized, false);
+  assert.equal(report.current_prod.environment, 'prod');
+  assert.equal(report.current_prod.runtime_repository, 'Shosetzel69/job-search-command-center');
+  assert.equal(report.target_prod.runtime_repository, 'Shosetzel69/job-search-runtime-prod');
+  assert.equal(report.target_prod.workflow, 'runtime.yml');
+  assert.equal(report.target_prod.search_mode, 'live');
+  assert.equal(report.migration_required, true);
+  assert.ok(report.checks.every(check => check.result === 'PASS'));
+});
+
+test('Phase 6 PROD preparation rejects a target that aliases DEV runtime data', () => {
+  const badManifest = JSON.parse(JSON.stringify(manifest));
+  badManifest.environments.prod.runtime_repository = badManifest.environments.dev.runtime_repository;
+  const wrangler = JSON.parse(readFileSync(resolve(ROOT, 'command-api/wrangler.jsonc'), 'utf8'));
+  assert.throws(() => buildProdPreparationReport({ manifest: badManifest, wrangler, sourceSha: SHA }), /canonical environment target|preflight failed/);
 });
 
 test('bootstrap-all scope is structurally DEV + TEST only', () => {
@@ -180,12 +204,13 @@ test('deploy workflow never defaults environment to PROD', () => {
   assert.doesNotMatch(workflow, /default:\s*prod/);
 });
 
-test('Phase 5 deploy workflow uses one generic DEV/TEST live path and keeps PROD blocked', () => {
+test('Phase 6 workflow exposes PROD preflight but keeps every live PROD operation blocked', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /prod-preflight/);
+  assert.match(workflow, /Phase 6 permits PROD preparation only; live PROD execution remains blocked until separate Phase 7 GO/);
+  assert.match(workflow, /prod-preflight requires environment=prod/);
   assert.match(workflow, /Resolve live DEV\/TEST configuration/);
-  assert.match(workflow, /Execute live environment action/);
-  assert.match(workflow, /Phase 5 live execution permits DEV\/TEST only; PROD remains blocked/);
-  assert.doesNotMatch(workflow, /Execute live DEV action/);
+  assert.doesNotMatch(workflow, /Resolve live PROD configuration/);
   assert.match(workflow, /TEST must use a Cloudflare account distinct from DEV/);
   assert.match(workflow, /TEST must use a runtime token distinct from DEV/);
 });
@@ -201,4 +226,5 @@ test('environment deploy health verification retries propagation and pins runtim
   assert.match(provision, /environment: runtime\.environment/);
   assert.match(provision, /searchMode: runtime\.searchMode/);
   assert.match(provision, /shouldRefreshPristineSeed/);
+  assert.match(provision, /assertPreCutoverLiveGate/);
 });
