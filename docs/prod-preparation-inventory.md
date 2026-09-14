@@ -11,6 +11,18 @@ Phase 6 may inspect, validate and prepare the PROD target model. It must not dep
 
 Phase 7 requires a separate explicit owner GO.
 
+## Naming decision
+
+The current production instance keeps its existing public identity. We do **not** rename the Worker or add a `-prod` suffix.
+
+Preserved production identity:
+
+- Worker name: `job-search-command-api`
+- live origin: `https://job-search-command-api.myeboda.workers.dev`
+- existing production Cloudflare account remains the PROD account
+
+Phase 6/7 standardizes the internal runtime/data/credential model in place. The user-facing Worker name and URL remain unchanged.
+
 ## Current PROD — legacy/live model
 
 Repository evidence from `command-api/wrangler.jsonc`:
@@ -60,6 +72,8 @@ The target runtime repository must be private and must be distinct from source, 
 Migration is required because the current PROD runtime repository/workflow identity differs from the standardized target.
 
 Phase 6 prepares the migration contract only. The actual copy/snapshot of PROD runtime data and Worker reconfiguration happen only during Phase 7 after separate owner approval.
+
+This is an **in-place standardization** of the existing production instance, not creation of a replacement public PROD instance.
 
 ## Backup/recovery preparation
 
