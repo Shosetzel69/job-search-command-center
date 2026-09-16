@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   assertProdGate,
+  CANONICAL_RUNTIME_REPOSITORIES,
   loadManifest,
   requireEnvironment,
   requireSourceSha,
@@ -35,8 +36,9 @@ function envInputs() {
 test('manifest defines exactly three canonical runtime repositories', () => {
   assert.deepEqual(Object.keys(manifest.environments).sort(), ['dev', 'prod', 'test']);
   for (const name of ['dev', 'test', 'prod']) {
-    assert.equal(manifest.environments[name].runtime_repository, `Shosetzel69/job-search-runtime-${name}`);
+    assert.equal(manifest.environments[name].runtime_repository, CANONICAL_RUNTIME_REPOSITORIES[name]);
   }
+  assert.equal(manifest.environments.prod.runtime_repository, 'Shosetzel69/job-search-prod');
 });
 
 test('missing environment fails closed', () => assert.throws(() => requireEnvironment(), /Explicit --env/));
@@ -94,7 +96,7 @@ test('Phase 6 PROD preparation identifies legacy source-backed runtime and isola
   assert.equal(report.phase7_cutover_authorized, false);
   assert.equal(report.current_prod.environment, 'prod');
   assert.equal(report.current_prod.runtime_repository, 'Shosetzel69/job-search-command-center');
-  assert.equal(report.target_prod.runtime_repository, 'Shosetzel69/job-search-runtime-prod');
+  assert.equal(report.target_prod.runtime_repository, 'Shosetzel69/job-search-prod');
   assert.equal(report.target_prod.workflow, 'runtime.yml');
   assert.equal(report.target_prod.search_mode, 'live');
   assert.equal(report.migration_required, true);
@@ -180,7 +182,7 @@ test('static isolation plan covers DEV->TEST, DEV->PROD and TEST->PROD', () => {
 
 test('manifest rejects non-canonical runtime targets', () => {
   const copy = JSON.parse(JSON.stringify(manifest));
-  copy.environments.test.runtime_repository = 'Shosetzel69/job-search-runtime-prod';
+  copy.environments.prod.runtime_repository = 'Shosetzel69/job-search-runtime-prod';
   assert.throws(() => validateManifest(copy), /canonical environment target/);
 });
 
