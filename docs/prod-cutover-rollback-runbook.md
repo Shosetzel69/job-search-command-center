@@ -26,7 +26,7 @@ Move production ownership from the legacy live stack:
 
 into the new fully isolated PROD stack:
 
-`Job Search PROD Cloudflare account + job-search-runtime-prod/main + runtime.yml`
+`Job Search PROD Cloudflare account + job-search-prod/main + runtime.yml`
 
 while keeping source code in `job-search-command-center` and preserving PROD-only runtime data.
 
@@ -42,7 +42,7 @@ Immediately before any Phase 7 mutation:
 - create an immutable source/data backup anchor;
 - verify legacy deployment remains reachable;
 - verify candidate source SHA passed DEV and TEST;
-- verify `job-search-runtime-prod` contains only approved PROD data;
+- verify `job-search-prod` contains only approved PROD data;
 - verify new PROD Cloudflare account contains only the intended Job Search PROD resources;
 - verify PROD credentials cannot access DEV/TEST or the legacy Cloudflare account;
 - verify OAuth/client/origin belong to the new PROD target.
@@ -55,7 +55,7 @@ Phase 6 prepares, without traffic cutover:
 
 - dedicated Cloudflare account `Job Search PROD`;
 - Worker `job-search-command-api` inside that account;
-- private `Shosetzel69/job-search-runtime-prod`;
+- private `Shosetzel69/job-search-prod`;
 - GitHub Environment `prod`;
 - separated bootstrap, runtime and source-read GitHub credentials;
 - dedicated Cloudflare deploy credential;
@@ -67,7 +67,7 @@ No legacy PROD resource is changed by these preparation steps.
 
 ## 5. PROD runtime snapshot creation
 
-Only canonical runtime-data contract files are copied from the immutable legacy PROD snapshot into `job-search-runtime-prod`. No DEV/TEST data and no historical test-only files are copied.
+Only canonical runtime-data contract files are copied from the immutable legacy PROD snapshot into `job-search-prod`. No DEV/TEST data and no historical test-only files are copied.
 
 The migration commit becomes the initial PROD `RUNTIME_DATA_SHA`.
 
@@ -76,7 +76,7 @@ Validate:
 - runtime repository is private;
 - exact file inventory and snapshot SHA;
 - no DEV/TEST operational content;
-- runtime token writes only `job-search-runtime-prod`;
+- runtime token writes only `job-search-prod`;
 - source-read token is read-only to source;
 - bootstrap credential is not installed in the Worker;
 - Cloudflare token belongs only to the dedicated PROD account.
@@ -89,7 +89,7 @@ Before traffic/cutover acceptance:
 2. verify `/health` on the new origin:
    - `environment=prod`;
    - exact `source_sha`;
-   - `runtime_repo=Shosetzel69/job-search-runtime-prod`;
+   - `runtime_repo=Shosetzel69/job-search-prod`;
    - exact `runtime_data_sha`;
    - `search_mode=live`;
    - auth configured;
