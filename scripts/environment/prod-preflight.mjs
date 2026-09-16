@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { requireSourceSha, validateManifest } from './contract.mjs';
+import { CANONICAL_RUNTIME_REPOSITORIES, requireSourceSha, validateManifest } from './contract.mjs';
 
 function loadJson(path, cwd = process.cwd()) {
   return JSON.parse(readFileSync(resolve(cwd, path), 'utf8'));
@@ -52,7 +52,7 @@ export function buildProdPreparationReport({ manifest, wrangler, sourceSha }) {
     ['current-prod-search-mode', current.search_mode === 'live'],
     ['current-prod-origin-https', current.frontend_origin.startsWith('https://')],
     ['target-prod-runtime-isolated', !forbiddenRuntimeRepositories.has(target.runtime_repository)],
-    ['target-prod-runtime-canonical', target.runtime_repository === 'Shosetzel69/job-search-runtime-prod'],
+    ['target-prod-runtime-canonical', target.runtime_repository === CANONICAL_RUNTIME_REPOSITORIES.prod],
     ['target-prod-search-mode-live', target.search_mode === 'live'],
     ['target-prod-runtime-ref-main', target.runtime_ref === 'main'],
     ['target-prod-workflow-runtime', target.workflow === 'runtime.yml'],
