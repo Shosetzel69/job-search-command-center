@@ -5,7 +5,7 @@ export const ENVIRONMENTS = Object.freeze(['dev', 'test', 'prod']);
 export const SHA_RE = /^[0-9a-f]{40}$/i;
 export const ACCOUNT_RE = /^[0-9a-f]{32}$/i;
 const PLACEHOLDER_RE = /<[^>]+>|#{5,}|\b(?:TODO|TBD|PLACEHOLDER)\b/i;
-const CANONICAL_RUNTIME_REPOSITORIES = Object.freeze({
+export const CANONICAL_RUNTIME_REPOSITORIES = Object.freeze({
   dev: 'Shosetzel69/job-search-runtime-dev',
   test: 'Shosetzel69/job-search-runtime-test',
   prod: 'Shosetzel69/job-search-prod',
