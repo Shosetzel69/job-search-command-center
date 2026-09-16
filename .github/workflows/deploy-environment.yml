@@ -175,10 +175,10 @@ jobs:
           TEST_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'test' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
           DEV_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'dev' && secrets.CLOUDFLARE_TOKEN || '' }}
           TEST_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'test' && secrets.CLOUDFLARE_TOKEN || '' }}
-          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && secrets.GITHUB_BOOTSTRAP_TOKEN || '' }}
-          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && secrets.GITHUB_BOOTSTRAP_TOKEN || '' }}
-          DEV_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'dev' && secrets.GITHUB_RUNTIME_TOKEN || '' }}
-          TEST_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'test' && secrets.GITHUB_RUNTIME_TOKEN || '' }}
+          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_BOOTSTRAP_TOKEN || '' }}
+          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_BOOTSTRAP_TOKEN || '' }}
+          DEV_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_RUNTIME_TOKEN || '' }}
+          TEST_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_RUNTIME_TOKEN || '' }}
           DEV_SOURCE_READ_TOKEN: ${{ inputs.environment == 'dev' && secrets.SOURCE_READ_TOKEN || '' }}
           TEST_SOURCE_READ_TOKEN: ${{ inputs.environment == 'test' && secrets.SOURCE_READ_TOKEN || '' }}
           DEV_ALLOWED_GOOGLE_SUB: ${{ inputs.environment == 'dev' && secrets.ALLOWED_GOOGLE_SUB || '' }}
@@ -206,8 +206,8 @@ jobs:
         env:
           SELECTED_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           SELECTED_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
-          SELECTED_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GITHUB_BOOTSTRAP_TOKEN }}
-          SELECTED_GITHUB_RUNTIME_TOKEN: ${{ secrets.GITHUB_RUNTIME_TOKEN }}
+          SELECTED_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
+          SELECTED_GITHUB_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
           SELECTED_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           SELECTED_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
         shell: bash
@@ -228,17 +228,17 @@ jobs:
         working-directory: control-plane
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
-          SELECTED_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GITHUB_BOOTSTRAP_TOKEN }}
-          SELECTED_GITHUB_RUNTIME_TOKEN: ${{ secrets.GITHUB_RUNTIME_TOKEN }}
+          SELECTED_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
+          SELECTED_GITHUB_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
           SELECTED_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           DEV_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'dev' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
           TEST_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'test' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
           DEV_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'dev' && secrets.CLOUDFLARE_TOKEN || '' }}
           TEST_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'test' && secrets.CLOUDFLARE_TOKEN || '' }}
-          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && secrets.GITHUB_BOOTSTRAP_TOKEN || '' }}
-          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && secrets.GITHUB_BOOTSTRAP_TOKEN || '' }}
-          DEV_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'dev' && secrets.GITHUB_RUNTIME_TOKEN || '' }}
-          TEST_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'test' && secrets.GITHUB_RUNTIME_TOKEN || '' }}
+          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_BOOTSTRAP_TOKEN || '' }}
+          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_BOOTSTRAP_TOKEN || '' }}
+          DEV_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_RUNTIME_TOKEN || '' }}
+          TEST_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_RUNTIME_TOKEN || '' }}
           DEV_SOURCE_READ_TOKEN: ${{ inputs.environment == 'dev' && secrets.SOURCE_READ_TOKEN || '' }}
           TEST_SOURCE_READ_TOKEN: ${{ inputs.environment == 'test' && secrets.SOURCE_READ_TOKEN || '' }}
           DEV_ALLOWED_GOOGLE_SUB: ${{ inputs.environment == 'dev' && secrets.ALLOWED_GOOGLE_SUB || '' }}
