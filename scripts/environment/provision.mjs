@@ -139,6 +139,20 @@ function runtimeSnapshot(runtime) {
   return { temp, dataDir: resolve(temp, 'data'), sha };
 }
 
+function verifyDeploymentWorkspaceSource(sourceSha) {
+  const workspace = sourceWorkspace();
+  const attestationPath = resolve(workspace, '.candidate-source-sha');
+  if (!existsSync(attestationPath)) {
+    verifyLocalSourceSha(sourceSha, workspace);
+    return false;
+  }
+  const attested = readFileSync(attestationPath, 'utf8').trim().toLowerCase();
+  if (!SHA_RE.test(attested) || attested !== String(sourceSha).toLowerCase()) {
+    throw new Error('Prepared deployment payload does not match immutable SOURCE_SHA');
+  }
+  return true;
+}
+
 function wrangler(runtime, args, env = {}) {
   return run('npx', ['wrangler', ...args], {
     cwd: resolve(sourceWorkspace(), 'command-api'),
@@ -171,7 +185,7 @@ function workerVars(runtime) {
 }
 
 function deployWorker(runtime) {
-  verifyLocalSourceSha(runtime.sourceSha, sourceWorkspace());
+  const trustedPayloadBuild = verifyDeploymentWorkspaceSource(runtime.sourceSha);
   const snapshot = runtimeSnapshot(runtime);
   try {
     const env = {
@@ -179,6 +193,7 @@ function deployWorker(runtime) {
       RUNTIME_DATA_SHA: snapshot.sha,
       RUNTIME_DATA_DIR: snapshot.dataDir,
       APP_ENV: runtime.environment,
+      TRUSTED_PAYLOAD_BUILD: trustedPayloadBuild ? '1' : '0',
     };
     const vars = Object.entries(workerVars(runtime)).flatMap(([key, value]) => ['--var', `${key}:${value}`]);
     wrangler(runtime, ['deploy', '--name', runtime.workerName, ...vars], env);
