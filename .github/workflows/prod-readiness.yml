@@ -119,18 +119,35 @@ jobs:
           GH_TOKEN="$SOURCE_READ_TOKEN" gh api "repos/$source_repo/commits/$SOURCE_SHA" --silent >/dev/null
           echo "GitHub credential role boundaries verified without mutation."
 
-      - name: Verify Cloudflare credential reaches only the dedicated PROD target context
+      - name: Verify Cloudflare PROD token and dedicated Worker target without mutation
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          http_code="$(curl --silent --show-error --output /tmp/prod-worker-settings.json --write-out '%{http_code}' \
+
+          verify_code="$(curl --silent --show-error --output /tmp/prod-token-verify.json --write-out '%{http_code}' \
             --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
-            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/job-search-command-api/settings")"
-          test "$http_code" = "200" || {
-            echo "Cloudflare PROD token cannot read the dedicated PROD Worker settings (HTTP $http_code)" >&2
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify")"
+          test "$verify_code" = "200" || {
+            echo "Cloudflare PROD token verification failed for the configured PROD account (HTTP $verify_code)" >&2
             exit 1
           }
-          echo "Cloudflare dedicated PROD Worker access verified without mutation."
+          jq -e '.success == true and .result.status == "active"' /tmp/prod-token-verify.json >/dev/null || {
+            echo "Cloudflare PROD token is not active for the configured PROD account" >&2
+            exit 1
+          }
+
+          worker_code="$(curl --silent --show-error --output /tmp/prod-worker-settings.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/job-search-command-api/settings")"
+          test "$worker_code" = "200" || {
+            echo "Cloudflare PROD token cannot read the dedicated PROD Worker settings (HTTP $worker_code)" >&2
+            exit 1
+          }
+          jq -e '.success == true' /tmp/prod-worker-settings.json >/dev/null || {
+            echo "Cloudflare PROD Worker settings response is not successful" >&2
+            exit 1
+          }
+          echo "Cloudflare PROD token is active for the configured account and can reach the dedicated PROD Worker. Cross-account negative isolation remains an independent G6 QA check."
