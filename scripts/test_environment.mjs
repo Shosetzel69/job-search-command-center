@@ -24,6 +24,7 @@ function envInputs() {
   for (const [name, cfg] of Object.entries(manifest.environments)) {
     values[cfg.cloudflare_account_id_env] = name === 'dev' ? '1'.repeat(32) : name === 'test' ? '2'.repeat(32) : '3'.repeat(32);
     values[cfg.cloudflare_token_env] = `${name}-cf-token`;
+    values[cfg.github_bootstrap_token_env] = `${name}-gh-bootstrap-token`;
     values[cfg.github_runtime_token_env] = `${name}-gh-runtime-token`;
     values[cfg.source_read_token_env] = `${name}-source-read-token`;
     values[cfg.allowed_google_sub_env] = `${name}-google-sub`;
@@ -54,6 +55,12 @@ test('invalid Cloudflare account ID fails closed', () => {
   const values = envInputs();
   values.DEV_CLOUDFLARE_ACCOUNT_ID = 'wrong';
   assert.throws(() => resolveEnvironment(manifest, 'dev', SHA, values), /32 hex/);
+});
+
+test('bootstrap and runtime GitHub roles must be distinct', () => {
+  const values = envInputs();
+  values.DEV_GITHUB_BOOTSTRAP_TOKEN = values.DEV_GITHUB_RUNTIME_TOKEN;
+  assert.throws(() => resolveEnvironment(manifest, 'dev', SHA, values), /must be distinct/);
 });
 
 test('Google client ID is an explicit environment input', () => {
@@ -206,15 +213,34 @@ test('deploy workflow never defaults environment to PROD', () => {
   assert.doesNotMatch(workflow, /default:\s*prod/);
 });
 
+test('live deployment is GitHub-Environment scoped and does not multiplex repository-scoped environment secrets', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /live-environment:[\s\S]*environment: \$\{\{ inputs\.environment \}\}/);
+  assert.match(workflow, /secrets\.GITHUB_BOOTSTRAP_TOKEN/);
+  assert.match(workflow, /secrets\.GITHUB_RUNTIME_TOKEN/);
+  assert.match(workflow, /secrets\.SOURCE_READ_TOKEN/);
+  assert.doesNotMatch(workflow, /secrets\.DEV_/);
+  assert.doesNotMatch(workflow, /secrets\.TEST_/);
+  assert.doesNotMatch(workflow, /secrets\.PROD_/);
+});
+
+test('live deployment uses trusted main control-plane and separate immutable candidate checkout', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /Checkout trusted control-plane from main/);
+  assert.match(workflow, /ref: main/);
+  assert.match(workflow, /path: control-plane/);
+  assert.match(workflow, /Checkout immutable candidate source/);
+  assert.match(workflow, /path: candidate-source/);
+  assert.match(workflow, /merge-base --is-ancestor/);
+  assert.match(workflow, /SOURCE_WORKSPACE/);
+});
+
 test('Phase 6 workflow exposes PROD preflight but keeps every live PROD operation blocked', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
   assert.match(workflow, /prod-preflight/);
   assert.match(workflow, /Phase 6 permits PROD preparation only; live PROD execution remains blocked until separate Phase 7 GO/);
   assert.match(workflow, /prod-preflight requires environment=prod/);
-  assert.match(workflow, /Resolve live DEV\/TEST configuration/);
-  assert.doesNotMatch(workflow, /Resolve live PROD configuration/);
-  assert.match(workflow, /TEST must use a Cloudflare account distinct from DEV/);
-  assert.match(workflow, /TEST must use a runtime token distinct from DEV/);
+  assert.match(workflow, /inputs\.environment == 'dev' \|\| inputs\.environment == 'test'/);
 });
 
 test('environment deploy health verification retries propagation and pins runtime snapshot identity', () => {
@@ -229,4 +255,13 @@ test('environment deploy health verification retries propagation and pins runtim
   assert.match(provision, /searchMode: runtime\.searchMode/);
   assert.match(provision, /shouldRefreshPristineSeed/);
   assert.match(provision, /assertPreCutoverLiveGate/);
+});
+
+test('trusted control-plane uses bootstrap role and does not inherit all secrets into child processes', () => {
+  const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
+  assert.match(provision, /githubBootstrapEnv/);
+  assert.match(provision, /runtime\.githubBootstrapToken/);
+  assert.match(provision, /SOURCE_WORKSPACE/);
+  assert.match(provision, /safeChildEnv/);
+  assert.doesNotMatch(provision, /\.\.\.process\.env/);
 });
