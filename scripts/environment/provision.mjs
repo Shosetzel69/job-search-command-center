@@ -14,10 +14,31 @@ function envLabel(runtime) {
   return String(runtime.environment || 'unknown').toUpperCase();
 }
 
+function sourceWorkspace() {
+  return resolve(String(process.env.SOURCE_WORKSPACE || process.cwd()));
+}
+
+function safeChildEnv(extra = {}) {
+  const allow = [
+    'PATH', 'HOME', 'USER', 'SHELL', 'CI', 'GITHUB_ACTIONS', 'RUNNER_TEMP', 'RUNNER_TOOL_CACHE',
+    'RUNNER_OS', 'TMPDIR', 'TEMP', 'TMP', 'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT',
+    'NODE_OPTIONS', 'NPM_CONFIG_CACHE',
+  ];
+  const env = {};
+  for (const key of allow) {
+    if (process.env[key]) env[key] = process.env[key];
+  }
+  return { ...env, ...extra };
+}
+
+function githubBootstrapEnv(runtime, extra = {}) {
+  return safeChildEnv({ GH_TOKEN: runtime.githubBootstrapToken, ...extra });
+}
+
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
     cwd: options.cwd || process.cwd(),
-    env: options.env || process.env,
+    env: options.env || safeChildEnv(),
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
@@ -32,8 +53,9 @@ function sleep(ms) {
 }
 
 function ensureRuntimeRepository(runtime) {
+  const ghEnv = githubBootstrapEnv(runtime);
   try {
-    const repo = json('gh', ['repo', 'view', runtime.runtimeRepository, '--json', 'nameWithOwner,isPrivate']);
+    const repo = json('gh', ['repo', 'view', runtime.runtimeRepository, '--json', 'nameWithOwner,isPrivate'], { env: ghEnv });
     if (!repo.isPrivate) throw new Error(`${runtime.runtimeRepository} must be private`);
     return false;
   } catch (error) {
@@ -44,7 +66,7 @@ function ensureRuntimeRepository(runtime) {
       '--private',
       '--description', `Isolated ${envLabel(runtime)} runtime for Job Search Command Center`,
       '--add-readme',
-    ]);
+    ], { env: ghEnv });
     return true;
   }
 }
@@ -64,9 +86,10 @@ function shouldWriteSeed(target, file, runtime) {
 
 function syncRuntimeFiles(runtime) {
   const temp = mkdtempSync(resolve(tmpdir(), 'job-search-runtime-bootstrap-'));
+  const ghEnv = githubBootstrapEnv(runtime);
   try {
-    run('gh', ['auth', 'setup-git']);
-    run('gh', ['repo', 'clone', runtime.runtimeRepository, temp, '--', '--depth=1']);
+    run('gh', ['auth', 'setup-git'], { env: ghEnv });
+    run('gh', ['repo', 'clone', runtime.runtimeRepository, temp, '--', '--depth=1'], { env: ghEnv });
     const now = new Date().toISOString();
     for (const dataPath of runtimeDataFiles()) {
       const target = resolve(temp, dataPath);
@@ -85,14 +108,14 @@ function syncRuntimeFiles(runtime) {
     mkdirSync(resolve(workflow, '..'), { recursive: true });
     cpSync(resolve(process.cwd(), 'config/runtime-template/runtime.yml'), workflow);
 
-    run('git', ['add', '.'], { cwd: temp });
-    if (run('git', ['status', '--porcelain'], { cwd: temp }).trim()) {
+    run('git', ['add', '.'], { cwd: temp, env: ghEnv });
+    if (run('git', ['status', '--porcelain'], { cwd: temp, env: ghEnv }).trim()) {
       run('git', [
         '-c', 'user.name=job-search-environment-tool',
         '-c', 'user.email=environment-tool@users.noreply.github.com',
         'commit', '-m', `[BOOTSTRAP] Initialize isolated ${envLabel(runtime)} runtime`,
-      ], { cwd: temp });
-      run('git', ['push', 'origin', 'HEAD:main'], { cwd: temp });
+      ], { cwd: temp, env: ghEnv });
+      run('git', ['push', 'origin', 'HEAD:main'], { cwd: temp, env: ghEnv });
     }
   } finally {
     rmSync(temp, { recursive: true, force: true });
@@ -100,29 +123,31 @@ function syncRuntimeFiles(runtime) {
 }
 
 function configureRuntimeVariables(runtime) {
-  run('gh', ['variable', 'set', 'APP_ENV', '--repo', runtime.runtimeRepository, '--body', runtime.environment]);
-  run('gh', ['variable', 'set', 'SEARCH_MODE', '--repo', runtime.runtimeRepository, '--body', runtime.searchMode]);
-  run('gh', ['variable', 'set', 'SOURCE_REPOSITORY', '--repo', runtime.runtimeRepository, '--body', runtime.sourceRepository]);
+  const ghEnv = githubBootstrapEnv(runtime);
+  run('gh', ['variable', 'set', 'APP_ENV', '--repo', runtime.runtimeRepository, '--body', runtime.environment], { env: ghEnv });
+  run('gh', ['variable', 'set', 'SEARCH_MODE', '--repo', runtime.runtimeRepository, '--body', runtime.searchMode], { env: ghEnv });
+  run('gh', ['variable', 'set', 'SOURCE_REPOSITORY', '--repo', runtime.runtimeRepository, '--body', runtime.sourceRepository], { env: ghEnv });
 }
 
 function runtimeSnapshot(runtime) {
   const temp = mkdtempSync(resolve(tmpdir(), 'job-search-runtime-snapshot-'));
-  run('gh', ['auth', 'setup-git']);
-  run('gh', ['repo', 'clone', runtime.runtimeRepository, temp, '--', '--depth=1', '--branch', runtime.runtimeRef]);
-  const sha = run('git', ['rev-parse', 'HEAD'], { cwd: temp }).trim().toLowerCase();
+  const ghEnv = githubBootstrapEnv(runtime);
+  run('gh', ['auth', 'setup-git'], { env: ghEnv });
+  run('gh', ['repo', 'clone', runtime.runtimeRepository, temp, '--', '--depth=1', '--branch', runtime.runtimeRef], { env: ghEnv });
+  const sha = run('git', ['rev-parse', 'HEAD'], { cwd: temp, env: ghEnv }).trim().toLowerCase();
   if (!SHA_RE.test(sha)) throw new Error('Could not resolve immutable RUNTIME_DATA_SHA');
   return { temp, dataDir: resolve(temp, 'data'), sha };
 }
 
 function wrangler(runtime, args, env = {}) {
   return run('npx', ['wrangler', ...args], {
-    cwd: resolve(process.cwd(), 'command-api'),
-    env: {
-      ...process.env,
+    cwd: resolve(sourceWorkspace(), 'command-api'),
+    env: safeChildEnv({
       CLOUDFLARE_ACCOUNT_ID: runtime.cloudflareAccountId,
+      CLOUDFLARE_API_TOKEN: runtime.cloudflareToken,
       WRANGLER_SEND_METRICS: 'false',
       ...env,
-    },
+    }),
   });
 }
 
@@ -146,7 +171,7 @@ function workerVars(runtime) {
 }
 
 function deployWorker(runtime) {
-  verifyLocalSourceSha(runtime.sourceSha);
+  verifyLocalSourceSha(runtime.sourceSha, sourceWorkspace());
   const snapshot = runtimeSnapshot(runtime);
   try {
     const env = {
