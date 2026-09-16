@@ -2,72 +2,91 @@
 
 Status: Phase 6 preparation artifact. **Execution is not authorized.**  
 Parent: #161  
-Preparation issue: #175
+Preparation issue: #175  
+Security gate: #177
 
 ## 1. Gate
 
 This runbook may be executed only after:
 
 1. G6 independent QA = PASS;
-2. owner explicitly approves Phase 7 / PROD cutover in a separate GO;
-3. exact cutover source SHA is recorded;
-4. current live PROD health and backup anchors are captured;
-5. rollback target is proven reachable.
+2. #177 security blockers are closed;
+3. owner explicitly approves Phase 7 / PROD cutover in a separate GO;
+4. exact cutover source SHA is recorded and has passed DEV/TEST;
+5. legacy live PROD health and immutable backup anchors are captured;
+6. new dedicated PROD target is healthy and rollback to legacy PROD is proven operationally possible.
 
-Without all five conditions: STOP.
+If any condition is missing: STOP.
 
 ## 2. Cutover objective
 
-Move PROD runtime data/workflow ownership from the legacy source-backed model:
+Move production ownership from the legacy live stack:
 
-`job-search-command-center / main / job-search-full.yml`
+`legacy Cloudflare account + job-search-command-center/main + job-search-full.yml`
 
-into the isolated PROD runtime model:
+into the new fully isolated PROD stack:
 
-`job-search-runtime-prod / main / runtime.yml`
+`Job Search PROD Cloudflare account + job-search-runtime-prod/main + runtime.yml`
 
-while keeping source code in `job-search-command-center` and preserving PROD data only.
+while keeping source code in `job-search-command-center` and preserving PROD-only runtime data.
+
+The legacy stack is not modified during Phase 6 and remains the rollback target during Phase 7 until final acceptance.
 
 ## 3. Pre-cutover capture
 
-Before any live mutation:
+Immediately before any Phase 7 mutation:
 
-- GET live `/health` and save non-secret response;
-- record current Worker URL and Worker name;
-- record current live source SHA;
-- record current runtime repository/ref/workflow identity;
-- record current canonical PROD data file blob SHAs;
-- create immutable source/data backup anchor;
-- verify the legacy deployment path remains available for rollback;
-- verify candidate source SHA has passed DEV and TEST;
-- verify PROD runtime repo snapshot contains no DEV/TEST data.
+- GET legacy live `/health` and save the non-secret response;
+- record legacy Worker URL/name, source SHA, runtime repo/ref/workflow and search mode;
+- record canonical legacy PROD data blob SHAs;
+- create an immutable source/data backup anchor;
+- verify legacy deployment remains reachable;
+- verify candidate source SHA passed DEV and TEST;
+- verify `job-search-runtime-prod` contains only approved PROD data;
+- verify new PROD Cloudflare account contains only the intended Job Search PROD resources;
+- verify PROD credentials cannot access DEV/TEST or the legacy Cloudflare account;
+- verify OAuth/client/origin belong to the new PROD target.
 
-If current PROD health is not green before cutover: STOP.
+If legacy PROD is unhealthy before cutover: STOP.
 
-## 4. PROD runtime snapshot creation
+## 4. New PROD target preparation
 
-Only canonical runtime-data contract files are copied from the captured PROD snapshot. No DEV/TEST runtime data and no historical test-only source files are copied.
+Phase 6 prepares, without traffic cutover:
 
-The migration commit in `job-search-runtime-prod` becomes the initial `RUNTIME_DATA_SHA`.
+- dedicated Cloudflare account `Job Search PROD`;
+- Worker `job-search-command-api` inside that account;
+- private `Shosetzel69/job-search-runtime-prod`;
+- GitHub Environment `prod`;
+- separated bootstrap, runtime and source-read GitHub credentials;
+- dedicated Cloudflare deploy credential;
+- dedicated PROD OAuth client/origin;
+- environment-specific secrets/variables;
+- trusted control-plane path satisfying #177.
 
-After commit:
+No legacy PROD resource is changed by these preparation steps.
 
-- verify repository is private;
-- verify file inventory;
-- verify runtime data SHA;
-- verify source/workflow separation;
-- verify PROD credentials are least privilege.
+## 5. PROD runtime snapshot creation
 
-No Worker change has occurred yet at this point.
+Only canonical runtime-data contract files are copied from the immutable legacy PROD snapshot into `job-search-runtime-prod`. No DEV/TEST data and no historical test-only files are copied.
 
-## 5. Live cutover sequence
+The migration commit becomes the initial PROD `RUNTIME_DATA_SHA`.
 
-After all gates pass:
+Validate:
 
-1. configure PROD runtime repository variables/secrets;
-2. configure PROD Worker variables to target `job-search-runtime-prod` and `runtime.yml`;
-3. deploy the exact approved immutable `SOURCE_SHA`;
-4. verify `/health`:
+- runtime repository is private;
+- exact file inventory and snapshot SHA;
+- no DEV/TEST operational content;
+- runtime token writes only `job-search-runtime-prod`;
+- source-read token is read-only to source;
+- bootstrap credential is not installed in the Worker;
+- Cloudflare token belongs only to the dedicated PROD account.
+
+## 6. New PROD deployment validation
+
+Before traffic/cutover acceptance:
+
+1. deploy the exact approved immutable `SOURCE_SHA` to the **new dedicated PROD Worker**;
+2. verify `/health` on the new origin:
    - `environment=prod`;
    - exact `source_sha`;
    - `runtime_repo=Shosetzel69/job-search-runtime-prod`;
@@ -75,68 +94,83 @@ After all gates pass:
    - `search_mode=live`;
    - auth configured;
    - GitHub runtime configured;
-5. verify authenticated UI;
-6. verify protected API rejects unauthenticated access;
-7. verify runtime token cannot write source/DEV/TEST;
-8. execute only the explicitly approved safe PROD smoke;
-9. confirm no DEV/TEST target changed;
-10. declare cutover complete only after owner acceptance.
+3. verify authenticated UI;
+4. verify protected APIs reject unauthenticated access;
+5. verify runtime credential cannot write source/DEV/TEST;
+6. verify Cloudflare deployment credential cannot affect DEV/TEST or the legacy account;
+7. execute only the explicitly approved bounded PROD smoke;
+8. confirm legacy PROD remains unchanged.
 
-## 6. Stop conditions
+The new PROD origin is not considered the accepted production endpoint until owner cutover approval.
 
-Rollback immediately if any of these occurs:
+## 7. Cutover
 
-- `/health` identity mismatch;
+After all gates pass and owner explicitly authorizes Phase 7:
+
+1. freeze mutable production changes for the cutover window;
+2. refresh the legacy PROD data snapshot if required and migrate the final approved delta;
+3. revalidate new PROD `/health`, auth and protected assets;
+4. switch the agreed production access path to the new isolated PROD target;
+5. validate user-facing production behavior;
+6. confirm no DEV/TEST or legacy resource was unintentionally modified;
+7. start the observation window;
+8. declare cutover complete only after explicit owner acceptance.
+
+## 8. Stop conditions
+
+Rollback immediately on:
+
+- source/runtime identity mismatch;
 - authentication regression;
 - protected asset/API exposure;
-- wrong runtime repository/ref/workflow;
-- missing or invalid runtime data;
-- source SHA mismatch;
+- missing/invalid runtime data;
 - cross-environment credential access;
-- unexpected Full Search execution;
-- DEV/TEST mutation;
-- new paid/quota behavior not previously approved.
+- unexpected Full Search behavior;
+- DEV/TEST or legacy PROD mutation;
+- inability to reach the legacy rollback target;
+- unapproved paid/quota behavior.
 
-## 7. Rollback
+## 9. Rollback
 
-Rollback restores the pre-cutover PROD Worker configuration and deployment identity captured in section 3.
+Primary rollback is **traffic/operational return to the untouched legacy PROD stack**, not reconfiguration of the new stack into the legacy model.
 
 Sequence:
 
-1. stop further PROD actions;
-2. restore legacy runtime owner/repo/ref/workflow variables;
-3. redeploy the last known-good pre-cutover source SHA if required;
-4. restore the legacy PROD runtime-data snapshot/commit reference;
-5. verify legacy `/health`, authentication and protected APIs;
-6. confirm DEV/TEST remain unchanged;
-7. record the failure evidence and keep `job-search-runtime-prod` intact for investigation;
-8. do not delete the legacy path until a later successful cutover is accepted.
+1. stop further new-PROD actions;
+2. route/return production use to the legacy PROD endpoint;
+3. verify legacy `/health`, authentication and protected APIs;
+4. confirm legacy runtime data matches the pre-cutover anchor or approved final delta;
+5. confirm DEV/TEST unchanged;
+6. preserve the new PROD stack and evidence for investigation;
+7. do not delete or repurpose either stack until a later successful cutover is accepted.
 
 Rollback never copies DEV/TEST data into PROD.
 
-## 8. Post-cutover cleanup
+## 10. Post-cutover cleanup
 
-Only after stable owner acceptance:
+Only after a stable observation period and explicit owner acceptance:
 
-- disable the obsolete direct source-repo deployment path for `job-search-command-api`;
-- prove source PR/push no longer deploys the Command API directly;
-- retain rollback evidence for an agreed observation period;
-- remove redundant legacy credentials only after rollback is no longer required;
+- disable obsolete direct source-repo deployment for the legacy `job-search-command-api`;
+- revoke/remove obsolete legacy runtime credentials;
+- retain rollback evidence for the agreed retention period;
+- remove the legacy stack only through a separate explicit cleanup decision;
 - leave unrelated `ai-github-bridge` infrastructure untouched.
 
-## 9. Evidence package
+## 11. Evidence package
 
-G7 closeout must contain:
+G7 closeout includes:
 
 - approved source SHA;
-- initial PROD runtime data SHA;
-- pre/post `/health` evidence;
+- initial/final PROD runtime data SHA;
+- legacy pre-cutover `/health`;
+- new PROD pre/post-cutover `/health`;
 - PROD runtime repo identity;
-- credential isolation results;
+- GitHub Environment and credential-role segregation evidence;
+- Cloudflare account isolation evidence;
 - auth/protected API smoke results;
-- DEV/TEST preservation results;
+- DEV/TEST/legacy preservation results;
 - cutover timestamp;
 - rollback anchor;
 - owner acceptance.
 
-No secret value is included in evidence.
+No secret values are included in evidence.
