@@ -31,7 +31,7 @@
       "frontend_origin_env": "TEST_FRONTEND_ORIGIN"
     },
     "prod": {
-      "runtime_repository": "Shosetzel69/job-search-runtime-prod",
+      "runtime_repository": "Shosetzel69/job-search-prod",
       "runtime_ref": "main",
       "workflow": "runtime.yml",
       "worker_name": "job-search-command-api",
