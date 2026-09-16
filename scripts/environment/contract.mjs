@@ -4,6 +4,11 @@ import { resolve } from 'node:path';
 export const ENVIRONMENTS = Object.freeze(['dev', 'test', 'prod']);
 export const SHA_RE = /^[0-9a-f]{40}$/i;
 export const ACCOUNT_RE = /^[0-9a-f]{32}$/i;
+export const CANONICAL_RUNTIME_REPOSITORIES = Object.freeze({
+  dev: 'Shosetzel69/job-search-runtime-dev',
+  test: 'Shosetzel69/job-search-runtime-test',
+  prod: 'Shosetzel69/job-search-prod',
+});
 const PLACEHOLDER_RE = /<[^>]+>|#{5,}|\b(?:TODO|TBD|PLACEHOLDER)\b/i;
 
 export function parseArgs(argv) {
@@ -54,7 +59,7 @@ export function validateManifest(manifest) {
       if (!value) throw new Error(`${name}.${field} is required`);
       if (PLACEHOLDER_RE.test(value)) throw new Error(`${name}.${field} contains unresolved placeholder content`);
     }
-    if (cfg.runtime_repository !== `Shosetzel69/job-search-runtime-${name}`) {
+    if (cfg.runtime_repository !== CANONICAL_RUNTIME_REPOSITORIES[name]) {
       throw new Error(`${name}.runtime_repository does not match the canonical environment target`);
     }
     if (cfg.runtime_ref !== 'main') throw new Error(`${name}.runtime_ref must be main`);
