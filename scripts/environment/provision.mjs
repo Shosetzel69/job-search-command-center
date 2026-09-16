@@ -35,6 +35,10 @@ function githubBootstrapEnv(runtime, extra = {}) {
   return safeChildEnv({ GH_TOKEN: runtime.githubBootstrapToken, ...extra });
 }
 
+function githubRuntimeEnv(runtime, extra = {}) {
+  return safeChildEnv({ GH_TOKEN: runtime.githubRuntimeToken, ...extra });
+}
+
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
     cwd: options.cwd || process.cwd(),
@@ -131,7 +135,7 @@ function configureRuntimeVariables(runtime) {
 
 function runtimeSnapshot(runtime) {
   const temp = mkdtempSync(resolve(tmpdir(), 'job-search-runtime-snapshot-'));
-  const ghEnv = githubBootstrapEnv(runtime);
+  const ghEnv = githubRuntimeEnv(runtime);
   run('gh', ['auth', 'setup-git'], { env: ghEnv });
   run('gh', ['repo', 'clone', runtime.runtimeRepository, temp, '--', '--depth=1', '--branch', runtime.runtimeRef], { env: ghEnv });
   const sha = run('git', ['rev-parse', 'HEAD'], { cwd: temp, env: ghEnv }).trim().toLowerCase();
