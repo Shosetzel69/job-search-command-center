@@ -9,6 +9,7 @@
     "env:deploy": "node scripts/environment.mjs deploy",
     "env:status": "node scripts/environment.mjs status",
     "env:isolation-test": "node scripts/environment.mjs isolation-test",
-    "test:environment": "node --test scripts/test_environment.mjs && node --check scripts/environment.mjs && node --check scripts/environment/provision.mjs"
+    "env:prod-preflight": "node scripts/environment.mjs prod-preflight",
+    "test:environment": "node --test scripts/test_environment.mjs scripts/test_prod_readiness.mjs scripts/test_security_s2.mjs scripts/test_security_s3.mjs && node --check scripts/environment.mjs && node --check scripts/environment/provision.mjs && node --check scripts/environment/prod-preflight.mjs && node --check command-api/scripts/write-build-identity.mjs"
   }
 }

@@ -7,7 +7,7 @@ on:
         description: Environment automation action
         required: true
         type: choice
-        options: [validate, bootstrap, deploy, status, isolation-test]
+        options: [validate, bootstrap, deploy, status, isolation-test, prod-preflight]
       environment:
         description: Explicit target environment
         required: true
@@ -23,7 +23,7 @@ on:
         default: true
         type: boolean
       owner_gate:
-        description: Must be APPROVED for any PROD gated operation
+        description: Defense-in-depth confirmation for PROD preparation
         required: false
         type: string
 
@@ -31,28 +31,33 @@ permissions:
   contents: read
 
 jobs:
-  environment-automation:
+  validate-request:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
           node-version: 24
 
-      - name: Guard immutable source and Phase 5 live scope
+      - name: Guard immutable source and Phase 6 scope
         shell: bash
         run: |
           set -euo pipefail
           [[ "${{ inputs.source_sha }}" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
-          actual="$(git rev-parse HEAD)"
-          test "${actual,,}" = "${{ inputs.source_sha }}" || { echo "checkout does not match source_sha" >&2; exit 1; }
           if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.environment }}" = "prod" ]; then
-            echo "Phase 5 live execution permits DEV/TEST only; PROD remains blocked" >&2
+            echo "Phase 6 permits PROD preparation only; live PROD execution remains blocked until separate Phase 7 GO" >&2
+            exit 1
+          fi
+          if [ "${{ inputs.action }}" = "prod-preflight" ] && [ "${{ inputs.environment }}" != "prod" ]; then
+            echo "prod-preflight requires environment=prod" >&2
+            exit 1
+          fi
+          if [ "${{ inputs.action }}" = "prod-preflight" ] && [ "${{ inputs.dry_run }}" != "true" ]; then
+            echo "prod-preflight is non-mutating and requires dry_run=true" >&2
             exit 1
           fi
           if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.action }}" = "isolation-test" ]; then
@@ -60,7 +65,7 @@ jobs:
             exit 1
           fi
           if [ "${{ inputs.environment }}" = "prod" ] && [ "${{ inputs.owner_gate }}" != "APPROVED" ]; then
-            echo "PROD requires explicit owner gate even for validation" >&2
+            echo "PROD preparation requires explicit owner confirmation" >&2
             exit 1
           fi
 
@@ -77,9 +82,12 @@ jobs:
           DEV_CLOUDFLARE_TOKEN: dry-run-dev-cf
           TEST_CLOUDFLARE_TOKEN: dry-run-test-cf
           PROD_CLOUDFLARE_TOKEN: dry-run-prod-cf
-          DEV_GITHUB_RUNTIME_TOKEN: dry-run-dev-gh
-          TEST_GITHUB_RUNTIME_TOKEN: dry-run-test-gh
-          PROD_GITHUB_RUNTIME_TOKEN: dry-run-prod-gh
+          DEV_GITHUB_BOOTSTRAP_TOKEN: dry-run-dev-bootstrap
+          TEST_GITHUB_BOOTSTRAP_TOKEN: dry-run-test-bootstrap
+          PROD_GITHUB_BOOTSTRAP_TOKEN: dry-run-prod-bootstrap
+          DEV_GITHUB_RUNTIME_TOKEN: dry-run-dev-runtime
+          TEST_GITHUB_RUNTIME_TOKEN: dry-run-test-runtime
+          PROD_GITHUB_RUNTIME_TOKEN: dry-run-prod-runtime
           DEV_SOURCE_READ_TOKEN: dry-run-dev-source
           TEST_SOURCE_READ_TOKEN: dry-run-test-source
           PROD_SOURCE_READ_TOKEN: dry-run-prod-source
@@ -103,139 +111,193 @@ jobs:
             deploy) npm run env:deploy -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run "${EXTRA[@]}" ;;
             status) npm run env:status -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" --dry-run ;;
             isolation-test) npm run env:isolation-test -- --source-sha "$SOURCE_SHA" --dry-run ;;
+            prod-preflight) npm run env:prod-preflight -- --source-sha "$SOURCE_SHA" --dry-run --owner-gate "${{ inputs.owner_gate }}" ;;
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
 
-      - name: Resolve live DEV/TEST configuration
-        if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') }}
-        env:
-          DEV_CLOUDFLARE_ACCOUNT_ID: ${{ vars.DEV_CLOUDFLARE_ACCOUNT_ID }}
-          DEV_CLOUDFLARE_TOKEN: ${{ secrets.DEV_CLOUDFLARE_TOKEN }}
-          DEV_GITHUB_RUNTIME_TOKEN: ${{ secrets.DEV_GITHUB_RUNTIME_TOKEN }}
-          DEV_SOURCE_READ_TOKEN: ${{ secrets.DEV_SOURCE_READ_TOKEN }}
-          DEV_ALLOWED_GOOGLE_SUB: ${{ secrets.DEV_ALLOWED_GOOGLE_SUB }}
-          DEV_GOOGLE_CLIENT_ID: ${{ vars.DEV_GOOGLE_CLIENT_ID }}
-          DEV_FRONTEND_ORIGIN: ${{ vars.DEV_FRONTEND_ORIGIN }}
-          TEST_CLOUDFLARE_ACCOUNT_ID: ${{ vars.TEST_CLOUDFLARE_ACCOUNT_ID }}
-          TEST_CLOUDFLARE_TOKEN: ${{ secrets.TEST_CLOUDFLARE_TOKEN }}
-          TEST_GITHUB_RUNTIME_TOKEN: ${{ secrets.TEST_GITHUB_RUNTIME_TOKEN }}
-          TEST_SOURCE_READ_TOKEN: ${{ secrets.TEST_SOURCE_READ_TOKEN }}
-          TEST_ALLOWED_GOOGLE_SUB: ${{ secrets.TEST_ALLOWED_GOOGLE_SUB }}
-          TEST_GOOGLE_CLIENT_ID: ${{ vars.TEST_GOOGLE_CLIENT_ID }}
-          TEST_FRONTEND_ORIGIN: ${{ vars.TEST_FRONTEND_ORIGIN }}
+  live-environment:
+    if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') }}
+    needs: validate-request
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: Checkout trusted control-plane from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+          path: control-plane
+
+      - name: Checkout immutable candidate source as inert payload
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+          persist-credentials: false
+          path: candidate-source
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify trusted control-plane and approved candidate ancestry
         shell: bash
         run: |
           set -euo pipefail
-          target="${{ inputs.environment }}"
-          case "$target" in
-            dev)
-              prefix=DEV
-              cf_account="$DEV_CLOUDFLARE_ACCOUNT_ID"
-              cf_token="$DEV_CLOUDFLARE_TOKEN"
-              runtime_token="$DEV_GITHUB_RUNTIME_TOKEN"
-              source_token="$DEV_SOURCE_READ_TOKEN"
-              google_sub="$DEV_ALLOWED_GOOGLE_SUB"
-              google_client="$DEV_GOOGLE_CLIENT_ID"
-              origin="$DEV_FRONTEND_ORIGIN"
-              runtime_repo="Shosetzel69/job-search-runtime-dev"
-              ;;
-            test)
-              prefix=TEST
-              cf_account="$TEST_CLOUDFLARE_ACCOUNT_ID"
-              cf_token="$TEST_CLOUDFLARE_TOKEN"
-              runtime_token="$TEST_GITHUB_RUNTIME_TOKEN"
-              source_token="$TEST_SOURCE_READ_TOKEN"
-              google_sub="$TEST_ALLOWED_GOOGLE_SUB"
-              google_client="$TEST_GOOGLE_CLIENT_ID"
-              origin="$TEST_FRONTEND_ORIGIN"
-              runtime_repo="Shosetzel69/job-search-runtime-test"
-              test "$cf_account" != "$DEV_CLOUDFLARE_ACCOUNT_ID" || { echo "TEST must use a Cloudflare account distinct from DEV" >&2; exit 1; }
-              test "$runtime_token" != "$DEV_GITHUB_RUNTIME_TOKEN" || { echo "TEST must use a runtime token distinct from DEV" >&2; exit 1; }
-              test "$source_token" != "$DEV_SOURCE_READ_TOKEN" || { echo "TEST must use a source-read token distinct from DEV" >&2; exit 1; }
-              test "$google_client" != "$DEV_GOOGLE_CLIENT_ID" || { echo "TEST must use a Google OAuth client distinct from DEV" >&2; exit 1; }
-              test "$origin" != "$DEV_FRONTEND_ORIGIN" || { echo "TEST must use an origin distinct from DEV" >&2; exit 1; }
-              ;;
-            *) echo "Unsupported live environment" >&2; exit 1 ;;
-          esac
+          source_sha="${{ inputs.source_sha }}"
+          candidate="$(git -C candidate-source rev-parse HEAD)"
+          test "${candidate,,}" = "${source_sha,,}" || { echo "candidate checkout does not match source_sha" >&2; exit 1; }
+          git -C control-plane fetch origin main --quiet
+          git -C control-plane cat-file -e "${source_sha}^{commit}"
+          git -C control-plane merge-base --is-ancestor "$source_sha" origin/main || {
+            echo "Live deployment source_sha must already be reachable from trusted main" >&2
+            exit 1
+          }
 
-          for value_name in cf_account cf_token runtime_token source_token google_sub google_client origin; do
-            test -n "${!value_name}" || { echo "Selected $target configuration is incomplete: $value_name" >&2; exit 1; }
-          done
+      - name: Run trusted environment contract tests
+        working-directory: control-plane
+        run: npm run test:environment
 
-          {
-            printf 'TARGET_ENV=%s\n' "$target"
-            printf 'LIVE_RUNTIME_REPO=%s\n' "$runtime_repo"
-            printf 'LIVE_WORKER_NAME=%s\n' 'job-search-command-api'
-            printf 'LIVE_CLOUDFLARE_ACCOUNT_ID=%s\n' "$cf_account"
-            printf 'LIVE_CLOUDFLARE_TOKEN=%s\n' "$cf_token"
-            printf 'LIVE_GITHUB_RUNTIME_TOKEN=%s\n' "$runtime_token"
-            printf 'LIVE_SOURCE_READ_TOKEN=%s\n' "$source_token"
-            printf 'LIVE_ALLOWED_GOOGLE_SUB=%s\n' "$google_sub"
-            printf 'LIVE_GOOGLE_CLIENT_ID=%s\n' "$google_client"
-            printf 'LIVE_FRONTEND_ORIGIN=%s\n' "$origin"
-            printf 'CLOUDFLARE_ACCOUNT_ID=%s\n' "$cf_account"
-            printf 'CLOUDFLARE_API_TOKEN=%s\n' "$cf_token"
-            printf 'GH_TOKEN=%s\n' "$runtime_token"
-            printf '%s_CLOUDFLARE_ACCOUNT_ID=%s\n' "$prefix" "$cf_account"
-            printf '%s_CLOUDFLARE_TOKEN=%s\n' "$prefix" "$cf_token"
-            printf '%s_GITHUB_RUNTIME_TOKEN=%s\n' "$prefix" "$runtime_token"
-            printf '%s_SOURCE_READ_TOKEN=%s\n' "$prefix" "$source_token"
-            printf '%s_ALLOWED_GOOGLE_SUB=%s\n' "$prefix" "$google_sub"
-            printf '%s_GOOGLE_CLIENT_ID=%s\n' "$prefix" "$google_client"
-            printf '%s_FRONTEND_ORIGIN=%s\n' "$prefix" "$origin"
-          } >> "$GITHUB_ENV"
+      - name: Prepare sanitized candidate payload on trusted build baseline
+        if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf deployment-source
+          cp -a control-plane deployment-source
+          rm -rf deployment-source/.git
 
-      - name: Install Command API deployment dependencies
-        if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') && (inputs.action == 'bootstrap' || inputs.action == 'deploy') }}
-        run: npm --prefix command-api install --ignore-scripts --no-audit --no-fund
+          rm -rf deployment-source/command-api/src
+          cp -a candidate-source/command-api/src deployment-source/command-api/src
 
-      - name: Execute live environment action
-        if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') }}
+          rm -rf deployment-source/frontend/src
+          cp -a candidate-source/frontend/src deployment-source/frontend/src
+          cp candidate-source/frontend/index.html deployment-source/frontend/index.html
+
+          if [ -d candidate-source/frontend/public ]; then
+            rm -rf deployment-source/frontend/public
+            cp -a candidate-source/frontend/public deployment-source/frontend/public
+          fi
+
+          printf '%s\n' "${{ inputs.source_sha }}" > deployment-source/.candidate-source-sha
+          test "$(cat deployment-source/.candidate-source-sha)" = "${{ inputs.source_sha }}"
+
+          # Executable build/deploy files remain exclusively from trusted main.
+          cmp control-plane/command-api/package.json deployment-source/command-api/package.json
+          cmp control-plane/command-api/wrangler.jsonc deployment-source/command-api/wrangler.jsonc
+          cmp control-plane/command-api/scripts/write-build-identity.mjs deployment-source/command-api/scripts/write-build-identity.mjs
+          cmp control-plane/frontend/package.json deployment-source/frontend/package.json
+          cmp control-plane/frontend/vite.config.js deployment-source/frontend/vite.config.js
+
+      - name: Install trusted deployment dependencies
+        if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
+        run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
+
+      - name: Execute selected live environment action
+        working-directory: control-plane
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
+          SOURCE_WORKSPACE: ${{ github.workspace }}/deployment-source
+          DEV_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'dev' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
+          TEST_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'test' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
+          DEV_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'dev' && secrets.CLOUDFLARE_TOKEN || '' }}
+          TEST_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'test' && secrets.CLOUDFLARE_TOKEN || '' }}
+          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && inputs.action == 'bootstrap' && secrets.GH_BOOTSTRAP_TOKEN || 'bootstrap-not-required' }}
+          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && inputs.action == 'bootstrap' && secrets.GH_BOOTSTRAP_TOKEN || 'bootstrap-not-required' }}
+          DEV_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_RUNTIME_TOKEN || '' }}
+          TEST_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_RUNTIME_TOKEN || '' }}
+          DEV_SOURCE_READ_TOKEN: ${{ inputs.environment == 'dev' && secrets.SOURCE_READ_TOKEN || '' }}
+          TEST_SOURCE_READ_TOKEN: ${{ inputs.environment == 'test' && secrets.SOURCE_READ_TOKEN || '' }}
+          DEV_ALLOWED_GOOGLE_SUB: ${{ inputs.environment == 'dev' && secrets.ALLOWED_GOOGLE_SUB || '' }}
+          TEST_ALLOWED_GOOGLE_SUB: ${{ inputs.environment == 'test' && secrets.ALLOWED_GOOGLE_SUB || '' }}
+          DEV_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'dev' && vars.GOOGLE_CLIENT_ID || '' }}
+          TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
+          DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
+          TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
         shell: bash
         run: |
           set -euo pipefail
           case "${{ inputs.action }}" in
-            validate) npm run env:validate -- --env "$TARGET_ENV" --source-sha "$SOURCE_SHA" ;;
-            bootstrap) npm run env:bootstrap -- --env "$TARGET_ENV" --source-sha "$SOURCE_SHA" ;;
-            deploy) npm run env:deploy -- --env "$TARGET_ENV" --source-sha "$SOURCE_SHA" ;;
-            status) npm run env:status -- --env "$TARGET_ENV" --source-sha "$SOURCE_SHA" ;;
+            validate) npm run env:validate -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
+            bootstrap) npm run env:bootstrap -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
+            deploy) npm run env:deploy -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
+            status) npm run env:status -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
             isolation-test) echo "Use independent QA for provider isolation" >&2; exit 1 ;;
+            prod-preflight) echo "prod-preflight is dry-run only" >&2; exit 1 ;;
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
 
-      - name: Configure runtime/Worker secrets
-        if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') && inputs.action == 'bootstrap' }}
+      - name: Configure runtime and Worker secrets with separated roles
+        if: ${{ inputs.action == 'bootstrap' }}
+        working-directory: deployment-source/command-api
+        env:
+          SELECTED_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          SELECTED_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          SELECTED_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
+          SELECTED_GITHUB_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
+          SELECTED_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          SELECTED_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
         shell: bash
-        working-directory: command-api
         run: |
           set -euo pipefail
-          printf '%s' "$LIVE_SOURCE_READ_TOKEN" | gh secret set SOURCE_READ_TOKEN --repo "$LIVE_RUNTIME_REPO"
-          printf '%s' "$LIVE_GITHUB_RUNTIME_TOKEN" | npx wrangler secret put GITHUB_TOKEN --name "$LIVE_WORKER_NAME"
-          printf '%s' "$LIVE_ALLOWED_GOOGLE_SUB" | npx wrangler secret put ALLOWED_GOOGLE_SUB --name "$LIVE_WORKER_NAME"
+          case "${{ inputs.environment }}" in
+            dev) runtime_repo="Shosetzel69/job-search-runtime-dev" ;;
+            test) runtime_repo="Shosetzel69/job-search-runtime-test" ;;
+            *) echo "Unsupported pre-cutover live environment" >&2; exit 1 ;;
+          esac
+          test "$SELECTED_GITHUB_BOOTSTRAP_TOKEN" != "$SELECTED_GITHUB_RUNTIME_TOKEN" || { echo "bootstrap/runtime token reuse is forbidden" >&2; exit 1; }
+          printf '%s' "$SELECTED_SOURCE_READ_TOKEN" | GH_TOKEN="$SELECTED_GITHUB_BOOTSTRAP_TOKEN" gh secret set SOURCE_READ_TOKEN --repo "$runtime_repo"
+          printf '%s' "$SELECTED_GITHUB_RUNTIME_TOKEN" | CLOUDFLARE_ACCOUNT_ID="$SELECTED_CLOUDFLARE_ACCOUNT_ID" CLOUDFLARE_API_TOKEN="$SELECTED_CLOUDFLARE_TOKEN" npx wrangler secret put GITHUB_TOKEN --name job-search-command-api
+          printf '%s' "$SELECTED_ALLOWED_GOOGLE_SUB" | CLOUDFLARE_ACCOUNT_ID="$SELECTED_CLOUDFLARE_ACCOUNT_ID" CLOUDFLARE_API_TOKEN="$SELECTED_CLOUDFLARE_TOKEN" npx wrangler secret put ALLOWED_GOOGLE_SUB --name job-search-command-api
 
-      - name: Verify credential roles and final health
-        if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') && inputs.action == 'bootstrap' }}
+      - name: Verify credential role separation and final health
+        if: ${{ inputs.action == 'bootstrap' }}
+        working-directory: control-plane
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
+          SELECTED_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
+          SELECTED_GITHUB_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
+          SELECTED_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          DEV_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'dev' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
+          TEST_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'test' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
+          DEV_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'dev' && secrets.CLOUDFLARE_TOKEN || '' }}
+          TEST_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'test' && secrets.CLOUDFLARE_TOKEN || '' }}
+          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_BOOTSTRAP_TOKEN || '' }}
+          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_BOOTSTRAP_TOKEN || '' }}
+          DEV_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_RUNTIME_TOKEN || '' }}
+          TEST_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_RUNTIME_TOKEN || '' }}
+          DEV_SOURCE_READ_TOKEN: ${{ inputs.environment == 'dev' && secrets.SOURCE_READ_TOKEN || '' }}
+          TEST_SOURCE_READ_TOKEN: ${{ inputs.environment == 'test' && secrets.SOURCE_READ_TOKEN || '' }}
+          DEV_ALLOWED_GOOGLE_SUB: ${{ inputs.environment == 'dev' && secrets.ALLOWED_GOOGLE_SUB || '' }}
+          TEST_ALLOWED_GOOGLE_SUB: ${{ inputs.environment == 'test' && secrets.ALLOWED_GOOGLE_SUB || '' }}
+          DEV_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'dev' && vars.GOOGLE_CLIENT_ID || '' }}
+          TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
+          DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
+          TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
         shell: bash
         run: |
           set -euo pipefail
-          label="${TARGET_ENV^^}"
-          runtime_permission="$(GH_TOKEN="$LIVE_GITHUB_RUNTIME_TOKEN" gh repo view "$LIVE_RUNTIME_REPO" --json viewerPermission --jq .viewerPermission)"
-          case "$runtime_permission" in WRITE|MAINTAIN|ADMIN) ;; *) echo "$label runtime token lacks runtime write permission" >&2; exit 1 ;; esac
-          source_permission="$(GH_TOKEN="$LIVE_GITHUB_RUNTIME_TOKEN" gh repo view Shosetzel69/job-search-command-center --json viewerPermission --jq .viewerPermission 2>/dev/null || echo NONE)"
-          case "$source_permission" in WRITE|MAINTAIN|ADMIN) echo "$label runtime token must not have source write permission" >&2; exit 1 ;; esac
-          GH_TOKEN="$LIVE_SOURCE_READ_TOKEN" gh api "repos/Shosetzel69/job-search-command-center/commits/$SOURCE_SHA" --silent
+          case "${{ inputs.environment }}" in
+            dev) runtime_repo="Shosetzel69/job-search-runtime-dev" ;;
+            test) runtime_repo="Shosetzel69/job-search-runtime-test" ;;
+            *) exit 1 ;;
+          esac
+          test "$SELECTED_GITHUB_BOOTSTRAP_TOKEN" != "$SELECTED_GITHUB_RUNTIME_TOKEN" || { echo "bootstrap/runtime token reuse is forbidden" >&2; exit 1; }
+          runtime_permission="$(GH_TOKEN="$SELECTED_GITHUB_RUNTIME_TOKEN" gh repo view "$runtime_repo" --json viewerPermission --jq .viewerPermission)"
+          case "$runtime_permission" in WRITE|MAINTAIN|ADMIN) ;; *) echo "Runtime token lacks runtime write permission" >&2; exit 1 ;; esac
+          source_runtime_permission="$(GH_TOKEN="$SELECTED_GITHUB_RUNTIME_TOKEN" gh repo view Shosetzel69/job-search-command-center --json viewerPermission --jq .viewerPermission 2>/dev/null || echo NONE)"
+          case "$source_runtime_permission" in WRITE|MAINTAIN|ADMIN) echo "Runtime token must not have source write permission" >&2; exit 1 ;; esac
+          source_permission="$(GH_TOKEN="$SELECTED_SOURCE_READ_TOKEN" gh repo view Shosetzel69/job-search-command-center --json viewerPermission --jq .viewerPermission)"
+          case "$source_permission" in READ|TRIAGE) ;; *) echo "Source token must remain read-only" >&2; exit 1 ;; esac
+          GH_TOKEN="$SELECTED_SOURCE_READ_TOKEN" gh api "repos/Shosetzel69/job-search-command-center/commits/$SOURCE_SHA" --silent
           for attempt in 1 2 3 4 5 6; do
-            if npm run env:status -- --env "$TARGET_ENV" --source-sha "$SOURCE_SHA"; then
+            if npm run env:status -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA"; then
               exit 0
             fi
             if [ "$attempt" -eq 6 ]; then
-              echo "$label readiness did not converge after 30 seconds" >&2
+              echo "Readiness did not converge after 30 seconds" >&2
               exit 1
             fi
-            echo "$label readiness not converged yet; retrying in 5 seconds (attempt $attempt/6)"
             sleep 5
           done

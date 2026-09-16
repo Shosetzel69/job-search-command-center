@@ -1,0 +1,153 @@
+name: PROD Readiness (Non-Mutating)
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Approved immutable source commit SHA reachable from main
+        required: true
+        type: string
+      owner_gate:
+        description: Defense-in-depth confirmation for PROD preparation
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prod-readiness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: prod
+    steps:
+      - name: Guard Phase 6 non-mutating scope
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          OWNER_GATE: ${{ inputs.owner_gate }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
+          test "$OWNER_GATE" = "APPROVED" || { echo "PROD preparation requires explicit owner confirmation" >&2; exit 1; }
+          echo "Phase 6 readiness only. Phase 7 remains blocked; no PROD mutation is performed."
+
+      - name: Checkout trusted main only
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Verify approved source is reachable from trusted main
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "${SOURCE_SHA}^{commit}"
+          git merge-base --is-ancestor "$SOURCE_SHA" origin/main || {
+            echo "PROD readiness source_sha must already be reachable from trusted main" >&2
+            exit 1
+          }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate PROD environment contract using environment-scoped values
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          PROD_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PROD_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          PROD_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
+          PROD_GITHUB_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
+          PROD_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+          PROD_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
+          PROD_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          PROD_FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in PROD_CLOUDFLARE_ACCOUNT_ID PROD_CLOUDFLARE_TOKEN PROD_GITHUB_BOOTSTRAP_TOKEN PROD_GITHUB_RUNTIME_TOKEN PROD_SOURCE_READ_TOKEN PROD_ALLOWED_GOOGLE_SUB PROD_GOOGLE_CLIENT_ID PROD_FRONTEND_ORIGIN; do
+            test -n "${!name:-}" || { echo "$name is missing from GitHub Environment prod" >&2; exit 1; }
+          done
+          test "$PROD_FRONTEND_ORIGIN" = "https://job-search-command-api.job-search-prod.workers.dev" || {
+            echo "PROD FRONTEND_ORIGIN does not match the dedicated PROD Worker origin" >&2
+            exit 1
+          }
+          test "$PROD_GITHUB_BOOTSTRAP_TOKEN" != "$PROD_GITHUB_RUNTIME_TOKEN" || {
+            echo "Bootstrap and runtime GitHub tokens must be distinct" >&2
+            exit 1
+          }
+          npm run env:validate -- --env prod --source-sha "$SOURCE_SHA" --dry-run --owner-gate APPROVED
+          npm run env:prod-preflight -- --source-sha "$SOURCE_SHA" --dry-run --owner-gate APPROVED
+
+      - name: Verify GitHub credential boundaries without mutation
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
+          RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
+          SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_repo="Shosetzel69/job-search-prod"
+          source_repo="Shosetzel69/job-search-command-center"
+
+          bootstrap_permission="$(GH_TOKEN="$BOOTSTRAP_TOKEN" gh repo view "$runtime_repo" --json viewerPermission --jq .viewerPermission)"
+          runtime_permission="$(GH_TOKEN="$RUNTIME_TOKEN" gh repo view "$runtime_repo" --json viewerPermission --jq .viewerPermission)"
+          source_permission="$(GH_TOKEN="$SOURCE_READ_TOKEN" gh repo view "$source_repo" --json viewerPermission --jq .viewerPermission)"
+
+          case "$bootstrap_permission" in WRITE|MAINTAIN|ADMIN) ;; *) echo "Bootstrap token lacks runtime repository write permission" >&2; exit 1 ;; esac
+          case "$runtime_permission" in WRITE|MAINTAIN|ADMIN) ;; *) echo "Runtime token lacks runtime repository write permission" >&2; exit 1 ;; esac
+          case "$source_permission" in READ|TRIAGE) ;; *) echo "Source-read token is not read-only on source repository" >&2; exit 1 ;; esac
+
+          runtime_source_permission="$(GH_TOKEN="$RUNTIME_TOKEN" gh repo view "$source_repo" --json viewerPermission --jq .viewerPermission 2>/dev/null || echo NONE)"
+          case "$runtime_source_permission" in WRITE|MAINTAIN|ADMIN) echo "Runtime token must not have source write permission" >&2; exit 1 ;; esac
+
+          if GH_TOKEN="$RUNTIME_TOKEN" gh api "repos/$runtime_repo/actions/secrets" --silent >/dev/null 2>&1; then
+            echo "Runtime token unexpectedly has Actions secrets read permission" >&2
+            exit 1
+          fi
+          if GH_TOKEN="$RUNTIME_TOKEN" gh api "repos/$runtime_repo/actions/variables" --silent >/dev/null 2>&1; then
+            echo "Runtime token unexpectedly has Actions variables read permission" >&2
+            exit 1
+          fi
+
+          GH_TOKEN="$BOOTSTRAP_TOKEN" gh api "repos/$runtime_repo/actions/secrets" --silent >/dev/null
+          GH_TOKEN="$BOOTSTRAP_TOKEN" gh api "repos/$runtime_repo/actions/variables" --silent >/dev/null
+          GH_TOKEN="$SOURCE_READ_TOKEN" gh api "repos/$source_repo/commits/$SOURCE_SHA" --silent >/dev/null
+          echo "GitHub credential role boundaries verified without mutation."
+
+      - name: Verify Cloudflare PROD token and dedicated Worker target without mutation
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          verify_code="$(curl --silent --show-error --output /tmp/prod-token-verify.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify")"
+          test "$verify_code" = "200" || {
+            echo "Cloudflare PROD token verification failed for the configured PROD account (HTTP $verify_code)" >&2
+            exit 1
+          }
+          jq -e '.success == true and .result.status == "active"' /tmp/prod-token-verify.json >/dev/null || {
+            echo "Cloudflare PROD token is not active for the configured PROD account" >&2
+            exit 1
+          }
+
+          worker_code="$(curl --silent --show-error --output /tmp/prod-worker-settings.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/job-search-command-api/settings")"
+          test "$worker_code" = "200" || {
+            echo "Cloudflare PROD token cannot read the dedicated PROD Worker settings (HTTP $worker_code)" >&2
+            exit 1
+          }
+          jq -e '.success == true' /tmp/prod-worker-settings.json >/dev/null || {
+            echo "Cloudflare PROD Worker settings response is not successful" >&2
+            exit 1
+          }
+          echo "Cloudflare PROD token is active for the configured account and can reach the dedicated PROD Worker. Cross-account negative isolation remains an independent G6 QA check."

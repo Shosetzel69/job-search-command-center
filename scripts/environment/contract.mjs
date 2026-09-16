@@ -5,6 +5,11 @@ export const ENVIRONMENTS = Object.freeze(['dev', 'test', 'prod']);
 export const SHA_RE = /^[0-9a-f]{40}$/i;
 export const ACCOUNT_RE = /^[0-9a-f]{32}$/i;
 const PLACEHOLDER_RE = /<[^>]+>|#{5,}|\b(?:TODO|TBD|PLACEHOLDER)\b/i;
+export const CANONICAL_RUNTIME_REPOSITORIES = Object.freeze({
+  dev: 'Shosetzel69/job-search-runtime-dev',
+  test: 'Shosetzel69/job-search-runtime-test',
+  prod: 'Shosetzel69/job-search-prod',
+});
 
 export function parseArgs(argv) {
   const args = { _: [] };
@@ -46,15 +51,16 @@ export function validateManifest(manifest) {
     const cfg = manifest.environments[name];
     const required = [
       'runtime_repository', 'runtime_ref', 'workflow', 'worker_name', 'search_mode',
-      'cloudflare_account_id_env', 'cloudflare_token_env', 'github_runtime_token_env',
-      'source_read_token_env', 'allowed_google_sub_env', 'google_client_id_env', 'frontend_origin_env',
+      'cloudflare_account_id_env', 'cloudflare_token_env', 'github_bootstrap_token_env',
+      'github_runtime_token_env', 'source_read_token_env', 'allowed_google_sub_env',
+      'google_client_id_env', 'frontend_origin_env',
     ];
     for (const field of required) {
       const value = String(cfg?.[field] || '').trim();
       if (!value) throw new Error(`${name}.${field} is required`);
       if (PLACEHOLDER_RE.test(value)) throw new Error(`${name}.${field} contains unresolved placeholder content`);
     }
-    if (cfg.runtime_repository !== `Shosetzel69/job-search-runtime-${name}`) {
+    if (cfg.runtime_repository !== CANONICAL_RUNTIME_REPOSITORIES[name]) {
       throw new Error(`${name}.runtime_repository does not match the canonical environment target`);
     }
     if (cfg.runtime_ref !== 'main') throw new Error(`${name}.runtime_ref must be main`);
@@ -102,6 +108,7 @@ export function resolveEnvironment(manifest, name, sourceSha, processEnv = proce
     searchMode: cfg.search_mode,
     cloudflareAccountId: null,
     cloudflareToken: null,
+    githubBootstrapToken: null,
     githubRuntimeToken: null,
     sourceReadToken: null,
     allowedGoogleSub: null,
@@ -113,6 +120,7 @@ export function resolveEnvironment(manifest, name, sourceSha, processEnv = proce
     resolved.cloudflareAccountId = requiredRuntimeValue(processEnv, cfg.cloudflare_account_id_env, 'Cloudflare account ID');
     if (!ACCOUNT_RE.test(resolved.cloudflareAccountId)) throw new Error(`Cloudflare account ID must be 32 hex characters (${cfg.cloudflare_account_id_env})`);
     resolved.cloudflareToken = requiredRuntimeValue(processEnv, cfg.cloudflare_token_env, 'Cloudflare token');
+    resolved.githubBootstrapToken = requiredRuntimeValue(processEnv, cfg.github_bootstrap_token_env, 'GitHub bootstrap token');
     resolved.githubRuntimeToken = requiredRuntimeValue(processEnv, cfg.github_runtime_token_env, 'GitHub runtime token');
     resolved.sourceReadToken = requiredRuntimeValue(processEnv, cfg.source_read_token_env, 'Source read token');
     resolved.allowedGoogleSub = requiredRuntimeValue(processEnv, cfg.allowed_google_sub_env, 'Allowed Google subject');
@@ -121,6 +129,9 @@ export function resolveEnvironment(manifest, name, sourceSha, processEnv = proce
     let origin;
     try { origin = new URL(resolved.frontendOrigin); } catch { throw new Error(`Frontend origin must be a valid URL (${cfg.frontend_origin_env})`); }
     if (origin.protocol !== 'https:') throw new Error(`Frontend origin must use HTTPS (${cfg.frontend_origin_env})`);
+    if (resolved.githubBootstrapToken === resolved.githubRuntimeToken) {
+      throw new Error('GitHub bootstrap and runtime credentials must be distinct');
+    }
   }
 
   return Object.freeze(resolved);

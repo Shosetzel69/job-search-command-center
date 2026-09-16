@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   assertProdGate,
+  CANONICAL_RUNTIME_REPOSITORIES,
   loadManifest,
   requireEnvironment,
   requireSourceSha,
@@ -11,7 +12,8 @@ import {
   validateManifest,
 } from './environment/contract.mjs';
 import { bootstrapPlan, isolationPlan, runtimeDataFiles } from './environment/plans.mjs';
-import { assertPhase5LiveGate } from './environment/live.mjs';
+import { assertPreCutoverLiveGate } from './environment/live.mjs';
+import { buildProdPreparationReport } from './environment/prod-preflight.mjs';
 import { runtimeSeedPayload, shouldRefreshPristineSeed } from './environment/seed.mjs';
 
 const ROOT = resolve(import.meta.dirname, '..');
@@ -22,6 +24,7 @@ function envInputs() {
   for (const [name, cfg] of Object.entries(manifest.environments)) {
     values[cfg.cloudflare_account_id_env] = name === 'dev' ? '1'.repeat(32) : name === 'test' ? '2'.repeat(32) : '3'.repeat(32);
     values[cfg.cloudflare_token_env] = `${name}-cf-token`;
+    values[cfg.github_bootstrap_token_env] = `${name}-gh-bootstrap-token`;
     values[cfg.github_runtime_token_env] = `${name}-gh-runtime-token`;
     values[cfg.source_read_token_env] = `${name}-source-read-token`;
     values[cfg.allowed_google_sub_env] = `${name}-google-sub`;
@@ -34,8 +37,9 @@ function envInputs() {
 test('manifest defines exactly three canonical runtime repositories', () => {
   assert.deepEqual(Object.keys(manifest.environments).sort(), ['dev', 'prod', 'test']);
   for (const name of ['dev', 'test', 'prod']) {
-    assert.equal(manifest.environments[name].runtime_repository, `Shosetzel69/job-search-runtime-${name}`);
+    assert.equal(manifest.environments[name].runtime_repository, CANONICAL_RUNTIME_REPOSITORIES[name]);
   }
+  assert.equal(manifest.environments.prod.runtime_repository, 'Shosetzel69/job-search-prod');
 });
 
 test('missing environment fails closed', () => assert.throws(() => requireEnvironment(), /Explicit --env/));
@@ -51,6 +55,12 @@ test('invalid Cloudflare account ID fails closed', () => {
   const values = envInputs();
   values.DEV_CLOUDFLARE_ACCOUNT_ID = 'wrong';
   assert.throws(() => resolveEnvironment(manifest, 'dev', SHA, values), /32 hex/);
+});
+
+test('bootstrap and runtime GitHub roles must be distinct', () => {
+  const values = envInputs();
+  values.DEV_GITHUB_BOOTSTRAP_TOKEN = values.DEV_GITHUB_RUNTIME_TOKEN;
+  assert.throws(() => resolveEnvironment(manifest, 'dev', SHA, values), /must be distinct/);
 });
 
 test('Google client ID is an explicit environment input', () => {
@@ -77,11 +87,34 @@ test('PROD requires an explicit owner gate for gated operations', () => {
   assert.doesNotThrow(() => assertProdGate('prod', 'APPROVED'));
 });
 
-test('Phase 5 live gate permits DEV/TEST and blocks PROD', () => {
-  assert.doesNotThrow(() => assertPhase5LiveGate('dev', false));
-  assert.doesNotThrow(() => assertPhase5LiveGate('test', false));
-  assert.throws(() => assertPhase5LiveGate('prod', false), /DEV\/TEST only/);
-  assert.doesNotThrow(() => assertPhase5LiveGate('prod', true));
+test('pre-cutover live gate permits DEV/TEST and blocks PROD', () => {
+  assert.doesNotThrow(() => assertPreCutoverLiveGate('dev', false));
+  assert.doesNotThrow(() => assertPreCutoverLiveGate('test', false));
+  assert.throws(() => assertPreCutoverLiveGate('prod', false), /Phase 7 GO/);
+  assert.doesNotThrow(() => assertPreCutoverLiveGate('prod', true));
+});
+
+test('Phase 6 PROD preparation identifies legacy source-backed runtime and isolated target', () => {
+  const wrangler = JSON.parse(readFileSync(resolve(ROOT, 'command-api/wrangler.jsonc'), 'utf8'));
+  const report = buildProdPreparationReport({ manifest, wrangler, sourceSha: SHA });
+  assert.equal(report.status, 'PASS');
+  assert.equal(report.phase, 6);
+  assert.equal(report.live_prod_mutation_authorized, false);
+  assert.equal(report.phase7_cutover_authorized, false);
+  assert.equal(report.current_prod.environment, 'prod');
+  assert.equal(report.current_prod.runtime_repository, 'Shosetzel69/job-search-command-center');
+  assert.equal(report.target_prod.runtime_repository, 'Shosetzel69/job-search-prod');
+  assert.equal(report.target_prod.workflow, 'runtime.yml');
+  assert.equal(report.target_prod.search_mode, 'live');
+  assert.equal(report.migration_required, true);
+  assert.ok(report.checks.every(check => check.result === 'PASS'));
+});
+
+test('Phase 6 PROD preparation rejects a target that aliases DEV runtime data', () => {
+  const badManifest = JSON.parse(JSON.stringify(manifest));
+  badManifest.environments.prod.runtime_repository = badManifest.environments.dev.runtime_repository;
+  const wrangler = JSON.parse(readFileSync(resolve(ROOT, 'command-api/wrangler.jsonc'), 'utf8'));
+  assert.throws(() => buildProdPreparationReport({ manifest: badManifest, wrangler, sourceSha: SHA }), /canonical environment target|preflight failed/);
 });
 
 test('bootstrap-all scope is structurally DEV + TEST only', () => {
@@ -156,7 +189,7 @@ test('static isolation plan covers DEV->TEST, DEV->PROD and TEST->PROD', () => {
 
 test('manifest rejects non-canonical runtime targets', () => {
   const copy = JSON.parse(JSON.stringify(manifest));
-  copy.environments.test.runtime_repository = 'Shosetzel69/job-search-runtime-prod';
+  copy.environments.prod.runtime_repository = 'Shosetzel69/job-search-runtime-prod';
   assert.throws(() => validateManifest(copy), /canonical environment target/);
 });
 
@@ -180,14 +213,34 @@ test('deploy workflow never defaults environment to PROD', () => {
   assert.doesNotMatch(workflow, /default:\s*prod/);
 });
 
-test('Phase 5 deploy workflow uses one generic DEV/TEST live path and keeps PROD blocked', () => {
+test('live deployment is GitHub-Environment scoped and does not multiplex repository-scoped environment secrets', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /Resolve live DEV\/TEST configuration/);
-  assert.match(workflow, /Execute live environment action/);
-  assert.match(workflow, /Phase 5 live execution permits DEV\/TEST only; PROD remains blocked/);
-  assert.doesNotMatch(workflow, /Execute live DEV action/);
-  assert.match(workflow, /TEST must use a Cloudflare account distinct from DEV/);
-  assert.match(workflow, /TEST must use a runtime token distinct from DEV/);
+  assert.match(workflow, /live-environment:[\s\S]*environment: \$\{\{ inputs\.environment \}\}/);
+  assert.match(workflow, /secrets\.GH_BOOTSTRAP_TOKEN/);
+  assert.match(workflow, /secrets\.GH_RUNTIME_TOKEN/);
+  assert.match(workflow, /secrets\.SOURCE_READ_TOKEN/);
+  assert.doesNotMatch(workflow, /secrets\.DEV_/);
+  assert.doesNotMatch(workflow, /secrets\.TEST_/);
+  assert.doesNotMatch(workflow, /secrets\.PROD_/);
+});
+
+test('live deployment uses trusted main control-plane and separate immutable candidate checkout', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /Checkout trusted control-plane from main/);
+  assert.match(workflow, /ref: main/);
+  assert.match(workflow, /path: control-plane/);
+  assert.match(workflow, /Checkout immutable candidate source/);
+  assert.match(workflow, /path: candidate-source/);
+  assert.match(workflow, /merge-base --is-ancestor/);
+  assert.match(workflow, /SOURCE_WORKSPACE/);
+});
+
+test('Phase 6 workflow exposes PROD preflight but keeps every live PROD operation blocked', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /prod-preflight/);
+  assert.match(workflow, /Phase 6 permits PROD preparation only; live PROD execution remains blocked until separate Phase 7 GO/);
+  assert.match(workflow, /prod-preflight requires environment=prod/);
+  assert.match(workflow, /inputs\.environment == 'dev' \|\| inputs\.environment == 'test'/);
 });
 
 test('environment deploy health verification retries propagation and pins runtime snapshot identity', () => {
@@ -201,4 +254,14 @@ test('environment deploy health verification retries propagation and pins runtim
   assert.match(provision, /environment: runtime\.environment/);
   assert.match(provision, /searchMode: runtime\.searchMode/);
   assert.match(provision, /shouldRefreshPristineSeed/);
+  assert.match(provision, /assertPreCutoverLiveGate/);
+});
+
+test('trusted control-plane uses bootstrap role and does not inherit all secrets into child processes', () => {
+  const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
+  assert.match(provision, /githubBootstrapEnv/);
+  assert.match(provision, /runtime\.githubBootstrapToken/);
+  assert.match(provision, /SOURCE_WORKSPACE/);
+  assert.match(provision, /safeChildEnv/);
+  assert.doesNotMatch(provision, /\.\.\.process\.env/);
 });
