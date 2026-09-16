@@ -203,8 +203,8 @@ jobs:
           TEST_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'test' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
           DEV_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'dev' && secrets.CLOUDFLARE_TOKEN || '' }}
           TEST_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'test' && secrets.CLOUDFLARE_TOKEN || '' }}
-          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_BOOTSTRAP_TOKEN || '' }}
-          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_BOOTSTRAP_TOKEN || '' }}
+          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && inputs.action == 'bootstrap' && secrets.GH_BOOTSTRAP_TOKEN || 'bootstrap-not-required' }}
+          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && inputs.action == 'bootstrap' && secrets.GH_BOOTSTRAP_TOKEN || 'bootstrap-not-required' }}
           DEV_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_RUNTIME_TOKEN || '' }}
           TEST_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_RUNTIME_TOKEN || '' }}
           DEV_SOURCE_READ_TOKEN: ${{ inputs.environment == 'dev' && secrets.SOURCE_READ_TOKEN || '' }}
