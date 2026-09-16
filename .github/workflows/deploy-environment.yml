@@ -129,11 +129,12 @@ jobs:
           fetch-depth: 0
           path: control-plane
 
-      - name: Checkout immutable candidate source
+      - name: Checkout immutable candidate source as inert payload
         uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 1
+          persist-credentials: false
           path: candidate-source
 
       - uses: actions/setup-node@v4
@@ -158,19 +159,46 @@ jobs:
         working-directory: control-plane
         run: npm run test:environment
 
-      - name: Install trusted deployment dependencies
-        if: ${{ inputs.action == 'bootstrap' }}
-        run: npm --prefix control-plane/command-api install --ignore-scripts --no-audit --no-fund
-
-      - name: Install candidate deployment dependencies without environment credentials
+      - name: Prepare sanitized candidate payload on trusted build baseline
         if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
-        run: npm --prefix candidate-source/command-api install --ignore-scripts --no-audit --no-fund
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf deployment-source
+          cp -a control-plane deployment-source
+          rm -rf deployment-source/.git
+
+          rm -rf deployment-source/command-api/src
+          cp -a candidate-source/command-api/src deployment-source/command-api/src
+
+          rm -rf deployment-source/frontend/src
+          cp -a candidate-source/frontend/src deployment-source/frontend/src
+          cp candidate-source/frontend/index.html deployment-source/frontend/index.html
+
+          if [ -d candidate-source/frontend/public ]; then
+            rm -rf deployment-source/frontend/public
+            cp -a candidate-source/frontend/public deployment-source/frontend/public
+          fi
+
+          printf '%s\n' "${{ inputs.source_sha }}" > deployment-source/.candidate-source-sha
+          test "$(cat deployment-source/.candidate-source-sha)" = "${{ inputs.source_sha }}"
+
+          # Executable build/deploy files remain exclusively from trusted main.
+          cmp control-plane/command-api/package.json deployment-source/command-api/package.json
+          cmp control-plane/command-api/wrangler.jsonc deployment-source/command-api/wrangler.jsonc
+          cmp control-plane/command-api/scripts/write-build-identity.mjs deployment-source/command-api/scripts/write-build-identity.mjs
+          cmp control-plane/frontend/package.json deployment-source/frontend/package.json
+          cmp control-plane/frontend/vite.config.js deployment-source/frontend/vite.config.js
+
+      - name: Install trusted deployment dependencies
+        if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
+        run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
       - name: Execute selected live environment action
         working-directory: control-plane
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
-          SOURCE_WORKSPACE: ${{ github.workspace }}/candidate-source
+          SOURCE_WORKSPACE: ${{ github.workspace }}/deployment-source
           DEV_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'dev' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
           TEST_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'test' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
           DEV_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'dev' && secrets.CLOUDFLARE_TOKEN || '' }}
@@ -202,7 +230,7 @@ jobs:
 
       - name: Configure runtime and Worker secrets with separated roles
         if: ${{ inputs.action == 'bootstrap' }}
-        working-directory: control-plane/command-api
+        working-directory: deployment-source/command-api
         env:
           SELECTED_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
           SELECTED_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
