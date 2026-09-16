@@ -45,3 +45,11 @@ test('PROD readiness verifies trusted-main ancestry and credential segregation',
   assert.match(workflow, /Runtime token unexpectedly has Actions variables read permission/);
   assert.match(workflow, /job-search-command-api\.job-search-prod\.workers\.dev/);
 });
+
+test('PROD readiness verifies active Cloudflare account token and target Worker without overclaiming cross-account isolation', () => {
+  assert.match(workflow, /accounts\/\$CLOUDFLARE_ACCOUNT_ID\/tokens\/verify/);
+  assert.match(workflow, /\.result\.status == "active"/);
+  assert.match(workflow, /workers\/scripts\/job-search-command-api\/settings/);
+  assert.match(workflow, /Cross-account negative isolation remains an independent G6 QA check/);
+  assert.doesNotMatch(workflow, /reaches only the dedicated PROD target context/);
+});
