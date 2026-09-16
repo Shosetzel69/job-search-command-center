@@ -42,7 +42,7 @@ Target architecture:
 - runtime workflow: `runtime.yml`;
 - search mode: `live`;
 - dedicated GitHub Environment: `prod`;
-- PROD-only Cloudflare deployment credential;
+- PROD-only Cloudflare deployment credential scoped to the individual PROD Worker whenever granular Worker roles are available;
 - PROD-only runtime GitHub credential;
 - separate temporary/bootstrap GitHub credential;
 - PROD-only source-read credential, read-only to the source repository;
@@ -57,7 +57,7 @@ The PROD stack uses separate credential roles:
 
 | Role | Scope | Long-lived in Worker? |
 |---|---|---|
-| Cloudflare deploy | Dedicated `Job Search PROD` account only | No |
+| Cloudflare deploy | Individual `job-search-command-api` Worker in dedicated `Job Search PROD` account; Editor only | No |
 | GitHub bootstrap/admin | Provision/configure `job-search-prod`; temporary | No |
 | GitHub runtime | `job-search-prod` only; minimum runtime write + Actions dispatch/read | Yes |
 | GitHub source-read | `job-search-command-center` read-only | Runtime repo secret only |
@@ -104,6 +104,7 @@ No business data is copied to DEV or TEST.
 Before G6 can PASS:
 
 - dedicated `Job Search PROD` Cloudflare account exists;
+- dedicated `job-search-command-api` Worker exists in that account;
 - `job-search-prod` exists and is private;
 - GitHub Environments `dev`, `test`, `prod` exist and credential scoping is validated;
 - PROD credential roles are separated and least-privilege;
