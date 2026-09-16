@@ -216,8 +216,8 @@ test('deploy workflow never defaults environment to PROD', () => {
 test('live deployment is GitHub-Environment scoped and does not multiplex repository-scoped environment secrets', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
   assert.match(workflow, /live-environment:[\s\S]*environment: \$\{\{ inputs\.environment \}\}/);
-  assert.match(workflow, /secrets\.GITHUB_BOOTSTRAP_TOKEN/);
-  assert.match(workflow, /secrets\.GITHUB_RUNTIME_TOKEN/);
+  assert.match(workflow, /secrets\.GH_BOOTSTRAP_TOKEN/);
+  assert.match(workflow, /secrets\.GH_RUNTIME_TOKEN/);
   assert.match(workflow, /secrets\.SOURCE_READ_TOKEN/);
   assert.doesNotMatch(workflow, /secrets\.DEV_/);
   assert.doesNotMatch(workflow, /secrets\.TEST_/);
