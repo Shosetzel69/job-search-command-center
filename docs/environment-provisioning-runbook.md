@@ -1,27 +1,31 @@
 # Environment Provisioning Runbook - DEV / TEST / PROD
 
-Status: Phase 7 PROD migration/bootstrap/deploy executed successfully; final independent QA is pending in #188.
+Status: DEV / TEST / PROD infrastructure operational. Phase 7 migration/bootstrap/deploy completed; final acceptance/remediation remains tracked separately. Permanent delivery lifecycle is defined by #197.
 Data initiala: 2026-09-11
-Revizie curenta: 2026-09-17
+Revizie curenta: 2026-09-18
 ADR: `docs/adr/ADR-003-environment-isolation.md`
+Delivery lifecycle: `docs/software-delivery-lifecycle.md`
+Release record: `docs/release-record-template.md`
 Implementation: #161 #175 #186
 Security / G6: #177 #183
-Final QA: #188
+Delivery governance: #197
+Automation alignment: #198
+Final Phase 7 QA: #188
 
 ## 1. Scop si stare curenta
 
-Acest document este contractul operational canonic pentru cele trei medii izolate. El descrie atat arhitectura si regulile permanente, cat si starea reala curenta dupa executia Phase 7.
+Acest document este contractul operational pentru cele trei medii izolate si pentru resursele lor. Regulile permanente de promovare software sunt definite in `docs/software-delivery-lifecycle.md`; sectiunile Phase 7 din acest document descriu executia istorica a cutover-ului initial si nu inlocuiesc lifecycle-ul permanent pentru release-urile viitoare.
 
 Starea curenta este:
 
 | Mediu | Runtime repo | Cloudflare target | URL | Search mode | Stare |
 | --- | --- | --- | --- | --- | --- |
-| DEV | `Shosetzel69/job-search-runtime-dev` | `Job Search DEV` | `https://job-search-command-api.job-search-dev.workers.dev` | `disabled` | operational, validat |
-| TEST | `Shosetzel69/job-search-runtime-test` | `Job Search TEST` | `https://job-search-command-api.job-search-test.workers.dev` | `smoke` | operational, validat |
-| PROD | `Shosetzel69/job-search-prod` | `Job Search PROD` | `https://job-search-command-api.job-search-prod.workers.dev` | `live` | migration + bootstrap/deploy PASS; final QA pending |
-| LEGACY | legacy stack | legacy Cloudflare account | `https://job-search-command-api.myeboda.workers.dev` | legacy | rollback reference; read-only during final QA |
+| DEV | `Shosetzel69/job-search-runtime-dev` | `Job Search DEV` | `https://job-search-command-api.job-search-dev.workers.dev` | `disabled` | operational |
+| TEST | `Shosetzel69/job-search-runtime-test` | `Job Search TEST` | `https://job-search-command-api.job-search-test.workers.dev` | `smoke` | operational |
+| PROD | `Shosetzel69/job-search-prod` | `Job Search PROD` | `https://job-search-command-api.job-search-prod.workers.dev` | `live` | dedicated stack operational |
+| LEGACY | legacy stack | legacy Cloudflare account | `https://job-search-command-api.myeboda.workers.dev` | legacy | rollback/fallback only; outside normal promotion chain |
 
-Approved application source:
+Approved application source used by the initial Phase 7 cutover:
 
 ```text
 SOURCE_SHA=1ca1d16f0c2bb0529cf4a91283117a120dfc80fc
@@ -33,13 +37,13 @@ Trusted control-plane main used for Phase 7 execution:
 55ef89ddbbbb27ac1f23c7a66957fc3c5188ce53
 ```
 
-PROD migration anchors:
+PROD migration anchors from the initial cutover:
 
 ```text
 initial canonical data migration commit:
 56c76e0724af629cb2fdfec19d444008574a5164
 
-current PROD runtime head used by bootstrap/deploy:
+initial dedicated PROD runtime head used by bootstrap/deploy:
 f552d5fb958c1559a65f420904b86cc403fd12aa
 ```
 
@@ -51,23 +55,7 @@ Successful Phase 7 bootstrap/deploy run:
 https://github.com/Shosetzel69/job-search-command-center/actions/runs/35247969324
 ```
 
-That run passed the 58/58 environment/security/Phase-7 contract tests, deployed the dedicated PROD Worker, configured runtime secrets, and converged `/health` to:
-
-```json
-{
-  "status": "ok",
-  "environment": "prod",
-  "source_sha": "1ca1d16f0c2bb0529cf4a91283117a120dfc80fc",
-  "runtime_repo": "Shosetzel69/job-search-prod",
-  "runtime_ref": "main",
-  "runtime_data_sha": "f552d5fb958c1559a65f420904b86cc403fd12aa",
-  "search_mode": "live",
-  "auth_configured": true,
-  "github_configured": true
-}
-```
-
-Phase 7 is therefore no longer blocked on migration or initial deployment. The remaining gate is final QA in #188, including one controlled PROD Full Search, publication/redeploy validation, DEV/TEST regression isolation, and legacy rollback read-only verification.
+That run passed the environment/security/Phase-7 contract tests, deployed the dedicated PROD Worker, configured runtime secrets, and converged `/health` to the approved Phase 7 source/runtime identities.
 
 ## 2. Permanent architecture principles
 
@@ -76,12 +64,56 @@ Phase 7 is therefore no longer blocked on migration or initial deployment. The r
 - three separate target Cloudflare accounts;
 - environment-specific GitHub Environments: `dev`, `test`, `prod`;
 - separate credentials per environment and role;
-- immutable `SOURCE_SHA` for executable application identity;
+- immutable `SOURCE_SHA` / `CANDIDATE_SHA` for executable application identity;
 - `RUNTIME_DATA_SHA` for the exact runtime snapshot served;
 - runtime data never promoted DEV -> TEST -> PROD;
 - no implicit PROD fallback;
 - privileged build/deploy tooling comes from trusted control-plane main, not from candidate payload;
-- legacy remains a rollback reference until final owner acceptance and later cleanup decision.
+- DEV/TEST validate the candidate before final integration to `main`;
+- PROD receives the exact TEST-passed candidate after that candidate is integrated/reachable from `main` without rewrite;
+- merge and deploy are separate actions;
+- rollback readiness is mandatory before PROD;
+- legacy remains outside the normal promotion chain until separately retired.
+
+### 2.1 Permanent promotion lifecycle
+
+For all future functional releases, fixes, infrastructure changes and migrations:
+
+```text
+approved Issue
+  -> development branch
+  -> DEV exact SHA
+  -> DEV PASS
+  -> candidate freeze
+  -> TEST exact same SHA
+  -> independent TEST PASS
+  -> integrate candidate in main without rewrite
+  -> PROD preflight + rollback readiness
+  -> explicit owner GO
+  -> PROD exact same SHA
+  -> smoke / acceptance
+```
+
+If TEST fails:
+
+```text
+TEST FAIL
+  -> DEV remediation
+  -> new SHA
+  -> DEV verification
+  -> new candidate freeze
+  -> TEST retest
+```
+
+Rules:
+- no fix is implemented directly in TEST or PROD;
+- no squash/rebase of a frozen TEST-passed candidate;
+- if post-TEST integration changes the candidate or requires content-changing conflict resolution, TEST PASS is invalidated;
+- `main` is not a development/test environment and is not used as a staging area before DEV/TEST validation;
+- PROD deploys the exact candidate SHA recorded in the release record, not an arbitrary current `main` HEAD;
+- every PROD promotion uses `docs/release-record-template.md` or an equivalent automation-generated record.
+
+Implementation enforcement is tracked in #198.
 
 ## 3. Runtime repositories
 
@@ -190,6 +222,12 @@ PROD -> no non-production badge
 
 The DEV and TEST markers are persistent runtime-derived markers, not manual labels.
 
+Operational roles:
+- DEV = implementation/debugging/technical verification;
+- TEST = independent validation only;
+- PROD = accepted production release;
+- LEGACY = rollback/fallback only.
+
 ## 7. Environment tooling
 
 The shared entry point remains:
@@ -202,13 +240,26 @@ The environment tool provides validation/bootstrap/deploy/status/isolation capab
 
 `bootstrap-all` remains structurally DEV + TEST only. It must never silently include PROD.
 
+### 7.1 Known lifecycle alignment gap
+
+At the 2026-09-18 architecture review, `.github/workflows/deploy-environment.yml` still requires live DEV/TEST `source_sha` to be reachable from trusted `main`.
+
+This is incompatible with the permanent lifecycle because the intended flow validates a branch candidate in DEV and TEST before final integration into `main`.
+
+Until #198 is implemented and validated:
+- this historical guard must not be treated as the canonical future promotion contract;
+- no new release process may infer that merge-to-main is required before DEV/TEST;
+- trusted control-plane execution from `main` remains required, but candidate payload ancestry to `main` is required only for PROD after TEST PASS/integration.
+
+### 7.2 Historical Phase 6/7 workflows
+
 Historical Phase 6 PROD readiness remains available as a non-mutating control:
 
 ```text
 PROD Readiness (Non-Mutating)
 ```
 
-For the executed Phase 7 PROD path, the canonical workflow is now:
+The initial Phase 7 PROD cutover used:
 
 ```text
 .github/workflows/prod-cutover.yml
@@ -229,8 +280,7 @@ expected_runtime_sha=f552d5fb958c1559a65f420904b86cc403fd12aa
 owner_gate=PHASE7_APPROVED
 ```
 
-The workflow:
-
+The historical workflow:
 1. validates explicit Phase 7 authorization;
 2. checks out trusted control-plane main;
 3. checks out immutable application candidate separately;
@@ -244,6 +294,8 @@ The workflow:
 11. configures Worker runtime secrets;
 12. validates `/health` identity;
 13. leaves legacy cleanup outside the workflow.
+
+Future permanent PROD promotion must implement the lifecycle gates from #197/#198 rather than reusing Phase 7 authorization semantics blindly.
 
 ## 8. Runtime execution contract
 
@@ -291,64 +343,67 @@ auth_configured
 github_configured
 ```
 
-After any PROD Full Search that publishes a new runtime commit, the dedicated PROD Worker must be redeployed so the static assets and `/health.runtime_data_sha` converge to the new runtime head.
-
-## 10. DEV procedure and final QA expectation
-
-Current state: operational.
-
-Final QA #188 must verify:
-
-- canonical DEV URL loads over HTTPS;
-- `/health.environment=dev`;
-- runtime repo is `job-search-runtime-dev`;
-- `SEARCH_MODE=disabled`;
-- persistent `[DEV]` badge;
-- authentication/UI smoke passes;
-- Full Search is blocked/fails closed;
-- PROD final validation does not mutate DEV runtime state.
-
-## 11. TEST procedure and final QA expectation
-
-Current state: operational.
-
-Final QA #188 must verify:
-
-- canonical TEST URL loads over HTTPS;
-- `/health.environment=test`;
-- runtime repo is `job-search-runtime-test`;
-- `SEARCH_MODE=smoke`;
-- persistent `[TEST]` badge;
-- authentication/UI smoke passes;
-- no live external collection or PROD-style publication occurs;
-- PROD final validation does not mutate TEST runtime state.
-
-## 12. PROD procedure and final QA expectation
-
-Current state: canonical data migration and initial dedicated PROD deployment are complete.
-
-Remaining QA sequence is defined in #188 and must be executed by Claude without code/config mutation:
-
-1. capture pre-test PROD `/health` and runtime head;
-2. verify migrated application/config data sanity;
-3. execute exactly one controlled Full Search through normal PROD application flow;
-4. record the runtime workflow URL/ID;
-5. verify generated contract validation and result publication;
-6. verify `job-search-prod/main` advances if a result commit is produced;
-7. verify automatic PROD redeploy;
-8. verify post-redeploy `/health.runtime_data_sha` equals new runtime head;
-9. verify UI/run-history consistency;
-10. re-check authentication/protected paths;
-11. re-check DEV and TEST isolation;
-12. verify legacy rollback endpoint read-only.
-
-The canonical QA ticket is:
+Candidate identity rule:
 
 ```text
-#188 [QA][Phase 7] Final validation DEV / TEST / PROD
+DEV /health.source_sha
+== TEST /health.source_sha
+== PROD /health.source_sha
+== release record CANDIDATE_SHA
 ```
 
-#186 is the orchestration/Phase 7 ticket, not the QA execution ticket.
+for one successful promotion cycle.
+
+After any PROD Full Search that publishes a new runtime commit, the dedicated PROD Worker must be redeployed so the static assets and `/health.runtime_data_sha` converge to the new runtime head.
+
+## 10. DEV procedure
+
+DEV is the implementation and technical-verification environment.
+
+For a normal change:
+1. create/use the approved development branch;
+2. deploy an explicit immutable SHA to DEV;
+3. verify `/health.source_sha` equals that SHA;
+4. execute technical/automated validation;
+5. remediate defects in DEV as needed;
+6. once stable, freeze the exact candidate SHA;
+7. record DEV evidence in the release record;
+8. promote that exact candidate to TEST.
+
+DEV never promotes runtime data to TEST/PROD.
+
+## 11. TEST procedure
+
+TEST is independent validation, not implementation.
+
+For a normal change:
+1. receive the exact frozen `CANDIDATE_SHA` from DEV;
+2. deploy that SHA to TEST;
+3. verify `/health.source_sha == CANDIDATE_SHA`;
+4. execute explicit QA scenarios;
+5. record evidence and verdict;
+6. on FAIL, return the defect to DEV;
+7. on PASS, freeze QA evidence for that exact SHA and allow release integration review.
+
+Any source/config change that affects candidate behavior after TEST PASS invalidates that PASS unless explicitly shown to be outside candidate payload and covered by the release contract.
+
+## 12. PROD procedure
+
+PROD receives only a TEST-passed candidate.
+
+Before PROD mutation:
+1. candidate has TEST PASS evidence;
+2. candidate is integrated in `main` without rewrite and remains reachable from `main`;
+3. release record is complete through TEST/integration gates;
+4. current known-good PROD source/runtime/config/schema anchors are captured;
+5. rollback procedure is ready;
+6. required backup/restore evidence exists for destructive/non-reversible data/schema changes;
+7. PROD target identity is explicit;
+8. owner GO is recorded.
+
+Deployment then uses exactly `CANDIDATE_SHA`, followed by production smoke/acceptance and final release-record closeout.
+
+The initial Phase 7 acceptance remains historically tracked in #188/#186; it is not the generic release gate for future changes.
 
 ## 13. Legacy rollback state
 
@@ -358,37 +413,46 @@ Legacy endpoint:
 https://job-search-command-api.myeboda.workers.dev
 ```
 
-The existing legacy deployment remains the rollback reference. During Phase 7 preparation, its Cloudflare Git/build integration was disconnected to freeze the baseline; the deployed legacy Worker was not deleted or repurposed.
+The existing legacy deployment remains a rollback/fallback reference until separately retired.
 
-Until final QA and owner acceptance:
-
-- legacy is read-only for validation;
-- do not deploy to legacy;
-- do not change legacy configuration;
-- do not add the requested `[LEGACY]` UI marker yet, because that would mutate the rollback baseline;
-- do not revoke/delete legacy resources or credentials needed for rollback.
-
-A `[LEGACY]` marker may be added only after final acceptance or through a separate explicit decision that accepts modification of the rollback baseline.
+Hard rules:
+- legacy is outside DEV -> TEST -> PROD;
+- do not develop or test against legacy as a normal environment;
+- do not deploy normal releases to legacy;
+- do not change legacy configuration/data through normal promotion;
+- do not repurpose it;
+- retirement/cleanup requires a separate explicit decision.
 
 ## 14. Rollback
 
-Primary rollback remains operational return to the existing legacy endpoint, not transformation of the new dedicated stack into the legacy architecture.
+Permanent rollback requirements are defined in `docs/software-delivery-lifecycle.md` and captured per release using `docs/release-record-template.md`.
+
+Minimum before any PROD deployment:
+- known-good PROD `SOURCE_SHA`;
+- known-good `RUNTIME_DATA_SHA` where applicable;
+- previous configuration anchor;
+- migration/schema version;
+- rollback/redeploy procedure;
+- for destructive/non-reversible DB changes: backup file, checksum and demonstrated non-PROD restore.
 
 Rollback conditions include:
-
 - source/runtime identity mismatch;
-- auth regression;
+- auth/security regression;
+- critical functional failure;
 - protected data/API exposure;
 - failed runtime publication/redeploy;
+- data/migration integrity failure;
 - unexpected DEV/TEST mutation;
 - cross-environment credential access;
 - inability to use the dedicated PROD endpoint safely.
 
 No DEV/TEST data may ever be copied into PROD as rollback.
 
-## 15. Final QA and acceptance gate
+The Phase 7-specific legacy fallback procedure remains documented in `docs/prod-cutover-rollback-runbook.md`.
 
-Current gate position:
+## 15. Historical Phase 7 gate
+
+The initial isolated-PROD cutover followed this historical sequence:
 
 ```text
 STABILIZATION CLOSED
@@ -400,37 +464,30 @@ STABILIZATION CLOSED
   -> G6 PASS
   -> Phase 7 owner GO
   -> canonical PROD data migration PASS
-  -> dedicated PROD bootstrap/deploy PASS (run 35247969324)
-  -> #188 final QA  <-- CURRENT
+  -> dedicated PROD bootstrap/deploy PASS
+  -> #188 final QA / remediation
   -> owner final acceptance
-  -> observation window
   -> optional legacy cleanup by separate explicit decision
 ```
 
-#188 may close PASS only when:
-
-- DEV boundary/isolation checks pass;
-- TEST smoke/isolation checks pass;
-- PROD controlled Full Search publishes and redeploys coherently;
-- post-PROD DEV/TEST checks remain unchanged;
-- legacy rollback remains available/read-only;
-- no unresolved blocker/major defect remains.
+This sequence remains evidence for the initial migration only. Future releases use the permanent G0-G7 lifecycle defined in `docs/software-delivery-lifecycle.md`.
 
 ## 16. Evidence requirements
 
-Every final validation record must include, without secret values:
+For every future promotion, the release record must include without secret values:
+- Issue/PR;
+- candidate SHA;
+- baseline `main` SHA at candidate freeze;
+- DEV deployment/test evidence;
+- TEST deployment/QA evidence and verdict;
+- post-integration `main` SHA;
+- schema/migration/config versions;
+- known-good PROD anchors;
+- rollback/backup evidence where applicable;
+- explicit PROD owner GO;
+- PROD deployment run;
+- pre/post `/health` identities;
+- smoke/acceptance result;
+- defects/observations and final state.
 
-- environment URL;
-- `/health` JSON;
-- `SOURCE_SHA`;
-- runtime repo/ref;
-- runtime data SHA before/after where relevant;
-- search mode;
-- badge result;
-- auth result;
-- workflow URL/run ID;
-- screenshots or equivalent browser evidence;
-- defects with reproduction steps;
-- final verdict.
-
-The authoritative final QA evidence is stored in #188. #186 stays open until #188 reaches an acceptable final verdict and owner acceptance is recorded.
+Use `docs/release-record-template.md` as the standard checklist until #198 provides equivalent automation-generated evidence.
