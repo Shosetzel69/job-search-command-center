@@ -283,14 +283,31 @@ jobs:
             test) runtime_repo="Shosetzel69/job-search-runtime-test" ;;
             *) exit 1 ;;
           esac
+          source_repo="Shosetzel69/job-search-command-center"
+
           test "$SELECTED_GITHUB_BOOTSTRAP_TOKEN" != "$SELECTED_GITHUB_RUNTIME_TOKEN" || { echo "bootstrap/runtime token reuse is forbidden" >&2; exit 1; }
-          runtime_permission="$(GH_TOKEN="$SELECTED_GITHUB_RUNTIME_TOKEN" gh repo view "$runtime_repo" --json viewerPermission --jq .viewerPermission)"
-          case "$runtime_permission" in WRITE|MAINTAIN|ADMIN) ;; *) echo "Runtime token lacks runtime write permission" >&2; exit 1 ;; esac
-          source_runtime_permission="$(GH_TOKEN="$SELECTED_GITHUB_RUNTIME_TOKEN" gh repo view Shosetzel69/job-search-command-center --json viewerPermission --jq .viewerPermission 2>/dev/null || echo NONE)"
-          case "$source_runtime_permission" in WRITE|MAINTAIN|ADMIN) echo "Runtime token must not have source write permission" >&2; exit 1 ;; esac
-          source_permission="$(GH_TOKEN="$SELECTED_SOURCE_READ_TOKEN" gh repo view Shosetzel69/job-search-command-center --json viewerPermission --jq .viewerPermission)"
-          case "$source_permission" in READ|TRIAGE) ;; *) echo "Source token must remain read-only" >&2; exit 1 ;; esac
-          GH_TOKEN="$SELECTED_SOURCE_READ_TOKEN" gh api "repos/Shosetzel69/job-search-command-center/commits/$SOURCE_SHA" --silent
+          test "$SELECTED_GITHUB_RUNTIME_TOKEN" != "$SELECTED_SOURCE_READ_TOKEN" || { echo "runtime/source-read token reuse is forbidden" >&2; exit 1; }
+          test "$SELECTED_GITHUB_BOOTSTRAP_TOKEN" != "$SELECTED_SOURCE_READ_TOKEN" || { echo "bootstrap/source-read token reuse is forbidden" >&2; exit 1; }
+
+          # Fine-grained PAT permissions are not exposed as effective per-token levels by viewerPermission.
+          # Verify the enforceable repository boundaries and only exercise SOURCE_READ_TOKEN through read calls.
+          case "$SELECTED_SOURCE_READ_TOKEN" in
+            github_pat_*) ;;
+            *) echo "Source-read token must be a fine-grained PAT" >&2; exit 1 ;;
+          esac
+
+          GH_TOKEN="$SELECTED_GITHUB_RUNTIME_TOKEN" gh api "repos/$runtime_repo" --silent >/dev/null
+          if GH_TOKEN="$SELECTED_GITHUB_RUNTIME_TOKEN" gh api "repos/$source_repo" --silent >/dev/null 2>&1; then
+            echo "Runtime token must not access source repository" >&2
+            exit 1
+          fi
+
+          GH_TOKEN="$SELECTED_SOURCE_READ_TOKEN" gh api "repos/$source_repo/commits/$SOURCE_SHA" --silent >/dev/null
+          if GH_TOKEN="$SELECTED_SOURCE_READ_TOKEN" gh api "repos/$runtime_repo" --silent >/dev/null 2>&1; then
+            echo "Source-read token must not access runtime repository" >&2
+            exit 1
+          fi
+
           for attempt in 1 2 3 4 5 6; do
             if npm run env:status -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA"; then
               exit 0
