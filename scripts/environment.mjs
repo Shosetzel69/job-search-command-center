@@ -5,6 +5,7 @@ import { printPlan, printValidation, statusRow } from './environment/report.mjs'
 import { assertPreCutoverLiveGate } from './environment/live.mjs';
 import { provisionEnvironment, deployEnvironment, statusEnvironment } from './environment/provision.mjs';
 import { prodPreparationReport } from './environment/prod-preflight.mjs';
+import { verifyCloudflareCredential } from './environment/cloudflare-preflight.mjs';
 
 function usage() {
   console.log(`Usage:\n  node scripts/environment.mjs validate --env dev|test|prod --source-sha <sha> [--dry-run] [--owner-gate APPROVED]\n  node scripts/environment.mjs bootstrap --env dev|test --source-sha <sha> [--dry-run]\n  node scripts/environment.mjs bootstrap-all --source-sha <sha> --dry-run\n  node scripts/environment.mjs deploy --env dev|test --source-sha <sha> [--dry-run]\n  node scripts/environment.mjs status --env dev|test --source-sha <sha> [--dry-run]\n  node scripts/environment.mjs isolation-test --source-sha <sha> --dry-run\n  node scripts/environment.mjs prod-preflight --source-sha <sha> --owner-gate APPROVED --dry-run\n\nPhase 6 permits non-mutating PROD preparation only. Live PROD bootstrap/deploy/status remain blocked until a separate Phase 7 owner GO. bootstrap-all and isolation-test remain non-mutating.`);
@@ -41,6 +42,7 @@ async function main() {
     assertProdGate(runtime.environment, args.owner_gate);
     if (args.dry_run === true) return printPlan('bootstrap', runtime, bootstrapPlan(runtime));
     assertPreCutoverLiveGate(runtime.environment, false);
+    await verifyCloudflareCredential(runtime);
     console.log(JSON.stringify(await provisionEnvironment(runtime), null, 2));
     return;
   }
@@ -59,6 +61,7 @@ async function main() {
     assertProdGate(runtime.environment, args.owner_gate);
     if (args.dry_run === true) return printPlan('deploy', runtime, deployPlan(runtime));
     assertPreCutoverLiveGate(runtime.environment, false);
+    await verifyCloudflareCredential(runtime);
     console.log(JSON.stringify(await deployEnvironment(runtime), null, 2));
     return;
   }
