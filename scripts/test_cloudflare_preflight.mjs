@@ -19,64 +19,60 @@ function response(status, payload) {
   };
 }
 
-test('Cloudflare preflight verifies active account token and selected Worker through non-mutating Wrangler probe', async () => {
-  const fetchCalls = [];
-  const runCalls = [];
+test('Cloudflare preflight verifies active account token and selected Worker through deployments API', async () => {
+  const calls = [];
   const fakeFetch = async (url, options) => {
-    fetchCalls.push({ url, options });
-    return response(200, { success: true, result: { status: 'active' } });
+    calls.push({ url, options });
+    if (url.endsWith('/tokens/verify')) {
+      return response(200, { success: true, result: { status: 'active' } });
+    }
+    return response(200, { success: true, result: { deployments: [] } });
   };
-  const fakeRun = (command, args, options) => {
-    runCalls.push({ command, args, options });
-    return '[]';
-  };
-  const result = await verifyCloudflareCredential(runtime, { fetchImpl: fakeFetch, runImpl: fakeRun });
+
+  const result = await verifyCloudflareCredential(runtime, { fetchImpl: fakeFetch });
   assert.equal(result.status, 'PASS');
-  assert.equal(result.authorization_probe, 'wrangler deployments list');
-  assert.equal(fetchCalls.length, 1);
-  assert.match(fetchCalls[0].url, /accounts\/1{32}\/tokens\/verify$/);
-  assert.equal(fetchCalls[0].options.headers.authorization, 'Bearer secret-token');
-  assert.equal(runCalls.length, 1);
-  assert.equal(runCalls[0].command, 'npx');
-  assert.deepEqual(runCalls[0].args, ['wrangler', 'deployments', 'list', '--name', 'job-search-command-api', '--json']);
-  assert.equal(runCalls[0].options.env.CLOUDFLARE_ACCOUNT_ID, '1'.repeat(32));
-  assert.equal(runCalls[0].options.env.CLOUDFLARE_API_TOKEN, 'secret-token');
+  assert.equal(result.authorization_probe, 'workers deployments API');
+  assert.equal(calls.length, 2);
+  assert.match(calls[0].url, /accounts\/1{32}\/tokens\/verify$/);
+  assert.match(calls[1].url, /accounts\/1{32}\/workers\/scripts\/job-search-command-api\/deployments$/);
+  assert.equal(calls[0].options.headers.authorization, 'Bearer secret-token');
+  assert.equal(calls[1].options.headers.authorization, 'Bearer secret-token');
 });
 
 test('Cloudflare preflight fails closed on invalid token before Worker authorization probe', async () => {
-  let fetchCalls = 0;
-  let runCalls = 0;
+  let calls = 0;
   const fakeFetch = async () => {
-    fetchCalls += 1;
+    calls += 1;
     return response(401, { success: false });
   };
-  const fakeRun = () => {
-    runCalls += 1;
-    return '[]';
-  };
   await assert.rejects(
-    () => verifyCloudflareCredential(runtime, { fetchImpl: fakeFetch, runImpl: fakeRun }),
+    () => verifyCloudflareCredential(runtime, { fetchImpl: fakeFetch }),
     /token is not active/,
   );
-  assert.equal(fetchCalls, 1);
-  assert.equal(runCalls, 0);
+  assert.equal(calls, 1);
 });
 
-test('Cloudflare preflight fails closed when Wrangler granular authorization cannot access selected Worker', async () => {
-  const fakeFetch = async () => response(200, { success: true, result: { status: 'active' } });
-  const fakeRun = () => {
-    throw new Error('forbidden');
+test('Cloudflare preflight fails closed when deployments API cannot access selected Worker', async () => {
+  let calls = 0;
+  const fakeFetch = async url => {
+    calls += 1;
+    if (url.endsWith('/tokens/verify')) {
+      return response(200, { success: true, result: { status: 'active' } });
+    }
+    return response(403, { success: false });
   };
   await assert.rejects(
-    () => verifyCloudflareCredential(runtime, { fetchImpl: fakeFetch, runImpl: fakeRun }),
-    /cannot access Worker.*Wrangler granular authorization/,
+    () => verifyCloudflareCredential(runtime, { fetchImpl: fakeFetch }),
+    /cannot access Worker.*deployments \(HTTP 403\)/,
   );
+  assert.equal(calls, 2);
 });
 
-test('Cloudflare preflight no longer uses legacy script settings endpoint as granular authorization proof', () => {
+test('Cloudflare preflight uses Worker deployments endpoint and no account-wide Worker listing', () => {
   const source = readFileSync(resolve(import.meta.dirname, 'environment', 'cloudflare-preflight.mjs'), 'utf8');
+  assert.match(source, /workers\/scripts\/\$\{encodeURIComponent\(runtime\.workerName\)\}\/deployments/);
+  assert.doesNotMatch(source, /wrangler', 'deployments'/);
   assert.doesNotMatch(source, /workers\/scripts\/.*\/settings/);
-  assert.match(source, /wrangler', 'deployments', 'list'/);
 });
 
 test('bootstrap and deploy invoke Cloudflare preflight before mutating operations', () => {
