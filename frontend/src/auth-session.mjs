@@ -26,6 +26,7 @@ export function rememberGoogleLoginHint(email, storage = browserStorage()) {
   try {
     storage?.setItem?.(GOOGLE_LOGIN_HINT_KEY, normalized);
     storage?.removeItem?.(GOOGLE_AUTO_RESTORE_DISABLED_KEY);
+    logoutClearRequested = false;
     return normalized;
   } catch {
     return null;
@@ -66,7 +67,9 @@ export function installAuthFailureReload(target = globalThis.window) {
     const response = await originalFetch(...args);
     if (isProtectedAuthFailure(args[0], response, target) && !authFailureReloadScheduled) {
       authFailureReloadScheduled = true;
-      disableAutoRestore(target.localStorage);
+      let storage = null;
+      try { storage = target.localStorage; } catch {}
+      disableAutoRestore(storage);
       target.setTimeout?.(() => target.location?.reload?.(), 0);
     }
     return response;
@@ -111,7 +114,8 @@ export function googleIdentityOptions({ clientId, loginHint, allowAutoRestore = 
     disableAutoRestore(storage);
     if (typeof window !== 'undefined') clearServerSession(window);
   }
-  const effectiveAutoRestore = Boolean(normalizedHint && allowAutoRestore && !autoRestoreDisabled(storage));
+  const serverRestoreAllowed = Boolean(allowAutoRestore && !autoRestoreDisabled(storage));
+  const effectiveAutoSelect = Boolean(normalizedHint && serverRestoreAllowed);
   let delivered = false;
   const deliver = credential => {
     if (!credential || delivered) return;
@@ -119,12 +123,12 @@ export function googleIdentityOptions({ clientId, loginHint, allowAutoRestore = 
     onCredential(credential);
   };
 
-  if (effectiveAutoRestore && typeof window !== 'undefined') restoreServerSession(deliver, window);
+  if (serverRestoreAllowed && typeof window !== 'undefined') restoreServerSession(deliver, window);
 
   return {
     client_id: clientId,
     callback: ({ credential }) => deliver(credential),
-    auto_select: effectiveAutoRestore,
+    auto_select: effectiveAutoSelect,
     cancel_on_tap_outside: true,
     ...(normalizedHint ? { login_hint: normalizedHint } : {}),
   };
