@@ -43,6 +43,10 @@ test('PROD readiness verifies trusted-main ancestry and credential segregation',
   assert.match(workflow, /Bootstrap and runtime GitHub tokens must be distinct/);
   assert.match(workflow, /Runtime token unexpectedly has Actions secrets read permission/);
   assert.match(workflow, /Runtime token unexpectedly has Actions variables read permission/);
+  assert.match(workflow, /Source-read token must be a fine-grained PAT/);
+  assert.match(workflow, /Runtime token must not access source repository/);
+  assert.match(workflow, /Source-read token must not access runtime repository/);
+  assert.doesNotMatch(workflow, /viewerPermission/);
   assert.match(workflow, /job-search-command-api\.job-search-prod\.workers\.dev/);
 });
 
