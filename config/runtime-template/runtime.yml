@@ -24,7 +24,7 @@ concurrency:
 jobs:
   runtime:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       SOURCE_SHA: ${{ inputs.source_sha }}
       APP_ENV: ${{ vars.APP_ENV }}
@@ -61,12 +61,13 @@ jobs:
           echo "Full Search is disabled for this runtime. No search execution occurred."
           exit 1
 
-      - name: Check out runtime repository
+      - name: Check out runtime repository without persisted credentials
         if: ${{ vars.SEARCH_MODE != 'disabled' }}
         uses: actions/checkout@v4
         with:
           path: runtime
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Check out exact source commit read-only
         if: ${{ vars.SEARCH_MODE != 'disabled' }}
@@ -75,24 +76,189 @@ jobs:
           repository: ${{ vars.SOURCE_REPOSITORY }}
           ref: ${{ inputs.source_sha }}
           token: ${{ secrets.SOURCE_READ_TOKEN }}
-          path: source
+          path: candidate-source
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Check out trusted control-plane baseline read-only
+        if: ${{ vars.SEARCH_MODE != 'disabled' }}
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ vars.SOURCE_REPOSITORY }}
+          ref: main
+          token: ${{ secrets.SOURCE_READ_TOKEN }}
+          path: control-plane
           persist-credentials: false
           fetch-depth: 0
 
-      - name: Verify source checkout
+      - name: Verify immutable source and trusted ancestry
         if: ${{ vars.SEARCH_MODE != 'disabled' }}
         shell: bash
         run: |
           set -euo pipefail
-          actual="$(git -C source rev-parse HEAD)"
+          actual="$(git -C candidate-source rev-parse HEAD)"
           test "${actual,,}" = "${SOURCE_SHA,,}" || { echo "Source checkout mismatch" >&2; exit 1; }
+          git -C control-plane cat-file -e "${SOURCE_SHA}^{commit}"
+          git -C control-plane merge-base --is-ancestor "$SOURCE_SHA" HEAD || {
+            echo "Runtime source_sha must remain reachable from trusted main" >&2
+            exit 1
+          }
 
       - name: TEST smoke boundary
         if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' }}
         run: |
           echo "TEST smoke policy verified immutable source checkout only. Full Search was not executed."
 
-      - name: Runtime execution handoff
+      - name: Prepare PROD search workspace from runtime snapshot
         if: ${{ vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        shell: bash
         run: |
-          echo "Runtime wrapper verified immutable source identity. PROD execution remains governed by the production phase/cutover gate."
+          set -euo pipefail
+          rm -rf search-source
+          cp -a candidate-source search-source
+          rm -rf search-source/.git search-source/data
+          cp -a runtime/data search-source/data
+          python3 -m py_compile \
+            search-source/scripts/job_search.py \
+            search-source/scripts/job_search_optimized.py \
+            search-source/scripts/job_search_apify.py \
+            search-source/scripts/job_search_runner.py \
+            search-source/scripts/source_orchestration.py \
+            search-source/scripts/job_search_web.py \
+            search-source/scripts/web_browser.py \
+            search-source/scripts/web_transport.py
+
+      - name: Install PROD browser fallback
+        if: ${{ vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        working-directory: search-source
+        run: |
+          python3 -m pip install --disable-pip-version-check -r requirements-search.txt
+          python3 -m playwright install --with-deps chromium
+
+      - name: Collect normalize filter and score in PROD
+        id: search
+        if: ${{ vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        continue-on-error: true
+        working-directory: search-source
+        env:
+          JOBSPIPE_API_KEY: ${{ secrets.JOBSPIPE_API_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          RUN_TRIGGER: ${{ inputs.run_trigger || 'manual-ui' }}
+          RUNTIME_REF: main
+          PUBLISH_BRANCH: main
+        run: python3 scripts/job_search_runner.py
+
+      - name: Validate generated PROD JSON contract
+        if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        working-directory: search-source
+        run: python3 scripts/job_search_runner.py --validate-only
+
+      - name: Stage generated PROD result files into runtime repository
+        if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in jobs.json run-status.json run-history.json search-state.json; do
+            test -f "search-source/data/$file" || { echo "Missing generated file: $file" >&2; exit 1; }
+            cp "search-source/data/$file" "runtime/data/$file"
+          done
+
+      - name: Publish PROD runtime results safely
+        if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        working-directory: runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PUBLISH_BASE_SHA: ${{ github.sha }}
+          PUBLISH_BRANCH: main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          bash ../control-plane/scripts/publish_results.sh
+          runtime_sha="$(git rev-parse HEAD)"
+          [[ "$runtime_sha" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "Invalid runtime data SHA" >&2; exit 1; }
+          echo "RUNTIME_DATA_SHA=$runtime_sha" >> "$GITHUB_ENV"
+
+      - name: Prepare trusted PROD deployment workspace
+        if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${RUNTIME_DATA_SHA:-}" || { echo "RUNTIME_DATA_SHA is required after publication" >&2; exit 1; }
+          rm -rf deployment-source
+          cp -a control-plane deployment-source
+          rm -rf deployment-source/.git
+          rm -rf deployment-source/command-api/src
+          cp -a candidate-source/command-api/src deployment-source/command-api/src
+          rm -rf deployment-source/frontend/src
+          cp -a candidate-source/frontend/src deployment-source/frontend/src
+          cp candidate-source/frontend/index.html deployment-source/frontend/index.html
+          if [ -d candidate-source/frontend/public ]; then
+            rm -rf deployment-source/frontend/public
+            cp -a candidate-source/frontend/public deployment-source/frontend/public
+          fi
+          printf '%s\n' "$SOURCE_SHA" > deployment-source/.candidate-source-sha
+          cmp control-plane/command-api/package.json deployment-source/command-api/package.json
+          cmp control-plane/command-api/wrangler.jsonc deployment-source/command-api/wrangler.jsonc
+          cmp control-plane/command-api/scripts/write-build-identity.mjs deployment-source/command-api/scripts/write-build-identity.mjs
+          cmp control-plane/frontend/package.json deployment-source/frontend/package.json
+          cmp control-plane/frontend/vite.config.js deployment-source/frontend/vite.config.js
+
+      - name: Install trusted PROD deployment dependencies
+        if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
+
+      - name: Redeploy PROD with published runtime snapshot
+        if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        working-directory: deployment-source/command-api
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          WRANGLER_SEND_METRICS: 'false'
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          APP_ENV: prod
+          TRUSTED_PAYLOAD_BUILD: '1'
+          RUNTIME_DATA_DIR: ${{ github.workspace }}/runtime/data
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime_repo_name="${GITHUB_REPOSITORY#*/}"
+          npx wrangler deploy --name "${{ vars.WORKER_NAME || 'job-search-command-api' }}" \
+            --var "APP_ENV:prod" \
+            --var "FRONTEND_ORIGIN:${{ vars.FRONTEND_ORIGIN }}" \
+            --var "GOOGLE_CLIENT_ID:${{ vars.GOOGLE_CLIENT_ID }}" \
+            --var "GITHUB_RUNTIME_OWNER:${GITHUB_REPOSITORY_OWNER}" \
+            --var "GITHUB_RUNTIME_REPO:${runtime_repo_name}" \
+            --var "GITHUB_RUNTIME_REF:main" \
+            --var "GITHUB_WORKFLOW:runtime.yml" \
+            --var "SEARCH_MODE:live" \
+            --var "SEARCH_CONFIG_PATH:data/search-config.json" \
+            --var "SOURCES_PATH:data/sources.json" \
+            --var "SOURCE_CATEGORIES_PATH:data/source-categories.json" \
+            --var "NOMENCLATURES_PATH:data/nomenclatures.json" \
+            --var "APPLICATIONS_PATH:data/applications.json"
+
+      - name: Verify PROD health after runtime redeploy
+        if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
+        env:
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if payload="$(curl --fail --silent --show-error "$FRONTEND_ORIGIN/health")"; then
+              echo "$payload" | jq -e \
+                --arg source "$SOURCE_SHA" \
+                --arg runtime "$RUNTIME_DATA_SHA" \
+                '.environment == "prod" and .source_sha == $source and .runtime_data_sha == $runtime and .runtime_repo == "Shosetzel69/job-search-prod" and .search_mode == "live" and .auth_configured == true and .github_configured == true' >/dev/null && exit 0
+            fi
+            sleep 3
+          done
+          echo "PROD health did not converge to the published runtime snapshot" >&2
+          exit 1
+
+      - name: Mark total PROD collection failure
+        if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' && steps.search.outcome != 'success' }}
+        run: |
+          echo "All configured collection queries failed. Runtime status was persisted and redeployed."
+          exit 1
