@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 
 import { INTERNAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import commandApi from '../src/index.js';
-import secureEntry from '../src/secure-entry.js';
+import secureEntry, { fullSearchAllowed } from '../src/secure-entry.js';
 
 const env = {
   APP_ENV: 'test',
@@ -21,7 +21,7 @@ const env = {
 
 const protectedDataPaths = PROTECTED_DATA_FILES.map(file => `/data/${file}`);
 
-test('all protected data assets reject missing bearer token before asset lookup', async () => {
+test('all protected data assets reject missing bearer/cookie session before asset lookup', async () => {
   assert.ok(protectedDataPaths.includes('/data/nomenclatures.json'));
   for (const path of protectedDataPaths) {
     const response = await secureEntry.fetch(new Request(`https://app.example.test${path}`), env);
@@ -30,7 +30,7 @@ test('all protected data assets reject missing bearer token before asset lookup'
   }
 });
 
-test('nomenclature admin API rejects missing bearer token before GitHub access', async () => {
+test('nomenclature admin API rejects missing bearer/cookie session before GitHub access', async () => {
   for (const [method,path] of [
     ['GET','/nomenclatures'],
     ['POST','/nomenclatures/application_statuses'],
@@ -75,4 +75,12 @@ test('preflight from a forbidden origin is rejected', async () => {
     headers: { Origin: 'https://evil.example.test' },
   }), env);
   assert.equal(response.status, 403);
+});
+
+test('full search is allowed only in explicit live search mode', () => {
+  assert.equal(fullSearchAllowed('live'), true);
+  assert.equal(fullSearchAllowed('LIVE'), true);
+  assert.equal(fullSearchAllowed('smoke'), false);
+  assert.equal(fullSearchAllowed('disabled'), false);
+  assert.equal(fullSearchAllowed(undefined), false);
 });
