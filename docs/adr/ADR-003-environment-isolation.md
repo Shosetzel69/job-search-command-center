@@ -1,9 +1,9 @@
 # ADR-003 - Medii DEV / TEST / PROD complet izolate
 
-Status: Accepted - implementation gate; Phase 6 alignment applied
+Status: Accepted - implementation gate; delivery lifecycle alignment applied
 Data initiala: 2026-09-11
-Revizie finala: 2026-09-17
-Refs: #161 #175 #177 #183
+Revizie finala: 2026-09-18
+Refs: #161 #175 #177 #183 #197 #198
 
 ## Context
 
@@ -18,6 +18,8 @@ Proiectul pastreaza principiul `free architecture`: cost operational preferabil 
 Stabilizarea baseline-ului curent a fost inchisa la 2026-09-13. Implementarea mediilor incepe numai dupa merge-ul acestui ADR si owner GO pentru #161.
 
 Revizia din 2026-09-17 aliniaza ADR-ul cu deciziile si controalele implementate in Phase 6: PROD foloseste un account Cloudflare nou si dedicat, runtime repository-ul canonic este `Shosetzel69/job-search-prod`, iar legacy PROD ramane neschimbat ca rollback target pana la un Phase 7 aprobat separat. GitHub Environments devin obligatorii pentru credentialele de deployment/control-plane conform #177.
+
+Revizia din 2026-09-18 aliniaza promovarea cu #197 si `docs/software-delivery-lifecycle.md`: DEV si TEST valideaza un candidate SHA immutable inainte de integrarea finala in `main`; dupa TEST PASS candidate-ul este integrat fara rescriere si PROD deployeaza exact acelasi SHA. `main` nu mai este o conditie prealabila pentru candidate deployment in DEV/TEST.
 
 ## Scope-ul izolarii
 
@@ -52,7 +54,8 @@ Configuratia initiala are coupling incompatibil cu izolarea ceruta:
 - full search ruleaza in source repository si publica inapoi in acelasi repository;
 - Cloudflare `Workers Scripts Write` poate avea blast radius de account daca nu este limitat prin roluri granulare disponibile;
 - source repository-ul are o cale istorica de deployment pentru `job-search-command-api`;
-- un singur SHA runtime nu identifica initial explicit atat codul de UI/API, cat si codul search executat.
+- un singur SHA runtime nu identifica initial explicit atat codul de UI/API, cat si codul search executat;
+- workflow-ul istoric DEV/TEST cere candidate-ului sa fie deja reachable din `main`, ceea ce muta integrarea inaintea validarii independente si slabeste trasabilitatea candidate-ului testat.
 
 ## Obiectiv
 
@@ -67,9 +70,21 @@ Configuratia initiala are coupling incompatibil cu izolarea ceruta:
          CF account     CF account     CF account
 ```
 
-Promotion muta numai un `SOURCE_SHA` immutable aprobat. Runtime data nu sunt promovate intre medii.
+Promotion muta numai un `SOURCE_SHA` / `CANDIDATE_SHA` immutable aprobat. Runtime data nu sunt promovate intre medii.
 
-Legacy PROD ramane un stack separat de tranzitie si rollback pana la finalizarea si acceptarea Phase 7.
+Fluxul operational canonic este:
+
+```text
+Development branch
+ -> DEV exact candidate SHA
+ -> candidate freeze
+ -> TEST exact same SHA
+ -> TEST PASS
+ -> integrate candidate without rewriting it
+ -> PROD exact same SHA
+```
+
+Legacy PROD ramane un stack separat de tranzitie si rollback pana la retragerea aprobata separat.
 
 ## Optiuni analizate
 
@@ -110,21 +125,21 @@ Nu devine datastore comun pentru cele trei runtime-uri.
 
 Dupa cutover-ul PROD, source repository-ul NU mai are voie sa deployeze direct `job-search-command-api` in niciun mediu prin Cloudflare Git integration sau alta cale implicita.
 
-Flux permis dupa cutover:
+Flux permis:
 
 ```text
-source commit -> runtime workflow -> environment Cloudflare account
+explicit candidate SHA -> controlled environment workflow -> environment Cloudflare account
 ```
 
 Flux interzis:
 
 ```text
-source push/PR -> direct command-api deploy
+source push/PR/merge -> direct implicit command-api deploy
 ```
 
 `ai-github-bridge` nu este afectat de aceasta regula cat timp ramane control-plane separat.
 
-Acceptance obligatoriu dupa cutover: push/PR in source repository produce zero deployment `job-search-command-api` in DEV/TEST/PROD.
+Acceptance obligatoriu: push/PR/merge in source repository produce zero deployment implicit `job-search-command-api` in DEV/TEST/PROD.
 
 ### 2. Runtime repositories
 
@@ -158,7 +173,7 @@ Job Search PROD
 
 Toate trei sunt dedicate environment-ului Job Search corespunzator. `Job Search PROD` este un account nou si separat de legacy PROD.
 
-Legacy PROD existent, cu origin `https://job-search-command-api.myeboda.workers.dev`, ramane complet neschimbat in Phase 6 si este rollback target pana la acceptarea Phase 7.
+Legacy PROD existent, cu origin `https://job-search-command-api.myeboda.workers.dev`, ramane complet neschimbat si este rollback target pana la o decizie separata de retragere.
 
 Fiecare account tinta contine propriul `job-search-command-api`, propriile secrets si credential de deploy.
 
@@ -169,9 +184,9 @@ Un runtime deploy credential trebuie sa aiba acces numai la account-ul/Worker-ul
 Runtime workflows executa codul canonic fara sa copieze business logic in cele trei runtime repositories.
 
 Model:
-1. workflow-ul porneste in runtime repository;
+1. workflow-ul porneste pentru un environment explicit;
 2. primeste obligatoriu `SOURCE_SHA` complet si immutable;
-3. checkout runtime repository;
+3. checkout runtime repository al environment-ului;
 4. checkout source repository exact la `SOURCE_SHA`, read-only;
 5. ruleaza scripturile/build-ul din checkout-ul aprobat conform control-plane trust model;
 6. publica numai in runtime repository-ul caller;
@@ -181,7 +196,7 @@ Accesul runtime -> source este read-only si environment-specific. PAT classic es
 
 Credentialele long-lived au expirare/rotatie documentata si nu sunt reutilizate intre environment-uri.
 
-### 5. Reusable workflow / template
+### 5. Reusable workflow / template si trusted control-plane
 
 Runtime repositories contin wrapper minim generat dintr-un template unic.
 
@@ -189,7 +204,13 @@ Business logic nu este duplicata in wrapper.
 
 Deployment/provisioning control-plane care primeste environment credentials ruleaza numai dintr-un baseline trusted/reviewed. Candidate `SOURCE_SHA` este checkout separat si inert; nu poate inlocui orchestration scripts, package manifests, Wrangler config sau build/deploy tooling care ruleaza privilegiat.
 
-Candidate-ul trebuie sa fie un commit immutable si reachable din trusted `main`/release baseline.
+Candidate identity rules:
+- pentru DEV si TEST, candidate-ul poate fi un commit immutable existent in source repository chiar daca nu este inca reachable din `main`;
+- candidate-ul trebuie verificat prin exact SHA checkout si nu prin branch mutable;
+- TEST trebuie sa primeasca exact candidate-ul frozen in DEV;
+- dupa TEST PASS candidate-ul este integrat in `main` fara squash/rebase/rescriere;
+- daca integrarea necesita conflict resolution care modifica candidate content sau SHA, TEST PASS este invalidat si se reia DEV -> TEST;
+- pentru PROD candidate-ul trebuie sa fie exact TEST-passed SHA si sa fie reachable din `main` dupa integrare.
 
 ### 6. GitHub Environments
 
@@ -200,11 +221,11 @@ Reguli:
 - un job nu primeste simultan credentialele mai multor environment-uri;
 - environment secrets/variables contin credentialele si configuratia specifica acelui environment;
 - credentialele bootstrap, runtime si source-read sunt distincte;
-- `prod` este restrictionat la calea/branch-ul de deployment aprobat folosind cel mai puternic control disponibil pe planul GitHub curent;
+- `prod` este restrictionat la calea de deployment aprobata folosind cel mai puternic control disponibil pe planul GitHub curent;
 - `owner_gate` text ramane numai defense-in-depth, nu boundary principal de autorizare;
-- Phase 7 necesita un owner GO nou si separat dupa G6 closeout.
+- PROD necesita owner GO explicit dupa TEST PASS si rollback readiness.
 
-Daca planul GitHub nu permite branch protection/rulesets suficient de puternice pentru un repository privat, riscul rezidual de single-operator authorization trebuie documentat si acceptat explicit in G6 sau eliminat prin upgrade/protectie suplimentara inainte de Phase 7.
+Daca planul GitHub nu permite branch protection/rulesets suficient de puternice pentru un repository privat, riscul rezidual de single-operator authorization trebuie documentat si acceptat explicit sau eliminat prin protectie suplimentara.
 
 ### 7. Command API si identity contract
 
@@ -220,11 +241,11 @@ RUNTIME_DATA_SHA
 SEARCH_MODE
 ```
 
-`SOURCE_SHA` este SHA-ul exact al source code-ului deployat si executat.
+`SOURCE_SHA` este SHA-ul exact al source code-ului deployat si executat. In lifecycle-ul de release acest SHA este `CANDIDATE_SHA`.
 
 `RUNTIME_DATA_SHA` este commit-ul runtime repository-ului din care a fost construit snapshot-ul de date servit de Worker.
 
-Niciunul nu poate avea fallback implicit la `main` pentru executie PROD.
+Niciunul nu poate avea fallback implicit la `main` ca payload identity.
 
 ### 8. Run identity contract
 
@@ -310,11 +331,12 @@ env bootstrap-all -> DEV + TEST only
 
 PROD NU este inclus in nicio comanda convenience/all.
 
-In Phase 6, live PROD bootstrap/deploy/cutover raman structural blocate. Phase 6 permite numai readiness/preflight non-mutating pe configuratia PROD reala.
-
-Orice live PROD mutation necesita Phase 7, `--env prod`, source SHA explicit si owner GO nou si separat dupa G6.
-
-Nicio comanda nu foloseste PROD ca default.
+Reguli lifecycle:
+- DEV poate deploya un SHA immutable nemerge-uit pentru verificare;
+- dupa DEV PASS se face candidate freeze;
+- TEST deployeaza exact candidate SHA frozen;
+- PROD ramane separat si necesita TEST PASS, integrarea candidate-ului in `main` fara rewrite, rollback readiness si owner GO;
+- nicio comanda nu foloseste PROD sau `main` ca payload default.
 
 ## Provisioning manual inevitabil
 
@@ -325,28 +347,49 @@ Owner actions pentru target-ul izolat:
 4. creeaza/mentine noul account dedicat `Job Search PROD`;
 5. configureaza GitHub Environments `dev`, `test`, `prod` cu valori environment-scoped;
 6. furnizeaza account IDs si credentials separate pe rol;
-7. confirma ca nicio actiune Phase 6 nu muta trafic sau date PROD live.
+7. autorizeaza explicit PROD numai dupa gate-urile lifecycle.
 
 Bootstrap credentials largi nu se stocheaza in Worker/runtime si se revoca/rotesc dupa provisioning daca nu mai sunt necesare.
 
 ## Promotion model
 
 ```text
-SOURCE_SHA X
-   +-> DEV
-   +-> TEST
-   +-> PROD
+approved Issue
+   -> development branch
+   -> DEV: SHA X
+   -> DEV PASS
+   -> freeze CANDIDATE_SHA = X
+   -> TEST: exact SHA X
+   -> TEST PASS
+   -> integrate X in main without rewriting X
+   -> PROD readiness + rollback + owner GO
+   -> PROD: exact SHA X
 ```
 
-Acelasi SHA este promovat. Nu se promoveaza branch-uri mutable si nu se promoveaza runtime data.
+Daca TEST esueaza:
 
-PROD promotion/cutover este o actiune Phase 7 separata; G6 nu o autorizeaza.
+```text
+TEST FAIL
+   -> DEV remediation
+   -> SHA Y
+   -> DEV PASS
+   -> freeze Y
+   -> TEST exact Y
+```
+
+Acelasi candidate SHA este promovat; nu se promoveaza branch-uri mutable si nu se promoveaza runtime data.
+
+Merge-ul in `main` nu este deploy si nu autorizeaza PROD implicit.
+
+Procedura detaliata, gate-urile si release record sunt definite in `docs/software-delivery-lifecycle.md`.
 
 ## Safety rules
 
 Deployment-ul fail closed daca:
 - environment lipseste;
 - `SOURCE_SHA` lipseste sau nu este commit SHA valid;
+- exact candidate checkout nu corespunde SHA-ului solicitat;
+- TEST candidate difera de candidate-ul frozen/promovat din DEV;
 - account ID nu corespunde environment-ului;
 - runtime repository nu corespunde environment-ului;
 - credentialul are scope neasteptat;
@@ -354,13 +397,15 @@ Deployment-ul fail closed daca:
 - DEV/TEST incearca target PROD;
 - health environment/source/runtime SHA nu corespund build-ului solicitat;
 - search policy nu corespunde environment-ului;
-- PROD live action este ceruta inainte de Phase 7 authorization.
-
-PROD necesita owner GO explicit si separat pentru Phase 7.
+- candidate-ul a fost modificat dupa freeze;
+- integrarea post-TEST rescrie candidate-ul;
+- PROD candidate nu este exact TEST-passed SHA sau nu este reachable din approved `main`;
+- rollback readiness lipseste pentru PROD;
+- owner GO lipseste pentru PROD.
 
 ## Acceptance boundary
 
-Izolarea este acceptata numai daca se demonstreaza:
+Izolarea si promovarea sunt acceptate numai daca se demonstreaza:
 - DEV nu poate scrie TEST;
 - DEV nu poate scrie PROD;
 - TEST nu poate scrie PROD;
@@ -369,12 +414,17 @@ Izolarea este acceptata numai daca se demonstreaza:
 - PROD Cloudflare credential nu poate opera asupra DEV/TEST sau legacy account;
 - runtime workflow nu poate publica in alt runtime repository;
 - promotion nu muta date;
+- DEV si TEST pot valida exact un candidate SHA fara a necesita integrare prealabila in `main`;
+- TEST primeste exact candidate-ul frozen in DEV;
+- TEST FAIL revine in DEV si genereaza candidate nou;
+- dupa TEST PASS, candidate SHA ramane reachable din `main` fara rewrite;
+- PROD deployeaza exact TEST-passed candidate;
+- merge in source repository nu produce direct `job-search-command-api` deployment;
 - `/health` identifica `environment`, `source_sha`, `runtime_repo`, `runtime_data_sha`, `search_mode`;
 - Run executa exact `source_sha` declarat de Worker;
-- push/PR in source repository nu produce direct `job-search-command-api` deployment dupa cutover;
 - compromiterea credentialelor DEV nu ofera o cale de write in TEST/PROD cu acele credentiale;
 - control-plane executabil ramane trusted si separat de candidate payload;
-- PROD authorization boundary si orice risc rezidual sunt documentate in G6.
+- PROD authorization boundary, rollback readiness si orice risc rezidual sunt documentate.
 
 ## Consecinte
 
@@ -382,35 +432,40 @@ Pozitive:
 - blast radius redus la un environment;
 - izolarea este impusa de provider permissions;
 - codul ramane unic;
+- candidate identity devine predictibila si auditabila end-to-end;
+- acelasi source SHA este verificat DEV -> TEST -> PROD;
+- `main` nu mai trebuie folosit ca staging area inainte de QA;
 - deploy/search sunt auditabile prin SHA immutable;
 - drift-ul Static Assets poate fi detectat prin `runtime_data_sha`;
-- legacy PROD ofera rollback separat in timpul cutover-ului.
+- legacy PROD ofera rollback separat in timpul tranzitiei.
 
 Trade-off-uri:
 - trei Cloudflare accounts tinta, plus legacy PROD temporar;
 - trei runtime repositories;
 - orchestration mai complex;
 - bootstrap initial necesita owner actions;
+- candidate freeze si release evidence adauga disciplina operationala;
 - GitHub owner identity si plan/quota raman shared control-plane;
 - pe planuri GitHub fara protectii avansate poate ramane un risc rezidual de single-operator authorization care necesita tratament explicit.
 
-## Impact implementare #161
+## Impact implementare
 
 Cel putin:
 - `ARCHITECTURE.md`;
-- `docs/command-api.md`;
+- `GOVERNANCE.md`;
+- `docs/software-delivery-lifecycle.md`;
+- `docs/command-api.md` unde candidate identity afecteaza contractul;
 - `CONTRIBUTING.md`;
 - `CHANGELOG.md`;
 - Command API environment/run identity;
 - `/health` contract;
 - Static Assets build flow;
-- GitHub Actions runtime orchestration;
-- Cloudflare Git integration pentru `job-search-command-api` la cutover;
+- GitHub Actions environment/promotion orchestration;
 - provisioning/deployment scripts;
-- `docs/prod-preparation-inventory.md`;
+- `docs/environment-provisioning-runbook.md`;
 - `docs/prod-cutover-rollback-runbook.md`.
 
-Acest ADR defineste tinta si boundary-urile. Phase 6 readiness nu autorizeaza Phase 7.
+Implementarea automatizarii lifecycle este urmarita separat prin #198. Acest ADR defineste tinta si boundary-urile; nu autorizeaza coding in task-ul de arhitectura #197.
 
 ## Referinte externe verificate
 
