@@ -1,389 +1,272 @@
 # Software Delivery Lifecycle - DEV -> TEST -> PROD
 
 Status: Canonical process proposal for #197
-Owner: project owner
-Scope: all functional changes, bug fixes, infrastructure changes and database migrations that can affect application behavior or production state
+Owner model: single maintainer
+Scope: functional changes, bug fixes, infrastructure changes and database migrations that can affect application behavior or production state
 
-## 1. Objective
+## 1. Goal
 
-Provide one predictable software-delivery flow with explicit responsibilities, immutable candidate identity, mandatory evidence, controlled promotion and rollback readiness.
+Keep release management predictable and safe without creating enterprise-style administration.
 
-The canonical operational flow is:
+The process must answer four questions at any time:
+
+1. What change is being released?
+2. What exact code was tested?
+3. What exact code is running in PROD?
+4. How do we return to the previous known-good PROD state?
+
+## 2. Canonical flow
 
 ```text
-Approved requirement / defect
-        |
-        v
-Development branch
-        |
-        v
-DEV deployment + technical verification
-        |
-        v
-Candidate freeze
-        |
-        v
-TEST deployment of the exact same candidate
-        |
-        v
-Independent TEST PASS + evidence review
-        |
-        v
-Merge / release authorization
-        |
-        v
-PROD preflight + rollback readiness
-        |
-        v
-Explicit owner GO
-        |
-        v
-PROD deployment of the exact validated candidate
-        |
-        v
-Production smoke / acceptance
-        |
-        v
-Closeout
+Approved Issue
+  -> development branch
+  -> DEV verification
+  -> freeze CANDIDATE_SHA
+  -> TEST exact same SHA
+  -> TEST PASS
+  -> integrate candidate in main without rewriting it
+  -> rollback check + owner GO
+  -> PROD exact same SHA
+  -> smoke PASS
+  -> close
 ```
-
-LEGACY is outside this chain and remains rollback/fallback only until separately retired.
-
-## 2. Non-negotiable rules
-
-1. `main` is not a development or debugging environment.
-2. No direct write to `main`; all source changes use a dedicated branch and pull request.
-3. DEV is the only normal environment where implementation and debugging occur.
-4. TEST performs independent validation; fixes are never implemented directly in TEST.
-5. A TEST defect returns to DEV. A new code change creates a new candidate and invalidates the previous TEST PASS.
-6. PROD receives only a candidate that passed TEST.
-7. The same immutable application `CANDIDATE_SHA` must be deployed to DEV, TEST and PROD for one promotion cycle.
-8. Runtime data are not promoted DEV -> TEST -> PROD with source code.
-9. Merge and deploy are separate actions. A merge to `main` does not authorize or trigger PROD deployment by itself.
-10. Deployment may not introduce code or configuration changes that were not part of the approved candidate/release record.
-11. Rollback readiness is a prerequisite for PROD, not an incident-time activity.
-12. LEGACY receives no normal code/config/data changes and is excluded from normal promotion automation.
-13. Any exception requires explicit owner approval and documented risk acceptance.
-
-## 3. Terminology
-
-### Development branch
-Dedicated Git branch for one approved Issue/change. The branch is mutable while development is active.
-
-### Candidate SHA
-The immutable source commit selected after DEV verification and used for promotion. It is the exact application payload identity.
-
-`CANDIDATE_SHA` and `SOURCE_SHA` are equivalent application identities in the current deployment architecture.
-
-### Candidate freeze
-The point after which the selected candidate cannot change. Any source modification produces a new SHA and a new promotion cycle.
-
-### Release record
-The permanent non-secret evidence package tying the Issue, PR, candidate, tests, migration/config state, rollback anchors and production deployment together.
-
-### Known-good PROD
-The exact production application/config/data anchors verified before a new PROD deployment and usable for rollback.
-
-## 4. Environment roles
-
-### DEV
-Purpose: implementation, debugging and first technical validation.
-
-Allowed:
-- coding and configuration work authorized by the Issue;
-- technical diagnostics;
-- unit/integration tests;
-- safe DEV data setup;
-- repeated deployment of development commits.
-
-Exit condition: one exact commit is technically verified and selected as `CANDIDATE_SHA`.
-
-### TEST
-Purpose: independent functional/integration/security validation of the frozen candidate.
-
-Rules:
-- TEST receives exactly `CANDIDATE_SHA` from DEV;
-- no coding/debug patch is applied directly in TEST;
-- QA evidence must identify the candidate SHA;
-- TEST PASS is valid only for that SHA and the recorded migration/config version.
 
 If TEST fails:
 
 ```text
 TEST FAIL
-   -> DEV remediation
-   -> new SHA
-   -> DEV verification
-   -> new candidate freeze
-   -> TEST retest
+  -> DEV remediation
+  -> new SHA
+  -> DEV verification
+  -> TEST retest
 ```
+
+LEGACY stays outside this chain and remains rollback/fallback only until separately retired.
+
+## 3. Non-negotiable rules
+
+1. `main` is not a development, debugging or QA environment.
+2. No direct write to `main`; source changes use branch + PR.
+3. DEV is the normal implementation/debugging environment.
+4. TEST validates the exact candidate; fixes never happen directly in TEST.
+5. One immutable `CANDIDATE_SHA` is promoted DEV -> TEST -> PROD.
+6. Any source change after freeze creates a new candidate and invalidates the previous TEST result.
+7. Merge to `main` is separate from PROD deployment and does not authorize PROD.
+8. After TEST PASS, candidate integration must preserve the tested commit identity. If squash/rebase/conflict resolution changes it, restart DEV -> TEST with a new SHA.
+9. PROD requires explicit owner GO.
+10. Rollback must be known before PROD deployment.
+11. Runtime data are environment-local; DEV/TEST data are never promoted or used as PROD rollback data.
+12. LEGACY is excluded from normal release automation.
+
+## 4. Environment roles
+
+### DEV
+Implementation, debugging, automated tests and first technical verification.
+
+Exit condition: implementation is stable enough to select one exact `CANDIDATE_SHA`.
+
+### TEST
+Independent functional/integration validation of the frozen candidate.
+
+Required:
+- exact same `CANDIDATE_SHA` as DEV;
+- QA verdict tied to that SHA;
+- no unresolved blocker/major defect.
+
+Any failure returns to DEV.
 
 ### PROD
-Purpose: serve the accepted software release.
+Runs only the TEST-passed candidate after owner authorization.
 
-Rules:
-- candidate must have TEST PASS;
-- release evidence must be reviewed;
-- rollback must be ready;
-- explicit owner GO is mandatory;
-- deployment uses exactly the validated candidate identity;
-- only smoke/acceptance validation follows unless a separately approved production test requires more.
+Default post-deploy validation is a small smoke test, not a second full QA cycle.
 
 ### LEGACY
-Purpose: temporary rollback/fallback only.
+Temporary fallback only. No normal code/config/data change.
 
-Hard rule: no development, QA, promotion, configuration change, data change or repurposing through the normal lifecycle.
+## 5. Five release gates
 
-## 5. Canonical gates
+### G1 - Scope approved
 
-| Gate | Name | Required outcome | Mandatory deliverables |
-| --- | --- | --- | --- |
-| G0 | Requirement approval | Scope authorized | approved Issue, acceptance criteria, architecture decision/ADR when required |
-| G1 | Development complete | Implementation complete on branch | code/config/docs, automated tests, implementation notes, PR |
-| G2 | DEV PASS | Candidate technically verified in DEV | DEV deploy evidence, tests, `/health` identity where relevant, no unresolved blocker |
-| G3 | Candidate freeze | One immutable candidate selected | `CANDIDATE_SHA`, source baseline SHA, PR number, migration/config version, release-record draft |
-| G4 | TEST PASS | Exact candidate independently validated | TEST deploy evidence, QA report, defects resolved, exact SHA confirmation |
-| G5 | Release approval | Candidate eligible for production | TEST evidence review, clean merge eligibility, final release record, no candidate mutation |
-| G6 | PROD readiness / GO | Rollback and target verified | PROD preflight, known-good anchors, backup/restore evidence if required, rollback plan, owner GO |
-| G7 | PROD acceptance | Release operationally accepted | deploy run, `/health`, smoke, monitoring check, final release record |
+Minimum:
+- approved Issue;
+- clear acceptance criteria;
+- ADR only if the change alters an architectural boundary.
 
-No gate is inferred from a previous phase. Each gate requires its own evidence.
+### G2 - DEV PASS + candidate freeze
 
-## 6. Source-control contract
+Minimum:
+- implementation complete on branch;
+- required automated tests green;
+- DEV verification PASS;
+- exact `CANDIDATE_SHA` recorded.
 
-### 6.1 Development
+From this point, candidate mutation invalidates the promotion cycle.
 
-Development starts from a verified `main` baseline on a dedicated branch.
+### G3 - TEST PASS
 
-Before candidate freeze, the branch must be synchronized with the intended current source baseline and all required CI checks must pass.
+Minimum:
+- TEST runs the exact frozen candidate;
+- expected behavior validated;
+- no unresolved blocker/major defect;
+- verdict recorded.
 
-### 6.2 Candidate freeze
+### G4 - PROD GO
 
-After DEV PASS:
+Minimum:
+- TEST-passed candidate integrated in `main` without rewriting it;
+- candidate SHA remains reachable from `main`;
+- previous known-good PROD `SOURCE_SHA` and `RUNTIME_DATA_SHA` captured;
+- rollback action/reference known;
+- explicit owner GO.
+
+Additional requirements are conditional:
+- config rollback detail only if config changes;
+- migration detail only if DB/schema/data changes;
+- destructive/non-reversible DB change requires validated backup and non-PROD restore proof.
+
+### G5 - PROD PASS / Close
+
+Minimum:
+- PROD runs the expected candidate;
+- `/health.source_sha` matches `CANDIDATE_SHA`;
+- core smoke PASS;
+- release record completed.
+
+The Issue may then close.
+
+## 6. Candidate identity contract
+
+`CANDIDATE_SHA` is the exact application source commit selected after DEV verification.
+
+For one promotion cycle:
 
 ```text
-CANDIDATE_SHA = exact branch HEAD selected for promotion
+DEV source_sha  = CANDIDATE_SHA
+TEST source_sha = CANDIDATE_SHA
+PROD source_sha = CANDIDATE_SHA
 ```
 
-The release record stores:
-- candidate SHA;
-- baseline `main` SHA used for the final DEV verification;
-- Issue and PR;
-- relevant schema/config version.
+DEV/TEST may deploy this immutable commit before it is merged into `main`.
 
-The branch may not be modified while that candidate is under TEST. If it is modified, the previous candidate is retired and the lifecycle returns to DEV.
+PROD may deploy it only after TEST PASS and after the same commit is reachable from approved `main` history.
 
-### 6.3 TEST promotion
+A workflow must never silently replace the requested candidate with current `main`, a later branch HEAD, a merge commit, or local modifications.
 
-TEST must deploy the exact `CANDIDATE_SHA`.
+## 7. Minimal Release Record
 
-The TEST workflow must not silently substitute:
-- current `main`;
-- branch HEAD after freeze;
-- another merge commit;
-- locally modified files.
-
-### 6.4 Merge after TEST PASS
-
-After TEST PASS, the candidate is integrated into `main` without changing the tested candidate identity.
-
-Required rules:
-- no squash merge for a frozen candidate;
-- no rebase that rewrites the candidate SHA after TEST PASS;
-- no manual merge-conflict resolution that changes candidate content after TEST PASS;
-- the candidate SHA must remain reachable from the resulting `main` history.
-
-If clean integration cannot be achieved, the candidate is invalidated, synchronized with the new baseline, assigned a new SHA and returned through DEV and TEST.
-
-### 6.5 PROD deployment
-
-PROD deploys `CANDIDATE_SHA`, not an arbitrary current `main` HEAD.
-
-Before deployment automation must verify at minimum:
-- candidate SHA is the TEST-passed SHA from the release record;
-- candidate SHA is reachable from approved `main` after integration;
-- no newer SHA is silently substituted;
-- PROD target/environment is explicit;
-- rollback anchors are recorded.
-
-`main` is therefore the approved integration/history line; the immutable candidate is the release payload identity.
-
-## 7. Release record
-
-Every promotion to PROD must have one release record containing at least:
+Every PROD promotion has one short, non-secret record:
 
 ```text
-Release / Issue ID
-PR
+Issue / PR
 CANDIDATE_SHA
-baseline main SHA at freeze
-post-merge main SHA
-DEV deployment/run evidence
-DEV verdict
-TEST deployment/run evidence
-TEST QA ticket/report
-TEST verdict
-schema/migration version
-configuration version/change summary
-known-good PROD SOURCE_SHA
-known-good PROD RUNTIME_DATA_SHA
-known-good PROD config anchor
-backup identifier/checksum where required
-rollback procedure
-PROD preflight evidence
-owner GO
-PROD deployment run
-post-deploy /health identity
-smoke/acceptance verdict
-final status
+DEV PASS evidence
+TEST PASS evidence
+Previous PROD SOURCE_SHA / RUNTIME_DATA_SHA
+Rollback action/reference
+Owner GO
+PROD deploy evidence
+PROD smoke verdict
 ```
 
-The record must not contain secret values.
+Only add fields that are actually relevant to the release:
+- configuration change/rollback;
+- schema/migration version;
+- backup identifier/checksum/restore proof;
+- release-specific risk or acceptance note.
 
-## 8. Rollback contract
+The record must remain short enough to maintain consistently.
 
-Rollback strategy is selected before G6 according to change type.
+## 8. Rollback
 
-### 8.1 Code-only change
+Rollback is prepared before PROD, not invented after failure.
 
-Minimum rollback:
-- known-good PROD `SOURCE_SHA` captured before deploy;
-- deployment mechanism capable of redeploying that exact SHA;
-- compatible current runtime/config state confirmed.
+### Normal code release
 
-### 8.2 Configuration change
+Minimum:
+- previous known-good PROD source identity;
+- previous runtime identity where relevant;
+- known procedure to redeploy/restore that state.
 
-Minimum rollback:
-- previous non-secret configuration/version recorded;
-- secret names/scopes verified without recording secret values;
-- explicit procedure to restore prior configuration;
-- post-restore health verification.
+### Configuration change
 
-### 8.3 Database/schema change
+Also capture the previous configuration reference and restoration action.
 
-Preferred strategy: backward-compatible expand/contract migration.
+### Database/schema/data change
 
-Before PROD:
-- migration version recorded;
-- application compatibility with old/new schema defined;
-- rollback or forward-fix strategy documented;
-- for destructive/non-reversible steps, validated backup is mandatory;
-- backup file checksum is recorded;
-- restore has been demonstrated in a non-PROD target before destructive PROD change.
+Use backward-compatible changes where practical.
 
-No destructive schema/data migration may rely on an untested rollback assumption.
+For destructive/non-reversible changes only:
+- backup required;
+- checksum verified;
+- restore demonstrated in non-PROD before PROD mutation.
 
-### 8.4 Runtime data
+DEV/TEST data are never PROD rollback data.
 
-DEV/TEST runtime data are never used as PROD rollback data.
+## 9. Production failure
 
-If PROD runtime data must be restored, only PROD backup/snapshot/history may be used.
-
-## 9. Stop conditions
-
-Promotion stops immediately when any of these occurs:
-- candidate identity mismatch;
-- candidate changed after freeze;
-- TEST executed against a different SHA;
-- TEST has unresolved blocker/major defect;
-- merge requires candidate-changing conflict resolution;
-- PROD target is ambiguous;
-- known-good PROD anchor is missing;
-- rollback procedure is undefined;
-- destructive DB change has no validated backup/restore path;
-- secrets would need to be exposed or committed;
-- cross-environment credential/isolation check fails;
-- owner GO is missing.
-
-## 10. Production failure handling
-
-If PROD smoke/acceptance fails:
+If PROD smoke fails:
 
 ```text
-STOP new PROD actions
-  -> classify incident
-  -> execute predefined rollback when rollback criteria are met
+STOP
+  -> execute predefined rollback when applicable
   -> verify restored PROD identity/health
   -> preserve evidence
-  -> create/remediate defect in DEV
-  -> generate new candidate
+  -> fix in DEV
+  -> new candidate
   -> DEV -> TEST -> PROD again
 ```
 
-A production failure does not authorize an ad-hoc patch in PROD or direct change on `main`.
+No ad-hoc PROD patch and no direct `main` fix.
 
-## 11. Hotfix flow
+## 10. Hotfix
 
-Urgency may shorten elapsed time, but does not remove identity, TEST or rollback controls.
+Urgency may reduce test breadth but not the core controls:
 
 ```text
-production defect
-  -> hotfix Issue
-  -> hotfix branch from approved baseline
-  -> DEV verification
-  -> candidate freeze
-  -> targeted TEST validation
-  -> release approval + rollback readiness
-  -> owner GO
+hotfix Issue
+  -> DEV
+  -> freeze SHA
+  -> targeted TEST
+  -> rollback check + owner GO
   -> PROD
 ```
 
-Any deliberately reduced test scope must be recorded as explicit owner risk acceptance. The same immutable candidate rule still applies.
+Any reduced test scope is explicitly accepted by the owner.
 
-## 12. Responsibilities
+## 11. Automation: safety without administration
 
-### Owner
-- approves scope/architecture changes;
-- reviews gate evidence where required;
-- authorizes PROD;
-- accepts explicit residual risk.
+Automate controls that prevent mistakes without requiring extra owner work:
 
-### Development executor
-- implements only approved scope in DEV;
-- produces tests and implementation evidence;
-- never fixes directly in TEST/PROD;
-- prepares rollback-relevant technical information.
+- one deployment at a time per environment (`concurrency` / deployment lock);
+- explicit environment;
+- full immutable SHA input;
+- exact checkout verification;
+- `/health.source_sha` verification;
+- no implicit `main` fallback;
+- no merge/push-triggered implicit PROD deployment;
+- PROD requires the TEST-passed candidate after it is reachable from `main`.
 
-### Independent QA / TEST executor
-- validates the exact frozen candidate;
-- records reproducible evidence;
-- does not modify implementation;
-- returns failures to DEV.
+Deferred until project scale justifies them:
+- canary percentage rollouts;
+- release trains;
+- CAB/change-board processes;
+- multi-person approval chains;
+- formal observation windows;
+- complex release classification/scoring.
 
-### Architecture
-- defines boundaries, promotion contract and rollback requirements;
-- reviews architectural deviations;
-- does not implement code changes in architecture tasks.
+## 12. Definition of Done
 
-## 13. Required automation behavior
-
-Deployment automation must eventually enforce the lifecycle rather than only document it.
-
-Required controls:
-- DEV/TEST can deploy an explicit immutable candidate SHA without requiring it to be already merged into `main`;
-- TEST promotion proves it is using the frozen DEV candidate;
-- PROD requires the TEST-passed candidate identity;
-- PROD verifies that candidate is reachable from approved `main` after integration;
-- no workflow silently defaults to `main` as payload identity;
-- environment is always explicit;
-- release/promotion evidence is non-secret and traceable;
-- existing environment isolation and trusted-control-plane protections remain intact.
-
-Implementation of these controls is a separate Development task derived from #197.
-
-## 14. Definition of Done for a software change
-
-A change is complete only when:
+A software change is complete when:
 - approved scope is implemented;
-- automated tests are green;
 - DEV PASS exists;
-- frozen candidate identity is recorded;
-- TEST PASS exists for that exact candidate;
-- candidate is integrated without mutation;
-- rollback readiness was verified before PROD;
+- one frozen candidate SHA is recorded;
+- TEST PASS exists for that exact SHA;
+- candidate is integrated without identity rewrite;
+- rollback is known;
 - owner GO is recorded;
-- PROD runs the exact validated candidate;
-- production smoke/acceptance passes;
-- release record is complete;
-- documentation reflects actual behavior;
-- relevant Issues are closed only after acceptance.
+- PROD runs the exact candidate;
+- smoke passes;
+- minimal Release Record is complete;
+- relevant documentation reflects actual behavior.
+
+Implementation enforcement is tracked separately in #198.
