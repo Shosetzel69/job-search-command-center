@@ -1,7 +1,7 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.5`
-Ultima actualizare: `2026-09-10`
+Versiune document: `v1.6`
+Ultima actualizare: `2026-09-18`
 
 ## 1. Principiu
 
@@ -9,9 +9,11 @@ Proiectul are un singur owner. Cerintele, schimbarile de scop si deciziile arhit
 
 Flux formal:
 
-`Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare`
+`Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> DEV -> TEST -> PROD`
 
 Nu exista trecere directa din `Ideas / Requirements` in `Development`.
+
+Procesul operational complet de livrare este definit in `docs/software-delivery-lifecycle.md`.
 
 ## 2. Etapele fluxului
 
@@ -93,12 +95,29 @@ In Development se pot face:
 - pull request;
 - actualizarea documentatiei afectate.
 
+Development se executa pe branch dedicat. `main`, TEST si PROD nu sunt medii de implementare sau debugging.
+
+Dupa implementare se aplica obligatoriu lifecycle-ul definit in `docs/software-delivery-lifecycle.md`:
+
+```text
+DEV verification
+-> candidate freeze
+-> TEST independent validation
+-> release approval
+-> PROD readiness + rollback
+-> owner GO
+-> PROD
+```
+
+Un defect gasit in TEST sau PROD revine in DEV. Nu se aplica patch-uri ad-hoc direct in TEST/PROD.
+
 ## 3. Surse de adevar si precedenta
 
 Documentele de referinta obligatorii sunt:
 
 - `ARCHITECTURE.md` - arhitectura canonica si adevar tehnic;
 - `GOVERNANCE.md` - reguli de proces, decizie si control;
+- `docs/software-delivery-lifecycle.md` - procesul canonic DEV -> TEST -> PROD, gate-uri, candidate identity si rollback;
 - `.ai-instructions.md` - reguli obligatorii de lucru pentru AI;
 - `docs/requirements.md` - cerinte;
 - `docs/functionalitati.md` - comportament implementat;
@@ -113,7 +132,7 @@ Documentele de referinta obligatorii sunt:
 Precedenta:
 
 - fapte tehnice si boundary-uri -> `ARCHITECTURE.md`;
-- proces, aprobare si control -> `GOVERNANCE.md`;
+- proces, aprobare si control -> `GOVERNANCE.md` + `docs/software-delivery-lifecycle.md`;
 - comportamentul AI -> `.ai-instructions.md`.
 
 Daca documentatia contrazice codul sau doua documente se contrazic, discrepanta se semnaleaza si se clarifica inainte de modificari functionale.
@@ -175,13 +194,16 @@ Refactorizarea in afara scope-ului aprobat se propune separat. Daca este necesar
 ## 5. Cod, Issues si branching
 
 - `main` trebuie sa ramana coerent si deployable;
+- `main` nu este mediu de development, debugging sau QA;
 - nu se face push direct pe `main`;
 - orice schimbare aprobata se face pe branch dedicat si se integreaza prin pull request;
 - cerintele, defectele si change request-urile relevante se urmaresc prin GitHub Issues;
 - codul functional nu se modifica in cadrul unei actualizari strict documentare;
 - fiecare Issue ramane deschis pana la validarea criteriilor de acceptare;
 - PR-ul trebuie sa permita verificarea clara a modificarilor fata de baseline-ul GitHub de la care a pornit taskul;
-- modificarile care depasesc scope-ul Issue-ului nu se includ silent in acelasi PR.
+- modificarile care depasesc scope-ul Issue-ului nu se includ silent in acelasi PR;
+- dupa candidate freeze, branch-ul nu se modifica; orice modificare genereaza un nou candidate SHA si reia DEV -> TEST;
+- un TEST PASS este valabil numai pentru SHA-ul exact testat.
 
 ### 5.1 Branch Target Safety Rule
 
@@ -219,10 +241,12 @@ Pentru logica critica se mentin teste pentru:
 
 CI trebuie sa valideze cel putin Python, JSON, React/Vite si Cloudflare Worker dry-run.
 
+TEST este mediul canonic de validare independenta a candidate-ului frozen. QA trebuie sa inregistreze SHA-ul exact testat si verdictul aferent.
+
 ## 7. Securitate
 
 - secretele nu se introduc in cod, documentatie sau frontend;
-- Google ID token ramane numai in memoria paginii;
+- Google ID token ramane numai in memoria paginii sau in mecanismul server-side aprobat de sesiune;
 - `GITHUB_TOKEN` ramane Cloudflare Secret;
 - cheile providerilor raman GitHub Actions Secrets;
 - datele private sunt accesate prin Cloudflare Worker;
@@ -242,24 +266,101 @@ Pentru orice implementare sau schimbare functionala, documentatia de analiza aso
 
 Nu se creeaza commit numai pentru documentatie daca nu exista o diferenta materiala de documentat.
 
-## 9. Deploy si promovare
+## 9. Deploy, promovare si release
 
-### 9.1 Deploy Immutability Rule
+Procesul canonic este definit in `docs/software-delivery-lifecycle.md`.
+
+Flux operational:
+
+```text
+approved change
+-> development branch
+-> DEV verification
+-> candidate freeze
+-> TEST exact candidate
+-> TEST PASS
+-> integration/release approval
+-> PROD readiness + rollback
+-> owner GO
+-> PROD exact candidate
+-> smoke/acceptance
+```
+
+### 9.1 Candidate Identity Rule
+
+Un release foloseste un `CANDIDATE_SHA` immutable.
+
+Reguli:
+
+- DEV si TEST trebuie sa ruleze exact acelasi SHA pentru ciclul de promovare;
+- orice modificare dupa freeze produce un SHA nou si invalideaza TEST PASS anterior;
+- dupa TEST PASS, integrarea in `main` nu poate rescrie candidate-ul prin squash/rebase;
+- daca integrarea necesita conflict resolution care modifica continutul candidate-ului, candidate-ul se invalideaza si revine in DEV/TEST;
+- PROD deployeaza exact candidate-ul validat, dupa ce acesta este integrat/reachable din `main`;
+- `main` este linia aprobata de integrare/history, nu substitut implicit pentru payload identity.
+
+### 9.2 Deploy Immutability Rule
 
 Deploy-ul nu este o etapa de development si nu poate introduce modificari noi.
 
 Pentru PROD:
 
-`PR aprobat -> merge commit -> CI -> deploy exact al commitului/artefactului rezultat`
+```text
+TEST PASS pe CANDIDATE_SHA
+-> candidate integrat fara mutatie in main
+-> PROD preflight + rollback ready
+-> owner GO
+-> deploy exact CANDIDATE_SHA
+```
 
 Reguli:
 
-- nu se fac patch-uri locale, editari manuale sau modificari intermediare intre merge si deploy;
-- un artefact diferit de cel rezultat din commitul aprobat nu se promoveaza ca acelasi release;
-- daca apare o problema dupa merge, se creeaza fix separat prin branch + PR, apoi se face un nou deploy;
+- nu se fac patch-uri locale, editari manuale sau modificari intermediare intre TEST PASS si deploy;
+- un artefact diferit de candidate-ul validat nu se promoveaza ca acelasi release;
+- daca apare o problema dupa TEST PASS, se creeaza fix separat in DEV, se genereaza SHA nou si se reia ciclul;
 - deploy-ul manual dintr-o copie locala modificata este interzis pentru PROD;
 - copia locala poate fi folosita pentru development/testare, dar nu ca sursa de release;
-- dupa deploy se pastreaza trasabilitatea la commitul GitHub si, unde platforma ofera, Version ID / Build ID / deployment URL.
+- dupa deploy se pastreaza trasabilitatea la candidate SHA, post-merge main SHA si, unde platforma ofera, Version ID / Build ID / deployment URL.
+
+### 9.3 Merge is not Deploy Rule
+
+Merge-ul in `main` si deploy-ul sunt evenimente separate.
+
+- merge-ul nu autorizeaza implicit PROD;
+- merge-ul nu trebuie sa declanseze silent un deploy functional;
+- PROD necesita propriul readiness gate si owner GO;
+- daca un workflow face deploy automat doar prin push/merge pe `main`, acesta este incompatibil cu lifecycle-ul canonic daca nu exista un gate de release echivalent.
+
+### 9.4 Rollback Readiness Rule
+
+Niciun PROD deploy nu porneste fara rollback definit inainte de executie.
+
+Minimum:
+
+- known-good PROD source identity;
+- known-good runtime/config identity;
+- procedura de redeploy/restore;
+- pentru modificari DB destructive sau greu reversibile: backup verificat, checksum si restore demonstrat non-PROD;
+- criterii clare pentru activarea rollback-ului.
+
+Rollback-ul nu foloseste date DEV/TEST ca date PROD.
+
+### 9.5 Release Record Rule
+
+Fiecare promovare PROD trebuie sa aiba un release record non-secret care leaga minimum:
+
+- Issue / PR;
+- `CANDIDATE_SHA`;
+- baseline main SHA la freeze;
+- post-merge main SHA;
+- DEV evidence;
+- TEST evidence + verdict;
+- schema/config version;
+- known-good PROD anchors;
+- rollback procedure;
+- owner GO;
+- PROD deploy evidence;
+- smoke/acceptance verdict.
 
 ## 10. Versionare
 
