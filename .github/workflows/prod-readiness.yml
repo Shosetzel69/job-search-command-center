@@ -94,16 +94,28 @@ jobs:
           runtime_repo="Shosetzel69/job-search-prod"
           source_repo="Shosetzel69/job-search-command-center"
 
-          bootstrap_permission="$(GH_TOKEN="$BOOTSTRAP_TOKEN" gh repo view "$runtime_repo" --json viewerPermission --jq .viewerPermission)"
-          runtime_permission="$(GH_TOKEN="$RUNTIME_TOKEN" gh repo view "$runtime_repo" --json viewerPermission --jq .viewerPermission)"
-          source_permission="$(GH_TOKEN="$SOURCE_READ_TOKEN" gh repo view "$source_repo" --json viewerPermission --jq .viewerPermission)"
+          test "$BOOTSTRAP_TOKEN" != "$RUNTIME_TOKEN" || { echo "Bootstrap and runtime GitHub tokens must be distinct" >&2; exit 1; }
+          test "$RUNTIME_TOKEN" != "$SOURCE_READ_TOKEN" || { echo "Runtime and source-read GitHub tokens must be distinct" >&2; exit 1; }
+          test "$BOOTSTRAP_TOKEN" != "$SOURCE_READ_TOKEN" || { echo "Bootstrap and source-read GitHub tokens must be distinct" >&2; exit 1; }
 
-          case "$bootstrap_permission" in WRITE|MAINTAIN|ADMIN) ;; *) echo "Bootstrap token lacks runtime repository write permission" >&2; exit 1 ;; esac
-          case "$runtime_permission" in WRITE|MAINTAIN|ADMIN) ;; *) echo "Runtime token lacks runtime repository write permission" >&2; exit 1 ;; esac
-          case "$source_permission" in READ|TRIAGE) ;; *) echo "Source-read token is not read-only on source repository" >&2; exit 1 ;; esac
+          # Fine-grained PAT permission levels cannot be inferred from viewerPermission for an owner account.
+          # Verify repository scoping and only exercise SOURCE_READ_TOKEN through read-only API calls.
+          case "$SOURCE_READ_TOKEN" in
+            github_pat_*) ;;
+            *) echo "Source-read token must be a fine-grained PAT" >&2; exit 1 ;;
+          esac
 
-          runtime_source_permission="$(GH_TOKEN="$RUNTIME_TOKEN" gh repo view "$source_repo" --json viewerPermission --jq .viewerPermission 2>/dev/null || echo NONE)"
-          case "$runtime_source_permission" in WRITE|MAINTAIN|ADMIN) echo "Runtime token must not have source write permission" >&2; exit 1 ;; esac
+          GH_TOKEN="$RUNTIME_TOKEN" gh api "repos/$runtime_repo" --silent >/dev/null
+          if GH_TOKEN="$RUNTIME_TOKEN" gh api "repos/$source_repo" --silent >/dev/null 2>&1; then
+            echo "Runtime token must not access source repository" >&2
+            exit 1
+          fi
+
+          GH_TOKEN="$SOURCE_READ_TOKEN" gh api "repos/$source_repo/commits/$SOURCE_SHA" --silent >/dev/null
+          if GH_TOKEN="$SOURCE_READ_TOKEN" gh api "repos/$runtime_repo" --silent >/dev/null 2>&1; then
+            echo "Source-read token must not access runtime repository" >&2
+            exit 1
+          fi
 
           if GH_TOKEN="$RUNTIME_TOKEN" gh api "repos/$runtime_repo/actions/secrets" --silent >/dev/null 2>&1; then
             echo "Runtime token unexpectedly has Actions secrets read permission" >&2
@@ -116,8 +128,7 @@ jobs:
 
           GH_TOKEN="$BOOTSTRAP_TOKEN" gh api "repos/$runtime_repo/actions/secrets" --silent >/dev/null
           GH_TOKEN="$BOOTSTRAP_TOKEN" gh api "repos/$runtime_repo/actions/variables" --silent >/dev/null
-          GH_TOKEN="$SOURCE_READ_TOKEN" gh api "repos/$source_repo/commits/$SOURCE_SHA" --silent >/dev/null
-          echo "GitHub credential role boundaries verified without mutation."
+          echo "GitHub credential repository boundaries verified without mutation."
 
       - name: Verify Cloudflare PROD token and dedicated Worker target without mutation
         env:
