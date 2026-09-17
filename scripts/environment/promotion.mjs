@@ -38,25 +38,24 @@ function normalizeHealth(health, environment, candidateSha) {
     throw new Error(`${environment.toUpperCase()} health evidence is missing`);
   }
   if (health.status !== 'ok') throw new Error(`${environment.toUpperCase()} health status must be ok`);
-  if (health.environment !== environment) {
-    throw new Error(`${environment.toUpperCase()} health environment mismatch`);
-  }
+  if (health.environment !== environment) throw new Error(`${environment.toUpperCase()} health environment mismatch`);
+
   const sourceSha = requireSha(health.source_sha, `${environment}.health.source_sha`);
   if (sourceSha !== candidateSha) {
     throw new Error(`${environment.toUpperCase()} health source_sha does not match CANDIDATE_SHA`);
   }
-  const runtimeDataSha = requireSha(health.runtime_data_sha, `${environment}.health.runtime_data_sha`);
+
   return {
     environment,
     source_sha: sourceSha,
     runtime_repo: requireText(health.runtime_repo, `${environment}.health.runtime_repo`),
     runtime_ref: requireText(health.runtime_ref, `${environment}.health.runtime_ref`),
-    runtime_data_sha: runtimeDataSha,
+    runtime_data_sha: requireSha(health.runtime_data_sha, `${environment}.health.runtime_data_sha`),
     search_mode: requireText(health.search_mode, `${environment}.health.search_mode`),
   };
 }
 
-function normalizeRunEvidence({ environment, candidateSha, runId, runUrl, health }) {
+function normalizeDeploymentEvidence({ environment, candidateSha, runId, runUrl, health }) {
   return {
     verdict: 'PASS',
     run_id: requireRunId(runId),
@@ -71,18 +70,20 @@ function assertBaseRecord(record, expectedStage, candidateSha) {
   }
   if (record.schema_version !== SCHEMA_VERSION) throw new Error('Unsupported promotion evidence schema_version');
   if (record.stage !== expectedStage) throw new Error(`Promotion evidence must be ${expectedStage}`);
+
   const expectedSha = requireSha(candidateSha, 'CANDIDATE_SHA');
-  const recordSha = requireSha(record.candidate_sha, 'record.candidate_sha');
-  if (recordSha !== expectedSha) throw new Error('Promotion evidence candidate does not match requested CANDIDATE_SHA');
+  if (requireSha(record.candidate_sha, 'record.candidate_sha') !== expectedSha) {
+    throw new Error('Promotion evidence candidate does not match requested CANDIDATE_SHA');
+  }
   requireText(record.issue_pr, 'record.issue_pr');
   return expectedSha;
 }
 
-function assertPassEvidence(evidence, environment, candidateSha) {
+function assertDeploymentEvidence(evidence, environment, candidateSha) {
   if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
-    throw new Error(`${environment.toUpperCase()} PASS evidence is missing`);
+    throw new Error(`${environment.toUpperCase()} deployment evidence is missing`);
   }
-  if (evidence.verdict !== 'PASS') throw new Error(`${environment.toUpperCase()} verdict must be PASS`);
+  if (evidence.verdict !== 'PASS') throw new Error(`${environment.toUpperCase()} deployment verdict must be PASS`);
   requireRunId(evidence.run_id, `${environment}.run_id`);
   requireText(evidence.run_url, `${environment}.run_url`);
   if (evidence.environment !== environment) throw new Error(`${environment.toUpperCase()} evidence environment mismatch`);
@@ -100,31 +101,72 @@ export function createDevPassRecord({ candidateSha, issuePr, runId, runUrl, heal
     issue_pr: requireText(issuePr, 'Issue / PR'),
     candidate_sha: sha,
     created_at: createdAt,
-    dev_pass: normalizeRunEvidence({ environment: 'dev', candidateSha: sha, runId, runUrl, health }),
+    dev_pass: normalizeDeploymentEvidence({ environment: 'dev', candidateSha: sha, runId, runUrl, health }),
   };
 }
 
 export function assertDevPassRecord(record, candidateSha) {
   const sha = assertBaseRecord(record, 'dev_pass', candidateSha);
-  assertPassEvidence(record.dev_pass, 'dev', sha);
+  assertDeploymentEvidence(record.dev_pass, 'dev', sha);
   return record;
 }
 
-export function createTestPassRecord({ devRecord, candidateSha, runId, runUrl, health, createdAt = new Date().toISOString() }) {
+export function createTestDeployedRecord({ devRecord, candidateSha, runId, runUrl, health, createdAt = new Date().toISOString() }) {
   const sha = requireSha(candidateSha, 'CANDIDATE_SHA');
   assertDevPassRecord(devRecord, sha);
   return {
     ...devRecord,
+    stage: 'test_deployed',
+    created_at: createdAt,
+    test_deploy: normalizeDeploymentEvidence({ environment: 'test', candidateSha: sha, runId, runUrl, health }),
+  };
+}
+
+export function assertTestDeployedRecord(record, candidateSha) {
+  const sha = assertBaseRecord(record, 'test_deployed', candidateSha);
+  assertDeploymentEvidence(record.dev_pass, 'dev', sha);
+  assertDeploymentEvidence(record.test_deploy, 'test', sha);
+  return record;
+}
+
+export function createTestPassRecord({
+  testDeployedRecord,
+  candidateSha,
+  qaEvidenceReference,
+  runId,
+  runUrl,
+  createdAt = new Date().toISOString(),
+}) {
+  const sha = requireSha(candidateSha, 'CANDIDATE_SHA');
+  assertTestDeployedRecord(testDeployedRecord, sha);
+  return {
+    ...testDeployedRecord,
     stage: 'test_pass',
     created_at: createdAt,
-    test_pass: normalizeRunEvidence({ environment: 'test', candidateSha: sha, runId, runUrl, health }),
+    test_pass: {
+      verdict: 'PASS',
+      evidence_reference: requireText(qaEvidenceReference, 'test_evidence_reference'),
+      attestation_run_id: requireRunId(runId, 'attestation_run_id'),
+      attestation_run_url: requireText(runUrl, 'attestation_run_url'),
+      source_sha: sha,
+    },
   };
 }
 
 export function assertTestPassRecord(record, candidateSha) {
   const sha = assertBaseRecord(record, 'test_pass', candidateSha);
-  assertPassEvidence(record.dev_pass, 'dev', sha);
-  assertPassEvidence(record.test_pass, 'test', sha);
+  assertDeploymentEvidence(record.dev_pass, 'dev', sha);
+  assertDeploymentEvidence(record.test_deploy, 'test', sha);
+  if (!record.test_pass || typeof record.test_pass !== 'object' || Array.isArray(record.test_pass)) {
+    throw new Error('TEST PASS attestation is missing');
+  }
+  if (record.test_pass.verdict !== 'PASS') throw new Error('TEST verdict must be PASS');
+  if (requireSha(record.test_pass.source_sha, 'test_pass.source_sha') !== sha) {
+    throw new Error('TEST PASS source_sha does not match CANDIDATE_SHA');
+  }
+  requireText(record.test_pass.evidence_reference, 'test_pass.evidence_reference');
+  requireRunId(record.test_pass.attestation_run_id, 'test_pass.attestation_run_id');
+  requireText(record.test_pass.attestation_run_url, 'test_pass.attestation_run_url');
   return record;
 }
 
@@ -177,15 +219,16 @@ export function createProdReleaseRecord({
     throw new Error('Previous PROD /health runtime_data_sha does not match expected_runtime_sha');
   }
 
-  const prodPass = normalizeRunEvidence({ environment: 'prod', candidateSha: sha, runId, runUrl, health: prodHealth });
+  const prodPass = normalizeDeploymentEvidence({ environment: 'prod', candidateSha: sha, runId, runUrl, health: prodHealth });
   const record = {
     schema_version: SCHEMA_VERSION,
     stage: 'prod_pass',
     issue_pr: testRecord.issue_pr,
     candidate_sha: sha,
     created_at: createdAt,
-    dev_pass: testRecord.dev_pass,
-    test_pass: testRecord.test_pass,
+    dev_pass_evidence: testRecord.dev_pass,
+    test_deploy_evidence: testRecord.test_deploy,
+    test_pass_evidence: testRecord.test_pass,
     previous_prod_source_sha: previousSourceSha,
     previous_prod_runtime_data_sha: previousRuntimeDataSha,
     rollback_action_reference: requireText(rollbackReference, 'rollback_reference'),
@@ -250,8 +293,8 @@ async function main(argv = process.argv.slice(2)) {
     assertDevPassRecord(readJson(args.file, 'DEV promotion evidence'), args.candidate_sha);
     return;
   }
-  if (command === 'create-test') {
-    writeRecord(args.output, createTestPassRecord({
+  if (command === 'create-test-deployed') {
+    writeRecord(args.output, createTestDeployedRecord({
       devRecord: readJson(args.dev_file, 'DEV promotion evidence'),
       candidateSha: args.candidate_sha,
       runId: args.run_id,
@@ -260,13 +303,27 @@ async function main(argv = process.argv.slice(2)) {
     }));
     return;
   }
-  if (command === 'verify-test') {
-    assertTestPassRecord(readJson(args.file, 'TEST promotion evidence'), args.candidate_sha);
+  if (command === 'verify-test-deployed') {
+    assertTestDeployedRecord(readJson(args.file, 'TEST deployment evidence'), args.candidate_sha);
+    return;
+  }
+  if (command === 'create-test-pass') {
+    writeRecord(args.output, createTestPassRecord({
+      testDeployedRecord: readJson(args.test_deployed_file, 'TEST deployment evidence'),
+      candidateSha: args.candidate_sha,
+      qaEvidenceReference: args.test_evidence_reference,
+      runId: args.run_id,
+      runUrl: args.run_url,
+    }));
+    return;
+  }
+  if (command === 'verify-test-pass') {
+    assertTestPassRecord(readJson(args.file, 'TEST PASS evidence'), args.candidate_sha);
     return;
   }
   if (command === 'create-release') {
     writeRecord(args.output, createProdReleaseRecord({
-      testRecord: readJson(args.test_file, 'TEST promotion evidence'),
+      testRecord: readJson(args.test_file, 'TEST PASS evidence'),
       candidateSha: args.candidate_sha,
       previousHealth: readJson(args.previous_health_file, 'previous PROD health evidence'),
       expectedRuntimeSha: args.expected_runtime_sha,
