@@ -2,11 +2,21 @@
 
 One short record per PROD promotion. No secret values.
 
+The automation carries evidence through this artifact chain:
+
+```text
+promotion-dev-pass
+  -> promotion-test-deployed
+  -> promotion-test-pass
+  -> release-record
+```
+
 ## Required
 
 - Issue / PR: `#####`
 - `CANDIDATE_SHA`: `#####`
 - DEV PASS evidence: `#####`
+- TEST deployment evidence: `#####`
 - TEST PASS evidence: `#####`
 - Previous PROD `SOURCE_SHA`: `#####`
 - Previous PROD `RUNTIME_DATA_SHA`: `#####`
@@ -31,8 +41,7 @@ If candidate changes after DEV freeze, start a new promotion cycle.
 
 ### Configuration change
 
-- Previous config reference: `#####`
-- Restore action: `#####`
+- Configuration rollback reference/action: `#####`
 
 ### Database / schema / data change
 
@@ -51,4 +60,4 @@ If `YES`:
 
 ## Rule
 
-This record is deliberately minimal. Do not add routine administrative fields unless they materially improve release safety or traceability.
+This record is deliberately minimal. Do not add routine administrative fields unless they materially improve release safety or traceability. Promotion artifacts contain identifiers and evidence only; secrets are never recorded.
