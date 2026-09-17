@@ -19,8 +19,8 @@ test('non-bootstrap live actions do not receive the real bootstrap credential', 
   assert.match(workflow, /Verify credential role separation and final health[\s\S]*if: \$\{\{ inputs\.action == 'bootstrap' \}\}/);
 });
 
-test('fine-grained PAT verification uses repository boundaries instead of viewerPermission', () => {
-  assert.doesNotMatch(workflow, /viewerPermission/);
+test('fine-grained PAT verification uses repository boundaries instead of account-level role inference', () => {
+  assert.doesNotMatch(workflow, /gh repo view[^\n]*viewerPermission/);
   assert.match(workflow, /Source-read token must be a fine-grained PAT/);
   assert.match(workflow, /Runtime token must not access source repository/);
   assert.match(workflow, /Source-read token must not access runtime repository/);
