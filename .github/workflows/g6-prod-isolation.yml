@@ -1,0 +1,104 @@
+name: G6 PROD Cloudflare Isolation (Non-Mutating)
+
+on:
+  workflow_dispatch:
+    inputs:
+      legacy_account_id:
+        description: Legacy PROD Cloudflare account ID used only for a negative read-access probe
+        required: true
+        type: string
+      owner_gate:
+        description: Explicit G6 QA confirmation; must be G6_QA
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  prod-cloudflare-isolation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    environment: prod
+    steps:
+      - name: Guard G6 non-mutating scope and account identities
+        env:
+          OWNER_GATE: ${{ inputs.owner_gate }}
+          PROD_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          LEGACY_ACCOUNT_ID: ${{ inputs.legacy_account_id }}
+          DEV_ACCOUNT_ID: 8364666c7cf48cd1852e2e29a682bfb6
+          TEST_ACCOUNT_ID: f5e9f2faf4d567f41baae8404058fbc2
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$OWNER_GATE" = "G6_QA" || { echo "G6 isolation QA requires owner_gate=G6_QA" >&2; exit 1; }
+          for name in PROD_ACCOUNT_ID LEGACY_ACCOUNT_ID DEV_ACCOUNT_ID TEST_ACCOUNT_ID; do
+            value="${!name:-}"
+            [[ "$value" =~ ^[0-9a-fA-F]{32}$ ]] || { echo "$name must be a 32-character Cloudflare account ID" >&2; exit 1; }
+          done
+          ids=("$PROD_ACCOUNT_ID" "$LEGACY_ACCOUNT_ID" "$DEV_ACCOUNT_ID" "$TEST_ACCOUNT_ID")
+          for ((i=0; i<${#ids[@]}; i++)); do
+            for ((j=i+1; j<${#ids[@]}; j++)); do
+              test "${ids[$i]}" != "${ids[$j]}" || { echo "G6 account identities must all be distinct" >&2; exit 1; }
+            done
+          done
+          echo "G6 QA only. This workflow performs GET requests only and does not mutate any Cloudflare resource."
+
+      - name: Verify PROD token is active and reaches only its intended positive target
+        env:
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          verify_code="$(curl --silent --show-error --output /tmp/g6-prod-token.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/tokens/verify")"
+          test "$verify_code" = "200" || { echo "Configured PROD token verification failed (HTTP $verify_code)" >&2; exit 1; }
+          jq -e '.success == true and .result.status == "active"' /tmp/g6-prod-token.json >/dev/null || {
+            echo "Configured PROD token is not active" >&2
+            exit 1
+          }
+
+          worker_code="$(curl --silent --show-error --output /tmp/g6-prod-worker.json --write-out '%{http_code}' \
+            --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+            "https://api.cloudflare.com/client/v4/accounts/$CLOUDFLARE_ACCOUNT_ID/workers/scripts/job-search-command-api/settings")"
+          test "$worker_code" = "200" || { echo "PROD token cannot read intended PROD Worker settings (HTTP $worker_code)" >&2; exit 1; }
+          jq -e '.success == true' /tmp/g6-prod-worker.json >/dev/null || {
+            echo "Intended PROD Worker settings response is not successful" >&2
+            exit 1
+          }
+          echo "Positive PROD target check PASS."
+
+      - name: Prove PROD token cannot read DEV TEST or legacy Worker targets
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          LEGACY_ACCOUNT_ID: ${{ inputs.legacy_account_id }}
+          DEV_ACCOUNT_ID: 8364666c7cf48cd1852e2e29a682bfb6
+          TEST_ACCOUNT_ID: f5e9f2faf4d567f41baae8404058fbc2
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          deny_worker_settings() {
+            local label="$1"
+            local account_id="$2"
+            local code
+            code="$(curl --silent --show-error --output "/tmp/g6-${label}.json" --write-out '%{http_code}' \
+              --header "Authorization: Bearer $CLOUDFLARE_API_TOKEN" \
+              "https://api.cloudflare.com/client/v4/accounts/$account_id/workers/scripts/job-search-command-api/settings")"
+            case "$code" in
+              403|404)
+                echo "$label negative isolation PASS (HTTP $code)"
+                ;;
+              *)
+                echo "$label negative isolation FAIL: PROD credential received unexpected HTTP $code" >&2
+                exit 1
+                ;;
+            esac
+          }
+
+          deny_worker_settings dev "$DEV_ACCOUNT_ID"
+          deny_worker_settings test "$TEST_ACCOUNT_ID"
+          deny_worker_settings legacy "$LEGACY_ACCOUNT_ID"
+          echo "G6 Cloudflare PROD cross-account negative isolation PASS. No mutation performed."
