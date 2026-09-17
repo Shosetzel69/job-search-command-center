@@ -1,6 +1,6 @@
 # Software Delivery Lifecycle - DEV -> TEST -> PROD
 
-Status: Canonical process proposal for #197
+Status: Canonical process for #197; automation enforcement implemented by #198
 Owner model: single maintainer
 Scope: functional changes, bug fixes, infrastructure changes and database migrations that can affect application behavior or production state
 
@@ -233,18 +233,38 @@ hotfix Issue
 
 Any reduced test scope is explicitly accepted by the owner.
 
-## 11. Automation: safety without administration
+## 11. Automation enforcement
 
-Automate controls that prevent mistakes without requiring extra owner work:
+The permanent artifact chain is:
 
-- one deployment at a time per environment (`concurrency` / deployment lock);
-- explicit environment;
-- full immutable SHA input;
+```text
+DEV deploy
+  -> promotion-dev-pass
+  -> TEST deploy of the same CANDIDATE_SHA
+  -> promotion-test-deployed
+  -> independent TEST QA
+  -> TEST PASS attestation
+  -> promotion-test-pass
+  -> integrate candidate into main without identity rewrite
+  -> PROD promotion + owner GO + rollback preflight
+  -> release-record
+```
+
+Enforced controls:
+- one deployment at a time per environment: `deploy-dev`, `deploy-test`, `deploy-prod`;
+- explicit environment and full immutable SHA input;
 - exact checkout verification;
-- `/health.source_sha` verification;
-- no implicit `main` fallback;
-- no merge/push-triggered implicit PROD deployment;
-- PROD requires the TEST-passed candidate after it is reachable from `main`.
+- DEV/TEST may use a pre-merge candidate, while trusted deployment tooling remains from `main`;
+- TEST requires the DEV PASS artifact for the exact same candidate;
+- TEST deployment and independent TEST PASS are separate evidence stages;
+- `/health.source_sha` is captured and bound to promotion evidence;
+- PROD requires the exact TEST PASS artifact and the same candidate reachable from `main`;
+- PROD captures the previous known-good source/runtime anchors before mutation;
+- PROD requires rollback reference and explicit `PROD_GO`;
+- configuration rollback evidence is required only when configuration is changed;
+- destructive DB changes require migration version, immutable backup reference, SHA-256 verification and non-PROD restore evidence;
+- no implicit `main` fallback and no merge/push-triggered implicit PROD deployment;
+- promotion and release artifacts contain identifiers/evidence only, never secrets.
 
 Deferred until project scale justifies them:
 - canary percentage rollouts;
@@ -269,4 +289,4 @@ A software change is complete when:
 - minimal Release Record is complete;
 - relevant documentation reflects actual behavior.
 
-Implementation enforcement is tracked separately in #198.
+Automation enforcement is implemented by #198 and must pass its fail-closed promotion tests before acceptance.
