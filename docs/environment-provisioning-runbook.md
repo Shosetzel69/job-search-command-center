@@ -1,45 +1,89 @@
 # Environment Provisioning Runbook - DEV / TEST / PROD
 
-Status: Phase 6 readiness prepared; DEV/TEST operational; PROD live cutover not authorized
+Status: Phase 7 PROD migration/bootstrap/deploy executed successfully; final independent QA is pending in #188.
 Data initiala: 2026-09-11
-Revizie finala: 2026-09-17
+Revizie curenta: 2026-09-17
 ADR: `docs/adr/ADR-003-environment-isolation.md`
-Implementation: #161 #175
+Implementation: #161 #175 #186
 Security / G6: #177 #183
+Final QA: #188
 
-## 1. Scop
+## 1. Scop si stare curenta
 
-Procedura defineste pregatirea, crearea, validarea, promovarea si cutover-ul celor trei medii runtime izolate.
+Acest document este contractul operational canonic pentru cele trei medii izolate. El descrie atat arhitectura si regulile permanente, cat si starea reala curenta dupa executia Phase 7.
 
-Documentul este contract operational pentru Development. La revizia din 2026-09-17, DEV si TEST sunt provisionate si validate, iar target-ul PROD dedicat este configurat pentru readiness non-mutating. Legacy PROD ramane neschimbat; Phase 7 nu este autorizat.
+Starea curenta este:
 
-Principii:
-- acelasi source code;
-- trei runtime stacks tinta separate;
-- trei runtime repositories separate;
-- trei Cloudflare accounts tinta separate;
-- credentiale de write separate pe environment si rol;
-- `SOURCE_SHA` immutable pentru build si Run;
-- `RUNTIME_DATA_SHA` pentru snapshot-ul de date servit;
-- fara fallback implicit la PROD sau `main` pentru identity finala;
-- fara copiere manuala repetitiva a configuratiei;
-- provisioning idempotent unde API-urile permit;
-- legacy PROD nu se modifica in Phase 6;
-- PROD cutover necesita G6 PASS si un owner GO nou, separat.
+| Mediu | Runtime repo | Cloudflare target | URL | Search mode | Stare |
+| --- | --- | --- | --- | --- | --- |
+| DEV | `Shosetzel69/job-search-runtime-dev` | `Job Search DEV` | `https://job-search-command-api.job-search-dev.workers.dev` | `disabled` | operational, validat |
+| TEST | `Shosetzel69/job-search-runtime-test` | `Job Search TEST` | `https://job-search-command-api.job-search-test.workers.dev` | `smoke` | operational, validat |
+| PROD | `Shosetzel69/job-search-prod` | `Job Search PROD` | `https://job-search-command-api.job-search-prod.workers.dev` | `live` | migration + bootstrap/deploy PASS; final QA pending |
+| LEGACY | legacy stack | legacy Cloudflare account | `https://job-search-command-api.myeboda.workers.dev` | legacy | rollback reference; read-only during final QA |
 
-## 2. Resurse tinta
-
-### 2.1 Source repository
+Approved application source:
 
 ```text
-Shosetzel69/job-search-command-center
+SOURCE_SHA=1ca1d16f0c2bb0529cf4a91283117a120dfc80fc
 ```
 
-Contine cod, teste, documentatie, templates si automation logic.
+Trusted control-plane main used for Phase 7 execution:
 
-Dupa cutover-ul PROD, source repository-ul nu mai deployeaza direct `job-search-command-api` prin Cloudflare Git integration sau alta cale implicita.
+```text
+55ef89ddbbbb27ac1f23c7a66957fc3c5188ce53
+```
 
-### 2.2 Runtime repositories
+PROD migration anchors:
+
+```text
+initial canonical data migration commit:
+56c76e0724af629cb2fdfec19d444008574a5164
+
+current PROD runtime head used by bootstrap/deploy:
+f552d5fb958c1559a65f420904b86cc403fd12aa
+```
+
+The difference between these two PROD SHAs is intentional: `56c76e...` is the initial canonical data migration commit; `f552d5...` also installs the isolated PROD runtime workflow while preserving the migrated data.
+
+Successful Phase 7 bootstrap/deploy run:
+
+```text
+https://github.com/Shosetzel69/job-search-command-center/actions/runs/35247969324
+```
+
+That run passed the 58/58 environment/security/Phase-7 contract tests, deployed the dedicated PROD Worker, configured runtime secrets, and converged `/health` to:
+
+```json
+{
+  "status": "ok",
+  "environment": "prod",
+  "source_sha": "1ca1d16f0c2bb0529cf4a91283117a120dfc80fc",
+  "runtime_repo": "Shosetzel69/job-search-prod",
+  "runtime_ref": "main",
+  "runtime_data_sha": "f552d5fb958c1559a65f420904b86cc403fd12aa",
+  "search_mode": "live",
+  "auth_configured": true,
+  "github_configured": true
+}
+```
+
+Phase 7 is therefore no longer blocked on migration or initial deployment. The remaining gate is final QA in #188, including one controlled PROD Full Search, publication/redeploy validation, DEV/TEST regression isolation, and legacy rollback read-only verification.
+
+## 2. Permanent architecture principles
+
+- one source repository: `Shosetzel69/job-search-command-center`;
+- three separate runtime repositories;
+- three separate target Cloudflare accounts;
+- environment-specific GitHub Environments: `dev`, `test`, `prod`;
+- separate credentials per environment and role;
+- immutable `SOURCE_SHA` for executable application identity;
+- `RUNTIME_DATA_SHA` for the exact runtime snapshot served;
+- runtime data never promoted DEV -> TEST -> PROD;
+- no implicit PROD fallback;
+- privileged build/deploy tooling comes from trusted control-plane main, not from candidate payload;
+- legacy remains a rollback reference until final owner acceptance and later cleanup decision.
+
+## 3. Runtime repositories
 
 ```text
 Shosetzel69/job-search-runtime-dev
@@ -47,9 +91,7 @@ Shosetzel69/job-search-runtime-test
 Shosetzel69/job-search-prod
 ```
 
-Toate private.
-
-Structura minima:
+Canonical runtime structure:
 
 ```text
 .github/workflows/runtime.yml
@@ -66,13 +108,11 @@ data/
 README.md
 ```
 
-Lista finala `data/*` se deriva din contractul canonic existent, nu se hard-codeaza independent in trei locuri.
+PROD data was migrated separately from an immutable canonical PROD snapshot. No DEV or TEST operational runtime data is promoted into PROD.
 
-Runtime data nu se promoveaza DEV -> TEST -> PROD.
+## 4. Cloudflare boundaries
 
-### 2.3 Cloudflare accounts
-
-Target-ul izolat foloseste:
+Target accounts:
 
 ```text
 Job Search DEV
@@ -80,110 +120,29 @@ Job Search TEST
 Job Search PROD
 ```
 
-- fiecare este account dedicat environment-ului sau;
-- `Job Search PROD` este un account nou si separat de legacy PROD;
-- fiecare target account contine numai runtime resources ale environment-ului sau;
-- legacy PROD existent ramane neschimbat ca rollback target pana la acceptarea Phase 7.
-
-Legacy live origin in Phase 6:
-
-```text
-https://job-search-command-api.myeboda.workers.dev
-```
-
-Target PROD origin:
-
-```text
-https://job-search-command-api.job-search-prod.workers.dev
-```
-
-### 2.4 Worker
-
-Nume in fiecare target account:
+Each environment has its own Worker named:
 
 ```text
 job-search-command-api
 ```
 
-Account-ul este boundary-ul principal. URL-ul/origin-ul trebuie sa fie distinct si verificabil per environment.
+Account separation is a primary security boundary. G6 proved the PROD Cloudflare token could access its own target and was denied against DEV, TEST and the legacy account.
 
-## 3. Manual vs automatizat
-
-### 3.1 Owner actions manuale
-
-Pentru target-ul izolat:
-1. stabilizarea curenta este inchisa;
-2. ADR-003 este merged;
-3. owner GO pentru #161;
-4. `Job Search DEV` exista separat;
-5. `Job Search TEST` exista separat;
-6. `Job Search PROD` exista ca account nou si dedicat;
-7. legacy PROD actual ramane neschimbat;
-8. cele trei Cloudflare account IDs sunt configurate environment-specific;
-9. GitHub Environments `dev`, `test`, `prod` exista si au credentiale/config separate;
-10. bootstrap/runtime/source-read credentials sunt separate pe rol;
-11. Phase 7 nu incepe fara G6 PASS si un owner GO nou.
-
-### 3.2 Automatizat
-
-Environment tool trebuie sa poata:
-- crea/verifica runtime repositories;
-- initializa datele seed aprobate pentru non-PROD;
-- genera wrapper workflow dintr-un template unic;
-- configura source read-only access;
-- seta repository secrets fara a le versiona;
-- valida Cloudflare account IDs;
-- crea/deploya Worker in account-ul corect atunci cand faza permite;
-- seta Worker vars/secrets;
-- verifica `/health`;
-- executa negative isolation tests;
-- produce raport machine-readable si human-readable fara secrete.
-
-Bootstrap credentials largi nu se stocheaza in Worker/runtime si se revoca/rotesc dupa provisioning daca nu mai sunt necesare.
-
-## 4. Manifest canonic
-
-Exemplu:
+Legacy Cloudflare account ID used for that proof:
 
 ```text
-config/environments.json
+1c10181de5c9d73957e1947f4411d55b
 ```
 
-Schema conceptuala:
+The dedicated PROD account ID is:
 
-```json
-{
-  "sourceRepository": "Shosetzel69/job-search-command-center",
-  "environments": {
-    "dev": {
-      "runtimeRepository": "Shosetzel69/job-search-runtime-dev",
-      "cloudflareAccountId": "<required>",
-      "workerName": "job-search-command-api",
-      "searchMode": "disabled-or-smoke"
-    },
-    "test": {
-      "runtimeRepository": "Shosetzel69/job-search-runtime-test",
-      "cloudflareAccountId": "<required>",
-      "workerName": "job-search-command-api",
-      "searchMode": "smoke"
-    },
-    "prod": {
-      "runtimeRepository": "Shosetzel69/job-search-prod",
-      "cloudflareAccountId": "<required>",
-      "workerName": "job-search-command-api",
-      "searchMode": "live"
-    }
-  }
-}
+```text
+05c75e8c6f1e84e2c8b29b941598bd53
 ```
 
-Secretele nu apar in manifest.
+## 5. GitHub credential model
 
-## 5. Secret input si least privilege
-
-Live deployment/control-plane foloseste GitHub Environments `dev`, `test`, `prod` cu aceeasi structura canonica.
-
-Secrets per environment:
+Secrets per GitHub Environment:
 
 ```text
 CLOUDFLARE_TOKEN
@@ -193,7 +152,7 @@ SOURCE_READ_TOKEN
 ALLOWED_GOOGLE_SUB
 ```
 
-Variables per environment:
+Variables per GitHub Environment:
 
 ```text
 CLOUDFLARE_ACCOUNT_ID
@@ -201,445 +160,277 @@ GOOGLE_CLIENT_ID
 FRONTEND_ORIGIN
 ```
 
-Roluri:
-- `GH_BOOTSTRAP_TOKEN`: bootstrap/configurare runtime repo; nu se instaleaza in Worker;
-- `GH_RUNTIME_TOKEN`: runtime repo-ul environment-ului numai; minimum necesar pentru runtime content/Actions;
-- `SOURCE_READ_TOKEN`: source repository read-only; nu acceseaza runtime repo;
-- `CLOUDFLARE_TOKEN`: numai account-ul/Worker-ul environment-ului, cu cel mai restrans scope disponibil;
-- credentialele celor trei roluri GitHub sunt distincte intre ele si environment-specific.
+Role rules:
 
-Runtime workflow poate folosi `GITHUB_TOKEN` nativ pentru operatii interne caller-ului acolo unde contractul permite; Worker-ul foloseste credentialul runtime separat si limitat la runtime repo-ul environment-ului.
+- `GH_BOOTSTRAP_TOKEN`: runtime repo bootstrap/configuration only; not installed in Worker;
+- `GH_RUNTIME_TOKEN`: only the runtime repository of that environment;
+- `SOURCE_READ_TOKEN`: fine-grained source-repository read-only;
+- `CLOUDFLARE_TOKEN`: only the intended account/Worker boundary;
+- bootstrap/runtime/source-read credentials must be distinct;
+- runtime token must not access source repo;
+- source-read token must not access runtime repo.
 
-PAT classic nu se foloseste pentru source-read. Implementarea curenta valideaza operational repository boundaries pentru fine-grained PATs.
+## 6. Environment policies
 
-Implementarea documenteaza expirarea, rotatia si revocarea credentialelor long-lived.
+Canonical mapping:
 
-## 6. Environment tool - contract
+```text
+dev  -> job-search-runtime-dev  -> SEARCH_MODE=disabled
+test -> job-search-runtime-test -> SEARCH_MODE=smoke
+prod -> job-search-prod         -> SEARCH_MODE=live
+```
 
-Phase 6 status:
-- contractul parametrizat, manifestul si comenzile sunt implementate;
-- DEV si TEST live bootstrap/deploy sunt operationale si validate;
-- PROD readiness foloseste configuratia reala `prod` intr-un workflow manual-only si strict non-mutating;
-- orice live PROD bootstrap/deploy/migration/cutover este blocat pana la Phase 7.
+UI environment marker behavior:
 
-Un singur entry point:
+```text
+DEV  -> [DEV]
+TEST -> [TEST]
+PROD -> no non-production badge
+```
+
+The DEV and TEST markers are persistent runtime-derived markers, not manual labels.
+
+## 7. Environment tooling
+
+The shared entry point remains:
 
 ```text
 scripts/environment.mjs
 ```
 
-Nu se creeaza scripturi DEV/TEST/PROD cu logica duplicata.
+The environment tool provides validation/bootstrap/deploy/status/isolation capabilities without duplicating per-environment logic.
 
-### 6.1 validate
+`bootstrap-all` remains structurally DEV + TEST only. It must never silently include PROD.
 
-```text
-npm run env:validate -- --env dev --source-sha <full-sha>
-npm run env:validate -- --env test --source-sha <full-sha>
-npm run env:validate -- --env prod --source-sha <full-sha> --dry-run --owner-gate APPROVED
-```
-
-Verifica minimum:
-- environment explicit si valid;
-- manifest valid;
-- account ID prezent;
-- runtime repo corespunde environment-ului;
-- Worker/origin coerent;
-- credentialele obligatorii exista;
-- GitHub credential boundaries corespund rolului;
-- Cloudflare token apartine target-ului asteptat;
-- source SHA exista si este immutable;
-- nu exista placeholder nerezolvat;
-- PROD nu este default;
-- search policy este compatibila cu environment-ul.
-
-Exit code != 0 la orice abatere.
-
-### 6.2 bootstrap
-
-Pre-Phase-7:
-
-```text
-npm run env:bootstrap -- --env dev --source-sha <full-sha>
-npm run env:bootstrap -- --env test --source-sha <full-sha>
-```
-
-Operatie idempotenta:
-1. `validate` + provider preflight;
-2. verifica/creeaza runtime repo;
-3. initializeaza fisierele runtime din seed aprobat;
-4. configureaza read-only source access;
-5. instaleaza wrapper workflow generat;
-6. configureaza environment-specific secrets;
-7. verifica Cloudflare account/Worker access inainte de mutatii;
-8. creeaza Worker daca lipseste si faza permite;
-9. configureaza Worker vars/secrets;
-10. deploy initial cu `SOURCE_SHA` explicit;
-11. verifica health identity;
-12. produce raport.
-
-Resursele existente nu sunt sterse/recreate implicit.
-
-### 6.3 bootstrap-all
-
-```text
-npm run env:bootstrap-all
-```
-
-Executa numai:
-
-```text
-bootstrap(dev)
-bootstrap(test)
-```
-
-**PROD este exclus structural din `bootstrap-all`.**
-
-Nu exista flag care transforma silent `bootstrap-all` in DEV+TEST+PROD.
-
-### 6.4 PROD readiness si bootstrap
-
-In Phase 6, singura actiune PROD aprobata este readiness/preflight non-mutating pe GitHub Environment `prod`.
-
-Workflow-ul canonic este:
+Historical Phase 6 PROD readiness remains available as a non-mutating control:
 
 ```text
 PROD Readiness (Non-Mutating)
 ```
 
-Acesta verifica configuratia reala, credential boundaries, trusted-main ancestry si accesul la dedicated PROD Worker fara a face deploy/migration/cutover.
-
-Live PROD bootstrap/deploy devine eligibil numai dupa:
-- G6 PASS;
-- inchiderea/acceptarea blockerelor de securitate;
-- owner GO nou si separat pentru Phase 7.
-
-Atunci comanda explicita va folosi:
+For the executed Phase 7 PROD path, the canonical workflow is now:
 
 ```text
-npm run env:bootstrap -- --env prod --source-sha <full-sha>
+.github/workflows/prod-cutover.yml
 ```
 
-Tool-ul trebuie sa refuze PROD live daca authorization gate-ul Phase 7 nu este satisfacut.
-
-### 6.5 deploy
+Workflow display name:
 
 ```text
-npm run env:deploy -- --env dev --source-sha <full-commit-sha>
+Phase 7 PROD Cutover
 ```
 
-Reguli:
-- `SOURCE_SHA` explicit si immutable;
-- branch/tag/mutable ref nu este acceptat ca identity finala de deployment;
-- candidate SHA trebuie sa fie reachable din trusted control-plane baseline;
-- runtime data vin numai din runtime repo-ul environment-ului;
-- privileged deployment tooling vine din trusted control-plane, nu din candidate payload;
-- deploy token corespunde Cloudflare account-ului environment-ului;
-- `/health` confirma `environment`, `source_sha`, `runtime_repo`, `runtime_data_sha`, `search_mode`;
-- PROD live deploy necesita Phase 7 GO;
-- lipsa `--env` sau `--source-sha` = FAIL.
-
-### 6.6 status
+The successful bootstrap/deploy invocation used:
 
 ```text
-npm run env:status
+action=bootstrap-deploy
+source_sha=1ca1d16f0c2bb0529cf4a91283117a120dfc80fc
+expected_runtime_sha=f552d5fb958c1559a65f420904b86cc403fd12aa
+owner_gate=PHASE7_APPROVED
 ```
 
-Output minim:
+The workflow:
+
+1. validates explicit Phase 7 authorization;
+2. checks out trusted control-plane main;
+3. checks out immutable application candidate separately;
+4. runs environment/security contract tests;
+5. verifies credential boundaries;
+6. verifies dedicated PROD Cloudflare target;
+7. verifies immutable PROD runtime head;
+8. installs/configures isolated PROD runtime workflow;
+9. prepares trusted build payload;
+10. deploys exact approved application source to dedicated PROD;
+11. configures Worker runtime secrets;
+12. validates `/health` identity;
+13. leaves legacy cleanup outside the workflow.
+
+## 8. Runtime execution contract
+
+The PROD runtime workflow resides in:
 
 ```text
-ENV   SOURCE_SHA   RUNTIME_DATA_SHA   RUNTIME_REPO             CF_ACCOUNT   HEALTH
-DEV   abc123...    def456...          job-search-runtime-dev   ...123       OK
-TEST  abc123...    987abc...          job-search-runtime-test  ...456       OK
-PROD  9fd321...    555aaa...          job-search-prod          ...789       OK
+Shosetzel69/job-search-prod/.github/workflows/runtime.yml
 ```
 
-Inainte de Phase 7, statusul target PROD poate fi `PREPARED/READINESS` fara runtime data migrata; legacy PROD ramane separat si live.
+For PROD live execution it must:
 
-Trebuie sa marcheze drift-ul dintre source SHA, runtime data SHA, manifest si health.
+1. receive explicit immutable `source_sha`;
+2. check out the caller runtime repository;
+3. check out exact application source read-only;
+4. check out trusted control-plane main separately;
+5. execute live collection only for `APP_ENV=prod` and `SEARCH_MODE=live`;
+6. validate generated runtime JSON contract;
+7. publish result files only to `job-search-prod`;
+8. capture the new runtime repository SHA;
+9. rebuild/redeploy only the PROD Worker with that exact runtime snapshot;
+10. verify post-redeploy `/health.runtime_data_sha` equals the published runtime SHA.
 
-### 6.7 isolation-test
+DEV must fail closed for live collection. TEST may perform smoke validation but not live external collection/publication.
+
+## 9. Static build and identity
+
+Build identity must include:
 
 ```text
-npm run env:isolation-test
+APP_ENV
+SOURCE_SHA
+RUNTIME_DATA_SHA
 ```
 
-Probe sigure/non-destructive:
-- DEV GitHub credential -> write TEST: refuz;
-- DEV GitHub credential -> write PROD: refuz;
-- TEST GitHub credential -> write PROD: refuz;
-- PROD runtime credential -> source repo: refuz;
-- source-read credential -> runtime repo: refuz;
-- DEV Cloudflare credential -> TEST/PROD: refuz;
-- TEST Cloudflare credential -> PROD: refuz;
-- PROD Cloudflare credential -> DEV/TEST/legacy account: refuz;
-- wrong runtime repo in manifest: FAIL;
-- wrong account ID: FAIL;
-- missing env: FAIL;
-- missing/wrong source SHA: FAIL;
-- health source SHA mismatch: FAIL;
-- health runtime data SHA mismatch: FAIL;
-- DEV/TEST live policy invalid: FAIL.
-
-Testul nu modifica date business reale.
-
-## 7. Runtime workflow
-
-Wrapper minimal:
+`/health` is the authoritative runtime identity check and must confirm:
 
 ```text
-workflow_dispatch / approved trigger
-        |
-        +-> validate explicit SOURCE_SHA
-        +-> checkout runtime repo
-        +-> checkout source repo @ SOURCE_SHA read-only
-        +-> validate runtime contract
-        +-> execute approved source payload using trusted orchestration
-        +-> publish data in caller runtime repo only
-        +-> capture new RUNTIME_DATA_SHA
-        +-> rebuild/deploy caller Worker only
-        +-> health identity check
+environment
+source_sha
+runtime_repo
+runtime_ref
+runtime_data_sha
+search_mode
+auth_configured
+github_configured
 ```
 
-Provider secrets sunt citite numai din runtime repository/environment-ul caller.
+After any PROD Full Search that publishes a new runtime commit, the dedicated PROD Worker must be redeployed so the static assets and `/health.runtime_data_sha` converge to the new runtime head.
 
-Wrapper-ul nu contine business logic duplicata.
+## 10. DEV procedure and final QA expectation
 
-Control-plane deployment scripts, package manifests, Wrangler config si build/deploy tooling provin din trusted reviewed baseline. Candidate `SOURCE_SHA` este separat ca payload immutable si nu poate suprascrie orchestration-ul privilegiat.
+Current state: operational.
 
-## 8. Source access
+Final QA #188 must verify:
 
-Model curent de rol:
+- canonical DEV URL loads over HTTPS;
+- `/health.environment=dev`;
+- runtime repo is `job-search-runtime-dev`;
+- `SEARCH_MODE=disabled`;
+- persistent `[DEV]` badge;
+- authentication/UI smoke passes;
+- Full Search is blocked/fails closed;
+- PROD final validation does not mutate DEV runtime state.
+
+## 11. TEST procedure and final QA expectation
+
+Current state: operational.
+
+Final QA #188 must verify:
+
+- canonical TEST URL loads over HTTPS;
+- `/health.environment=test`;
+- runtime repo is `job-search-runtime-test`;
+- `SEARCH_MODE=smoke`;
+- persistent `[TEST]` badge;
+- authentication/UI smoke passes;
+- no live external collection or PROD-style publication occurs;
+- PROD final validation does not mutate TEST runtime state.
+
+## 12. PROD procedure and final QA expectation
+
+Current state: canonical data migration and initial dedicated PROD deployment are complete.
+
+Remaining QA sequence is defined in #188 and must be executed by Claude without code/config mutation:
+
+1. capture pre-test PROD `/health` and runtime head;
+2. verify migrated application/config data sanity;
+3. execute exactly one controlled Full Search through normal PROD application flow;
+4. record the runtime workflow URL/ID;
+5. verify generated contract validation and result publication;
+6. verify `job-search-prod/main` advances if a result commit is produced;
+7. verify automatic PROD redeploy;
+8. verify post-redeploy `/health.runtime_data_sha` equals new runtime head;
+9. verify UI/run-history consistency;
+10. re-check authentication/protected paths;
+11. re-check DEV and TEST isolation;
+12. verify legacy rollback endpoint read-only.
+
+The canonical QA ticket is:
 
 ```text
-job-search-runtime-dev  -> SOURCE_READ_TOKEN DEV  -> source (read-only)
-job-search-runtime-test -> SOURCE_READ_TOKEN TEST -> source (read-only)
-job-search-prod         -> SOURCE_READ_TOKEN PROD -> source (read-only)
+#188 [QA][Phase 7] Final validation DEV / TEST / PROD
 ```
 
-Fiecare token source-read este fine-grained, scoped exclusiv la source repository si separat de runtime/bootstrap token.
+#186 is the orchestration/Phase 7 ticket, not the QA execution ticket.
 
-Orice alternativa necesita acelasi nivel de least privilege.
+## 13. Legacy rollback state
 
-## 9. Command API configuration
-
-Minimum semantic:
+Legacy endpoint:
 
 ```text
-APP_ENV=dev|test|prod
-GITHUB_RUNTIME_OWNER=Shosetzel69
-GITHUB_RUNTIME_REPO=<canonical repo for selected env>
-GITHUB_RUNTIME_REF=main
-GITHUB_WORKFLOW=runtime.yml
-SOURCE_SHA=<full-sha>
-RUNTIME_DATA_SHA=<runtime-commit-sha>
-SEARCH_MODE=<policy>
-FRONTEND_ORIGIN=<environment-url>
+https://job-search-command-api.myeboda.workers.dev
 ```
 
-Canonical runtime repo mapping:
+The existing legacy deployment remains the rollback reference. During Phase 7 preparation, its Cloudflare Git/build integration was disconnected to freeze the baseline; the deployed legacy Worker was not deleted or repurposed.
 
-```text
-dev  -> job-search-runtime-dev
-test -> job-search-runtime-test
-prod -> job-search-prod
-```
+Until final QA and owner acceptance:
 
-Tokenul Worker are acces exclusiv la runtime repo-ul environment-ului sau.
+- legacy is read-only for validation;
+- do not deploy to legacy;
+- do not change legacy configuration;
+- do not add the requested `[LEGACY]` UI marker yet, because that would mutate the rollback baseline;
+- do not revoke/delete legacy resources or credentials needed for rollback.
 
-## 10. Run identity
+A `[LEGACY]` marker may be added only after final acceptance or through a separate explicit decision that accepts modification of the rollback baseline.
 
-`POST /commands/run` nu poate executa `main` implicit.
+## 14. Rollback
 
-Flux obligatoriu:
+Primary rollback remains operational return to the existing legacy endpoint, not transformation of the new dedicated stack into the legacy architecture.
 
-```text
-GET /health -> source_sha = abc123
-POST /commands/run
-workflow_dispatch(source_sha=abc123)
-checkout source @ abc123
-```
+Rollback conditions include:
 
-`run-status.json` si `run-history.json` includ `source_sha`.
+- source/runtime identity mismatch;
+- auth regression;
+- protected data/API exposure;
+- failed runtime publication/redeploy;
+- unexpected DEV/TEST mutation;
+- cross-environment credential access;
+- inability to use the dedicated PROD endpoint safely.
 
-Workflow-ul refuza lipsa sau mismatch-ul de `source_sha`.
+No DEV/TEST data may ever be copied into PROD as rollback.
 
-## 11. Static data build si consistency
+## 15. Final QA and acceptance gate
 
-Build:
-1. checkout source @ `SOURCE_SHA` ca payload aprobat;
-2. checkout runtime repo la `RUNTIME_DATA_SHA`;
-3. build frontend/Worker prin trusted build baseline;
-4. copiaza protected runtime data in Static Assets;
-5. deploy;
-6. `/health` confirma cele doua SHA-uri.
-
-Dupa search:
-1. publica runtime data numai in caller repo;
-2. obtine noul `RUNTIME_DATA_SHA`;
-3. rebuild/deploy acelasi environment;
-4. confirma `/health.runtime_data_sha`.
-
-Daca commit-ul runtime reuseste dar redeploy-ul esueaza, statusul este explicit `DEGRADED/STALE_ASSET`. Nu se raporteaza Run ca complet sincronizat.
-
-## 12. Procedura DEV
-
-Status actual: operational / bootstrap PASS pentru candidate SHA aprobat in evidence G6.
-
-Procedura:
-1. owner GO #161;
-2. completeaza DEV account/config;
-3. validate DEV;
-4. bootstrap DEV;
-5. configureaza OAuth DEV;
-6. health identity check;
-7. isolation DEV -> TEST/PROD;
-8. smoke functional;
-9. DEV ready numai dupa PASS.
-
-PROD nu se modifica.
-
-## 13. Procedura TEST
-
-Status actual: operational / bootstrap PASS pentru acelasi candidate SHA folosit in evidence G6.
-
-Numai dupa DEV PASS:
-1. validate TEST;
-2. bootstrap TEST;
-3. configureaza OAuth TEST;
-4. deploy exact acelasi `SOURCE_SHA` validat in DEV;
-5. health identity check;
-6. isolation TEST -> PROD;
-7. smoke/E2E TEST;
-8. release candidate ready numai dupa PASS.
-
-## 14. Procedura PROD
-
-### Phase 6 — preparation only
-
-Permis:
-1. inventar complet legacy PROD;
-2. backup/recovery design si runbook;
-3. configurare target `job-search-prod` fara business-data migration;
-4. configurare dedicated `Job Search PROD` account/Worker/OAuth/credentials;
-5. non-mutating readiness against real `prod` environment;
-6. independent G6 QA.
-
-Interzis in Phase 6:
-- live PROD bootstrap/deploy;
-- migrare runtime data PROD;
-- Full Search pe noul target ca actiune de cutover;
-- switch de trafic;
-- mutatie legacy PROD.
-
-### Phase 7 — numai dupa G6 PASS + owner GO nou
-
-1. re-probe legacy PROD live identity;
-2. captureaza backup anchors immutable imediat inainte de cutover;
-3. seed/migreaza controlat numai datele canonice PROD in `job-search-prod`;
-4. configureaza/finalizeaza credentialele PROD runtime;
-5. deploy exact `SOURCE_SHA` validat in DEV si TEST;
-6. health/auth/protected-assets smoke;
-7. verifica search execution cu acelasi `SOURCE_SHA` numai in limita aprobata;
-8. confirma negative credential isolation inclusiv fata de legacy account;
-9. cutover explicit;
-10. dezactiveaza calea directa source repo -> Cloudflare deployment pentru legacy `job-search-command-api` numai dupa acceptare conform runbook;
-11. verifica: push/PR in source repo produce zero command-api deployment;
-12. pastreaza legacy rollback target pana la acceptarea finala;
-13. elimina mecanismele vechi redundante numai prin decizie separata dupa observatie.
-
-`ai-github-bridge` nu este dezactivat sau mutat de acest pas.
-
-## 15. Rollback
-
-Primary rollback in Phase 7 este revenirea operationala/traffic la legacy PROD neschimbat.
-
-Rollback cod pentru noul target = redeploy ultimul `SOURCE_SHA` PROD validat, daca aceasta este actiunea aprobata.
-
-Rollback data = backup/history din runtime PROD exclusiv.
-
-Nu se copiaza date DEV/TEST in PROD.
-
-Daca noul runtime PROD esueaza inainte de finalizarea cutover-ului, se revine la legacy PROD si noul stack se pastreaza pentru investigatie.
-
-Detaliile autoritative sunt in `docs/prod-cutover-rollback-runbook.md`.
-
-## 16. Cost control
-
-Target: cost 0.
-
-- Cloudflare: conturi Free separate;
-- GitHub: runtime repos private, consum Actions monitorizat;
-- DEV live full search disabled implicit;
-- TEST controlled search;
-- provider calls costisitoare nu se tripleaza automat.
-
-Orice cost nou necesita aprobare inainte de activare.
-
-## 17. Evidence
-
-Raportul final al fiecarui bootstrap/deploy/readiness contine:
-- environment;
-- `SOURCE_SHA`;
-- `RUNTIME_DATA_SHA` daca exista;
-- runtime repo;
-- Cloudflare account ID mascat;
-- Worker name/URL;
-- search mode;
-- health/readiness result;
-- credential/isolation result;
-- timestamp;
-- fara secrete.
-
-G6 evidence trebuie sa includa suplimentar:
-- acelasi approved candidate SHA prin DEV/TEST;
-- PROD readiness non-mutating pe `prod` real;
-- credential role/repository boundaries;
-- Cloudflare target si negative cross-account isolation proof;
-- documentatie canonica aliniata;
-- tratamentul explicit al riscului S4 de authorization boundary.
-
-## 18. Gate-uri
+Current gate position:
 
 ```text
 STABILIZATION CLOSED
-        |
-        v
-ADR-003 merged
-        |
-        v
-#161 owner GO
-        |
-        v
-environment-awareness + automation
-        |
-        v
-DEV bootstrap + health/isolation PASS
-        |
-        v
-TEST same SOURCE_SHA + health/isolation PASS
-        |
-        v
-PROD readiness NON-MUTATING PASS
-        |
-        v
-G6 independent QA PASS
-        |
-        v
-NEW separate Phase 7 owner GO
-        |
-        v
-PROD backup + migration + deploy + validation
-        |
-        v
-explicit cutover
-        |
-        v
-source direct command-api deploy disabled when runbook permits
-        |
-        v
-final isolation + identity + owner acceptance PASS
+  -> ADR-003 merged
+  -> #161 owner GO
+  -> DEV PASS
+  -> TEST PASS
+  -> PROD readiness PASS
+  -> G6 PASS
+  -> Phase 7 owner GO
+  -> canonical PROD data migration PASS
+  -> dedicated PROD bootstrap/deploy PASS (run 35247969324)
+  -> #188 final QA  <-- CURRENT
+  -> owner final acceptance
+  -> observation window
+  -> optional legacy cleanup by separate explicit decision
 ```
 
-Orice FAIL critic opreste promovarea.
+#188 may close PASS only when:
 
-G6 PASS nu autorizeaza automat Phase 7; owner GO pentru cutover este obligatoriu si separat.
+- DEV boundary/isolation checks pass;
+- TEST smoke/isolation checks pass;
+- PROD controlled Full Search publishes and redeploys coherently;
+- post-PROD DEV/TEST checks remain unchanged;
+- legacy rollback remains available/read-only;
+- no unresolved blocker/major defect remains.
+
+## 16. Evidence requirements
+
+Every final validation record must include, without secret values:
+
+- environment URL;
+- `/health` JSON;
+- `SOURCE_SHA`;
+- runtime repo/ref;
+- runtime data SHA before/after where relevant;
+- search mode;
+- badge result;
+- auth result;
+- workflow URL/run ID;
+- screenshots or equivalent browser evidence;
+- defects with reproduction steps;
+- final verdict.
+
+The authoritative final QA evidence is stored in #188. #186 stays open until #188 reaches an acceptable final verdict and owner acceptance is recorded.
