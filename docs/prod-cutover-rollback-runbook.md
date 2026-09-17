@@ -1,6 +1,13 @@
 # PROD Cutover and Rollback Runbook
 
-Status: Phase 7 canonical PROD data migration and dedicated PROD bootstrap/deploy completed successfully. Final independent QA is pending in #188; final owner acceptance and post-cutover cleanup are not yet complete.
+Status: Phase 7-specific cutover/rollback record for the initial isolated PROD migration. It is not the generic release lifecycle for future changes.
+
+Permanent delivery process: `docs/software-delivery-lifecycle.md`  
+Permanent release/rollback checklist: `docs/release-record-template.md`  
+Delivery governance: #197  
+Automation alignment: #198
+
+The remainder of this document preserves the Phase 7 migration/cutover procedure and evidence model. Future DEV -> TEST -> PROD releases must follow the permanent lifecycle above. LEGACY remains outside the normal promotion chain.
 
 Parent/orchestration: #186  
 Preparation: #175  
@@ -24,15 +31,7 @@ Completed:
 9. dedicated PROD `/health` identity converged successfully;
 10. legacy deployed Worker remains available as rollback reference.
 
-Pending:
-
-1. independent final QA in #188;
-2. one controlled PROD Full Search through the normal application path;
-3. publication -> runtime SHA advance -> automatic PROD redeploy validation;
-4. post-PROD DEV/TEST isolation regression;
-5. read-only legacy rollback validation;
-6. explicit final owner acceptance;
-7. later observation/cleanup decisions.
+The Phase 7 final-QA/remediation history remains tracked in #188 and its linked defects. This historical runbook must not be reused as the default release process for subsequent changes.
 
 ## 2. Canonical endpoints
 
@@ -52,7 +51,7 @@ https://job-search-command-api.myeboda.workers.dev
 
 ## 3. Immutable anchors
 
-Approved application source:
+Approved application source used by the Phase 7 cutover:
 
 ```text
 SOURCE_SHA=1ca1d16f0c2bb0529cf4a91283117a120dfc80fc
@@ -70,13 +69,13 @@ Initial canonical PROD data migration commit:
 56c76e0724af629cb2fdfec19d444008574a5164
 ```
 
-Current PROD runtime head used by bootstrap/deploy:
+Initial PROD runtime head used by bootstrap/deploy:
 
 ```text
 f552d5fb958c1559a65f420904b86cc403fd12aa
 ```
 
-`56c76e...` is the initial migration commit containing the canonical PROD runtime data. `f552d5...` adds the isolated PROD runtime workflow while preserving the migrated data and is therefore the `RUNTIME_DATA_SHA` served by the successful initial dedicated PROD deployment.
+`56c76e...` is the initial migration commit containing the canonical PROD runtime data. `f552d5...` adds the isolated PROD runtime workflow while preserving the migrated data and was the `RUNTIME_DATA_SHA` served by the successful initial dedicated PROD deployment.
 
 Successful Phase 7 bootstrap/deploy run:
 
@@ -84,9 +83,9 @@ Successful Phase 7 bootstrap/deploy run:
 https://github.com/Shosetzel69/job-search-command-center/actions/runs/35247969324
 ```
 
-The run completed with 58/58 environment/security/Phase-7 contract tests passing.
+The run completed with the environment/security/Phase-7 contract tests passing.
 
-## 4. Current dedicated PROD identity
+## 4. Initial dedicated PROD identity
 
 The successful Phase 7 run validated the dedicated target with:
 
@@ -104,11 +103,11 @@ The successful Phase 7 run validated the dedicated target with:
 }
 ```
 
-This proves initial deployment/bootstrap health. It does not replace the final end-to-end Full Search validation required by #188.
+This proves initial deployment/bootstrap health only. Subsequent releases must use their own release record and exact candidate identity.
 
 ## 5. Target architecture after migration
 
-Production ownership is moving from the legacy stack:
+Production ownership moved from the legacy stack:
 
 ```text
 legacy Cloudflare account
@@ -185,113 +184,36 @@ https://job-search-command-api.myeboda.workers.dev
 
 The deployed legacy Worker was not deleted or repurposed. Its Cloudflare Git/build integration was disconnected during Phase 7 preparation to freeze the rollback baseline and prevent new source pushes from silently redeploying legacy.
 
-Until final QA and owner acceptance:
+Permanent rule under #197:
+- LEGACY is outside the DEV -> TEST -> PROD chain;
+- no normal release is deployed to LEGACY;
+- no normal QA or development occurs there;
+- no configuration/data mutation is allowed through the normal lifecycle;
+- retirement or repurposing requires a separate explicit decision.
 
-- legacy is read-only;
-- no deploy/config/data mutation is allowed;
-- no legacy cleanup is allowed;
-- no `[LEGACY]` UI marker is added, because that would intentionally mutate the rollback baseline;
-- credentials/resources needed for rollback are retained.
+## 9. Phase 7 final QA execution — historical ticket #188
 
-The requested `[LEGACY]` marker is deferred until final acceptance or a separate explicit owner decision.
-
-## 9. Final QA execution — canonical ticket #188
-
-Claude executes the final QA under:
+The initial cutover QA was tracked under:
 
 ```text
 #188 [QA][Phase 7] Final validation DEV / TEST / PROD
 ```
 
-Claude must not modify source code, GitHub secrets/variables, Cloudflare settings, runtime configuration, or legacy resources during QA.
+That QA contract and its linked defects are historical evidence for the initial migration/cutover. They are not the generic template for future releases.
 
-Execution order:
-
-1. DEV;
-2. TEST;
-3. PROD;
-4. DEV/TEST post-PROD regression;
-5. legacy read-only rollback check.
-
-### DEV expectations
-
-- HTTPS/application load PASS;
-- `/health.environment=dev`;
-- runtime repo = `job-search-runtime-dev`;
-- `SEARCH_MODE=disabled`;
-- persistent `[DEV]` marker;
-- auth/UI smoke PASS;
-- Full Search blocked/fails closed;
-- no mutation caused by PROD testing.
-
-### TEST expectations
-
-- HTTPS/application load PASS;
-- `/health.environment=test`;
-- runtime repo = `job-search-runtime-test`;
-- `SEARCH_MODE=smoke`;
-- persistent `[TEST]` marker;
-- auth/UI smoke PASS;
-- no live external collection/PROD-style publication;
-- no mutation caused by PROD testing.
-
-### PROD expectations before controlled Full Search
-
-- `/health.environment=prod`;
-- exact approved source SHA;
-- runtime repo/ref = `Shosetzel69/job-search-prod` / `main`;
-- current runtime head captured;
-- `SEARCH_MODE=live`;
-- auth/github configured;
-- migrated configuration/application data readable;
-- no non-production badge.
-
-### Exactly one controlled PROD Full Search
-
-Claude executes exactly one Full Search using the existing approved PROD configuration, without changing criteria immediately before the run.
-
-Required evidence:
-
-- start time;
-- UI initiation screenshot/state;
-- GitHub runtime workflow URL and run ID;
-- workflow conclusion;
-- source warnings/failures, if any;
-- `job-search-prod/main` SHA before/after;
-- generated result publication evidence;
-- automatic PROD redeploy evidence;
-- post-redeploy `/health`.
-
-Expected successful convergence:
-
-```text
-source_sha remains 1ca1d16f0c2bb0529cf4a91283117a120dfc80fc
-runtime_data_sha == new job-search-prod/main after publication
-runtime_repo == Shosetzel69/job-search-prod
-runtime_ref == main
-search_mode == live
-auth_configured == true
-github_configured == true
-```
-
-Partial external-source failures may produce `PASS WITH OBSERVATION` only if the application contract tolerates them and a valid result/status snapshot is published and redeployed. Total collection failure, failed publication, or failed redeploy is FAIL.
+For future releases, TEST validation and PROD acceptance use `docs/software-delivery-lifecycle.md` plus the release record template.
 
 ## 10. Post-PROD isolation regression
 
-After the controlled PROD Full Search:
+The Phase 7 procedure required re-checking DEV and TEST after PROD actions to prove no cross-environment mutation. This remains a valid permanent security principle where a PROD release can affect shared control-plane behavior.
 
-- re-read DEV `/health` and `[DEV]` marker;
-- re-read TEST `/health` and `[TEST]` marker;
-- compare DEV/TEST runtime heads before/after;
-- prove PROD execution changed only PROD runtime state where expected;
-- verify no cross-environment data contamination.
-
-Any unexpected DEV/TEST mutation is a stop condition and blocks final acceptance.
+Any unexpected DEV/TEST mutation remains a stop condition.
 
 ## 11. Stop conditions
 
-Final acceptance must stop on:
+Permanent stop conditions are defined in `docs/software-delivery-lifecycle.md`.
 
+The Phase 7-specific stop conditions included:
 - source/runtime identity mismatch;
 - authentication regression;
 - protected data/API exposure;
@@ -307,10 +229,9 @@ Final acceptance must stop on:
 
 ## 12. Rollback
 
-Primary rollback remains operational return to the preserved legacy deployed endpoint.
+For the initial Phase 7 cutover, primary rollback was operational return to the preserved legacy deployed endpoint.
 
-Sequence if final validation exposes a blocker:
-
+Historical sequence:
 1. stop further new-PROD actions;
 2. direct operational use back to the legacy endpoint as applicable;
 3. verify legacy application/health/auth sufficiently for rollback use;
@@ -321,50 +242,48 @@ Sequence if final validation exposes a blocker:
 
 Rollback never copies DEV/TEST runtime data into PROD.
 
+For future releases, rollback is release-specific and must be prepared before PROD using `docs/release-record-template.md`:
+- previous known-good PROD source SHA;
+- previous runtime/config/schema anchors;
+- redeploy/restore procedure;
+- validated backup/restore evidence for destructive/non-reversible DB changes.
+
+LEGACY must not be assumed to be the permanent rollback mechanism after its future retirement.
+
 ## 13. Final acceptance
 
-Final QA is accepted only when #188 records:
+Phase 7 acceptance remains governed by #188/#186 as historical migration closeout.
 
-- DEV PASS;
-- TEST PASS;
-- PROD PASS or explicitly accepted PASS WITH OBSERVATION;
-- successful controlled PROD Full Search publication/redeploy consistency;
-- post-PROD isolation PASS;
-- legacy rollback read-only PASS;
-- no unresolved blocker/major defect.
-
-After that, #186 may proceed to explicit owner final acceptance.
+Future release acceptance requires:
+- exact candidate identity preserved DEV -> TEST -> PROD;
+- independent TEST PASS;
+- candidate integrated into `main` without rewrite;
+- PROD rollback readiness;
+- explicit owner GO;
+- successful PROD deploy and smoke/acceptance;
+- completed release record.
 
 ## 14. Observation and cleanup
 
-Cleanup is not part of #188.
+Legacy cleanup is not part of the normal release process and requires a separate explicit decision.
 
-Only after final owner acceptance and a stable observation period may a separate explicit decision authorize some or all of:
-
-- permanent retirement of obsolete legacy credentials;
-- addition of a `[LEGACY]` marker if the legacy endpoint is retained for reference;
-- further restriction/removal of legacy deployment mechanisms;
-- archival/removal of the legacy stack;
-- retention-period cleanup of rollback evidence.
-
-Unrelated infrastructure, including `ai-github-bridge`, remains untouched.
+Unrelated infrastructure, including `ai-github-bridge`, remains untouched by application release rollback unless separately affected and approved.
 
 ## 15. Evidence package
 
-Final Phase 7 closeout must include:
+The Phase 7 closeout evidence remains in #186/#188 and related tickets.
 
-- approved source SHA;
-- initial migration commit;
-- current/final PROD runtime SHA;
-- successful Phase 7 bootstrap/deploy run ID;
-- pre/post controlled-search PROD `/health`;
-- PROD runtime workflow run ID;
-- GitHub credential-role segregation evidence;
-- Cloudflare isolation evidence;
-- auth/UI/protected-path smoke evidence;
-- DEV/TEST post-PROD preservation evidence;
-- legacy rollback read-only evidence;
+Every future release uses its own release record, containing without secret values:
+- Issue/PR;
+- candidate SHA;
+- DEV evidence;
+- TEST evidence/verdict;
+- post-integration `main` SHA;
+- migration/config versions;
+- known-good PROD anchors;
+- rollback/backup evidence;
+- owner GO;
+- PROD deploy evidence;
+- post-deploy health/smoke evidence;
 - defects/observations;
-- final owner acceptance timestamp.
-
-No secret values are included in evidence.
+- final acceptance state.
