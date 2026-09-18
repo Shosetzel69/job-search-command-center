@@ -125,6 +125,7 @@ Secretele runtime si GitHub App nu se introduc in frontend, JSON publicabil sau 
 - `GOVERNANCE.md` - reguli de guvernanta, branching si control;
 - `.ai-instructions.md` - guardrails si reguli de lucru pentru AI;
 - `CONTRIBUTING.md` - mod de lucru;
+- `docs/documentation-policy.md` - context minim, structura si limite pentru Issues/runbook-uri;
 - `CHANGELOG.md` - istoric schimbari relevante;
 - `docs/requirements.md` - cerinte;
 - `docs/functionalitati.md` - comportament curent;
