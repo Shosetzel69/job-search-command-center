@@ -222,31 +222,34 @@ test("snapshot reports the stage-specific TEST deployment run instead of inherit
   assert.equal(snapshot.environments.test.deployment_evidence.run_url, "https://example/run/20");
 });
 
-test("chat sanity contract is chat-first and keeps project status secondary", () => {
+test("chat sanity contract is concise and interaction-first", () => {
   const contract = readFileSync(new URL("../docs/project-sanity.md", import.meta.url), "utf8");
   const requiredInOrder = [
-    "Last material action:",
-    "Result:",
-    "Subject:",
-    "Relevance: CURRENT | PARTIALLY_CURRENT | SUPERSEDED | CLOSED",
-    "CHANGED SINCE",
-    "CURRENT RELEVANT STATE",
-    "NEXT",
-    "UNIQUE / PERSISTENCE",
-    "CHAT VERDICT",
+    "Ultima interacțiune:",
+    "Ultima acțiune materială:",
+    "Subiect:",
+    "Actualitate:",
+    "Verdict:",
   ];
 
   let previous = -1;
   for (const marker of requiredInOrder) {
     const index = contract.indexOf(marker);
-    assert.ok(index > previous, `Expected sanity contract marker in order: ${marker}`);
+    assert.ok(index > previous, `Expected concise sanity marker in order: ${marker}`);
     previous = index;
   }
 
-  assert.match(contract, /Do not start with release\/DEV\/TEST\/PROD status\./);
-  assert.match(contract, /Do not dump the full project snapshot by default\./);
-  assert.match(contract, /PARTIALLY_CURRENT/);
-  assert.match(contract, /SUPERSEDED/);
-  assert.ok(contract.includes("`CLOSED` never implies `SAFE TO DELETE` by itself."));
-  assert.match(contract, /SANITY: BLOCKED/);
+  assert.ok(contract.includes("bare `sanity`, the command itself is never reported as the last interaction"));
+  assert.ok(contract.includes("`DA`"));
+  assert.ok(contract.includes("`PARȚIAL`"));
+  assert.ok(contract.includes("`NU`"));
+  assert.ok(contract.includes("`ÎNCHIS`"));
+  assert.ok(contract.includes("`CONTINUĂ AICI`"));
+  assert.ok(contract.includes("`MUTĂ ÎN ALT CHAT`"));
+  assert.ok(contract.includes("`POȚI ȘTERGE`"));
+  assert.ok(contract.includes("Nicio acțiune materială."));
+  assert.ok(contract.includes("Schimbat între timp:"));
+  assert.match(contract, /Do not add project-wide status sections by default\./);
+  assert.match(contract, /Sanity is not a project-status report\./);
+  assert.match(contract, /SANITY — BLOCAT/);
 });
