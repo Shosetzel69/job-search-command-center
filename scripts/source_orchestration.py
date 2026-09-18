@@ -156,7 +156,7 @@ def failure_result(connector, query, exc):
         False,
         [],
         0,
-        str(exc),
+        diagnostics.sanitize_text(exc),
         error_code=error_code,
         failure_stage=failure_stage,
         http_status=http_status,
@@ -317,7 +317,7 @@ def collect_sources(config, state, now, plan, run_id=None):
             except Exception as exc:
                 results = [failure_result("web:" + str(item["source_id"]), "collect", exc)]
                 item["web_outcome"] = "error"
-                item["failure_reason"] = str(exc)
+                item["failure_reason"] = diagnostics.sanitize_text(exc)
             record_results(item, results)
             collection.extend(results)
     return collection, metadata, mode
@@ -327,7 +327,9 @@ def record_results(item, results):
     failed = [result for result in results if not result.ok]
     item["status"] = "completed" if results and not failed else "failed"
     item["records"] = sum(len(result.records) for result in results if result.ok)
-    item["error"] = "; ".join(result.error or "Collection failed" for result in failed) or None
+    item["error"] = "; ".join(
+        diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
+    ) or None
     if not results:
         item["outcome"] = "failed"
         item["error"] = item["error"] or "Connector returned no collection result"
@@ -353,7 +355,7 @@ def record_results(item, results):
         "status": "completed" if result.ok else "failed",
         "outcome": ("success" if result.records else "success_empty") if result.ok else "failed",
         "records": len(result.records),
-        "error": result.error,
+        "error": diagnostics.sanitize_text(result.error) if result.error else None,
         "error_code": None if result.ok else (result.error_code or "CONNECTOR_ERROR"),
         "failure_stage": None if result.ok else (result.failure_stage or "fetch"),
         "http_status": result.http_status,
