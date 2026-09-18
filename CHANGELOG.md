@@ -4,6 +4,7 @@
 
 ### Functionalitati
 
+- #229 / Release 1 Wave 3: introdus contractul structurat per source execution (`outcome`, `source_execution_id`, `error_code`, `failure_stage`, `http_status`) cu compatibilitate pentru statusurile legacy; `success_empty` si starile operationale asteptate nu mai trebuie interpretate ca erori din text liber.
 - #227: simplificat outputul sanity la cinci campuri: ultima interactiune, ultima actiune materiala, subiect, actualitate (DA/PARTIAL/NU/INCHIS) si verdict; statusul general de proiect este ascuns implicit, iar `Schimbat intre timp` apare doar pentru diferente materiale.
 - #222: sanity devine chat-first: raporteaza mai intai ultima actiune materiala, subiectul si actualitatea lui (CURRENT/PARTIALLY_CURRENT/SUPERSEDED/CLOSED), apoi doar starea GitHub relevanta; verdictul de continuare/stergere ramane fail-closed pentru informatia UNIQUE nepersistata.
 - #211: adaugat snapshot automat read-only pentru project sanity, derivat din checkpoint/FRC PR, defecte/QA si evidence artifacts DEV/TEST/PROD; la reluarea unui chat JSCC contextul este comparat cu snapshot-ul, iar LEGACY si mediile aplicatiei nu sunt mutate de sanity.
