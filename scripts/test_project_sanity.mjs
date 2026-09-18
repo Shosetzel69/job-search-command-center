@@ -174,3 +174,49 @@ test("checkpoint PROD evidence is flagged as invalid", async () => {
   assert.equal(snapshot.environments.prod.status, "INVALID_FOR_CHECKPOINT");
   assert.match(snapshot.warnings[0], /forbids checkpoint promotion/i);
 });
+
+test("snapshot reports the stage-specific TEST deployment run instead of inherited DEV evidence", async () => {
+  const sha = "f".repeat(40);
+  const api = {
+    listOpenPullRequests: async () => [{
+      number: 209,
+      title: "[Release 1 Wave 2] Candidate",
+      body: "",
+      html_url: "https://example/209",
+      head: { sha },
+    }],
+    getIssue: async () => null,
+    listWorkflowRuns: async (workflow) => workflow === "deploy-environment.yml"
+      ? [
+          { id: 20, conclusion: "success", html_url: "https://example/run/20" },
+          { id: 10, conclusion: "success", html_url: "https://example/run/10" },
+        ]
+      : [],
+    listRunArtifacts: async (runId) => runId === 20
+      ? [{ name: "promotion-test-deployed", expired: false }]
+      : [{ name: "promotion-dev-pass", expired: false }],
+  };
+  const readArtifact = async (runId, artifactName) => {
+    if (runId === 20 && artifactName === "promotion-test-deployed") {
+      return {
+        stage: "test_deployed",
+        candidate_sha: sha,
+        dev_pass: { run_id: "10", run_url: "https://example/run/10" },
+        test_deploy: { run_id: "20", run_url: "https://example/run/20" },
+      };
+    }
+    if (runId === 10 && artifactName === "promotion-dev-pass") {
+      return {
+        stage: "dev_pass",
+        candidate_sha: sha,
+        dev_pass: { run_id: "10", run_url: "https://example/run/10" },
+      };
+    }
+    throw new Error("not found");
+  };
+
+  const snapshot = await buildProjectSnapshot({ api, readArtifact });
+  assert.equal(snapshot.environments.dev.evidence.run_id, 10);
+  assert.equal(snapshot.environments.test.deployment_evidence.run_id, 20);
+  assert.equal(snapshot.environments.test.deployment_evidence.run_url, "https://example/run/20");
+});

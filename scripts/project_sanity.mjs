@@ -68,25 +68,20 @@ export function classifyRelatedIssues(issues) {
 
 function evidenceSummary(record, run) {
   if (!record) return null;
+
+  const stageEvidence = {
+    dev_pass: record.dev_pass,
+    test_deployed: record.test_deploy,
+    test_pass: record.test_pass,
+    prod_pass: record.prod_deploy_evidence,
+  }[record.stage] || null;
+
   return {
     stage: record.stage || null,
     candidate_sha: record.candidate_sha || null,
     created_at: record.created_at || run?.created_at || null,
-    run_id: Number(
-      record.dev_pass?.run_id ||
-      record.test_deploy?.run_id ||
-      record.test_pass?.attestation_run_id ||
-      record.prod_deploy_evidence?.run_id ||
-      run?.id ||
-      0
-    ) || null,
-    run_url:
-      record.dev_pass?.run_url ||
-      record.test_deploy?.run_url ||
-      record.test_pass?.attestation_run_url ||
-      record.prod_deploy_evidence?.run_url ||
-      run?.html_url ||
-      null,
+    run_id: Number(stageEvidence?.run_id || stageEvidence?.attestation_run_id || run?.id || 0) || null,
+    run_url: stageEvidence?.run_url || stageEvidence?.attestation_run_url || run?.html_url || null,
   };
 }
 
