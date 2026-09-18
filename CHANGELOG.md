@@ -25,6 +25,7 @@
 
 ### Remedieri
 
+- #207: normalizat `FRONTEND_ORIGIN` in etapa de capturare a evidence-ului DEV/TEST, evitand esecul `curl` produs de whitespace in GitHub Environment variable dupa un deploy reusit.
 - #154: badge-ul `De evaluat` foloseste aceeasi eligibilitate de freshness si mod de lucru ca lista; resetarea filtrelor produce un contor coerent cu randurile eligibile.
 - #153: reload-ul poate reobtine un Google ID token prin Google Identity Services folosind numai emailul contului autorizat ca `login_hint`; tokenul nu este persistat, iar `/auth/session` continua sa valideze server-side `ALLOWED_GOOGLE_SUB`. Logout explicit dezactiveaza auto-select.
 - #140: eliminat self-call-ul intern MCP -> REST pentru `get_issue`, `create_issue` si `update_issue`; issue tools folosesc acum direct GitHub App Claude -> installation token -> GitHub API, rezolvand `Unexpected bridge error` observat live.
