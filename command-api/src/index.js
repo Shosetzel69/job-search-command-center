@@ -62,13 +62,18 @@ async function verifyGoogleToken(request, env) {
   return payload;
 }
 
-async function authenticate(request, env) {
+function authorizeGooglePayload(payload, env) {
   if (!env.ALLOWED_GOOGLE_SUB) throw Object.assign(new Error('Authorization is not configured'), { status: 503 });
-  const payload = await verifyGoogleToken(request, env);
-  if (!payload.sub || payload.sub !== env.ALLOWED_GOOGLE_SUB) {
+  if (!payload?.sub || payload.sub !== env.ALLOWED_GOOGLE_SUB) {
     throw Object.assign(new Error('User not authorized'), { status: 403 });
   }
   return payload;
+}
+
+async function authenticate(request, env) {
+  if (!env.ALLOWED_GOOGLE_SUB) throw Object.assign(new Error('Authorization is not configured'), { status: 503 });
+  const payload = await verifyGoogleToken(request, env);
+  return authorizeGooglePayload(payload, env);
 }
 
 function runtimeConfig(env) {
@@ -333,7 +338,7 @@ async function renameSourceCategoryReferences(env, oldLabel, newLabel) {
   return result?.commit?.sha || null;
 }
 
-export { applyUserConfigPatch, assertGeographyNoConflict, readNomenclatures, validateEffectiveSearchConfig, validateUserConfigPatch };
+export { applyUserConfigPatch, assertGeographyNoConflict, authorizeGooglePayload, readNomenclatures, validateEffectiveSearchConfig, validateUserConfigPatch };
 
 export default {
   async fetch(request, env) {
