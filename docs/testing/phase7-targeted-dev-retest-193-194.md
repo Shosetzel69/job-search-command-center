@@ -1,7 +1,7 @@
 # Phase 7 targeted DEV retest — #193 / #194
 
 Status: executable after the fix candidate is deployed to DEV.
-Executor: Claude in Chrome.
+Executor: ChatGPT / DEV verification flow.
 Environment: **DEV only**.
 DEV URL: `https://job-search-command-api.job-search-dev.workers.dev`
 Parent QA: #188.
@@ -15,7 +15,7 @@ This is a targeted retest, not a replay of all Phase 7 QA.
 - **Do not run a live Full Search.** DEV must remain `search_mode=disabled`.
 - Do not change search criteria, sources, nomenclatures, GitHub configuration, Cloudflare configuration, secrets, runtime repositories, or legacy.
 - Do not expose Google tokens, cookie values, Authorization headers, or secrets in screenshots/evidence.
-- Owner may perform the interactive Google account click when Claude cannot complete Google authentication itself.
+- Owner may perform the interactive Google account click when ChatGPT cannot complete Google authentication itself.
 - A missing browser/DevTools capability is `BLOCKED`, not a product `FAIL`.
 - Stop the dependent sequence on a reproducible auth failure, but still perform independent read-only checks that remain safe.
 
@@ -48,7 +48,7 @@ Before login capture all of the following:
 ### Steps
 1. Open the DEV root URL.
 2. Confirm `[DEV]` is visible on the sign-in screen.
-3. Sign in with the approved Google account. If Claude cannot perform the account click, request OWNER ACTION and continue immediately after the owner completes it.
+3. Sign in with the approved Google account. If ChatGPT cannot perform the account click, request OWNER ACTION and continue immediately after the owner completes it.
 4. Wait until the normal application shell is visible.
 5. Visit `Joburi noi`, `Aplicari`, `Criterii de selectie`, then `Administrare`.
 6. In Network, verify these protected assets resolve successfully after authentication:
@@ -278,7 +278,7 @@ After all cases:
 ## Targeted DEV retest — #193 / #194
 Candidate SOURCE_SHA:
 Date/time:
-Executor: Claude
+Executor: ChatGPT
 DEV /health before:
 DEV_RUNTIME_SHA_BEFORE:
 
