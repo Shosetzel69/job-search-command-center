@@ -4,6 +4,7 @@
 
 ### Security
 
+- #233 / Release 1 Wave 3: adaugat gate CI Gitleaks fail-closed, cu binar versionat si verificat SHA-256, scan range PR/push, self-test cu secret sintetic temporar si politica de allowlist scoped.
 - #232 / Release 1 Wave 3: extinsa suita negativa pentru identity authorization, protected data fara sesiune, CORS interzis, payload config invalid si forced reauthentication la protected 401.
 
 ### Functionalitati
