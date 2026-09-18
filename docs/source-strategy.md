@@ -131,6 +131,7 @@ Reguli:
 - executia reusita fara rezultate este `success_empty`, nu failure;
 - orice `failed` are `error_code` si `failure_stage` structurate;
 - textul `error` / `failure_reason` este numai pentru oameni si nu este parsabil ca API contract;
+- exceptia legacy JobsPipe direct pentru monthly quota este provider-specific si amanata in #236; nu apartine contractului generic;
 - aceleasi rezultate structurate sunt publicate in status si istoric.
 
 ## 9. Colectare web HTTP
