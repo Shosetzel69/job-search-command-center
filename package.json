@@ -10,6 +10,6 @@
     "env:status": "node scripts/environment.mjs status",
     "env:isolation-test": "node scripts/environment.mjs isolation-test",
     "env:prod-preflight": "node scripts/environment.mjs prod-preflight",
-    "test:environment": "node --test scripts/test_environment.mjs scripts/test_promotion.mjs scripts/test_prod_readiness.mjs scripts/test_g6_prod_isolation.mjs scripts/test_security_s2.mjs scripts/test_security_s3.mjs scripts/test_cloudflare_preflight.mjs scripts/test_phase7_prod_cutover.mjs && node --check scripts/environment.mjs && node --check scripts/environment/cloudflare-preflight.mjs && node --check scripts/environment/provision.mjs && node --check scripts/environment/prod-preflight.mjs && node --check scripts/environment/promotion.mjs && node --check command-api/scripts/write-build-identity.mjs"
+    "test:environment": "node --test scripts/test_environment.mjs scripts/test_promotion.mjs scripts/test_prod_readiness.mjs scripts/test_g6_prod_isolation.mjs scripts/test_security_s2.mjs scripts/test_security_s3.mjs scripts/test_cloudflare_preflight.mjs scripts/test_phase7_prod_cutover.mjs scripts/test_ai_release_dispatch.mjs && node --check scripts/environment.mjs && node --check scripts/environment/cloudflare-preflight.mjs && node --check scripts/environment/provision.mjs && node --check scripts/environment/prod-preflight.mjs && node --check scripts/environment/promotion.mjs && node --check scripts/environment/ai-release-dispatch.mjs && node --check command-api/scripts/write-build-identity.mjs"
   }
 }
