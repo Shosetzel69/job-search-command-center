@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.6`
+Versiune document: `v1.7`
 Ultima actualizare: `2026-09-18`
 
 ## 1. Principiu
@@ -117,7 +117,7 @@ Un defect gasit in TEST sau PROD revine in DEV. Nu se aplica patch-uri ad-hoc di
 
 ## 3. Surse de adevar si precedenta
 
-Documentele de referinta obligatorii sunt:
+Sursele canonice sunt listate mai jos. Lista defineste precedenta, nu un set care trebuie citit integral pentru fiecare task:
 
 - `ARCHITECTURE.md` - arhitectura canonica si adevar tehnic;
 - `GOVERNANCE.md` - reguli de proces, decizie si control;
@@ -129,6 +129,7 @@ Documentele de referinta obligatorii sunt:
 - `docs/command-api.md` - Command API si autentificare;
 - `docs/source-strategy.md` - surse si connectori;
 - `CONTRIBUTING.md` - mod de lucru;
+- `docs/documentation-policy.md` - context budget, structura si reguli anti-duplicare;
 - `CHANGELOG.md` - istoric schimbari relevante.
 
 `README.md` este doar overview.
@@ -149,7 +150,8 @@ Reguli:
 
 - conversatiile, memoria AI, rezumatele si copiile locale sunt context, nu sursa de adevar tehnic;
 - AI verifica `main` curent si fisierele relevante din repository inainte de a propune sau modifica implementarea;
-- inainte de modificare se citesc minimum `ARCHITECTURE.md`, `GOVERNANCE.md`, `.ai-instructions.md`, Issue-ul aprobat si codul afectat;
+- contextul documentar se incarca targetat conform `docs/documentation-policy.md`: Issue/task + fisiere afectate + numai sectiunile canonice relevante;
+- documentele istorice, arhivele, analizele si runbook-urile superseded nu se citesc implicit;
 - daca memoria/conversatia contrazice repository-ul, repository-ul verificat are prioritate ca stare curenta;
 - daca repository-ul contrazice documentatia canonica aprobata, schimbarea se opreste si discrepanta se clarifica; AI nu decide singur care varianta devine noul adevar;
 - o copie locala a repository-ului nu este niciodata canonica si nu poate fi folosita ca justificare pentru a suprascrie starea GitHub.
@@ -258,17 +260,18 @@ TEST este mediul canonic de validare independenta a candidate-ului frozen. QA tr
 
 ## 8. Documentatie
 
-Documentele interne in limba romana se redacteaza fara diacritice.
+Politica detaliata este `docs/documentation-policy.md`.
 
-Documentatia trebuie sa fie simpla si concisa. Daca nu exista informatie pentru un camp sau o sectiune obligatorie, se foloseste `#####`.
+Reguli obligatorii:
+- documentele interne in limba romana se redacteaza fara diacritice;
+- documentatia descrie implementarea reala; planurile sunt marcate explicit;
+- se actualizeaza numai documentele canonice material afectate;
+- analiza ramane istoric de decizie, nu oglinda permanenta a implementarii;
+- Issues si runbook-uri trebuie sa fie task-oriented, scurte si sa foloseasca linkuri in loc de duplicare;
+- arhivele si documentele superseded nu intra in contextul implicit al AI;
+- nu se creeaza document sau commit fara diferenta materiala de documentat.
 
-Documentatia descrie implementarea reala. Functionalitatile planificate sunt marcate explicit ca neimplementate.
-
-La schimbari materiale se actualizeaza documentele afectate si, daca este relevant, `CHANGELOG.md`.
-
-Pentru orice implementare sau schimbare functionala, documentatia de analiza asociata se actualizeaza in aceeasi interventie, fara solicitare separata din partea owner-ului. Actualizarea trebuie sa reflecte decizia finala, diferentele fata de analiza initiala si statusul rezultat. Daca nu exista o analiza asociata, nu se creeaza artificial un document numai pentru a satisface aceasta regula; se actualizeaza documentele canonice relevante.
-
-Nu se creeaza commit numai pentru documentatie daca nu exista o diferenta materiala de documentat.
+Daca nu exista informatie pentru un camp obligatoriu, se foloseste `#####`.
 
 ## 9. Deploy, promovare si release
 
