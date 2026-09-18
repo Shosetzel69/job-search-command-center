@@ -1,164 +1,138 @@
 # Project Sanity
 
 Status: CANONICAL
-Scope: JSCC chat-resume sanity + GitHub current-state evidence
-Implements: #211, #222
+Scope: JSCC chat-resume sanity
+Implements: #211, #222, #227
 
-## 1. Purpose
+## 1. Goal
 
-Every JSCC chat is a temporary workspace. GitHub remains the operational source of truth.
+Sanity answers one practical question first:
 
-Sanity answers the chat-level question first:
+> Is this chat still useful to continue from?
 
-> Is the information and working subject of this chat still current and useful?
+GitHub remains the operational source of truth. The project snapshot is evidence, not the user-facing output.
 
-Only after that does it expose project/release/environment state needed to support the answer.
+## 2. What sanity evaluates
 
-## 2. Chat-first evaluation
+When sanity runs, identify in this order:
 
-At the first substantive message in a resumed JSCC chat, or when the owner writes `sanity`:
+1. **Ultima interacțiune** - the most recent substantive user↔assistant exchange before the sanity trigger.
+2. **Ultima acțiune materială** - the latest concrete project action/decision recorded in this chat.
+3. **Subiect** - the narrow working topic, in 3-7 words.
+4. **Actualitate** - whether that topic/state is still current against GitHub evidence.
+5. **Verdict** - whether to continue here, move elsewhere, or delete the chat.
 
-1. inspect the current chat and identify its **last material action**;
-2. identify the result/status left by that action;
-3. identify the chat's narrow working **subject**;
-4. obtain the latest successful `Project sanity snapshot`;
-5. compare the chat subject/action with current GitHub evidence;
-6. classify the subject relevance;
-7. report only material changes since the last chat action;
-8. show only current project state relevant to this chat;
-9. decide whether the chat can safely continue or be deleted.
+If the trigger is a bare `sanity`, the command itself is never reported as the last interaction.
 
-A material action is the latest concrete project operation or decision in this chat, for example: implementation, PR/Issue change, deployment, test result, approved decision, completed analysis or explicit blocked/waiting state. Ignore greetings, generic status questions and other non-state-changing messages when identifying it.
+`Ultima interacțiune` and `Ultima acțiune materială` are intentionally different:
+- interaction = what the user last asked and what the assistant answered/did;
+- material action = latest state-changing project operation or decision, which may be older.
 
-If an exact action timestamp is available, include it. Do not invent one.
+If no material action exists, write exactly: `Nicio acțiune materială.`
 
-## 3. Topic relevance classifications
+## 3. Actualitate
 
-- `CURRENT`: the chat subject is still active and its material working state agrees with current evidence.
-- `PARTIALLY_CURRENT`: the subject is still active, but one or more material facts in the chat are stale and must be replaced before continuing.
-- `SUPERSEDED`: a newer candidate, ticket, decision, workflow or procedure replaced the working basis of this chat. Do not continue from the old basis.
-- `CLOSED`: the chat subject/action is completed and no further action remains for that subject.
+Use only:
 
-These classifications describe the **chat topic**, not whether sanity itself succeeded.
+- `DA` - subject is active and the chat's material state is current.
+- `PARȚIAL` - subject is active, but at least one material fact in the chat is stale.
+- `NU` - the working basis/topic is no longer current or was superseded.
+- `ÎNCHIS` - the subject/action is completed and no further action remains here.
 
-## 4. Sanity status
+Give one short sentence explaining the classification.
 
-- `SANITY: PASS`: chat relevance was verified against sufficient current evidence. A topic may still be `SUPERSEDED` or `CLOSED`.
-- `SANITY: WARNING`: verification completed but found material contradictions, stale assumptions or ambiguous state that must be called out.
-- `SANITY: BLOCKED`: current GitHub/snapshot evidence cannot be obtained or is insufficient. Never claim the chat is current from memory alone.
+## 4. Verdict
+
+Use only:
+
+- `CONTINUĂ AICI` - this chat remains the right place to continue.
+- `MUTĂ ÎN ALT CHAT` - work remains, but this chat is no longer the right scope/basis.
+- `POȚI ȘTERGE` - the relevant subject is closed/superseded and no material chat-only information would be lost.
+
+`POȚI ȘTERGE` is fail-closed: any material information that exists only in chat must be persisted first.
 
 ## 5. Required default output
 
-The chat assessment must come first. Do not start with release/DEV/TEST/PROD status.
+Keep the answer short. Each field should normally be one sentence.
 
 ```text
-SANITY: PASS | WARNING | BLOCKED
+SANITY
 
-CHAT
-Last material action:
-Result:
-Subject:
-Relevance: CURRENT | PARTIALLY_CURRENT | SUPERSEDED | CLOSED
-Reason:
+Ultima interacțiune:
+[what the user asked + what the assistant answered/did]
 
-CHANGED SINCE
-- only material changes relevant to this chat
-- "none" when there are no relevant changes
+Ultima acțiune materială:
+[concrete action, or "Nicio acțiune materială."]
 
-CURRENT RELEVANT STATE
-- only evidence/state needed for this chat
-- omit unrelated global project status
+Subiect:
+[3-7 words]
 
-NEXT
-- next useful action for this subject
-- "none" when the subject is complete
+Actualitate:
+DA | PARȚIAL | NU | ÎNCHIS — [one-sentence reason]
 
-UNIQUE / PERSISTENCE
-- material chat-only information not yet persisted, or "none"
-
-CHAT VERDICT
-SAFE TO CONTINUE | SAFE TO DELETE | DO NOT DELETE
+Verdict:
+CONTINUĂ AICI | MUTĂ ÎN ALT CHAT | POȚI ȘTERGE
 ```
 
-## 6. Chat verdict rules
+Do not add project-wide status sections by default.
 
-`SAFE TO CONTINUE`:
-- current evidence is available;
-- the subject is `CURRENT` or `PARTIALLY_CURRENT`;
-- any stale facts have been explicitly replaced in the sanity output;
-- no unresolved contradiction prevents execution.
+## 6. Optional change block
 
-`SAFE TO DELETE`:
-- no material `UNIQUE` information remains only in chat;
-- required decisions/results are already persisted in GitHub;
-- the topic is normally `CLOSED` or `SUPERSEDED`, or the owner explicitly asked only for deletion safety.
+Add this block only when something material changed after the chat's last relevant state:
 
-`DO NOT DELETE`:
-- material `UNIQUE` information still exists only in chat;
-- persistence is incomplete;
-- or an unresolved ambiguity means deletion could lose project context.
+```text
+Schimbat între timp:
+[one concise change]
+```
 
-`CLOSED` never implies `SAFE TO DELETE` by itself.
+Prefer one sentence. Use at most three short bullets only when one line would hide an important distinction.
 
-## 7. Project-state evidence
+If nothing relevant changed, omit the block entirely.
+
+## 7. What must stay out of the default answer
+
+Do not include global:
+- DEV/TEST/PROD status;
+- SHA values;
+- release/wave state;
+- blocker lists;
+- QA lists;
+- project summaries.
+
+Include one of these only if it is directly required to explain `Actualitate` or `Verdict`.
+
+Sanity is not a project-status report.
+
+## 8. Evidence and failure behavior
+
+Use the latest successful `Project sanity snapshot` and targeted GitHub evidence as needed.
 
 Workflow: `.github/workflows/project-sanity.yml`
-
 Artifact: `current-project-state`
 
-Files:
-- `current-project-state.json` - machine-readable snapshot;
-- `current-project-state.md` - compact human-readable snapshot.
+If current evidence cannot be established, do not guess. Return only a concise blocked result:
 
-The snapshot is evidence for the chat comparison, not the first section of the user-facing sanity response.
+```text
+SANITY — BLOCAT
 
-It derives:
-- active checkpoint/FRC PR and immutable SHA;
-- related blockers and QA Issues;
-- promotion evidence for DEV/TEST/PROD;
-- next lifecycle gate;
-- LEGACY boundary.
+Motiv:
+[why current state cannot be verified]
 
-Discovery convention:
-- `[Release N Wave M] ...` = intermediate validation checkpoint;
-- `[Release N FRC] ...` or `[Release N Final Release Candidate] ...` = Final Release Candidate.
+Verdict:
+NU CONTINUA PE BAZA ISTORICULUI ACESTUI CHAT
+```
 
-Checkpoint TEST PASS stops before PROD. Only an FRC can advance toward PROD.
-
-## 8. Topic-scoped project status
-
-Do not dump the full project snapshot by default.
-
-Show release/candidate/DEV/TEST/PROD only when one of them:
-- is part of the chat subject;
-- changed since the chat's last material action;
-- proves that the chat state is stale/superseded;
-- is required for the next action.
-
-For a documentation, architecture, source investigation or other unrelated chat, omit environment/release details unless they materially affect that topic.
-
-## 9. Fail-closed and safety
-
-If the latest snapshot is unavailable, stale for the event being evaluated or has `SANITY: WARNING`, use targeted GitHub verification. If current evidence still cannot be established, return `SANITY: BLOCKED`.
+## 9. Safety
 
 Sanity is read-only. It never:
-- deploys code;
-- writes application/runtime data;
-- changes configuration;
+- deploys;
+- changes application/runtime data or configuration;
 - mutates DEV, TEST or PROD;
 - touches LEGACY.
-
-The generated snapshot cannot determine chat-only `UNIQUE` information. The AI performs that comparison from the visible chat before issuing a deletion verdict.
 
 ## 10. Verification
 
 ```bash
 node --test scripts/test_project_sanity.mjs
 node --check scripts/project_sanity.mjs
-```
-
-Live snapshot generation remains:
-
-```bash
-npm run sanity:project -- --output-json project-state/current-project-state.json --output-md project-state/current-project-state.md
 ```
