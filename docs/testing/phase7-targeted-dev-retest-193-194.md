@@ -1,10 +1,10 @@
 # Phase 7 targeted DEV retest — #193 / #194
 
 Status: executable after the fix candidate is deployed to DEV.
-Executor: ChatGPT / DEV verification flow.
+Executor: DEV instance/agent (currently ChatGPT / Development).
 Environment: **DEV only**.
 DEV URL: `https://job-search-command-api.job-search-dev.workers.dev`
-Parent QA: #188.
+Parent QA: #188. TEST validation remains assigned to the independent TEST executor.
 Defects: #193, #194.
 
 ## Scope and hard boundaries
@@ -12,6 +12,7 @@ Defects: #193, #194.
 This is a targeted retest, not a replay of all Phase 7 QA.
 
 - Use DEV only until every mandatory DEV case below passes.
+- This runbook is executed by the DEV executor only. The independent TEST/QA executor must not enter DEV.
 - **Do not run a live Full Search.** DEV must remain `search_mode=disabled`.
 - Do not change search criteria, sources, nomenclatures, GitHub configuration, Cloudflare configuration, secrets, runtime repositories, or legacy.
 - Do not expose Google tokens, cookie values, Authorization headers, or secrets in screenshots/evidence.
@@ -278,7 +279,7 @@ After all cases:
 ## Targeted DEV retest — #193 / #194
 Candidate SOURCE_SHA:
 Date/time:
-Executor: ChatGPT
+Executor: DEV instance/agent
 DEV /health before:
 DEV_RUNTIME_SHA_BEFORE:
 
