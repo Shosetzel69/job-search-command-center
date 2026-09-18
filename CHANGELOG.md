@@ -56,6 +56,7 @@
 
 ### Documentatie
 
+- #224: adaugat enforcement lightweight pentru politica de documentatie: CI verifica doar Markdown-ul schimbat, runbook-urile active esueaza peste 200 de linii si primesc warning peste 150, iar template-ul de executable task cere context minim explicit.
 - #220: introdusa politica de documentatie cu progressive disclosure si context budget; AI nu mai incarca implicit toate documentele canonice, Issues/runbook-urile au limite de marime, iar analiza nu mai este sincronizata ca documentatie live dupa fiecare implementare.
 - #216: clarificat lifecycle-ul release-urilor multi-wave: checkpoint-urile intermediare pot valida DEV -> TEST si se opresc inainte de PROD; dupa finalizarea tuturor wave-urilor se ingheata un singur Final Release Candidate care parcurge integral DEV -> TEST -> PROD si produce Release Record.
 

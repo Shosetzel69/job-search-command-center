@@ -154,3 +154,18 @@ Before adding documentation, ask:
 5. Am I preserving history instead of mixing it with current state?
 
 If the answer to 2 is yes, update/link the canonical source. Do not create another source of truth.
+
+
+## 10. Automated enforcement
+
+Pull requests that change Markdown run `.github/workflows/documentation-policy.yml`.
+
+The check:
+- evaluates only changed Markdown files;
+- skips `docs/archive/**` and documents marked `SUPERSEDED` or `HISTORICAL`;
+- warns when an active runbook exceeds 150 lines;
+- fails when an active runbook exceeds 200 lines;
+- warns when a non-runbook document exceeds 300 lines;
+- warns when a runbook omits preferred operational headings.
+
+Executable Development/QA/operations Issues should start from `.github/ISSUE_TEMPLATE/executable-task.yml`.
