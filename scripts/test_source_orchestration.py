@@ -182,6 +182,32 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(item["error_code"], "TIMEOUT")
         self.assertEqual(item["outcome"], "failed")
 
+    def test_source_aggregates_separate_outcomes_and_failure_dimensions(self):
+        plan = [
+            {"outcome": "success"},
+            {"outcome": "success_empty"},
+            {"outcome": "failed", "error_code": "TIMEOUT", "failure_stage": "fetch"},
+            {"outcome": "failed", "error_code": "TIMEOUT", "failure_stage": "fetch"},
+            {"outcome": "failed", "error_code": "SCHEMA_ERROR", "failure_stage": "parse"},
+            {"outcome": "disabled_config"},
+            {"outcome": "deferred_provider"},
+        ]
+        aggregate = orchestration.aggregate_source_results(plan)
+        self.assertEqual(aggregate["source_outcome_counts"]["success"], 1)
+        self.assertEqual(aggregate["source_outcome_counts"]["success_empty"], 1)
+        self.assertEqual(aggregate["source_outcome_counts"]["failed"], 3)
+        self.assertEqual(aggregate["source_outcome_counts"]["disabled_config"], 1)
+        self.assertEqual(aggregate["source_outcome_counts"]["deferred_provider"], 1)
+        self.assertEqual(aggregate["source_failure_codes"], {"SCHEMA_ERROR": 1, "TIMEOUT": 2})
+        self.assertEqual(aggregate["source_failure_stages"], {"fetch": 2, "parse": 1})
+
+    def test_run_history_persists_structured_source_aggregates(self):
+        _, status = self.run_search()
+        history = json.loads(runner.HISTORY_PATH.read_text())["runs"][0]
+        self.assertEqual(history["source_outcome_counts"], status["source_outcome_counts"])
+        self.assertEqual(history["source_failure_codes"], status["source_failure_codes"])
+        self.assertEqual(history["source_failure_stages"], status["source_failure_stages"])
+
     def test_structured_lifecycle_events_are_correlated(self):
         events = []
 
