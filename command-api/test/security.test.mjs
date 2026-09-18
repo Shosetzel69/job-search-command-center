@@ -2,8 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { INTERNAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
-import commandApi from '../src/index.js';
+import commandApi, { authorizeGooglePayload, validateUserConfigPatch } from '../src/index.js';
 import secureEntry, { fullSearchAllowed } from '../src/secure-entry.js';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 const env = {
   APP_ENV: 'test',
@@ -20,12 +22,36 @@ const env = {
 };
 
 const protectedDataPaths = PROTECTED_DATA_FILES.map(file => `/data/${file}`);
+const nomenclatures = JSON.parse(readFileSync(resolve(process.cwd(), '../data/nomenclatures.json'), 'utf8'));
+
+
+test('unauthorized Google subject is rejected independently of token parsing', () => {
+  assert.throws(
+    () => authorizeGooglePayload({ sub:'different-user', email:'other@example.test' }, env),
+    error => error?.status === 403 && /not authorized/i.test(error.message),
+  );
+  assert.equal(authorizeGooglePayload({ sub:env.ALLOWED_GOOGLE_SUB }, env).sub, env.ALLOWED_GOOGLE_SUB);
+});
+
+test('invalid configuration payloads fail closed at validation boundary', () => {
+  for (const payload of [null, [], 'bad', 42]) {
+    assert.throws(
+      () => validateUserConfigPatch(payload, nomenclatures),
+      error => error?.status === 400 && /invalid configuration payload/i.test(error.message),
+    );
+  }
+  assert.throws(
+    () => validateUserConfigPatch({ fitThreshold:101 }, nomenclatures),
+    error => error?.status === 400 && /fitThreshold/i.test(error.message),
+  );
+});
 
 test('all protected data assets reject missing bearer/cookie session before asset lookup', async () => {
   assert.ok(protectedDataPaths.includes('/data/nomenclatures.json'));
   for (const path of protectedDataPaths) {
     const response = await secureEntry.fetch(new Request(`https://app.example.test${path}`), env);
     assert.equal(response.status, 401, `${path} must be protected and must not return 404`);
+    assert.equal(response.headers.get('access-control-allow-origin'), null);
     assert.match(response.headers.get('cache-control') || '', /no-store/i);
   }
 });
@@ -65,6 +91,7 @@ test('privileged request from a forbidden origin is rejected before auth', async
     headers: { Origin: 'https://evil.example.test' },
   }), env);
   assert.equal(response.status, 403);
+  assert.equal(response.headers.get('access-control-allow-origin'), null);
   const payload = await response.json();
   assert.match(payload.error, /origin not allowed/i);
 });
