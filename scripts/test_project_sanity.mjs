@@ -247,6 +247,6 @@ test("chat sanity contract is chat-first and keeps project status secondary", ()
   assert.match(contract, /Do not dump the full project snapshot by default\./);
   assert.match(contract, /PARTIALLY_CURRENT/);
   assert.match(contract, /SUPERSEDED/);
-  assert.match(contract, /CLOSED never implies .*SAFE TO DELETE.* by itself\./);
+  assert.ok(contract.includes("`CLOSED` never implies `SAFE TO DELETE` by itself."));
   assert.match(contract, /SANITY: BLOCKED/);
 });
