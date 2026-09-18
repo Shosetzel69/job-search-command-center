@@ -133,6 +133,7 @@ Reguli:
 - textul `error` / `failure_reason` este numai pentru oameni si nu este parsabil ca API contract;
 - exceptia legacy JobsPipe direct pentru monthly quota este provider-specific si amanata in #236; nu apartine contractului generic;
 - aceleasi rezultate structurate sunt publicate in status si istoric.
+- lifecycle-ul run/source emite evenimente JSON structurate si sanitizate; aceste loguri sunt evidence operational, nu sursa de adevar pentru status.
 
 ## 9. Colectare web HTTP
 
