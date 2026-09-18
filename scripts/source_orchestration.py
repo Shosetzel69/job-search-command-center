@@ -7,6 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
+import diagnostics
 import job_search as engine
 import job_search_apify as apify
 import job_search_ashby as ashby
@@ -155,7 +156,7 @@ def failure_result(connector, query, exc):
         False,
         [],
         0,
-        str(exc),
+        diagnostics.sanitize_text(exc),
         error_code=error_code,
         failure_stage=failure_stage,
         http_status=http_status,
@@ -170,8 +171,17 @@ def disabled_route_outcome(reason):
     return "disabled_config"
 
 
-def finalize_source_outcomes(plan, run_id):
+def prepare_source_execution_ids(plan, run_id):
     for index, item in enumerate(plan):
+        if item.get("source_execution_id"):
+            continue
+        raw_identity = f"{run_id}\0{item.get('source_id')}\0{index}".encode("utf-8")
+        item["source_execution_id"] = hashlib.sha256(raw_identity).hexdigest()[:24]
+
+
+def finalize_source_outcomes(plan, run_id):
+    prepare_source_execution_ids(plan, run_id)
+    for item in plan:
         if not item.get("outcome"):
             if item.get("status") == "completed":
                 item["outcome"] = "success" if item.get("records", 0) else "success_empty"
@@ -183,11 +193,43 @@ def finalize_source_outcomes(plan, run_id):
                 item["outcome"] = "skipped"
         if item["outcome"] not in CANONICAL_OUTCOMES:
             raise ValueError(f"Unsupported source outcome: {item['outcome']}")
-        raw_identity = f"{run_id}\0{item.get('source_id')}\0{index}".encode("utf-8")
-        item["source_execution_id"] = hashlib.sha256(raw_identity).hexdigest()[:24]
         if item["outcome"] != "failed":
             item["error_code"] = None
             item["failure_stage"] = None
+
+
+def emit_source_started(run_id, item):
+    diagnostics.emit_event(
+        "source.collection.started",
+        "INFO",
+        run_id=run_id,
+        **diagnostics.source_fields(item),
+        attempt=1,
+    )
+
+
+def emit_source_final(run_id, item):
+    outcome = item.get("outcome")
+    if outcome in {"success", "success_empty"}:
+        event_name = "source.collection.completed"
+    elif outcome == "failed":
+        event_name = "source.collection.failed"
+    else:
+        event_name = "source.collection.skipped"
+    diagnostics.emit_event(
+        event_name,
+        diagnostics.source_level(item),
+        run_id=run_id,
+        **diagnostics.source_fields(item),
+        outcome=outcome,
+        legacy_status=item.get("status"),
+        records=item.get("records", 0),
+        error_code=item.get("error_code"),
+        failure_stage=item.get("failure_stage"),
+        http_status=item.get("http_status"),
+        message=item.get("error") or item.get("failure_reason"),
+        attempt=1,
+    )
 
 
 def build_plan(catalog):
@@ -250,11 +292,22 @@ def build_plan(catalog):
     return plan
 
 
-def collect_sources(config, state, now, plan):
+def collect_sources(config, state, now, plan, run_id=None):
+    run_id = run_id or ("github-" + now.strftime("%Y%m%dT%H%M%SZ"))
+    prepare_source_execution_ids(plan, run_id)
     with ThreadPoolExecutor(max_workers=12) as pool:
-        futures = {item["source_id"]: pool.submit(web.collect, {"id": item["source_id"], "name": item["source"], "url": item["url"]}, config, now)
-                   for item in plan if item["connector"] == "web" and item["status"] == "pending"}
-        collection, metadata, mode = collect_api_sources(config, state, now, plan)
+        futures = {}
+        for item in plan:
+            if item["connector"] != "web" or item["status"] != "pending":
+                continue
+            emit_source_started(run_id, item)
+            futures[item["source_id"]] = pool.submit(
+                web.collect,
+                {"id": item["source_id"], "name": item["source"], "url": item["url"]},
+                config,
+                now,
+            )
+        collection, metadata, mode = collect_api_sources(config, state, now, plan, run_id)
         for item in plan:
             if item["connector"] != "web" or item["status"] != "pending":
                 continue
@@ -264,7 +317,7 @@ def collect_sources(config, state, now, plan):
             except Exception as exc:
                 results = [failure_result("web:" + str(item["source_id"]), "collect", exc)]
                 item["web_outcome"] = "error"
-                item["failure_reason"] = str(exc)
+                item["failure_reason"] = diagnostics.sanitize_text(exc)
             record_results(item, results)
             collection.extend(results)
     return collection, metadata, mode
@@ -274,7 +327,9 @@ def record_results(item, results):
     failed = [result for result in results if not result.ok]
     item["status"] = "completed" if results and not failed else "failed"
     item["records"] = sum(len(result.records) for result in results if result.ok)
-    item["error"] = "; ".join(result.error or "Collection failed" for result in failed) or None
+    item["error"] = "; ".join(
+        diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
+    ) or None
     if not results:
         item["outcome"] = "failed"
         item["error"] = item["error"] or "Connector returned no collection result"
@@ -300,7 +355,7 @@ def record_results(item, results):
         "status": "completed" if result.ok else "failed",
         "outcome": ("success" if result.records else "success_empty") if result.ok else "failed",
         "records": len(result.records),
-        "error": result.error,
+        "error": diagnostics.sanitize_text(result.error) if result.error else None,
         "error_code": None if result.ok else (result.error_code or "CONNECTOR_ERROR"),
         "failure_stage": None if result.ok else (result.failure_stage or "fetch"),
         "http_status": result.http_status,
@@ -326,7 +381,7 @@ def collect_ats(item):
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
-def collect_api_sources(config, state, now, plan):
+def collect_api_sources(config, state, now, plan, run_id=None):
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
@@ -353,6 +408,8 @@ def collect_api_sources(config, state, now, plan):
                             failure_reason="Jobicy hourly polling limit; no API call")
                 continue
             state.setdefault("source_last_attempt", {})[connector] = now.isoformat()
+        if run_id:
+            emit_source_started(run_id, item)
         try:
             if connector in ats_connectors:
                 results = collect_ats(item)
@@ -387,8 +444,18 @@ def collect_api_sources(config, state, now, plan):
 
 def run(config, now):
     state = optimized.load_state(now)
+    run_id = "github-" + now.strftime("%Y%m%dT%H%M%SZ")
     plan = build_plan(json.loads(SOURCES_PATH.read_text(encoding="utf-8")))
-    collection, metadata, mode = collect_sources(config, state, now, plan)
+    prepare_source_execution_ids(plan, run_id)
+    diagnostics.emit_event(
+        "search.run.started",
+        "INFO",
+        run_id=run_id,
+        source_strategy=config.get("source_strategy") or "all active sources equally",
+        sources_configured=len(plan),
+        sources_active=sum(item["active"] for item in plan),
+    )
+    collection, metadata, mode = collect_sources(config, state, now, plan, run_id)
     successful = any(result.ok for result in collection)
     if successful:
         output = engine.process_records(config, collection, now)
@@ -429,5 +496,20 @@ def run(config, now):
         status["jobspipe_optimization"] = metadata
     engine.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     optimized.save_state(state)
+
+    for item in plan:
+        emit_source_final(run_id, item)
+
+    run_level = "ERROR" if status["status"] == "failed" else ("WARN" if status["status"] == "completed_with_errors" else "INFO")
+    diagnostics.emit_event(
+        "search.run.completed",
+        run_level,
+        run_id=run_id,
+        status=status["status"],
+        records_inspected=status.get("records_inspected", 0),
+        jobs_published=status.get("jobs_published", 0),
+        excluded=status.get("excluded", 0),
+        **{field: status[field] for field in COUNTERS},
+    )
     print(json.dumps({field: status[field] for field in COUNTERS}))
     return 2 if status["status"] == "failed" else 0

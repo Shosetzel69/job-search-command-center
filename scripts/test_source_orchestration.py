@@ -182,6 +182,57 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(item["error_code"], "TIMEOUT")
         self.assertEqual(item["outcome"], "failed")
 
+    def test_structured_lifecycle_events_are_correlated(self):
+        events = []
+
+        def capture(event_name, level="INFO", **fields):
+            events.append((event_name, level, fields))
+            return {"event_name": event_name, "level": level, **fields}
+
+        with patch.object(orchestration.diagnostics, "emit_event", side_effect=capture):
+            _, status = self.run_search()
+
+        names = [event[0] for event in events]
+        self.assertIn("search.run.started", names)
+        self.assertIn("search.run.completed", names)
+        self.assertIn("source.collection.started", names)
+        self.assertIn("source.collection.completed", names)
+        self.assertIn("source.collection.failed", names)
+        self.assertIn("source.collection.skipped", names)
+
+        run_ids = {
+            fields.get("run_id")
+            for _, _, fields in events
+            if fields.get("run_id")
+        }
+        self.assertEqual(run_ids, {status["run_id"]})
+
+        source_events = [
+            fields for name, _, fields in events
+            if name.startswith("source.collection.")
+        ]
+        self.assertTrue(all(fields.get("source_execution_id") for fields in source_events))
+        failed = [
+            (level, fields) for name, level, fields in events
+            if name == "source.collection.failed"
+        ]
+        self.assertTrue(failed)
+        self.assertTrue(all(level == "WARN" for level, _ in failed))
+
+    def test_persisted_failure_message_is_sanitized(self):
+        secret = "abcdefghijklmnopqrstuvwxyz123456"
+        self.apify.side_effect = RuntimeError(
+            f"Authorization: Bearer {secret} https://provider.test/?api_key=supersecret"
+        )
+        _, status = self.run_search()
+        jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
+        self.assertNotIn(secret, jobs_pipe["error"])
+        self.assertNotIn("supersecret", jobs_pipe["error"])
+        history = json.loads(runner.HISTORY_PATH.read_text())["runs"][0]
+        historical = next(item for item in history["source_results"] if item["source"] == "JobsPipe")
+        self.assertNotIn(secret, historical["error"])
+        self.assertNotIn("supersecret", historical["error"])
+
     def test_direct_transport_preserves_incremental_metadata(self):
         self.direct.return_value = ([engine.CollectionResult("jobspipe", "target", True, [], 0)], 0, {"target": 0}, 14)
         _, status = self.run_search({**CONFIG, "jobspipe_mode": "direct"})
