@@ -1,7 +1,7 @@
 # Functionalitati
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-13`
+Ultima actualizare: `2026-09-18`
 Status baseline: `STABLE / CLOSE`
 
 ## 1. Acces
@@ -150,8 +150,12 @@ Pagina `Loguri`:
 
 - foloseste `data/run-history.json`;
 - pastreaza maximum 10 rulari de cautare;
-- afiseaza status, trigger, ora, durata, surse procesate, rezultate si erori sanitizate;
-- permite inspectarea source results si limitarilor;
+- afiseaza status, trigger, ora, durata, surse procesate si rezultate;
+- afiseaza agregate separate pentru `success`, `success_empty`, `failed` si starile asteptate de neexecutie;
+- erorile sunt grupate dupa `error_code` si `failure_stage`;
+- source results afiseaza outcome-ul structurat si, numai pentru failures, codul/etapa/statusul HTTP;
+- starile `deferred_provider`, `blocked_credentials`, `validation_pending`, `disabled_config`, `excluded_policy` si `skipped` nu sunt etichetate ca runtime errors;
+- mesajele text sanitizate raman detaliu uman si nu sunt folosite de UI pentru clasificare;
 - istoricul este protejat prin Cloudflare Worker.
 
 ## 8. JobsPipe si provideri

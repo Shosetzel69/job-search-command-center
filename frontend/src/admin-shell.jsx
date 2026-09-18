@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
+import { failureGroupRows, sourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
 import {
   ADMIN_SECTIONS,
   SOURCE_SECTIONS,
@@ -276,7 +277,55 @@ function Nomenclatures() {
 function Logs({ runs }) {
   const [open,setOpen] = useState(null);
   if (!runs.length) return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Nu exista istoric de rulari.</div>;
-  return <div className="space-y-3">{runs.slice(0,10).map(run => <section key={run.run_id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><button onClick={() => setOpen(open === run.run_id ? null : run.run_id)} className="grid w-full gap-2 px-5 py-4 text-left sm:grid-cols-[160px_120px_120px_1fr]"><div><div className="font-semibold text-slate-900">{formatTime(run.completed_at || run.started_at)}</div><div className="text-xs text-slate-400">{run.run_id}</div></div><Pill tone={run.status === 'completed' ? 'green' : run.status === 'completed_with_errors' ? 'amber' : 'red'}>{run.status}</Pill><div className="text-xs text-slate-600">Trigger: {run.trigger || '—'}</div><div className="text-xs text-slate-500">{run.sources_attempted ?? run.sources_processed ?? 0} surse · {run.jobs_published ?? 0} publicate</div></button>{open === run.run_id && <div className="border-t border-slate-100 bg-slate-50 p-4 text-xs text-slate-600"><div className="grid gap-2 md:grid-cols-3"><span>Durata: {run.duration_seconds != null ? `${run.duration_seconds}s` : '—'}</span><span>Brute: {run.records_inspected ?? 0}</span><span>Excluse: {run.excluded ?? 0}</span></div>{run.limitations?.length > 0 && <div className="mt-3 text-amber-700">{run.limitations.join(' · ')}</div>}{run.failed_sources?.length > 0 && <div className="mt-3 text-red-700">Surse cu eroare: {run.failed_sources.join(', ')}</div>}</div>}</section>)}</div>;
+  return <div className="space-y-3">{runs.slice(0,10).map(run => {
+    const summary = sourceSummaryRows(run);
+    const failureGroups = failureGroupRows(run);
+    const sourceRows = sourceResultRows(run);
+    return <section key={run.run_id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <button onClick={() => setOpen(open === run.run_id ? null : run.run_id)} className="grid w-full gap-2 px-5 py-4 text-left sm:grid-cols-[160px_120px_120px_1fr]">
+        <div><div className="font-semibold text-slate-900">{formatTime(run.completed_at || run.started_at)}</div><div className="text-xs text-slate-400">{run.run_id}</div></div>
+        <Pill tone={run.status === 'completed' ? 'green' : run.status === 'completed_with_errors' ? 'amber' : 'red'}>{run.status}</Pill>
+        <div className="text-xs text-slate-600">Trigger: {run.trigger || '—'}</div>
+        <div className="text-xs text-slate-500">{run.sources_attempted ?? run.sources_processed ?? 0} surse · {run.jobs_published ?? 0} publicate</div>
+      </button>
+      {open === run.run_id && <div className="border-t border-slate-100 bg-slate-50 p-4 text-xs text-slate-600">
+        <div className="grid gap-2 md:grid-cols-3"><span>Durata: {run.duration_seconds != null ? `${run.duration_seconds}s` : '—'}</span><span>Brute: {run.records_inspected ?? 0}</span><span>Excluse: {run.excluded ?? 0}</span></div>
+
+        {summary.length > 0 && <div className="mt-4">
+          <div className="mb-2 font-semibold text-slate-700">Rezultat surse</div>
+          <div className="flex flex-wrap gap-2">{summary.map(item => <Pill key={item.outcome} tone={item.tone}>{item.label}: {item.count}</Pill>)}</div>
+        </div>}
+
+        {(failureGroups.errorCodes.length > 0 || failureGroups.failureStages.length > 0) && <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-red-100 bg-white p-3">
+            <div className="font-semibold text-red-700">Erori dupa cod</div>
+            <div className="mt-2 space-y-1">{failureGroups.errorCodes.map(item => <div key={item.key} className="flex justify-between gap-3"><span>{item.key}</span><span className="font-semibold">{item.count}</span></div>)}</div>
+          </div>
+          <div className="rounded-xl border border-red-100 bg-white p-3">
+            <div className="font-semibold text-red-700">Erori dupa etapa</div>
+            <div className="mt-2 space-y-1">{failureGroups.failureStages.map(item => <div key={item.key} className="flex justify-between gap-3"><span>{item.key}</span><span className="font-semibold">{item.count}</span></div>)}</div>
+          </div>
+        </div>}
+
+        {sourceRows.length > 0 && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
+          <div className="min-w-[760px] divide-y divide-slate-100">
+            {sourceRows.map((item,index) => <div key={`${item.source}-${index}`} className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 px-3 py-2">
+              <div className="font-medium text-slate-700">{item.source}</div>
+              <div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div>
+              <div>{item.records} joburi</div>
+              <div className={item.outcome === 'failed' ? 'text-red-700' : 'text-slate-500'}>
+                {item.outcome === 'failed'
+                  ? [item.errorCode, item.failureStage, item.httpStatus ? `HTTP ${item.httpStatus}` : null].filter(Boolean).join(' · ') || 'Eroare clasificata'
+                  : item.outcomeMeta.kind === 'expected' ? 'Neexecutata conform starii/politicii curente' : '—'}
+              </div>
+            </div>)}
+          </div>
+        </div>}
+
+        {run.limitations?.length > 0 && <div className="mt-3 text-amber-700">{run.limitations.join(' · ')}</div>}
+      </div>}
+    </section>;
+  })}</div>;
 }
 
 export default function AdminShell({
