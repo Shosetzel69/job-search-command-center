@@ -7,6 +7,7 @@ import {
   disableAutoRestore,
   googleIdentityOptions,
   isProtectedAuthFailure,
+  installAuthFailureReload,
   readGoogleLoginHint,
   rememberGoogleLoginHint,
 } from '../src/auth-session.mjs';
@@ -93,6 +94,27 @@ test('Google Identity stays manual before the first successful login', () => {
 test('Google Identity options reject invalid required inputs', () => {
   assert.throws(() => googleIdentityOptions({ clientId: '', onCredential() {} }), /client ID/);
   assert.throws(() => googleIdentityOptions({ clientId: 'client-id', onCredential: null }), /callback/);
+});
+
+
+test('protected 401 schedules visible reauthentication and disables automatic restore', async () => {
+  const storage = memoryStorage();
+  let reloads = 0;
+  const target = {
+    location:{
+      href:'https://app.example.test/',
+      origin:'https://app.example.test',
+      reload(){ reloads += 1; },
+    },
+    localStorage:storage,
+    fetch:async () => ({ status:401 }),
+    setTimeout(callback){ callback(); },
+  };
+  assert.equal(installAuthFailureReload(target), true);
+  const response = await target.fetch('/data/jobs.json');
+  assert.equal(response.status, 401);
+  assert.equal(storage.getItem(GOOGLE_AUTO_RESTORE_DISABLED_KEY), '1');
+  assert.equal(reloads, 1);
 });
 
 test('only same-origin protected 401 responses trigger forced reauthentication', () => {
