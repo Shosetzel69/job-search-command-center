@@ -81,9 +81,11 @@ def sanitize_text(value: Any) -> str:
     if not text:
         return text
 
-    text = KEY_VALUE_PATTERN.sub(lambda match: f"{match.group(1)}=[REDACTED]", text)
+    # Redact token-shaped values first so labels such as "Authorization: Bearer ..."
+    # cannot remove the marker while leaving the credential behind.
     for pattern in TOKEN_PATTERNS:
         text = pattern.sub("[REDACTED]", text)
+    text = KEY_VALUE_PATTERN.sub(lambda match: f"{match.group(1)}=[REDACTED]", text)
 
     # Sanitize URL query/userinfo without requiring callers to identify URL fields.
     parts = text.split()
