@@ -143,6 +143,9 @@ def append_run_history() -> None:
         "jobs_published": int(status.get("jobs_published") or 0),
         "excluded": int(status.get("excluded") or 0),
         "source_results": status.get("source_results") or [],
+        "source_outcome_counts": status.get("source_outcome_counts") or {},
+        "source_failure_codes": status.get("source_failure_codes") or {},
+        "source_failure_stages": status.get("source_failure_stages") or {},
         "limitations": status.get("limitations") or [],
         "publication": "published",
     }
