@@ -53,11 +53,14 @@ function requestUrl(input, target = globalThis.window) {
 }
 
 export function isProtectedAuthFailure(input, response, target = globalThis.window) {
-  if (response?.status !== 401) return false;
+  const status = Number(response?.status);
+  if (status !== 401 && status !== 403) return false;
   const url = requestUrl(input, target);
   if (!url) return false;
   if (target?.location?.origin && url.origin !== target.location.origin) return false;
-  return !['/auth/session','/auth/config','/auth/logout','/health'].includes(url.pathname);
+  if (['/auth/session','/auth/config','/auth/logout','/health'].includes(url.pathname)) return false;
+  if (status === 403) return url.pathname.startsWith('/data/');
+  return true;
 }
 
 export function installAuthFailureReload(target = globalThis.window) {
