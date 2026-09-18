@@ -232,6 +232,26 @@ def emit_source_final(run_id, item):
     )
 
 
+def aggregate_source_results(plan):
+    outcome_counts = {}
+    error_code_counts = {}
+    failure_stage_counts = {}
+    for item in plan:
+        outcome = item.get("outcome") or "unknown"
+        outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
+        if outcome != "failed":
+            continue
+        error_code = item.get("error_code") or "UNEXPECTED_ERROR"
+        failure_stage = item.get("failure_stage") or "postprocess"
+        error_code_counts[error_code] = error_code_counts.get(error_code, 0) + 1
+        failure_stage_counts[failure_stage] = failure_stage_counts.get(failure_stage, 0) + 1
+    return {
+        "source_outcome_counts": dict(sorted(outcome_counts.items())),
+        "source_failure_codes": dict(sorted(error_code_counts.items())),
+        "source_failure_stages": dict(sorted(failure_stage_counts.items())),
+    }
+
+
 def build_plan(catalog):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("sources"), list):
         raise ValueError("Source catalog must contain a sources array")
@@ -473,6 +493,7 @@ def run(config, now):
     status = json.loads(engine.STATUS_PATH.read_text())
     finalize_source_outcomes(plan, status["run_id"])
     status["source_outcome_schema_version"] = "1.0"
+    status.update(aggregate_source_results(plan))
     attempted = [item for item in plan if item["status"] in {"completed", "failed"}]
     status.update({"source_strategy": config.get("source_strategy") or "all active sources equally",
                    "sources_configured": len(plan), "sources_active": sum(item["active"] for item in plan),
