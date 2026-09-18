@@ -36,15 +36,28 @@ Modificarile de config, surse, categorii sau nomenclatoare nu pornesc full searc
 
 ## Autentificare
 
-Browser:
+Browserul poate autentifica o cerere protejata in doua moduri echivalente:
 
 ```text
 Authorization: Bearer <GOOGLE_ID_TOKEN>
 ```
 
-Worker verifica Google JWKS, issuer, `GOOGLE_CLIENT_ID` si `ALLOWED_GOOGLE_SUB`.
+sau prin sesiunea same-origin `__Host-jscc_session` stabilita dupa validarea initiala.
 
-La autentificare reusita, frontend-ul poate retine local numai adresa de email autorizata ca `login_hint` non-secret pentru Google Identity Services. Google ID token nu este persistat: ramane exclusiv in memoria paginii. La reload, frontend-ul poate cere Google Identity Services sa emita un credential nou pentru contul cunoscut; credentialul este revalidat integral prin `POST /auth/session`. Logout explicit dezactiveaza auto-select pentru a evita reautentificarea imediata.
+Worker verifica in ambele cazuri Google JWKS, issuer, `GOOGLE_CLIENT_ID` si `ALLOWED_GOOGLE_SUB`. Cookie-ul nu inlocuieste validarea Google; transporta credentialul inapoi la Worker fara a-l expune JavaScript-ului.
+
+Reguli sesiune:
+- `POST /auth/session` cu bearer valid seteaza `__Host-jscc_session`;
+- cookie: `Secure; HttpOnly; SameSite=Strict; Path=/`, fara `Domain`;
+- durata nu depaseste expirarea Google ID token;
+- Google ID token nu este persistat in localStorage/sessionStorage;
+- frontend-ul poate pastra numai `login_hint` si markerul non-secret de auto-restore;
+- reload-ul incearca restore prin `POST /auth/session`;
+- `POST /auth/logout` sterge cookie-ul si logout-ul explicit suprima auto-restore;
+- protected-data 401/403 produce reautentificare vizibila;
+- un 403 de politica, de exemplu Full Search dezactivat in DEV/TEST, nu este tratat ca pierdere de sesiune.
+
+Decizie: `docs/adr/ADR-004-http-only-auth-session.md`.
 
 ## Endpoint-uri publice
 
@@ -54,6 +67,7 @@ La autentificare reusita, frontend-ul poate retine local numai adresa de email a
 ## Endpoint autentificare
 
 - `POST /auth/session`
+- `POST /auth/logout`
 
 ## Date protejate
 
