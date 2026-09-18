@@ -2,7 +2,7 @@
 
 Status: Accepted
 Data: 2026-09-09
-Refs: #127 #132 #128 #131 #136 #140 #143
+Refs: #127 #132 #128 #131 #136 #140 #143 #204
 
 ## Context
 
@@ -104,7 +104,8 @@ Private keys, JWT-urile si installation tokens nu sunt returnate clientului si n
 
 - niciun endpoint generic de proxy;
 - repository fix, neparametrizabil in v1;
-- operatiile administrative, secrets, collaborators, branch protection si deploy sunt excluse;
+- operatiile administrative, secrets, collaborators, branch protection si deploy generic sunt excluse;
+- exceptie aprobata #204: bridge-ul poate dispatch-ui exclusiv `deploy-environment.yml` pentru `dev|test`, cu repository/ref/action/inputurile structurale fixate server-side;
 - write direct in `main` nu este relevant pentru MVP issues si ramane interzis la extinderea viitoare pe fisiere;
 - merge/deploy PROD ramane in governance-ul existent si necesita owner GO;
 - orice extindere spre files/branches/PR necesita contract explicit si teste dedicate.
@@ -166,4 +167,21 @@ Aceasta corectie nu schimba decizia ADR: boundary-ul ramane `AI client -> ai-git
 
 Validarea live a fost finalizata cu issue #143, creat de `jobsearch-claude-agent[bot]`, apoi actualizat si inchis prin MCP. Titlul si label-urile au ramas neschimbate.
 
-Remote MCP ChatGPT nu este activ in configuratia curenta. Orice extindere a MCP spre ChatGPT sau spre files/branches/PR necesita change separat si actualizare de contract/documentatie.
+## Addendum release dispatch - 2026-09-18
+
+Issue #204 extinde acelasi boundary cu o singura capabilitate Actions mutabila, strict allowlisted:
+
+- REST: `POST /v1/actions/environment-deploy`;
+- MCP Claude: `dispatch_environment_deploy`;
+- workflow fix: `deploy-environment.yml`;
+- ref fix: `main`;
+- action fixa: `deploy`;
+- medii permise: `dev|test`;
+- PROD este respins inainte de GitHub API;
+- DEV necesita `issue_pr`;
+- TEST necesita `dev_evidence_run_id`;
+- GitHub App necesita `Actions: Read and write`.
+
+Aceasta extensie automatizeaza etapa DEV/TEST din #198 fara a autoriza PROD, owner GO sau workflow-uri arbitrare.
+
+Remote MCP ChatGPT nu este activ in configuratia curenta. REST/OpenAPI poate expune aceeasi operatie actorului ChatGPT dupa configurarea integrarii bridge existente. Orice extindere a MCP spre ChatGPT sau spre files/branches/PR necesita change separat si actualizare de contract/documentatie.

@@ -210,3 +210,113 @@ test("repository allowlist cannot be redirected by environment drift", async () 
   assert.equal(issueCall, false);
   assert.equal((await response.json()).error, "bridge_not_configured");
 });
+
+
+test("ChatGPT can dispatch only the canonical DEV environment workflow", async () => {
+  const calls = [];
+  const sourceSha = "a".repeat(40);
+  const fetchImpl = async (url, options) => {
+    calls.push({ url: String(url), options });
+    if (String(url).includes("/app/installations/160337921/access_tokens")) {
+      return json({ token: "installation-chatgpt" }, 201);
+    }
+    assert.equal(
+      String(url),
+      "https://api.github.com/repos/Shosetzel69/job-search-command-center/actions/workflows/deploy-environment.yml/dispatches",
+    );
+    assert.equal(options.method, "POST");
+    assert.equal(options.headers.authorization, "Bearer installation-chatgpt");
+    assert.deepEqual(JSON.parse(options.body), {
+      ref: "main",
+      inputs: {
+        action: "deploy",
+        environment: "dev",
+        source_sha: sourceSha,
+        dry_run: false,
+        issue_pr: "#193 / #194 / PR #203",
+      },
+    });
+    return new Response(null, { status: 204 });
+  };
+
+  const response = await handleRequest(
+    new Request("https://bridge.example/v1/actions/environment-deploy", {
+      method: "POST",
+      headers: { authorization: "Bearer bridge-chatgpt", "content-type": "application/json" },
+      body: JSON.stringify({
+        environment: "dev",
+        source_sha: sourceSha,
+        issue_pr: "#193 / #194 / PR #203",
+      }),
+    }),
+    env(),
+    deps(fetchImpl),
+  );
+
+  assert.equal(response.status, 202);
+  const payload = await response.json();
+  assert.equal(payload.actor, "chatgpt");
+  assert.equal(payload.workflow, "deploy-environment.yml");
+  assert.equal(payload.ref, "main");
+  assert.equal(payload.environment, "dev");
+  assert.equal(payload.source_sha, sourceSha);
+  assert.equal(calls.length, 2);
+});
+
+test("TEST dispatch is bound to DEV evidence for the same explicit candidate input", async () => {
+  const sourceSha = "b".repeat(40);
+  const fetchImpl = async (url, options) => {
+    if (String(url).includes("/access_tokens")) return json({ token: "installation-chatgpt" }, 201);
+    assert.deepEqual(JSON.parse(options.body), {
+      ref: "main",
+      inputs: {
+        action: "deploy",
+        environment: "test",
+        source_sha: sourceSha,
+        dry_run: false,
+        dev_evidence_run_id: "35290000001",
+      },
+    });
+    return new Response(null, { status: 204 });
+  };
+
+  const response = await handleRequest(
+    new Request("https://bridge.example/v1/actions/environment-deploy", {
+      method: "POST",
+      headers: { authorization: "Bearer bridge-chatgpt", "content-type": "application/json" },
+      body: JSON.stringify({
+        environment: "test",
+        source_sha: sourceSha,
+        dev_evidence_run_id: "35290000001",
+      }),
+    }),
+    env(),
+    deps(fetchImpl),
+  );
+  assert.equal(response.status, 202);
+});
+
+test("PROD and malformed environment deploy requests fail closed before GitHub access", async () => {
+  for (const body of [
+    { environment: "prod", source_sha: "c".repeat(40), issue_pr: "#204" },
+    { environment: "dev", source_sha: "short", issue_pr: "#204" },
+    { environment: "dev", source_sha: "c".repeat(40) },
+    { environment: "test", source_sha: "c".repeat(40) },
+    { environment: "dev", source_sha: "c".repeat(40), issue_pr: "#204", dev_evidence_run_id: "123" },
+    { environment: "dev", source_sha: "c".repeat(40), issue_pr: "#204", workflow: "prod-cutover.yml" },
+  ]) {
+    let called = false;
+    const response = await handleRequest(
+      new Request("https://bridge.example/v1/actions/environment-deploy", {
+        method: "POST",
+        headers: { authorization: "Bearer bridge-chatgpt", "content-type": "application/json" },
+        body: JSON.stringify(body),
+      }),
+      env(),
+      deps(async () => { called = true; return json({}); }),
+    );
+    assert.equal(response.status, 400);
+    assert.equal(called, false);
+    assert.equal((await response.json()).error, "invalid_request");
+  }
+});

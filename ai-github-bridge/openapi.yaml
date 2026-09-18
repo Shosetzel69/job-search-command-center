@@ -1,8 +1,8 @@
 openapi: 3.1.0
 info:
   title: Job Search AI GitHub Bridge
-  version: 0.1.0
-  description: Restricted GitHub issue operations for the Job Search Command Center AI agents.
+  version: 0.2.0
+  description: Restricted GitHub issue and release-control operations for the Job Search Command Center AI agents.
 servers:
   - url: https://ai-github-bridge.myeboda.workers.dev
 paths:
@@ -101,6 +101,41 @@ paths:
           description: Invalid request.
         "401":
           description: Invalid bridge credential.
+  /v1/actions/environment-deploy:
+    post:
+      operationId: dispatchEnvironmentDeploy
+      description: Dispatch the canonical #198 environment deployment workflow for DEV or TEST only. Repository, workflow, ref, action and dry_run are fixed server-side. PROD is rejected.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: false
+              required: [environment, source_sha]
+              properties:
+                environment:
+                  type: string
+                  enum: [dev, test]
+                source_sha:
+                  type: string
+                  pattern: "^[0-9a-fA-F]{40}$"
+                issue_pr:
+                  type: string
+                  minLength: 1
+                  maxLength: 256
+                dev_evidence_run_id:
+                  type: string
+                  pattern: "^[0-9]+$"
+      responses:
+        "202":
+          description: Workflow dispatch accepted by GitHub.
+        "400":
+          description: Invalid or non-allowlisted deployment request.
+        "401":
+          description: Invalid bridge credential.
+        "403":
+          description: GitHub App lacks required Actions permission.
 components:
   securitySchemes:
     bridgeBearer:
