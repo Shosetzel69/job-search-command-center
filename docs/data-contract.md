@@ -97,6 +97,8 @@ Coduri de eroare initiale pentru `failed`:
 
 Automatizarea si UI-ul nu parseaza `error` / `failure_reason` pentru a deduce outcome, error code sau failure stage.
 
+Exceptie legacy cunoscuta, provider-specific: JobsPipe direct mai foloseste un mesaj text pentru starea de quota lunara; remedierea este separata si amanata in #236. Aceasta exceptie nu face parte din contractul generic si nu poate fi folosita de consumatorii `source_results`.
+
 ## 4. `data/run-history.json`
 
 ```json
