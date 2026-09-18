@@ -97,7 +97,9 @@ In Development se pot face:
 
 Development se executa pe branch dedicat. `main`, TEST si PROD nu sunt medii de implementare sau debugging.
 
-Dupa implementare se aplica obligatoriu lifecycle-ul definit in `docs/software-delivery-lifecycle.md`:
+Dupa implementare se aplica obligatoriu lifecycle-ul definit in `docs/software-delivery-lifecycle.md`.
+
+Pentru un release simplu/single-wave:
 
 ```text
 DEV verification
@@ -108,6 +110,8 @@ DEV verification
 -> owner GO
 -> PROD
 ```
+
+Pentru un release multi-wave, TEST poate fi folosit pentru checkpoint-uri intermediare. Acestea se opresc dupa verdictul TEST; numai Final Release Candidate (FRC), care contine scope-ul complet al release-ului, poate continua spre PROD.
 
 Un defect gasit in TEST sau PROD revine in DEV. Nu se aplica patch-uri ad-hoc direct in TEST/PROD.
 
@@ -286,20 +290,35 @@ approved change
 -> smoke/acceptance
 ```
 
-### 9.1 Candidate Identity Rule
+### 9.1 Multi-wave Release Checkpoint Rule
 
-Un release foloseste un `CANDIDATE_SHA` immutable.
+Un release mare poate folosi checkpoint-uri intermediare DEV -> TEST pentru a valida un subset stabilizat inainte de finalizarea intregului release.
+
+Reguli:
+- checkpoint-ul foloseste un SHA immutable si TEST primeste exact SHA-ul verificat in DEV;
+- checkpoint PASS autorizeaza numai continuarea catre urmatorul wave;
+- checkpoint-ul se opreste inainte de PROD si nu primeste owner GO;
+- evidence-ul checkpoint-ului ramane atasat scope-ului testat, dar nu inlocuieste validarea Final Release Candidate;
+- modificarile din wave-urile ulterioare pot produce SHA-uri noi fara a invalida istoric verdictul checkpoint-ului;
+- dupa finalizarea scope-ului release-ului se selecteaza un singur **Final Release Candidate (FRC)**;
+- FRC executa integral ciclul DEV -> TEST -> PROD si este singurul candidat eligibil pentru Release Record.
+
+Pentru Release 1, Wave 2 este tratat ca intermediate TEST validation checkpoint; dupa Wave 3/4 se va selecta FRC-ul Release 1.
+
+### 9.2 Candidate Identity Rule
+
+Fiecare validation/promotion cycle foloseste un SHA immutable. Pentru ciclul final, SHA-ul este Final Release Candidate al release-ului.
 
 Reguli:
 
-- DEV si TEST trebuie sa ruleze exact acelasi SHA pentru ciclul de promovare;
+- DEV si TEST trebuie sa ruleze exact acelasi SHA pentru ciclul curent; pentru checkpoint ciclul se opreste dupa TEST, iar pentru FRC continua spre PROD;
 - orice modificare dupa freeze produce un SHA nou si invalideaza TEST PASS anterior;
 - dupa TEST PASS, integrarea in `main` nu poate rescrie candidate-ul prin squash/rebase;
 - daca integrarea necesita conflict resolution care modifica continutul candidate-ului, candidate-ul se invalideaza si revine in DEV/TEST;
 - PROD deployeaza exact candidate-ul validat, dupa ce acesta este integrat/reachable din `main`;
 - `main` este linia aprobata de integrare/history, nu substitut implicit pentru payload identity.
 
-### 9.2 Deploy Immutability Rule
+### 9.3 Deploy Immutability Rule
 
 Deploy-ul nu este o etapa de development si nu poate introduce modificari noi.
 
@@ -322,7 +341,7 @@ Reguli:
 - copia locala poate fi folosita pentru development/testare, dar nu ca sursa de release;
 - dupa deploy se pastreaza trasabilitatea la candidate SHA, post-merge main SHA si, unde platforma ofera, Version ID / Build ID / deployment URL.
 
-### 9.3 Merge is not Deploy Rule
+### 9.4 Merge is not Deploy Rule
 
 Merge-ul in `main` si deploy-ul sunt evenimente separate.
 
@@ -331,7 +350,7 @@ Merge-ul in `main` si deploy-ul sunt evenimente separate.
 - PROD necesita propriul readiness gate si owner GO;
 - daca un workflow face deploy automat doar prin push/merge pe `main`, acesta este incompatibil cu lifecycle-ul canonic daca nu exista un gate de release echivalent.
 
-### 9.4 Rollback Readiness Rule
+### 9.5 Rollback Readiness Rule
 
 Niciun PROD deploy nu porneste fara rollback definit inainte de executie.
 
@@ -345,7 +364,7 @@ Minimum:
 
 Rollback-ul nu foloseste date DEV/TEST ca date PROD.
 
-### 9.5 Release Record Rule
+### 9.6 Release Record Rule
 
 Fiecare promovare PROD trebuie sa aiba un release record non-secret care leaga minimum:
 

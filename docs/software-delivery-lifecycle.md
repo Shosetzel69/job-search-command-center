@@ -43,13 +43,41 @@ TEST FAIL
 
 LEGACY stays outside this chain and remains rollback/fallback only until separately retired.
 
+### 2.1 Multi-wave releases: validation checkpoints and Final Release Candidate
+
+A release may contain several implementation/stabilization waves. In that case, TEST can be used as an **intermediate validation checkpoint** before the complete release scope is finished.
+
+Checkpoint flow:
+
+```text
+wave scope implemented
+  -> DEV verification
+  -> freeze CHECKPOINT_SHA
+  -> TEST exact same SHA
+  -> independent checkpoint verdict
+  -> STOP before PROD
+  -> next release wave
+```
+
+Rules:
+- a validation checkpoint is not the Final Release Candidate and cannot receive PROD GO;
+- checkpoint PASS authorizes continuation of the release build only;
+- checkpoint evidence remains valid evidence for the scope tested at that SHA, but cannot substitute for final DEV/TEST evidence;
+- later wave changes may create a different SHA without treating the earlier checkpoint as a failed release candidate;
+- a checkpoint failure returns to DEV and requires a new checkpoint SHA before that scope is accepted;
+- after all intended release waves are complete, freeze one **Final Release Candidate (FRC)** containing the complete release scope;
+- the FRC must execute the full canonical DEV -> TEST -> PROD lifecycle on one immutable SHA;
+- only the FRC can produce PROD GO, PROD deployment and the Release Record.
+
+The normal single-change/single-wave lifecycle is unchanged: its first frozen candidate may also be the FRC.
+
 ## 3. Non-negotiable rules
 
 1. `main` is not a development, debugging or QA environment.
 2. No direct write to `main`; source changes use branch + PR.
 3. DEV is the normal implementation/debugging environment.
 4. TEST validates the exact candidate; fixes never happen directly in TEST.
-5. One immutable `CANDIDATE_SHA` is promoted DEV -> TEST -> PROD.
+5. One immutable candidate SHA is used per validation/promotion cycle. Only a Final Release Candidate is promoted DEV -> TEST -> PROD.
 6. Any source change after freeze creates a new candidate and invalidates the previous TEST result.
 7. Merge to `main` is separate from PROD deployment and does not authorize PROD.
 8. After TEST PASS, candidate integration must preserve the tested commit identity. If squash/rebase/conflict resolution changes it, restart DEV -> TEST with a new SHA.
@@ -57,6 +85,7 @@ LEGACY stays outside this chain and remains rollback/fallback only until separat
 10. Rollback must be known before PROD deployment.
 11. Runtime data are environment-local; DEV/TEST data are never promoted or used as PROD rollback data.
 12. LEGACY is excluded from normal release automation.
+13. Intermediate TEST checkpoint PASS never authorizes PROD and never replaces the final DEV/TEST evidence required for the FRC.
 
 ## 4. Environment roles
 
@@ -136,7 +165,7 @@ The Issue may then close.
 
 ## 6. Candidate identity contract
 
-`CANDIDATE_SHA` is the exact application source commit selected after DEV verification.
+`CANDIDATE_SHA` is the exact application source commit selected after DEV verification for one validation/promotion cycle. In a multi-wave release, an intermediate cycle may use a `CHECKPOINT_SHA`; the final cycle uses the **Final Release Candidate (FRC)** SHA.
 
 For one promotion cycle:
 
@@ -151,6 +180,8 @@ DEV/TEST may deploy this immutable commit before it is merged into `main`.
 PROD may deploy it only after TEST PASS and after the same commit is reachable from approved `main` history.
 
 A workflow must never silently replace the requested candidate with current `main`, a later branch HEAD, a merge commit, or local modifications.
+
+For intermediate checkpoints, the equality requirement applies DEV -> TEST for that checkpoint and the cycle stops before PROD. For the FRC, the equality requirement applies DEV -> TEST -> PROD.
 
 ## 7. Minimal Release Record
 
@@ -300,7 +331,9 @@ Deferred until project scale justifies them:
 
 ## 12. Definition of Done
 
-A software change is complete when:
+For a multi-wave release, checkpoint PASS means only that the tested wave/scope is accepted to continue building the release. The release itself is complete only after the FRC completes the full lifecycle below.
+
+A software release/change is complete when:
 - approved scope is implemented;
 - DEV PASS exists;
 - one frozen candidate SHA is recorded;
