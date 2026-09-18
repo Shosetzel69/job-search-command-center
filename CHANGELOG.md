@@ -4,6 +4,7 @@
 
 ### Functionalitati
 
+- #222: sanity devine chat-first: raporteaza mai intai ultima actiune materiala, subiectul si actualitatea lui (CURRENT/PARTIALLY_CURRENT/SUPERSEDED/CLOSED), apoi doar starea GitHub relevanta; verdictul de continuare/stergere ramane fail-closed pentru informatia UNIQUE nepersistata.
 - #211: adaugat snapshot automat read-only pentru project sanity, derivat din checkpoint/FRC PR, defecte/QA si evidence artifacts DEV/TEST/PROD; la reluarea unui chat JSCC contextul este comparat cu snapshot-ul, iar LEGACY si mediile aplicatiei nu sunt mutate de sanity.
 - #204: automatizarea release-ului permite ChatGPT sa porneasca DEV/TEST printr-un comentariu GitHub owner `/jscc-deploy ...`; workflow-ul GitHub-native valideaza strict owner-ul, SHA-ul si evidence-ul, apoi dispatch-uieste doar `deploy-environment.yml` din `main`. PROD ramane exclus. Extensia ai-github-bridge DEV/TEST este pastrata optional pentru integrari viitoare.
 - #198: implementat fluxul fail-closed de promovare a aceluiasi `CANDIDATE_SHA` DEV -> TEST -> PROD, cu evidence artifacts separate pentru DEV PASS, TEST deploy, TEST PASS independent si PROD release record; PROD necesita candidate reachability din `main`, rollback pregatit si `PROD_GO` explicit.
