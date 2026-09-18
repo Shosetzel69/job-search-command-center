@@ -15,6 +15,7 @@ from typing import Any
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
+import diagnostics
 from job_identity import deduplicate
 import nomenclatures as canonical_nomenclatures
 
@@ -571,7 +572,7 @@ def write_status(now: datetime, collection: list[CollectionResult], jobs_publish
             "source_execution_id": f"{run_id}:{index:04d}",
             "records": records,
             "total_available": result.total_available,
-            "error": result.error,
+            "error": diagnostics.sanitize_text(result.error) if result.error else None,
             "error_code": None if result.ok else (result.error_code or "CONNECTOR_ERROR"),
             "failure_stage": None if result.ok else (result.failure_stage or "fetch"),
             "http_status": result.http_status,
