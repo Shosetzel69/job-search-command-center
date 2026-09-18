@@ -2,6 +2,8 @@ name: Project sanity snapshot
 
 on:
   workflow_dispatch:
+  push:
+    branches: [main]
   issues:
     types: [opened, closed, reopened, labeled, unlabeled]
   workflow_run:
