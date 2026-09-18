@@ -56,6 +56,7 @@
 
 ### Documentatie
 
+- #220: introdusa politica de documentatie cu progressive disclosure si context budget; AI nu mai incarca implicit toate documentele canonice, Issues/runbook-urile au limite de marime, iar analiza nu mai este sincronizata ca documentatie live dupa fiecare implementare.
 - #216: clarificat lifecycle-ul release-urilor multi-wave: checkpoint-urile intermediare pot valida DEV -> TEST si se opresc inainte de PROD; dupa finalizarea tuturor wave-urilor se ingheata un singur Final Release Candidate care parcurge integral DEV -> TEST -> PROD si produce Release Record.
 
 - #198: documentat lantul permanent de artifacts `promotion-dev-pass -> promotion-test-deployed -> promotion-test-pass -> release-record`, gate-urile automate, concurenta per mediu si cerintele conditionale de rollback/config/DB.
