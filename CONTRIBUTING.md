@@ -59,15 +59,16 @@ Nu exista write pe files/branches/PR prin Remote MCP in scope-ul curent. Dispatc
 
 ## 5. Documentatie
 
-- documentele in limba romana se scriu fara diacritice;
-- documentatia trebuie sa fie simpla si concisa;
-- daca nu exista informatie pentru un camp sau o sectiune obligatorie, se foloseste `#####`;
-- documentatia descrie implementarea reala, nu doar intentia;
-- unde E2E nu este confirmat, se marcheaza explicit `de confirmat`;
-- modificarile de functionalitate trebuie reflectate in cerinte, functionalitati si arhitectura dupa caz;
-- documentatia este revizuita periodic, la fiecare 2 ore, prin taskul programat ChatGPT `Actualizare documentatie proiect`;
-- taskul de review poate identifica discrepante si propune modificari, dar orice modificare urmeaza regulile de aprobare, versionare, branch si pull request ale proiectului;
-- daca nu exista modificari materiale, nu se creeaza commit doar pentru documentatie.
+Politica canonica: `docs/documentation-policy.md`.
+
+- scrie scurt si task-oriented; linkuieste sursa canonica in loc sa copiezi context;
+- un Issue normal tinteste <= 80 linii; peste 120 linii se separa detaliul suport;
+- un runbook tinteste <= 150 linii; peste 200 linii se revizuieste/sparge inainte de reutilizare;
+- arhivele, rapoartele vechi si documentele `SUPERSEDED` nu sunt context implicit;
+- documentele de analiza pastreaza rationamentul/decizia, nu se sincronizeaza continuu cu implementarea;
+- la o schimbare se actualizeaza numai documentatia canonica material afectata;
+- taskul periodic de review semnaleaza drift material; nu produce rescrieri sau commit-uri de stil fara nevoie reala;
+- documentele in limba romana se scriu fara diacritice.
 
 ## 6. Contracte si versiuni
 
