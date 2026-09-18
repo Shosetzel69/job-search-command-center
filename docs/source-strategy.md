@@ -1,7 +1,7 @@
 # Strategia surselor
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-08`
+Ultima actualizare: `2026-09-18`
 
 ## 1. Principiu
 
@@ -106,23 +106,33 @@ Aceste intrari apar in `source_results` ca `skipped`, cu motiv explicit. Nu sunt
 
 ## 8. Executie si raportare
 
-Fiecare intrare este clasificata operational ca:
+Campul legacy `status` ramane temporar pentru compatibilitate (`inactive|unsupported|skipped|completed|failed`), dar contractul canonic per run este `outcome`:
 
-- `inactive`;
-- `unsupported`;
-- `skipped`;
-- `completed`;
-- `failed`.
+- `success`;
+- `success_empty`;
+- `failed`;
+- `deferred_provider`;
+- `blocked_credentials`;
+- `validation_pending`;
+- `disabled_config`;
+- `excluded_policy`;
+- `skipped` pentru omisiuni operationale intentionate care nu sunt failure.
 
 Reguli:
 
 - `priority` nu limiteaza selectia;
-- o excludere de politica produce `inactive` inainte de colectare;
-- sursele cu acelasi connector/endpoint sunt colectate o singura data; aliasurile sunt raportate `skipped`;
-- JobsPipe respecta modul configurat si in starea curenta nu face apeluri;
-- Jobicy respecta limita sa de polling;
-- erorile per sursa sunt izolate;
-- aceleasi campuri de acoperire sunt publicate in status si istoric, apoi afisate in Loguri.
+- Source Registry state nu este acelasi lucru cu execution outcome;
+- o excludere de politica produce `excluded_policy`;
+- provider roots amanate produc `deferred_provider`;
+- connectorii blocati de credentiale si rutele nevalidate sunt raportate distinct;
+- sursele cu acelasi connector/endpoint sunt colectate o singura data; aliasurile pot fi `skipped`;
+- JobsPipe dezactivat produce `disabled_config`;
+- Jobicy cooldown/quota guards sunt `skipped`, nu failure;
+- executia reusita fara rezultate este `success_empty`, nu failure;
+- orice `failed` are `error_code` si `failure_stage` structurate;
+- textul `error` / `failure_reason` este numai pentru oameni si nu este parsabil ca API contract;
+- exceptia legacy JobsPipe direct pentru monthly quota este provider-specific si amanata in #236; nu apartine contractului generic;
+- aceleasi rezultate structurate sunt publicate in status si istoric.
 
 ## 9. Colectare web HTTP
 

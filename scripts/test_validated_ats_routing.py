@@ -19,6 +19,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         self.assertEqual(plan[0]["connector"], "phenom")
         self.assertFalse(plan[0]["active"])
         self.assertEqual(plan[0]["status"], "inactive")
+        self.assertEqual(plan[0]["outcome"], "blocked_credentials")
         self.assertEqual(plan[0]["failure_reason"], "connector_requires_credentials")
 
     def test_unvalidated_greenhouse_board_stays_disabled(self):
@@ -26,6 +27,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         plan = orchestration.build_plan({"sources": [source]})
         self.assertEqual(plan[0]["connector"], "greenhouse")
         self.assertEqual(plan[0]["status"], "inactive")
+        self.assertEqual(plan[0]["outcome"], "validation_pending")
         self.assertEqual(plan[0]["failure_reason"], "live_api_route_not_validated")
 
     def test_smartrecruiters_dispatch_uses_route_configuration(self):

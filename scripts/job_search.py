@@ -43,6 +43,9 @@ class CollectionResult:
     records: list[dict[str, Any]]
     total_available: int
     error: str | None = None
+    error_code: str | None = None
+    failure_stage: str | None = None
+    http_status: int | None = None
 
 
 class JobsPipeConnector:
@@ -553,22 +556,29 @@ def write_status(now: datetime, collection: list[CollectionResult], jobs_publish
     else:
         state = "completed"
 
+    run_id = "github-" + now.strftime("%Y%m%dT%H%M%SZ")
     sources = sorted({canonical_source_name(result.connector) for result in collection})
-    source_results = [
-        {
+    source_results = []
+    for index, result in enumerate(collection):
+        records = len(result.records)
+        outcome = ("success" if records else "success_empty") if result.ok else "failed"
+        source_results.append({
             "source": canonical_source_name(result.connector),
             "connector": result.connector,
             "query": result.query,
             "status": "completed" if result.ok else "failed",
-            "records": len(result.records),
+            "outcome": outcome,
+            "source_execution_id": f"{run_id}:{index:04d}",
+            "records": records,
             "total_available": result.total_available,
             "error": result.error,
-        }
-        for result in collection
-    ]
+            "error_code": None if result.ok else (result.error_code or "CONNECTOR_ERROR"),
+            "failure_stage": None if result.ok else (result.failure_stage or "fetch"),
+            "http_status": result.http_status,
+        })
     status = {
         "schema_version": SCHEMA_VERSION,
-        "run_id": "github-" + now.strftime("%Y%m%dT%H%M%SZ"),
+        "run_id": run_id,
         "status": state,
         "started_at": now.isoformat(),
         "completed_at": datetime.now(timezone.utc).isoformat(),
