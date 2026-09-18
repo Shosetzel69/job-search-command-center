@@ -1,7 +1,9 @@
 # Phase 7 targeted DEV retest — #193 / #194
 
 Status: executable after the fix candidate is deployed to DEV.
-Executor: Claude in Chrome.
+Accountable DEV executor: **ChatGPT / Development**.
+Browser execution surface: a browser-capable ChatGPT DEV surface (preferred: ChatGPT Work Cloud Browser) or an owner-controlled browser session used only to provide the required interactive browser capability. Owner action may be required for the Google account selection/sign-in step.
+Independent TEST executor after DEV PASS: **Claude QA**.
 Environment: **DEV only**.
 DEV URL: `https://job-search-command-api.job-search-dev.workers.dev`
 Parent QA: #188.
@@ -15,9 +17,26 @@ This is a targeted retest, not a replay of all Phase 7 QA.
 - **Do not run a live Full Search.** DEV must remain `search_mode=disabled`.
 - Do not change search criteria, sources, nomenclatures, GitHub configuration, Cloudflare configuration, secrets, runtime repositories, or legacy.
 - Do not expose Google tokens, cookie values, Authorization headers, or secrets in screenshots/evidence.
-- Owner may perform the interactive Google account click when Claude cannot complete Google authentication itself.
-- A missing browser/DevTools capability is `BLOCKED`, not a product `FAIL`.
+- Claude must not execute DEV validation, debugging, retest or mutation. Claude begins only after the exact DEV-passed candidate is promoted to TEST.
+- The ChatGPT / Development role owns the DEV verdict and records the DEV evidence in #188.
+- Repository, CI, deployment and immutable-candidate checks may be executed directly from the Development toolset.
+- Browser-authenticated cases must be executed on a browser-capable DEV surface. If the active Development surface has no browser/DevTools capability, use a browser-capable ChatGPT DEV surface or an owner-controlled browser session for the interaction; this does not transfer DEV ownership to TEST QA.
+- Owner may perform the interactive Google account click when the browser executor cannot complete Google authentication itself.
+- Missing browser/DevTools capability is an **execution capability gap** and is reported as `BLOCKED`, not as product `PASS` or `FAIL`.
+- Deployment/repository evidence alone can never satisfy the mandatory browser-authenticated DEV cases.
 - Stop the dependent sequence on a reproducible auth failure, but still perform independent read-only checks that remain safe.
+
+## Executor and capability contract
+
+DEV ownership and browser capability are separate concerns:
+
+1. **ChatGPT / Development owns the DEV verification and verdict.**
+2. The active Development chat may perform repository, CI, deployment and immutable-SHA checks directly.
+3. Tests that depend on Google authentication, browser refresh/navigation, UI state, Network inspection or cookie deletion require a **browser-capable DEV execution surface**.
+4. Preferred interactive path is a ChatGPT Development session with Cloud Browser capability (for example ChatGPT Work). An owner-controlled browser session is an acceptable execution surface when needed for interactive Google login, provided the evidence is captured against the exact frozen candidate.
+5. **Claude QA is TEST-only.** Claude does not enter DEV to compensate for a missing DEV browser capability.
+6. A browser capability gap blocks the affected test; it does not change the product verdict and does not justify promotion to TEST.
+7. Mandatory browser cases must have actual execution evidence before the DEV gate may be declared PASS.
 
 ## Required baseline evidence
 
@@ -48,7 +67,7 @@ Before login capture all of the following:
 ### Steps
 1. Open the DEV root URL.
 2. Confirm `[DEV]` is visible on the sign-in screen.
-3. Sign in with the approved Google account. If Claude cannot perform the account click, request OWNER ACTION and continue immediately after the owner completes it.
+3. Sign in with the approved Google account. If the browser executor cannot perform the account click, request OWNER ACTION and continue immediately after the owner completes it.
 4. Wait until the normal application shell is visible.
 5. Visit `Joburi noi`, `Aplicari`, `Criterii de selectie`, then `Administrare`.
 6. In Network, verify these protected assets resolve successfully after authentication:
@@ -270,7 +289,7 @@ After all cases:
 
 - **PASS:** DEV-AUTH-01/02/03/04, DEV-RUN-01/02 and final regression checks all PASS. DEV-AUTH-05 may be BLOCKED only for missing DevTools cookie-deletion capability. DEV-AUTH-06 browser variant may be BLOCKED if no safe unauthorized account is available.
 - **FAIL:** any mandatory case fails.
-- **BLOCKED:** executor cannot complete a mandatory case because required browser capability or owner login action is unavailable.
+- **BLOCKED:** the active DEV execution surface cannot complete a mandatory case because required browser/DevTools capability or owner login action is unavailable. Resolve the execution capability gap on a browser-capable DEV surface; do not hand DEV validation to Claude TEST QA.
 
 ## Evidence report format for #188
 
@@ -278,7 +297,8 @@ After all cases:
 ## Targeted DEV retest — #193 / #194
 Candidate SOURCE_SHA:
 Date/time:
-Executor: Claude
+Executor: ChatGPT / Development
+Browser execution surface:
 DEV /health before:
 DEV_RUNTIME_SHA_BEFORE:
 
