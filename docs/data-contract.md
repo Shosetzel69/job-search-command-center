@@ -2,7 +2,7 @@
 
 Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-09-09`
+Ultima actualizare: `2026-09-18`
 
 ## 1. Reguli generale
 
@@ -64,6 +64,38 @@ Campuri principale:
 
 Stari active UI: `queued`, `pending`, `running`, `in_progress`.
 Stari terminale: `completed`, `completed_with_errors`, `failed`.
+
+### 3.1 Source execution result contract
+
+`source_results[]` pastreaza campul legacy `status` pentru compatibilitate, dar semantica noua este exprimata prin campuri structurate si nu se deriva din textul `error`.
+
+Campuri canonice per source execution:
+- `source`, `source_id`, `connector`, `collection_method`;
+- `source_execution_id` — identificator unic in cadrul run-ului;
+- `outcome`;
+- `records`;
+- `error_code` numai pentru `failed`;
+- `failure_stage` numai pentru `failed`;
+- `http_status` cand este disponibil;
+- `error` / `failure_reason` raman text pentru oameni si compatibilitate, nu contract pentru automatizare.
+
+Outcome-uri:
+- `success` — executie reusita cu rezultate;
+- `success_empty` — executie reusita fara rezultate valide;
+- `failed` — executie incercata/esec de preflight care necesita clasificare de eroare;
+- `deferred_provider` — ruta dedicata este amanata intentionat;
+- `blocked_credentials` — connectorul necesita credentiale indisponibile;
+- `validation_pending` — ruta exista dar validarea live nu este finalizata;
+- `disabled_config` — sursa/transportul este dezactivat prin configuratie;
+- `excluded_policy` — sursa este exclusa prin politica proiectului;
+- `skipped` — omisiune operationala intentionata care nu este failure si nu se incadreaza in clasele specializate, de exemplu cooldown sau endpoint duplicat.
+
+Coduri de eroare initiale pentru `failed`:
+`HTTP_CLIENT_ERROR`, `HTTP_SERVER_ERROR`, `ACCESS_DENIED`, `RATE_LIMITED`, `TIMEOUT`, `NETWORK_ERROR`, `DNS_ERROR`, `AUTH_REQUIRED`, `CONFIG_ERROR`, `API_ROUTE_INVALID`, `PARSE_ERROR`, `SCHEMA_ERROR`, `NORMALIZATION_ERROR`, `CONNECTOR_ERROR`, `UNEXPECTED_ERROR`.
+
+`failure_stage` foloseste boundary-uri reale ale pipeline-ului, inclusiv `preflight`, `route_resolution`, `authentication`, `fetch`, `parse`, `normalize`, `filter`, `publish`, `postprocess`.
+
+Automatizarea si UI-ul nu parseaza `error` / `failure_reason` pentru a deduce outcome, error code sau failure stage.
 
 ## 4. `data/run-history.json`
 
