@@ -63,18 +63,18 @@ LEGACY stays outside this chain and remains rollback/fallback only until separat
 ### DEV
 Implementation, debugging, automated tests and first technical verification.
 
-**Executor:** ChatGPT / DEV flow.
+**Executor:** DEV instance/agent (currently ChatGPT / Development).
 
-Claude does not execute DEV validation. DEV evidence is produced by the development flow and is the prerequisite for promotion.
+The independent tester does not enter DEV. DEV implementation, debugging and verification are owned by the DEV executor. DEV evidence is produced by that flow and is the prerequisite for promotion.
 
 Exit condition: implementation is stable enough to select one exact `CANDIDATE_SHA`.
 
 ### TEST
 Independent functional/integration validation of the frozen candidate.
 
-**Executor:** Claude QA.
+**Executor:** independent TEST instance/agent (currently Claude QA).
 
-Claude validates only in TEST for the normal release flow; it does not perform DEV verification.
+The independent tester validates only in TEST for the normal release flow. It does not open, debug, retest or mutate DEV. TEST remains independent from the implementation environment.
 
 Required:
 - exact same `CANDIDATE_SHA` as DEV;
@@ -86,7 +86,7 @@ Any failure returns to DEV.
 ### PROD
 Runs only the TEST-passed candidate after owner authorization.
 
-Default post-deploy validation is a small smoke test, not a second full QA cycle.
+Default post-deploy validation is a small smoke/acceptance check executed by the release/deployment flow after owner GO. PROD is not used as a second independent QA environment unless the owner explicitly authorizes a separate production validation.
 
 ### LEGACY
 Temporary fallback only. No normal code/config/data change.
