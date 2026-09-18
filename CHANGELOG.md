@@ -54,6 +54,8 @@
 
 ### Documentatie
 
+- #216: clarificat lifecycle-ul release-urilor multi-wave: checkpoint-urile intermediare pot valida DEV -> TEST si se opresc inainte de PROD; dupa finalizarea tuturor wave-urilor se ingheata un singur Final Release Candidate care parcurge integral DEV -> TEST -> PROD si produce Release Record.
+
 - #198: documentat lantul permanent de artifacts `promotion-dev-pass -> promotion-test-deployed -> promotion-test-pass -> release-record`, gate-urile automate, concurenta per mediu si cerintele conditionale de rollback/config/DB.
 - Clarificata capabilitatea Claude de testare web/browser: `ARCHITECTURE.md` -> v1.11 si `.ai-instructions.md` -> v1.8. Browser/UI testing este mod QA suportat atunci cand sesiunea Claude il expune si preflight-ul confirma accesul; DevTools/Network, shell/CLI/Playwright, GitHub Actions si Cloudflare raman capabilitati separate. Toate testele Claude viitoare trebuie sa declare conditiile de browser, autentificare, evidence, rollback si owner gate.
 - #145: revizuite si aliniate documentele proiectului afectate de configuratia finala AI GitHub; `ARCHITECTURE.md` -> v1.9, `GOVERNANCE.md` -> v1.5, `.ai-instructions.md` -> v1.6; README, CONTRIBUTING, ADR-002 si analizele bridge/MCP descriu acum starea operationala reala.
