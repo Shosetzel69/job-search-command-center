@@ -4,6 +4,7 @@
 
 ### Functionalitati
 
+- #198: implementat fluxul fail-closed de promovare a aceluiasi `CANDIDATE_SHA` DEV -> TEST -> PROD, cu evidence artifacts separate pentru DEV PASS, TEST deploy, TEST PASS independent si PROD release record; PROD necesita candidate reachability din `main`, rollback pregatit si `PROD_GO` explicit.
 - #161 / Phase 3: adaugat manifestul canonic `config/environments.json`, CLI unic `env:*`, guard-uri fail-closed, dry-run plans pentru bootstrap/deploy/status/isolation si workflow generic manual-only; Phase 3 nu provision-eaza resurse si nu modifica PROD.
 - #161 / Phase 2: introdus contract environment-aware fail-closed (`APP_ENV`, runtime repo/ref, immutable `SOURCE_SHA`, `RUNTIME_DATA_SHA`, `SEARCH_MODE`, `FRONTEND_ORIGIN`), `/health` identity, dispatch cu `source_sha` si marker UI DEV/TEST; fara provisioning DEV/TEST si fara schimbarea functionala a PROD.
 - #136: Remote MCP Claude este deployat si validat live pe `ai-github-bridge`, cu OAuth 2.1, `read_file`, `get_issue`, `create_issue` si `update_issue` sub identitatea `jobsearch-claude-agent[bot]`; validarea operationala a fost finalizata prin issue #143.
@@ -51,6 +52,7 @@
 
 ### Documentatie
 
+- #198: documentat lantul permanent de artifacts `promotion-dev-pass -> promotion-test-deployed -> promotion-test-pass -> release-record`, gate-urile automate, concurenta per mediu si cerintele conditionale de rollback/config/DB.
 - Clarificata capabilitatea Claude de testare web/browser: `ARCHITECTURE.md` -> v1.11 si `.ai-instructions.md` -> v1.8. Browser/UI testing este mod QA suportat atunci cand sesiunea Claude il expune si preflight-ul confirma accesul; DevTools/Network, shell/CLI/Playwright, GitHub Actions si Cloudflare raman capabilitati separate. Toate testele Claude viitoare trebuie sa declare conditiile de browser, autentificare, evidence, rollback si owner gate.
 - #145: revizuite si aliniate documentele proiectului afectate de configuratia finala AI GitHub; `ARCHITECTURE.md` -> v1.9, `GOVERNANCE.md` -> v1.5, `.ai-instructions.md` -> v1.6; README, CONTRIBUTING, ADR-002 si analizele bridge/MCP descriu acum starea operationala reala.
 - #141/#144: documentate `Branch Target Safety Rule` si `Issue Metadata Preservation Rule`; operatiile de continut nu folosesc direct `main`, iar titlul/label-urile unui Issue existent se pastreaza implicit.
@@ -217,7 +219,3 @@
 - Criterii de selectie salvate local.
 - Excluderi dinamice.
 - Afisarea versiunii aplicatiei.
-
-### Observatie istorica
-
-Prioritizarea initiala a maximum cinci surse a fost eliminata ulterior. Strategia curenta este `all active sources equally`.

@@ -224,21 +224,50 @@ test('live deployment is GitHub-Environment scoped and does not multiplex reposi
   assert.doesNotMatch(workflow, /secrets\.PROD_/);
 });
 
-test('live deployment uses trusted main control-plane and separate immutable candidate checkout', () => {
+test('live DEV and TEST deployment uses trusted main control-plane and exact pre-merge candidate payload', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
   assert.match(workflow, /Checkout trusted control-plane from main/);
   assert.match(workflow, /ref: main/);
   assert.match(workflow, /path: control-plane/);
   assert.match(workflow, /Checkout immutable candidate source/);
+  assert.match(workflow, /ref: \$\{\{ inputs\.source_sha \}\}/);
   assert.match(workflow, /path: candidate-source/);
-  assert.match(workflow, /merge-base --is-ancestor/);
+  assert.match(workflow, /candidate checkout does not match source_sha/);
   assert.match(workflow, /SOURCE_WORKSPACE/);
+  assert.doesNotMatch(workflow, /Live deployment source_sha must already be reachable from trusted main/);
 });
 
-test('Phase 6 workflow exposes PROD preflight but keeps every live PROD operation blocked', () => {
+test('DEV freezes candidate evidence and TEST requires the same DEV-passed candidate', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /issue_pr/);
+  assert.match(workflow, /dev_evidence_run_id/);
+  assert.match(workflow, /promotion-dev-pass/);
+  assert.match(workflow, /verify-dev/);
+  assert.match(workflow, /create-test-deployed/);
+  assert.match(workflow, /promotion-test-deployed/);
+  assert.match(workflow, /group: deploy-\$\{\{ inputs\.environment \}\}/);
+  assert.match(workflow, /cancel-in-progress: false/);
+});
+
+test('independent TEST PASS attestation is main-controlled and candidate-bound', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/record-test-pass.yml'), 'utf8');
+  assert.match(workflow, /name: TEST PASS attestation/);
+  assert.match(workflow, /workflow_dispatch:/);
+  assert.match(workflow, /environment: test/);
+  assert.match(workflow, /test_evidence_reference/);
+  assert.match(workflow, /test_verdict/);
+  assert.match(workflow, /refs\/heads\/main/);
+  assert.match(workflow, /promotion-test-deployed/);
+  assert.match(workflow, /verify-test-deployed/);
+  assert.match(workflow, /create-test-pass/);
+  assert.match(workflow, /promotion-test-pass/);
+  assert.doesNotMatch(workflow, /push:/);
+});
+
+test('environment automation blocks live PROD and delegates mutation to permanent PROD promotion', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
   assert.match(workflow, /prod-preflight/);
-  assert.match(workflow, /Phase 6 permits PROD preparation only; live PROD execution remains blocked until separate Phase 7 GO/);
+  assert.match(workflow, /Live PROD uses the dedicated permanent promotion workflow/);
   assert.match(workflow, /prod-preflight requires environment=prod/);
   assert.match(workflow, /inputs\.environment == 'dev' \|\| inputs\.environment == 'test'/);
 });

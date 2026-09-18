@@ -1,42 +1,116 @@
-name: Phase 7 PROD Cutover
+name: PROD promotion
 
 on:
   workflow_dispatch:
     inputs:
       action:
-        description: Phase 7 PROD action
+        description: PROD action
         required: true
         type: choice
         options: [bootstrap-deploy, deploy, status]
       source_sha:
-        description: Approved immutable application source SHA
+        description: Exact TEST-passed CANDIDATE_SHA
         required: true
+        type: string
+      test_pass_run_id:
+        description: Successful TEST PASS attestation run id; required for mutation
+        required: false
         type: string
       expected_runtime_sha:
         description: Expected current job-search-prod main SHA before this action
         required: true
         type: string
-      owner_gate:
-        description: Explicit Phase 7 owner authorization
+      rollback_reference:
+        description: Release-specific rollback action/reference; required for mutation
+        required: false
+        type: string
+      config_rollback_reference:
+        description: Configuration rollback reference; required only for bootstrap-deploy
+        required: false
+        type: string
+      database_change:
+        description: Database/schema change classification for this release
         required: true
+        default: none
+        type: choice
+        options: [none, reversible, destructive]
+      migration_version:
+        description: Migration/schema version; required when database_change is not none
+        required: false
+        type: string
+      db_backup_reference:
+        description: Immutable backup reference; required only for destructive DB changes
+        required: false
+        type: string
+      db_backup_checksum_verified:
+        description: Enter YES after SHA-256 checksum verification; destructive DB changes only
+        required: false
+        type: string
+      db_restore_evidence:
+        description: Non-PROD restore evidence reference; destructive DB changes only
+        required: false
+        type: string
+      owner_gate:
+        description: Explicit owner GO; enter PROD_GO for mutation
+        required: false
         type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
-  prod-cutover:
+  prod-promotion:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: prod
+    concurrency:
+      group: deploy-prod
+      cancel-in-progress: false
     steps:
-      - name: Guard explicit Phase 7 authorization
+      - name: Guard immutable candidate, TEST gate and rollback readiness
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          TEST_PASS_RUN_ID: ${{ inputs.test_pass_run_id }}
+          EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
+          ROLLBACK_REFERENCE: ${{ inputs.rollback_reference }}
+          CONFIG_ROLLBACK_REFERENCE: ${{ inputs.config_rollback_reference }}
+          DATABASE_CHANGE: ${{ inputs.database_change }}
+          MIGRATION_VERSION: ${{ inputs.migration_version }}
+          DB_BACKUP_REFERENCE: ${{ inputs.db_backup_reference }}
+          DB_BACKUP_CHECKSUM_VERIFIED: ${{ inputs.db_backup_checksum_verified }}
+          DB_RESTORE_EVIDENCE: ${{ inputs.db_restore_evidence }}
+          OWNER_GATE: ${{ inputs.owner_gate }}
         shell: bash
         run: |
           set -euo pipefail
-          test "${{ inputs.owner_gate }}" = "PHASE7_APPROVED" || { echo "Phase 7 PROD mutation requires owner_gate=PHASE7_APPROVED" >&2; exit 1; }
-          [[ "${{ inputs.source_sha }}" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
-          [[ "${{ inputs.expected_runtime_sha }}" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "expected_runtime_sha must be a full immutable commit SHA" >&2; exit 1; }
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
+          [[ "$EXPECTED_RUNTIME_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "expected_runtime_sha must be a full immutable commit SHA" >&2; exit 1; }
+
+          if [ "${{ inputs.action }}" != "status" ]; then
+            test "$GITHUB_REF" = "refs/heads/main" || { echo "PROD mutation workflow must run from main" >&2; exit 1; }
+            [[ "$TEST_PASS_RUN_ID" =~ ^[0-9]+$ ]] || { echo "PROD mutation requires numeric test_pass_run_id" >&2; exit 1; }
+            test -n "$ROLLBACK_REFERENCE" || { echo "PROD mutation requires rollback_reference" >&2; exit 1; }
+            test "$OWNER_GATE" = "PROD_GO" || { echo "PROD mutation requires owner_gate=PROD_GO" >&2; exit 1; }
+          fi
+
+          if [ "${{ inputs.action }}" = "bootstrap-deploy" ]; then
+            test -n "$CONFIG_ROLLBACK_REFERENCE" || { echo "bootstrap-deploy requires config_rollback_reference" >&2; exit 1; }
+          fi
+
+          case "$DATABASE_CHANGE" in
+            none) ;;
+            reversible)
+              test -n "$MIGRATION_VERSION" || { echo "Database change requires migration_version" >&2; exit 1; }
+              ;;
+            destructive)
+              test -n "$MIGRATION_VERSION" || { echo "Destructive DB change requires migration_version" >&2; exit 1; }
+              test -n "$DB_BACKUP_REFERENCE" || { echo "Destructive DB change requires db_backup_reference" >&2; exit 1; }
+              test "$DB_BACKUP_CHECKSUM_VERIFIED" = "YES" || { echo "Destructive DB change requires SHA-256 checksum verification" >&2; exit 1; }
+              test -n "$DB_RESTORE_EVIDENCE" || { echo "Destructive DB change requires non-PROD restore evidence" >&2; exit 1; }
+              ;;
+            *) echo "Unsupported database_change" >&2; exit 1 ;;
+          esac
 
       - name: Checkout trusted control-plane from main
         uses: actions/checkout@v4
@@ -58,7 +132,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Verify trusted control-plane and approved candidate ancestry
+      - name: Verify exact candidate and post-TEST integration ancestry
         shell: bash
         run: |
           set -euo pipefail
@@ -68,13 +142,57 @@ jobs:
           git -C control-plane fetch origin main --quiet
           git -C control-plane cat-file -e "${source_sha}^{commit}"
           git -C control-plane merge-base --is-ancestor "$source_sha" origin/main || {
-            echo "PROD deployment source_sha must already be reachable from trusted main" >&2
+            echo "TEST-passed candidate is not reachable from approved main; integration rewrote or omitted the candidate" >&2
             exit 1
           }
 
-      - name: Run trusted environment and Phase 7 contract tests
+      - name: Run trusted environment and promotion contract tests
         working-directory: control-plane
         run: npm run test:environment
+
+      - name: Verify exact TEST PASS evidence
+        if: ${{ inputs.action != 'status' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TEST_PASS_RUN_ID: ${{ inputs.test_pass_run_id }}
+          CANDIDATE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TEST_PASS_RUN_ID")"
+          jq -e '.conclusion == "success" and .event == "workflow_dispatch" and .head_branch == "main" and .name == "TEST PASS attestation"' <<<"$run_json" >/dev/null || {
+            echo "Referenced TEST PASS must come from a successful main control-plane attestation run" >&2
+            exit 1
+          }
+          rm -rf promotion-input
+          mkdir -p promotion-input
+          gh run download "$TEST_PASS_RUN_ID" --repo "$GITHUB_REPOSITORY" --name promotion-test-pass --dir promotion-input
+          node control-plane/scripts/environment/promotion.mjs verify-test-pass \
+            --file promotion-input/promotion-record.json \
+            --candidate-sha "$CANDIDATE_SHA"
+
+      - name: Capture previous known-good PROD anchors before mutation
+        if: ${{ inputs.action != 'status' }}
+        env:
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-input
+          curl --fail --silent --show-error "$FRONTEND_ORIGIN/health" > release-input/previous-prod-health.json
+          jq -e '.status == "ok" and .environment == "prod" and .runtime_repo == "Shosetzel69/job-search-prod" and .runtime_ref == "main" and .search_mode == "live" and .auth_configured == true and .github_configured == true' \
+            release-input/previous-prod-health.json >/dev/null || { echo "Previous PROD health is not known-good" >&2; exit 1; }
+          previous_source="$(jq -r '.source_sha' release-input/previous-prod-health.json)"
+          previous_runtime="$(jq -r '.runtime_data_sha' release-input/previous-prod-health.json)"
+          [[ "$previous_source" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "Previous PROD source_sha is invalid" >&2; exit 1; }
+          [[ "$previous_runtime" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "Previous PROD runtime_data_sha is invalid" >&2; exit 1; }
+          test "${previous_runtime,,}" = "${EXPECTED_RUNTIME_SHA,,}" || {
+            echo "Previous PROD /health runtime_data_sha does not match expected_runtime_sha" >&2
+            exit 1
+          }
+          echo "Previous PROD SOURCE_SHA=$previous_source"
+          echo "Previous PROD RUNTIME_DATA_SHA=$previous_runtime"
 
       - name: Verify credential boundaries before mutation
         env:
@@ -134,7 +252,7 @@ jobs:
           }
           echo "Verified PROD runtime anchor: $current"
 
-      - name: Install PROD runtime workflow without rewriting migrated data
+      - name: Install PROD runtime workflow without rewriting runtime data
         if: ${{ inputs.action == 'bootstrap-deploy' }}
         env:
           GH_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
@@ -147,8 +265,8 @@ jobs:
           cp control-plane/config/runtime-template/runtime.yml runtime-admin/.github/workflows/runtime.yml
           git -C runtime-admin add .github/workflows/runtime.yml
           if ! git -C runtime-admin diff --cached --quiet; then
-            git -C runtime-admin -c user.name=job-search-phase7 -c user.email=phase7@users.noreply.github.com \
-              commit -m "[Phase 7 #186] Install isolated PROD runtime workflow"
+            git -C runtime-admin -c user.name=job-search-environment-tool -c user.email=environment-tool@users.noreply.github.com \
+              commit -m "[#198] Maintain isolated PROD runtime workflow"
             git -C runtime-admin push origin HEAD:main
           fi
 
@@ -222,7 +340,7 @@ jobs:
         if: ${{ inputs.action != 'status' }}
         run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
-      - name: Deploy exact approved source to dedicated PROD
+      - name: Deploy exact TEST-passed candidate to dedicated PROD
         if: ${{ inputs.action != 'status' }}
         working-directory: deployment-source/command-api
         env:
@@ -273,22 +391,67 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p release-output
           runtime_sha="$(GH_TOKEN="$GH_RUNTIME_TOKEN" gh api repos/Shosetzel69/job-search-prod/commits/main --jq .sha)"
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
             if payload="$(curl --fail --silent --show-error "$FRONTEND_ORIGIN/health")"; then
-              echo "$payload" | jq -e \
+              if echo "$payload" | jq -e \
                 --arg source "$SOURCE_SHA" \
                 --arg runtime "$runtime_sha" \
-                '.environment == "prod" and .source_sha == $source and .runtime_repo == "Shosetzel69/job-search-prod" and .runtime_ref == "main" and .runtime_data_sha == $runtime and .search_mode == "live" and .auth_configured == true and .github_configured == true' >/dev/null && {
-                  echo "$payload"
+                '.environment == "prod" and .source_sha == $source and .runtime_repo == "Shosetzel69/job-search-prod" and .runtime_ref == "main" and .runtime_data_sha == $runtime and .search_mode == "live" and .auth_configured == true and .github_configured == true' >/dev/null; then
+                  printf '%s\n' "$payload" > release-output/prod-health.json
                   exit 0
-                }
+              fi
             fi
             sleep 3
           done
           echo "Dedicated PROD health validation failed" >&2
           exit 1
 
-      - name: Confirm Phase 7 action completed without legacy cleanup
+      - name: Create minimal non-secret release record
+        if: ${{ inputs.action != 'status' }}
+        env:
+          CANDIDATE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
+          ROLLBACK_REFERENCE: ${{ inputs.rollback_reference }}
+          CONFIG_ROLLBACK_REFERENCE: ${{ inputs.config_rollback_reference }}
+          DATABASE_CHANGE: ${{ inputs.database_change }}
+          MIGRATION_VERSION: ${{ inputs.migration_version }}
+          DB_BACKUP_REFERENCE: ${{ inputs.db_backup_reference }}
+          DB_BACKUP_CHECKSUM_VERIFIED: ${{ inputs.db_backup_checksum_verified }}
+          DB_RESTORE_EVIDENCE: ${{ inputs.db_restore_evidence }}
+        shell: bash
         run: |
-          echo "Phase 7 action completed on dedicated PROD only. Legacy rollback resources were not deleted or repurposed by this workflow."
+          set -euo pipefail
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          node control-plane/scripts/environment/promotion.mjs create-release \
+            --test-file promotion-input/promotion-record.json \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --previous-health-file release-input/previous-prod-health.json \
+            --expected-runtime-sha "$EXPECTED_RUNTIME_SHA" \
+            --rollback-reference "$ROLLBACK_REFERENCE" \
+            --owner-go-reference "PROD_GO by ${GITHUB_ACTOR} in ${run_url}" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-url "$run_url" \
+            --prod-health-file release-output/prod-health.json \
+            --action "${{ inputs.action }}" \
+            --config-rollback-reference "${CONFIG_ROLLBACK_REFERENCE:-N/A}" \
+            --database-change "$DATABASE_CHANGE" \
+            --migration-version "${MIGRATION_VERSION:-N/A}" \
+            --db-backup-reference "${DB_BACKUP_REFERENCE:-N/A}" \
+            --db-backup-checksum-verified "${DB_BACKUP_CHECKSUM_VERIFIED:-N/A}" \
+            --db-restore-evidence "${DB_RESTORE_EVIDENCE:-N/A}" \
+            --output release-output/release-record.json
+
+      - name: Upload release record
+        if: ${{ inputs.action != 'status' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-record
+          path: release-output/release-record.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Confirm PROD action boundary
+        run: |
+          echo "PROD action completed on the dedicated PROD stack only. LEGACY was not modified."

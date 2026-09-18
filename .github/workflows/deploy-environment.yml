@@ -17,6 +17,14 @@ on:
         description: Immutable source commit SHA
         required: true
         type: string
+      issue_pr:
+        description: Issue / PR reference; required for live DEV deploy and frozen into promotion evidence
+        required: false
+        type: string
+      dev_evidence_run_id:
+        description: Successful DEV promotion run id; required for live TEST deploy
+        required: false
+        type: string
       dry_run:
         description: Non-mutating validation/plan
         required: true
@@ -29,6 +37,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   validate-request:
@@ -43,13 +52,16 @@ jobs:
         with:
           node-version: 24
 
-      - name: Guard immutable source and Phase 6 scope
+      - name: Guard immutable source and environment scope
+        env:
+          ISSUE_PR: ${{ inputs.issue_pr }}
+          DEV_EVIDENCE_RUN_ID: ${{ inputs.dev_evidence_run_id }}
         shell: bash
         run: |
           set -euo pipefail
           [[ "${{ inputs.source_sha }}" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
           if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.environment }}" = "prod" ]; then
-            echo "Phase 6 permits PROD preparation only; live PROD execution remains blocked until separate Phase 7 GO" >&2
+            echo "Live PROD uses the dedicated permanent promotion workflow" >&2
             exit 1
           fi
           if [ "${{ inputs.action }}" = "prod-preflight" ] && [ "${{ inputs.environment }}" != "prod" ]; then
@@ -67,6 +79,12 @@ jobs:
           if [ "${{ inputs.environment }}" = "prod" ] && [ "${{ inputs.owner_gate }}" != "APPROVED" ]; then
             echo "PROD preparation requires explicit owner confirmation" >&2
             exit 1
+          fi
+          if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.action }}" = "deploy" ] && [ "${{ inputs.environment }}" = "dev" ]; then
+            test -n "$ISSUE_PR" || { echo "Live DEV deploy requires issue_pr for candidate freeze evidence" >&2; exit 1; }
+          fi
+          if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.action }}" = "deploy" ] && [ "${{ inputs.environment }}" = "test" ]; then
+            [[ "$DEV_EVIDENCE_RUN_ID" =~ ^[0-9]+$ ]] || { echo "Live TEST deploy requires a numeric dev_evidence_run_id" >&2; exit 1; }
           fi
 
       - name: Run environment contract tests
@@ -121,6 +139,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
     steps:
       - name: Checkout trusted control-plane from main
         uses: actions/checkout@v4
@@ -141,23 +162,38 @@ jobs:
         with:
           node-version: 24
 
-      - name: Verify trusted control-plane and approved candidate ancestry
+      - name: Verify exact immutable candidate checkout
         shell: bash
         run: |
           set -euo pipefail
           source_sha="${{ inputs.source_sha }}"
           candidate="$(git -C candidate-source rev-parse HEAD)"
           test "${candidate,,}" = "${source_sha,,}" || { echo "candidate checkout does not match source_sha" >&2; exit 1; }
-          git -C control-plane fetch origin main --quiet
-          git -C control-plane cat-file -e "${source_sha}^{commit}"
-          git -C control-plane merge-base --is-ancestor "$source_sha" origin/main || {
-            echo "Live deployment source_sha must already be reachable from trusted main" >&2
-            exit 1
-          }
 
       - name: Run trusted environment contract tests
         working-directory: control-plane
         run: npm run test:environment
+
+      - name: Verify DEV PASS evidence for TEST candidate
+        if: ${{ inputs.action == 'deploy' && inputs.environment == 'test' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEV_EVIDENCE_RUN_ID: ${{ inputs.dev_evidence_run_id }}
+          CANDIDATE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$DEV_EVIDENCE_RUN_ID")"
+          jq -e '.conclusion == "success" and .event == "workflow_dispatch" and .head_branch == "main" and .name == "Environment automation"' <<<"$run_json" >/dev/null || {
+            echo "Referenced DEV evidence must come from a successful main control-plane Environment automation run" >&2
+            exit 1
+          }
+          rm -rf promotion-input
+          mkdir -p promotion-input
+          gh run download "$DEV_EVIDENCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name promotion-dev-pass --dir promotion-input
+          node control-plane/scripts/environment/promotion.mjs verify-dev \
+            --file promotion-input/promotion-record.json \
+            --candidate-sha "$CANDIDATE_SHA"
 
       - name: Prepare sanitized candidate payload on trusted build baseline
         if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
@@ -228,6 +264,54 @@ jobs:
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
 
+      - name: Capture immutable DEV / TEST deployment evidence
+        if: ${{ inputs.action == 'deploy' }}
+        env:
+          CANDIDATE_SHA: ${{ inputs.source_sha }}
+          ISSUE_PR: ${{ inputs.issue_pr }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p promotion-output
+          curl --fail --silent --show-error "$FRONTEND_ORIGIN/health" > promotion-output/health.json
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          if [ "${{ inputs.environment }}" = "dev" ]; then
+            node control-plane/scripts/environment/promotion.mjs create-dev \
+              --candidate-sha "$CANDIDATE_SHA" \
+              --issue-pr "$ISSUE_PR" \
+              --run-id "$GITHUB_RUN_ID" \
+              --run-url "$run_url" \
+              --health-file promotion-output/health.json \
+              --output promotion-output/promotion-record.json
+          else
+            node control-plane/scripts/environment/promotion.mjs create-test-deployed \
+              --dev-file promotion-input/promotion-record.json \
+              --candidate-sha "$CANDIDATE_SHA" \
+              --run-id "$GITHUB_RUN_ID" \
+              --run-url "$run_url" \
+              --health-file promotion-output/health.json \
+              --output promotion-output/promotion-record.json
+          fi
+
+      - name: Upload DEV PASS evidence
+        if: ${{ inputs.action == 'deploy' && inputs.environment == 'dev' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: promotion-dev-pass
+          path: promotion-output/promotion-record.json
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload TEST deployment evidence
+        if: ${{ inputs.action == 'deploy' && inputs.environment == 'test' }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: promotion-test-deployed
+          path: promotion-output/promotion-record.json
+          if-no-files-found: error
+          retention-days: 90
+
       - name: Configure runtime and Worker secrets with separated roles
         if: ${{ inputs.action == 'bootstrap' }}
         working-directory: deployment-source/command-api
@@ -244,7 +328,7 @@ jobs:
           case "${{ inputs.environment }}" in
             dev) runtime_repo="Shosetzel69/job-search-runtime-dev" ;;
             test) runtime_repo="Shosetzel69/job-search-runtime-test" ;;
-            *) echo "Unsupported pre-cutover live environment" >&2; exit 1 ;;
+            *) echo "Unsupported live environment" >&2; exit 1 ;;
           esac
           test "$SELECTED_GITHUB_BOOTSTRAP_TOKEN" != "$SELECTED_GITHUB_RUNTIME_TOKEN" || { echo "bootstrap/runtime token reuse is forbidden" >&2; exit 1; }
           printf '%s' "$SELECTED_SOURCE_READ_TOKEN" | GH_TOKEN="$SELECTED_GITHUB_BOOTSTRAP_TOKEN" gh secret set SOURCE_READ_TOKEN --repo "$runtime_repo"
@@ -289,8 +373,6 @@ jobs:
           test "$SELECTED_GITHUB_RUNTIME_TOKEN" != "$SELECTED_SOURCE_READ_TOKEN" || { echo "runtime/source-read token reuse is forbidden" >&2; exit 1; }
           test "$SELECTED_GITHUB_BOOTSTRAP_TOKEN" != "$SELECTED_SOURCE_READ_TOKEN" || { echo "bootstrap/source-read token reuse is forbidden" >&2; exit 1; }
 
-          # Fine-grained PAT permissions are not exposed as effective per-token levels by viewerPermission.
-          # Verify the enforceable repository boundaries and only exercise SOURCE_READ_TOKEN through read calls.
           case "$SELECTED_SOURCE_READ_TOKEN" in
             github_pat_*) ;;
             *) echo "Source-read token must be a fine-grained PAT" >&2; exit 1 ;;

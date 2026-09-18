@@ -4,33 +4,66 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 const ROOT = resolve(import.meta.dirname, '..');
-const cutover = readFileSync(resolve(ROOT, '.github/workflows/prod-cutover.yml'), 'utf8');
+const promotion = readFileSync(resolve(ROOT, '.github/workflows/prod-cutover.yml'), 'utf8');
 const runtime = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
 
-test('Phase 7 cutover workflow is manual-only and binds to PROD environment', () => {
-  assert.match(cutover, /workflow_dispatch:/);
-  assert.doesNotMatch(cutover, /schedule:/);
-  assert.match(cutover, /environment:\s*prod/);
+test('PROD promotion is manual-only, PROD-scoped and serialized', () => {
+  assert.match(promotion, /name: PROD promotion/);
+  assert.match(promotion, /workflow_dispatch:/);
+  assert.doesNotMatch(promotion, /schedule:/);
+  assert.doesNotMatch(promotion, /push:/);
+  assert.match(promotion, /environment:\s*prod/);
+  assert.match(promotion, /group: deploy-prod/);
+  assert.match(promotion, /cancel-in-progress: false/);
 });
 
-test('Phase 7 PROD mutation requires a distinct explicit owner gate', () => {
-  assert.match(cutover, /owner_gate=PHASE7_APPROVED/);
-  assert.match(cutover, /inputs\.owner_gate/);
-  assert.doesNotMatch(cutover, /owner_gate=APPROVED/);
+test('PROD mutation requires explicit owner GO and release-specific rollback reference', () => {
+  assert.match(promotion, /owner_gate=PROD_GO/);
+  assert.match(promotion, /rollback_reference/);
+  assert.match(promotion, /PROD mutation requires rollback_reference/);
+  assert.doesNotMatch(promotion, /PHASE7_APPROVED/);
 });
 
-test('Phase 7 verifies immutable source and runtime anchors before mutation', () => {
-  assert.match(cutover, /expected_runtime_sha/);
-  assert.match(cutover, /merge-base --is-ancestor/);
-  assert.match(cutover, /job-search-prod main moved/);
-  assert.match(cutover, /SOURCE_READ_TOKEN/);
+test('PROD requires exact TEST PASS evidence for the same immutable candidate', () => {
+  assert.match(promotion, /test_pass_run_id/);
+  assert.match(promotion, /promotion-test-pass/);
+  assert.match(promotion, /verify-test-pass/);
+  assert.match(promotion, /CANDIDATE_SHA/);
+  assert.match(promotion, /merge-base --is-ancestor/);
+  assert.match(promotion, /TEST-passed candidate is not reachable from approved main/);
+});
+
+test('PROD captures previous known-good source/runtime anchors before mutation', () => {
+  assert.match(promotion, /previous-prod-health\.json/);
+  assert.match(promotion, /Previous PROD source_sha is invalid/);
+  assert.match(promotion, /Previous PROD runtime_data_sha is invalid/);
+  assert.match(promotion, /expected_runtime_sha/);
+  assert.match(promotion, /job-search-prod main moved/);
+});
+
+test('PROD release record is generated after exact candidate health verification', () => {
+  assert.match(promotion, /prod-health\.json/);
+  assert.match(promotion, /create-release/);
+  assert.match(promotion, /release-record\.json/);
+  assert.match(promotion, /name: release-record/);
+  assert.match(promotion, /owner-go-reference/);
+});
+
+test('configuration and destructive DB changes fail closed without rollback evidence', () => {
+  assert.match(promotion, /bootstrap-deploy requires config_rollback_reference/);
+  assert.match(promotion, /database_change/);
+  assert.match(promotion, /Destructive DB change requires migration_version/);
+  assert.match(promotion, /Destructive DB change requires db_backup_reference/);
+  assert.match(promotion, /Destructive DB change requires SHA-256 checksum verification/);
+  assert.match(promotion, /Destructive DB change requires non-PROD restore evidence/);
 });
 
 test('PROD deployment keeps trusted control-plane separate from candidate payload', () => {
-  assert.match(cutover, /Checkout trusted control-plane from main/);
-  assert.match(cutover, /Checkout immutable candidate source as inert payload/);
-  assert.match(cutover, /Prepare sanitized candidate payload on trusted baseline/);
-  assert.match(cutover, /cmp control-plane\/command-api\/wrangler\.jsonc/);
+  assert.match(promotion, /Checkout trusted control-plane from main/);
+  assert.match(promotion, /Checkout immutable candidate source as inert payload/);
+  assert.match(promotion, /Prepare sanitized candidate payload on trusted baseline/);
+  assert.match(promotion, /cmp control-plane\/command-api\/wrangler\.jsonc/);
+  assert.match(promotion, /Deploy exact TEST-passed candidate to dedicated PROD/);
 });
 
 test('PROD runtime executes search from immutable source then publishes and redeploys exact runtime snapshot', () => {

@@ -1,0 +1,103 @@
+name: TEST PASS attestation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Frozen candidate SHA already deployed to TEST
+        required: true
+        type: string
+      test_deploy_run_id:
+        description: Successful TEST deployment Environment automation run id
+        required: true
+        type: string
+      test_evidence_reference:
+        description: Independent QA evidence reference (issue/comment/report/run URL)
+        required: true
+        type: string
+      test_verdict:
+        description: Explicit independent TEST verdict
+        required: true
+        type: choice
+        options: [PASS]
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  attest-test-pass:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: test
+    steps:
+      - name: Guard trusted attestation control-plane
+        env:
+          CANDIDATE_SHA: ${{ inputs.source_sha }}
+          TEST_DEPLOY_RUN_ID: ${{ inputs.test_deploy_run_id }}
+          TEST_EVIDENCE_REFERENCE: ${{ inputs.test_evidence_reference }}
+          TEST_VERDICT: ${{ inputs.test_verdict }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main" || { echo "TEST PASS attestation must run from main" >&2; exit 1; }
+          [[ "$CANDIDATE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
+          [[ "$TEST_DEPLOY_RUN_ID" =~ ^[0-9]+$ ]] || { echo "test_deploy_run_id must be numeric" >&2; exit 1; }
+          test -n "$TEST_EVIDENCE_REFERENCE" || { echo "Independent TEST evidence reference is required" >&2; exit 1; }
+          test "$TEST_VERDICT" = "PASS" || { echo "Only an explicit TEST PASS can create promotion evidence" >&2; exit 1; }
+
+      - name: Checkout trusted control-plane from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+          path: control-plane
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Verify exact TEST deployment evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE_SHA: ${{ inputs.source_sha }}
+          TEST_DEPLOY_RUN_ID: ${{ inputs.test_deploy_run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$TEST_DEPLOY_RUN_ID")"
+          jq -e '.conclusion == "success" and .event == "workflow_dispatch" and .head_branch == "main" and .name == "Environment automation"' <<<"$run_json" >/dev/null || {
+            echo "Referenced TEST deployment must be a successful main control-plane Environment automation run" >&2
+            exit 1
+          }
+          rm -rf promotion-input
+          mkdir -p promotion-input
+          gh run download "$TEST_DEPLOY_RUN_ID" --repo "$GITHUB_REPOSITORY" --name promotion-test-deployed --dir promotion-input
+          node control-plane/scripts/environment/promotion.mjs verify-test-deployed \
+            --file promotion-input/promotion-record.json \
+            --candidate-sha "$CANDIDATE_SHA"
+
+      - name: Create immutable TEST PASS evidence
+        env:
+          CANDIDATE_SHA: ${{ inputs.source_sha }}
+          TEST_EVIDENCE_REFERENCE: ${{ inputs.test_evidence_reference }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p promotion-output
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          node control-plane/scripts/environment/promotion.mjs create-test-pass \
+            --test-deployed-file promotion-input/promotion-record.json \
+            --candidate-sha "$CANDIDATE_SHA" \
+            --test-evidence-reference "$TEST_EVIDENCE_REFERENCE" \
+            --run-id "$GITHUB_RUN_ID" \
+            --run-url "$run_url" \
+            --output promotion-output/promotion-record.json
+
+      - name: Upload TEST PASS evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: promotion-test-pass
+          path: promotion-output/promotion-record.json
+          if-no-files-found: error
+          retention-days: 90
