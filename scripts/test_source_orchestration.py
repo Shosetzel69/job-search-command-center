@@ -147,6 +147,15 @@ class OrchestrationTests(unittest.TestCase):
         jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
         self.assertEqual(jobs_pipe["outcome"], "skipped")
 
+    def test_empty_collection_result_is_structured_failure(self):
+        item = {"source": "Example", "source_id": "x", "status": "pending", "records": 0,
+                "error": None, "failure_reason": None, "http_status": None}
+        orchestration.record_results(item, [])
+        self.assertEqual(item["status"], "failed")
+        self.assertEqual(item["outcome"], "failed")
+        self.assertEqual(item["error_code"], "CONNECTOR_ERROR")
+        self.assertEqual(item["failure_stage"], "fetch")
+
     def test_success_empty_is_distinct_from_failure(self):
         self.apify.return_value = [engine.CollectionResult("jobspipe-apify", "target", True, [], 0)]
         self.jobicy.return_value = [engine.CollectionResult("jobicy", "latest_200", True, [], 0)]
