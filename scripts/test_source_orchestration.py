@@ -5,6 +5,7 @@ import unittest
 from contextlib import ExitStack
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.error import HTTPError
 from unittest.mock import patch, MagicMock
 
 import job_search as engine
@@ -68,6 +69,15 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(status["sources_succeeded"], 2)
         self.assertEqual(status["sources_unsupported"], 1)
         self.assertEqual(status["sources_inactive"], 1)
+        results = {item["source"]: item for item in status["source_results"]}
+        self.assertEqual(results["JobsPipe"]["outcome"], "success")
+        self.assertEqual(results["Jobicy"]["outcome"], "success")
+        self.assertEqual(results["Unimplemented"]["outcome"], "failed")
+        self.assertEqual(results["Unimplemented"]["error_code"], "CONFIG_ERROR")
+        self.assertEqual(results["Unimplemented"]["failure_stage"], "preflight")
+        self.assertEqual(results["Inactive"]["outcome"], "disabled_config")
+        self.assertTrue(all(len(item["source_execution_id"]) == 24 for item in status["source_results"]))
+        self.assertEqual(status["source_outcome_schema_version"], "1.0")
         self.assertEqual(status["status"], "completed_with_errors")
         self.assertEqual(json.loads(engine.JOBS_PATH.read_text())["results"], 1)
         history = json.loads(runner.HISTORY_PATH.read_text())["runs"][0]
@@ -81,6 +91,10 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(code, 0)
         self.assertEqual(status["sources_failed"], 1)
         self.assertEqual(status["failed_sources"], ["JobsPipe"])
+        jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
+        self.assertEqual(jobs_pipe["outcome"], "failed")
+        self.assertEqual(jobs_pipe["error_code"], "CONNECTOR_ERROR")
+        self.assertEqual(jobs_pipe["failure_stage"], "fetch")
         self.assertEqual(status["jobs_published"], 1)
         self.assertEqual(json.loads(engine.JOBS_PATH.read_text())["jobs"][0]["source"], "Jobicy")
 
@@ -98,6 +112,8 @@ class OrchestrationTests(unittest.TestCase):
         self.jobicy.assert_called_once()
         self.assertEqual(status["sources"], ["Jobicy"])
         self.assertEqual(status["sources_skipped"], 1)
+        jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
+        self.assertEqual(jobs_pipe["outcome"], "disabled_config")
 
     def test_catalog_inactive_and_deleted_provider_do_not_call(self):
         catalog = copy.deepcopy(CATALOG)
@@ -116,6 +132,7 @@ class OrchestrationTests(unittest.TestCase):
         monster = next(item for item in plan if item["source"] == "Monster")
         self.assertFalse(monster["active"])
         self.assertEqual(monster["status"], "inactive")
+        self.assertEqual(monster["outcome"], "excluded_policy")
         self.assertTrue(monster["policy_excluded"])
         self.assertIn("project source policy", monster["error"])
 
@@ -127,6 +144,34 @@ class OrchestrationTests(unittest.TestCase):
         self.direct.assert_not_called()
         self.jobicy.assert_called_once()
         self.assertEqual(status["sources_attempted"], 1)
+        jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
+        self.assertEqual(jobs_pipe["outcome"], "skipped")
+
+    def test_success_empty_is_distinct_from_failure(self):
+        self.apify.return_value = [engine.CollectionResult("jobspipe-apify", "target", True, [], 0)]
+        self.jobicy.return_value = [engine.CollectionResult("jobicy", "latest_200", True, [], 0)]
+        _, status = self.run_search()
+        outcomes = {item["source"]: item["outcome"] for item in status["source_results"]}
+        self.assertEqual(outcomes["JobsPipe"], "success_empty")
+        self.assertEqual(outcomes["Jobicy"], "success_empty")
+
+    def test_http_429_is_structured_without_parsing_message(self):
+        self.apify.side_effect = HTTPError("https://example.invalid", 429, "quota", {}, None)
+        _, status = self.run_search()
+        jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
+        self.assertEqual(jobs_pipe["outcome"], "failed")
+        self.assertEqual(jobs_pipe["error_code"], "RATE_LIMITED")
+        self.assertEqual(jobs_pipe["failure_stage"], "fetch")
+        self.assertEqual(jobs_pipe["http_status"], 429)
+
+    def test_explicit_failure_metadata_wins_over_human_message(self):
+        item = {"source": "Example", "source_id": "x", "status": "pending", "records": 0,
+                "error": None, "failure_reason": None, "http_status": None}
+        result = engine.CollectionResult("example", "q", False, [], 0, "HTTP 429 text only",
+                                         error_code="TIMEOUT", failure_stage="fetch")
+        orchestration.record_results(item, [result])
+        self.assertEqual(item["error_code"], "TIMEOUT")
+        self.assertEqual(item["outcome"], "failed")
 
     def test_direct_transport_preserves_incremental_metadata(self):
         self.direct.return_value = ([engine.CollectionResult("jobspipe", "target", True, [], 0)], 0, {"target": 0}, 14)
