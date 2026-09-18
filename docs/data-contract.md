@@ -99,6 +99,40 @@ Automatizarea si UI-ul nu parseaza `error` / `failure_reason` pentru a deduce ou
 
 Exceptie legacy cunoscuta, provider-specific: JobsPipe direct mai foloseste un mesaj text pentru starea de quota lunara; remedierea este separata si amanata in #236. Aceasta exceptie nu face parte din contractul generic si nu poate fi folosita de consumatorii `source_results`.
 
+### 3.2 Diagnostic event contract
+
+Diagnostic events sunt JSON line-uri sanitizate si sunt supporting evidence, nu sursa canonica pentru run state.
+
+Envelope stabil:
+- `timestamp`;
+- `level`;
+- `event_name`;
+- `service=job-search-runner`;
+- `environment`;
+- `run_id`.
+
+Evente stabile initiale:
+- `search.run.started`;
+- `search.run.completed`;
+- `source.collection.started`;
+- `source.collection.completed`;
+- `source.collection.failed`;
+- `source.collection.skipped`.
+
+Eventele source includ, unde exista:
+- `source_execution_id`, `source_id`, `source`;
+- `connector`, `collection_method`;
+- `outcome`, `records`;
+- `error_code`, `failure_stage`, `http_status`;
+- `attempt`.
+
+Severity este independenta de outcome:
+- normal lifecycle / expected skip -> `INFO`;
+- handled source failure / blocked credentials / run completed_with_errors -> `WARN`;
+- run-level failure care impiedica rezultatul asteptat -> `ERROR`.
+
+Sanitizarea este centrala in `scripts/diagnostics.py`. Credentialele, Authorization/Cookie, PAT/JWT, API keys, secret query parameters si userinfo din URL nu se emit in diagnostic events. Upstream exception text este sanitizat si in mesajele persistate in run-status/run-history.
+
 ## 4. `data/run-history.json`
 
 ```json
