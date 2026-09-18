@@ -4,6 +4,7 @@
 
 ### Functionalitati
 
+- #193: aliniat modelul de autentificare cu ADR-004; sesiunea same-origin HttpOnly ramane fallback-ul aprobat, iar frontend-ul trateaza 403 pe protected data ca pierdere de autentificare fara a confunda 403 de politica operationala cu session loss.
 - #204: automatizarea release-ului permite ChatGPT sa porneasca DEV/TEST printr-un comentariu GitHub owner `/jscc-deploy ...`; workflow-ul GitHub-native valideaza strict owner-ul, SHA-ul si evidence-ul, apoi dispatch-uieste doar `deploy-environment.yml` din `main`. PROD ramane exclus. Extensia ai-github-bridge DEV/TEST este pastrata optional pentru integrari viitoare.
 - #198: implementat fluxul fail-closed de promovare a aceluiasi `CANDIDATE_SHA` DEV -> TEST -> PROD, cu evidence artifacts separate pentru DEV PASS, TEST deploy, TEST PASS independent si PROD release record; PROD necesita candidate reachability din `main`, rollback pregatit si `PROD_GO` explicit.
 - #161 / Phase 3: adaugat manifestul canonic `config/environments.json`, CLI unic `env:*`, guard-uri fail-closed, dry-run plans pentru bootstrap/deploy/status/isolation si workflow generic manual-only; Phase 3 nu provision-eaza resurse si nu modifica PROD.
