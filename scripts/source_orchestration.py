@@ -81,6 +81,14 @@ def deferred_provider(source):
         return None
 
 
+class ClassifiedSourceError(Exception):
+    def __init__(self, message, error_code, failure_stage, http_status=None):
+        super().__init__(message)
+        self.error_code = error_code
+        self.failure_stage = failure_stage
+        self.http_status = http_status
+
+
 CANONICAL_OUTCOMES = {
     "success",
     "success_empty",
@@ -111,6 +119,8 @@ def error_code_for_http_status(status):
 
 
 def classify_exception(exc):
+    if isinstance(exc, ClassifiedSourceError):
+        return exc.error_code, exc.failure_stage, exc.http_status
     if isinstance(exc, HTTPError):
         code = error_code_for_http_status(exc.code) or "HTTP_CLIENT_ERROR"
         stage = "authentication" if exc.code in {401, 403} else "fetch"
@@ -265,7 +275,14 @@ def record_results(item, results):
     item["status"] = "completed" if results and not failed else "failed"
     item["records"] = sum(len(result.records) for result in results if result.ok)
     item["error"] = "; ".join(result.error or "Collection failed" for result in failed) or None
-    if failed:
+    if not results:
+        item["outcome"] = "failed"
+        item["error"] = item["error"] or "Connector returned no collection result"
+        item["failure_reason"] = item.get("failure_reason") or item["error"]
+        item["error_code"] = "CONNECTOR_ERROR"
+        item["failure_stage"] = "fetch"
+        item["http_status"] = None
+    elif failed:
         item["outcome"] = "failed"
         first = failed[0]
         http_status = first.http_status if first.http_status is not None else item.get("http_status")
@@ -348,9 +365,17 @@ def collect_api_sources(config, state, now, plan):
                 metadata = {"credits_used": credits, "preview_counts": previews, "run_budget": budget,
                             "estimated_monthly_credits": state.get("usage", {}).get("estimated_credits_used", 0)}
             else:
-                raise ValueError(f"Unsupported connector: {connector}")
+                raise ClassifiedSourceError(
+                    f"Unsupported connector: {connector}",
+                    "CONFIG_ERROR",
+                    "route_resolution",
+                )
             if not results:
-                raise ValueError("Connector returned no collection result")
+                raise ClassifiedSourceError(
+                    "Connector returned no collection result",
+                    "CONNECTOR_ERROR",
+                    "fetch",
+                )
         except Exception as exc:
             results = [failure_result(connector, "collect", exc)]
         collection.extend(results)
