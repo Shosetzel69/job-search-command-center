@@ -1,0 +1,65 @@
+name: Executable task
+description: Development, QA or operational task with bounded context.
+title: ""
+labels: []
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What result must this task produce?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Only the context needed to understand this task. Prefer 3-5 lines.
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: What is included?
+    validations:
+      required: true
+
+  - type: textarea
+    id: out_of_scope
+    attributes:
+      label: Out of scope
+      description: What must not be changed? Use N/A if nothing specific.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Concrete conditions for completion.
+      placeholder: |
+        - [ ] Criterion 1
+        - [ ] Criterion 2
+    validations:
+      required: true
+
+  - type: textarea
+    id: required_context
+    attributes:
+      label: Required context
+      description: Exact files/sections the executor must read. Link instead of copying content.
+      placeholder: |
+        - path/to/file.md - section name
+    validations:
+      required: true
+
+  - type: textarea
+    id: optional_context
+    attributes:
+      label: Optional context
+      description: Read only if a question remains.
+    validations:
+      required: false
