@@ -1,7 +1,10 @@
 """Catalog-driven collection using the existing CollectionResult contract."""
 
+import hashlib
 import json
+import socket
 from concurrent.futures import ThreadPoolExecutor
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 
 import job_search as engine
@@ -78,6 +81,105 @@ def deferred_provider(source):
         return None
 
 
+CANONICAL_OUTCOMES = {
+    "success",
+    "success_empty",
+    "failed",
+    "deferred_provider",
+    "blocked_credentials",
+    "validation_pending",
+    "disabled_config",
+    "excluded_policy",
+    "skipped",
+}
+
+
+def error_code_for_http_status(status):
+    if not isinstance(status, int):
+        return None
+    if status == 401:
+        return "AUTH_REQUIRED"
+    if status == 403:
+        return "ACCESS_DENIED"
+    if status == 429:
+        return "RATE_LIMITED"
+    if 400 <= status < 500:
+        return "HTTP_CLIENT_ERROR"
+    if status >= 500:
+        return "HTTP_SERVER_ERROR"
+    return None
+
+
+def classify_exception(exc):
+    if isinstance(exc, HTTPError):
+        code = error_code_for_http_status(exc.code) or "HTTP_CLIENT_ERROR"
+        stage = "authentication" if exc.code in {401, 403} else "fetch"
+        return code, stage, exc.code
+    if isinstance(exc, json.JSONDecodeError):
+        return "PARSE_ERROR", "parse", None
+    if isinstance(exc, socket.gaierror):
+        return "DNS_ERROR", "fetch", None
+    if isinstance(exc, (TimeoutError, socket.timeout)):
+        return "TIMEOUT", "fetch", None
+    if isinstance(exc, URLError):
+        reason = exc.reason
+        if isinstance(reason, socket.gaierror):
+            return "DNS_ERROR", "fetch", None
+        if isinstance(reason, (TimeoutError, socket.timeout)):
+            return "TIMEOUT", "fetch", None
+        return "NETWORK_ERROR", "fetch", None
+    if isinstance(exc, ConnectionError):
+        return "NETWORK_ERROR", "fetch", None
+    if isinstance(exc, ValueError):
+        return "SCHEMA_ERROR", "parse", None
+    if isinstance(exc, RuntimeError):
+        return "CONNECTOR_ERROR", "fetch", None
+    return "UNEXPECTED_ERROR", "fetch", None
+
+
+def failure_result(connector, query, exc):
+    error_code, failure_stage, http_status = classify_exception(exc)
+    return engine.CollectionResult(
+        connector,
+        query,
+        False,
+        [],
+        0,
+        str(exc),
+        error_code=error_code,
+        failure_stage=failure_stage,
+        http_status=http_status,
+    )
+
+
+def disabled_route_outcome(reason):
+    if reason == "connector_requires_credentials":
+        return "blocked_credentials"
+    if reason == "live_api_route_not_validated":
+        return "validation_pending"
+    return "disabled_config"
+
+
+def finalize_source_outcomes(plan, run_id):
+    for index, item in enumerate(plan):
+        if not item.get("outcome"):
+            if item.get("status") == "completed":
+                item["outcome"] = "success" if item.get("records", 0) else "success_empty"
+            elif item.get("status") == "failed":
+                item["outcome"] = "failed"
+                item["error_code"] = item.get("error_code") or "UNEXPECTED_ERROR"
+                item["failure_stage"] = item.get("failure_stage") or "postprocess"
+            else:
+                item["outcome"] = "skipped"
+        if item["outcome"] not in CANONICAL_OUTCOMES:
+            raise ValueError(f"Unsupported source outcome: {item['outcome']}")
+        raw_identity = f"{run_id}\0{item.get('source_id')}\0{index}".encode("utf-8")
+        item["source_execution_id"] = hashlib.sha256(raw_identity).hexdigest()[:24]
+        if item["outcome"] != "failed":
+            item["error_code"] = None
+            item["failure_stage"] = None
+
+
 def build_plan(catalog):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("sources"), list):
         raise ValueError("Source catalog must contain a sources array")
@@ -103,26 +205,34 @@ def build_plan(catalog):
                 "connector": "deferred" if deferred else connector,
                 "collection_method": "deferred" if deferred else connector,
                 "active": source.get("active") is not False and not excluded_by_policy, "status": "pending",
+                "outcome": None, "source_execution_id": None,
                 "records": 0, "error": None, "failure_reason": None,
+                "error_code": None, "failure_stage": None, "http_status": None,
                 "policy_excluded": excluded_by_policy}
         if excluded_by_policy:
             reason = "Excluded operationally by project source policy"
-            item.update(status="inactive", error=reason, failure_reason=reason)
+            item.update(status="inactive", outcome="excluded_policy", error=reason, failure_reason=reason)
         if route:
             item["connector_config"] = route
             if route.get("enabled") is False:
                 item["active"] = False
                 reason = route.get("disabled_reason") or "ATS route disabled"
-                item.update(status="inactive", error=reason, failure_reason=reason)
+                item.update(status="inactive", outcome=disabled_route_outcome(reason),
+                            error=reason, failure_reason=reason)
         if item["status"] == "pending" and not item["active"]:
-            item.update(status="inactive", error="Disabled in source catalog", failure_reason="Disabled in source catalog")
+            item.update(status="inactive", outcome="disabled_config",
+                        error="Disabled in source catalog", failure_reason="Disabled in source catalog")
         elif item["status"] == "pending" and deferred:
             reason = f"{deferred} provider root deferred; generic web crawling disabled while dedicated provider route is postponed"
-            item.update(status="skipped", error=reason, failure_reason=reason, deferred_provider=deferred)
+            item.update(status="skipped", outcome="deferred_provider",
+                        error=reason, failure_reason=reason, deferred_provider=deferred)
         elif item["status"] == "pending" and not connector:
-            item.update(status="unsupported", error="Invalid or unsafe source URL", failure_reason="Invalid or unsafe source URL")
+            item.update(status="unsupported", outcome="failed", error="Invalid or unsafe source URL",
+                        failure_reason="Invalid or unsafe source URL", error_code="CONFIG_ERROR",
+                        failure_stage="preflight")
         elif item["status"] == "pending" and route_key in seen:
-            item.update(status="skipped", error="Duplicate provider endpoint already planned",
+            item.update(status="skipped", outcome="skipped",
+                        error="Duplicate provider endpoint already planned",
                         failure_reason="Duplicate provider endpoint already planned")
         elif item["status"] == "pending":
             seen.add(route_key)
@@ -142,7 +252,7 @@ def collect_sources(config, state, now, plan):
                 results, details = futures[item["source_id"]].result()
                 item.update(details)
             except Exception as exc:
-                results = [engine.CollectionResult("web:" + str(item["source_id"]), "collect", False, [], 0, str(exc))]
+                results = [failure_result("web:" + str(item["source_id"]), "collect", exc)]
                 item["web_outcome"] = "error"
                 item["failure_reason"] = str(exc)
             record_results(item, results)
@@ -151,13 +261,33 @@ def collect_sources(config, state, now, plan):
 
 
 def record_results(item, results):
-    item["status"] = "completed" if results and all(result.ok for result in results) else "failed"
+    failed = [result for result in results if not result.ok]
+    item["status"] = "completed" if results and not failed else "failed"
     item["records"] = sum(len(result.records) for result in results if result.ok)
-    item["error"] = "; ".join(result.error or "Collection failed" for result in results if not result.ok) or None
+    item["error"] = "; ".join(result.error or "Collection failed" for result in failed) or None
+    if failed:
+        item["outcome"] = "failed"
+        first = failed[0]
+        http_status = first.http_status if first.http_status is not None else item.get("http_status")
+        item["http_status"] = http_status
+        item["error_code"] = first.error_code or error_code_for_http_status(http_status) or "CONNECTOR_ERROR"
+        item["failure_stage"] = first.failure_stage or "fetch"
+    else:
+        item["outcome"] = "success" if item["records"] else "success_empty"
+        item["error_code"] = None
+        item["failure_stage"] = None
     if item.get("error") and not item.get("failure_reason"):
         item["failure_reason"] = item["error"]
-    item["queries"] = [{"query": r.query, "status": "completed" if r.ok else "failed",
-                        "records": len(r.records), "error": r.error} for r in results]
+    item["queries"] = [{
+        "query": result.query,
+        "status": "completed" if result.ok else "failed",
+        "outcome": ("success" if result.records else "success_empty") if result.ok else "failed",
+        "records": len(result.records),
+        "error": result.error,
+        "error_code": None if result.ok else (result.error_code or "CONNECTOR_ERROR"),
+        "failure_stage": None if result.ok else (result.failure_stage or "fetch"),
+        "http_status": result.http_status,
+    } for result in results]
 
 
 def collect_ats(item):
@@ -189,17 +319,20 @@ def collect_api_sources(config, state, now, plan):
             continue
         connector = item["connector"]
         if connector == "jobspipe" and mode == "disabled":
-            item.update(status="skipped", error="JobsPipe disabled by configuration",
+            item.update(status="skipped", outcome="disabled_config",
+                        error="JobsPipe disabled by configuration",
                         failure_reason="JobsPipe disabled by configuration")
             continue
         if connector == "jobspipe" and mode == "direct" and state.get("usage", {}).get("provider_quota_exhausted_month") == now.strftime("%Y-%m"):
-            item.update(status="skipped", error="JobsPipe direct monthly quota exhausted; no API call",
+            item.update(status="skipped", outcome="skipped",
+                        error="JobsPipe direct monthly quota exhausted; no API call",
                         failure_reason="JobsPipe direct monthly quota exhausted; no API call")
             continue
         if connector == "jobicy":
             last = engine.parse_posted_datetime(state.get("source_last_attempt", {}).get(connector))
             if last and (now - last).total_seconds() < 3600:
-                item.update(status="skipped", error="Jobicy hourly polling limit; no API call",
+                item.update(status="skipped", outcome="skipped",
+                            error="Jobicy hourly polling limit; no API call",
                             failure_reason="Jobicy hourly polling limit; no API call")
                 continue
             state.setdefault("source_last_attempt", {})[connector] = now.isoformat()
@@ -219,7 +352,7 @@ def collect_api_sources(config, state, now, plan):
             if not results:
                 raise ValueError("Connector returned no collection result")
         except Exception as exc:
-            results = [engine.CollectionResult(connector, "collect", False, [], 0, str(exc))]
+            results = [failure_result(connector, "collect", exc)]
         collection.extend(results)
         record_results(item, results)
         if connector == "jobspipe" and mode == "direct" and "Monthly request quota exceeded" in (item["error"] or ""):
@@ -246,6 +379,8 @@ def run(config, now):
         apify.update_status([r for r in collection if r.connector.startswith("jobspipe")],
                             max(100, min(20000, int(config.get("jobspipe_apify_max_items_per_run", 5000)))))
     status = json.loads(engine.STATUS_PATH.read_text())
+    finalize_source_outcomes(plan, status["run_id"])
+    status["source_outcome_schema_version"] = "1.0"
     attempted = [item for item in plan if item["status"] in {"completed", "failed"}]
     status.update({"source_strategy": config.get("source_strategy") or "all active sources equally",
                    "sources_configured": len(plan), "sources_active": sum(item["active"] for item in plan),
