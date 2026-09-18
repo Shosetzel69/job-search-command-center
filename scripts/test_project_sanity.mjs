@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   buildProjectSnapshot,
   classifyRelatedIssues,
@@ -219,4 +220,33 @@ test("snapshot reports the stage-specific TEST deployment run instead of inherit
   assert.equal(snapshot.environments.dev.evidence.run_id, 10);
   assert.equal(snapshot.environments.test.deployment_evidence.run_id, 20);
   assert.equal(snapshot.environments.test.deployment_evidence.run_url, "https://example/run/20");
+});
+
+test("chat sanity contract is chat-first and keeps project status secondary", () => {
+  const contract = readFileSync(new URL("../docs/project-sanity.md", import.meta.url), "utf8");
+  const requiredInOrder = [
+    "Last material action:",
+    "Result:",
+    "Subject:",
+    "Relevance: CURRENT | PARTIALLY_CURRENT | SUPERSEDED | CLOSED",
+    "CHANGED SINCE",
+    "CURRENT RELEVANT STATE",
+    "NEXT",
+    "UNIQUE / PERSISTENCE",
+    "CHAT VERDICT",
+  ];
+
+  let previous = -1;
+  for (const marker of requiredInOrder) {
+    const index = contract.indexOf(marker);
+    assert.ok(index > previous, `Expected sanity contract marker in order: ${marker}`);
+    previous = index;
+  }
+
+  assert.match(contract, /Do not start with release\/DEV\/TEST\/PROD status\./);
+  assert.match(contract, /Do not dump the full project snapshot by default\./);
+  assert.match(contract, /PARTIALLY_CURRENT/);
+  assert.match(contract, /SUPERSEDED/);
+  assert.ok(contract.includes("`CLOSED` never implies `SAFE TO DELETE` by itself."));
+  assert.match(contract, /SANITY: BLOCKED/);
 });
