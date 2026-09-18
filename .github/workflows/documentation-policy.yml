@@ -1,0 +1,44 @@
+name: Documentation policy
+
+on:
+  pull_request:
+    paths:
+      - "**/*.md"
+      - ".github/ISSUE_TEMPLATE/**"
+      - "scripts/check_documentation_policy.mjs"
+      - ".github/workflows/documentation-policy.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  documentation-policy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect changed Markdown files
+        id: changed
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --name-only --diff-filter=ACMRT "$GITHUB_BASE_SHA" "$GITHUB_SHA" -- '*.md' > changed-docs.txt
+          {
+            echo 'files<<EOF'
+            cat changed-docs.txt
+            echo EOF
+          } >> "$GITHUB_OUTPUT"
+        env:
+          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
+
+      - name: Check documentation policy
+        if: steps.changed.outputs.files != ''
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t files < changed-docs.txt
+          node scripts/check_documentation_policy.mjs "${files[@]}"
