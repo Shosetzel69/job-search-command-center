@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Security
+
+- #232 / Release 1 Wave 3: extinsa suita negativa pentru identity authorization, protected data fara sesiune, CORS interzis, payload config invalid si forced reauthentication la protected 401.
+
 ### Functionalitati
 
 - #231 / Release 1 Wave 3: Loguri consuma outcome/error_code/failure_stage structurat, publica agregate in run-status/run-history si separa `success_empty`/starile asteptate de neexecutie de runtime failures.
