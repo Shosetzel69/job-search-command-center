@@ -23,6 +23,7 @@ class DeferredProviderRoutingTests(unittest.TestCase):
         plan = orchestration.build_plan(catalog)
         self.assertTrue(all(item["status"] == "skipped" for item in plan))
         self.assertTrue(all(item["connector"] == "deferred" for item in plan))
+        self.assertTrue(all(item["outcome"] == "deferred_provider" for item in plan))
         self.assertEqual({item["deferred_provider"] for item in plan},
                          {"LinkedIn", "Indeed", "Workday", "Greenhouse", "Workable", "SmartRecruiters", "Ashby", "Lever"})
         with patch.object(orchestration.web, "collect") as crawler:
@@ -55,7 +56,9 @@ class DeferredProviderRoutingTests(unittest.TestCase):
         apify.assert_not_called()
         direct.assert_not_called()
         self.assertEqual(plan[0]["status"], "skipped")
+        self.assertEqual(plan[0]["outcome"], "disabled_config")
         self.assertEqual(plan[1]["status"], "completed")
+        self.assertEqual(plan[1]["outcome"], "success_empty")
         self.assertEqual(len(results), 1)
 
 
