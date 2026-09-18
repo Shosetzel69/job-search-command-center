@@ -95,9 +95,10 @@ test('Google Identity options reject invalid required inputs', () => {
   assert.throws(() => googleIdentityOptions({ clientId: 'client-id', onCredential: null }), /callback/);
 });
 
-test('only same-origin protected 401 responses trigger forced reauthentication', () => {
+test('same-origin auth failures force reauthentication without treating policy 403 as session loss', () => {
   const target = { location:{ href:'https://app.example.test/', origin:'https://app.example.test' } };
   assert.equal(isProtectedAuthFailure('/data/jobs.json', { status:401 }, target), true);
+  assert.equal(isProtectedAuthFailure('/data/jobs.json', { status:403 }, target), true);
   assert.equal(isProtectedAuthFailure('/commands/run', { status:401 }, target), true);
   assert.equal(isProtectedAuthFailure('/auth/session', { status:401 }, target), false);
   assert.equal(isProtectedAuthFailure('/commands/run', { status:403 }, target), false);
