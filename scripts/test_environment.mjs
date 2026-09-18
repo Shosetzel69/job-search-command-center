@@ -237,6 +237,14 @@ test('live DEV and TEST deployment uses trusted main control-plane and exact pre
   assert.doesNotMatch(workflow, /Live deployment source_sha must already be reachable from trusted main/);
 });
 
+test('promotion evidence normalizes FRONTEND_ORIGIN before curl', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /String\(process\.env\.FRONTEND_ORIGIN \|\| ""\)\.trim\(\)\.replace/);
+  assert.match(workflow, /FRONTEND_ORIGIN is empty after normalization/);
+  assert.match(workflow, /curl --fail --silent --show-error "\$frontend_origin\/health"/);
+  assert.doesNotMatch(workflow, /curl --fail --silent --show-error "\$FRONTEND_ORIGIN\/health"/);
+});
+
 test('DEV freezes candidate evidence and TEST requires the same DEV-passed candidate', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
   assert.match(workflow, /issue_pr/);
