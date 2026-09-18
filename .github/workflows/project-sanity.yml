@@ -1,0 +1,61 @@
+name: Project sanity snapshot
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened, closed, reopened, labeled, unlabeled]
+  workflow_run:
+    workflows:
+      - Environment automation
+      - TEST PASS attestation
+      - PROD promotion
+    types: [completed]
+  schedule:
+    - cron: "17 3 * * *"
+
+permissions:
+  contents: read
+  actions: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: project-sanity-snapshot
+  cancel-in-progress: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+
+      - name: Generate read-only current project state
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p project-state
+          npm run sanity:project -- \
+            --output-json project-state/current-project-state.json \
+            --output-md project-state/current-project-state.md
+
+      - name: Publish snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: current-project-state
+          path: project-state/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Add readable snapshot to job summary
+        shell: bash
+        run: cat project-state/current-project-state.md >> "$GITHUB_STEP_SUMMARY"
