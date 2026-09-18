@@ -4,6 +4,7 @@
 
 ### Functionalitati
 
+- #231 / Release 1 Wave 3: Loguri consuma outcome/error_code/failure_stage structurat, publica agregate in run-status/run-history si separa `success_empty`/starile asteptate de neexecutie de runtime failures.
 - #230 / Release 1 Wave 3: adaugate diagnostic events JSON pentru run/source lifecycle, corelare prin `run_id`/`source_execution_id` si sanitizare centrala a secretelor/upstream exception messages, inclusiv in run-status/run-history.
 - #229 / Release 1 Wave 3: introdus contractul structurat per source execution (`outcome`, `source_execution_id`, `error_code`, `failure_stage`, `http_status`) cu compatibilitate pentru statusurile legacy; `success_empty` si starile operationale asteptate nu mai trebuie interpretate ca erori din text liber.
 - #227: simplificat outputul sanity la cinci campuri: ultima interactiune, ultima actiune materiala, subiect, actualitate (DA/PARTIAL/NU/INCHIS) si verdict; statusul general de proiect este ascuns implicit, iar `Schimbat intre timp` apare doar pentru diferente materiale.
