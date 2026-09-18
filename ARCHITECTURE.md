@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.13`
+Versiune document: `v1.14`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-13`
+Ultima actualizare: `2026-09-18`
 
 ## 1. Rol
 
@@ -17,6 +17,7 @@ Documente complementare:
 - `docs/package-2a8-implementation-plan.md` — planul de implementare aprobat;
 - `docs/adr/ADR-002-ai-github-bridge.md` — decizia pentru identitati GitHub App operationale;
 - `docs/adr/ADR-003-environment-isolation.md` — decizia acceptata pentru izolarea DEV / TEST / PROD;
+- `docs/adr/ADR-004-http-only-auth-session.md` — decizia pentru fallback-ul de sesiune Google in cookie HttpOnly same-origin;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
@@ -86,7 +87,7 @@ Administrare
 Reguli:
 
 - UI nu acceseaza GitHub direct;
-- Google ID token ramane numai in memoria paginii;
+- Google ID token nu se persista in Web Storage; poate exista in memoria paginii si, dupa validare server-side, in cookie-ul host-only HttpOnly definit de ADR-004;
 - filtrele/KPI locale nu declanseaza provider request;
 - modificarile administrative nu pornesc full search;
 - `Ruleaza verificarea` / `Ruleaza acum` este comanda explicita de executie;
@@ -358,11 +359,18 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 
 - Google Identity Services;
 - Worker valideaza semnatura JWT, issuer, audience si identitatea autorizata;
+- autentificarea protejata accepta bearer Google valid sau fallback-ul same-origin `__Host-jscc_session`;
+- cookie-ul de sesiune este `Secure; HttpOnly; SameSite=Strict; Path=/`, fara `Domain`, cu durata limitata de expirarea credentialului Google;
+- cookie-ul nu este expus JavaScript-ului si Google ID token nu este persistat in localStorage/sessionStorage;
+- bootstrap-ul poate restaura sesiunea prin `POST /auth/session`, iar logout-ul explicit sterge cookie-ul;
+- protected-data 401/403 forteaza reautentificarea vizibila; un 403 de politica operationala nu este tratat automat ca pierdere de sesiune;
 - credentialele GitHub nu ajung in browser;
 - `/data/*` necesita autentificare;
 - protected data foloseste `no-store`;
 - fara secrete in cod/documentatie;
 - HTTPS obligatoriu.
+
+Decizia canonica este ADR-004.
 
 Pentru `ai-github-bridge`:
 
