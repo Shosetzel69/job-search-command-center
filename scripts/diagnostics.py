@@ -55,7 +55,7 @@ TOKEN_PATTERNS = (
 )
 
 KEY_VALUE_PATTERN = re.compile(
-    r"(?i)\b(authorization|cookie|set-cookie|token|access_token|id_token|refresh_token|api[_-]?key|secret|password|credential)\b\s*[:=]\s*([^\s,;]+)"
+    r"(?i)\b(authorization|cookie|set-cookie|token|access_token|id_token|refresh_token|api[_-]?key|secret|password|credential)\b\s*[:=]\s*([^\s,;&]+)"
 )
 
 
