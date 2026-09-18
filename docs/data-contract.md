@@ -59,8 +59,19 @@ Campuri principale:
 - `run_id`, `status`;
 - `started_at`, `completed_at`;
 - `sources`, `sources_processed`, `failed_sources`;
+- `source_results`;
+- `source_outcome_counts`;
+- `source_failure_codes`;
+- `source_failure_stages`;
 - `records_inspected`, `jobs_published`, `excluded`;
 - `limitations`.
+
+Agregatele source sunt derivate exclusiv din campurile structurate ale `source_results`:
+- `source_outcome_counts` grupeaza dupa `outcome`;
+- `source_failure_codes` grupeaza numai `outcome=failed` dupa `error_code`;
+- `source_failure_stages` grupeaza numai `outcome=failed` dupa `failure_stage`.
+
+`success_empty` ramane distinct de `failed`, iar starile asteptate de neexecutie (`deferred_provider`, `blocked_credentials`, `validation_pending`, `disabled_config`, `excluded_policy`, `skipped`) nu sunt raportate ca runtime failures.
 
 Stari active UI: `queued`, `pending`, `running`, `in_progress`.
 Stari terminale: `completed`, `completed_with_errors`, `failed`.
@@ -143,6 +154,8 @@ Sanitizarea este centrala in `scripts/diagnostics.py`. Credentialele, Authorizat
 ```
 
 Maximum 10 rulari, cea mai recenta prima.
+
+Fiecare entry pastreaza `source_results` si agregatele `source_outcome_counts`, `source_failure_codes`, `source_failure_stages` pentru reporting fara reinterpretarea mesajelor text.
 
 ## 5. `data/search-config.json`
 
