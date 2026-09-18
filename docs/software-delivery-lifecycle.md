@@ -63,10 +63,18 @@ LEGACY stays outside this chain and remains rollback/fallback only until separat
 ### DEV
 Implementation, debugging, automated tests and first technical verification.
 
+**Executor:** ChatGPT / DEV flow.
+
+Claude does not execute DEV validation. DEV evidence is produced by the development flow and is the prerequisite for promotion.
+
 Exit condition: implementation is stable enough to select one exact `CANDIDATE_SHA`.
 
 ### TEST
 Independent functional/integration validation of the frozen candidate.
+
+**Executor:** Claude QA.
+
+Claude validates only in TEST for the normal release flow; it does not perform DEV verification.
 
 Required:
 - exact same `CANDIDATE_SHA` as DEV;
