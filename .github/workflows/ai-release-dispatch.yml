@@ -1,0 +1,48 @@
+name: AI release dispatch
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  actions: write
+
+jobs:
+  dispatch:
+    if: ${{ github.actor == 'Shosetzel69' && startsWith(github.event.comment.body, '/jscc-deploy') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted control-plane from main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Parse owner command and dispatch canonical environment workflow
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ACTOR: ${{ github.actor }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          COMMENT_ID: ${{ github.event.comment.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(node scripts/environment/ai-release-dispatch.mjs)"
+          printf '%s' "$payload" | gh api \
+            --method POST \
+            "repos/$GITHUB_REPOSITORY/actions/workflows/deploy-environment.yml/dispatches" \
+            --input -
+          {
+            echo "### AI release dispatch"
+            echo
+            echo "Accepted owner command from issue #$ISSUE_NUMBER / comment $COMMENT_ID."
+            echo "Canonical workflow: Environment automation."
+            echo "PROD is not supported by this trigger."
+          } >> "$GITHUB_STEP_SUMMARY"

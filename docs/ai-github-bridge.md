@@ -126,27 +126,33 @@ Private keys, bridge tokens si owner access code nu se copiaza in repo, issue, l
 
 ## Release workflow dispatch #204
 
-Contractul este intentionat restrans:
+The bridge extension remains available for future direct client integrations:
 
 ```text
 POST /v1/actions/environment-deploy
-  environment = dev | test
-  source_sha = full 40-char SHA
-  issue_pr = required for DEV
-  dev_evidence_run_id = required for TEST
+MCP Claude: dispatch_environment_deploy
 ```
 
-Server-side:
+It remains hard-bound to DEV/TEST and cannot dispatch PROD.
+
+For the current ChatGPT operational path, no bridge/plugin refresh is required. The preferred trigger is GitHub-native:
 
 ```text
-repository = Shosetzel69/job-search-command-center
-workflow = deploy-environment.yml
-ref = main
-action = deploy
-dry_run = false
+ChatGPT
+  -> owner-authored GitHub issue comment
+  -> AI release dispatch workflow
+  -> workflow_dispatch deploy-environment.yml
+  -> canonical #198 DEV/TEST evidence
 ```
 
-Clientul nu poate selecta alt repository, workflow, ref, action sau input arbitrar. PROD, `prod-cutover.yml` si owner GO nu fac parte din #204.
+Commands:
+
+```text
+/jscc-deploy dev <40-char CANDIDATE_SHA>
+/jscc-deploy test <40-char CANDIDATE_SHA> <DEV_EVIDENCE_RUN_ID>
+```
+
+The comment trigger is restricted to GitHub actor `Shosetzel69`, uses only the repository `GITHUB_TOKEN`, and cannot select PROD, another repository, another workflow or another ref. The bridge implementation is therefore retained as an optional future integration rather than a prerequisite for ChatGPT release operation.
 
 ## Audit
 
@@ -173,10 +179,7 @@ Validarea live finala a fost efectuata prin Claude Web:
 6. `update_issue` + close #143 - PASS;
 7. titlul si label-urile #143 au ramas neschimbate - PASS.
 
-Validarea live pentru #204 necesita, separat:
-1. confirmarea permisiunii GitHub App Actions: Read and write;
-2. un dispatch DEV non-PROD pe un candidate SHA aprobat;
-3. verificarea ca run-ul rezultat este `Environment automation` din `main` si foloseste exact inputurile asteptate.
+Validarea live finala #204 foloseste trigger-ul GitHub-native: un comentariu owner `/jscc-deploy dev ...`, urmat de verificarea run-ului `Environment automation` si a evidence artifact-ului pentru exact acel candidate SHA.
 
 ## Reguli de lucru
 

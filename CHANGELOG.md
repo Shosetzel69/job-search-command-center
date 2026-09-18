@@ -4,7 +4,7 @@
 
 ### Functionalitati
 
-- #204: ai-github-bridge poate dispatch-ui strict allowlisted workflow-ul #198 `deploy-environment.yml` pentru DEV/TEST prin REST si Remote MCP Claude; repository/ref/action sunt fixate server-side, PROD este respins, iar GitHub App necesita Actions write.
+- #204: automatizarea release-ului permite ChatGPT sa porneasca DEV/TEST printr-un comentariu GitHub owner `/jscc-deploy ...`; workflow-ul GitHub-native valideaza strict owner-ul, SHA-ul si evidence-ul, apoi dispatch-uieste doar `deploy-environment.yml` din `main`. PROD ramane exclus. Extensia ai-github-bridge DEV/TEST este pastrata optional pentru integrari viitoare.
 - #198: implementat fluxul fail-closed de promovare a aceluiasi `CANDIDATE_SHA` DEV -> TEST -> PROD, cu evidence artifacts separate pentru DEV PASS, TEST deploy, TEST PASS independent si PROD release record; PROD necesita candidate reachability din `main`, rollback pregatit si `PROD_GO` explicit.
 - #161 / Phase 3: adaugat manifestul canonic `config/environments.json`, CLI unic `env:*`, guard-uri fail-closed, dry-run plans pentru bootstrap/deploy/status/isolation si workflow generic manual-only; Phase 3 nu provision-eaza resurse si nu modifica PROD.
 - #161 / Phase 2: introdus contract environment-aware fail-closed (`APP_ENV`, runtime repo/ref, immutable `SOURCE_SHA`, `RUNTIME_DATA_SHA`, `SEARCH_MODE`, `FRONTEND_ORIGIN`), `/health` identity, dispatch cu `source_sha` si marker UI DEV/TEST; fara provisioning DEV/TEST si fara schimbarea functionala a PROD.
