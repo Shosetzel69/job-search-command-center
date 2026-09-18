@@ -6,6 +6,7 @@ import { pemToPkcs8 } from "./index.js";
 const REPOSITORY = "Shosetzel69/job-search-command-center";
 const MAX_FILE_BYTES = 1024 * 1024;
 const MAX_RETURN_LINES = 400;
+const ENVIRONMENT_DEPLOY_WORKFLOW = "deploy-environment.yml";
 const textEncoder = new TextEncoder();
 
 function base64Url(bytes) {
@@ -127,6 +128,75 @@ export async function githubIssueRequest(env, method, issueNumber = null, body =
   return { actor: "claude", issue: normalizedIssue(payload) };
 }
 
+function validateEnvironmentDeployInput({ environment, source_sha, issue_pr, dev_evidence_run_id }) {
+  if (environment !== "dev" && environment !== "test") throw new Error("environment must be dev or test");
+  if (typeof source_sha !== "string" || !/^[0-9a-fA-F]{40}$/.test(source_sha)) {
+    throw new Error("source_sha must be a full 40-character commit SHA");
+  }
+  const issuePr = issue_pr === undefined ? undefined : String(issue_pr).trim();
+  const devEvidenceRunId = dev_evidence_run_id === undefined ? undefined : String(dev_evidence_run_id).trim();
+
+  if (environment === "dev") {
+    if (!issuePr || issuePr.length > 256) throw new Error("DEV deploy requires issue_pr up to 256 characters");
+    if (devEvidenceRunId !== undefined) throw new Error("DEV deploy must not provide dev_evidence_run_id");
+  } else if (!devEvidenceRunId || !/^\d+$/.test(devEvidenceRunId)) {
+    throw new Error("TEST deploy requires numeric dev_evidence_run_id");
+  }
+
+  return {
+    ref: "main",
+    workflow: ENVIRONMENT_DEPLOY_WORKFLOW,
+    environment,
+    source_sha: source_sha.toLowerCase(),
+    inputs: {
+      action: "deploy",
+      environment,
+      source_sha: source_sha.toLowerCase(),
+      dry_run: false,
+      ...(issuePr ? { issue_pr: issuePr } : {}),
+      ...(devEvidenceRunId ? { dev_evidence_run_id: devEvidenceRunId } : {}),
+    },
+  };
+}
+
+export async function githubEnvironmentDeployRequest(env, input, deps = {}) {
+  const tokenProvider = deps.tokenProvider || installationToken;
+  const fetchImpl = deps.fetchImpl || fetch;
+  if ((env.GITHUB_REPOSITORY || REPOSITORY) !== REPOSITORY) {
+    throw new Error("Repository allowlist configuration is invalid");
+  }
+
+  const deployment = validateEnvironmentDeployInput(input);
+  const token = await tokenProvider(env);
+  const response = await fetchImpl(
+    `https://api.github.com/repos/${REPOSITORY}/actions/workflows/${ENVIRONMENT_DEPLOY_WORKFLOW}/dispatches`,
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        accept: "application/vnd.github+json",
+        "x-github-api-version": "2022-11-28",
+        "user-agent": "jobsearch-claude-agent",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ ref: deployment.ref, inputs: deployment.inputs }),
+    },
+  );
+
+  if (!response.ok) {
+    const payload = await response.json().catch(() => null);
+    throw new Error(payload?.message || "GitHub workflow dispatch failed");
+  }
+
+  return {
+    actor: "claude",
+    workflow: ENVIRONMENT_DEPLOY_WORKFLOW,
+    ref: deployment.ref,
+    environment: deployment.environment,
+    source_sha: deployment.source_sha,
+  };
+}
+
 async function readRepositoryFile(env, path, ref, startLine, endLine) {
   const parts = path.split("/").filter(Boolean);
   if (!parts.length || parts.some((part) => part === "." || part === "..")) throw new Error("Invalid repository path");
@@ -184,7 +254,7 @@ function fail(error) {
 }
 
 export function createClaudeMcpServer(env) {
-  const server = new McpServer({ name: "Job Search GitHub - Claude", version: "0.2.1" });
+  const server = new McpServer({ name: "Job Search GitHub - Claude", version: "0.3.0" });
 
   server.registerTool(
     "read_file",
@@ -238,6 +308,27 @@ export function createClaudeMcpServer(env) {
       try {
         assertClaudeAuthorization();
         return ok(await githubIssueRequest(env, "POST", null, { title, ...(body !== undefined ? { body } : {}), ...(labels !== undefined ? { labels } : {}) }));
+      } catch (error) {
+        return fail(error);
+      }
+    },
+  );
+
+  server.registerTool(
+    "dispatch_environment_deploy",
+    {
+      description: "Dispatch the canonical #198 Environment automation workflow for DEV or TEST only. Repository, workflow, ref, action and dry_run are fixed server-side; PROD is not allowed.",
+      inputSchema: {
+        environment: z.enum(["dev", "test"]),
+        source_sha: z.string().regex(/^[0-9a-fA-F]{40}$/),
+        issue_pr: z.string().min(1).max(256).optional(),
+        dev_evidence_run_id: z.string().regex(/^\d+$/).optional(),
+      },
+    },
+    async (input) => {
+      try {
+        assertClaudeAuthorization();
+        return ok(await githubEnvironmentDeployRequest(env, input));
       } catch (error) {
         return fail(error);
       }
