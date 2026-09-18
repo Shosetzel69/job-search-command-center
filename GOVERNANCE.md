@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.6`
+Versiune document: `v1.7`
 Ultima actualizare: `2026-09-18`
 
 ## 1. Principiu
@@ -241,7 +241,15 @@ Pentru logica critica se mentin teste pentru:
 
 CI trebuie sa valideze cel putin Python, JSON, React/Vite si Cloudflare Worker dry-run.
 
-TEST este mediul canonic de validare independenta a candidate-ului frozen. QA trebuie sa inregistreze SHA-ul exact testat si verdictul aferent.
+Separarea executorilor pe medii este obligatorie:
+
+- DEV este verificat de executorul DEV (in prezent ChatGPT / Development);
+- TEST este verificat exclusiv de testerul independent (in prezent Claude QA);
+- testerul independent nu intra pe DEV pentru validare, debugging sau retest;
+- DEV executorul nu substituie verdictul independent din TEST;
+- PROD primeste doar smoke/acceptance dupa owner GO, prin fluxul de release; nu devine mediu de QA extins.
+
+TEST este mediul canonic de validare independenta a candidate-ului frozen. QA trebuie sa inregistreze SHA-ul exact testat si verdictul aferent. Separarea aceasta protejeaza independenta TEST si evita contaminarea sau mutatiile accidentale intre medii.
 
 ## 7. Securitate
 
