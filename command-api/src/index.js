@@ -71,6 +71,7 @@ function authorizeGooglePayload(payload, env) {
 }
 
 async function authenticate(request, env) {
+  if (!env.ALLOWED_GOOGLE_SUB) throw Object.assign(new Error('Authorization is not configured'), { status: 503 });
   const payload = await verifyGoogleToken(request, env);
   return authorizeGooglePayload(payload, env);
 }
