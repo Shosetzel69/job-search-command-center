@@ -266,6 +266,30 @@ Enforced controls:
 - no implicit `main` fallback and no merge/push-triggered implicit PROD deployment;
 - promotion and release artifacts contain identifiers/evidence only, never secrets.
 
+### GitHub-native AI dispatch
+
+ChatGPT can start the existing canonical DEV/TEST deployment workflow without a manual Actions click by creating an owner-authored GitHub issue/PR comment.
+
+Accepted commands:
+
+```text
+/jscc-deploy dev <CANDIDATE_SHA>
+/jscc-deploy test <CANDIDATE_SHA> <DEV_EVIDENCE_RUN_ID>
+```
+
+The control workflow `.github/workflows/ai-release-dispatch.yml`:
+- runs only for comments authored by repository owner `Shosetzel69`;
+- parses only the exact commands above;
+- accepts only DEV or TEST;
+- rejects PROD and malformed commands before dispatch;
+- checks out the trusted control-plane from `main`;
+- uses the repository `GITHUB_TOKEN` with `actions: write` only to call `workflow_dispatch` on `deploy-environment.yml`;
+- hard-binds repository, workflow and ref; no arbitrary workflow selection exists;
+- derives DEV traceability from the issue/comment id;
+- requires an explicit numeric DEV evidence run id for TEST.
+
+The resulting deployment remains a normal `Environment automation` / `workflow_dispatch` run, so the #198 evidence contract and run-identity checks are unchanged. PROD remains outside this trigger and still requires the dedicated promotion workflow plus owner GO.
+
 Deferred until project scale justifies them:
 - canary percentage rollouts;
 - release trains;
