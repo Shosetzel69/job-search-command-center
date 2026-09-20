@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   completionNotice,
+  duplicateRunResolution,
   isActiveRunStatus,
   isTerminalRunStatus,
   pollingDelayMs,
@@ -46,4 +47,12 @@ test('completed_with_errors has a distinct notice', () => {
   const notice = completionNotice({ status: 'completed_with_errors', jobs_published: 117, sources_processed: 117 });
   assert.equal(notice.type, 'info');
   assert.match(notice.message, /erori partiale/);
+});
+
+test('genuine 409 tracks only a confirmed active run', () => {
+  assert.deepEqual(duplicateRunResolution({ status:'queued' }), { trackExistingRun:true, state:'active' });
+  assert.deepEqual(duplicateRunResolution({ status:'in_progress' }), { trackExistingRun:true, state:'active' });
+  assert.deepEqual(duplicateRunResolution({ status:'completed' }), { trackExistingRun:false, state:'idle' });
+  assert.deepEqual(duplicateRunResolution({ status:'completed_with_errors' }), { trackExistingRun:false, state:'idle' });
+  assert.deepEqual(duplicateRunResolution(null), { trackExistingRun:false, state:'idle' });
 });
