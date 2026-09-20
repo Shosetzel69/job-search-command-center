@@ -21,6 +21,8 @@ Protected runtime contracts:
 Manifestul canonic pentru publicare/protectie este `shared/runtime-data.mjs`.
 `search-state.json` este intern si nu este publicat.
 
+Protected runtime JSON este citit la request din repository-ul runtime configurat pentru mediul curent. Static Assets livreaza frontend-ul, dar nu reprezinta sursa de adevar pentru fisierele runtime mutabile. Astfel, mutatiile prin Command API devin vizibile la urmatorul reload fara redeploy.
+
 ## 2. `data/jobs.json`
 
 Root minim:
