@@ -63,7 +63,7 @@ test('protected runtime data is read fresh from runtime repository on each reque
 
   globalThis.fetch = async url => {
     requested.push(String(url));
-    const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    const content = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64');
     return new Response(JSON.stringify({ sha:'blob-sha', content }), { status:200 });
   };
 
