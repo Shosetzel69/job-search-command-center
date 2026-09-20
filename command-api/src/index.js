@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import { activeCodes, assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
+import { PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import {
   applySourceAction,
   assertUniqueCategoryLabel,
@@ -94,6 +95,24 @@ async function readRepoJson(env, path) {
 
 async function writeRepoJson(env, path, sha, payload, message) {
   return writeRuntimeJson(env, runtimeConfig(env), path, sha, payload, message);
+}
+
+function protectedRuntimePath(env, file) {
+  const overrides = {
+    'search-config.json': env.SEARCH_CONFIG_PATH,
+    'sources.json': env.SOURCES_PATH,
+    'source-categories.json': env.SOURCE_CATEGORIES_PATH,
+    'nomenclatures.json': env.NOMENCLATURES_PATH,
+  };
+  return overrides[file] || `data/${file}`;
+}
+
+async function readProtectedRuntimeData(env, file) {
+  if (!PROTECTED_DATA_FILES.includes(file)) {
+    throw Object.assign(new Error('Not found'), { status:404 });
+  }
+  const { payload } = await readRepoJson(env, protectedRuntimePath(env, file));
+  return payload;
 }
 
 async function readNomenclatures(env) {
@@ -338,7 +357,7 @@ async function renameSourceCategoryReferences(env, oldLabel, newLabel) {
   return result?.commit?.sha || null;
 }
 
-export { applyUserConfigPatch, assertGeographyNoConflict, authorizeGooglePayload, readNomenclatures, validateEffectiveSearchConfig, validateUserConfigPatch };
+export { applyUserConfigPatch, assertGeographyNoConflict, authorizeGooglePayload, protectedRuntimePath, readNomenclatures, readProtectedRuntimeData, validateEffectiveSearchConfig, validateUserConfigPatch };
 
 export default {
   async fetch(request, env) {
@@ -376,6 +395,14 @@ export default {
       }
 
       const user = await authenticate(request, env);
+
+      if (request.method === 'GET' && url.pathname.startsWith('/data/')) {
+        const file = decodeURIComponent(url.pathname.slice('/data/'.length));
+        if (!file || file.includes('/') || !PROTECTED_DATA_FILES.includes(file)) {
+          return json({ error:'Not found' }, 404, cors);
+        }
+        return json(await readProtectedRuntimeData(env, file), 200, cors);
+      }
 
       if (request.method === 'POST' && url.pathname === '/commands/run') {
         if (runtime.searchMode !== 'live') throw Object.assign(new Error('Full search is disabled for this environment'), { status: 409 });
