@@ -49,6 +49,57 @@ export function countryOptions(payload) {
   return domainOptions(payload, 'countries');
 }
 
+export function countryNameToCode(payload) {
+  const output = {};
+  for (const item of domainValues(payload, 'countries', { activeOnly:true })) {
+    const code = String(item.code || '').trim().toUpperCase();
+    for (const value of [item.code, item.label, ...(item.aliases || [])]) {
+      const key = String(value || '').trim().toLocaleLowerCase('en-US');
+      if (key) output[key] = code;
+    }
+  }
+  return output;
+}
+
+export function normalizeCountryNames(payload, { countries = [], countryCodes = [], remoteScope = null } = {}) {
+  const aliases = countryNameToCode(payload);
+  const canonicalByCode = Object.fromEntries(countryOptions(payload));
+  const names = [];
+  const seenNames = new Set();
+  const seenCodes = new Set();
+
+  const addName = value => {
+    const text = String(value || '').trim();
+    const key = text.toLocaleLowerCase('en-US');
+    if (!text || seenNames.has(key)) return;
+    seenNames.add(key);
+    names.push(text);
+  };
+
+  for (const raw of countries || []) {
+    const text = typeof raw === 'string' ? raw : raw?.name;
+    const normalized = String(text || '').trim();
+    if (!normalized) continue;
+    const code = aliases[normalized.toLocaleLowerCase('en-US')];
+    if (code) {
+      seenCodes.add(code);
+      addName(canonicalByCode[code] || code);
+    } else {
+      addName(normalized);
+    }
+  }
+
+  for (const rawCode of countryCodes || []) {
+    const code = String(rawCode || '').trim().toUpperCase();
+    if (!code || seenCodes.has(code)) continue;
+    seenCodes.add(code);
+    addName(canonicalByCode[code] || code);
+  }
+
+  if (!names.length && remoteScope && !['Unknown','Country'].includes(remoteScope)) addName(remoteScope);
+  return names;
+}
+
 export function regionOptions(payload) {
   return domainOptions(payload, 'regions');
 }

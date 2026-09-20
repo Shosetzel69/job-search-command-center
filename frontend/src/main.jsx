@@ -2,7 +2,7 @@ import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AdminShell from './admin-shell.jsx';
-import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES, REGION_OPTIONS, WORK_MODE_OPTIONS } from './nomenclature-runtime.mjs';
+import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES, REGION_OPTIONS, WORK_MODE_OPTIONS, normalizedCountryNames } from './nomenclature-runtime.mjs';
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
 import { googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
@@ -81,13 +81,7 @@ function normalizeMode(value) {
 }
 
 function countryName(code){return COUNTRY_NAMES[String(code||'').toUpperCase()]||String(code||'').toUpperCase();}
-function normalizedCountries(job){
-  const names=Array.isArray(job.countries)?job.countries.map(x=>typeof x==='string'?x:x?.name).filter(Boolean):[];
-  const codes=Array.isArray(job.country_codes)?job.country_codes.filter(Boolean):job.country_code?[job.country_code]:[];
-  for(const code of codes){const name=countryName(code);if(name&&!names.includes(name))names.push(name);}
-  if(!names.length&&job.remote_scope&&job.remote_scope!=='Unknown'&&job.remote_scope!=='Country')names.push(job.remote_scope);
-  return names;
-}
+function normalizedCountries(job){return normalizedCountryNames(job);}
 function countryCompact(job){const list=job.countries||[];if(!list.length)return'Nespecificat';return list.length===1?list[0]:`${list[0]} +${list.length-1}`;}
 function normalizeJob(job){const countries=normalizedCountries(job);return{
   id:job.id||null,title:job.title||'Titlu indisponibil',company:job.company||'Companie nespecificata',initial:job.initial||((job.company||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?'),

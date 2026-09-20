@@ -221,5 +221,23 @@ class OutputTests(unittest.TestCase):
         self.assertEqual(output["jobs"][0]["employment_type_raw"], "provider-special")
 
 
+
+    def test_country_aliases_are_deduplicated_to_canonical_label(self):
+        job = {
+            "title": "Project Manager",
+            "company": "Example",
+            "location": "Brussels",
+            "countries": ["Belgium", "Belgia"],
+            "country_codes": ["BE"],
+            "remote": False,
+            "mode": "onsite",
+            "date_posted": "2026-09-20T08:00:00+00:00",
+        }
+        countries, codes, scope, eligible = engine.normalize_job_geography(job, False)
+        self.assertEqual(countries, ["Belgia"])
+        self.assertEqual(codes, ["BE"])
+        self.assertEqual(scope, "Country")
+        self.assertTrue(eligible)
+
 if __name__ == "__main__":
     unittest.main()
