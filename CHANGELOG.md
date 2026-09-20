@@ -157,6 +157,7 @@
 
 ### Frontend
 
+- #194 / R1.5: dupa un genuine HTTP 409, UI confirma o singura data run-status; polling continua numai daca exista un run activ, altfel butonul revine imediat la idle.
 - #35 / R1.5: canonicalizeaza aliasurile de tara dupa codul canonic si elimina duplicate lingvistice precum `Belgium` + `Belgia` din output si afisare.
 - Migrare completa la React 18 + Tailwind CSS + Vite.
 - Layout principal centrat, maximum 1400 px.
