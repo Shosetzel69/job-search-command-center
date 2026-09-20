@@ -8,7 +8,13 @@
       "name": "LinkedIn Jobs",
       "url": "https://www.linkedin.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-19586b7c",
@@ -16,7 +22,13 @@
       "name": "Indeed",
       "url": "https://www.indeed.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-151ed5ae",
@@ -24,7 +36,13 @@
       "name": "eJobs",
       "url": "https://www.ejobs.ro/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-a41721bd",
@@ -32,7 +50,13 @@
       "name": "Hipo",
       "url": "https://www.hipo.ro/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-f9b6441c",
@@ -40,7 +64,13 @@
       "name": "Jobicy",
       "url": "https://jobicy.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "jobicy",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-c2f412ff",
@@ -48,7 +78,13 @@
       "name": "EURES",
       "url": "https://eures.europa.eu/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-60eb92d7",
@@ -56,7 +92,13 @@
       "name": "EU Careers / EPSO",
       "url": "https://eu-careers.europa.eu/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-de6c7ccb",
@@ -64,7 +106,13 @@
       "name": "EuroBrussels",
       "url": "https://www.eurobrussels.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-01389b06",
@@ -72,7 +120,13 @@
       "name": "eFinancialCareers",
       "url": "https://www.efinancialcareers.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-6d75d5ec",
@@ -80,7 +134,13 @@
       "name": "Hays Romania",
       "url": "https://www.hays.ro/cauta-locuri-de-munca",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-c449712a",
@@ -88,7 +148,13 @@
       "name": "Jobgether",
       "url": "https://jobgether.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-eaa0bf03",
@@ -96,7 +162,13 @@
       "name": "Himalayas",
       "url": "https://himalayas.app/jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-c5c33d14",
@@ -104,7 +176,13 @@
       "name": "Working Nomads",
       "url": "https://www.workingnomads.com/jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-711652ce",
@@ -112,7 +190,13 @@
       "name": "Remote OK",
       "url": "https://remoteok.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-33faa076",
@@ -120,7 +204,13 @@
       "name": "We Work Remotely",
       "url": "https://weworkremotely.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-6f69f067",
@@ -128,7 +218,13 @@
       "name": "Remote.co",
       "url": "https://remote.co/remote-jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-8dc57863",
@@ -136,7 +232,13 @@
       "name": "NoDesk",
       "url": "https://nodesk.co/remote-jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-b428d48a",
@@ -144,7 +246,13 @@
       "name": "EU Remote Jobs",
       "url": "https://euremotejobs.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-5c60a3ef",
@@ -152,7 +260,13 @@
       "name": "Remote in Europe",
       "url": "https://remoteineurope.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-5b267066",
@@ -160,7 +274,13 @@
       "name": "Landing.Jobs",
       "url": "https://landing.jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-19fdc576",
@@ -168,7 +288,13 @@
       "name": "Wellfound",
       "url": "https://wellfound.com/jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-98e6fa9a",
@@ -176,7 +302,13 @@
       "name": "Flexa",
       "url": "https://flexa.careers/jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-418d4402",
@@ -184,7 +316,13 @@
       "name": "No Fluff Jobs",
       "url": "https://nofluffjobs.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-08e07524",
@@ -192,7 +330,13 @@
       "name": "Just Join IT",
       "url": "https://justjoin.it/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-29c7e716",
@@ -200,7 +344,13 @@
       "name": "awork.ro",
       "url": "https://awork.ro/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-22e89880",
@@ -208,7 +358,13 @@
       "name": "Remotive",
       "url": "https://remotive.com/remote-jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-95b41cd3",
@@ -216,7 +372,13 @@
       "name": "JustRemote",
       "url": "https://justremote.co/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-bc23a227",
@@ -224,7 +386,13 @@
       "name": "Jobspresso",
       "url": "https://jobspresso.co/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-847cc7fb",
@@ -232,7 +400,13 @@
       "name": "DailyRemote",
       "url": "https://dailyremote.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-051631b2",
@@ -240,7 +414,13 @@
       "name": "PowerToFly",
       "url": "https://powertofly.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-27876fc7",
@@ -248,7 +428,13 @@
       "name": "Dynamite Jobs",
       "url": "https://dynamitejobs.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-e2c72147",
@@ -256,7 +442,13 @@
       "name": "Torre",
       "url": "https://torre.ai/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-37fe892c",
@@ -264,7 +456,13 @@
       "name": "Welcome to the Jungle",
       "url": "https://www.welcometothejungle.com/en/jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-de78b466",
@@ -272,7 +470,13 @@
       "name": "Techjobs.be",
       "url": "https://techjobs.be/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-5ba28ea2",
@@ -280,7 +484,13 @@
       "name": "FlexJobs",
       "url": "https://www.flexjobs.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-b9e381e5",
@@ -288,7 +498,13 @@
       "name": "Glassdoor Jobs",
       "url": "https://www.glassdoor.com/Job/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-362eebc4",
@@ -304,7 +520,13 @@
       "name": "Pangian",
       "url": "https://pangian.com/job-travel-remote/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-7abce359",
@@ -312,7 +534,13 @@
       "name": "SkipTheDrive",
       "url": "https://www.skipthedrive.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-a83077eb",
@@ -320,7 +548,13 @@
       "name": "RemoteHunt",
       "url": "https://remotehunt.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-6351e67a",
@@ -328,7 +562,13 @@
       "name": "Freelancermap",
       "url": "https://www.freelancermap.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-b1f34459",
@@ -336,7 +576,13 @@
       "name": "Malt",
       "url": "https://www.malt.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-d7caf4d7",
@@ -344,7 +590,13 @@
       "name": "Toptal",
       "url": "https://www.toptal.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-b87e0b6b",
@@ -352,7 +604,13 @@
       "name": "Crossover",
       "url": "https://www.crossover.com/jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-05d0980c",
@@ -360,7 +618,13 @@
       "name": "Upwork",
       "url": "https://www.upwork.com/freelance-jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-633a9d75",
@@ -368,7 +632,13 @@
       "name": "Arc.dev",
       "url": "https://arc.dev/remote-jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-cd888ac5",
@@ -376,7 +646,13 @@
       "name": "PeoplePerHour",
       "url": "https://www.peopleperhour.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-198c2c6d",
@@ -384,7 +660,13 @@
       "name": "Freelancer.com",
       "url": "https://www.freelancer.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-5da9090f",
@@ -392,7 +674,13 @@
       "name": "Hubstaff Talent",
       "url": "https://talent.hubstaff.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-30f49eb9",
@@ -400,7 +688,13 @@
       "name": "European Dynamics",
       "url": "https://www.eurodyn.com/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-130c8619",
@@ -408,7 +702,13 @@
       "name": "Almaviva de Belgique",
       "url": "https://www.almaviva.it/en_GB/Work-with-us/Open-positions",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-43f89b7e",
@@ -416,7 +716,13 @@
       "name": "Vector Synergy",
       "url": "https://vectorsynergy.com/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-0ed4ecb9",
@@ -424,7 +730,13 @@
       "name": "NATO Careers",
       "url": "https://www.nato.int/cps/en/natohq/recruitment.htm",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-f8ab232c",
@@ -432,7 +744,13 @@
       "name": "Cronos Europa",
       "url": "https://cronos-europa.eu/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-35952461",
@@ -440,7 +758,13 @@
       "name": "Serco Europe",
       "url": "https://careers.serco.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-66c9abf9",
@@ -448,7 +772,13 @@
       "name": "CGI",
       "url": "https://www.cgi.com/en/careers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-f6ec92c2",
@@ -456,7 +786,13 @@
       "name": "Sopra Steria",
       "url": "https://careers.soprasteria.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-81c52270",
@@ -464,7 +800,13 @@
       "name": "Netcompany / Intrasoft",
       "url": "https://www.netcompany.com/careers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-4f115b25",
@@ -472,7 +814,13 @@
       "name": "Thales",
       "url": "https://careers.thalesgroup.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-cd35311d",
@@ -480,7 +828,13 @@
       "name": "ING Careers",
       "url": "https://careers.ing.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-db53eef5",
@@ -488,7 +842,13 @@
       "name": "Deutsche Bank",
       "url": "https://careers.db.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-b5d2ea7a",
@@ -496,7 +856,13 @@
       "name": "Societe Generale",
       "url": "https://careers.societegenerale.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-2d0a1ece",
@@ -504,7 +870,13 @@
       "name": "Allianz Careers",
       "url": "https://careers.allianz.com/",
       "active": false,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-81d05cc7",
@@ -512,7 +884,13 @@
       "name": "Worldline",
       "url": "https://careers.worldline.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-9c62386c",
@@ -520,7 +898,13 @@
       "name": "Worldpay / Global Payments",
       "url": "https://jobs.globalpayments.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-c55d92f1",
@@ -528,7 +912,13 @@
       "name": "Vodafone / VOIS",
       "url": "https://careers.vodafone.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-13cf91f6",
@@ -536,7 +926,13 @@
       "name": "Airbus",
       "url": "https://www.airbus.com/en/careers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-673ff124",
@@ -544,7 +940,13 @@
       "name": "GlobalLogic",
       "url": "https://www.globallogic.com/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-388b210e",
@@ -552,7 +954,13 @@
       "name": "Luxoft",
       "url": "https://career.luxoft.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-0d30c544",
@@ -560,7 +968,13 @@
       "name": "Mantu",
       "url": "https://careers.mantu.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-86b7291f",
@@ -568,7 +982,13 @@
       "name": "NTT",
       "url": "https://careers.services.global.ntt/",
       "active": false,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-c92fb5b2",
@@ -576,7 +996,13 @@
       "name": "NTT DATA Romania",
       "url": "https://ro.nttdata.com/careers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-93fac926",
@@ -584,7 +1010,13 @@
       "name": "Cegeka",
       "url": "https://www.cegeka.com/en/ro/jobs/all-jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-97ae3205",
@@ -592,7 +1024,13 @@
       "name": "Computacenter",
       "url": "https://careers.computacenter.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-ab8eef5d",
@@ -600,7 +1038,13 @@
       "name": "SoftServe",
       "url": "https://career.softserveinc.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-1acffa09",
@@ -608,7 +1052,13 @@
       "name": "EPAM",
       "url": "https://www.epam.com/careers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-3f1d18c1",
@@ -616,7 +1066,13 @@
       "name": "Eviden",
       "url": "https://eviden.com/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-86c16192",
@@ -624,7 +1080,13 @@
       "name": "DXC Technology",
       "url": "https://careers.dxc.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-80728c0f",
@@ -632,7 +1094,13 @@
       "name": "HARMAN",
       "url": "https://jobs.harman.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-200ac72c",
@@ -640,7 +1108,13 @@
       "name": "Endava",
       "url": "https://careers.endava.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-06a35de2",
@@ -648,7 +1122,13 @@
       "name": "Accenture",
       "url": "https://www.accenture.com/ro-en/careers/jobsearch",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-883880eb",
@@ -656,7 +1136,13 @@
       "name": "Atos",
       "url": "https://jobs.atos.net/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-068757e6",
@@ -664,7 +1150,13 @@
       "name": "Orange Romania",
       "url": "https://www.orange.ro/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-20cc8a94",
@@ -672,7 +1164,13 @@
       "name": "Bosch Romania",
       "url": "https://www.bosch.ro/cariere/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-33dc53dd",
@@ -680,7 +1178,13 @@
       "name": "Xebia CEE",
       "url": "https://xebia.com/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-ffbd0efc",
@@ -688,7 +1192,13 @@
       "name": "Prohuman",
       "url": "https://www.prohuman.ro/locuri-de-munca",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-880cb59e",
@@ -696,7 +1206,13 @@
       "name": "Fortive",
       "url": "https://careers.fortive.com/",
       "active": false,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-ca19ca22",
@@ -704,7 +1220,13 @@
       "name": "Saphetor",
       "url": "https://saphetor.com/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-e227c07e",
@@ -712,7 +1234,13 @@
       "name": "Camunda",
       "url": "https://camunda.com/careers/all-jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-45ded4bd",
@@ -720,7 +1248,13 @@
       "name": "ClickHouse",
       "url": "https://clickhouse.com/company/careers",
       "active": false,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-36303de5",
@@ -728,7 +1262,13 @@
       "name": "GitHub",
       "url": "https://www.github.careers/careers-home",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-fa93d750",
@@ -736,7 +1276,13 @@
       "name": "Snyk",
       "url": "https://snyk.io/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-f0431472",
@@ -744,7 +1290,13 @@
       "name": "Datadog",
       "url": "https://careers.datadoghq.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-69b52ced",
@@ -752,7 +1304,13 @@
       "name": "Stripe",
       "url": "https://stripe.com/jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-b0569593",
@@ -760,7 +1318,13 @@
       "name": "Kong",
       "url": "https://konghq.com/company/careers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-4e049a8b",
@@ -768,7 +1332,13 @@
       "name": "LocalStack",
       "url": "https://www.localstack.cloud/careers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-5e1bffb7",
@@ -776,7 +1346,13 @@
       "name": "Contentsquare",
       "url": "https://careers.contentsquare.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-59fe329e",
@@ -784,7 +1360,13 @@
       "name": "Storyblok",
       "url": "https://www.storyblok.com/jobs",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-b9c3e8da",
@@ -792,7 +1374,13 @@
       "name": "Ashby",
       "url": "https://jobs.ashbyhq.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-a4b24087",
@@ -800,7 +1388,13 @@
       "name": "Workable",
       "url": "https://jobs.workable.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-cb17e9a4",
@@ -808,7 +1402,13 @@
       "name": "Greenhouse",
       "url": "https://www.greenhouse.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-9a1da502",
@@ -816,7 +1416,13 @@
       "name": "Lever",
       "url": "https://www.lever.co/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-a17e037a",
@@ -824,7 +1430,13 @@
       "name": "Workday",
       "url": "https://www.workday.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-4366cf98",
@@ -832,7 +1444,13 @@
       "name": "SmartRecruiters",
       "url": "https://www.smartrecruiters.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-5b8df11a",
@@ -840,7 +1458,13 @@
       "name": "Recruitee",
       "url": "https://recruitee.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-c1f00061",
@@ -848,7 +1472,13 @@
       "name": "BambooHR",
       "url": "https://www.bamboohr.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-2671485b",
@@ -856,7 +1486,13 @@
       "name": "Eightfold",
       "url": "https://eightfold.ai/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-6dfcf5c6",
@@ -864,7 +1500,13 @@
       "name": "UpcoMinds",
       "url": "https://www.jobs4it.gr/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-9adf56b2",
@@ -872,7 +1514,13 @@
       "name": "Infoplus Technologies UK",
       "url": "https://www.infoplusltd.co.uk/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-022e1882",
@@ -880,7 +1528,13 @@
       "name": "RED Global",
       "url": "https://www.redglobal.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-1b80f6e3",
@@ -888,7 +1542,13 @@
       "name": "Salt",
       "url": "https://welovesalt.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-635a05cb",
@@ -896,7 +1556,13 @@
       "name": "Avance Consulting",
       "url": "https://www.avanceconsulting.com/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-9cdef20d",
@@ -904,7 +1570,13 @@
       "name": "Hirexa Solutions",
       "url": "https://hirexa.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-07fe3d5c",
@@ -912,7 +1584,13 @@
       "name": "Infinity Quest",
       "url": "https://www.i-q.net/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-ea3cff6e",
@@ -920,7 +1598,13 @@
       "name": "Square One Resources",
       "url": "https://www.squareoneresources.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-3827c764",
@@ -928,7 +1612,13 @@
       "name": "Source Group International",
       "url": "https://www.sourcegroupinternational.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-45ccbce5",
@@ -936,7 +1626,13 @@
       "name": "Montreal Associates",
       "url": "https://www.montrealassociates.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-04910401",
@@ -944,7 +1640,13 @@
       "name": "Brains Consulting",
       "url": "https://brainsconsulting.ro/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-68781255",
@@ -952,7 +1654,13 @@
       "name": "Head Hunting IT",
       "url": "https://www.headhuntingit.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-5e2000e7",
@@ -960,7 +1668,13 @@
       "name": "Next Ventures",
       "url": "https://next-ventures.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-52730da8",
@@ -968,7 +1682,13 @@
       "name": "Lawrence Harvey",
       "url": "https://www.lawrenceharvey.com/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-caa85833",
@@ -976,7 +1696,13 @@
       "name": "Proactive.IT",
       "url": "https://proactive.it/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-63ad859c",
@@ -984,7 +1710,13 @@
       "name": "W Talent",
       "url": "https://www.wtalent.com/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-de00bad8",
@@ -992,7 +1724,13 @@
       "name": "KEYES / NRB",
       "url": "https://www.nrb.be/careers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-3720e0c9",
@@ -1000,7 +1738,13 @@
       "name": "Trasys International",
       "url": "https://careers.nrb.be/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-627fe4ae",
@@ -1008,7 +1752,13 @@
       "name": "Thaleria",
       "url": "https://www.thaleria.com/careers/open-positions",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-c5b4586f",
@@ -1016,7 +1766,13 @@
       "name": "Talan Belgium / Luxembourg",
       "url": "https://www.talan.com/global/en/join-us/our-job-offers",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-c636b92c",
@@ -1024,7 +1780,13 @@
       "name": "Fujitsu Belgium",
       "url": "https://www.fujitsu.com/be/about/local/jobs/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-e1e59857",
@@ -1032,7 +1794,13 @@
       "name": "ARHS / Accenture",
       "url": "https://www.arhs-group.com/careers/",
       "active": true,
-      "connector_available": true
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     },
     {
       "id": "src-1241f7ac",
@@ -1040,7 +1808,13 @@
       "name": "JobsPipe",
       "url": "https://jobspipe.dev/",
       "active": true,
-      "connector_available": true
+      "collection_method": "jobspipe",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": null,
+      "policy_excluded": false
     }
   ]
 }
