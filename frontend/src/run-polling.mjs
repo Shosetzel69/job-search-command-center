@@ -9,6 +9,12 @@ export function isActiveRunStatus(status) {
   return ACTIVE_RUN_STATUSES.has(String(status || '').toLowerCase());
 }
 
+export function duplicateRunResolution(status) {
+  return isActiveRunStatus(status?.status)
+    ? { trackExistingRun:true, state:'active' }
+    : { trackExistingRun:false, state:'idle' };
+}
+
 export function runChanged(status, baseline = {}) {
   if (!status) return false;
   return status.run_id !== (baseline.runId ?? null) || status.completed_at !== (baseline.completedAt ?? null);
