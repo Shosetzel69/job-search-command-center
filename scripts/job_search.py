@@ -259,22 +259,35 @@ def list_values(value: Any) -> list[str]:
 def normalize_job_geography(job: dict[str, Any], remote: bool) -> tuple[list[str], list[str], str, bool]:
     """Normalize country fields and determine the remote scope without inventing a country."""
     country_codes: list[str] = []
+    countries: list[str] = []
+    seen_country_names: set[str] = set()
+
+    def add_country_name(value: Any) -> None:
+        text = str(value or "").strip()
+        key = text.casefold()
+        if text and key not in seen_country_names:
+            seen_country_names.add(key)
+            countries.append(text)
+
+    for country in list_values(job.get("countries")):
+        text = str(country or "").strip()
+        if not text:
+            continue
+        code = COUNTRY_NAME_TO_CODE.get(text.casefold())
+        if code:
+            if code not in country_codes:
+                country_codes.append(code)
+            add_country_name(COUNTRY_NAMES.get(code, code))
+        else:
+            add_country_name(text)
+
     raw_codes = [job.get("country_code"), job.get("job_country_code"), *list_values(job.get("country_codes"))]
     for value in raw_codes:
         code = str(value or "").strip().upper()
         if code in ACTIVE_COUNTRY_CODES and code not in country_codes:
             country_codes.append(code)
-
-    countries = list_values(job.get("countries"))
-    for country in countries:
-        code = COUNTRY_NAME_TO_CODE.get(country.lower())
-        if code and code not in country_codes:
-            country_codes.append(code)
-
-    for code in country_codes:
-        name = COUNTRY_NAMES.get(code, code)
-        if name not in countries:
-            countries.append(name)
+        if code in ACTIVE_COUNTRY_CODES:
+            add_country_name(COUNTRY_NAMES.get(code, code))
 
     if not remote:
         return countries, country_codes, "Country" if country_codes else "Unknown", True
