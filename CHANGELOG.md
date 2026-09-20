@@ -4,6 +4,7 @@
 
 ### Security
 
+- #242 / Release 1 Wave 3: migrateaza toate action-urile GitHub externe active la full commit SHA verificat, actualizeaza runtime-urile la Node 24 si adauga un guard CI permanent impotriva referintelor mutable.
 - #234 / Release 1 Wave 3: documentata procedura de rotire a credentialelor compromise si adoptata decizia de pinning a tuturor action-urilor externe la full commit SHA; implementarea este separata in #242.
 - #233 / Release 1 Wave 3: adaugat gate CI Gitleaks fail-closed, cu binar versionat si verificat SHA-256, scan range PR/push, self-test cu secret sintetic temporar si politica de allowlist scoped.
 - #232 / Release 1 Wave 3: extinsa suita negativa pentru identity authorization, protected data fara sesiune, CORS interzis, payload config invalid si forced reauthentication la protected 401.
