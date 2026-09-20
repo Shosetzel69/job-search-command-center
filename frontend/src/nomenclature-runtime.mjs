@@ -3,6 +3,7 @@ import {
   assertNomenclatures,
   countryOptions,
   domainOptions,
+  normalizeCountryNames,
   regionMembership,
   regionOptions,
 } from '../../shared/nomenclatures.mjs';
@@ -16,3 +17,11 @@ export const REGION_OPTIONS = Object.freeze(regionOptions(nomenclatures).map(([c
 export const REGION_COUNTRIES = Object.freeze(Object.fromEntries(regionMembership(nomenclatures)));
 export const WORK_MODE_OPTIONS = Object.freeze(domainOptions(nomenclatures, 'work_modes'));
 export const CONTRACT_TYPE_OPTIONS = Object.freeze(domainOptions(nomenclatures, 'contract_types'));
+
+export function normalizedCountryNames(job) {
+  return normalizeCountryNames(nomenclatures, {
+    countries:Array.isArray(job?.countries) ? job.countries : [],
+    countryCodes:Array.isArray(job?.country_codes) ? job.country_codes : (job?.country_code ? [job.country_code] : []),
+    remoteScope:job?.remote_scope || null,
+  });
+}
