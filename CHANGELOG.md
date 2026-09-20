@@ -157,6 +157,7 @@
 
 ### Frontend
 
+- #35 / R1.5: canonicalizeaza aliasurile de tara dupa codul canonic si elimina duplicate lingvistice precum `Belgium` + `Belgia` din output si afisare.
 - Migrare completa la React 18 + Tailwind CSS + Vite.
 - Layout principal centrat, maximum 1400 px.
 - Fundal slate deschis si carduri albe cu border/shadow discret.
