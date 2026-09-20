@@ -86,10 +86,7 @@ export default {
           headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
         });
       }
-      const authResponse = await verifyProtectedDataRequest(authorizedRequest, env);
-      if (!authResponse.ok) return noStoreResponse(authResponse);
-      const assetRequest = new Request(request.url, { method: 'GET', headers: { Accept: request.headers.get('Accept') || 'application/json' } });
-      return noStoreResponse(await env.ASSETS.fetch(assetRequest));
+      return noStoreResponse(await commandApi.fetch(authorizedRequest, env));
     }
 
     if (url.pathname === '/nomenclatures' || url.pathname.startsWith('/nomenclatures/')) {
