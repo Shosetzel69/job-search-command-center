@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import { INTERNAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
-import commandApi, { authorizeGooglePayload, validateUserConfigPatch } from '../src/index.js';
+import commandApi, { authorizeGooglePayload, protectedRuntimePath, readProtectedRuntimeData, validateUserConfigPatch } from '../src/index.js';
 import secureEntry, { fullSearchAllowed } from '../src/secure-entry.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -43,6 +43,58 @@ test('invalid configuration payloads fail closed at validation boundary', () => 
   assert.throws(
     () => validateUserConfigPatch({ fitThreshold:101 }, nomenclatures),
     error => error?.status === 400 && /fitThreshold/i.test(error.message),
+  );
+});
+
+test('protected runtime data resolves to isolated runtime paths', () => {
+  assert.equal(protectedRuntimePath(env, 'sources.json'), 'data/sources.json');
+  assert.equal(
+    protectedRuntimePath({ ...env, SOURCES_PATH:'runtime/custom-sources.json' }, 'sources.json'),
+    'runtime/custom-sources.json',
+  );
+  assert.equal(protectedRuntimePath(env, 'run-status.json'), 'data/run-status.json');
+});
+
+test('protected runtime data is read fresh from runtime repository on each request', async () => {
+  const originalFetch = globalThis.fetch;
+  const runtimeEnv = { ...env, GITHUB_TOKEN:'test-token' };
+  let payload = { schema_version:'1.0', count:0, sources:[] };
+  const requested = [];
+
+  globalThis.fetch = async url => {
+    requested.push(String(url));
+    const content = btoa(unescape(encodeURIComponent(JSON.stringify(payload))));
+    return new Response(JSON.stringify({ sha:'blob-sha', content }), { status:200 });
+  };
+
+  try {
+    const first = await readProtectedRuntimeData(runtimeEnv, 'sources.json');
+    assert.equal(first.count, 0);
+
+    payload = {
+      schema_version:'1.0',
+      count:1,
+      sources:[{ id:'src-test', name:'Persisted source' }],
+    };
+    const second = await readProtectedRuntimeData(runtimeEnv, 'sources.json');
+    assert.equal(second.count, 1);
+    assert.equal(second.sources[0].name, 'Persisted source');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+
+  assert.equal(requested.length, 2);
+  assert.ok(requested.every(url => url.includes('/repos/runtime-owner/runtime-repo/contents/data/sources.json?ref=main')));
+});
+
+test('protected runtime data helper rejects internal or unknown files', async () => {
+  await assert.rejects(
+    () => readProtectedRuntimeData({ ...env, GITHUB_TOKEN:'test-token' }, 'search-state.json'),
+    error => error?.status === 404,
+  );
+  await assert.rejects(
+    () => readProtectedRuntimeData({ ...env, GITHUB_TOKEN:'test-token' }, 'unknown.json'),
+    error => error?.status === 404,
   );
 });
 
