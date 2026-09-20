@@ -7,7 +7,9 @@ Ultima actualizare: `2026-09-18`
 
 Strategia executata de runner ramane `all active sources equally` pentru sursele eligibile operational.
 
-Nu exista prioritate operationala 1-5. Campul `priority` din catalogul legacy este ignorat si este eliminat la normalizarea registrului.
+Nu exista prioritate operationala 1-5. Campul `priority` nu mai exista in catalogul fizic si nu participa la normalizare sau selectie.
+
+Prin #93, toate intrarile non-Monster sunt materializate fizic cu starea persistenta de guvernanta (`collection_method`, `connector_available`, `validation_status`, `approval_status`, `last_validated_at`, `validation_reason`, `policy_excluded`). Aceste campuri sunt diferite de outcome-urile unei rulari.
 
 O regula explicita de excludere operationala prevaleaza peste un eventual `active=true` ramas intr-o intrare legacy.
 
@@ -62,6 +64,8 @@ Protectia este aplicata in doua locuri:
 - search orchestration marcheaza sursa `inactive` si nu o trimite niciunui collector, chiar daca o intrare legacy contine `active=true`.
 
 Astfel, o stare legacy din JSON nu poate reactiva accidental Monster.
+
+Cleanup-ul fizic al intrarii Monster este separat si amanat in #237. #93 nu modifica acea intrare; aceasta este singura exceptie fizica legacy tolerata temporar.
 
 Star Storage si companiile grupului raman excluse prin regulile de business/search configurate; acestea nu sunt reintroduse prin source governance.
 

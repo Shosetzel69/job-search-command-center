@@ -345,11 +345,25 @@ Campuri canonice:
 - `active`;
 - `collection_method`, `connector_available`;
 - `validation_status`, `approval_status`;
-- `last_validated_at`, `validation_reason`.
+- `last_validated_at`, `validation_reason`;
+- `policy_excluded`.
+
+Semantica:
+- `collection_method` descrie ruta de colectare disponibila (`web` sau connector dedicat), nu rezultatul unei rulari;
+- `connector_available` indica existenta unei rute de colectare in registrul/codul curent;
+- `validation_status` = `pending|validating|validated|requires_connector|rejected`;
+- `approval_status` = `pending|approved|rejected`;
+- `active=true` este permis numai pentru `validated + approved` si fara excludere de politica;
+- `policy_excluded` este stare persistenta de guvernanta si nu trebuie confundata cu outcome-ul per-run `excluded_policy`.
 
 Sursa noua = pending + neaprobata + inactiva.
 Activarea necesita validated + approved.
-Monster ramane exclus operational.
+
+Migrare #93:
+- toate sursele non-Monster din catalog sunt materializate fizic cu aceste campuri canonice;
+- normalizarea lor este idempotenta: citirea prin `normalizeSource()` nu mai inventeaza metadata lipsa;
+- campul legacy `priority` este absent;
+- Monster ramane singura exceptie fizica legacy, explicit amanata in #237; protectia operationala continua sa il normalizeze `policy_excluded=true` si `active=false`.
 
 ## 10. `data/source-categories.json`
 

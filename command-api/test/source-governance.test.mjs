@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   applySourceAction,
   newPendingSource,
@@ -68,6 +70,50 @@ test('requires connector cannot be activated', () => {
   source = applySourceAction(source, 'mark_requires_connector', { reason:'Connector lipsa' });
   assert.equal(source.validation_status, 'requires_connector');
   assert.throws(() => applySourceAction(source, 'activate'), /Sursa trebuie validata si aprobata/);
+});
+
+
+test('physical source registry is canonical for all non-deferred sources', () => {
+  const catalog = JSON.parse(readFileSync(resolve(process.cwd(), '../data/sources.json'), 'utf8'));
+  assert.equal(catalog.schema_version, '1.0');
+  assert.equal(catalog.count, catalog.sources.length);
+  assert.ok(catalog.sources.length > 0);
+
+  const required = [
+    'id',
+    'category',
+    'name',
+    'url',
+    'active',
+    'collection_method',
+    'connector_available',
+    'validation_status',
+    'approval_status',
+    'last_validated_at',
+    'validation_reason',
+    'policy_excluded',
+  ];
+
+  let deferredMonster = 0;
+  for (const source of catalog.sources) {
+    assert.equal('priority' in source, false, `${source.name} must not contain legacy priority`);
+
+    if (source.name === 'Monster') {
+      deferredMonster += 1;
+      assert.equal(source.active, true, 'Monster physical legacy state remains deferred to #237');
+      const normalized = normalizeSource(source);
+      assert.equal(normalized.policy_excluded, true);
+      assert.equal(normalized.active, false);
+      continue;
+    }
+
+    for (const key of required) {
+      assert.ok(key in source, `${source.name} is missing canonical field ${key}`);
+    }
+    assert.deepEqual(normalizeSource(source), source, `${source.name} must already be normalization-idempotent`);
+  }
+
+  assert.equal(deferredMonster, 1, 'Exactly one deferred Monster physical record is expected');
 });
 
 test('legacy executable source is normalized as approved/validated', () => {
