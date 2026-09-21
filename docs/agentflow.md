@@ -180,7 +180,7 @@ Release governance
 DEV -> candidate freeze -> TEST -> RELEASE -> PROD_GO -> PROD -> smoke
 ```
 
-AgentFlow nu redefinește candidate identity, TEST independence, rollback sau PROD gates.
+AgentFlow nu redefineste candidate identity, TEST independence, rollback sau PROD gates.
 
 ## 13. Documentation transition
 
