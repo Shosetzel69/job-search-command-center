@@ -21,7 +21,7 @@ promotion-dev-pass
 - Previous PROD `SOURCE_SHA`: `#####`
 - Previous PROD `RUNTIME_DATA_SHA`: `#####`
 - Rollback action/reference: `#####`
-- Owner GO: `YES / NO` — reference/time: `#####`
+- AgentFlow PROD authorization: `PROD GO / PROD_GO / NO` — reference/time: `#####`
 - PROD deploy evidence: `#####`
 - PROD `/health.source_sha`: `#####`
 - PROD smoke verdict: `PASS / FAIL`
