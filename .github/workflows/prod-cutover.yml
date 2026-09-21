@@ -210,6 +210,7 @@ jobs:
           test "$GH_BOOTSTRAP_TOKEN" != "$SOURCE_READ_TOKEN" || { echo "bootstrap/source-read token reuse is forbidden" >&2; exit 1; }
           case "$SOURCE_READ_TOKEN" in github_pat_*) ;; *) echo "Source-read token must be a fine-grained PAT" >&2; exit 1 ;; esac
           GH_TOKEN="$GH_RUNTIME_TOKEN" gh api "repos/$runtime_repo" --silent >/dev/null
+          GH_TOKEN="$GH_RUNTIME_TOKEN" gh api "repos/$runtime_repo/contents/data/search-config.json?ref=main" --silent >/dev/null || { echo "Runtime token cannot read canonical runtime contents" >&2; exit 1; }
           if GH_TOKEN="$GH_RUNTIME_TOKEN" gh api "repos/$source_repo" --silent >/dev/null 2>&1; then
             echo "Runtime token must not access source repository" >&2
             exit 1

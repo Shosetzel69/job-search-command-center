@@ -32,7 +32,7 @@ export async function runtimeGithubRequest(env, runtime, path, init = {}) {
 export async function canAccessRuntimeRepository(env, runtime) {
   if (!env.GITHUB_TOKEN) return false;
   try {
-    await runtimeGithubRequest(env, runtime, '');
+    await readRuntimeJson(env, runtime, 'data/search-config.json');
     return true;
   } catch {
     return false;
