@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.9`
+Versiune document: `v1.10`
 Ultima actualizare: `2026-09-21`
 
 ## 1. Principiu
@@ -151,7 +151,7 @@ Reguli fail-closed:
 - implementarea incepe numai dupa comanda explicita `APPROVE_TASK_CONTRACT <reference>`;
 - limbajul natural generic (`continua`, `go`, `merge`) nu inlocuieste gate-ul de task contract;
 - fiecare Agent Task Contract defineste scope, out-of-scope, acceptance, evidence si limita de retry;
-- daca executia descopera o decizie noua materiala de arhitectura, scope, securitate, privacy sau cost, taskul devine `BLOCKED` si revine la gate-ul potrivit; DEV nu inventeaza decizia;
+- daca executia descopera o decizie noua materiala de arhitectura, scope, securitate, privacy sau cost, taskul foloseste statusul canonic de blocare al fazei curente si revine la gate-ul potrivit; DEV nu inventeaza decizia;
 - Evidence Bundle demonstreaza rezultatul contractului, dar nu inlocuieste TEST independent sau release gates.
 
 ### 2.7 Vocabular canonic de proces
@@ -167,6 +167,72 @@ Reguli fail-closed:
 | `LEGACY-ADAPTED` | proces anterior pastrat pentru work deja material inceput, cu guardrails curente de release |
 
 Acesti termeni se folosesc identic in Issues, documentatie si handoff-uri. Sinonimele pot aparea in explicatii, dar nu ca nume de gate/status.
+
+### 2.8 Statusuri canonice de workflow
+
+Orice work item activ are un singur status canonic, separat de faza in care se afla.
+
+Headerul canonic recomandat este:
+
+```text
+Process: AGENTFLOW | LEGACY-ADAPTED | INHERIT-PARENT
+Phase: <canonical phase>
+Status: <canonical status>
+Blocked by: <issue/gate/reason, numai daca este blocat>
+```
+
+Daca un Issue existent contine in sectiuni istorice statusuri vechi sau contradictorii, headerul canonic cel mai recent are precedenta. Istoricul nu se rescrie doar pentru armonizare.
+
+Reguli:
+
+- `BLOCKED` singur nu este status canonic;
+- `READY FOR DEV`, `WAITING FOR ...`, `READY FOR REVIEW` si `READY FOR TEST` nu mai sunt statusuri canonice;
+- un blocker se exprima prin statusul fazei (`IMPLEMENTATION_BLOCKED`, `REVIEW_BLOCKED`, `TEST_BLOCKED` etc.) plus `Blocked by`;
+- `ARCHITECTURE_BLOCKED` se foloseste numai cand faza curenta este `ARCHITECTURE`; un task de implementare blocat de un architecture gate foloseste `IMPLEMENTATION_BLOCKED` + `Blocked by: #...`;
+- statusul se actualizeaza numai cand work item-ul trece efectiv intr-o alta stare; comentariile/evidence nu schimba implicit statusul;
+- inchiderea GitHub Issue nu inlocuieste statusul final; la inchidere se foloseste unul dintre statusurile de `CLOSURE`.
+
+| Phase | Statusuri canonice |
+|---|---|
+| `REQUIREMENTS` | `IDEA`, `REQUIREMENT_ANALYSIS`, `REQUIREMENT_READY_FOR_APPROVAL`, `REQUIREMENT_APPROVED`, `REQUIREMENT_CHANGES_REQUIRED`, `REQUIREMENT_DEFERRED`, `REQUIREMENT_REJECTED` |
+| `ARCHITECTURE` | `ARCHITECTURE_REVIEW`, `ARCHITECTURE_READY_FOR_APPROVAL`, `ARCHITECTURE_APPROVED`, `ARCHITECTURE_CHANGES_REQUIRED`, `ARCHITECTURE_BLOCKED` |
+| `DEVELOPMENT_ANALYSIS` | `DEVELOPMENT_ANALYSIS`, `DEVELOPMENT_ANALYSIS_BLOCKED`, `READY_FOR_TASK_CONTRACTS` |
+| `TASK_CONTRACT` | `TASK_CONTRACT_DRAFT`, `TASK_CONTRACT_PROPOSED`, `TASK_CONTRACT_CHANGES_REQUIRED`, `TASK_CONTRACT_APPROVED` |
+| `IMPLEMENTATION` | `IMPLEMENTATION_AUTHORIZED`, `IMPLEMENTING`, `IMPLEMENTATION_BLOCKED`, `IMPLEMENTATION_FAILED`, `IMPLEMENTATION_COMPLETE` |
+| `EVIDENCE` | `EVIDENCE_PREPARING`, `EVIDENCE_READY`, `EVIDENCE_INCOMPLETE` |
+| `REVIEW` | `REVIEW_PENDING`, `REVIEW_IN_PROGRESS`, `REVIEW_PASS`, `REVIEW_FAIL`, `REVIEW_BLOCKED` |
+| `DEV` | `DEV_PENDING`, `DEV_IN_PROGRESS`, `DEV_PASS`, `DEV_FAIL`, `DEV_BLOCKED` |
+| `CANDIDATE` | `CANDIDATE_READY`, `CANDIDATE_FROZEN`, `CANDIDATE_INVALIDATED` |
+| `TEST` | `TEST_PENDING`, `TEST_IN_PROGRESS`, `TEST_PASS`, `TEST_FAIL`, `TEST_BLOCKED` |
+| `RELEASE` | `RELEASE_PENDING`, `RELEASE_READY`, `RELEASE_BLOCKED` |
+| `PROD_GATE` | `PROD_GO_PENDING`, `PROD_GO`, `PROD_NO_GO` |
+| `PROD_DEPLOY` | `PROD_DEPLOYING`, `PROD_DEPLOYED`, `PROD_DEPLOY_FAILED` |
+| `PROD_SMOKE` | `PROD_SMOKE_PENDING`, `PROD_SMOKE_PASS`, `PROD_SMOKE_FAIL`, `PROD_SMOKE_BLOCKED` |
+| `CLOSURE` | `DONE`, `DEFERRED`, `CANCELLED`, `SUPERSEDED` |
+
+Fluxul nominal AgentFlow este:
+
+```text
+REQUIREMENT_APPROVED
+-> ARCHITECTURE_APPROVED (daca este necesar)
+-> DEVELOPMENT_ANALYSIS
+-> READY_FOR_TASK_CONTRACTS
+-> TASK_CONTRACT_PROPOSED
+-> TASK_CONTRACT_APPROVED
+-> IMPLEMENTATION_AUTHORIZED
+-> IMPLEMENTING
+-> IMPLEMENTATION_COMPLETE
+-> EVIDENCE_READY
+-> REVIEW_PASS
+-> DEV_PASS
+-> CANDIDATE_FROZEN
+-> TEST_PASS
+-> RELEASE_READY
+-> PROD_GO
+-> PROD_DEPLOYED
+-> PROD_SMOKE_PASS
+-> DONE
+```
 
 ## 3. Surse de adevar si precedenta
 
