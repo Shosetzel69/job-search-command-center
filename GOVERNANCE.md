@@ -1,7 +1,12 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.11`
-Ultima actualizare: `2026-09-21`
+Status: `CANONICAL`
+Version: `v1.12`
+Applicability: `CURRENT`
+Applies to: `BOTH`
+Effective from: `2026-09-21`
+Supersedes: `v1.11`
+Last updated: `2026-09-21`
 
 ## 1. Principiu
 
@@ -397,6 +402,37 @@ Reguli obligatorii:
 - nu se creeaza document sau commit fara diferenta materiala de documentat.
 
 Daca nu exista informatie pentru un camp obligatoriu, se foloseste `#####`.
+
+### 8.1 Versiune aplicabila si document in-place
+
+Pentru documentele canonice si operationale care au versiune proprie, versiunea aplicabila este versiunea curenta pastrata **in-place**, in aceeasi cale canonica din `main`.
+
+Git pastreaza istoricul versiunilor. Nu se creeaza copii `-v1`, `-v2`, `-final` sau echivalente in zona activa doar pentru versionare.
+
+Metadata standard pentru un document nou sau modificat material, unde este relevanta:
+
+```text
+Status: CANONICAL | WORKING | HISTORICAL | SUPERSEDED
+Version: vX.Y
+Applicability: CURRENT | HISTORICAL_ONLY
+Applies to: AGENTFLOW | LEGACY-ADAPTED | BOTH
+Effective from: YYYY-MM-DD
+Supersedes: <version/document, optional>
+```
+
+Reguli:
+
+- pentru acelasi document logic exista o singura versiune `CURRENT` in calea canonica;
+- o modificare materiala a unui document cu versiune proprie actualizeaza versiunea in acelasi fisier;
+- `CANONICAL + CURRENT` este document aprobat si aplicabil pentru scope-ul declarat;
+- `WORKING + CURRENT` poate descrie material in lucru, dar nu are precedenta peste un document `CANONICAL` aprobat;
+- `HISTORICAL` si `SUPERSEDED` folosesc `Applicability: HISTORICAL_ONLY` si nu conduc executia curenta;
+- `Supersedes` identifica versiunea/documentul inlocuit cand acest lucru este util; istoricul complet ramane in Git;
+- un document `LEGACY-ADAPTED` poate ramane `CURRENT` cat timp exista work activ care depinde de el;
+- mutarea in arhiva sau marcarea `HISTORICAL_ONLY` se face numai cand documentul nu mai este necesar executiei curente;
+- nu se face retrofit in masa numai pentru metadata; regula se aplica atunci cand documentul este creat sau modificat material, respectiv in cadrul curatarii documentare aprobate.
+
+Campurile `Status`, `Applicability` si `Applies to` au roluri diferite: statusul indica autoritatea/starea documentului, applicability indica daca poate conduce lucrul curent, iar applies-to indica procesul pentru care este relevant.
 
 ## 9. Deploy, promovare si release
 
