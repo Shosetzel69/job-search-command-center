@@ -6,6 +6,7 @@ import { resolve } from 'node:path';
 const ROOT = resolve(import.meta.dirname, '..');
 const promotion = readFileSync(resolve(ROOT, '.github/workflows/prod-cutover.yml'), 'utf8');
 const runtime = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
+const commandApi = readFileSync(resolve(ROOT, 'command-api/src/index.js'), 'utf8');
 
 test('PROD promotion is manual-only, PROD-scoped and serialized', () => {
   assert.match(promotion, /name: PROD promotion/);
@@ -73,4 +74,17 @@ test('PROD runtime executes search from immutable source then publishes and rede
   assert.match(runtime, /Redeploy PROD with published runtime snapshot/);
   assert.match(runtime, /Verify PROD health after runtime redeploy/);
   assert.match(runtime, /TEST smoke policy verified immutable source checkout only/);
+});
+
+
+test('PROD mutation refreshes Worker runtime secrets before health verification', () => {
+  const block = promotion.match(/- name: Configure PROD Worker runtime secrets[\s\S]*?- name: Verify dedicated PROD application health/)?.[0] || '';
+  assert.match(block, /if: \$\{\{ inputs\.action != 'status' \}\}/);
+  assert.match(block, /wrangler secret put GITHUB_TOKEN/);
+  assert.match(block, /wrangler secret put ALLOWED_GOOGLE_SUB/);
+});
+
+test('health validates live runtime repository access rather than token presence only', () => {
+  assert.match(commandApi, /github_configured:await canAccessRuntimeRepository\(env, runtime\)/);
+  assert.doesNotMatch(commandApi, /github_configured:Boolean\(env\.GITHUB_TOKEN\)/);
 });
