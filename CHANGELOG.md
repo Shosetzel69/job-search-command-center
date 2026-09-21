@@ -69,6 +69,8 @@
 
 ### Documentatie
 
+- AgentFlow: adaugat Architecture Change Detection Gate fail-closed; Development Analysis trebuie sa compare solutia cu arhitectura curenta si sa returneze `ARCHITECTURE BLOCKED` inainte de ATC daca apare un datastore, auth/tenancy, persistence boundary, orchestration sau alt boundary arhitectural nou.
+
 - AgentFlow: formalizate regula canonica de control keywords si routing persistence; aprobarile owner-ului sunt scoped la un singur obiect/gate, verdicturile TEST raman evidence, iar un work item rutat AgentFlow ramane AgentFlow end-to-end pana la o decizie explicita contrara a owner-ului.
 
 - Adaugat contractul canonic `docs/testing/qa-testability-ui-contract.md`: fluxurile UI automatizabile sunt DOM-first, dialogurile browser-native nu sunt acceptate in nominal DEV/TEST, iar blocajele de acest tip devin `BLOCKED-TESTABILITY`; #257 urmareste violarea curenta din stergerea Surse/Nomenclatoare.
