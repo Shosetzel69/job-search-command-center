@@ -17,7 +17,7 @@ import {
 } from './source-governance.js';
 import { assertEnvironmentConfig } from './environment-config.js';
 import { BUILD_IDENTITY } from './build-identity.generated.js';
-import { dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-github.js';
+import { canAccessRuntimeRepository, dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-github.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 
@@ -381,7 +381,7 @@ export default {
           runtime_data_sha:runtime.runtimeDataSha,
           search_mode:runtime.searchMode,
           auth_configured:googleConfigured(env),
-          github_configured:Boolean(env.GITHUB_TOKEN),
+          github_configured:await canAccessRuntimeRepository(env, runtime),
         }, 200, cors);
       }
       if (request.method === 'GET' && url.pathname === '/auth/config') {

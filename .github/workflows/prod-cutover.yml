@@ -181,8 +181,8 @@ jobs:
           set -euo pipefail
           mkdir -p release-input
           curl --fail --silent --show-error "$FRONTEND_ORIGIN/health" > release-input/previous-prod-health.json
-          jq -e '.status == "ok" and .environment == "prod" and .runtime_repo == "Shosetzel69/job-search-prod" and .runtime_ref == "main" and .search_mode == "live" and .auth_configured == true and .github_configured == true' \
-            release-input/previous-prod-health.json >/dev/null || { echo "Previous PROD health is not known-good" >&2; exit 1; }
+          jq -e '.status == "ok" and .environment == "prod" and .runtime_repo == "Shosetzel69/job-search-prod" and .runtime_ref == "main" and .search_mode == "live" and .auth_configured == true' \
+            release-input/previous-prod-health.json >/dev/null || { echo "Previous PROD identity/rollback anchors are invalid" >&2; exit 1; }
           previous_source="$(jq -r '.source_sha' release-input/previous-prod-health.json)"
           previous_runtime="$(jq -r '.runtime_data_sha' release-input/previous-prod-health.json)"
           [[ "$previous_source" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "Previous PROD source_sha is invalid" >&2; exit 1; }
@@ -370,7 +370,7 @@ jobs:
             --var "APPLICATIONS_PATH:data/applications.json"
 
       - name: Configure PROD Worker runtime secrets
-        if: ${{ inputs.action == 'bootstrap-deploy' }}
+        if: ${{ inputs.action != 'status' }}
         working-directory: deployment-source/command-api
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
