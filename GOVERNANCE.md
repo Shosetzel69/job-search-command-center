@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.11`
+Versiune document: `v1.12`
 Ultima actualizare: `2026-09-21`
 
 ## 1. Principiu
@@ -126,6 +126,33 @@ Odata rutat in AgentFlow:
 - in caz de conflict intre memoria conversatiei si metadata/artefactele GitHub verificate, starea GitHub verificata are prioritate; daca artefactele GitHub se contrazic intre ele, executia se opreste pana la reconciliere.
 
 Pentru handoff intre chaturi/agenti, Issue-ul trebuie sa afiseze explicit minimum `Process: AgentFlow` si gate-ul curent. Daca aceste campuri lipsesc pentru un item deja rutat AgentFlow, ele se completeaza ca normalizare de proces; lipsa lor nu schimba procesul aplicabil.
+
+### 2.3.3 AgentFlow - Architecture Change Detection Gate
+
+Inainte de orice Agent Task Contract sau solutie tehnica propusa in Development Analysis, AI executa obligatoriu un **architecture delta check** fata de `ARCHITECTURE.md` curent.
+
+Daca implementarea ar necesita sau ar presupune oricare dintre urmatoarele:
+- datastore/baza de date noua sau schimbarea mecanismului de persistenta;
+- schimbarea sursei canonice sau a boundary-ului de ownership al datelor;
+- mecanism nou/schimbat de autentificare, autorizare, tenancy sau multi-user;
+- schimbarea boundary-ului Cloudflare Worker / Command API;
+- schimbarea mecanismului de orchestrare/executie;
+- provider/runtime/framework/serviciu nou cu rol arhitectural;
+- schimbarea unui contract comun stabil intre componente;
+
+verdictul Development este obligatoriu:
+
+`ARCHITECTURE BLOCKED`
+
+si executia se opreste la acel gate.
+
+Reguli:
+- Development poate identifica problema, constrangerile si delta fata de arhitectura curenta, dar nu poate adopta singur o noua arhitectura;
+- o alternativa tehnica noua poate fi mentionata numai ca optiune pentru analiza arhitecturala, nu ca directie aprobata sau contract executabil;
+- se creeaza sau se refera un architecture gate dedicat;
+- analiza arhitecturala compara optiuni, impact, cost, securitate, migrare si rollback;
+- owner-ul aproba explicit decizia arhitecturala/ADR inainte de generarea sau aprobarea ATC-urilor dependente;
+- daca un ATC existent presupune o arhitectura care nu mai este aprobata/neechivoca, ATC-ul intra HOLD si se revalideaza dupa architecture gate.
 
 ### 2.4 Development
 
