@@ -370,7 +370,7 @@ jobs:
             --var "APPLICATIONS_PATH:data/applications.json"
 
       - name: Configure PROD Worker runtime secrets
-        if: ${{ inputs.action == 'bootstrap-deploy' }}
+        if: ${{ inputs.action != 'status' }}
         working-directory: deployment-source/command-api
         env:
           CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
