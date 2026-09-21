@@ -1,6 +1,16 @@
 # Package 2 - status implementare
 
-Ultima actualizare: 2026-09-13
+Status: `HISTORICAL`
+Version: `v1.0`
+Applicability: `HISTORICAL_ONLY`
+Applies to: `LEGACY-ADAPTED`
+Effective from: `2026-09-21`
+Snapshot date: `2026-09-13`
+
+> Acest document este un snapshot istoric de planificare/status pentru Package 2 si nu conduce executia curenta.
+> Surse curente: Package 2B Scheduler -> #86 + `job-search-discovery/transfers/DTP_PACKAGE-2B_SCHEDULER.md`; Package 2C -> #87; Package 2D -> #88; Package 2E -> #89; statusul curent al work item-urilor este in Issues executabile.
+
+Ultima actualizare a snapshot-ului: 2026-09-13
 
 ## Scope
 
