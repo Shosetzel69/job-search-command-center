@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.9`
+Versiune document: `v1.10`
 Ultima actualizare: `2026-09-21`
 
 ## 1. Principiu
@@ -107,6 +107,20 @@ Keywords canonice de control:
 | `STOP` | opreste fluxul la gate-ul curent | continuarea automata |
 
 Statusurile produse de agenti, inclusiv `TEST_PASSED`, `TEST_FAILED` si `BLOCKED`, sunt evidence/verdict, nu keywords de autorizare ale owner-ului si nu acorda singure permisiunea de a trece la urmatorul gate.
+
+### 2.3.2 AgentFlow - Routing Persistence Rule
+
+Un work item intra in AgentFlow cand sursa aprobata de transfer, DTP-ul, Issue-ul sau owner-ul il marcheaza explicit ca `AgentFlow` / proces agentic AgentFlow.
+
+Odata rutat in AgentFlow:
+- ramane in AgentFlow end-to-end pentru acel scope;
+- fiecare etapa foloseste artefactele, gate-urile, evidence-ul si control keywords AgentFlow aplicabile;
+- un chat, agent sau executor ulterior nu poate reclasifica implicit item-ul ca legacy doar pentru ca titlul Issue-ului nu contine `AgentFlow`;
+- absenta markerului din titlu nu anuleaza routing-ul daca body-ul, DTP-ul sau transferul aprobat identifica AgentFlow;
+- revenirea la un proces legacy sau iesirea din AgentFlow necesita o decizie explicita a owner-ului, inregistrata pe work item;
+- in caz de conflict intre memoria conversatiei si metadata/artefactele GitHub verificate, starea GitHub verificata are prioritate; daca artefactele GitHub se contrazic intre ele, executia se opreste pana la reconciliere.
+
+Pentru handoff intre chaturi/agenti, Issue-ul trebuie sa afiseze explicit minimum `Process: AgentFlow` si gate-ul curent. Daca aceste campuri lipsesc pentru un item deja rutat AgentFlow, ele se completeaza ca normalizare de proces; lipsa lor nu schimba procesul aplicabil.
 
 ### 2.4 Development
 
