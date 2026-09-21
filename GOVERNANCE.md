@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.10`
+Versiune document: `v1.11`
 Ultima actualizare: `2026-09-21`
 
 ## 1. Principiu
@@ -81,8 +81,9 @@ Pentru orice cerinta noua:
 
 1. analiza impactului;
 2. propunere de optimizare, daca este cazul;
-3. confirmare explicita;
-4. transfer in Development.
+3. `APPROVE REQUIREMENT` pentru cerinta curenta;
+4. pregatirea DTP/handoff-ului, daca se aplica;
+5. `APPROVE TRANSFER` pentru intrarea in Development.
 
 ### 2.3.1 AgentFlow - Control Keyword Rule
 
@@ -107,6 +108,10 @@ Keywords canonice de control:
 | `STOP` | opreste fluxul la gate-ul curent | continuarea automata |
 
 Statusurile produse de agenti, inclusiv `TEST_PASSED`, `TEST_FAILED` si `BLOCKED`, sunt evidence/verdict, nu keywords de autorizare ale owner-ului si nu acorda singure permisiunea de a trece la urmatorul gate.
+
+Machine gate tokens precum `APPROVED`, `G6_QA` sau alte valori interne de workflow sunt contracte tehnice, nu autorizari AgentFlow. `PROD_GO` poate reprezenta keyword-ul owner-ului numai cand este emis explicit ca decizie AgentFlow pentru FRC-ul curent; simpla prezenta a valorii intr-un workflow, log sau exemplu nu demonstreaza autorizarea owner-ului. Similar, cuvantul `STOP` folosit descriptiv intr-o diagrama sau procedura nu este keyword AgentFlow.
+
+Aprobarile explicite ale owner-ului inregistrate inainte de formalizarea acestei reguli raman valide numai pentru obiectul/gate-ul pe care l-au aprobat istoric. Nu sunt rescrise retroactiv ca keywords si nu se propaga la gate-uri ulterioare.
 
 ### 2.3.2 AgentFlow - Routing Persistence Rule
 
@@ -147,7 +152,7 @@ DEV verification
 -> TEST independent validation
 -> release approval
 -> PROD readiness + rollback
--> owner GO
+-> `PROD GO` / `PROD_GO`
 -> PROD
 ```
 
@@ -341,8 +346,8 @@ Un release mare poate folosi checkpoint-uri intermediare DEV -> TEST pentru a va
 
 Reguli:
 - checkpoint-ul foloseste un SHA immutable si TEST primeste exact SHA-ul verificat in DEV;
-- checkpoint PASS autorizeaza numai continuarea catre urmatorul wave;
-- checkpoint-ul se opreste inainte de PROD si nu primeste owner GO;
+- checkpoint PASS confirma rezultatul tehnic si permite continuarea numai in limitele mandatului deja aprobat; nu este owner authorization;
+- checkpoint-ul se opreste inainte de PROD si nu poate primi `PROD GO` / `PROD_GO`;
 - evidence-ul checkpoint-ului ramane atasat scope-ului testat, dar nu inlocuieste validarea Final Release Candidate;
 - modificarile din wave-urile ulterioare pot produce SHA-uri noi fara a invalida istoric verdictul checkpoint-ului;
 - dupa finalizarea scope-ului release-ului se selecteaza un singur **Final Release Candidate (FRC)**;
@@ -373,7 +378,7 @@ Pentru PROD:
 TEST PASS pe CANDIDATE_SHA
 -> candidate integrat fara mutatie in main
 -> PROD preflight + rollback ready
--> owner GO
+-> `PROD GO` / `PROD_GO`
 -> deploy exact CANDIDATE_SHA
 ```
 
@@ -392,7 +397,7 @@ Merge-ul in `main` si deploy-ul sunt evenimente separate.
 
 - merge-ul nu autorizeaza implicit PROD;
 - merge-ul nu trebuie sa declanseze silent un deploy functional;
-- PROD necesita propriul readiness gate si owner GO;
+- PROD necesita propriul readiness gate si `PROD GO` / `PROD_GO` explicit pentru FRC-ul exact;
 - daca un workflow face deploy automat doar prin push/merge pe `main`, acesta este incompatibil cu lifecycle-ul canonic daca nu exista un gate de release echivalent.
 
 ### 9.5 Rollback Readiness Rule
@@ -422,7 +427,7 @@ Fiecare promovare PROD trebuie sa aiba un release record non-secret care leaga m
 - schema/config version;
 - known-good PROD anchors;
 - rollback procedure;
-- owner GO;
+- AgentFlow PROD authorization (`PROD GO` / `PROD_GO`) + reference/time;
 - PROD deploy evidence;
 - smoke/acceptance verdict.
 
