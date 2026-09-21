@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.8`
+Versiune document: `v1.9`
 Ultima actualizare: `2026-09-21`
 
 ## 1. Principiu
@@ -14,6 +14,8 @@ Flux formal:
 Nu exista trecere directa din `Ideas / Requirements` in `Development`.
 
 Procesul operational complet de livrare este definit in `docs/software-delivery-lifecycle.md`.
+
+Denumirea canonica pentru acest mod de lucru este **AgentFlow**.
 
 ## 2. Etapele fluxului
 
@@ -81,6 +83,30 @@ Pentru orice cerinta noua:
 2. propunere de optimizare, daca este cazul;
 3. confirmare explicita;
 4. transfer in Development.
+
+### 2.3.1 AgentFlow - Control Keyword Rule
+
+In AgentFlow, autorizarea owner-ului se exprima prin keywords explicite. Un keyword este o decizie **scoped la un singur obiect/gate**, nu o autorizare generala pentru etapele urmatoare.
+
+Reguli:
+- keyword-ul se recunoaste numai ca instructiune explicita; matching-ul este case-insensitive, dar simple mentionari, exemple, citate, negatii sau discutii despre keyword nu constituie autorizare;
+- keyword-ul se aplica obiectului/gate-ului numit explicit sau, daca acesta nu este repetat, numai gate-ului curent daca este unic si neambiguu;
+- daca tinta este ambigua, starea nu se schimba pana la clarificare;
+- aprobarile nu se propaga automat: aprobarea unei decizii, cerinte, transfer, PR sau gate nu autorizeaza gate-ul urmator;
+- fiecare tranzitie materiala pastreaza trasabilitatea minima: keyword, tinta si starea rezultata.
+
+Keywords canonice de control:
+
+| Keyword | Efect permis | Nu autorizeaza |
+|---|---|---|
+| `APPROVE PRODUCT DECISIONS` | inchide deciziile de produs pentru analiza curenta | aprobarea cerintei sau transferul in Development |
+| `APPROVE REQUIREMENT` | marcheaza cerinta curenta ca aprobata | transferul in Development |
+| `APPROVE TRANSFER` | autorizeaza transferul cerintei/contractului aprobat in Development, in scope-ul aprobat | schimbari de scope, TEST sau PROD |
+| `APPROVE` | aproba numai obiectul/gate-ul curent cand tinta este explicita si unica | orice pas ulterior implicit |
+| `PROD GO` / `PROD_GO` | autorizeaza exclusiv promovarea in PROD a FRC-ului exact care a trecut TEST si preflight-ul de rollback | schimbarea candidate-ului sau alta mutatie in PROD |
+| `STOP` | opreste fluxul la gate-ul curent | continuarea automata |
+
+Statusurile produse de agenti, inclusiv `TEST_PASSED`, `TEST_FAILED` si `BLOCKED`, sunt evidence/verdict, nu keywords de autorizare ale owner-ului si nu acorda singure permisiunea de a trece la urmatorul gate.
 
 ### 2.4 Development
 
