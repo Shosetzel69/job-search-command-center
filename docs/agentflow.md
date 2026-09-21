@@ -1,7 +1,7 @@
 # AgentFlow - Operating Contract
 
 Status: **CANONICAL**  
-Version: **1.0**  
+Version: **1.1**  
 Applies to: **AGENTFLOW**  
 Last verified: **2026-09-21**
 
@@ -24,6 +24,35 @@ In perioada de tranzitie:
 - `INHERIT-PARENT` - taskul mosteneste procesul parentului daca acesta este neechivoc.
 
 Un work item nu schimba procesul silent. Conversia necesita decizie explicita a owner-ului.
+
+## 2.1 Discovery -> Development handoff
+
+Pentru cerintele provenite din Discovery, artefactul formal de handoff este **Development Transfer Package (DTP)**.
+
+Reguli:
+
+- DTP se creeaza numai pentru o cerinta Discovery aprobata;
+- DTP defineste **ce rezultat trebuie obtinut, scope-ul, out-of-scope-ul, acceptance criteria si invariants**; nu prescrie solutia tehnica;
+- `APPROVE_TRANSFER <ref>` autorizeaza numai intrarea in `Development Analysis`; nu autorizeaza coding, PR sau executia unui ATC;
+- DTP este artefactul de handoff; `Agent Task Contract` este artefactul de executie;
+- pregatirile tehnice istorice pot fi input pentru Development Analysis, dar nu devin automat cerinte sau solutii aprobate;
+- daca Development considera necesara o solutie tehnica care depaseste DTP-ul sau arhitectura aprobata, se aplica stop condition si se revine la gate-ul potrivit.
+
+Surse de adevar:
+
+- **Discovery** ramane sursa de adevar pentru intentia de business, scope, acceptance criteria si product invariants;
+- **Development** ramane sursa de adevar pentru implementarea tehnica aprobata;
+- **Architecture** ramane sursa de adevar pentru boundary-uri si deciziile arhitecturale canonice.
+
+## 2.2 Stage / chat boundary
+
+AgentFlow este stage-bound:
+
+- un chat/rol nu executa implicit etapa urmatoare daca aceasta apartine altei specializari;
+- un DTP deschis intr-un proces legacy nu se converteste tacit in legacy;
+- un task de Development nu decide singur o problema de Architecture;
+- un review nu modifica implementarea in acelasi pas;
+- promovarea TEST/PROD nu este executata ca extensie implicita a implementarii.
 
 ## 3. Canonical Issue header
 
@@ -144,6 +173,24 @@ Retry-ul este limitat de ATC. Daca limita este depasita sau executia cere schimb
 
 Nu se foloseste oportunitatea pentru refactor/redesign in afara scope-ului.
 
+## 9.1 Stop conditions / escalation
+
+Executia se opreste si foloseste statusul canonic de blocare al fazei curente cand apare material:
+
+- schimbare de requirement, scope sau acceptance criteria;
+- ambiguitate care poate produce rezultate business diferite;
+- contradictie nerezolvabila local intre cerinta si arhitectura/contractele existente;
+- serviciu nou sau schimbare arhitecturala semnificativa;
+- API sau model persistent incompatibil;
+- migrare de date neautorizata de contractul curent;
+- dependenta noua cu impact material de cost, securitate, licentiere sau operare;
+- concern de security/privacy care necesita acceptare explicita;
+- acces sau credentiale lipsa necesare executiei;
+- extindere semnificativa de scope;
+- testele obligatorii raman failing dupa limita de retry din ATC.
+
+Nu necesita escaladare o alegere locala, reversibila si in-scope privind fisiere, functii sau structura interna, daca respecta arhitectura si contractul aprobat.
+
 ## 10. Evidence Bundle
 
 Evidence Bundle trebuie sa permita verificarea contractului fara reconstruirea istoricului conversatiei.
@@ -211,3 +258,4 @@ Nu se incarca implicit istoricul, arhivele sau toate documentele proiectului.
 - `docs/software-delivery-lifecycle.md` - DEV -> TEST -> PROD;
 - `docs/documentation-policy.md` - context/documentation rules;
 - `.github/ISSUE_TEMPLATE/executable-task.yml` - executable task metadata.
+- `job-search-discovery/templates/DEVELOPMENT_TRANSFER_PACKAGE.md` - template DTP pentru handoff Discovery -> Development.

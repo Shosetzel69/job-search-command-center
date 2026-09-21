@@ -71,6 +71,8 @@
 
 ### Documentatie
 
+- #288: `docs/agentflow.md` -> v1.1; aliniat contractul canonic cu modelul DTP din Discovery: DTP devine handoff formal Discovery -> Development, Discovery ramane sursa de adevar pentru intentia de business, Development pentru implementare, iar boundary-ul intre etape/chaturi si stop conditions sunt explicite; template-ul Discovery este versionat separat la v2.0 si foloseste taxonomia canonica Phase/Status.
+
 - #285: documentatia AgentFlow este consolidata in `docs/agentflow.md` v1.0, aliniata cu `GOVERNANCE.md` v1.11 si taxonomia canonica Phase/Status; sunt definite routing-ul AGENTFLOW/LEGACY-ADAPTED, control tokens `APPROVE_TRANSFER`, `APPROVE_TASK_CONTRACT`, `PROD_GO`, architecture delta check si handoff-ul catre lifecycle-ul DEV -> TEST -> PROD.
 
 - Adaugat contractul canonic `docs/testing/qa-testability-ui-contract.md`: fluxurile UI automatizabile sunt DOM-first, dialogurile browser-native nu sunt acceptate in nominal DEV/TEST, iar blocajele de acest tip devin `BLOCKED-TESTABILITY`; #257 urmareste violarea curenta din stergerea Surse/Nomenclatoare.
