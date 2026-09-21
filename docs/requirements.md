@@ -1,7 +1,7 @@
 # Cerinte - Job Search Command Center
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-13`
+Ultima actualizare: `2026-09-21`
 
 ## Regula de lucru pentru cerinte
 
@@ -9,8 +9,11 @@ Pentru orice cerinta noua:
 
 1. analiza impactului;
 2. propunere de optimizare, daca este cazul;
-3. confirmarea utilizatorului;
-4. implementare numai dupa confirmare.
+3. `APPROVE REQUIREMENT` pentru aprobarea cerintei;
+4. DTP/handoff, daca se aplica;
+5. `APPROVE TRANSFER` inainte de Development.
+
+Aprobarea cerintei nu autorizeaza implicit transferul sau implementarea. Regula canonica este in `GOVERNANCE.md`.
 
 Format standard pentru fiecare cerinta: `ID`, `Titlu`, `Descriere`, `Categorie`, `Sursa`, `Prioritate`.
 
