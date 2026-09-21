@@ -126,6 +126,9 @@ test('bootstrap-all scope is structurally DEV + TEST only', () => {
 test('runtime seed derives files from the shared runtime-data contract', () => {
   assert.ok(runtimeDataFiles().includes('data/jobs.json'));
   assert.ok(runtimeDataFiles().includes('data/search-state.json'));
+  assert.ok(runtimeDataFiles().includes('data/automation-config.json'));
+  assert.ok(runtimeDataFiles().includes('data/scheduler-state.json'));
+  assert.ok(runtimeDataFiles().includes('data/run-admission.json'));
   assert.equal(new Set(runtimeDataFiles()).size, runtimeDataFiles().length);
   for (const path of runtimeDataFiles()) {
     const payload = runtimeSeedPayload(path.replace('data/', ''), { sourceSha: SHA, generatedAt: '2026-09-13T00:00:00.000Z' });
@@ -138,6 +141,15 @@ test('isolated non-PROD seed contains no jobs, applications or search history', 
   assert.deepEqual(runtimeSeedPayload('applications.json').applications, []);
   assert.deepEqual(runtimeSeedPayload('run-history.json').runs, []);
   assert.equal(runtimeSeedPayload('search-config.json').jobspipe_mode, 'disabled');
+  assert.deepEqual(runtimeSeedPayload('automation-config.json'), {
+    schema_version: '1.0',
+    enabled: false,
+    interval_hours: 8,
+    anchor_time: '08:00',
+    timezone: 'Europe/Bucharest',
+  });
+  assert.equal(runtimeSeedPayload('scheduler-state.json').last_processed_slot, null);
+  assert.equal(runtimeSeedPayload('run-admission.json').claim, null);
 });
 
 test('TEST seed metadata is TEST/smoke and never inherits DEV identity', () => {
