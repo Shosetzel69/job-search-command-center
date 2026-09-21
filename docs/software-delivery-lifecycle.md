@@ -18,14 +18,14 @@ The process must answer four questions at any time:
 ## 2. Canonical flow
 
 ```text
-Approved Issue
+Approved + transferred Issue
   -> development branch
   -> DEV verification
   -> freeze CANDIDATE_SHA
   -> TEST exact same SHA
   -> TEST PASS
   -> integrate candidate in main without rewriting it
-  -> rollback check + owner GO
+  -> rollback check + `PROD GO` / `PROD_GO`
   -> PROD exact same SHA
   -> smoke PASS
   -> close
@@ -61,7 +61,7 @@ wave scope implemented
 
 Rules:
 - a validation checkpoint is not the Final Release Candidate and cannot receive PROD GO;
-- checkpoint PASS authorizes continuation of the release build only;
+- checkpoint PASS is a technical verdict that allows continuation only inside the already-approved release mandate; it is not owner authorization;
 - checkpoint evidence remains valid evidence for the scope tested at that SHA, but cannot substitute for final DEV/TEST evidence;
 - later wave changes may create a different SHA without treating the earlier checkpoint as a failed release candidate;
 - a checkpoint failure returns to DEV and requires a new checkpoint SHA before that scope is accepted;
@@ -81,7 +81,7 @@ The normal single-change/single-wave lifecycle is unchanged: its first frozen ca
 6. Any source change after freeze creates a new candidate and invalidates the previous TEST result.
 7. Merge to `main` is separate from PROD deployment and does not authorize PROD.
 8. After TEST PASS, candidate integration must preserve the tested commit identity. If squash/rebase/conflict resolution changes it, restart DEV -> TEST with a new SHA.
-9. PROD requires explicit owner GO.
+9. PROD requires explicit owner `PROD GO` / `PROD_GO` for the exact FRC.
 10. Rollback must be known before PROD deployment.
 11. Runtime data are environment-local; DEV/TEST data are never promoted or used as PROD rollback data.
 12. LEGACY is excluded from normal release automation.
@@ -105,7 +105,7 @@ Required:
 Any failure returns to DEV.
 
 ### PROD
-Runs only the TEST-passed candidate after owner authorization.
+Runs only the TEST-passed candidate after explicit AgentFlow `PROD GO` / `PROD_GO` for that FRC.
 
 Default post-deploy validation is a small smoke test, not a second full QA cycle.
 
@@ -133,6 +133,8 @@ From this point, candidate mutation invalidates the promotion cycle.
 
 ### G3 - TEST PASS
 
+`TEST PASS` is evidence/verdict for the tested SHA. It does not itself create owner authorization or expand the approved scope.
+
 Minimum:
 - TEST runs the exact frozen candidate;
 - expected behavior validated;
@@ -146,7 +148,7 @@ Minimum:
 - candidate SHA remains reachable from `main`;
 - previous known-good PROD `SOURCE_SHA` and `RUNTIME_DATA_SHA` captured;
 - rollback action/reference known;
-- explicit owner GO.
+- explicit owner `PROD GO` / `PROD_GO` for this FRC.
 
 Additional requirements are conditional:
 - config rollback detail only if config changes;
@@ -194,7 +196,7 @@ DEV PASS evidence
 TEST PASS evidence
 Previous PROD SOURCE_SHA / RUNTIME_DATA_SHA
 Rollback action/reference
-Owner GO
+AgentFlow PROD authorization (`PROD GO` / `PROD_GO`) + reference/time
 PROD deploy evidence
 PROD smoke verdict
 ```
