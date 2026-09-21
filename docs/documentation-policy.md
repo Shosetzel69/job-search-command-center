@@ -2,7 +2,7 @@
 
 Status: CANONICAL
 Scope: project documentation, Issues, runbooks and AI context loading
-Last verified: 2026-09-18
+Last verified: 2026-09-21
 
 ## 1. Goal
 
@@ -43,6 +43,23 @@ Examples: analysis documents, reports, superseded runbooks, docs/archive.
 Purpose: preserve reasoning and evidence.
 
 Rule: never load by default. Read only when explicitly required by the task or when current evidence is insufficient.
+
+## 2.1 Process applicability during AgentFlow transition
+
+Operational/process documentation may temporarily coexist for two process modes:
+
+- `AGENTFLOW`;
+- `LEGACY-ADAPTED`.
+
+When a process document is created or materially changed, add where relevant:
+
+`Applies to: AGENTFLOW | LEGACY-ADAPTED | BOTH`
+
+Rules:
+- do not mark the legacy document `SUPERSEDED` while active legacy-adapted work still depends on it;
+- cross-link successor/predecessor documents instead of merging both processes into one oversized runbook;
+- do not mass-retrofit untouched historical documents;
+- process applicability is not a replacement for document status (`CANONICAL`, `HISTORICAL`, `SUPERSEDED`).
 
 ## 3. AI context loading
 

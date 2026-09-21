@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.8`
+Versiune document: `v1.9`
 Ultima actualizare: `2026-09-21`
 
 ## 1. Principiu
@@ -114,6 +114,59 @@ DEV verification
 Pentru un release multi-wave, TEST poate fi folosit pentru checkpoint-uri intermediare. Acestea se opresc dupa verdictul TEST; numai Final Release Candidate (FRC), care contine scope-ul complet al release-ului, poate continua spre PROD.
 
 Un defect gasit in TEST sau PROD revine in DEV. Nu se aplica patch-uri ad-hoc direct in TEST/PROD.
+
+### 2.5 Moduri de proces in perioada de tranzitie
+
+Pe perioada adoptarii AgentFlow sunt suportate doua moduri operative:
+
+- `AGENTFLOW` - pentru work item-uri noi aprobate si pentru item-uri convertite explicit de owner;
+- `LEGACY-ADAPTED` - pentru work item-uri deja material incepute sub procesul anterior si duse la inchidere fara schimbare silent de proces.
+
+Reguli:
+
+- fiecare Issue executabil nou declara explicit campul `Process`;
+- un work item pastreaza acelasi mod de proces end-to-end daca owner-ul nu aproba explicit conversia;
+- `AGENTFLOW` si `LEGACY-ADAPTED` pot coexista in acelasi release;
+- coexistenta proceselor nu creeaza doua lifecycle-uri de release: DEV -> TEST -> PROD ramane unic si este definit in `docs/software-delivery-lifecycle.md`.
+
+### 2.6 Contract AgentFlow minimal
+
+Pentru `Process: AGENTFLOW`, fluxul este:
+
+```text
+approved requirement
+-> Architecture Gate, daca exista trigger arhitectural
+-> Development Analysis
+-> Proposed Agent Task Contract(s)
+-> owner gate: APPROVE_TASK_CONTRACT <reference>
+-> implementation
+-> Evidence Bundle
+-> independent review
+-> canonical DEV -> TEST -> PROD lifecycle
+```
+
+Reguli fail-closed:
+
+- Development Analysis nu autorizeaza implementarea;
+- implementarea incepe numai dupa comanda explicita `APPROVE_TASK_CONTRACT <reference>`;
+- limbajul natural generic (`continua`, `go`, `merge`) nu inlocuieste gate-ul de task contract;
+- fiecare Agent Task Contract defineste scope, out-of-scope, acceptance, evidence si limita de retry;
+- daca executia descopera o decizie noua materiala de arhitectura, scope, securitate, privacy sau cost, taskul devine `BLOCKED` si revine la gate-ul potrivit; DEV nu inventeaza decizia;
+- Evidence Bundle demonstreaza rezultatul contractului, dar nu inlocuieste TEST independent sau release gates.
+
+### 2.7 Vocabular canonic de proces
+
+| Termen | Sens canonic |
+|---|---|
+| `Architecture Gate` | decizie arhitecturala necesara inainte ca DEV sa poata continua |
+| `Development Analysis` | analiza tehnica read-only care transforma o cerinta aprobata intr-un plan implementabil |
+| `Agent Task Contract (ATC)` | unitatea aprobabila de executie AgentFlow, cu scope si evidence definite |
+| `APPROVE_TASK_CONTRACT <ref>` | autorizarea explicita de implementare pentru ATC-ul indicat |
+| `Evidence Bundle` | dovezile produse de executie pentru verificarea ATC-ului |
+| `Independent Review` | verificare separata a implementarii/evidence fata de ATC |
+| `LEGACY-ADAPTED` | proces anterior pastrat pentru work deja material inceput, cu guardrails curente de release |
+
+Acesti termeni se folosesc identic in Issues, documentatie si handoff-uri. Sinonimele pot aparea in explicatii, dar nu ca nume de gate/status.
 
 ## 3. Surse de adevar si precedenta
 
@@ -393,5 +446,10 @@ Versiunea aplicatiei foloseste formatul `X.XX` conform regulii curente a proiect
 `ARCHITECTURE.md` foloseste propria schema de versionare si politica de pastrare definite in document.
 
 Documentele de guvernanta cu versiune proprie isi actualizeaza versiunea la fiecare modificare materiala.
+
+In perioada de tranzitie AgentFlow:
+- documentele operative noi sau material modificate declara, unde este relevant, `Applies to: AGENTFLOW | LEGACY-ADAPTED | BOTH`;
+- doua documente operative pot ramane simultan active daca acopera procese diferite; unul nu este marcat `SUPERSEDED` pana cand procesul pe care il sustine nu mai are work activ;
+- nu se face retrofit in masa; markerul de aplicabilitate se adauga cand documentul este creat sau modificat material.
 
 Contractele JSON principale folosesc `schema_version`. Schimbarile incompatibile necesita versiune noua de contract.
