@@ -31,6 +31,37 @@ test('runtime read targets explicit runtime repository and ref', async () => {
   assert.equal(requested, 'https://api.github.com/repos/runtime-owner/runtime-repo/contents/data/search-config.json?ref=runtime-ref');
 });
 
+test('runtime read falls back to raw media when Contents API omits inline content', async () => {
+  const requests = [];
+  await withFetch(async (url, init = {}) => {
+    requests.push({ url:String(url), headers:init.headers || {} });
+    if (requests.length === 1) {
+      return new Response(JSON.stringify({
+        sha:'large-blob-sha',
+        size:6_162_245,
+        encoding:'none',
+        content:'',
+      }), { status:200 });
+    }
+    return new Response(JSON.stringify({
+      schema_version:'1.0',
+      runs:[{ run_id:'github-test' }],
+    }), { status:200 });
+  }, async () => {
+    const result = await readRuntimeJson(env, runtime, 'data/run-history.json');
+    assert.equal(result.sha, 'large-blob-sha');
+    assert.deepEqual(result.payload, {
+      schema_version:'1.0',
+      runs:[{ run_id:'github-test' }],
+    });
+  });
+
+  assert.equal(requests.length, 2);
+  assert.equal(requests[0].url, 'https://api.github.com/repos/runtime-owner/runtime-repo/contents/data/run-history.json?ref=runtime-ref');
+  assert.equal(requests[1].url, requests[0].url);
+  assert.equal(requests[1].headers.Accept, 'application/vnd.github.raw+json');
+});
+
 test('runtime write targets explicit runtime branch', async () => {
   let requested = null;
   let body = null;
