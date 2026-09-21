@@ -45,6 +45,8 @@ test('PROD readiness verifies trusted-main ancestry and credential segregation',
   assert.match(workflow, /Runtime token unexpectedly has Actions variables read permission/);
   assert.match(workflow, /Source-read token must be a fine-grained PAT/);
   assert.match(workflow, /Runtime token must not access source repository/);
+  assert.match(workflow, /contents\/data\/search-config\.json\?ref=main/);
+  assert.match(workflow, /Runtime token cannot read canonical runtime contents/);
   assert.match(workflow, /Source-read token must not access runtime repository/);
   assert.doesNotMatch(workflow, /gh repo view[^\n]*viewerPermission/);
   assert.match(workflow, /job-search-command-api\.job-search-prod\.workers\.dev/);
