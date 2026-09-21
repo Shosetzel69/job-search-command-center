@@ -204,6 +204,68 @@ Alte campuri principale:
 
 JobsPipe ramane `disabled` in Package 2.
 
+### 5.1 `data/automation-config.json`
+
+Configuratia schedulerului este separata de criteriile de cautare.
+
+```json
+{
+  "schema_version": "1.0",
+  "enabled": false,
+  "interval_hours": 8,
+  "anchor_time": "08:00",
+  "timezone": "Europe/Bucharest"
+}
+```
+
+Reguli:
+- `enabled` este implicit `false`;
+- `interval_hours` accepta numai `8`, `12`, `24`;
+- `anchor_time` este o ora locala valida `HH:MM`;
+- timezone-ul MVP este fix `Europe/Bucharest`;
+- salvarea configuratiei nu porneste Full Search;
+- programarea este wall-clock anchored, nu derivata din ultima rulare manuala.
+
+### 5.2 `data/scheduler-state.json`
+
+Stare operationala a schedulerului, separata de configuratie.
+
+```json
+{
+  "schema_version": "1.0",
+  "last_processed_slot": null,
+  "last_outcome": null,
+  "last_dispatched_at": null,
+  "last_skipped_at": null,
+  "last_skip_reason": null
+}
+```
+
+`last_processed_slot` foloseste identificator local `YYYY-MM-DDTHH:MM` in timezone-ul configurat. Identitatea locala permite procesarea o singura data a unui slot repetat la trecerea DST inapoi si permite marcarea determinista a unui slot local inexistent la trecerea DST inainte.
+
+Schedulerul nu scrie stare pentru tick-uri OFF/not-due; scrie numai cand un slot eligibil este procesat.
+
+### 5.3 `data/run-admission.json`
+
+Contract intern, neexpus prin `/data/*`, folosit pentru coordonarea atomica a admisiei manuale/programate.
+
+Baseline:
+
+```json
+{
+  "schema_version": "1.0",
+  "claim": null
+}
+```
+
+Un claim activ contine:
+- `id`;
+- `origin`: `manual-ui|scheduled|system`;
+- `claimed_at`;
+- `expires_at`.
+
+Claim-ul este temporar si trebuie sa expire; nu inlocuieste concurrency guard-ul workflow-ului, ci il completeaza pentru cursa check/dispatch.
+
 ## 6. `data/nomenclatures.json`
 
 Root:
@@ -398,4 +460,4 @@ Campuri curente: `id`, `company`, `title`, `location`, `countries`, `applied_at`
 - regression tests.
 
 Un protected asset nou nu mai necesita trei liste functionale independente.
-`search-state.json` este exclus explicit.
+`search-state.json` si `run-admission.json` sunt excluse explicit; `automation-config.json` si `scheduler-state.json` sunt protected runtime assets.
