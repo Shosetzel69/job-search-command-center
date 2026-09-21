@@ -88,3 +88,11 @@ test('health validates live runtime repository access rather than token presence
   assert.match(commandApi, /github_configured:await canAccessRuntimeRepository\(env, runtime\)/);
   assert.doesNotMatch(commandApi, /github_configured:Boolean\(env\.GITHUB_TOKEN\)/);
 });
+
+
+test('pre-deploy rollback anchor capture does not block credential remediation', () => {
+  const block = promotion.match(/Capture previous known-good PROD anchors before mutation[\s\S]*?- name: Verify credential boundaries before mutation/)?.[0] || '';
+  assert.match(block, /auth_configured == true/);
+  assert.doesNotMatch(block, /github_configured == true/);
+  assert.match(block, /Previous PROD identity\/rollback anchors are invalid/);
+});
