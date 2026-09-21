@@ -1,0 +1,8 @@
+{
+  "schema_version": "1.0",
+  "last_processed_slot": null,
+  "last_outcome": null,
+  "last_dispatched_at": null,
+  "last_skipped_at": null,
+  "last_skip_reason": null
+}
