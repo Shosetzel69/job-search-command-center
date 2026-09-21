@@ -106,6 +106,7 @@ jobs:
           esac
 
           GH_TOKEN="$RUNTIME_TOKEN" gh api "repos/$runtime_repo" --silent >/dev/null
+          GH_TOKEN="$RUNTIME_TOKEN" gh api "repos/$runtime_repo/contents/data/search-config.json?ref=main" --silent >/dev/null || { echo "Runtime token cannot read canonical runtime contents" >&2; exit 1; }
           if GH_TOKEN="$RUNTIME_TOKEN" gh api "repos/$source_repo" --silent >/dev/null 2>&1; then
             echo "Runtime token must not access source repository" >&2
             exit 1
