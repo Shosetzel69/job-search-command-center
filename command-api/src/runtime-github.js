@@ -29,6 +29,16 @@ export async function runtimeGithubRequest(env, runtime, path, init = {}) {
   return text ? JSON.parse(text) : null;
 }
 
+export async function canAccessRuntimeRepository(env, runtime) {
+  if (!env.GITHUB_TOKEN) return false;
+  try {
+    await runtimeGithubRequest(env, runtime, '');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 function decodeBase64Utf8(value) {
   const binary = atob(String(value || '').replace(/\n/g, ''));
   const bytes = Uint8Array.from(binary, char => char.charCodeAt(0));
