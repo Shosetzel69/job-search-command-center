@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dispatchWorkflow, readRuntimeJson, writeRuntimeJson } from '../src/runtime-github.js';
+import { canAccessRuntimeRepository, dispatchWorkflow, readRuntimeJson, writeRuntimeJson } from '../src/runtime-github.js';
 
 const runtime = {
   runtimeOwner:'runtime-owner',
@@ -59,4 +59,21 @@ test('workflow dispatch transports exact immutable source_sha', async () => {
   assert.equal(body.ref, 'runtime-ref');
   assert.equal(body.inputs.run_trigger, 'manual-ui');
   assert.equal(body.inputs.source_sha, runtime.sourceSha);
+});
+
+
+test('runtime credential probe validates actual repository access', async () => {
+  await withFetch(async url => {
+    assert.equal(String(url), 'https://api.github.com/repos/runtime-owner/runtime-repo');
+    return new Response(JSON.stringify({ full_name:'runtime-owner/runtime-repo' }), { status:200 });
+  }, async () => {
+    assert.equal(await canAccessRuntimeRepository(env, runtime), true);
+  });
+});
+
+test('runtime credential probe fails closed for missing or rejected token', async () => {
+  assert.equal(await canAccessRuntimeRepository({}, runtime), false);
+  await withFetch(async () => new Response('Bad credentials', { status:401 }), async () => {
+    assert.equal(await canAccessRuntimeRepository(env, runtime), false);
+  });
 });
