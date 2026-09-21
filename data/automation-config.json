@@ -1,0 +1,7 @@
+{
+  "schema_version": "1.0",
+  "enabled": false,
+  "interval_hours": 8,
+  "anchor_time": "08:00",
+  "timezone": "Europe/Bucharest"
+}
