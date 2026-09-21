@@ -16,6 +16,8 @@ Reguli:
 
 Nu exista trecere directa din `Ideas / Requirements` in `Development`.
 
+Pentru work marcat `Process: AGENTFLOW`, se aplica suplimentar `docs/agentflow.md`: Development Analysis -> Agent Task Contract -> autorizare explicita -> implementation -> Evidence Bundle -> Independent Review. AgentFlow nu inlocuieste lifecycle-ul DEV -> TEST -> PROD.
+
 Pentru orice cerinta noua:
 
 1. se analizeaza impactul;
