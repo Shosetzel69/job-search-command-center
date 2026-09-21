@@ -1,7 +1,7 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.7`
-Ultima actualizare: `2026-09-18`
+Versiune document: `v1.8`
+Ultima actualizare: `2026-09-21`
 
 ## 1. Principiu
 
@@ -248,6 +248,8 @@ Pentru logica critica se mentin teste pentru:
 CI trebuie sa valideze cel putin Python, JSON, React/Vite si Cloudflare Worker dry-run.
 
 TEST este mediul canonic de validare independenta a candidate-ului frozen. QA trebuie sa inregistreze SHA-ul exact testat si verdictul aferent.
+
+Pentru testarea UI browser-based, contractul canonic de testabilitate este `docs/testing/qa-testability-ui-contract.md`. Fluxurile nominale DEV/TEST trebuie sa fie operabile prin controale DOM-addressable; blocajele produse de dialoguri browser-native sau alte controale non-DOM se trateaza ca `BLOCKED-TESTABILITY`, nu ca owner action accidental.
 
 ## 7. Securitate
 
