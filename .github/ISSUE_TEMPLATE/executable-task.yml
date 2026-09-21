@@ -3,6 +3,17 @@ description: Development, QA or operational task with bounded context.
 title: ""
 labels: []
 body:
+  - type: dropdown
+    id: process
+    attributes:
+      label: Process
+      description: Execution process for this work item. Do not change it silently after work starts.
+      options:
+        - AGENTFLOW
+        - LEGACY-ADAPTED
+        - INHERIT-PARENT
+    validations:
+      required: true
   - type: textarea
     id: objective
     attributes:
