@@ -3,6 +3,8 @@ export const PROTECTED_DATA_FILES = Object.freeze([
   'run-status.json',
   'run-history.json',
   'search-config.json',
+  'automation-config.json',
+  'scheduler-state.json',
   'sources.json',
   'source-categories.json',
   'nomenclatures.json',
@@ -11,6 +13,7 @@ export const PROTECTED_DATA_FILES = Object.freeze([
 
 export const INTERNAL_DATA_FILES = Object.freeze([
   'search-state.json',
+  'run-admission.json',
 ]);
 
 export function protectedDataPaths() {
