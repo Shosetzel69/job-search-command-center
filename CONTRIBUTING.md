@@ -4,15 +4,16 @@
 
 Fluxul formal este:
 
-`Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare`
+`Ideas / Requirements -> Analiza -> APPROVE REQUIREMENT -> DTP/handoff -> APPROVE TRANSFER -> Development -> implementare`
 
 Reguli:
 
 1. `Ideas / Requirements` este exclusiv pentru colectare, explorare si maturizare de idei. Nu se scrie si nu se modifica cod.
 2. Cand o idee este suficient de matura, se transfera in `Analiza` printr-un sumar scurt.
 3. `Analiza` clarifica formal functionalitatea, impactul, scope-ul, alternativele si cerintele. Nu se implementeaza cod.
-4. Owner-ul aproba explicit intrarea in `Development`.
-5. Numai in `Development` se face design tehnic, implementare, testare si integrare.
+4. Owner-ul aproba cerinta prin gate-ul AgentFlow aplicabil; aprobarea cerintei nu autorizeaza transferul.
+5. Intrarea in `Development` necesita `APPROVE TRANSFER` pentru handoff-ul curent.
+6. Numai in `Development` se face design tehnic, implementare, testare si integrare.
 
 Nu exista trecere directa din `Ideas / Requirements` in `Development`.
 
@@ -20,8 +21,9 @@ Pentru orice cerinta noua:
 
 1. se analizeaza impactul;
 2. se propune optimizare daca este cazul;
-3. se asteapta confirmarea owner-ului;
-4. se implementeaza numai dupa transferul explicit in Development.
+3. cerinta devine aprobata numai la `APPROVE REQUIREMENT`;
+4. se pregateste handoff-ul/DTP-ul aplicabil;
+5. implementarea poate incepe numai dupa `APPROVE TRANSFER`.
 
 ## 2. Schimbari de cod si documentatie
 
@@ -102,5 +104,7 @@ npm run test:environment
 ```
 
 In Phase 3, bootstrap/deploy/status/isolation ruleaza numai dry-run. PROD necesita suplimentar `--owner-gate APPROVED`; aceasta confirmare nu autorizeaza cutover-ul PROD, care ramane gate separat in Phase 6/7.
+
+`--owner-gate APPROVED` este un machine gate token de environment tooling, nu un keyword AgentFlow si nu inlocuieste `PROD GO` / `PROD_GO` pentru promovarea unui FRC.
 
 Lipsa `--env`, un ref mutabil in loc de SHA complet, un target runtime gresit sau credential/config lipsa produce FAIL. `bootstrap-all` nu include PROD.
