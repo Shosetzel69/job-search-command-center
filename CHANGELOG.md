@@ -12,6 +12,7 @@
 
 ### Functionalitati
 
+- #97 / Package 2B AgentFlow: introduse contractele schedulerului pentru configuratie OFF/8h/08:00/Europe-Bucharest, stare operationala, run-admission intern si calcul determinist al sloturilor locale, inclusiv DST si missed-run latest-only; fara activarea schedulerului sau modificarea Full Search.
 - #93 / Release 1 Wave 3: materializate campurile canonice de guvernanta pentru toate sursele non-Monster din `data/sources.json`; eliminata dependenta de metadata implicita la citire, cu Monster pastrat explicit ca exceptie legacy in #237.
 - #231 / Release 1 Wave 3: Loguri consuma outcome/error_code/failure_stage structurat, publica agregate in run-status/run-history si separa `success_empty`/starile asteptate de neexecutie de runtime failures.
 - #230 / Release 1 Wave 3: adaugate diagnostic events JSON pentru run/source lifecycle, corelare prin `run_id`/`source_execution_id` si sanitizare centrala a secretelor/upstream exception messages, inclusiv in run-status/run-history.
