@@ -13,7 +13,7 @@ export function runtimeGithubBase(runtime) {
   return `https://api.github.com/repos/${encodeURIComponent(runtime.runtimeOwner)}/${encodeURIComponent(runtime.runtimeRepo)}`;
 }
 
-export async function runtimeGithubRequest(env, runtime, path, init = {}) {
+async function runtimeGithubResponse(env, runtime, path, init = {}) {
   if (!env.GITHUB_TOKEN) throw Object.assign(new Error('GitHub token is not configured'), { status: 503 });
   const response = await fetch(`${runtimeGithubBase(runtime)}${path}`, {
     ...init,
@@ -24,9 +24,20 @@ export async function runtimeGithubRequest(env, runtime, path, init = {}) {
     const status = response.status === 409 ? 409 : 502;
     throw Object.assign(new Error(`GitHub ${response.status}: ${detail}`), { status });
   }
+  return response;
+}
+
+export async function runtimeGithubRequest(env, runtime, path, init = {}) {
+  const response = await runtimeGithubResponse(env, runtime, path, init);
   if (response.status === 204) return null;
   const text = await response.text();
   return text ? JSON.parse(text) : null;
+}
+
+async function runtimeGithubTextRequest(env, runtime, path, init = {}) {
+  const response = await runtimeGithubResponse(env, runtime, path, init);
+  if (response.status === 204) return '';
+  return response.text();
 }
 
 export async function canAccessRuntimeRepository(env, runtime) {
@@ -57,11 +68,22 @@ function encodePath(path) {
 }
 
 export async function readRuntimeJson(env, runtime, path) {
-  const current = await runtimeGithubRequest(env, runtime, `/contents/${encodePath(path)}?ref=${encodeURIComponent(runtime.runtimeRef)}`);
-  if (!current?.sha || !current?.content) {
+  const apiPath = `/contents/${encodePath(path)}?ref=${encodeURIComponent(runtime.runtimeRef)}`;
+  const current = await runtimeGithubRequest(env, runtime, apiPath);
+  if (!current?.sha) {
     throw Object.assign(new Error(`Repository file could not be loaded: ${path}`), { status: 502 });
   }
-  return { sha: current.sha, payload: JSON.parse(decodeBase64Utf8(current.content)) };
+  if (current.content) {
+    return { sha: current.sha, payload: JSON.parse(decodeBase64Utf8(current.content)) };
+  }
+
+  const raw = await runtimeGithubTextRequest(env, runtime, apiPath, {
+    headers: { Accept: 'application/vnd.github.raw+json' },
+  });
+  if (!raw) {
+    throw Object.assign(new Error(`Repository file could not be loaded: ${path}`), { status: 502 });
+  }
+  return { sha: current.sha, payload: JSON.parse(raw) };
 }
 
 export async function writeRuntimeJson(env, runtime, path, sha, payload, message) {
