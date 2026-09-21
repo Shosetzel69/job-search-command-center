@@ -1,6 +1,6 @@
 # GOVERNANCE.md - Job Search Command Center
 
-Versiune document: `v1.10`
+Versiune document: `v1.11`
 Ultima actualizare: `2026-09-21`
 
 ## 1. Principiu
@@ -153,6 +153,7 @@ Reguli fail-closed:
 - fiecare Agent Task Contract defineste scope, out-of-scope, acceptance, evidence si limita de retry;
 - daca executia descopera o decizie noua materiala de arhitectura, scope, securitate, privacy sau cost, taskul foloseste statusul canonic de blocare al fazei curente si revine la gate-ul potrivit; DEV nu inventeaza decizia;
 - Evidence Bundle demonstreaza rezultatul contractului, dar nu inlocuieste TEST independent sau release gates.
+- Detaliile operationale AgentFlow sunt definite in `docs/agentflow.md`; `GOVERNANCE.md` ramane sursa de adevar pentru reguli si statusuri.
 
 ### 2.7 Vocabular canonic de proces
 
@@ -161,7 +162,9 @@ Reguli fail-closed:
 | `Architecture Gate` | decizie arhitecturala necesara inainte ca DEV sa poata continua |
 | `Development Analysis` | analiza tehnica read-only care transforma o cerinta aprobata intr-un plan implementabil |
 | `Agent Task Contract (ATC)` | unitatea aprobabila de executie AgentFlow, cu scope si evidence definite |
+| `APPROVE_TRANSFER <ref>` | autorizeaza transferul cerintei aprobate in Development Analysis; nu autorizeaza implementarea |
 | `APPROVE_TASK_CONTRACT <ref>` | autorizarea explicita de implementare pentru ATC-ul indicat |
+| `PROD_GO` | autorizarea owner-ului pentru promovarea exacta in PROD conform lifecycle-ului canonic |
 | `Evidence Bundle` | dovezile produse de executie pentru verificarea ATC-ului |
 | `Independent Review` | verificare separata a implementarii/evidence fata de ATC |
 | `LEGACY-ADAPTED` | proces anterior pastrat pentru work deja material inceput, cu guardrails curente de release |
@@ -241,6 +244,7 @@ Sursele canonice sunt listate mai jos. Lista defineste precedenta, nu un set car
 - `ARCHITECTURE.md` - arhitectura canonica si adevar tehnic;
 - `GOVERNANCE.md` - reguli de proces, decizie si control;
 - `docs/software-delivery-lifecycle.md` - procesul canonic DEV -> TEST -> PROD, gate-uri, candidate identity si rollback;
+- `docs/agentflow.md` - contract operational AgentFlow; `GOVERNANCE.md` are precedenta pentru reguli/statusuri;
 - `.ai-instructions.md` - reguli obligatorii de lucru pentru AI;
 - `docs/requirements.md` - cerinte;
 - `docs/functionalitati.md` - comportament implementat;
