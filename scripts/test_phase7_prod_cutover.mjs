@@ -87,6 +87,8 @@ test('PROD mutation refreshes Worker runtime secrets before health verification'
 test('health validates live runtime repository access rather than token presence only', () => {
   assert.match(commandApi, /github_configured:await canAccessRuntimeRepository\(env, runtime\)/);
   assert.doesNotMatch(commandApi, /github_configured:Boolean\(env\.GITHUB_TOKEN\)/);
+  assert.match(promotion, /contents\/data\/search-config\.json\?ref=main/);
+  assert.match(promotion, /Runtime token cannot read canonical runtime contents/);
 });
 
 
