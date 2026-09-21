@@ -14,6 +14,32 @@ body:
         - INHERIT-PARENT
     validations:
       required: true
+  - type: input
+    id: phase
+    attributes:
+      label: Phase
+      description: Canonical workflow phase from GOVERNANCE.md section 2.8.
+      placeholder: DEVELOPMENT_ANALYSIS
+    validations:
+      required: true
+
+  - type: input
+    id: status
+    attributes:
+      label: Status
+      description: Canonical status valid for the selected Phase. Do not use BLOCKED/READY FOR DEV/WAITING FOR as free-form aliases.
+      placeholder: DEVELOPMENT_ANALYSIS
+    validations:
+      required: true
+
+  - type: input
+    id: blocked_by
+    attributes:
+      label: Blocked by
+      description: Issue/gate/reason only when the canonical Status is blocked; otherwise leave empty.
+    validations:
+      required: false
+
   - type: textarea
     id: objective
     attributes:
