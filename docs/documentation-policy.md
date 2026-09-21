@@ -1,8 +1,13 @@
 # Documentation Policy - Context Budget and Progressive Disclosure
 
-Status: CANONICAL
+Status: `CANONICAL`
+Version: `v1.0`
+Applicability: `CURRENT`
+Applies to: `BOTH`
+Effective from: `2026-09-21`
+Supersedes: unversioned baseline
 Scope: project documentation, Issues, runbooks and AI context loading
-Last verified: 2026-09-21
+Last verified: `2026-09-21`
 
 ## 1. Goal
 
@@ -60,6 +65,34 @@ Rules:
 - cross-link successor/predecessor documents instead of merging both processes into one oversized runbook;
 - do not mass-retrofit untouched historical documents;
 - process applicability is not a replacement for document status (`CANONICAL`, `HISTORICAL`, `SUPERSEDED`).
+
+## 2.2 Applicable version and in-place versioning
+
+The applicable version of a versioned canonical/operational document is maintained in-place at its canonical path. Git history is the version archive.
+
+When a document is created or materially changed, add or maintain where relevant:
+
+```text
+Status: CANONICAL | WORKING | HISTORICAL | SUPERSEDED
+Version: vX.Y
+Applicability: CURRENT | HISTORICAL_ONLY
+Applies to: AGENTFLOW | LEGACY-ADAPTED | BOTH
+Effective from: YYYY-MM-DD
+Supersedes: <version/document, optional>
+```
+
+Rules:
+- keep exactly one `CURRENT` version for the same logical document at the canonical path;
+- update the version in the same file for material changes; do not create active `-v1`, `-v2`, `-final` copies for version history;
+- Git history preserves previous in-place versions;
+- `CANONICAL + CURRENT` is approved current guidance for its declared scope;
+- `WORKING + CURRENT` may be actively edited/referenced but does not override approved canonical guidance;
+- `HISTORICAL` or `SUPERSEDED` documents use `HISTORICAL_ONLY` and are excluded from default execution context;
+- a `LEGACY-ADAPTED` document may remain `CURRENT` while active legacy work still needs it;
+- `Status`, `Applicability` and `Applies to` are independent metadata and must not be used as synonyms;
+- do not mass-retrofit untouched documents; apply this metadata during material edits or an explicitly approved documentation cleanup.
+
+Archive copies are reference evidence only. If a historical snapshot is retained outside Git history for a concrete audit reason, it must be under an archive/history location and cannot use `Applicability: CURRENT`.
 
 ## 3. AI context loading
 
