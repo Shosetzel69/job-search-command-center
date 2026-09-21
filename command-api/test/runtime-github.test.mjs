@@ -62,10 +62,11 @@ test('workflow dispatch transports exact immutable source_sha', async () => {
 });
 
 
-test('runtime credential probe validates actual repository access', async () => {
+test('runtime credential probe validates actual runtime contents access', async () => {
   await withFetch(async url => {
-    assert.equal(String(url), 'https://api.github.com/repos/runtime-owner/runtime-repo');
-    return new Response(JSON.stringify({ full_name:'runtime-owner/runtime-repo' }), { status:200 });
+    assert.equal(String(url), 'https://api.github.com/repos/runtime-owner/runtime-repo/contents/data/search-config.json?ref=runtime-ref');
+    const content = btoa(JSON.stringify({ schema_version:'1.0' }));
+    return new Response(JSON.stringify({ sha:'blob-sha', content }), { status:200 });
   }, async () => {
     assert.equal(await canAccessRuntimeRepository(env, runtime), true);
   });
