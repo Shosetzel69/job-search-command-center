@@ -139,6 +139,25 @@ export function runtimeSeedPayload(file, {
       return nomenclaturesSeed();
     case 'applications.json':
       return { schema_version: SCHEMA, applications: [] };
+    case 'automation-config.json':
+      return {
+        schema_version: SCHEMA,
+        enabled: false,
+        interval_hours: 8,
+        anchor_time: '08:00',
+        timezone: 'Europe/Bucharest',
+      };
+    case 'scheduler-state.json':
+      return {
+        schema_version: SCHEMA,
+        last_processed_slot: null,
+        last_outcome: null,
+        last_dispatched_at: null,
+        last_skipped_at: null,
+        last_skip_reason: null,
+      };
+    case 'run-admission.json':
+      return { schema_version: SCHEMA, claim: null };
     case 'search-state.json':
       return {
         schema_version: SCHEMA,
