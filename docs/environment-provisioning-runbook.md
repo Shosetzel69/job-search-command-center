@@ -89,7 +89,7 @@ approved Issue
   -> independent TEST PASS
   -> integrate candidate in main without rewrite
   -> PROD preflight + rollback readiness
-  -> explicit owner GO
+  -> explicit `PROD GO` / `PROD_GO`
   -> PROD exact same SHA
   -> smoke / acceptance
 ```
@@ -399,7 +399,7 @@ Before PROD mutation:
 5. rollback procedure is ready;
 6. required backup/restore evidence exists for destructive/non-reversible data/schema changes;
 7. PROD target identity is explicit;
-8. owner GO is recorded.
+8. AgentFlow `PROD GO` / `PROD_GO` authorization is recorded.
 
 Deployment then uses exactly `CANDIDATE_SHA`, followed by production smoke/acceptance and final release-record closeout.
 
