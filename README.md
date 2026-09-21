@@ -32,6 +32,8 @@ Nu se face write direct pe `main`. La actualizarea unui Issue existent, titlul s
 
 Regulile complete sunt definite in `GOVERNANCE.md`, `.ai-instructions.md` si `CONTRIBUTING.md`.
 
+Pentru work `Process: AGENTFLOW`, contractul operational este `docs/agentflow.md`. AgentFlow controleaza analiza/ATC/executia/evidence/review si apoi preda rezultatul lifecycle-ului canonic DEV -> TEST -> PROD.
+
 ## Arhitectura MVP
 
 Runtime functional:
@@ -123,6 +125,7 @@ Secretele runtime si GitHub App nu se introduc in frontend, JSON publicabil sau 
 
 - `ARCHITECTURE.md` - arhitectura canonica;
 - `GOVERNANCE.md` - reguli de guvernanta, branching si control;
+- `docs/agentflow.md` - contract operational AgentFlow, gate-uri si handoff;
 - `.ai-instructions.md` - guardrails si reguli de lucru pentru AI;
 - `CONTRIBUTING.md` - mod de lucru;
 - `docs/documentation-policy.md` - context minim, structura si limite pentru Issues/runbook-uri;
