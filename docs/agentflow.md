@@ -33,7 +33,7 @@ Pentru work AgentFlow activ, headerul curent este:
 Process: AGENTFLOW
 Phase: <canonical phase>
 Status: <canonical status>
-Blocked by: <issue/gate/reason sau —>
+Blocked by: <issue/gate/reason sau ->
 ```
 
 Taxonomia completa `Phase` / `Status` este definita numai in `GOVERNANCE.md` sectiunea 2.8. Nu se mentine o copie separata aici.
