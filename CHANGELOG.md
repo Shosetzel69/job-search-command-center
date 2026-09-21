@@ -71,6 +71,8 @@
 
 ### Documentatie
 
+- #285: documentatia AgentFlow este consolidata in `docs/agentflow.md` v1.0, aliniata cu `GOVERNANCE.md` v1.11 si taxonomia canonica Phase/Status; sunt definite routing-ul AGENTFLOW/LEGACY-ADAPTED, control tokens `APPROVE_TRANSFER`, `APPROVE_TASK_CONTRACT`, `PROD_GO`, architecture delta check si handoff-ul catre lifecycle-ul DEV -> TEST -> PROD.
+
 - Adaugat contractul canonic `docs/testing/qa-testability-ui-contract.md`: fluxurile UI automatizabile sunt DOM-first, dialogurile browser-native nu sunt acceptate in nominal DEV/TEST, iar blocajele de acest tip devin `BLOCKED-TESTABILITY`; #257 urmareste violarea curenta din stergerea Surse/Nomenclatoare.
 - #224: adaugat enforcement lightweight pentru politica de documentatie: CI verifica doar Markdown-ul schimbat, runbook-urile active esueaza peste 200 de linii si primesc warning peste 150, iar template-ul de executable task cere context minim explicit.
 - #220: introdusa politica de documentatie cu progressive disclosure si context budget; AI nu mai incarca implicit toate documentele canonice, Issues/runbook-urile au limite de marime, iar analiza nu mai este sincronizata ca documentatie live dupa fiecare implementare.
