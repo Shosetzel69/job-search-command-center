@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.13`
+Versiune document: `v1.14`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-13`
+Ultima actualizare: `2026-09-21`
 
 ## 1. Rol
 
@@ -17,6 +17,7 @@ Documente complementare:
 - `docs/package-2a8-implementation-plan.md` — planul de implementare aprobat;
 - `docs/adr/ADR-002-ai-github-bridge.md` — decizia pentru identitati GitHub App operationale;
 - `docs/adr/ADR-003-environment-isolation.md` — decizia acceptata pentru izolarea DEV / TEST / PROD;
+- `docs/adr/ADR-004-nile-postgresql-backend.md` — Nile/PostgreSQL ca target persistent backend si principiile de migrare;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
@@ -36,7 +37,7 @@ Principii:
 - geografia este separata de FIT/scoring;
 - Save/configuration != Run;
 - secretele nu ajung in browser;
-- persistenta curenta ramane JSON versionat in repository;
+- runtime-ul curent foloseste inca JSON versionat in repository, dar target-ul persistent aprobat este Nile/PostgreSQL conform ADR-004;
 - costul operational este mentinut redus;
 - pentru domeniile controlate, datele canonice nu se dubleaza functional intre React, Worker si Python;
 - infrastructura AI pentru GitHub este separata de Command API si nu devine proxy GitHub generic.
@@ -50,7 +51,8 @@ Principii:
 | `GitHub Actions` | orchestration full search, secrets runtime, publicare rezultate |
 | `search engine` | colectare, normalizare, geografie, dedupe/repost, filtrare, FIT |
 | `connectors` | transport/provider specific, fara FIT |
-| `data/*.json` | persistenta runtime/versionata si domenii canonice |
+| `data/*.json` | persistenta runtime/versionata curenta si compatibilitate tranzitorie in timpul migrarii |
+| `Nile / PostgreSQL` | target persistent pentru stare tranzactionala, multiuser/tenant, operational history si domeniile migrate incremental |
 | `ai-github-bridge` | infrastructura separata de engineering/governance pentru operatii GitHub allowlisted sub identitati GitHub App distincte; expune REST controlat si Remote MCP stateless |
 
 ## 4. Frontend
@@ -451,13 +453,46 @@ CI nu face crawl live si nu porneste full search.
 
 ## 16. Persistenta si limite arhitecturale
 
-Nu exista baza de date activa pentru aplicatia Job Search Command Center.
+### 16.1 Runtime curent
 
-Trecerea aplicatiei la alta persistenta, multi-user sau storage privat pentru CV necesita analiza/ADR conform guvernantei.
+Aplicatia operationala continua temporar sa foloseasca fisiere JSON versionate in runtime repositories pentru domeniile care nu au fost inca migrate.
+
+Acest model ramane compatibilitate tranzitorie, nu target-ul persistent pe termen mediu.
+
+### 16.2 Target persistent aprobat
+
+Conform ADR-004 si deciziei owner din #270:
+
+**Nile / PostgreSQL este backend-ul persistent target al JSCC.**
+
+Principii:
+
+- migrarea din JSON este incrementala, nu big-bang;
+- frontend-ul React, Cloudflare Worker / Command API, GitHub Actions search engine si connectorii raman componente arhitecturale;
+- accesul la date persistente trece printr-un repository/data-access boundary;
+- business logic si frontend-ul nu se leaga direct de SQL sau de API-uri proprietare Nile;
+- mediile raman strict separate: `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- nu exista fallback implicit intre DEV / TEST / PROD;
+- runtime-ul single-user curent trebuie sa ramana utilizabil in timpul migrarii;
+- target-ul de cost pentru pilot ramane €0, cu capacity/cost guardrails si fail-closed inainte de overage platit;
+- schema, tenancy, ownership, scheduler/concurrency si ordinea migrarii sunt definite prin #270/#275 inainte de implementare.
+
+Pregatirea Nile din `job-search-discovery#8` si PR #9 demonstreaza izolarea credentialelor intre medii si pregateste backup/restore, dar nu autorizeaza singura schema mutation sau migration.
+
+Limita cunoscuta: credentiale Nile diferite pentru aceeasi baza au demonstrat acelasi rol PostgreSQL efectiv (`khnum_user`), deci runtime-vs-migration least privilege nu este inca demonstrat si trebuie rezolvat sau acceptat explicit in analiza de implementare.
+
+### 16.3 Alternative superseded
+
+- SQLite (#2) nu mai este target backend;
+- Cloudflare D1 (#44 persistence proposal) nu mai este target backend.
+
+Cerintele functionale valide din ticket-ele respective raman active unde sunt preluate de #265/#270.
+
+### 16.4 Storage tehnic separat
 
 Cloudflare KV `OAUTH_KV` este exclusiv storage tehnic al infrastructurii Remote MCP/OAuth si nu devine persistenta functionala a aplicatiei.
 
-Introducerea `nomenclatures.json` nu schimba boundary-ul arhitectural si nu necesita ADR separat: ramane in modelul existent JSON versionat + Command API + static frontend + Python runner.
+Introducerea sau mentinerea unor fisiere canonice precum `nomenclatures.json` poate continua tranzitoriu pana cand un domeniu este migrat explicit.
 
 ATS Match v1 este separat de FIT. Orice dependinta noua de parsing PDF/DOCX necesita aprobare explicita.
 
