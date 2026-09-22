@@ -1819,7 +1819,7 @@
     {
       "id": "src-4b6330f5",
       "category": "Servicii IT si consultanta",
-      "name": "Qualco Group",
+      "name": "Qualco Group / Quento",
       "url": "https://apply.workable.com/qualcogroup/",
       "active": true,
       "collection_method": "web",
@@ -1827,7 +1827,7 @@
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": "Workable tenant identified: qualcogroup",
+      "validation_reason": "Workable tenant identified: qualcogroup; Quento is the ICT arm of Qualco Group and its vacancies are published in the same Workable tenant",
       "policy_excluded": false
     }
   ]
