@@ -18,6 +18,7 @@ Documente complementare:
 - `docs/adr/ADR-002-ai-github-bridge.md` — decizia pentru identitati GitHub App operationale;
 - `docs/adr/ADR-003-environment-isolation.md` — decizia acceptata pentru izolarea DEV / TEST / PROD;
 - `docs/adr/ADR-004-nile-postgresql-backend.md` — Nile/PostgreSQL ca target persistent backend si principiile de migrare;
+- `docs/adr/ADR-005-multiuser-ownership-isolation-shared-collection.md` — ownership multiuser, izolare tenant, shared collection si scheduler global;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
