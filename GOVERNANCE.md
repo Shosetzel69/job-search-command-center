@@ -242,36 +242,6 @@ REQUIREMENT_APPROVED
 -> DONE
 ```
 
-## 2.9 Independent Governance Review
-
-Modificarile materiale ale documentelor canonice de arhitectura, guvernanta sau lifecycle care schimba reguli, gate-uri, autoritati, release semantics sau environment boundaries necesita un al doilea review independent inainte sa devina baseline canonic in `main`.
-
-Flux minim:
-
-```text
-owner-approved decision
--> dedicated documentation branch/PR
--> freeze exact review candidate SHA
--> Independent Governance Review
--> REVIEW_PASS
--> merge/publication
-```
-
-Reguli:
-
-- reviewer-ul verifica transpunerea deciziei aprobate; nu reaproba si nu redeseneaza arhitectura;
-- reviewer-ul nu modifica acelasi candidate in timpul review-ului;
-- input-ul autoritativ este exact PR-ul/SHA-ul frozen plus decizia owner-approved si documentele canonice incluse;
-- `main`, memoria conversatiei sau intentia declarata nu substituie candidate-ul frozen;
-- review-ul verifica minimum decision fidelity, cross-document consistency, authority boundaries, lifecycle integrity, environment isolation, fail-closed semantics, evidence contract, scope containment si ambiguitati materiale;
-- verdicturile sunt `REVIEW_PASS`, `REVIEW_FAIL` sau `REVIEW_BLOCKED`;
-- `REVIEW_PASS` este permis numai fara BLOCKER/MAJOR deschis;
-- `REVIEW_BLOCKED` se foloseste numai cand lipseste input/evidence necesar pentru un review valid;
-- modificarile editoriale fara schimbare semantica nu necesita acest gate;
-- un review pozitiv nu autorizeaza implementation/runtime mutation si nu inlocuieste `APPROVE_TASK_CONTRACT`, TEST sau PROD gates.
-
-Pentru #322, acest gate se aplica PR-ului dedicat care publica contractul aprobat de candidate-managed shared/product data.
-
 ## 3. Surse de adevar si precedenta
 
 Sursele canonice sunt listate mai jos. Lista defineste precedenta, nu un set care trebuie citit integral pentru fiecare task:
@@ -300,9 +270,11 @@ Precedenta:
 
 Daca documentatia contrazice codul sau doua documente se contrazic, discrepanta se semnaleaza si se clarifica inainte de modificari functionale.
 
-### 3.1 Baseline tehnic obligatoriu
+### 3.1 Baseline tehnic obligatoriu (operational baseline)
 
-Pentru orice analiza tehnica, implementare, review sau fix, starea curenta din GitHub este baseline-ul operational care trebuie verificat inainte de actiune.
+Pentru orice analiza tehnica, implementare, review sau fix, starea curenta din GitHub este **operational baseline** care trebuie verificata inainte de actiune.
+
+Acest termen descrie baseline-ul de stare tehnica verificata al repository-ului si nu trebuie confundat cu **reconciliation baseline** din contractul de candidate-managed runtime data (#322), care este ultima versiune candidate-managed acceptata in environment si nu `main` curent.
 
 Reguli:
 
