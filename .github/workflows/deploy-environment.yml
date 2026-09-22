@@ -170,6 +170,21 @@ jobs:
           candidate="$(git -C candidate-source rev-parse HEAD)"
           test "${candidate,,}" = "${source_sha,,}" || { echo "candidate checkout does not match source_sha" >&2; exit 1; }
 
+      - name: Prepare inert candidate-managed data
+        if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf candidate-managed-data
+          mkdir -p candidate-managed-data/data
+          for path in data/sources.json data/source-categories.json data/nomenclatures.json; do
+            test -f "candidate-source/$path" || { echo "Missing candidate-managed file: $path" >&2; exit 1; }
+            test ! -L "candidate-source/$path" || { echo "Candidate-managed file must not be a symlink: $path" >&2; exit 1; }
+            cp "candidate-source/$path" "candidate-managed-data/$path"
+          done
+          mapfile -t copied < <(find candidate-managed-data -type f -print | sort)
+          test "${#copied[@]}" -eq 3 || { echo "Unexpected candidate-managed payload" >&2; exit 1; }
+
       - name: Run trusted environment contract tests
         working-directory: control-plane
         run: npm run test:environment
@@ -254,6 +269,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          if [ "${{ inputs.action }}" = "bootstrap" ] || [ "${{ inputs.action }}" = "deploy" ]; then
+            mkdir -p "$GITHUB_WORKSPACE/promotion-output"
+            export CONTROL_PLANE_SHA="$(git -C "$GITHUB_WORKSPACE/control-plane" rev-parse HEAD)"
+            export CANDIDATE_DATA_WORKSPACE="$GITHUB_WORKSPACE/candidate-managed-data"
+            export RECONCILIATION_EVIDENCE_PATH="$GITHUB_WORKSPACE/promotion-output/reconciliation.json"
+          fi
           case "${{ inputs.action }}" in
             validate) npm run env:validate -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
             bootstrap) npm run env:bootstrap -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
@@ -285,6 +306,7 @@ jobs:
               --run-id "$GITHUB_RUN_ID" \
               --run-url "$run_url" \
               --health-file promotion-output/health.json \
+              --reconciliation-file promotion-output/reconciliation.json \
               --output promotion-output/promotion-record.json
           else
             node control-plane/scripts/environment/promotion.mjs create-test-deployed \
@@ -293,6 +315,7 @@ jobs:
               --run-id "$GITHUB_RUN_ID" \
               --run-url "$run_url" \
               --health-file promotion-output/health.json \
+              --reconciliation-file promotion-output/reconciliation.json \
               --output promotion-output/promotion-record.json
           fi
 
