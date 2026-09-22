@@ -306,7 +306,7 @@ Pentru fiecare environment si fiecare fisier allowlisted:
 - `CANDIDATE` = versiunea din exact `CANDIDATE_SHA`;
 - `RUNTIME` = versiunea curenta din runtime repository.
 
-`main` curent nu este baseline de reconciliere.
+`main` curent nu este **reconciliation baseline**. Acest termen este distinct de operational baseline din `GOVERNANCE.md` §3.1.
 
 Bootstrap-ul initial este permis numai cu seed digests cunoscute explicit.
 
@@ -325,6 +325,8 @@ Decizia se calculeaza per fisier, dar setul rezultat se valideaza si se aplica b
 
 Metadata de release-control este environment-owned operational state, in afara protected application data surface, si retine minimum schema/version, per-file accepted baseline digests si previous promotion identity.
 
+O schema/versiune de release-control metadata necunoscuta sau nesuportata de trusted promotion contract opreste promovarea fail closed. Promovarea poate continua numai dupa un update/migration al control-plane contract revizuit separat.
+
 Trusted control-plane executa reconcilierea. Candidate-ul este input inert si nu poate furniza sau modifica promotion logic, validators, allowlist, GitHub write logic sau environment credentials.
 
 Secventa controlata este:
@@ -332,17 +334,20 @@ Secventa controlata este:
 1. capture runtime HEAD + accepted baseline metadata;
 2. load exact candidate allowlisted content;
 3. reconcile + validate fara mutatie;
-4. commit target set + release metadata cu expected runtime HEAD;
+4. commit target set + release metadata cu expected runtime HEAD; metadata marcheaza tentativa ca pending si nu muta accepted reconciliation baseline;
 5. capture noul `RUNTIME_DATA_SHA`;
 6. build/deploy exact `CANDIDATE_SHA` cu acel snapshot;
 7. verify `/health` identity si protected functional data;
-8. record evidence.
+8. numai dupa verificare reusita, marcheaza promotion accepted si actualizeaza accepted reconciliation baseline;
+9. record evidence.
 
-Daca deploy/verification esueaza dupa runtime commit, compensating revert automat este permis numai daca runtime HEAD este inca promotion commit. Daca HEAD s-a schimbat, nu se forteaza reset/overwrite; environment-ul/promotion devine explicit `DEGRADED/BLOCKED`.
+Daca deploy/verification esueaza dupa runtime commit, compensating revert automat este permis numai daca runtime HEAD este inca promotion commit. Daca HEAD s-a schimbat, nu se forteaza reset/overwrite; environment-ul/promotion devine explicit `DEGRADED/BLOCKED`. O tentativa failed/reverted/degraded nu actualizeaza accepted reconciliation baseline si nu poate deveni silent baseline-ul urmatoarei promovari.
+
+`DEGRADED/BLOCKED` si `DEGRADED/STALE_ASSET` sunt conditii operationale ale environment-ului, nu statusuri AgentFlow. Work item-ul foloseste statusul canonic al fazei curente, de exemplu `DEV_BLOCKED`, `TEST_BLOCKED` sau `RELEASE_BLOCKED`, cu `Blocked by` explicit.
 
 Candidate-managed data nu sunt copiate DEV -> TEST -> PROD. Fiecare environment face reconcilierea independent fata de propriul baseline si runtime.
 
-Evidence include minimum control-plane SHA, candidate SHA, runtime before/after SHA, allowlist version, per-file baseline/candidate/runtime digests si action, validation result, deploy/run identity, health identities si functional visibility proof.
+Evidence include minimum environment, control-plane SHA, candidate SHA, runtime before/after SHA, allowlist version, per-file baseline/candidate/runtime digests si action, reconciliation result, schema/integrity validation result, deploy/run identity, health identities, functional visibility proof si revert/rollback result cand este aplicabil.
 
 ### 10. Search execution policy
 
