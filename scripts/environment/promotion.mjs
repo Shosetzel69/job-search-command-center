@@ -3,7 +3,9 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SHA_RE } from './contract.mjs';
 
-const SCHEMA_VERSION = '1.0';
+const SCHEMA_VERSION = '2.0';
+const RECONCILIATION_SCHEMA_VERSION = '1.0';
+const MANAGED_PATHS = Object.freeze(['data/sources.json','data/source-categories.json','data/nomenclatures.json']);
 const RUN_ID_RE = /^\d+$/;
 const DB_CHANGE_TYPES = new Set(['none', 'reversible', 'destructive']);
 
@@ -55,12 +57,66 @@ function normalizeHealth(health, environment, candidateSha) {
   };
 }
 
-function normalizeDeploymentEvidence({ environment, candidateSha, runId, runUrl, health }) {
+function normalizeReconciliationEvidence(evidence, environment, candidateSha, runtimeDataSha) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    throw new Error(`${environment.toUpperCase()} reconciliation evidence is missing`);
+  }
+  if (evidence.schema_version !== RECONCILIATION_SCHEMA_VERSION) {
+    throw new Error('Unsupported reconciliation evidence schema_version');
+  }
+  if (evidence.environment !== environment) throw new Error(`${environment.toUpperCase()} reconciliation environment mismatch`);
+  if (requireSha(evidence.candidate_sha, `${environment}.reconciliation.candidate_sha`) !== candidateSha) {
+    throw new Error(`${environment.toUpperCase()} reconciliation candidate_sha mismatch`);
+  }
+  if (requireSha(evidence.promotion_runtime_sha, `${environment}.reconciliation.promotion_runtime_sha`) !== runtimeDataSha) {
+    throw new Error(`${environment.toUpperCase()} reconciliation runtime_data_sha mismatch`);
+  }
+  requireSha(evidence.control_plane_sha, `${environment}.reconciliation.control_plane_sha`);
+  requireSha(evidence.runtime_head_before, `${environment}.reconciliation.runtime_head_before`);
+  if (evidence.acceptance_runtime_head != null) requireSha(evidence.acceptance_runtime_head, `${environment}.reconciliation.acceptance_runtime_head`);
+  if (requireText(evidence.allowlist_version, `${environment}.reconciliation.allowlist_version`) !== '1.0') {
+    throw new Error('Unsupported reconciliation allowlist_version');
+  }
+  if (evidence.reconciliation_result !== 'PASS') throw new Error(`${environment.toUpperCase()} reconciliation must PASS`);
+  if (evidence.validation_result !== 'PASS') throw new Error(`${environment.toUpperCase()} reconciliation validation must PASS`);
+  if (evidence.snapshot_verification !== 'PASS') throw new Error(`${environment.toUpperCase()} runtime snapshot verification must PASS`);
+  if (!['ACCEPTED','NOT_REQUIRED'].includes(evidence.acceptance_result)) {
+    throw new Error(`${environment.toUpperCase()} reconciliation baseline is not accepted`);
+  }
+  if (evidence.revert_result !== 'NOT_REQUIRED') {
+    throw new Error(`${environment.toUpperCase()} reconciliation evidence contains a revert/degraded outcome`);
+  }
+  if (evidence.health?.source_sha !== candidateSha || evidence.health?.runtime_data_sha !== runtimeDataSha) {
+    throw new Error(`${environment.toUpperCase()} reconciliation health identity mismatch`);
+  }
+  for (const path of MANAGED_PATHS) {
+    const item = evidence.files?.[path];
+    if (!item || typeof item !== 'object') throw new Error(`Missing reconciliation file evidence: ${path}`);
+    for (const field of ['baseline_digest','candidate_digest','runtime_before_digest','runtime_after_digest','next_baseline_digest']) {
+      if (!/^sha256:[0-9a-f]{64}$/.test(String(item[field] || ''))) {
+        throw new Error(`Invalid reconciliation digest ${path}.${field}`);
+      }
+    }
+    if (!['noop_baseline','noop_runtime_already_candidate','apply_candidate','preserve_runtime'].includes(item.action)) {
+      throw new Error(`Invalid reconciliation action for ${path}`);
+    }
+  }
+  return evidence;
+}
+
+function normalizeDeploymentEvidence({ environment, candidateSha, runId, runUrl, health, reconciliation }) {
+  const normalizedHealth = normalizeHealth(health, environment, candidateSha);
   return {
     verdict: 'PASS',
     run_id: requireRunId(runId),
     run_url: requireText(runUrl, 'run_url'),
-    ...normalizeHealth(health, environment, candidateSha),
+    ...normalizedHealth,
+    reconciliation: normalizeReconciliationEvidence(
+      reconciliation,
+      environment,
+      candidateSha,
+      normalizedHealth.runtime_data_sha,
+    ),
   };
 }
 
@@ -90,10 +146,11 @@ function assertDeploymentEvidence(evidence, environment, candidateSha) {
   if (requireSha(evidence.source_sha, `${environment}.source_sha`) !== candidateSha) {
     throw new Error(`${environment.toUpperCase()} evidence source_sha does not match CANDIDATE_SHA`);
   }
-  requireSha(evidence.runtime_data_sha, `${environment}.runtime_data_sha`);
+  const runtimeDataSha = requireSha(evidence.runtime_data_sha, `${environment}.runtime_data_sha`);
+  normalizeReconciliationEvidence(evidence.reconciliation, environment, candidateSha, runtimeDataSha);
 }
 
-export function createDevPassRecord({ candidateSha, issuePr, runId, runUrl, health, createdAt = new Date().toISOString() }) {
+export function createDevPassRecord({ candidateSha, issuePr, runId, runUrl, health, reconciliation, createdAt = new Date().toISOString() }) {
   const sha = requireSha(candidateSha, 'CANDIDATE_SHA');
   return {
     schema_version: SCHEMA_VERSION,
@@ -101,7 +158,7 @@ export function createDevPassRecord({ candidateSha, issuePr, runId, runUrl, heal
     issue_pr: requireText(issuePr, 'Issue / PR'),
     candidate_sha: sha,
     created_at: createdAt,
-    dev_pass: normalizeDeploymentEvidence({ environment: 'dev', candidateSha: sha, runId, runUrl, health }),
+    dev_pass: normalizeDeploymentEvidence({ environment: 'dev', candidateSha: sha, runId, runUrl, health, reconciliation }),
   };
 }
 
@@ -111,14 +168,14 @@ export function assertDevPassRecord(record, candidateSha) {
   return record;
 }
 
-export function createTestDeployedRecord({ devRecord, candidateSha, runId, runUrl, health, createdAt = new Date().toISOString() }) {
+export function createTestDeployedRecord({ devRecord, candidateSha, runId, runUrl, health, reconciliation, createdAt = new Date().toISOString() }) {
   const sha = requireSha(candidateSha, 'CANDIDATE_SHA');
   assertDevPassRecord(devRecord, sha);
   return {
     ...devRecord,
     stage: 'test_deployed',
     created_at: createdAt,
-    test_deploy: normalizeDeploymentEvidence({ environment: 'test', candidateSha: sha, runId, runUrl, health }),
+    test_deploy: normalizeDeploymentEvidence({ environment: 'test', candidateSha: sha, runId, runUrl, health, reconciliation }),
   };
 }
 
@@ -286,6 +343,7 @@ async function main(argv = process.argv.slice(2)) {
       runId: args.run_id,
       runUrl: args.run_url,
       health: readJson(args.health_file, 'DEV health evidence'),
+      reconciliation: readJson(args.reconciliation_file, 'DEV reconciliation evidence'),
     }));
     return;
   }
@@ -300,6 +358,7 @@ async function main(argv = process.argv.slice(2)) {
       runId: args.run_id,
       runUrl: args.run_url,
       health: readJson(args.health_file, 'TEST health evidence'),
+      reconciliation: readJson(args.reconciliation_file, 'TEST reconciliation evidence'),
     }));
     return;
   }
