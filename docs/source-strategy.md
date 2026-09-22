@@ -27,7 +27,7 @@ O regula explicita de excludere operationala prevaleaza peste un eventual `activ
 
 Stare curenta:
 
-- 160 intrari in catalog, inclusiv JobsPipe explicit; 29 surse Remote-first noi sunt inregistrate fail-closed si raman inactive pana la finalizarea gate-urilor Package 2C;
+- 160 intrari in catalog, inclusiv JobsPipe explicit; 29 surse Remote-first noi sunt fail-closed: 28 sunt tehnic validate, Oyster ramane in validare connector-level, iar toate 29 sunt neaprobate si inactive;
 - adaptere API existente sunt validate/activate controlat conform Package 2C;
 - JobsPipe este `disabled` in configuratia runtime;
 - Jobicy ramane operational independent;
@@ -201,7 +201,7 @@ Nu se introduce in Package 2 obiectivul de acoperire completa a tuturor surselor
 
 ### Remote-first batch #313-#320
 
-Implementarea autorizata adauga 29 surse sub categoria existenta `Companii remote-first`, toate initial `pending + approval pending + active=false`.
+Implementarea autorizata adauga 29 surse sub categoria existenta `Companii remote-first`. Starea curenta este 28 `validated + approval pending + active=false` si Oyster `validating + approval pending + active=false`.
 
 Rutarea reutilizeaza:
 - 11 board-uri Greenhouse prin connectorul generic existent;
