@@ -2,9 +2,11 @@
 
 Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-09-18`
+Ultima actualizare: `2026-09-22`
 
 ## 1. Reguli generale
+
+> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, personal/profile-owned si system/operational state in PostgreSQL, domain-by-domain.
 
 Contractele runtime publicate frontend-ului folosesc `schema_version = "1.0"`.
 
@@ -161,7 +163,13 @@ Fiecare entry pastreaza `source_results` si agregatele `source_outcome_counts`, 
 
 ## 5. `data/search-config.json`
 
-Sursa canonica pentru selectiile efective ale motorului. Valorile controlate sunt definite de `data/nomenclatures.json`.
+**AS-IS:** sursa canonica single-user pentru selectiile efective ale motorului. Valorile controlate sunt definite de `data/nomenclatures.json`.
+
+**Target ADR-005:** acest fisier nu are succesor 1:1. Contractul se desparte in:
+- system/collection configuration — source strategy, provider/collector limits, collection freshness si alte politici globale;
+- profile-owned job-search preferences — role-family interests, geography, work mode, contract, compensation, personal exclusions, relevance/FIT preferences si display preferences.
+
+O modificare de profil nu declanseaza provider retrieval; ea declanseaza numai re-evaluarea personala necesara.
 
 Geografie:
 - `target_regions`;
@@ -399,3 +407,71 @@ Campuri curente: `id`, `company`, `title`, `location`, `countries`, `applied_at`
 
 Un protected asset nou nu mai necesita trei liste functionale independente.
 `search-state.json` este exclus explicit.
+
+
+## 9. Target ownership contracts — ADR-005
+
+Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/indexes sunt responsabilitatea #275.
+
+### Shared/product
+
+- Canonical Job;
+- Source Posting;
+- shared job lifecycle;
+- dedup/repost relationships;
+- role-family classification;
+- Source Registry / source categories;
+- nomenclatures.
+
+### Personal/profile-owned
+
+- Profile;
+- profile search preferences;
+- user-job state: `seen_at`, `archived_at` si evaluation validity/version metadata;
+- FIT/evaluation score, pros, risks;
+- Applications cu `job_id` optional si snapshot minim;
+- personal notes;
+- UI preferences.
+
+### System/operational
+
+- global collection configuration;
+- global scheduler configuration/state;
+- collection/search runs;
+- source-run diagnostics;
+- collector/provider state.
+
+### Canonical job identity
+
+Target-ul foloseste doua niveluri:
+- `Canonical Job`;
+- `Source Posting`.
+
+Source Posting identity:
+1. `source + external_job_id` daca exista;
+2. altfel `source + canonical_url`.
+
+Cross-source merge este conservator. Un requisition id nou nu este automat repost.
+
+### Shared lifecycle
+
+`ACTIVE -> UNCONFIRMED -> INACTIVE`
+
+Absenta dintr-un run partial/esuat nu produce automat INACTIVE.
+
+Default retention pentru un shared job INACTIVE este 90 zile, exceptand cazurile in care o referinta personala retinuta necesita jobul.
+
+### Application
+
+Application este profile-owned.
+
+- `job_id` este optional;
+- aplicatiile externe JSCC sunt permise;
+- daca exista job link, snapshot-ul minim pastreaza company/title/location/reference/source URL;
+- application lifecycle este independent de shared job lifecycle.
+
+### Evaluation
+
+`User Profile + Shared Job -> User-Job Evaluation`
+
+FIT este personal si incremental. Hard eligibility exclude numai pe contradictie explicita. Missing/unknown nu inseamna incompatibilitate.
