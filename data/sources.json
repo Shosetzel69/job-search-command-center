@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "count": 130,
+  "count": 131,
   "sources": [
     {
       "id": "src-db8da20e",
@@ -1814,6 +1814,20 @@
       "approval_status": "approved",
       "last_validated_at": null,
       "validation_reason": null,
+      "policy_excluded": false
+    },
+    {
+      "id": "src-4b6330f5",
+      "category": "Servicii IT si consultanta",
+      "name": "Qualco Group",
+      "url": "https://apply.workable.com/qualcogroup/",
+      "active": true,
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": "Workable tenant identified: qualcogroup",
       "policy_excluded": false
     }
   ]
