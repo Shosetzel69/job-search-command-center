@@ -192,10 +192,13 @@ Activarea connectorilor suplimentari se face numai dupa:
 ```text
 implementat
 + testat
++ ruta dedicata enabled
 + validat pe sursa concreta
 + aprobat
 -> activare registry
 ```
+
+Pentru o sursa mapata explicit in `shared/validated-ats-routes.json`, `enabled=false` este un hard gate de activare chiar daca snapshot-ul Source Registry contine legacy `validation_status=validated` si `approval_status=approved`. Motivul `disabled_reason` ramane observabil (de exemplu `connector_requires_credentials` sau `live_api_route_not_validated`).
 
 Nu se introduce in Package 2 obiectivul de acoperire completa a tuturor surselor active. #49 ramane exclus din Package 2 conform deciziei ownerului.
 
