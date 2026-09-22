@@ -12,10 +12,14 @@ import job_search as engine
 import job_search_apify as apify
 import job_search_ashby as ashby
 import job_search_bamboohr as bamboohr
+import job_search_breezyhr as breezyhr
 import job_search_greenhouse as greenhouse
 import job_search_jobicy as jobicy
+import job_search_lever as lever
+import job_search_pinpoint as pinpoint
 import job_search_recruitee as recruitee
 import job_search_smartrecruiters as smartrecruiters
+import job_search_traefik as traefik
 import job_search_web as web
 import job_search_workday as workday
 import job_search_optimized as optimized
@@ -398,6 +402,12 @@ def collect_ats(item):
         return recruitee.collect(route["subdomain"], company)
     if connector == "bamboohr":
         return bamboohr.collect(route["subdomain"], company)
+    if connector == "lever":
+        return lever.collect(route["site"], company, region=route.get("region", "global"))
+    if connector == "breezyhr":
+        return breezyhr.collect(route["tenant"], company)
+    if connector == "pinpoint":
+        return pinpoint.collect(route["subdomain"], company)
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
@@ -405,7 +415,7 @@ def collect_api_sources(config, state, now, plan, run_id=None):
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
-    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr"}
+    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint"}
     for item in plan:
         if item["status"] != "pending" or item["connector"] == "web":
             continue
@@ -433,6 +443,8 @@ def collect_api_sources(config, state, now, plan, run_id=None):
         try:
             if connector in ats_connectors:
                 results = collect_ats(item)
+            elif connector == "traefik":
+                results = traefik.collect(item["url"], item["source"])
             elif connector == "jobicy":
                 results = jobicy.collect(config)
             elif connector == "jobspipe" and mode == "apify":
