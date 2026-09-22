@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.15`
+Versiune document: `v1.16`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-22`
+Ultima actualizare: `2026-09-23`
 
 ## 1. Rol
 
@@ -370,6 +370,35 @@ Package 2A8 adauga:
 Fisier intern:
 
 - `data/search-state.json` — nu este publicat frontend-ului.
+
+### Candidate-managed shared/product data in runtime
+
+Conform #322 si ADR-003 revizuit, izolarea runtime nu inseamna ca un environment poate ramane fara shared/product data cerute de exact candidate-ul validat.
+
+In perioada JSON tranzitorie, urmatoarele fisiere sunt candidate-managed allowlisted:
+
+- `data/sources.json`;
+- `data/source-categories.json`;
+- `data/nomenclatures.json`.
+
+Reguli:
+
+- aceste fisiere nu se copiaza DEV -> TEST -> PROD;
+- fiecare environment reconciliaza independent continutul exact din `CANDIDATE_SHA` cu propriul runtime;
+- baseline-ul de reconciliere este ultima versiune candidate-managed acceptata in environment, nu `main` curent;
+- bootstrap-ul initial foloseste numai seed digests explicite;
+- runtime-only change fata de baseline este pastrat daca candidate-ul nu a schimbat acelasi fisier;
+- candidate-only change poate fi aplicat daca runtime-ul este inca la baseline;
+- schimbare concurenta candidate + runtime pe acelasi fisier produce conflict si fail closed;
+- nu exista merge automat field-level;
+- decizia se calculeaza per fisier, dar setul rezultat este validat si commit-uit batch-atomic;
+- generic `data/*` promotion este interzis;
+- metadata de release-control pentru baseline/digests este operationala, environment-owned si nu este browser-visible.
+
+Candidate content este input inert. Reconciliation/promotion logic, validatorii, allowlist-ul si credentialele ruleaza numai din trusted control-plane baseline.
+
+Dupa commit-ul runtime se obtine noul `RUNTIME_DATA_SHA`, apoi se deployeaza exact `CANDIDATE_SHA` folosind acel snapshot. Daca deploy/verification esueaza dupa mutatia runtime, se face compensating revert numai daca runtime HEAD nu s-a schimbat; altfel environment-ul ramane explicit `DEGRADED/BLOCKED` pentru reconciliere manuala.
+
 
 ### Runtime asset manifest
 
