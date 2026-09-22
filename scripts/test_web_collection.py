@@ -4,6 +4,7 @@ import socket
 import time
 import unittest
 from datetime import datetime, timezone
+from urllib.parse import urlsplit
 from unittest.mock import patch, MagicMock
 
 import job_search as engine
@@ -169,6 +170,93 @@ class WebTests(unittest.TestCase):
         for path in ("/pricing", "/products/post-a-job", "/resources/job-descriptions", "/webinars/latest", "/status/history", "/career-advice"):
             self.assertIsNone(web.candidate({"url": path, "text": "jobs and careers"}, SOURCE["url"], roots), path)
         self.assertIsNotNone(web.candidate({"url": "/careers/project-manager", "text": "Project Manager"}, SOURCE["url"], roots))
+
+
+    def test_b1_profiles_scope_navigation_to_job_surfaces(self):
+        cases = [
+            ("Cegeka", "https://www.cegeka.com/en/ro/jobs/all-jobs", "/en/ro/jobs/all-jobs/pm-1", "/en-gb/jobs"),
+            ("Flexa", "https://flexa.careers/jobs", "/jobs/example-role", "/companies/example"),
+            ("Stripe", "https://stripe.com/careers/search", "/careers/listing/example/123", "/docs/projects"),
+            ("Techjobs.be", "https://techjobs.be/en/ict-jobs", "/en/ict-jobs/123-it-project-manager", "/en/articles"),
+        ]
+        for name, page_url, allowed, blocked in cases:
+            profile = web.source_profile({"name": name})
+            roots = {web.site_root(urlsplit(page_url).hostname)}
+            self.assertIsNotNone(web.candidate({"url": allowed, "text": "job"}, page_url, roots, profile), name)
+            self.assertIsNone(web.candidate({"url": blocked, "text": "job"}, page_url, roots, profile), name)
+
+    def test_justjoin_profile_strips_promo_tracking_from_job_url(self):
+        profile = web.source_profile({"name": "Just Join IT"})
+        roots = {"justjoin.it"}
+        option = web.candidate(
+            {"url": "/job-offer/example-pm?promo=lal", "text": "Project Manager"},
+            "https://justjoin.it/job-offers/all-locations",
+            roots,
+            profile,
+        )
+        self.assertEqual(option, (0, "https://justjoin.it/job-offer/example-pm"))
+
+    def test_red_profile_prefers_job_details_and_rejects_role_search_pages(self):
+        profile = web.source_profile({"name": "RED Global"})
+        roots = {"redglobal.com"}
+        detail = web.candidate(
+            {"url": "/jobs/job/project-manager/abc123", "text": "Project Manager"},
+            "https://www.redglobal.com/jobs",
+            roots,
+            profile,
+        )
+        role_search = web.candidate(
+            {"url": "/jobs/search?role=abc", "text": "Project Manager"},
+            "https://www.redglobal.com/jobs",
+            roots,
+            profile,
+        )
+        self.assertEqual(detail[0], 0)
+        self.assertIsNone(role_search)
+
+    def test_nodesk_profile_rejects_collection_pages_but_keeps_job_details(self):
+        profile = web.source_profile({"name": "NoDesk"})
+        roots = {"nodesk.co"}
+        self.assertIsNone(web.candidate(
+            {"url": "/remote-jobs/project-manager/", "text": "Project Manager"},
+            "https://nodesk.co/remote-jobs/",
+            roots,
+            profile,
+        ))
+        detail = web.candidate(
+            {"url": "/remote-jobs/example-company-it-project-manager/", "text": "IT Project Manager"},
+            "https://nodesk.co/remote-jobs/",
+            roots,
+            profile,
+        )
+        self.assertEqual(detail[0], 0)
+
+    def test_profile_queue_preserves_listing_order_for_equal_priority_details(self):
+        source = {"name": "Flexa", "url": "https://flexa.careers/jobs", "id": "flexa"}
+        first_url = "https://flexa.careers/jobs/z-first"
+        second_url = "https://flexa.careers/jobs/a-second"
+        first_job = {**JOB, "url": first_url, "identifier": "z-first"}
+        second_job = {**JOB, "url": second_url, "identifier": "a-second"}
+        client = FakeClient({
+            source["url"]: '<a href="/jobs/z-first">First</a><a href="/jobs/a-second">Second</a>',
+            first_url: html(first_job),
+            second_url: html(second_job),
+        })
+        with patch.object(web, "MAX_PAGES", 2):
+            _, details = web.collect(source, {}, NOW, client)
+        self.assertEqual(client.called[:2], [source["url"], first_url])
+        self.assertEqual(details["web_profile"], "Flexa")
+        self.assertEqual(details["entrypoint_url"], source["url"])
+
+    def test_profile_can_override_collection_entrypoint_without_mutating_source_url(self):
+        source = {"name": "Luxoft", "url": "https://career.luxoft.com/", "id": "luxoft"}
+        entrypoint = "https://career.luxoft.com/jobs?keyword=&perPage=60"
+        client = FakeClient({entrypoint: html(JOB)})
+        with patch.object(web, "MAX_PAGES", 1):
+            _, details = web.collect(source, {}, NOW, client)
+        self.assertEqual(client.called[0], entrypoint)
+        self.assertEqual(details["requested_url"], source["url"])
+        self.assertEqual(details["entrypoint_url"], entrypoint)
 
     def test_all_web_sources_are_scheduled_individually(self):
         catalog = {"sources": [{"name": f"Source {i}", "url": f"https://site{i}.example/jobs"} for i in range(6)]}
