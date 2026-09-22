@@ -509,7 +509,7 @@ Acest model ramane compatibilitate tranzitorie, nu target-ul persistent pe terme
 
 ### 16.2 Target persistent aprobat
 
-Conform ADR-004 si deciziei owner din #270:
+Conform ADR-004 si ADR-005:
 
 **Nile / PostgreSQL este backend-ul persistent target al JSCC.**
 
@@ -522,27 +522,102 @@ Principii:
 - mediile raman strict separate: `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
 - nu exista fallback implicit intre DEV / TEST / PROD;
 - runtime-ul single-user curent trebuie sa ramana utilizabil in timpul migrarii;
-- target-ul de cost pentru pilot ramane €0, cu capacity/cost guardrails si fail-closed inainte de overage platit;
-- schema, tenancy, ownership, scheduler/concurrency si ordinea migrarii sunt definite prin #270/#275 inainte de implementare.
+- dupa cutover, fiecare domeniu are exact un authoritative system of record;
+- permanent dual-write JSON/PostgreSQL este interzis.
 
-Pregatirea Nile din `job-search-discovery#8` si PR #9 demonstreaza izolarea credentialelor intre medii si pregateste backup/restore, dar nu autorizeaza singura schema mutation sau migration.
+Pregatirea Nile din `job-search-discovery#8` si PR #9 ramane technical preparation evidence; nu autorizeaza singura schema mutation sau migration.
 
-Limita cunoscuta: credentiale Nile diferite pentru aceeasi baza au demonstrat acelasi rol PostgreSQL efectiv (`khnum_user`), deci runtime-vs-migration least privilege nu este inca demonstrat si trebuie rezolvat sau acceptat explicit in analiza de implementare.
+### 16.3 Multiuser / shared collection contract
 
-### 16.3 Alternative superseded
+ADR-005 fixeaza urmatoarele boundary-uri:
+
+- retrieval extern este shared/system-owned;
+- un singur corpus canonical de joburi este reutilizat de toate profilurile;
+- profilurile aplica eligibility/FIT/state independent;
+- `Canonical Job` si `Source Posting` sunt entitati distincte;
+- Source Posting identity foloseste prioritar `source + external_job_id`, fallback `source + canonical_url`;
+- cross-source merge este conservator; false merge este mai grav decat un duplicate temporar;
+- shared job lifecycle: `ACTIVE -> UNCONFIRMED -> INACTIVE`;
+- freshness/display window nu este lifecycle/deletion;
+- inactive shared jobs au retention implicit 90 zile, cu protectie pentru referinte personale care necesita jobul;
+- Application este profile-owned si are `job_id` optional; aplicatiile externe sunt valide cu `job_id = NULL`;
+- FIT este profile-owned si se recalculeaza incremental la job/profile/fit-version changes;
+- hard eligibility exclude doar pe contradictie explicita; missing/unknown nu este negative evidence.
+
+### 16.4 Account lifecycle si authorization
+
+Lifecycle:
+
+`ACTIVE <-> DEACTIVATED -> DELETED`
+
+- DEACTIVATED blocheaza accesul si pastreaza datele personale pentru reactivare;
+- DELETED sterge ireversibil domeniul personal si pastreaza datele shared/system;
+- nu se pastreaza tombstone identificabil;
+- se poate pastra maximum 90 zile un deletion audit event neidentificabil;
+- re-signup dupa DELETE creeaza un account/profile nou.
+
+MVP roles:
+
+- `USER`;
+- `ADMIN`.
+
+ADMIN are drepturi USER doar asupra propriului profil si capabilitati administrative asupra account lifecycle, shared/system configuration, scheduler, manual collection si diagnostics. ADMIN nu acceseaza continutul personal al altui user.
+
+Tenant isolation este defense-in-depth:
+
+- authenticated identity -> server-side app_user/profile resolution;
+- repository scoping obligatoriu pentru personal data;
+- PostgreSQL RLS pe personal tables;
+- `FORCE ROW LEVEL SECURITY` unde se aplica;
+- browser-supplied user/profile id nu confera autoritate;
+- ADMIN nu primeste personal-content RLS bypass.
+
+### 16.5 Runtime connectivity si privilege gate
+
+Path target:
+
+`Cloudflare Worker -> repository/data-access -> node-postgres (pg) -> Cloudflare Hyperdrive -> Nile PostgreSQL`
+
+- Hyperdrive este folosit pentru pooling;
+- query caching este initial OFF pentru persistence runtime;
+- DEV/TEST/PROD folosesc bindings statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- request-selected DB si cross-environment fallback sunt interzise;
+- runtime CRUD authority trebuie separata demonstrabil de migration/DDL authority inainte de personal-data/multiuser PROD cutover;
+- broad DDL poate fi tolerat temporar numai in DEV/TEST si migration work controlat;
+- daca providerul nu permite separarea demonstrabila, riscul revine la Architecture pentru owner decision explicit.
+
+### 16.6 Cost guardrail
+
+Pilot variable infrastructure budget este **EUR 0**.
+
+- auto-upgrade si paid overage sunt interzise fara owner approval;
+- 70% din capacitatea Nile inclusa este operational warning/gate;
+- inainte de PROD multiuser trebuie demonstrat fie ca paid overage nu poate aparea fara owner action, fie ca workload-ul non-essential poate fi oprit/degradat inainte de consum platit;
+- daca fail-closed cost control nu poate fi demonstrat, multiuser PROD ramane blocat.
+
+### 16.7 Migration order si authority
+
+Migrarea este domain-by-domain:
+
+1. operational history;
+2. shared job corpus;
+3. multiuser personal core;
+4. global scheduler;
+5. remaining shared administration/runtime state.
+
+JSON poate ramane temporar pentru compatibility/export. Rollback-ul este per domain/slice.
+
+Shared source/category/nomenclature JSON poate ramane in GitHub pana cand exista un motiv concret de migrare.
+
+### 16.8 Alternative superseded si storage tehnic separat
 
 - SQLite (#2) nu mai este target backend;
-- Cloudflare D1 (#44 persistence proposal) nu mai este target backend.
+- Cloudflare D1 (#44 persistence proposal) nu mai este target backend;
+- Cloudflare KV `OAUTH_KV` este exclusiv storage tehnic al infrastructurii Remote MCP/OAuth si nu devine persistenta functionala a aplicatiei.
 
-Cerintele functionale valide din ticket-ele respective raman active unde sunt preluate de #265/#270.
+Cerintele functionale valide din ticket-ele superseded raman active numai unde sunt preluate de requirements/ADR-uri curente.
 
-### 16.4 Storage tehnic separat
-
-Cloudflare KV `OAUTH_KV` este exclusiv storage tehnic al infrastructurii Remote MCP/OAuth si nu devine persistenta functionala a aplicatiei.
-
-Introducerea sau mentinerea unor fisiere canonice precum `nomenclatures.json` poate continua tranzitoriu pana cand un domeniu este migrat explicit.
-
-ATS Match v1 este separat de FIT. Orice dependinta noua de parsing PDF/DOCX necesita aprobare explicita.
+ATS Match v1 ramane separat de FIT. Orice dependinta noua de parsing PDF/DOCX necesita aprobare explicita.
 
 ## 17. Status Package 2
 
@@ -846,69 +921,3 @@ Contract:
 Workflow-ul `deploy-environment.yml` este manual-only si `dry_run=true` implicit. G3 cere validarea statica/dry-run pentru toate cele trei environments si zero mutatii PROD.
 
 **Gate G3:** automation + CI + dry-run PASS. Dupa G3 se opreste; bootstrap DEV necesita Phase 4 / GO conform planului #161.
-
-
-### 16.3 Multiuser / shared collection contract
-
-ADR-005 fixeaza urmatoarele boundary-uri:
-
-- retrieval extern este shared/system-owned;
-- un singur corpus canonical de joburi este reutilizat de toate profilurile;
-- profilurile aplica eligibility/FIT/state independent;
-- `Canonical Job` si `Source Posting` sunt entitati distincte;
-- Source Posting identity foloseste prioritar `source + external_job_id`, fallback `source + canonical_url`;
-- cross-source merge este conservator; false merge este mai grav decat un duplicate temporar;
-- shared job lifecycle: `ACTIVE -> UNCONFIRMED -> INACTIVE`;
-- freshness/display window nu este lifecycle/deletion;
-- inactive shared jobs au retention implicit 90 zile, cu protectie pentru referinte personale care necesita jobul;
-- Application este profile-owned si are `job_id` optional; aplicatiile externe sunt valide cu `job_id = NULL`;
-- FIT este profile-owned si se recalculeaza incremental la job/profile/fit-version changes;
-- hard eligibility exclude doar pe contradictie explicita; missing/unknown nu este negative evidence.
-
-### 16.4 Account lifecycle si authorization
-
-Lifecycle:
-
-`ACTIVE <-> DEACTIVATED -> DELETED`
-
-- DEACTIVATED blocheaza accesul si pastreaza datele personale pentru reactivare;
-- DELETED sterge ireversibil domeniul personal si pastreaza datele shared/system;
-- nu se pastreaza tombstone identificabil;
-- se poate pastra maximum 90 zile un deletion audit event neidentificabil;
-- re-signup dupa DELETE creeaza un account/profile nou.
-
-MVP roles:
-
-- `USER`;
-- `ADMIN`.
-
-ADMIN are drepturi USER doar asupra propriului profil si capabilitati administrative asupra account lifecycle, shared/system configuration, scheduler, manual collection si diagnostics. ADMIN nu acceseaza continutul personal al altui user.
-
-### 16.5 Runtime connectivity, privileges si cost
-
-Path target:
-
-`Cloudflare Worker -> repository/data-access -> node-postgres (pg) -> Cloudflare Hyperdrive -> Nile PostgreSQL`
-
-- Hyperdrive este folosit pentru pooling;
-- query caching este initial OFF pentru persistence runtime;
-- DEV/TEST/PROD folosesc bindings statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
-- request-selected DB si cross-environment fallback sunt interzise;
-- runtime CRUD authority trebuie separata demonstrabil de migration/DDL authority inainte de personal-data/multiuser PROD cutover;
-- broad DDL poate fi tolerat temporar numai in DEV/TEST si migration work controlat;
-- pilot variable infrastructure budget este EUR 0;
-- auto-upgrade/paid overage este interzis fara owner approval;
-- 70% din capacitatea Nile inclusa este operational warning/gate;
-- daca hard cost control nu poate fi demonstrat, multiuser PROD ramane blocat.
-
-### 16.6 Migration order si authority
-
-Migrarea este domain-by-domain, fara big-bang:
-
-1. operational history;
-2. shared job corpus;
-3. multiuser personal core;
-4. global scheduler;
-5. remaining shared administration/runtime state.
-
-Dupa cutover, fiecare domeniu are exact un authoritative system of record. JSON poate ramane temporar pentru compatibility/export, dar permanent dual-write este interzis. Rollback-ul este per domain/slice.
