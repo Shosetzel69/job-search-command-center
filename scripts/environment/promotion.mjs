@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { SHA_RE } from './contract.mjs';
 
-const SCHEMA_VERSION = '2.0';
+const SCHEMA_VERSION = '1.0';
 const RECONCILIATION_SCHEMA_VERSION = '1.0';
 const MANAGED_PATHS = Object.freeze(['data/sources.json','data/source-categories.json','data/nomenclatures.json']);
 const RUN_ID_RE = /^\d+$/;
