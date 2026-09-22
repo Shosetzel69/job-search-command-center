@@ -2190,8 +2190,8 @@
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": "2026-09-22T20:06:59Z",
-      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
+      "last_validated_at": "2026-09-22T21:43:43Z",
+      "validation_reason": "Controlled DEV live BreezyHR validation PASS in GitHub Actions run 35788335862; source remains inactive pending approval.",
       "policy_excluded": false
     },
     {
@@ -2204,8 +2204,8 @@
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": "2026-09-22T20:06:59Z",
-      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
+      "last_validated_at": "2026-09-22T21:43:43Z",
+      "validation_reason": "Controlled DEV live Pinpoint validation PASS in GitHub Actions run 35788335862; source remains inactive pending approval.",
       "policy_excluded": false
     },
     {
@@ -2218,8 +2218,8 @@
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": "2026-09-22T20:06:59Z",
-      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
+      "last_validated_at": "2026-09-22T21:43:43Z",
+      "validation_reason": "Controlled DEV live bounded-parser validation and supported-provider fingerprint re-check PASS in GitHub Actions run 35788335862; source remains inactive pending approval.",
       "policy_excluded": false
     },
     {
