@@ -1,10 +1,12 @@
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
+import atsRouteRegistry from '../../shared/validated-ats-routes.json' with { type: 'json' };
 
 export const SOURCE_SCHEMA = '1.0';
 export const CATEGORY_SCHEMA = '1.0';
 export const VALIDATION_STATUSES = new Set(['pending','validating','validated','requires_connector','rejected']);
 export const APPROVAL_STATUSES = new Set(['pending','approved','rejected']);
 export const POLICY_EXCLUDED_SOURCE_NAMES = new Set(['monster']);
+const ATS_ROUTES = atsRouteRegistry.routes || {};
 
 function fail(message, status = 400) {
   throw Object.assign(new Error(message), { status });
@@ -102,6 +104,17 @@ export function isPolicyExcludedSource(source) {
   return POLICY_EXCLUDED_SOURCE_NAMES.has(String(source?.name || '').trim().toLocaleLowerCase('ro-RO'));
 }
 
+export function dedicatedRouteActivationGate(source) {
+  const name = String(source?.name || '').trim();
+  const route = ATS_ROUTES[name];
+  if (!route) return { allowed: true, reason: null };
+  if (route.enabled === true) return { allowed: true, reason: null };
+  return {
+    allowed: false,
+    reason: String(route.disabled_reason || 'connector_route_disabled'),
+  };
+}
+
 export function normalizeSource(source, { legacyApproved = true } = {}) {
   const url = String(source?.url || '').trim();
   const name = String(source?.name || 'Sursa').trim();
@@ -118,7 +131,8 @@ export function normalizeSource(source, { legacyApproved = true } = {}) {
     ? explicitApproval
     : legacyApproved ? 'approved' : 'pending';
   const policyExcluded = isPolicyExcludedSource({ name });
-  const active = !policyExcluded && source?.active === true && approvalStatus === 'approved' && validationStatus === 'validated';
+  const routeGate = dedicatedRouteActivationGate({ name });
+  const active = !policyExcluded && routeGate.allowed && source?.active === true && approvalStatus === 'approved' && validationStatus === 'validated';
   const validationReason = source?.validation_reason ? String(source.validation_reason).slice(0, 500) : null;
   return {
     id: String(source?.id || stableSourceId(url)),
@@ -212,11 +226,14 @@ export function applySourceAction(source, action, { now = new Date().toISOString
       next.active = false;
       next.validation_reason = reason ? String(reason).slice(0, 500) : next.validation_reason;
       return next;
-    case 'activate':
+    case 'activate': {
       if (next.policy_excluded) fail('Sursa este exclusa operational prin politica proiectului.', 409);
       if (next.validation_status !== 'validated' || next.approval_status !== 'approved') fail('Sursa trebuie validata si aprobata inainte de activare.', 409);
+      const routeGate = dedicatedRouteActivationGate(next);
+      if (!routeGate.allowed) fail(`Ruta dedicata nu este eligibila pentru activare: ${routeGate.reason}.`, 409);
       next.active = true;
       return next;
+    }
     case 'disable':
       next.active = false;
       return next;
