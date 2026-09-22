@@ -31,6 +31,79 @@ SKIP = re.compile(
 )
 DYNAMIC = re.compile(r"<script[^>]+src=|__NEXT_DATA__|webpack|data-reactroot|id=[\"'](?:root|app|__next)[\"']", re.I)
 
+SOURCE_PROFILES = {
+    "Cegeka": {
+        "start_url": "https://www.cegeka.com/en/ro/jobs/all-jobs",
+        "allow": re.compile(r"^/en/ro/jobs/all-jobs(?:/[^/]+)?/?$"),
+        "detail": re.compile(r"^/en/ro/jobs/all-jobs/[^/]+/?$"),
+    },
+    "Dynamite Jobs": {
+        "start_url": "https://dynamitejobs.com/remote-jobs",
+        "allow": re.compile(r"^/(?:remote-jobs(?:/.*)?|company/[^/]+/remote-job/[^/]+)/?$"),
+        "detail": re.compile(r"^/company/[^/]+/remote-job/[^/]+/?$"),
+    },
+    "Flexa": {
+        "start_url": "https://flexa.careers/jobs",
+        "allow": re.compile(r"^/jobs(?:/[^/]+)?/?$"),
+        "detail": re.compile(r"^/jobs/[^/]+/?$"),
+    },
+    "Just Join IT": {
+        "start_url": "https://justjoin.it/job-offers/all-locations",
+        "allow": re.compile(r"^/(?:job-offers/all-locations(?:/[^/]+)?|job-offer/[^/]+)/?$"),
+        "detail": re.compile(r"^/job-offer/[^/]+/?$"),
+        "drop_query": {"promo"},
+    },
+    "Lawrence Harvey": {
+        "start_url": "https://www.lawrenceharvey.com/jobs",
+        "allow": re.compile(r"^/jobs(?:/[^/]+)?/?$"),
+        "detail": re.compile(r"^/jobs/[0-9][^/]+/?$"),
+    },
+    "Luxoft": {
+        "start_url": "https://career.luxoft.com/jobs?keyword=&perPage=60",
+        "allow": re.compile(r"^/jobs(?:/[^/]+)?/?$"),
+        "detail": re.compile(r"^/jobs/[^/]+/?$"),
+    },
+    "NoDesk": {
+        "start_url": "https://nodesk.co/remote-jobs/",
+        "allow": re.compile(r"^/remote-jobs(?:/[^/]+)?/?$"),
+        "deny": re.compile(
+            r"^/remote-jobs/(?:customer-support|design|engineering|marketing|non-tech|operations|product|sales|other|collections|remote-first|project-manager)/?$"
+        ),
+        "detail": re.compile(r"^/remote-jobs/[^/]+/?$"),
+    },
+    "RED Global": {
+        "start_url": "https://www.redglobal.com/jobs",
+        "allow": re.compile(r"^/jobs(?:/.*)?$"),
+        "deny": re.compile(r"^/jobs/search/?$"),
+        "detail": re.compile(r"^/jobs/job/[^/]+/[^/]+/?$"),
+    },
+    "Stripe": {
+        "start_url": "https://stripe.com/careers/search",
+        "allow": re.compile(r"^/careers/(?:search|listing/[^/]+/[^/]+)/?$"),
+        "detail": re.compile(r"^/careers/listing/[^/]+/[^/]+/?$"),
+    },
+    "Techjobs.be": {
+        "start_url": "https://techjobs.be/en/ict-jobs",
+        "allow": re.compile(r"^/en/ict-jobs(?:/[^/]+)?/?$"),
+        "detail": re.compile(r"^/en/ict-jobs/[0-9]+-[^/]+/?$"),
+    },
+}
+
+
+def source_profile(source):
+    return SOURCE_PROFILES.get(str(source.get("name") or "").strip())
+
+
+def profile_url(url, profile):
+    if not profile or not profile.get("drop_query"):
+        return url
+    parsed = urlsplit(url)
+    drop = profile["drop_query"]
+    query = [(key, value) for key, value in parse_qsl(parsed.query, keep_blank_values=True) if key not in drop]
+    return urlunsplit((parsed.scheme, parsed.netloc, parsed.path, urlencode(query), ""))
+
+
+
 
 class Page(HTMLParser):
     def __init__(self, html):
