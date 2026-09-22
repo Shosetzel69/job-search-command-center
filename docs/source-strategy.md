@@ -1,9 +1,17 @@
 # Strategia surselor
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-18`
+Ultima actualizare: `2026-09-22`
 
 ## 1. Principiu
+
+### Shared collection invariant — ADR-005
+
+Retrieval-ul extern este shared/system-owned. O sursa eligibila este colectata ca parte din corpusul comun, nu separat pentru fiecare user/profil.
+
+Profilele utilizatorilor nu controleaza provider calls si nu creeaza Full Search propriu. Ele aplica ulterior eligibility/FIT/state peste shared canonical job corpus.
+
+Consecinta de capacitate: cresterea numarului de utilizatori nu trebuie sa multiplice direct traficul catre surse.
 
 Strategia executata de runner ramane `all active sources equally` pentru sursele eligibile operational.
 
@@ -77,7 +85,9 @@ Star Storage si companiile grupului raman excluse prin regulile de business/sear
 - repostarile sunt marcate;
 - toate rezultatele intra in modelul intern comun;
 - sursa nu primeste avantaj de scoring;
-- geo-eligibility este separata de FIT.
+- geo-eligibility este separata de FIT;
+- in target-ul ADR-005, source collection este separata de personal eligibility/FIT;
+- lipsa rezultatelor sau coverage incomplet nu poate fi interpretata ca monitorizare exhaustiva a sursei.
 
 ## 6. JobsPipe
 
