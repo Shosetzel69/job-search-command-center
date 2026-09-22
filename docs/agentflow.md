@@ -1,9 +1,9 @@
 # AgentFlow - Operating Contract
 
 Status: **CANONICAL**  
-Version: **1.1**  
+Version: **1.2**  
 Applies to: **AGENTFLOW**  
-Last verified: **2026-09-21**
+Last verified: **2026-09-23**
 
 ## 1. Purpose
 
@@ -214,6 +214,26 @@ Review-ul compara implementarea exacta cu ATC-ul aprobat si Evidence Bundle.
 Review-ul nu modifica implementarea in acelasi pas.
 
 Verdictele canonice sunt cele din `GOVERNANCE.md` (`REVIEW_PASS`, `REVIEW_FAIL`, `REVIEW_BLOCKED`). Un review pozitiv nu autorizeaza automat PROD.
+
+## 11.1 Independent Governance Review
+
+Material changes to canonical architecture/governance/process documentation use the governance-review gate defined in `GOVERNANCE.md`.
+
+This review is distinct from the implementation/Evidence Bundle review above.
+
+Contract:
+
+- Architecture/owner decides the rule first;
+- documentation changes are made on a dedicated branch/PR;
+- the exact candidate SHA is frozen before review;
+- an independent reviewer checks that the frozen candidate faithfully and consistently implements the approved decision;
+- the reviewer must not modify the candidate during the same review;
+- findings are classified `BLOCKER | MAJOR | MINOR`;
+- verdict is `REVIEW_PASS | REVIEW_FAIL | REVIEW_BLOCKED`;
+- only `REVIEW_PASS` allows publication/merge of a material governance/process candidate;
+- review does not authorize product implementation, runtime mutation, TEST or PROD.
+
+If the review finds a material defect, the candidate returns to the authoring stage, receives a new SHA after correction, and the independent review is rerun against that new frozen SHA.
 
 ## 12. Handoff to release lifecycle
 
