@@ -106,18 +106,21 @@ function normalizeReconciliationEvidence(evidence, environment, candidateSha, ru
 
 function normalizeDeploymentEvidence({ environment, candidateSha, runId, runUrl, health, reconciliation }) {
   const normalizedHealth = normalizeHealth(health, environment, candidateSha);
-  return {
+  const output = {
     verdict: 'PASS',
     run_id: requireRunId(runId),
     run_url: requireText(runUrl, 'run_url'),
     ...normalizedHealth,
-    reconciliation: normalizeReconciliationEvidence(
+  };
+  if (environment !== 'prod' || reconciliation) {
+    output.reconciliation = normalizeReconciliationEvidence(
       reconciliation,
       environment,
       candidateSha,
       normalizedHealth.runtime_data_sha,
-    ),
-  };
+    );
+  }
+  return output;
 }
 
 function assertBaseRecord(record, expectedStage, candidateSha) {
@@ -147,7 +150,9 @@ function assertDeploymentEvidence(evidence, environment, candidateSha) {
     throw new Error(`${environment.toUpperCase()} evidence source_sha does not match CANDIDATE_SHA`);
   }
   const runtimeDataSha = requireSha(evidence.runtime_data_sha, `${environment}.runtime_data_sha`);
-  normalizeReconciliationEvidence(evidence.reconciliation, environment, candidateSha, runtimeDataSha);
+  if (environment !== 'prod' || evidence.reconciliation) {
+    normalizeReconciliationEvidence(evidence.reconciliation, environment, candidateSha, runtimeDataSha);
+  }
 }
 
 export function createDevPassRecord({ candidateSha, issuePr, runId, runUrl, health, reconciliation, createdAt = new Date().toISOString() }) {
