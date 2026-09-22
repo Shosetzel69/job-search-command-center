@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import {
   applySourceAction,
+  dedicatedRouteActivationGate,
   newPendingSource,
   normalizeCategoryCatalog,
   normalizeSource,
@@ -72,6 +73,62 @@ test('requires connector cannot be activated', () => {
   assert.throws(() => applySourceAction(source, 'activate'), /Sursa trebuie validata si aprobata/);
 });
 
+
+test('disabled dedicated ATS route fails closed at activation', () => {
+  const source = normalizeSource({
+    id:'src-ntt',
+    name:'NTT',
+    url:'https://careers.services.global.ntt/',
+    category:'Servicii IT si consultanta',
+    active:true,
+    validation_status:'validated',
+    approval_status:'approved',
+  });
+  assert.equal(source.active, false);
+  assert.deepEqual(dedicatedRouteActivationGate(source), {
+    allowed:false,
+    reason:'connector_requires_credentials',
+  });
+  assert.throws(
+    () => applySourceAction({ ...source, active:false }, 'activate'),
+    /connector_requires_credentials/
+  );
+});
+
+test('live-unvalidated dedicated ATS route cannot be activated', () => {
+  const source = normalizeSource({
+    id:'src-clickhouse',
+    name:'ClickHouse',
+    url:'https://clickhouse.com/company/careers',
+    category:'Servicii IT si consultanta',
+    active:false,
+    validation_status:'validated',
+    approval_status:'approved',
+  });
+  assert.deepEqual(dedicatedRouteActivationGate(source), {
+    allowed:false,
+    reason:'live_api_route_not_validated',
+  });
+  assert.throws(
+    () => applySourceAction(source, 'activate'),
+    /live_api_route_not_validated/
+  );
+});
+
+test('enabled validated ATS route may pass activation gate', () => {
+  let source = normalizeSource({
+    id:'src-endava',
+    name:'Endava',
+    url:'https://careers.endava.com/',
+    category:'Servicii IT si consultanta',
+    active:false,
+    validation_status:'validated',
+    approval_status:'approved',
+  });
+  assert.deepEqual(dedicatedRouteActivationGate(source), { allowed:true, reason:null });
+  source = applySourceAction(source, 'activate');
+  assert.equal(source.active, true);
+});
 
 test('physical source registry is canonical for all non-deferred sources', () => {
   const catalog = JSON.parse(readFileSync(resolve(process.cwd(), '../data/sources.json'), 'utf8'));
