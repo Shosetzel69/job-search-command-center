@@ -1,7 +1,7 @@
 # Command API
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-13`
+Ultima actualizare: `2026-09-22`
 
 ## Scop
 
@@ -16,9 +16,11 @@ Responsabilitati:
 - Nomenclatoare canonice + integritate referentiala;
 - acces server-side la GitHub Actions/Contents API.
 
-Command API nu este motorul de cautare si nu este baza de date.
+Command API nu este motorul de cautare. In target-ul ADR-005 devine boundary-ul server-side pentru identity/authorization si repository/data-access catre PostgreSQL, fara SQL direct in frontend/business logic.
 
 ## Regula Save != Run
+
+AS-IS single-user:
 
 ```text
 PUT /config
@@ -32,7 +34,21 @@ POST /commands/run
 -> workflow_dispatch(run_trigger=manual-ui, source_sha=SOURCE_SHA)
 ```
 
-Modificarile de config, surse, categorii sau nomenclatoare nu pornesc full search.
+Target ADR-005:
+
+```text
+USER profile change
+-> persist personal profile
+-> optional personal re-evaluation
+-> NO provider retrieval
+
+global scheduler due OR ADMIN manual collection
+-> global run admission
+-> maximum one heavy collection run
+-> shared corpus refresh
+```
+
+USER nu are manual Run/Search in target. Manual collection este ADMIN-only. Modificarile de profil, surse, categorii sau nomenclatoare nu pornesc implicit full search.
 
 ## Autentificare
 
@@ -42,7 +58,17 @@ Browser:
 Authorization: Bearer <GOOGLE_ID_TOKEN>
 ```
 
-Worker verifica Google JWKS, issuer, `GOOGLE_CLIENT_ID` si `ALLOWED_GOOGLE_SUB`.
+Worker verifica Google JWKS, issuer si `GOOGLE_CLIENT_ID`.
+
+AS-IS, autorizarea este limitata prin `ALLOWED_GOOGLE_SUB`.
+
+Target ADR-005:
+- `Google sub -> app_user.user_id -> profile.profile_id`;
+- exactly one profile per user in MVP;
+- account lookup/provisioning si profile resolution se fac server-side;
+- browser-supplied user/profile identifiers nu confera autoritate;
+- roles: `USER` si `ADMIN`;
+- ADMIN nu poate citi continutul personal al altui user.
 
 La autentificare reusita, frontend-ul poate retine local numai adresa de email autorizata ca `login_hint` non-secret pentru Google Identity Services. Google ID token nu este persistat: ramane exclusiv in memoria paginii. La reload, frontend-ul poate cere Google Identity Services sa emita un credential nou pentru contul cunoscut; credentialul este revalidat integral prin `POST /auth/session`. Logout explicit dezactiveaza auto-select pentru a evita reautentificarea imediata.
 
@@ -102,7 +128,11 @@ Reguli geografice:
 
 ### `POST /commands/run`
 
-Porneste exact un full search manual dupa validarea configuratiei. Run activ -> 409. Dispatch-ul transporta obligatoriu `source_sha` exact al Worker-ului; workflow-ul valideaza SHA-ul si face checkout la acel commit inainte de executie.
+**AS-IS:** porneste exact un full search manual dupa validarea configuratiei. Run activ -> 409.
+
+**Target ADR-005:** endpoint-ul de manual collection este ADMIN-only si global, nu profile-owned. Run admission garanteaza maximum o executie grea globala. USER nu primeste acest drept.
+
+Dispatch-ul continua sa transporte obligatoriu `source_sha` exact al Worker-ului; workflow-ul valideaza SHA-ul si face checkout la acel commit inainte de executie.
 
 ## Source Registry
 
@@ -260,3 +290,47 @@ Reguli relevante pentru Command API:
 - Phase 3 nu schimba mapping-ul operational PROD curent;
 - niciun live bootstrap/deploy nu este permis in Phase 3;
 - viitoarele Phase 4+ trebuie sa configureze Worker-ul exclusiv cu valorile environment-ului selectat si sa confirme identity prin `/health`.
+
+
+## Target persistence / authorization boundary — ADR-005
+
+### Repository boundary
+
+Command API nu expune generic SQL client catre business/UI.
+
+Personal repositories primesc profile context derivat server-side din principalul autentificat. Niciun endpoint personal nu acorda acces pe baza unui `profile_id` primit de la browser.
+
+### Tenant isolation
+
+Defense in depth:
+- server-side account/profile resolution;
+- repository scoping;
+- PostgreSQL RLS pe personal tables;
+- `FORCE ROW LEVEL SECURITY` unde se aplica;
+- ADMIN fara personal-content bypass.
+
+### Connectivity
+
+`Worker -> repository/data-access -> pg -> Hyperdrive -> Nile PostgreSQL`
+
+- Hyperdrive pooling;
+- query caching initial OFF;
+- bindings distincte DEV/TEST/PROD;
+- fara runtime-selected DB;
+- fara cross-environment fallback.
+
+### Runtime privileges
+
+Inainte de personal-data/multiuser PROD, runtime CRUD authority trebuie separata demonstrabil de migration/DDL authority.
+
+### Account deletion
+
+DELETE personal account/profile este hard delete al personal domain. Shared jobs/sources/runs/nomenclatures nu sunt sterse.
+
+Se poate pastra maximum 90 zile numai un audit event neidentificabil, fara user/profile identifiers sau date care permit relinkarea.
+
+### Cost guardrail
+
+Pilot variable infrastructure cost: EUR 0.
+
+Paid capacity nu se activeaza automat. 70% din included Nile capacity este warning/gate operational. Daca fail-closed cost control nu poate fi demonstrat, multiuser PROD ramane blocat.
