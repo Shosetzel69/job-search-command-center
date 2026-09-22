@@ -284,6 +284,19 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(status["sources_attempted"], 1)
         self.assertTrue(any("hourly" in x for x in status["limitations"]))
 
+
+    def test_remoteok_routes_to_official_feed_connector(self):
+        source = {"id": "remote-ok", "name": "Remote OK", "url": "https://remoteok.com/", "active": True}
+        plan = orchestration.build_plan({"sources": [source]})
+        self.assertEqual(plan[0]["connector"], "remoteok")
+        expected = [engine.CollectionResult("remoteok", "public_json_feed", True, [record("Remote OK", "3")], 1)]
+        with patch.object(orchestration.remoteok, "collect", return_value=expected) as collect:
+            collection, _, _ = orchestration.collect_api_sources(CONFIG, {}, NOW, plan)
+        collect.assert_called_once_with(CONFIG)
+        self.assertEqual(collection, expected)
+        self.assertEqual(plan[0]["outcome"], "success")
+        self.assertEqual(plan[0]["records"], 1)
+
     def test_provider_alias_is_not_counted_twice(self):
         catalog = copy.deepcopy(CATALOG)
         catalog["sources"].append({"name": "Alias", "url": "https://www.jobicy.com/jobs"})
@@ -294,6 +307,8 @@ class OrchestrationTests(unittest.TestCase):
         for url in ("https://jobicy.com.evil.example/", "https://jobicy.com@evil.example/", "http://jobicy.com/", "https://jobicy.com:444/"):
             self.assertIsNone(orchestration.connector_for({"url": url, "connector_available": True}))
         self.assertEqual(orchestration.connector_for({"url": "https://jobicy.com/", "connector_available": False}), "jobicy")
+        self.assertEqual(orchestration.connector_for({"url": "https://remoteok.com/", "connector_available": False}), "remoteok")
+        self.assertIsNone(orchestration.connector_for({"url": "https://remoteok.com.evil.example/"}))
 
     def test_provider_local_ids_do_not_drop_unrelated_jobs(self):
         other = record("Jobicy")
