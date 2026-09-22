@@ -265,9 +265,14 @@ class RemoteFirstRoutingTests(unittest.TestCase):
             self.assertEqual(len(matches), 1, name)
             source = matches[0]
             self.assertFalse(source["active"], name)
-            self.assertEqual(source["validation_status"], "pending", name)
+            expected_validation = "validating" if name == "Oyster" else "validated"
+            self.assertEqual(source["validation_status"], expected_validation, name)
             self.assertEqual(source["approval_status"], "pending", name)
             self.assertFalse(source["policy_excluded"], name)
+            if name == "Oyster":
+                self.assertIn("connector-level live validation", source["validation_reason"])
+            else:
+                self.assertIsNotNone(source["last_validated_at"], name)
         self.assertEqual(catalog["count"], len(catalog["sources"]))
 
     def test_new_provider_dispatch_uses_route_configuration(self):
