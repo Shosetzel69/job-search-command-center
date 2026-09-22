@@ -1838,10 +1838,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1852,10 +1852,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1866,10 +1866,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1880,10 +1880,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1894,10 +1894,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1908,10 +1908,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1922,10 +1922,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1936,10 +1936,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1950,10 +1950,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1964,10 +1964,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1978,10 +1978,10 @@
       "active": false,
       "collection_method": "greenhouse",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -1992,10 +1992,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2006,10 +2006,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2020,10 +2020,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2034,10 +2034,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2048,10 +2048,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2062,10 +2062,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2076,10 +2076,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2090,10 +2090,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2104,10 +2104,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2118,10 +2118,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2132,10 +2132,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2146,10 +2146,10 @@
       "active": false,
       "collection_method": "ashby",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validating",
       "approval_status": "pending",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "Ashby route confirmed; JSCC connector-level live validation remains required before activation.",
       "policy_excluded": false
     },
     {
@@ -2160,10 +2160,10 @@
       "active": false,
       "collection_method": "lever",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2174,10 +2174,10 @@
       "active": false,
       "collection_method": "bamboohr",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2188,10 +2188,10 @@
       "active": false,
       "collection_method": "breezyhr",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2202,10 +2202,10 @@
       "active": false,
       "collection_method": "pinpoint",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2216,10 +2216,10 @@
       "active": false,
       "collection_method": "traefik",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     },
     {
@@ -2230,10 +2230,10 @@
       "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "pending",
+      "validation_status": "validated",
       "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": null,
+      "last_validated_at": "2026-09-22T20:06:59Z",
+      "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
       "policy_excluded": false
     }
   ]
