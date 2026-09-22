@@ -302,7 +302,7 @@ Generic `data/*` promotion este interzis.
 
 Pentru fiecare environment si fiecare fisier allowlisted:
 
-- `BASELINE` = ultima versiune candidate-managed acceptata cu succes in acel environment;
+- `RECONCILIATION_BASELINE` = ultima versiune candidate-managed acceptata cu succes in acel environment;
 - `CANDIDATE` = versiunea din exact `CANDIDATE_SHA`;
 - `RUNTIME` = versiunea curenta din runtime repository.
 
@@ -314,10 +314,10 @@ Semantica:
 
 - candidate neschimbat, runtime neschimbat -> no-op;
 - runtime == candidate -> no-op;
-- candidate schimbat, runtime == baseline -> candidate poate fi aplicat;
-- runtime schimbat, candidate == baseline -> runtime se pastreaza;
+- candidate schimbat, runtime == RECONCILIATION_BASELINE -> candidate poate fi aplicat;
+- runtime schimbat, candidate == RECONCILIATION_BASELINE -> runtime se pastreaza;
 - candidate si runtime ambele schimbate fata de baseline -> conflict, fail closed;
-- baseline lipsa/invalid -> fail closed, exceptand bootstrap-ul explicit.
+- RECONCILIATION_BASELINE lipsa/invalid -> fail closed, exceptand bootstrap-ul explicit.
 
 Nu se face merge automat field-level.
 
