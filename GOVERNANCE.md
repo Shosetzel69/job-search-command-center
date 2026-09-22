@@ -1,12 +1,12 @@
 # GOVERNANCE.md - Job Search Command Center
 
 Status: `CANONICAL`
-Version: `v1.12`
+Version: `v1.13`
 Applicability: `CURRENT`
 Applies to: `BOTH`
-Effective from: `2026-09-21`
-Supersedes: `v1.11`
-Last updated: `2026-09-21`
+Effective from: `2026-09-23`
+Supersedes: `v1.12`
+Last updated: `2026-09-23`
 
 ## 1. Principiu
 
@@ -270,9 +270,11 @@ Precedenta:
 
 Daca documentatia contrazice codul sau doua documente se contrazic, discrepanta se semnaleaza si se clarifica inainte de modificari functionale.
 
-### 3.1 Baseline tehnic obligatoriu
+### 3.1 Baseline tehnic obligatoriu (operational baseline)
 
-Pentru orice analiza tehnica, implementare, review sau fix, starea curenta din GitHub este baseline-ul operational care trebuie verificat inainte de actiune.
+Pentru orice analiza tehnica, implementare, review sau fix, starea curenta din GitHub este **operational baseline** care trebuie verificata inainte de actiune.
+
+Acest termen descrie baseline-ul de stare tehnica verificata al repository-ului si nu trebuie confundat cu **reconciliation baseline** din contractul de candidate-managed runtime data (#322), care este ultima versiune candidate-managed acceptata in environment si nu `main` curent.
 
 Reguli:
 

@@ -1,9 +1,9 @@
 # AgentFlow - Operating Contract
 
 Status: **CANONICAL**  
-Version: **1.1**  
+Version: **1.2**  
 Applies to: **AGENTFLOW**  
-Last verified: **2026-09-21**
+Last verified: **2026-09-23**
 
 ## 1. Purpose
 
@@ -228,6 +228,8 @@ DEV -> candidate freeze -> TEST -> RELEASE -> PROD_GO -> PROD -> smoke
 ```
 
 AgentFlow nu redefineste candidate identity, TEST independence, rollback sau PROD gates.
+
+Pentru ATC-uri care modifica fisierele candidate-managed shared/product aprobate prin #322, handoff-ul foloseste contractul de reconciliere si evidence din `docs/software-delivery-lifecycle.md` sectiunea 6.1. AgentFlow nu autorizeaza implicit mutatia runtime asociata promovarii.
 
 ## 13. Documentation transition
 
