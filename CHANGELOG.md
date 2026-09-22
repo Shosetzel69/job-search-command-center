@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- #102: Source Registry activation now fails closed for dedicated ATS routes marked disabled in `shared/validated-ats-routes.json`; credential-gated or live-unvalidated routes cannot be activated merely because legacy source metadata is `validated+approved`.
+
 ### Security
 
 - #250 / R1.5: protected `/data/*` reads now use the current isolated runtime repository instead of the immutable deploy Static Assets snapshot, so Source Registry/config/nomenclature mutations persist visibly across reload.
