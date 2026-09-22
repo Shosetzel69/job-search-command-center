@@ -2,13 +2,14 @@
 
 import hashlib
 import heapq
+import itertools
 import json
 import re
 import time
 from datetime import datetime, timezone
 from html import unescape
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 
 import job_search as engine
 import web_browser as browser
@@ -156,9 +157,10 @@ def site_root(host):
     return re.sub(r"^(www|jobs|careers|career)\.", "", host or "")
 
 
-def candidate(link, page_url, roots):
+def candidate(link, page_url, roots, profile=None):
     try:
         url = public_url(urljoin(page_url, unescape(link["url"])))
+        url = profile_url(url, profile)
     except FetchError:
         return None
     parsed = urlsplit(url)
@@ -167,18 +169,31 @@ def candidate(link, page_url, roots):
         return None
     internal = any(host == root or host.endswith("." + root) for root in roots)
     ats = any(host == root or host.endswith("." + root) for root in ATS_HOSTS)
-    if not internal and not ats:
+    if profile:
+        if not internal:
+            return None
+        if profile.get("allow") and not profile["allow"].search(path):
+            return None
+        if profile.get("deny") and profile["deny"].search(path):
+            return None
+    elif not internal and not ats:
         return None
+
     text = link.get("text") or ""
-    if ROLE.search(text + " " + path):
+    if profile and profile.get("detail") and profile["detail"].search(path):
         priority = 0
     elif link.get("next") or re.search(r"^(next|suivant|urmatoarea|weiter|[2-9])$", text.strip(), re.I):
-        priority = 2
+        priority = 1 if profile else 2
+    elif profile:
+        priority = 2 if CAREER.search(text + " " + path) else None
+    elif ROLE.search(text + " " + path):
+        priority = 0
     elif CAREER.search(text + " " + path) or ats:
         priority = 1 if len(path.strip("/").split("/")) <= 2 else 3
     else:
-        return None
-    return priority, url
+        priority = None
+
+    return (priority, url) if priority is not None else None
 
 
 def challenge(html):
@@ -218,9 +233,12 @@ def collect(source, config, now=None, client=None):
     client = client or PublicClient(deadline)
     connector = "web:" + str(source.get("id") or hashlib.sha256(source["url"].encode()).hexdigest()[:12])
     queue, queued, visited, records, diagnostics = [], set(), set(), {}, []
-    roots = {site_root(urlsplit(source["url"]).hostname)}
-    heapq.heappush(queue, (0, source["url"]))
-    queued.add(source["url"])
+    profile = source_profile(source)
+    start_url = profile.get("start_url") if profile else source["url"]
+    roots = {site_root(urlsplit(start_url).hostname)}
+    sequence = itertools.count()
+    heapq.heappush(queue, (0, next(sequence), start_url))
+    queued.add(start_url)
     pages, detected, malformed, expired = 0, 0, 0, 0
     browser_attempted = False
     browser_status = "not_attempted"
@@ -230,7 +248,7 @@ def collect(source, config, now=None, client=None):
     first_robots_status = None
 
     while queue and pages < MAX_PAGES and time.monotonic() < deadline:
-        _, requested = heapq.heappop(queue)
+        _, _, requested = heapq.heappop(queue)
         if requested in visited:
             continue
         visited.add(requested)
@@ -301,10 +319,10 @@ def collect(source, config, now=None, client=None):
                 "error": "; ".join(diagnostic_error) or None,
             })
             for link in page.links[:MAX_LINKS]:
-                option = candidate(link, final_url, roots)
+                option = candidate(link, final_url, roots, profile)
                 if option and option[1] not in queued and option[1] not in visited and len(queued) < MAX_LINKS:
                     queued.add(option[1])
-                    heapq.heappush(queue, option)
+                    heapq.heappush(queue, (option[0], next(sequence), option[1]))
         except (FetchError, ValueError, OSError, RecursionError) as exc:
             diagnostics.append({
                 "query": requested,
@@ -352,6 +370,8 @@ def collect(source, config, now=None, client=None):
         "web_outcome": outcome,
         "collection_method": "http+browser" if browser_attempted else "http",
         "requested_url": source.get("url"),
+        "entrypoint_url": start_url,
+        "web_profile": source.get("name") if profile else None,
         "final_url": first_final_url or getattr(client, "last_url", None),
         "http_status": first_http_status,
         "robots_status": first_robots_status,
