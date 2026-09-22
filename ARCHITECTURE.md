@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.14`
+Versiune document: `v1.15`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-21`
+Ultima actualizare: `2026-09-22`
 
 ## 1. Rol
 
@@ -37,6 +37,9 @@ Principii:
 - Source Registry este separat de connectorii operationali;
 - geografia este separata de FIT/scoring;
 - Save/configuration != Run;
+- colectarea externa este shared/system-owned; profilurile nu declanseaza retrieval separat;
+- schedulerul de retrieval este global si controlat de ADMIN;
+- evaluarea FIT si starea user-job sunt personale si separate de corpusul shared;
 - secretele nu ajung in browser;
 - runtime-ul curent foloseste inca JSON versionat in repository, dar target-ul persistent aprobat este Nile/PostgreSQL conform ADR-004;
 - costul operational este mentinut redus;
@@ -92,7 +95,8 @@ Reguli:
 - Google ID token ramane numai in memoria paginii;
 - filtrele/KPI locale nu declanseaza provider request;
 - modificarile administrative nu pornesc full search;
-- `Ruleaza verificarea` / `Ruleaza acum` este comanda explicita de executie;
+- in target-ul ADR-005, USER nu are comanda de Run/Search; manual collection este actiune administrativa exceptionala, ADMIN-only;
+- orice control existent de `Ruleaza verificarea` / `Ruleaza acum` este AS-IS tranzitoriu pana la rebaseline-ul Package 2B;
 - dupa Package 2A8, UI nu mai detine liste functionale independente pentru regions/countries/work_modes/contract_types.
 
 ## 5. Command API
@@ -118,10 +122,14 @@ Package 2A8 adauga endpoint-uri autentificate pentru citirea si administrarea no
 
 Semantica executiei:
 
-- `PUT /config` valideaza/persista si nu face dispatch;
+- `PUT /config` din runtime-ul curent valideaza/persista si nu face dispatch;
 - source/category/nomenclature CRUD nu face dispatch;
-- `POST /commands/run` verifica rulare concurenta si produce maximum un `workflow_dispatch` cu `run_trigger=manual-ui`;
-- target geografic gol este invalid.
+- target-ul ADR-005 separa configuratia shared/system de profilul personal;
+- collection run este global/shared, nu profile-owned;
+- numai ADMIN poate solicita manual o collection run globala;
+- exista maximum o executie grea globala admisa simultan;
+- schimbarile profilului produc re-evaluare personala, nu provider retrieval;
+- target geografic gol ramane invalid pentru profilurile care folosesc criterii geografice.
 
 ## 6. Source governance
 
@@ -254,7 +262,9 @@ Trigger operational curent:
 
 Nu exista `push` sau `schedule` pe workflow-ul greu.
 
-Schedulerul lightweight este Package 2B si ramane separat de full search. Cand automation este OFF sau not due, nu se apeleaza provideri.
+Schedulerul lightweight ramane separat de full search, dar ADR-005 ii schimba ownership-ul: schedulerul este global/system-owned si configurabil numai de ADMIN.
+
+Package 2B (#86/#97-#101) trebuie rebaselined fata de aceasta regula. Nu exista scheduler per profil si profilurile nu declanseaza provider retrieval. Cand automation este OFF sau not due, nu se apeleaza provideri.
 
 Publicarea rezultatelor:
 
@@ -266,7 +276,7 @@ Publicarea rezultatelor:
 
 Entry point: `scripts/job_search_runner.py`.
 
-Pipeline:
+Pipeline AS-IS:
 
 ```text
 Collect
@@ -277,6 +287,26 @@ Collect
  -> Score
  -> Publish
 ```
+
+Boundary target aprobat prin ADR-005:
+
+```text
+SHARED COLLECTION
+Sources
+ -> Collect
+ -> Normalize
+ -> Canonical Job / Source Posting
+ -> Deduplicate / Repost
+ -> Persist shared corpus
+
+PERSONAL EVALUATION
+Shared Job + User Profile
+ -> hard eligibility on explicit contradictory evidence
+ -> FIT / pros / risks
+ -> personal user-job state
+```
+
+Collection si personal evaluation sunt componente logice separate. User count nu trebuie sa multiplice provider calls.
 
 Componente principale:
 
@@ -311,6 +341,17 @@ Package 2 exclude explicit implementarea generica #49.
 Package 2C activeaza surse numai dupa `implementat + testat + validat + aprobat`.
 
 ## 11. Runtime data
+
+### Ownership target ADR-005
+
+Target-ul persistent separa trei domenii:
+
+- **shared/product** — canonical jobs, source postings, lifecycle, dedup/repost, role-family classification, Source Registry, source categories, nomenclatures;
+- **personal/profile-owned** — profile, search preferences, FIT/evaluations, seen/archive state, applications, notes, UI preferences;
+- **system/operational** — collection policy, scheduler config/state, runs, source diagnostics si provider/collector state.
+
+`search-config.json` este un contract tranzitoriu mixt si nu are succesor 1:1: campurile sale vor fi separate intre configuratie system/collection si profil personal.
+
 
 Fisiere publicate/protejate curente:
 
@@ -359,8 +400,14 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 
 ## 13. Autentificare si securitate
 
-- Google Identity Services;
-- Worker valideaza semnatura JWT, issuer, audience si identitatea autorizata;
+- Google Identity Services ramane IdP;
+- Worker valideaza semnatura JWT, issuer si audience;
+- target multiuser: `Google sub -> app_user.user_id -> profile.profile_id`, cu exact un profil per user in MVP;
+- `ALLOWED_GOOGLE_SUB` ramane numai mecanism AS-IS single-user pana la cutover;
+- profilul autorizat este rezolvat server-side; un `profile_id` trimis de browser nu confera acces;
+- repository-urile personale necesita profile context autentificat;
+- tabelele personale folosesc PostgreSQL RLS si `FORCE ROW LEVEL SECURITY` unde se aplica;
+- ADMIN nu primeste bypass pentru continutul personal al altor utilizatori;
 - credentialele GitHub nu ajung in browser;
 - `/data/*` necesita autentificare;
 - protected data foloseste `no-store`;
@@ -799,3 +846,69 @@ Contract:
 Workflow-ul `deploy-environment.yml` este manual-only si `dry_run=true` implicit. G3 cere validarea statica/dry-run pentru toate cele trei environments si zero mutatii PROD.
 
 **Gate G3:** automation + CI + dry-run PASS. Dupa G3 se opreste; bootstrap DEV necesita Phase 4 / GO conform planului #161.
+
+
+### 16.3 Multiuser / shared collection contract
+
+ADR-005 fixeaza urmatoarele boundary-uri:
+
+- retrieval extern este shared/system-owned;
+- un singur corpus canonical de joburi este reutilizat de toate profilurile;
+- profilurile aplica eligibility/FIT/state independent;
+- `Canonical Job` si `Source Posting` sunt entitati distincte;
+- Source Posting identity foloseste prioritar `source + external_job_id`, fallback `source + canonical_url`;
+- cross-source merge este conservator; false merge este mai grav decat un duplicate temporar;
+- shared job lifecycle: `ACTIVE -> UNCONFIRMED -> INACTIVE`;
+- freshness/display window nu este lifecycle/deletion;
+- inactive shared jobs au retention implicit 90 zile, cu protectie pentru referinte personale care necesita jobul;
+- Application este profile-owned si are `job_id` optional; aplicatiile externe sunt valide cu `job_id = NULL`;
+- FIT este profile-owned si se recalculeaza incremental la job/profile/fit-version changes;
+- hard eligibility exclude doar pe contradictie explicita; missing/unknown nu este negative evidence.
+
+### 16.4 Account lifecycle si authorization
+
+Lifecycle:
+
+`ACTIVE <-> DEACTIVATED -> DELETED`
+
+- DEACTIVATED blocheaza accesul si pastreaza datele personale pentru reactivare;
+- DELETED sterge ireversibil domeniul personal si pastreaza datele shared/system;
+- nu se pastreaza tombstone identificabil;
+- se poate pastra maximum 90 zile un deletion audit event neidentificabil;
+- re-signup dupa DELETE creeaza un account/profile nou.
+
+MVP roles:
+
+- `USER`;
+- `ADMIN`.
+
+ADMIN are drepturi USER doar asupra propriului profil si capabilitati administrative asupra account lifecycle, shared/system configuration, scheduler, manual collection si diagnostics. ADMIN nu acceseaza continutul personal al altui user.
+
+### 16.5 Runtime connectivity, privileges si cost
+
+Path target:
+
+`Cloudflare Worker -> repository/data-access -> node-postgres (pg) -> Cloudflare Hyperdrive -> Nile PostgreSQL`
+
+- Hyperdrive este folosit pentru pooling;
+- query caching este initial OFF pentru persistence runtime;
+- DEV/TEST/PROD folosesc bindings statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- request-selected DB si cross-environment fallback sunt interzise;
+- runtime CRUD authority trebuie separata demonstrabil de migration/DDL authority inainte de personal-data/multiuser PROD cutover;
+- broad DDL poate fi tolerat temporar numai in DEV/TEST si migration work controlat;
+- pilot variable infrastructure budget este EUR 0;
+- auto-upgrade/paid overage este interzis fara owner approval;
+- 70% din capacitatea Nile inclusa este operational warning/gate;
+- daca hard cost control nu poate fi demonstrat, multiuser PROD ramane blocat.
+
+### 16.6 Migration order si authority
+
+Migrarea este domain-by-domain, fara big-bang:
+
+1. operational history;
+2. shared job corpus;
+3. multiuser personal core;
+4. global scheduler;
+5. remaining shared administration/runtime state.
+
+Dupa cutover, fiecare domeniu are exact un authoritative system of record. JSON poate ramane temporar pentru compatibility/export, dar permanent dual-write este interzis. Rollback-ul este per domain/slice.
