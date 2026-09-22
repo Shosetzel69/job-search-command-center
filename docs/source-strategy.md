@@ -31,6 +31,7 @@ Stare curenta:
 - adaptere API existente sunt validate/activate controlat conform Package 2C;
 - JobsPipe este `disabled` in configuratia runtime;
 - Jobicy ramane operational independent;
+- Remote OK foloseste feed-ul JSON public oficial `https://remoteok.com/api`, cu link-back la anuntul furnizorului; nu mai consuma generic web crawl;
 - collector web comun pentru sursele HTTP(S) active, eligibile si nerutate/amanate explicit;
 - suportul se deriva din cod/registru, nu dintr-un flag trimis de client.
 
