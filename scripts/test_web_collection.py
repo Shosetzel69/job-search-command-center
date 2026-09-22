@@ -175,7 +175,13 @@ class WebTests(unittest.TestCase):
     def test_b1_profiles_scope_navigation_to_job_surfaces(self):
         cases = [
             ("Cegeka", "https://www.cegeka.com/en/ro/jobs/all-jobs", "/en/ro/jobs/all-jobs/pm-1", "/en-gb/jobs"),
+            ("Dynamite Jobs", "https://dynamitejobs.com/remote-jobs", "/company/acme/remote-job/project-manager", "/skill/remote-program-management-jobs"),
             ("Flexa", "https://flexa.careers/jobs", "/jobs/example-role", "/companies/example"),
+            ("Just Join IT", "https://justjoin.it/job-offers/all-locations", "/job-offer/example-pm", "/companies/example"),
+            ("Lawrence Harvey", "https://www.lawrenceharvey.com/jobs", "/jobs/330249technologytransformationmanager", "/?source=www.lawrenceharvey.com"),
+            ("Luxoft", "https://career.luxoft.com/jobs?keyword=&perPage=60", "/jobs/example-role-12345", "/about"),
+            ("NoDesk", "https://nodesk.co/remote-jobs/", "/remote-jobs/example-company-it-project-manager/", "/remote-jobs/project-manager/"),
+            ("RED Global", "https://www.redglobal.com/jobs", "/jobs/job/project-manager/abc123", "/candidates/job-alerts"),
             ("Stripe", "https://stripe.com/careers/search", "/careers/listing/example/123", "/docs/projects"),
             ("Techjobs.be", "https://techjobs.be/en/ict-jobs", "/en/ict-jobs/123-it-project-manager", "/en/articles"),
         ]
