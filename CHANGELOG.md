@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+- #299: Remote OK is routed from the generic web crawler to its official public JSON feed, preserving provider attribution/link-back and using the existing CollectionResult pipeline.
+
 ### Security
 
 - #250 / R1.5: protected `/data/*` reads now use the current isolated runtime repository instead of the immutable deploy Static Assets snapshot, so Source Registry/config/nomenclature mutations persist visibly across reload.
