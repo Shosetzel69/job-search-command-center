@@ -409,7 +409,7 @@ Un protected asset nou nu mai necesita trei liste functionale independente.
 `search-state.json` este exclus explicit.
 
 
-## 9. Target ownership contracts — ADR-005
+## 13. Target ownership contracts — ADR-005
 
 Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/indexes sunt responsabilitatea #275.
 
