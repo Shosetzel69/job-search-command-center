@@ -2,8 +2,8 @@
 
 Status: Accepted - implementation gate; delivery lifecycle alignment applied
 Data initiala: 2026-09-11
-Revizie finala: 2026-09-18
-Refs: #161 #175 #177 #183 #197 #198
+Revizie finala: 2026-09-23
+Refs: #161 #175 #177 #183 #197 #198 #322
 
 ## Context
 
@@ -20,6 +20,8 @@ Stabilizarea baseline-ului curent a fost inchisa la 2026-09-13. Implementarea me
 Revizia din 2026-09-17 aliniaza ADR-ul cu deciziile si controalele implementate in Phase 6: PROD foloseste un account Cloudflare nou si dedicat, runtime repository-ul canonic este `Shosetzel69/job-search-prod`, iar legacy PROD ramane neschimbat ca rollback target pana la un Phase 7 aprobat separat. GitHub Environments devin obligatorii pentru credentialele de deployment/control-plane conform #177.
 
 Revizia din 2026-09-18 aliniaza promovarea cu #197 si `docs/software-delivery-lifecycle.md`: DEV si TEST valideaza un candidate SHA immutable inainte de integrarea finala in `main`; dupa TEST PASS candidate-ul este integrat fara rescriere si PROD deployeaza exact acelasi SHA. `main` nu mai este o conditie prealabila pentru candidate deployment in DEV/TEST.
+
+Revizia din 2026-09-23 aplica #322: runtime data nu se copiaza intre environments, dar shared/product data controlate de source candidate pot fi reconciliate independent in fiecare runtime izolat. Contractul foloseste baseline-ul acceptat al environment-ului, allowlist explicit, fail-closed conflict semantics, batch-atomic commit si evidence identity completa.
 
 ## Scope-ul izolarii
 
@@ -70,7 +72,7 @@ Configuratia initiala are coupling incompatibil cu izolarea ceruta:
          CF account     CF account     CF account
 ```
 
-Promotion muta numai un `SOURCE_SHA` / `CANDIDATE_SHA` immutable aprobat. Runtime data nu sunt promovate intre medii.
+Promotion muta un `SOURCE_SHA` / `CANDIDATE_SHA` immutable aprobat. Runtime data nu sunt copiate intre medii. Allowlisted candidate-managed shared/product data pot fi reconciliate din exact source candidate in fiecare runtime izolat, independent, conform contractului #322.
 
 Fluxul operational canonic este:
 
@@ -159,7 +161,7 @@ Fiecare detine exclusiv:
 - execution history;
 - credentialele proprii de deploy/runtime.
 
-Nu exista copiere automata DEV -> TEST -> PROD pentru date.
+Nu exista copiere automata DEV -> TEST -> PROD pentru date. Allowlisted candidate-managed shared/product data sunt reconciliate separat in fiecare environment din exact candidate SHA; ele nu sunt propagate din runtime-ul unui environment in altul.
 
 ### 3. Cloudflare accounts
 
@@ -286,6 +288,62 @@ Daca redeploy-ul esueaza, runtime repository poate avea date mai noi decat Worke
 
 Schimbarea la un datastore nou nu este aprobata de acest ADR.
 
+### 9.1 Candidate-managed shared/product data reconciliation
+
+Izolarea environment-urilor si source-controlled shared/product data sunt compatibile printr-un contract de reconciliere fail-closed.
+
+Allowlist aprobat:
+
+- `data/sources.json`;
+- `data/source-categories.json`;
+- `data/nomenclatures.json`.
+
+Generic `data/*` promotion este interzis.
+
+Pentru fiecare environment si fiecare fisier allowlisted:
+
+- `BASELINE` = ultima versiune candidate-managed acceptata cu succes in acel environment;
+- `CANDIDATE` = versiunea din exact `CANDIDATE_SHA`;
+- `RUNTIME` = versiunea curenta din runtime repository.
+
+`main` curent nu este baseline de reconciliere.
+
+Bootstrap-ul initial este permis numai cu seed digests cunoscute explicit.
+
+Semantica:
+
+- candidate neschimbat, runtime neschimbat -> no-op;
+- runtime == candidate -> no-op;
+- candidate schimbat, runtime == baseline -> candidate poate fi aplicat;
+- runtime schimbat, candidate == baseline -> runtime se pastreaza;
+- candidate si runtime ambele schimbate fata de baseline -> conflict, fail closed;
+- baseline lipsa/invalid -> fail closed, exceptand bootstrap-ul explicit.
+
+Nu se face merge automat field-level.
+
+Decizia se calculeaza per fisier, dar setul rezultat se valideaza si se aplica batch-atomic intr-un singur runtime commit. Orice schema error, referential-integrity error sau conflict opreste operatia fara mutatie.
+
+Metadata de release-control este environment-owned operational state, in afara protected application data surface, si retine minimum schema/version, per-file accepted baseline digests si previous promotion identity.
+
+Trusted control-plane executa reconcilierea. Candidate-ul este input inert si nu poate furniza sau modifica promotion logic, validators, allowlist, GitHub write logic sau environment credentials.
+
+Secventa controlata este:
+
+1. capture runtime HEAD + accepted baseline metadata;
+2. load exact candidate allowlisted content;
+3. reconcile + validate fara mutatie;
+4. commit target set + release metadata cu expected runtime HEAD;
+5. capture noul `RUNTIME_DATA_SHA`;
+6. build/deploy exact `CANDIDATE_SHA` cu acel snapshot;
+7. verify `/health` identity si protected functional data;
+8. record evidence.
+
+Daca deploy/verification esueaza dupa runtime commit, compensating revert automat este permis numai daca runtime HEAD este inca promotion commit. Daca HEAD s-a schimbat, nu se forteaza reset/overwrite; environment-ul/promotion devine explicit `DEGRADED/BLOCKED`.
+
+Candidate-managed data nu sunt copiate DEV -> TEST -> PROD. Fiecare environment face reconcilierea independent fata de propriul baseline si runtime.
+
+Evidence include minimum control-plane SHA, candidate SHA, runtime before/after SHA, allowlist version, per-file baseline/candidate/runtime digests si action, validation result, deploy/run identity, health identities si functional visibility proof.
+
 ### 10. Search execution policy
 
 ```text
@@ -377,7 +435,7 @@ TEST FAIL
    -> TEST exact Y
 ```
 
-Acelasi candidate SHA este promovat; nu se promoveaza branch-uri mutable si nu se promoveaza runtime data.
+Acelasi candidate SHA este promovat; nu se promoveaza branch-uri mutable. Runtime data nu se copiaza intre environments; numai allowlisted candidate-managed shared/product data se reconciliaza independent din exact candidate in fiecare runtime conform sectiunii 9.1.
 
 Merge-ul in `main` nu este deploy si nu autorizeaza PROD implicit.
 
@@ -413,7 +471,7 @@ Izolarea si promovarea sunt acceptate numai daca se demonstreaza:
 - TEST Cloudflare credential nu poate modifica PROD;
 - PROD Cloudflare credential nu poate opera asupra DEV/TEST sau legacy account;
 - runtime workflow nu poate publica in alt runtime repository;
-- promotion nu muta date;
+- promotion nu copiaza runtime data intre environments; allowlisted candidate-managed shared/product data sunt reconciliate independent conform sectiunii 9.1;
 - DEV si TEST pot valida exact un candidate SHA fara a necesita integrare prealabila in `main`;
 - TEST primeste exact candidate-ul frozen in DEV;
 - TEST FAIL revine in DEV si genereaza candidate nou;
