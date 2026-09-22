@@ -190,7 +190,7 @@
       "name": "Remote OK",
       "url": "https://remoteok.com/",
       "active": true,
-      "collection_method": "web",
+      "collection_method": "remoteok",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
