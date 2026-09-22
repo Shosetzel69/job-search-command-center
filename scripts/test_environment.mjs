@@ -302,3 +302,43 @@ test('trusted control-plane uses bootstrap role and does not inherit all secrets
   assert.match(provision, /safeChildEnv/);
   assert.doesNotMatch(provision, /\.\.\.process\.env/);
 });
+
+
+test('candidate-managed data stays inert and explicitly allowlisted in live deployment', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /Prepare inert candidate-managed data/);
+  assert.match(workflow, /data\/sources\.json data\/source-categories\.json data\/nomenclatures\.json/);
+  assert.match(workflow, /test ! -L "candidate-source\/\$path"/);
+  assert.match(workflow, /CANDIDATE_DATA_WORKSPACE/);
+  assert.match(workflow, /CONTROL_PLANE_SHA/);
+  assert.match(workflow, /RECONCILIATION_EVIDENCE_PATH/);
+  assert.doesNotMatch(workflow, /cp -a candidate-source\/data/);
+});
+
+test('runtime reconciliation executes before runtime snapshot deployment', () => {
+  const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
+  const reconcileAt = provision.indexOf('reconcileRuntimeRepository(runtime');
+  const deployAt = provision.indexOf('const runtimeDataSha = deployWorker(runtime)');
+  assert.ok(reconcileAt > -1 && deployAt > -1 && reconcileAt < deployAt);
+  assert.match(provision, /verifyRuntimePromotionSnapshot/);
+  assert.match(provision, /acceptRuntimeReconciliation/);
+  assert.match(provision, /revertRuntimeReconciliation/);
+});
+
+test('reconciliation write path uses expected-head checks and forbids force/reset semantics', () => {
+  const reconciliation = readFileSync(resolve(ROOT, 'scripts/environment/reconciliation.mjs'), 'utf8');
+  assert.match(reconciliation, /git', \['ls-remote'/);
+  assert.match(reconciliation, /Runtime changed concurrently/);
+  assert.match(reconciliation, /HEAD:\$\{runtimeRef\}/);
+  assert.doesNotMatch(reconciliation, /--force/);
+  assert.doesNotMatch(reconciliation, /git', \['reset'/);
+  assert.match(reconciliation, /\.release-control\/candidate-managed\.json/);
+});
+
+test('DEV and TEST promotion records require reconciliation evidence', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /--reconciliation-file promotion-output\/reconciliation\.json/);
+  const promotion = readFileSync(resolve(ROOT, 'scripts/environment/promotion.mjs'), 'utf8');
+  assert.match(promotion, /reconciliation evidence is missing/);
+  assert.match(promotion, /runtime snapshot verification must PASS/);
+});
