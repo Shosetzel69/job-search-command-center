@@ -15,6 +15,7 @@ import job_search_bamboohr as bamboohr
 import job_search_greenhouse as greenhouse
 import job_search_jobicy as jobicy
 import job_search_recruitee as recruitee
+import job_search_remoteok as remoteok
 import job_search_smartrecruiters as smartrecruiters
 import job_search_web as web
 import job_search_workday as workday
@@ -435,6 +436,8 @@ def collect_api_sources(config, state, now, plan, run_id=None):
                 results = collect_ats(item)
             elif connector == "jobicy":
                 results = jobicy.collect(config)
+            elif connector == "remoteok":
+                results = remoteok.collect(config)
             elif connector == "jobspipe" and mode == "apify":
                 results = apify.collect(config)
             elif connector == "jobspipe" and mode == "direct":
