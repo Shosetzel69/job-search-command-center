@@ -83,7 +83,7 @@ The normal single-change/single-wave lifecycle is unchanged: its first frozen ca
 8. After TEST PASS, candidate integration must preserve the tested commit identity. If squash/rebase/conflict resolution changes it, restart DEV -> TEST with a new SHA.
 9. PROD requires explicit owner GO.
 10. Rollback must be known before PROD deployment.
-11. Runtime data are environment-local; DEV/TEST data are never promoted or used as PROD rollback data.
+11. Runtime data are environment-local; DEV/TEST runtime data are never copied/promoted into another environment or used as PROD rollback data. Allowlisted candidate-managed shared/product data may be reconciled independently from the exact candidate into each environment under section 6.1.
 12. LEGACY is excluded from normal release automation.
 13. Intermediate TEST checkpoint PASS never authorizes PROD and never replaces the final DEV/TEST evidence required for the FRC.
 
@@ -183,6 +183,80 @@ A workflow must never silently replace the requested candidate with current `mai
 
 For intermediate checkpoints, the equality requirement applies DEV -> TEST for that checkpoint and the cycle stops before PROD. For the FRC, the equality requirement applies DEV -> TEST -> PROD.
 
+## 6.1 Candidate-managed shared/product data contract
+
+When a candidate changes one or more approved shared/product JSON files, functional DEV/TEST validation is valid only after the target environment has reconciled those exact candidate-managed files.
+
+Allowlist:
+
+- `data/sources.json`;
+- `data/source-categories.json`;
+- `data/nomenclatures.json`.
+
+No other `data/*` file is implicitly promotable.
+
+### Reconciliation identities
+
+For every allowlisted file:
+
+- **BASELINE** = last successfully accepted candidate-managed digest in that environment;
+- **CANDIDATE** = content from exact `CANDIDATE_SHA`;
+- **RUNTIME** = current content at the environment runtime HEAD.
+
+`main` current content is not the reconciliation baseline.
+
+Initial bootstrap requires an explicit known seed digest set.
+
+### Decision table
+
+- candidate == baseline and runtime == baseline -> no-op;
+- runtime == candidate -> no-op;
+- candidate != baseline and runtime == baseline -> apply candidate;
+- candidate == baseline and runtime != baseline -> preserve runtime;
+- candidate != baseline and runtime != baseline -> conflict, fail closed;
+- missing/invalid baseline -> fail closed except explicit bootstrap initialization.
+
+No automatic field-level merge is permitted.
+
+Reconciliation is evaluated per file, but application is batch-atomic:
+
+1. capture runtime HEAD and accepted baseline metadata;
+2. load allowlisted files from exact candidate SHA;
+3. compute all reconciliation decisions without mutation;
+4. construct target set and validate schemas plus cross-file referential integrity;
+5. on any conflict or validation failure, mutate nothing;
+6. otherwise commit all required runtime changes plus release-control metadata against expected runtime HEAD;
+7. capture new `RUNTIME_DATA_SHA`;
+8. build/deploy exact candidate using that runtime snapshot;
+9. verify health identity and protected functional data;
+10. record promotion evidence.
+
+Candidate code is inert input. Promotion logic, validators, path allowlist and environment credentials come only from trusted control-plane code.
+
+If deployment/verification fails after runtime commit, an automatic compensating revert is allowed only when runtime HEAD is still the promotion commit. If HEAD moved concurrently, no overwrite/reset is allowed; promotion becomes blocked/degraded and requires explicit reconciliation.
+
+### Required evidence when this contract is used
+
+Record at minimum:
+
+- environment;
+- trusted control-plane SHA;
+- `CANDIDATE_SHA`;
+- runtime HEAD before promotion;
+- resulting runtime commit / `RUNTIME_DATA_SHA`;
+- allowlist version;
+- per-file baseline, candidate, runtime-before and runtime-after digests plus action;
+- reconciliation verdict;
+- schema/referential-integrity validation result;
+- deploy/run identity;
+- post-deploy `/health.source_sha` and `/health.runtime_data_sha`;
+- functional proof that required candidate-managed data are visible;
+- revert/rollback result when applicable.
+
+Infrastructure health alone is not functional acceptance when the release claim depends on candidate-managed data.
+
+Candidate-managed data are never copied DEV -> TEST -> PROD. TEST and PROD independently reconcile the same exact candidate against their own accepted baseline and runtime state.
+
 ## 7. Minimal Release Record
 
 Every PROD promotion has one short, non-secret record:
@@ -192,6 +266,7 @@ Issue / PR
 CANDIDATE_SHA
 DEV PASS evidence
 TEST PASS evidence
+Candidate-managed runtime promotion evidence, when applicable
 Previous PROD SOURCE_SHA / RUNTIME_DATA_SHA
 Rollback action/reference
 Owner GO
