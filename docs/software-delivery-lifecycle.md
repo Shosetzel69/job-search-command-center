@@ -86,6 +86,7 @@ The normal single-change/single-wave lifecycle is unchanged: its first frozen ca
 11. Runtime data are environment-local; DEV/TEST runtime data are never copied/promoted into another environment or used as PROD rollback data. Allowlisted candidate-managed shared/product data may be reconciled independently from the exact candidate into each environment under section 6.1.
 12. LEGACY is excluded from normal release automation.
 13. Intermediate TEST checkpoint PASS never authorizes PROD and never replaces the final DEV/TEST evidence required for the FRC.
+14. A candidate-managed-data reconciliation conflict is an environment/operational block, not by itself a candidate defect or `TEST_FAIL`; it does not invalidate the frozen `CANDIDATE_SHA` unless resolution requires changing candidate source content.
 
 ## 4. Environment roles
 
@@ -102,7 +103,7 @@ Required:
 - QA verdict tied to that SHA;
 - no unresolved blocker/major defect.
 
-Any failure returns to DEV.
+A functional/integration failure of the candidate returns to DEV. A candidate-managed-data reconciliation conflict governed by section 6.1 is instead an environment/operational block: keep the frozen candidate unchanged, resolve reconciliation explicitly, then resume validation. If resolution requires a source change, that change creates a new candidate and restarts DEV -> TEST.
 
 ### PROD
 Runs only the TEST-passed candidate after owner authorization.
@@ -199,22 +200,24 @@ No other `data/*` file is implicitly promotable.
 
 For every allowlisted file:
 
-- **BASELINE** = last successfully accepted candidate-managed digest in that environment;
+- **RECONCILIATION_BASELINE** = last successfully accepted candidate-managed digest in that environment;
 - **CANDIDATE** = content from exact `CANDIDATE_SHA`;
 - **RUNTIME** = current content at the environment runtime HEAD.
 
-`main` current content is not the reconciliation baseline.
+`main` current content is not the reconciliation baseline. This is distinct from the repository **operational baseline** defined in `GOVERNANCE.md` §3.1.
 
 Initial bootstrap requires an explicit known seed digest set.
 
+An unrecognized or unsupported release-control metadata schema/version fails closed and requires a separately reviewed control-plane contract migration/update before promotion can continue.
+
 ### Decision table
 
-- candidate == baseline and runtime == baseline -> no-op;
+- candidate == RECONCILIATION_BASELINE and runtime == RECONCILIATION_BASELINE -> no-op;
 - runtime == candidate -> no-op;
-- candidate != baseline and runtime == baseline -> apply candidate;
-- candidate == baseline and runtime != baseline -> preserve runtime;
-- candidate != baseline and runtime != baseline -> conflict, fail closed;
-- missing/invalid baseline -> fail closed except explicit bootstrap initialization.
+- candidate != RECONCILIATION_BASELINE and runtime == RECONCILIATION_BASELINE -> apply candidate;
+- candidate == RECONCILIATION_BASELINE and runtime != RECONCILIATION_BASELINE -> preserve runtime;
+- candidate != RECONCILIATION_BASELINE and runtime != RECONCILIATION_BASELINE -> conflict, fail closed;
+- missing/invalid RECONCILIATION_BASELINE -> fail closed except explicit bootstrap initialization.
 
 No automatic field-level merge is permitted.
 
@@ -225,15 +228,16 @@ Reconciliation is evaluated per file, but application is batch-atomic:
 3. compute all reconciliation decisions without mutation;
 4. construct target set and validate schemas plus cross-file referential integrity;
 5. on any conflict or validation failure, mutate nothing;
-6. otherwise commit all required runtime changes plus release-control metadata against expected runtime HEAD;
+6. otherwise commit all required runtime changes plus release-control metadata against expected runtime HEAD; mark the attempt pending and do not change the accepted reconciliation baseline;
 7. capture new `RUNTIME_DATA_SHA`;
 8. build/deploy exact candidate using that runtime snapshot;
 9. verify health identity and protected functional data;
-10. record promotion evidence.
+10. only after successful verification, mark the promotion accepted and update the accepted reconciliation baseline;
+11. record promotion evidence.
 
 Candidate code is inert input. Promotion logic, validators, path allowlist and environment credentials come only from trusted control-plane code.
 
-If deployment/verification fails after runtime commit, an automatic compensating revert is allowed only when runtime HEAD is still the promotion commit. If HEAD moved concurrently, no overwrite/reset is allowed; promotion becomes blocked/degraded and requires explicit reconciliation.
+If deployment/verification fails after runtime commit, an automatic compensating revert is allowed only when runtime HEAD is still the promotion commit. If HEAD moved concurrently, no overwrite/reset is allowed; promotion becomes blocked/degraded and requires explicit reconciliation. A failed, reverted or degraded attempt never updates the accepted reconciliation baseline and never silently becomes the next baseline.
 
 ### Required evidence when this contract is used
 
@@ -254,6 +258,8 @@ Record at minimum:
 - revert/rollback result when applicable.
 
 Infrastructure health alone is not functional acceptance when the release claim depends on candidate-managed data.
+
+A reconciliation conflict/block does not by itself produce `TEST_FAIL` and does not invalidate the candidate. Track the work item using the canonical blocked status for its current phase (`DEV_BLOCKED`, `TEST_BLOCKED` or `RELEASE_BLOCKED`) plus an explicit `Blocked by`. `DEGRADED/BLOCKED` and `DEGRADED/STALE_ASSET` describe environment/runtime conditions, not AgentFlow status tokens.
 
 Candidate-managed data are never copied DEV -> TEST -> PROD. TEST and PROD independently reconcile the same exact candidate against their own accepted baseline and runtime state.
 
