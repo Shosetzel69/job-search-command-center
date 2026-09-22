@@ -385,7 +385,7 @@ Reguli:
 
 - aceste fisiere nu se copiaza DEV -> TEST -> PROD;
 - fiecare environment reconciliaza independent continutul exact din `CANDIDATE_SHA` cu propriul runtime;
-- baseline-ul de reconciliere este ultima versiune candidate-managed acceptata in environment, nu `main` curent;
+- **reconciliation baseline** este ultima versiune candidate-managed acceptata in environment, nu `main` curent; este distinct de operational baseline din `GOVERNANCE.md` §3.1;
 - bootstrap-ul initial foloseste numai seed digests explicite;
 - runtime-only change fata de baseline este pastrat daca candidate-ul nu a schimbat acelasi fisier;
 - candidate-only change poate fi aplicat daca runtime-ul este inca la baseline;
@@ -393,7 +393,9 @@ Reguli:
 - nu exista merge automat field-level;
 - decizia se calculeaza per fisier, dar setul rezultat este validat si commit-uit batch-atomic;
 - generic `data/*` promotion este interzis;
-- metadata de release-control pentru baseline/digests este operationala, environment-owned si nu este browser-visible.
+- metadata de release-control pentru baseline/digests este operationala, environment-owned si nu este browser-visible;
+- o schema/versiune de release-control metadata necunoscuta sau nesuportata de trusted promotion contract opreste promovarea fail closed si necesita un update/migration al control-plane contract revizuit separat;
+- un promotion attempt esuat/reverted/degraded nu devine niciodata silent noul reconciliation baseline; accepted baseline se actualizeaza numai dupa verificarea functionala reusita.
 
 Candidate content este input inert. Reconciliation/promotion logic, validatorii, allowlist-ul si credentialele ruleaza numai din trusted control-plane baseline.
 
