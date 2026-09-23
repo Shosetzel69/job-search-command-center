@@ -392,7 +392,10 @@ function migrationProdArgs(reconciliationEvidence = migrationReconciliation()) {
   return {
     testRecord: passed,
     candidateSha: MIGRATION_SHA,
-    previousProdHealth: health('prod', PREVIOUS_PROD_SOURCE_SHA, PROD_RUNTIME_SHA),
+    previousHealth: {
+      source_sha: PREVIOUS_PROD_SOURCE_SHA,
+      runtime_data_sha: PROD_RUNTIME_SHA,
+    },
     expectedRuntimeSha: PROD_RUNTIME_SHA,
     expectedRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
     reconciliationRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
