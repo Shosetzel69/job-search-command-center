@@ -272,17 +272,26 @@ jobs:
             echo "job-search-prod main moved: expected acceptance_runtime_head $EXPECTED_RUNTIME_HEAD got $current" >&2
             exit 1
           }
+          echo "RECONCILIATION_RUNTIME_HEAD=$current" >> "$GITHUB_ENV"
           echo "Verified PROD acceptance runtime head: $current"
 
       - name: Install PROD runtime workflow without rewriting runtime data
         if: ${{ inputs.action == 'bootstrap-deploy' }}
         env:
           GH_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
+          EXPECTED_RUNTIME_HEAD: ${{ inputs.expected_runtime_head }}
         shell: bash
         run: |
           set -euo pipefail
+          repo="Shosetzel69/job-search-prod"
           rm -rf runtime-admin
-          GH_TOKEN="$GH_BOOTSTRAP_TOKEN" gh repo clone Shosetzel69/job-search-prod runtime-admin -- --depth=1 --branch main
+          GH_TOKEN="$GH_BOOTSTRAP_TOKEN" gh repo clone "$repo" runtime-admin -- --depth=1 --branch main
+          cloned_head="$(git -C runtime-admin rev-parse HEAD)"
+          test "${cloned_head,,}" = "${EXPECTED_RUNTIME_HEAD,,}" || {
+            echo "PROD runtime moved before bootstrap workflow update: expected $EXPECTED_RUNTIME_HEAD got $cloned_head" >&2
+            exit 1
+          }
+
           mkdir -p runtime-admin/.github/workflows
           cp control-plane/config/runtime-template/runtime.yml runtime-admin/.github/workflows/runtime.yml
           git -C runtime-admin add .github/workflows/runtime.yml
@@ -291,6 +300,15 @@ jobs:
               commit -m "[#198] Maintain isolated PROD runtime workflow"
             git -C runtime-admin push origin HEAD:main
           fi
+
+          authorized_head="$(git -C runtime-admin rev-parse HEAD)"
+          remote_head="$(GH_TOKEN="$GH_BOOTSTRAP_TOKEN" gh api "repos/$repo/commits/main" --jq .sha)"
+          test "${remote_head,,}" = "${authorized_head,,}" || {
+            echo "PROD runtime moved after authorized bootstrap workflow update: expected $authorized_head got $remote_head" >&2
+            exit 1
+          }
+          echo "RECONCILIATION_RUNTIME_HEAD=$authorized_head" >> "$GITHUB_ENV"
+          echo "Authorized post-bootstrap runtime head: $authorized_head"
 
       - name: Configure PROD runtime variables and secrets
         if: ${{ inputs.action == 'bootstrap-deploy' }}
@@ -371,7 +389,7 @@ jobs:
           mkdir -p promotion-output release-output
           node control-plane/scripts/environment/prod-reconciliation.mjs \
             --source-sha "$SOURCE_SHA" \
-            --expected-runtime-head "${{ inputs.expected_runtime_head }}" \
+            --expected-runtime-head "$RECONCILIATION_RUNTIME_HEAD" \
             --owner-gate PROD_GO \
             --health-output release-output/prod-health.json \
             --result-output promotion-output/prod-deployment.json
@@ -382,7 +400,7 @@ jobs:
         with:
           name: reconciliation-prod-${{ github.run_id }}
           path: promotion-output/reconciliation.json
-          if-no-files-found: warn
+          if-no-files-found: error
           retention-days: 90
 
       - name: Create minimal non-secret release record
@@ -408,6 +426,7 @@ jobs:
             --previous-health-file release-input/previous-prod-health.json \
             --expected-runtime-sha "$EXPECTED_RUNTIME_SHA" \
             --expected-runtime-head "$EXPECTED_RUNTIME_HEAD" \
+            --reconciliation-runtime-head "$RECONCILIATION_RUNTIME_HEAD" \
             --rollback-reference "$ROLLBACK_REFERENCE" \
             --owner-go-reference "PROD_GO by ${GITHUB_ACTOR} in ${run_url}" \
             --run-id "$GITHUB_RUN_ID" \
