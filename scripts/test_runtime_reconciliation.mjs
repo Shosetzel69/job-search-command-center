@@ -120,6 +120,7 @@ function runtime() {
     runtimeRepository:'Shosetzel69/job-search-runtime-dev',
     runtimeRef:'main',
     githubRuntimeToken:'test-runtime-token',
+    frontendOrigin:'https://dev.example.test',
   };
 }
 
