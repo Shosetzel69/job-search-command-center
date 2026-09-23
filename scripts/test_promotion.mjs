@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   assertDevPassRecord,
   assertTestPassRecord,
@@ -22,6 +24,10 @@ const ACCEPTANCE_HEAD = '7'.repeat(40);
 const PREVIOUS_ACCEPTANCE_HEAD = '5'.repeat(40);
 const POST_BOOTSTRAP_HEAD = '4'.repeat(40);
 const DIGEST = `sha256:${'1'.repeat(64)}`;
+const MIGRATION_MANIFEST = JSON.parse(
+  readFileSync(resolve(import.meta.dirname, '..', 'config', 'prod-baseline-migration-332.json'), 'utf8'),
+);
+const MIGRATION_SHA = MIGRATION_MANIFEST.target_candidate_sha;
 
 function health(environment, sourceSha, runtimeSha) {
   const runtimeRepo = environment === 'dev'
@@ -290,6 +296,147 @@ test('bootstrap-deploy fails closed if reconciliation evidence starts from any h
       reconciliation: bootstrapReconciliation,
     })),
     /runtime_head_before does not match authorized reconciliation runtime head/,
+  );
+});
+
+function migrationReconciliation(runtimeSha = PROD_PROMOTION_RUNTIME_SHA) {
+  const files = {};
+  for (const path of Object.keys(MIGRATION_MANIFEST.files)) {
+    const contract = MIGRATION_MANIFEST.files[path];
+    const functionalDigest = DIGEST;
+    files[path] = {
+      baseline_digest: contract.historical_digest,
+      candidate_digest: contract.target_candidate_digest,
+      runtime_before_digest: contract.expected_pre_migration_digest,
+      action: contract.resolved_target_digest === contract.expected_pre_migration_digest
+        ? 'migration_noop_target'
+        : 'migration_apply_resolved',
+      runtime_after_digest: contract.resolved_target_digest,
+      next_baseline_digest: contract.target_candidate_digest,
+      functional_expected_digest: functionalDigest,
+    };
+  }
+  return {
+    schema_version: '1.0',
+    environment: 'prod',
+    control_plane_sha: CONTROL_PLANE_SHA,
+    candidate_sha: MIGRATION_SHA,
+    runtime_head_before: PREVIOUS_ACCEPTANCE_HEAD,
+    promotion_runtime_sha: runtimeSha,
+    acceptance_runtime_head: ACCEPTANCE_HEAD,
+    allowlist_version: '1.0',
+    files,
+    reconciliation_result: 'PASS',
+    validation_result: 'PASS',
+    snapshot_verification: 'PASS',
+    functional_visibility: {
+      status: 'PASS',
+      method: 'deployed-protected-data',
+      files: Object.fromEntries(Object.keys(files).map(path => [path, {
+        expected_semantic_digest: DIGEST,
+        visible_semantic_digest: DIGEST,
+        visible_count: 1,
+      }])),
+    },
+    acceptance_result: 'ACCEPTED',
+    health: { source_sha:MIGRATION_SHA, runtime_data_sha:runtimeSha },
+    revert_result: 'NOT_REQUIRED',
+    migration: {
+      schema_version: MIGRATION_MANIFEST.schema_version,
+      migration_id: MIGRATION_MANIFEST.migration_id,
+      migration_version: MIGRATION_MANIFEST.migration_version,
+      path: 'one_time_prod_baseline_migration',
+      historical_candidate_sha: MIGRATION_MANIFEST.historical_candidate_sha,
+      target_candidate_sha: MIGRATION_MANIFEST.target_candidate_sha,
+      historical_digests: Object.fromEntries(Object.entries(MIGRATION_MANIFEST.files).map(([path,item]) => [path,item.historical_digest])),
+      pre_migration_digests: Object.fromEntries(Object.entries(MIGRATION_MANIFEST.files).map(([path,item]) => [path,item.expected_pre_migration_digest])),
+      approved_overlay: {
+        path:MIGRATION_MANIFEST.approved_overlay.path,
+        source_id:MIGRATION_MANIFEST.approved_overlay.source_id,
+        source_name:MIGRATION_MANIFEST.approved_overlay.source_name,
+      },
+      resolved_target_digests: Object.fromEntries(Object.entries(MIGRATION_MANIFEST.files).map(([path,item]) => [path,item.resolved_target_digest])),
+      result: 'PASS',
+      acceptance_result: 'ACCEPTED',
+    },
+  };
+}
+
+function migrationProdArgs(reconciliationEvidence = migrationReconciliation()) {
+  const dev = createDevPassRecord({
+    candidateSha: MIGRATION_SHA,
+    issuePr: '#337 / PR #338',
+    runId: '2001',
+    runUrl: 'https://github.com/example/repo/actions/runs/2001',
+    health: health('dev', MIGRATION_SHA, DEV_RUNTIME_SHA),
+    reconciliation: reconciliation('dev', MIGRATION_SHA, DEV_RUNTIME_SHA),
+    createdAt: '2026-09-23T17:30:00.000Z',
+  });
+  const deployed = createTestDeployedRecord({
+    devRecord: dev,
+    candidateSha: MIGRATION_SHA,
+    runId: '2002',
+    runUrl: 'https://github.com/example/repo/actions/runs/2002',
+    health: health('test', MIGRATION_SHA, TEST_RUNTIME_SHA),
+    reconciliation: reconciliation('test', MIGRATION_SHA, TEST_RUNTIME_SHA),
+    createdAt: '2026-09-23T17:31:00.000Z',
+  });
+  const passed = createTestPassRecord({
+    testDeployedRecord: deployed,
+    candidateSha: MIGRATION_SHA,
+    qaEvidenceReference: 'QA #337 migration regression',
+    runId: '2003',
+    runUrl: 'https://github.com/example/repo/actions/runs/2003',
+    createdAt: '2026-09-23T17:32:00.000Z',
+  });
+  return {
+    testRecord: passed,
+    candidateSha: MIGRATION_SHA,
+    previousProdHealth: health('prod', PREVIOUS_PROD_SOURCE_SHA, PROD_RUNTIME_SHA),
+    expectedRuntimeSha: PROD_RUNTIME_SHA,
+    expectedRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
+    reconciliationRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
+    rollbackReference: 'redeploy previous known-good PROD source/runtime pair',
+    ownerGoReference: 'PROD_GO by owner',
+    runId: '2004',
+    runUrl: 'https://github.com/example/repo/actions/runs/2004',
+    prodHealth: health('prod', MIGRATION_SHA, PROD_PROMOTION_RUNTIME_SHA),
+    reconciliation: reconciliationEvidence,
+    createdAt: '2026-09-23T17:33:00.000Z',
+  };
+}
+
+test('PROD release accepts one-time migration actions only with exact valid migration evidence', () => {
+  const record = createProdReleaseRecord(migrationProdArgs());
+  assert.equal(record.candidate_sha, MIGRATION_SHA);
+  assert.equal(record.prod_deploy_evidence.reconciliation.migration.migration_id, 'prod-baseline-332-v1');
+  assert.equal(record.prod_deploy_evidence.reconciliation.migration.acceptance_result, 'ACCEPTED');
+});
+
+test('PROD release rejects migration actions without migration evidence', () => {
+  const evidence = migrationReconciliation();
+  delete evidence.migration;
+  assert.throws(
+    () => createProdReleaseRecord(migrationProdArgs(evidence)),
+    /migration reconciliation actions require valid migration evidence/,
+  );
+});
+
+test('PROD release rejects migration evidence that does not match the frozen manifest', () => {
+  const evidence = migrationReconciliation();
+  evidence.migration.resolved_target_digests['data/sources.json'] = `sha256:${'0'.repeat(64)}`;
+  assert.throws(
+    () => createProdReleaseRecord(migrationProdArgs(evidence)),
+    /migration manifest digest mismatch/,
+  );
+});
+
+test('PROD release rejects migration evidence paired with generic reconciliation actions', () => {
+  const evidence = migrationReconciliation();
+  for (const item of Object.values(evidence.files)) item.action = 'noop_baseline';
+  assert.throws(
+    () => createProdReleaseRecord(migrationProdArgs(evidence)),
+    /migration evidence cannot accompany generic reconciliation actions/,
   );
 });
 
