@@ -9,9 +9,11 @@ import { assertPreCutoverLiveGate, verifyLocalSourceSha } from './live.mjs';
 import {
   acceptRuntimeReconciliation,
   buildReconciliationEvidence,
+  FunctionalVisibilityError,
   reconcileRuntimeRepository,
   ReconciliationBlockedError,
   revertRuntimeReconciliation,
+  verifyProtectedFunctionalVisibility,
   verifyRuntimePromotionSnapshot,
   writeReconciliationEvidence,
 } from './reconciliation.mjs';
@@ -289,6 +291,7 @@ async function deployCandidateWithReconciliation(runtime) {
 
   let health = null;
   let snapshotVerification = 'NOT_RUN';
+  let functionalVisibility = null;
   let acceptance = null;
   let revert = null;
 
@@ -299,18 +302,27 @@ async function deployCandidateWithReconciliation(runtime) {
     }
     health = await probeDeployedHealth(runtime, runtimeDataSha);
     snapshotVerification = verifyRuntimePromotionSnapshot(runtime, reconciliation, { gitEnv });
-    acceptance = acceptRuntimeReconciliation(runtime, reconciliation, { gitEnv });
+    functionalVisibility = await verifyProtectedFunctionalVisibility(runtime, reconciliation);
+    acceptance = acceptRuntimeReconciliation(runtime, reconciliation, {
+      gitEnv,
+      snapshotVerification,
+      functionalVisibility,
+    });
     if (acceptance.status === 'DEGRADED') throw new Error(acceptance.reason || 'Baseline acceptance is degraded');
 
     const evidence = buildReconciliationEvidence(reconciliation, {
       health,
       snapshotVerification,
+      functionalVisibility,
       acceptance,
       revert,
     });
     writeReconciliationEvidence(inputs.evidencePath, evidence);
     return { runtimeDataSha, health, reconciliation: evidence };
   } catch (error) {
+    if (error instanceof FunctionalVisibilityError && error.proof) {
+      functionalVisibility = error.proof;
+    }
     if (acceptance?.status !== 'ACCEPTED') {
       try {
         revert = revertRuntimeReconciliation(runtime, reconciliation, { gitEnv });
@@ -327,6 +339,7 @@ async function deployCandidateWithReconciliation(runtime) {
     const evidence = buildReconciliationEvidence(reconciliation, {
       health,
       snapshotVerification,
+      functionalVisibility,
       acceptance,
       revert,
     });
