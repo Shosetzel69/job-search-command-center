@@ -7,6 +7,9 @@ const ROOT = resolve(import.meta.dirname, '..');
 const promotion = readFileSync(resolve(ROOT, '.github/workflows/prod-cutover.yml'), 'utf8');
 const runtime = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
 const commandApi = readFileSync(resolve(ROOT, 'command-api/src/index.js'), 'utf8');
+const prodExecutor = readFileSync(resolve(ROOT, 'scripts/environment/prod-reconciliation.mjs'), 'utf8');
+const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
+const promotionEvidence = readFileSync(resolve(ROOT, 'scripts/environment/promotion.mjs'), 'utf8');
 
 test('PROD promotion is manual-only, PROD-scoped and serialized', () => {
   assert.match(promotion, /name: PROD promotion/);
@@ -64,7 +67,9 @@ test('PROD deployment keeps trusted control-plane separate from candidate payloa
   assert.match(promotion, /Checkout immutable candidate source as inert payload/);
   assert.match(promotion, /Prepare sanitized candidate payload on trusted baseline/);
   assert.match(promotion, /cmp control-plane\/command-api\/wrangler\.jsonc/);
-  assert.match(promotion, /Deploy exact TEST-passed candidate to dedicated PROD/);
+  assert.match(promotion, /Execute reconciled PROD candidate promotion/);
+  assert.match(prodExecutor, /deployCandidateWithReconciliation/);
+  assert.match(provision, /export async function deployCandidateWithReconciliation/);
 });
 
 test('PROD runtime executes search from immutable source then publishes and redeploys exact runtime snapshot', () => {
@@ -77,11 +82,32 @@ test('PROD runtime executes search from immutable source then publishes and rede
 });
 
 
-test('PROD mutation refreshes Worker runtime secrets before health verification', () => {
-  const block = promotion.match(/- name: Configure PROD Worker runtime secrets[\s\S]*?- name: Verify dedicated PROD application health/)?.[0] || '';
-  assert.match(block, /if: \$\{\{ inputs\.action != 'status' \}\}/);
-  assert.match(block, /wrangler secret put GITHUB_TOKEN/);
-  assert.match(block, /wrangler secret put ALLOWED_GOOGLE_SUB/);
+test('PROD candidate-managed reconciliation uses the exact approved allowlist and replaces the unsafe direct snapshot path', () => {
+  assert.match(promotion, /for path in data\/sources\.json data\/source-categories\.json data\/nomenclatures\.json/);
+  assert.match(promotion, /Unexpected candidate-managed payload/);
+  assert.doesNotMatch(promotion, /cp -a candidate-source\/data/);
+  assert.doesNotMatch(promotion, /Resolve deployment runtime snapshot/);
+  assert.doesNotMatch(promotion, /Deploy exact TEST-passed candidate to dedicated PROD/);
+  assert.match(promotion, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
+  assert.match(promotion, /RECONCILIATION_EVIDENCE_PATH/);
+  assert.match(promotion, /reconciliation-prod-\$\{\{ github\.run_id \}\}/);
+  assert.match(promotion, /--reconciliation-file promotion-output\/reconciliation\.json/);
+  assert.match(promotionEvidence, /PROD reconciliation evidence is missing/);
+});
+
+test('PROD reconciliation runs only after immutable runtime anchor and TEST PASS guards', () => {
+  const guard = promotion.indexOf('Verify exact TEST PASS evidence');
+  const anchor = promotion.indexOf('Verify immutable PROD runtime head');
+  const reconcile = promotion.indexOf('Execute reconciled PROD candidate promotion');
+  const release = promotion.indexOf('Create minimal non-secret release record');
+  assert.ok(guard >= 0 && anchor > guard && reconcile > anchor && release > reconcile);
+});
+
+test('PROD reconciled deployment refreshes Worker runtime secrets before protected verification', () => {
+  assert.match(prodExecutor, /configureBootstrapSecrets: true/);
+  assert.match(provision, /'secret', 'put', 'GITHUB_TOKEN'/);
+  assert.match(provision, /'secret', 'put', 'ALLOWED_GOOGLE_SUB'/);
+  assert.match(provision, /verifyProtectedFunctionalVisibility/);
 });
 
 test('health validates live runtime repository access rather than token presence only', () => {
