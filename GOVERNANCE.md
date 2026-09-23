@@ -1,11 +1,11 @@
 # GOVERNANCE.md - Job Search Command Center
 
 Status: `CANONICAL`
-Version: `v1.13`
+Version: `v1.14`
 Applicability: `CURRENT`
 Applies to: `BOTH`
 Effective from: `2026-09-23`
-Supersedes: `v1.12`
+Supersedes: `v1.13`
 Last updated: `2026-09-23`
 
 ## 1. Principiu
@@ -159,6 +159,22 @@ Reguli fail-closed:
 - daca executia descopera o decizie noua materiala de arhitectura, scope, securitate, privacy sau cost, taskul foloseste statusul canonic de blocare al fazei curente si revine la gate-ul potrivit; DEV nu inventeaza decizia;
 - Evidence Bundle demonstreaza rezultatul contractului, dar nu inlocuieste TEST independent sau release gates.
 - Detaliile operationale AgentFlow sunt definite in `docs/agentflow.md`; `GOVERNANCE.md` ramane sursa de adevar pentru reguli si statusuri.
+
+### 2.6.1 Independent Review record ownership
+
+Pentru `Process: AGENTFLOW`, **ATC Issue-ul este recordul canonic al Independent Review**.
+
+Reguli:
+
+- fiecare verdict `REVIEW_PASS`, `REVIEW_FAIL` sau `REVIEW_BLOCKED` se inregistreaza pe ATC Issue si este legat de exact candidate SHA revizuit;
+- cand exista un implementation PR, review record-ul canonic indica si PR-ul relevant;
+- istoricul review-urilor este append-only: un verdict anterior nu se suprascrie; remediation pe SHA nou produce Evidence Bundle nou si review nou;
+- implementation PR-ul primeste o referinta/mirror concisa la verdictul canonic, ATC si exact SHA, dar PR-ul nu devine sursa de adevar pentru statusul AgentFlow;
+- `draft`, `open`, `merged` si `closed` sunt stari GitHub ale PR-ului, nu statusuri AgentFlow;
+- Phase/Status AgentFlow curent se mentine pe ATC Issue;
+- daca merge/publication depinde de Independent Review, exact HEAD SHA curent al PR-ului trebuie sa aiba ca ultim verdict canonic aplicabil `REVIEW_PASS`; schimbarea HEAD-ului invalideaza folosirea verdictului anterior pentru merge/publication;
+- `REVIEW_BLOCKED` consemneaza pe ATC evidence/access/environment/dependency lipsa; dupa rezolvare se revine la evidence/review si se emite verdict nou pentru exact candidate-ul curent;
+- work item-urile istorice inchise nu se rescriu in masa; regula se aplica prospectiv si la urmatoarea actualizare materiala a unui ATC activ.
 
 ### 2.7 Vocabular canonic de proces
 
