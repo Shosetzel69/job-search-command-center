@@ -1,0 +1,54 @@
+{
+  "schema_version": "1.0",
+  "count": 8,
+  "categories": [
+    {
+      "id": "job-boards-agregatoare",
+      "label": "Job boards si agregatoare",
+      "active": true,
+      "order": 10
+    },
+    {
+      "id": "contract-b2b-freelance",
+      "label": "Contract, B2B si freelance",
+      "active": true,
+      "order": 20
+    },
+    {
+      "id": "contractori-ue-nato",
+      "label": "Contractori UE si NATO",
+      "active": true,
+      "order": 30
+    },
+    {
+      "id": "banking-enterprise",
+      "label": "Banking si enterprise",
+      "active": true,
+      "order": 40
+    },
+    {
+      "id": "servicii-it-consultanta",
+      "label": "Servicii IT si consultanta",
+      "active": true,
+      "order": 50
+    },
+    {
+      "id": "companii-remote-first",
+      "label": "Companii remote-first",
+      "active": true,
+      "order": 60
+    },
+    {
+      "id": "ats-publice",
+      "label": "ATS publice",
+      "active": true,
+      "order": 70
+    },
+    {
+      "id": "agentii-recrutare",
+      "label": "Agentii si recrutare",
+      "active": true,
+      "order": 80
+    }
+  ]
+}
