@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useRef, useState } from 'react';
+import { createSingleFireGuard } from './action-dialog-guard.mjs';
 
 export default function ActionDialog({
   title,
@@ -13,8 +14,23 @@ export default function ActionDialog({
   busy = false,
   confirmDisabled = false,
 }) {
+  const confirmGuard = useRef(null);
+  if (!confirmGuard.current) confirmGuard.current = createSingleFireGuard();
+  const [confirming, setConfirming] = useState(false);
+  const locked = busy || confirming;
+  const handleConfirm = async () => {
+    if (busy || confirmDisabled || !confirmGuard.current.tryStart()) return;
+    setConfirming(true);
+    try {
+      await onConfirm();
+    } finally {
+      confirmGuard.current.finish();
+      setConfirming(false);
+    }
+  };
+
   return <>
-    <button type="button" aria-label="Inchide dialogul" className="fixed inset-0 z-[80] bg-slate-950/30" onClick={onCancel}/>
+    <button type="button" aria-label="Inchide dialogul" className="fixed inset-0 z-[80] bg-slate-950/30" onClick={onCancel} disabled={locked}/>
     <section
       role="dialog"
       aria-modal="true"
@@ -37,8 +53,8 @@ export default function ActionDialog({
         </label>)}
       </div>}
       <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} disabled={busy} className="h-9 rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-600 disabled:opacity-50">Renunta</button>
-        <button type="button" onClick={onConfirm} disabled={busy || confirmDisabled} className={`h-9 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 ${danger ? 'bg-red-600' : 'bg-blue-600'}`}>{busy ? 'Se salveaza...' : confirmLabel}</button>
+        <button type="button" onClick={onCancel} disabled={locked} className="h-9 rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-600 disabled:opacity-50">Renunta</button>
+        <button type="button" onClick={handleConfirm} disabled={locked || confirmDisabled} className={`h-9 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 ${danger ? 'bg-red-600' : 'bg-blue-600'}`}>{locked ? 'Se salveaza...' : confirmLabel}</button>
       </div>
     </section>
   </>;
