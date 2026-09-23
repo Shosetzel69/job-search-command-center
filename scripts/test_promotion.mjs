@@ -14,6 +14,7 @@ const OTHER_SHA = 'b'.repeat(40);
 const DEV_RUNTIME_SHA = 'c'.repeat(40);
 const TEST_RUNTIME_SHA = 'd'.repeat(40);
 const PROD_RUNTIME_SHA = 'e'.repeat(40);
+const PROD_PROMOTION_RUNTIME_SHA = '6'.repeat(40);
 const PREVIOUS_PROD_SOURCE_SHA = 'f'.repeat(40);
 const CONTROL_PLANE_SHA = '9'.repeat(40);
 const RUNTIME_HEAD_BEFORE = '8'.repeat(40);
@@ -143,7 +144,8 @@ function prodArgs(overrides = {}) {
     ownerGoReference: 'PROD_GO by owner',
     runId: '1004',
     runUrl: 'https://github.com/example/repo/actions/runs/1004',
-    prodHealth: health('prod', SHA, PROD_RUNTIME_SHA),
+    prodHealth: health('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+    reconciliation: reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
     createdAt: '2026-09-18T00:03:00.000Z',
     ...overrides,
   };
@@ -228,6 +230,20 @@ test('PROD release rejects previous runtime anchor mismatch before acceptance', 
   assert.throws(() => createProdReleaseRecord(prodArgs({ expectedRuntimeSha: OTHER_SHA })), /does not match expected_runtime_sha/);
 });
 
+test('PROD release requires accepted candidate-managed reconciliation evidence', () => {
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({ reconciliation: undefined })),
+    /PROD reconciliation evidence is missing/,
+  );
+
+  const failed = reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA);
+  failed.functional_visibility.status = 'FAIL';
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({ reconciliation: failed })),
+    /protected functional visibility must PASS/,
+  );
+});
+
 test('reversible DB change records migration version without destructive backup fields', () => {
   const record = createProdReleaseRecord(prodArgs({
     databaseChange: 'reversible',
@@ -271,6 +287,9 @@ test('minimal PROD release record preserves candidate, TEST evidence, rollback a
   assert.equal(record.previous_prod_source_sha, PREVIOUS_PROD_SOURCE_SHA);
   assert.equal(record.previous_prod_runtime_data_sha, PROD_RUNTIME_SHA);
   assert.equal(record.prod_deploy_evidence.source_sha, SHA);
+  assert.equal(record.prod_deploy_evidence.runtime_data_sha, PROD_PROMOTION_RUNTIME_SHA);
+  assert.equal(record.prod_deploy_evidence.reconciliation.environment, 'prod');
+  assert.equal(record.prod_deploy_evidence.reconciliation.functional_visibility.status, 'PASS');
   assert.equal(record.prod_smoke_verdict, 'PASS');
   assert.equal(record.final_state, 'ACCEPTED');
   assert.equal(record.database_change, undefined);
