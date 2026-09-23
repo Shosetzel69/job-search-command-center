@@ -354,18 +354,26 @@ export function planCandidateManagedReconciliation({
 
   try {
     validateCandidateManagedSet(candidateContents);
-    failureStage = 'runtime_validation';
-    validateCandidateManagedSet(runtimeContents);
 
     const candidateDigests = digestSet(candidateContents);
     const runtimeDigests = digestSet(runtimeContents);
     const bootstrap = metadata == null;
 
-    failureStage = bootstrap ? 'bootstrap_validation' : 'metadata_validation';
-    const normalizedMetadata = bootstrap ? null : normalizeReleaseControlMetadata(metadata, environment);
-    const baselineDigests = bootstrap
-      ? explicitSeedBaseline(runtimeDigests)
-      : normalizedMetadata.accepted_baselines;
+    let normalizedMetadata = null;
+    let baselineDigests;
+    if (bootstrap) {
+      // Bootstrap runtime files are intentionally minimal seeds. They are
+      // accepted only by exact trusted digests and are not treated as a
+      // canonical operational catalog before candidate reconciliation.
+      failureStage = 'bootstrap_validation';
+      baselineDigests = explicitSeedBaseline(runtimeDigests);
+    } else {
+      failureStage = 'runtime_validation';
+      validateCandidateManagedSet(runtimeContents);
+      failureStage = 'metadata_validation';
+      normalizedMetadata = normalizeReleaseControlMetadata(metadata, environment);
+      baselineDigests = normalizedMetadata.accepted_baselines;
+    }
 
     const targetContents = {};
     const nextBaselines = {};
