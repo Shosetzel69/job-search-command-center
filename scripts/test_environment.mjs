@@ -315,13 +315,15 @@ test('candidate-managed data stays inert and explicitly allowlisted in live depl
   assert.doesNotMatch(workflow, /cp -a candidate-source\/data/);
 });
 
-test('runtime reconciliation executes before runtime snapshot deployment', () => {
+test('runtime reconciliation and protected functional verification precede baseline acceptance', () => {
   const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
   const reconcileAt = provision.indexOf('reconcileRuntimeRepository(runtime');
   const deployAt = provision.indexOf('const runtimeDataSha = deployWorker(runtime)');
+  const functionalAt = provision.indexOf('verifyProtectedFunctionalVisibility(runtime, reconciliation)');
+  const acceptAt = provision.indexOf('acceptRuntimeReconciliation(runtime, reconciliation');
   assert.ok(reconcileAt > -1 && deployAt > -1 && reconcileAt < deployAt);
+  assert.ok(functionalAt > deployAt && acceptAt > functionalAt);
   assert.match(provision, /verifyRuntimePromotionSnapshot/);
-  assert.match(provision, /acceptRuntimeReconciliation/);
   assert.match(provision, /revertRuntimeReconciliation/);
 });
 
@@ -341,4 +343,19 @@ test('DEV and TEST promotion records require reconciliation evidence', () => {
   const promotion = readFileSync(resolve(ROOT, 'scripts/environment/promotion.mjs'), 'utf8');
   assert.match(promotion, /reconciliation evidence is missing/);
   assert.match(promotion, /runtime snapshot verification must PASS/);
+});
+
+
+test('fail-closed reconciliation evidence is retained even when live action fails', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /Upload reconciliation trace on success or fail-closed exit/);
+  assert.match(workflow, /always\(\) && \(inputs\.action == 'bootstrap' \|\| inputs\.action == 'deploy'\)/);
+  assert.match(workflow, /path: promotion-output\/reconciliation\.json/);
+});
+
+test('DEV/TEST evidence contract requires protected functional visibility PASS', () => {
+  const promotion = readFileSync(resolve(ROOT, 'scripts/environment/promotion.mjs'), 'utf8');
+  assert.match(promotion, /protected functional visibility must PASS/);
+  assert.match(promotion, /canonical-protected-runtime-read/);
+  assert.match(promotion, /functional_expected_digest/);
 });
