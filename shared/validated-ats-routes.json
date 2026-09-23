@@ -1,19 +1,203 @@
 {
   "schema_version": "1.0",
   "routes": {
-    "Endava": {"connector": "smartrecruiters", "company_identifier": "Endava", "enabled": true},
-    "Netcompany / Intrasoft": {"connector": "smartrecruiters", "company_identifier": "Netcompany1", "enabled": true},
-    "Bosch Romania": {"connector": "smartrecruiters", "company_identifier": "BoschGroup", "enabled": true},
-    "Camunda": {"connector": "ashby", "board_name": "camunda", "enabled": true},
-    "Datadog": {"connector": "greenhouse", "board_token": "datadog", "enabled": true},
-    "Almaviva de Belgique": {"connector": "recruitee", "subdomain": "almavivadebelgique", "enabled": true},
-    "Saphetor": {"connector": "bamboohr", "subdomain": "saphetor", "enabled": true},
-    "Thales": {"connector": "workday", "career_url": "https://thales.wd3.myworkdayjobs.com/Careers", "enabled": true},
-
-    "NTT": {"connector": "phenom", "enabled": false, "disabled_reason": "connector_requires_credentials"},
-    "Allianz Careers": {"connector": "phenom", "enabled": false, "disabled_reason": "connector_requires_credentials"},
-    "Fortive": {"connector": "eightfold", "domain": "fortive", "enabled": false, "disabled_reason": "connector_requires_credentials"},
-
-    "ClickHouse": {"connector": "greenhouse", "board_token": "clickhouse", "enabled": false, "disabled_reason": "live_api_route_not_validated"}
+    "Endava": {
+      "connector": "smartrecruiters",
+      "company_identifier": "Endava",
+      "enabled": true
+    },
+    "Netcompany / Intrasoft": {
+      "connector": "smartrecruiters",
+      "company_identifier": "Netcompany1",
+      "enabled": true
+    },
+    "Bosch Romania": {
+      "connector": "smartrecruiters",
+      "company_identifier": "BoschGroup",
+      "enabled": true
+    },
+    "Camunda": {
+      "connector": "ashby",
+      "board_name": "camunda",
+      "enabled": true
+    },
+    "Datadog": {
+      "connector": "greenhouse",
+      "board_token": "datadog",
+      "enabled": true
+    },
+    "Almaviva de Belgique": {
+      "connector": "recruitee",
+      "subdomain": "almavivadebelgique",
+      "enabled": true
+    },
+    "Saphetor": {
+      "connector": "bamboohr",
+      "subdomain": "saphetor",
+      "enabled": true
+    },
+    "Thales": {
+      "connector": "workday",
+      "career_url": "https://thales.wd3.myworkdayjobs.com/Careers",
+      "enabled": true
+    },
+    "NTT": {
+      "connector": "phenom",
+      "enabled": false,
+      "disabled_reason": "connector_requires_credentials"
+    },
+    "Allianz Careers": {
+      "connector": "phenom",
+      "enabled": false,
+      "disabled_reason": "connector_requires_credentials"
+    },
+    "Fortive": {
+      "connector": "eightfold",
+      "domain": "fortive",
+      "enabled": false,
+      "disabled_reason": "connector_requires_credentials"
+    },
+    "ClickHouse": {
+      "connector": "greenhouse",
+      "board_token": "clickhouse",
+      "enabled": false,
+      "disabled_reason": "live_api_route_not_validated"
+    },
+    "Canonical": {
+      "connector": "greenhouse",
+      "board_token": "canonical",
+      "enabled": true
+    },
+    "GitLab": {
+      "connector": "greenhouse",
+      "board_token": "gitlab",
+      "enabled": true
+    },
+    "Grafana Labs": {
+      "connector": "greenhouse",
+      "board_token": "grafanalabs",
+      "enabled": true
+    },
+    "Elastic": {
+      "connector": "greenhouse",
+      "board_token": "elastic",
+      "enabled": true
+    },
+    "Remote": {
+      "connector": "greenhouse",
+      "board_token": "remotecom",
+      "enabled": true
+    },
+    "Sourcegraph": {
+      "connector": "greenhouse",
+      "board_token": "sourcegraph91",
+      "enabled": true
+    },
+    "Automattic": {
+      "connector": "greenhouse",
+      "board_token": "automatticcareers",
+      "enabled": true
+    },
+    "DoiT": {
+      "connector": "greenhouse",
+      "board_token": "doitintl",
+      "enabled": true
+    },
+    "Mattermost": {
+      "connector": "greenhouse",
+      "board_token": "mattermost",
+      "enabled": true
+    },
+    "Upbound": {
+      "connector": "greenhouse",
+      "board_token": "upbound",
+      "enabled": true
+    },
+    "Customer.io": {
+      "connector": "greenhouse",
+      "board_token": "customerio",
+      "enabled": true
+    },
+    "Supabase": {
+      "connector": "ashby",
+      "board_name": "supabase",
+      "enabled": true
+    },
+    "Docker": {
+      "connector": "ashby",
+      "board_name": "docker",
+      "enabled": true
+    },
+    "Zapier": {
+      "connector": "ashby",
+      "board_name": "zapier",
+      "enabled": true
+    },
+    "Deel": {
+      "connector": "ashby",
+      "board_name": "Deel",
+      "enabled": true
+    },
+    "TestGorilla": {
+      "connector": "ashby",
+      "board_name": "testgorilla",
+      "enabled": true
+    },
+    "Temporal": {
+      "connector": "ashby",
+      "board_name": "temporal",
+      "enabled": true
+    },
+    "Linear": {
+      "connector": "ashby",
+      "board_name": "linear",
+      "enabled": true
+    },
+    "Qdrant": {
+      "connector": "ashby",
+      "board_name": "qdrant.tech",
+      "enabled": true
+    },
+    "GitBook": {
+      "connector": "ashby",
+      "board_name": "gitbook",
+      "enabled": true
+    },
+    "Chili Piper": {
+      "connector": "ashby",
+      "board_name": "chilipiper",
+      "enabled": true
+    },
+    "Close": {
+      "connector": "ashby",
+      "board_name": "Close",
+      "enabled": true
+    },
+    "Oyster": {
+      "connector": "ashby",
+      "board_name": "oyster",
+      "enabled": true
+    },
+    "Whereby": {
+      "connector": "lever",
+      "site": "whereby",
+      "region": "global",
+      "enabled": true
+    },
+    "Slite": {
+      "connector": "bamboohr",
+      "subdomain": "slite",
+      "enabled": true
+    },
+    "Cal.com": {
+      "connector": "breezyhr",
+      "tenant": "cal-com",
+      "enabled": true
+    },
+    "SafetyWing": {
+      "connector": "pinpoint",
+      "subdomain": "safetywing",
+      "enabled": true
+    }
   }
 }

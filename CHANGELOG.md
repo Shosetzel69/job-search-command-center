@@ -36,6 +36,8 @@
 
 ### Conectori
 
+- #313-#320 / Package 2C: pregatit batch-ul Remote-first cu 29 surse fail-closed; 23 reutilizeaza Greenhouse/Ashby, Whereby reutilizeaza Lever, Slite reutilizeaza BambooHR, Cal.com foloseste noul connector generic BreezyHR, SafetyWing noul connector generic Pinpoint, Traefik Labs un collector bounded peste transportul web securizat, iar Float pastreaza semantica `success_empty`. Nicio sursa noua nu este activata implicit.
+- #315: connectorul Lever existent este cablat in dispatch-ul ATS canonic.
 - #58: adaugat connector SmartRecruiters Public Posting API cu paginare, detalii complete, normalizare in `CollectionResult` si teste izolate; nu este rutat sau activat in Source Registry pana la validarea live.
 
 ### Remedieri
