@@ -4,6 +4,11 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { loadManifest, requireSourceSha, resolveEnvironment } from './contract.mjs';
 import { deployCandidateWithReconciliation } from './provision.mjs';
+import {
+  createProdMigrationAwarePlanner,
+  loadHistoricalCandidateManagedContents,
+  loadProdBaselineMigrationManifest,
+} from './prod-baseline-migration.mjs';
 
 function parseArgs(argv) {
   const args = { _: [] };
@@ -40,10 +45,19 @@ async function main(argv = process.argv.slice(2)) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
   const manifest = loadManifest(resolve(root, 'config/environments.json'));
   const runtime = resolveEnvironment(manifest, 'prod', sourceSha);
+  const migrationManifest = loadProdBaselineMigrationManifest(
+    resolve(root, 'config/prod-baseline-migration-332.json'),
+  );
+  const historicalContents = loadHistoricalCandidateManagedContents(runtime, migrationManifest);
+  const reconciliationPlanner = createProdMigrationAwarePlanner({
+    manifest: migrationManifest,
+    historicalContents,
+  });
 
   const deployment = await deployCandidateWithReconciliation(runtime, {
     configureBootstrapSecrets: true,
     expectedRuntimeHead,
+    reconciliationPlanner,
   });
 
   writeJson(args.health_output, deployment.health);
