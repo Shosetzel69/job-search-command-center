@@ -19,6 +19,7 @@ const PREVIOUS_PROD_SOURCE_SHA = 'f'.repeat(40);
 const CONTROL_PLANE_SHA = '9'.repeat(40);
 const RUNTIME_HEAD_BEFORE = '8'.repeat(40);
 const ACCEPTANCE_HEAD = '7'.repeat(40);
+const PREVIOUS_ACCEPTANCE_HEAD = '5'.repeat(40);
 const DIGEST = `sha256:${'1'.repeat(64)}`;
 
 function health(environment, sourceSha, runtimeSha) {
@@ -140,12 +141,16 @@ function prodArgs(overrides = {}) {
       runtime_data_sha: PROD_RUNTIME_SHA,
     },
     expectedRuntimeSha: PROD_RUNTIME_SHA,
+    expectedRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
     rollbackReference: 'redeploy previous known-good PROD source/runtime pair',
     ownerGoReference: 'PROD_GO by owner',
     runId: '1004',
     runUrl: 'https://github.com/example/repo/actions/runs/1004',
     prodHealth: health('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
-    reconciliation: reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+    reconciliation: {
+      ...reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+      runtime_head_before: PREVIOUS_ACCEPTANCE_HEAD,
+    },
     createdAt: '2026-09-18T00:03:00.000Z',
     ...overrides,
   };
@@ -226,8 +231,30 @@ test('mutating candidate identity after TEST PASS invalidates promotion evidence
   assert.throws(() => assertTestPassRecord(testPassRecord(), OTHER_SHA), /candidate does not match requested CANDIDATE_SHA/);
 });
 
-test('PROD release rejects previous runtime anchor mismatch before acceptance', () => {
-  assert.throws(() => createProdReleaseRecord(prodArgs({ expectedRuntimeSha: OTHER_SHA })), /does not match expected_runtime_sha/);
+test('PROD release rejects previous deployed promotion runtime mismatch', () => {
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({ expectedRuntimeSha: OTHER_SHA })),
+    /does not match prior promotion_runtime_sha/,
+  );
+});
+
+test('PROD release rejects current runtime HEAD that is not the prior acceptance head', () => {
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({ expectedRuntimeHead: OTHER_SHA })),
+    /runtime_head_before does not match prior acceptance_runtime_head/,
+  );
+});
+
+test('PROD release records deployed promotion snapshot separately from acceptance runtime head', () => {
+  const record = createProdReleaseRecord(prodArgs());
+  assert.equal(record.previous_prod_runtime_anchor.promotion_runtime_sha, PROD_RUNTIME_SHA);
+  assert.equal(record.previous_prod_runtime_anchor.acceptance_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
+  assert.equal(record.prod_runtime_anchor.promotion_runtime_sha, PROD_PROMOTION_RUNTIME_SHA);
+  assert.equal(record.prod_runtime_anchor.acceptance_runtime_head, ACCEPTANCE_HEAD);
+  assert.notEqual(
+    record.prod_runtime_anchor.promotion_runtime_sha,
+    record.prod_runtime_anchor.acceptance_runtime_head,
+  );
 });
 
 test('PROD release requires accepted candidate-managed reconciliation evidence', () => {
@@ -286,6 +313,7 @@ test('minimal PROD release record preserves candidate, TEST evidence, rollback a
   assert.equal(record.test_pass_evidence.verdict, 'PASS');
   assert.equal(record.previous_prod_source_sha, PREVIOUS_PROD_SOURCE_SHA);
   assert.equal(record.previous_prod_runtime_data_sha, PROD_RUNTIME_SHA);
+  assert.equal(record.previous_prod_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
   assert.equal(record.prod_deploy_evidence.source_sha, SHA);
   assert.equal(record.prod_deploy_evidence.runtime_data_sha, PROD_PROMOTION_RUNTIME_SHA);
   assert.equal(record.prod_deploy_evidence.reconciliation.environment, 'prod');
