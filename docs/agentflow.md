@@ -1,7 +1,7 @@
 # AgentFlow - Operating Contract
 
 Status: **CANONICAL**  
-Version: **1.2**  
+Version: **1.3**  
 Applies to: **AGENTFLOW**  
 Last verified: **2026-09-23**
 
@@ -214,6 +214,31 @@ Review-ul compara implementarea exacta cu ATC-ul aprobat si Evidence Bundle.
 Review-ul nu modifica implementarea in acelasi pas.
 
 Verdictele canonice sunt cele din `GOVERNANCE.md` (`REVIEW_PASS`, `REVIEW_FAIL`, `REVIEW_BLOCKED`). Un review pozitiv nu autorizeaza automat PROD.
+
+### 11.1 Review record si candidate binding
+
+Pentru JSSC, ATC GitHub Issue este recordul canonic al Independent Review.
+
+Fiecare review record trebuie sa contina minimum:
+
+- ATC-ul revizuit;
+- verdictul canonic;
+- exact candidate SHA;
+- implementation PR, daca exista;
+- Evidence Bundle/referinta folosita;
+- findings sau, pentru `REVIEW_BLOCKED`, evidence/access/environment/dependency care impiedica verdictul.
+
+Procedura:
+
+1. reviewer-ul verifica exact ATC + exact candidate SHA + Evidence Bundle;
+2. verdictul complet se inregistreaza pe ATC Issue;
+3. headerul/statusul ATC se actualizeaza conform fazei `REVIEW`;
+4. daca exista PR, PR-ul primeste o referinta concisa la ATC, verdict si exact SHA;
+5. la `REVIEW_FAIL`, remediation produce SHA nou, Evidence Bundle nou si review nou; verdictul vechi ramane in istoric;
+6. la `REVIEW_BLOCKED`, blocker-ul ramane explicit pe ATC; dupa rezolvare review-ul se reia pe exact candidate-ul curent;
+7. inainte de merge/publication care necesita review, se verifica faptul ca HEAD-ul curent al PR-ului este exact SHA-ul pentru care ATC-ul are ultimul verdict aplicabil `REVIEW_PASS`.
+
+PR body/comments pot rezuma sau referentia review-ul, dar nu inlocuiesc recordul canonic de pe ATC. Starile GitHub ale PR-ului nu modifica implicit Phase/Status AgentFlow.
 
 ## 12. Handoff to release lifecycle
 
