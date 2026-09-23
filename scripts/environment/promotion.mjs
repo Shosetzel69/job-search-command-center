@@ -83,7 +83,7 @@ function normalizeReconciliationEvidence(evidence, environment, candidateSha, ru
   if (evidence.functional_visibility?.status !== 'PASS') {
     throw new Error(`${environment.toUpperCase()} protected functional visibility must PASS`);
   }
-  if (requireText(evidence.functional_visibility.method, `${environment}.functional_visibility.method`) !== 'canonical-protected-runtime-read') {
+  if (requireText(evidence.functional_visibility.method, `${environment}.functional_visibility.method`) !== 'deployed-protected-data') {
     throw new Error(`${environment.toUpperCase()} functional visibility method is unsupported`);
   }
   if (!['ACCEPTED','NOT_REQUIRED'].includes(evidence.acceptance_result)) {
