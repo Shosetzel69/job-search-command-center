@@ -37,12 +37,16 @@ test('PROD requires exact TEST PASS evidence for the same immutable candidate', 
   assert.match(promotion, /TEST-passed candidate is not reachable from approved main/);
 });
 
-test('PROD captures previous known-good source/runtime anchors before mutation', () => {
+test('PROD captures distinct previous promotion snapshot and acceptance runtime head before mutation', () => {
   assert.match(promotion, /previous-prod-health\.json/);
   assert.match(promotion, /Previous PROD source_sha is invalid/);
   assert.match(promotion, /Previous PROD runtime_data_sha is invalid/);
   assert.match(promotion, /expected_runtime_sha/);
-  assert.match(promotion, /job-search-prod main moved/);
+  assert.match(promotion, /expected_runtime_head/);
+  assert.match(promotion, /prior promotion_runtime_sha/);
+  assert.match(promotion, /prior acceptance_runtime_head/);
+  assert.match(promotion, /expected acceptance_runtime_head/);
+  assert.match(promotion, /--expected-runtime-head/);
 });
 
 test('PROD release record is generated after exact candidate health verification', () => {
@@ -51,6 +55,16 @@ test('PROD release record is generated after exact candidate health verification
   assert.match(promotion, /release-record\.json/);
   assert.match(promotion, /name: release-record/);
   assert.match(promotion, /owner-go-reference/);
+});
+
+test('PROD release record receives both runtime-anchor identities plus reconciliation evidence', () => {
+  assert.match(promotion, /--expected-runtime-sha "\$EXPECTED_RUNTIME_SHA"/);
+  assert.match(promotion, /--expected-runtime-head "\$EXPECTED_RUNTIME_HEAD"/);
+  assert.match(promotion, /--reconciliation-file promotion-output\/reconciliation\.json/);
+  assert.match(promotionEvidence, /previous_prod_runtime_anchor/);
+  assert.match(promotionEvidence, /prod_runtime_anchor/);
+  assert.match(promotionEvidence, /promotion_runtime_sha/);
+  assert.match(promotionEvidence, /acceptance_runtime_head/);
 });
 
 test('configuration and destructive DB changes fail closed without rollback evidence', () => {
@@ -97,7 +111,7 @@ test('PROD candidate-managed reconciliation uses the exact approved allowlist an
 
 test('PROD reconciliation runs only after immutable runtime anchor and TEST PASS guards', () => {
   const guard = promotion.indexOf('Verify exact TEST PASS evidence');
-  const anchor = promotion.indexOf('Verify immutable PROD runtime head');
+  const anchor = promotion.indexOf('Verify immutable PROD acceptance runtime head');
   const reconcile = promotion.indexOf('Execute reconciled PROD candidate promotion');
   const release = promotion.indexOf('Create minimal non-secret release record');
   assert.ok(guard >= 0 && anchor > guard && reconcile > anchor && release > reconcile);
