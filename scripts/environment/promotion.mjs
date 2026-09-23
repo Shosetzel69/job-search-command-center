@@ -80,6 +80,12 @@ function normalizeReconciliationEvidence(evidence, environment, candidateSha, ru
   if (evidence.reconciliation_result !== 'PASS') throw new Error(`${environment.toUpperCase()} reconciliation must PASS`);
   if (evidence.validation_result !== 'PASS') throw new Error(`${environment.toUpperCase()} reconciliation validation must PASS`);
   if (evidence.snapshot_verification !== 'PASS') throw new Error(`${environment.toUpperCase()} runtime snapshot verification must PASS`);
+  if (evidence.functional_visibility?.status !== 'PASS') {
+    throw new Error(`${environment.toUpperCase()} protected functional visibility must PASS`);
+  }
+  if (requireText(evidence.functional_visibility.method, `${environment}.functional_visibility.method`) !== 'canonical-protected-runtime-read') {
+    throw new Error(`${environment.toUpperCase()} functional visibility method is unsupported`);
+  }
   if (!['ACCEPTED','NOT_REQUIRED'].includes(evidence.acceptance_result)) {
     throw new Error(`${environment.toUpperCase()} reconciliation baseline is not accepted`);
   }
@@ -92,13 +98,24 @@ function normalizeReconciliationEvidence(evidence, environment, candidateSha, ru
   for (const path of MANAGED_PATHS) {
     const item = evidence.files?.[path];
     if (!item || typeof item !== 'object') throw new Error(`Missing reconciliation file evidence: ${path}`);
-    for (const field of ['baseline_digest','candidate_digest','runtime_before_digest','runtime_after_digest','next_baseline_digest']) {
+    for (const field of ['baseline_digest','candidate_digest','runtime_before_digest','runtime_after_digest','next_baseline_digest','functional_expected_digest']) {
       if (!/^sha256:[0-9a-f]{64}$/.test(String(item[field] || ''))) {
         throw new Error(`Invalid reconciliation digest ${path}.${field}`);
       }
     }
     if (!['noop_baseline','noop_runtime_already_candidate','apply_candidate','preserve_runtime'].includes(item.action)) {
       throw new Error(`Invalid reconciliation action for ${path}`);
+    }
+    const visible = evidence.functional_visibility.files?.[path];
+    if (!visible || typeof visible !== 'object') throw new Error(`Missing functional visibility evidence: ${path}`);
+    for (const field of ['expected_semantic_digest','visible_semantic_digest']) {
+      if (!/^sha256:[0-9a-f]{64}$/.test(String(visible[field] || ''))) {
+        throw new Error(`Invalid functional visibility digest ${path}.${field}`);
+      }
+    }
+    if (visible.expected_semantic_digest !== item.functional_expected_digest
+      || visible.visible_semantic_digest !== item.functional_expected_digest) {
+      throw new Error(`Functional visibility digest mismatch for ${path}`);
     }
   }
   return evidence;
