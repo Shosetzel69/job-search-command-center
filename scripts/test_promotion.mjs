@@ -264,6 +264,7 @@ test('PROD release requires accepted candidate-managed reconciliation evidence',
   );
 
   const failed = reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA);
+  failed.runtime_head_before = PREVIOUS_ACCEPTANCE_HEAD;
   failed.functional_visibility.status = 'FAIL';
   assert.throws(
     () => createProdReleaseRecord(prodArgs({ reconciliation: failed })),
