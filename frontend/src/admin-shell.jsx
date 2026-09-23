@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
-import { failureGroupRows, sourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
+import { failureGroupRows, runSummaryLabel, sourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
 import {
   ADMIN_SECTIONS,
   SOURCE_SECTIONS,
@@ -286,7 +286,7 @@ function Logs({ runs }) {
         <div><div className="font-semibold text-slate-900">{formatTime(run.completed_at || run.started_at)}</div><div className="text-xs text-slate-400">{run.run_id}</div></div>
         <Pill tone={run.status === 'completed' ? 'green' : run.status === 'completed_with_errors' ? 'amber' : 'red'}>{run.status}</Pill>
         <div className="text-xs text-slate-600">Trigger: {run.trigger || '—'}</div>
-        <div className="text-xs text-slate-500">{run.sources_attempted ?? run.sources_processed ?? 0} surse · {run.jobs_published ?? 0} publicate</div>
+        <div className="text-xs text-slate-500">{runSummaryLabel(run)}</div>
       </button>
       {open === run.run_id && <div className="border-t border-slate-100 bg-slate-50 p-4 text-xs text-slate-600">
         <div className="grid gap-2 md:grid-cols-3"><span>Durata: {run.duration_seconds != null ? `${run.duration_seconds}s` : '—'}</span><span>Brute: {run.records_inspected ?? 0}</span><span>Excluse: {run.excluded ?? 0}</span></div>
