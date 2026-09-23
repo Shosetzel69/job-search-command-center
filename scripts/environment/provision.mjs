@@ -55,7 +55,8 @@ function run(command, args, options = {}) {
     cwd: options.cwd || process.cwd(),
     env: options.env || safeChildEnv(),
     encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
+    input: options.input,
+    stdio: [options.input == null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
   });
 }
 
@@ -142,6 +143,41 @@ function configureRuntimeVariables(runtime) {
   run('gh', ['variable', 'set', 'APP_ENV', '--repo', runtime.runtimeRepository, '--body', runtime.environment], { env: ghEnv });
   run('gh', ['variable', 'set', 'SEARCH_MODE', '--repo', runtime.runtimeRepository, '--body', runtime.searchMode], { env: ghEnv });
   run('gh', ['variable', 'set', 'SOURCE_REPOSITORY', '--repo', runtime.runtimeRepository, '--body', runtime.sourceRepository], { env: ghEnv });
+}
+
+function configureBootstrapRuntimeSecrets(runtime) {
+  if (runtime.githubBootstrapToken === runtime.githubRuntimeToken) {
+    throw new Error('GitHub bootstrap and runtime credentials must be distinct');
+  }
+  if (runtime.githubRuntimeToken === runtime.sourceReadToken) {
+    throw new Error('GitHub runtime and source-read credentials must be distinct');
+  }
+  if (runtime.githubBootstrapToken === runtime.sourceReadToken) {
+    throw new Error('GitHub bootstrap and source-read credentials must be distinct');
+  }
+
+  run(
+    'gh',
+    ['secret', 'set', 'SOURCE_READ_TOKEN', '--repo', runtime.runtimeRepository],
+    { env: githubBootstrapEnv(runtime), input: runtime.sourceReadToken },
+  );
+
+  const cloudflareEnv = safeChildEnv({
+    CLOUDFLARE_ACCOUNT_ID: runtime.cloudflareAccountId,
+    CLOUDFLARE_API_TOKEN: runtime.cloudflareToken,
+    WRANGLER_SEND_METRICS: 'false',
+  });
+  const cwd = resolve(sourceWorkspace(), 'command-api');
+  run('npx', ['wrangler', 'secret', 'put', 'GITHUB_TOKEN', '--name', runtime.workerName], {
+    cwd,
+    env: cloudflareEnv,
+    input: runtime.githubRuntimeToken,
+  });
+  run('npx', ['wrangler', 'secret', 'put', 'ALLOWED_GOOGLE_SUB', '--name', runtime.workerName], {
+    cwd,
+    env: cloudflareEnv,
+    input: runtime.allowedGoogleSub,
+  });
 }
 
 function runtimeSnapshot(runtime) {
@@ -264,14 +300,17 @@ function requiredLiveReconciliationInputs() {
   if (!SHA_RE.test(controlPlaneSha)) throw new Error('CONTROL_PLANE_SHA must be a full immutable commit SHA');
   const candidateWorkspace = String(process.env.CANDIDATE_DATA_WORKSPACE || '').trim();
   if (!candidateWorkspace) throw new Error('CANDIDATE_DATA_WORKSPACE is required for live deployment');
+  const functionalGoogleIdToken = String(process.env.FUNCTIONAL_GOOGLE_ID_TOKEN || '').trim();
+  if (!functionalGoogleIdToken) throw new Error('FUNCTIONAL_GOOGLE_ID_TOKEN is required for deployed protected functional verification');
   return {
     controlPlaneSha,
     candidateWorkspace,
+    functionalGoogleIdToken,
     evidencePath: String(process.env.RECONCILIATION_EVIDENCE_PATH || '').trim() || null,
   };
 }
 
-async function deployCandidateWithReconciliation(runtime) {
+async function deployCandidateWithReconciliation(runtime, { configureBootstrapSecrets = false } = {}) {
   const inputs = requiredLiveReconciliationInputs();
   const gitEnv = githubRuntimeEnv(runtime);
   let reconciliation;
@@ -300,6 +339,7 @@ async function deployCandidateWithReconciliation(runtime) {
     if (runtimeDataSha !== reconciliation.promotion_runtime_sha) {
       throw new Error(`Runtime snapshot identity mismatch: expected ${reconciliation.promotion_runtime_sha}, got ${runtimeDataSha}`);
     }
+    if (configureBootstrapSecrets) configureBootstrapRuntimeSecrets(runtime);
     health = await probeDeployedHealth(runtime, runtimeDataSha);
     try {
       snapshotVerification = verifyRuntimePromotionSnapshot(runtime, reconciliation, { gitEnv });
@@ -307,7 +347,9 @@ async function deployCandidateWithReconciliation(runtime) {
       snapshotVerification = 'FAIL';
       throw error;
     }
-    functionalVisibility = await verifyProtectedFunctionalVisibility(runtime, reconciliation);
+    functionalVisibility = await verifyProtectedFunctionalVisibility(runtime, reconciliation, {
+      googleIdToken: inputs.functionalGoogleIdToken,
+    });
     acceptance = acceptRuntimeReconciliation(runtime, reconciliation, {
       gitEnv,
       snapshotVerification,
@@ -359,7 +401,7 @@ export async function provisionEnvironment(runtime) {
   const created = ensureRuntimeRepository(runtime);
   syncRuntimeFiles(runtime);
   configureRuntimeVariables(runtime);
-  const deployment = await deployCandidateWithReconciliation(runtime);
+  const deployment = await deployCandidateWithReconciliation(runtime, { configureBootstrapSecrets: true });
   return {
     status: 'PASS',
     action: 'bootstrap',
