@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: PROD action
+        description: PROD action. verify-deployed-status is post-deploy verification only; use PROD Readiness for pre-cutover checks
         required: true
         type: choice
-        options: [bootstrap-deploy, deploy, status]
+        options: [bootstrap-deploy, deploy, verify-deployed-status]
       source_sha:
         description: Exact TEST-passed CANDIDATE_SHA
         required: true
@@ -93,7 +93,7 @@ jobs:
           [[ "$EXPECTED_RUNTIME_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "expected_runtime_sha must be a full immutable commit SHA" >&2; exit 1; }
           [[ "$EXPECTED_RUNTIME_HEAD" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "expected_runtime_head must be a full immutable commit SHA" >&2; exit 1; }
 
-          if [ "${{ inputs.action }}" != "status" ]; then
+          if [ "${{ inputs.action }}" != "verify-deployed-status" ]; then
             test "$GITHUB_REF" = "refs/heads/main" || { echo "PROD mutation workflow must run from main" >&2; exit 1; }
             [[ "$TEST_PASS_RUN_ID" =~ ^[0-9]+$ ]] || { echo "PROD mutation requires numeric test_pass_run_id" >&2; exit 1; }
             test -n "$ROLLBACK_REFERENCE" || { echo "PROD mutation requires rollback_reference" >&2; exit 1; }
@@ -135,7 +135,7 @@ jobs:
           path: candidate-source
 
       - name: Prepare inert candidate-managed data
-        if: ${{ inputs.action != 'status' }}
+        if: ${{ inputs.action != 'verify-deployed-status' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -167,12 +167,31 @@ jobs:
             exit 1
           }
 
+      - name: Verify already-deployed PROD status semantics
+        if: ${{ inputs.action == 'verify-deployed-status' }}
+        env:
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! health="$(curl --fail --silent --show-error "$FRONTEND_ORIGIN/health")"; then
+            echo "verify-deployed-status requires an already deployed PROD instance. For pre-cutover checks use the separate PROD Readiness (Non-Mutating) workflow." >&2
+            exit 1
+          fi
+          if ! jq -e --arg source "$SOURCE_SHA" --arg runtime "$EXPECTED_RUNTIME_SHA"             '.status == "ok" and .environment == "prod" and .source_sha == $source and .runtime_data_sha == $runtime and .runtime_repo == "Shosetzel69/job-search-prod" and .search_mode == "live"'             <<<"$health" >/dev/null; then
+            echo "verify-deployed-status is post-deploy verification only: requested source/runtime is not currently deployed. Use PROD Readiness (Non-Mutating) before cutover." >&2
+            exit 1
+          fi
+          echo "Already-deployed PROD identity verified for $SOURCE_SHA."
+
       - name: Run trusted environment and promotion contract tests
         working-directory: control-plane
         run: npm run test:environment
 
       - name: Verify exact TEST PASS evidence
-        if: ${{ inputs.action != 'status' }}
+        if: ${{ inputs.action != 'verify-deployed-status' }}
         env:
           GH_TOKEN: ${{ github.token }}
           TEST_PASS_RUN_ID: ${{ inputs.test_pass_run_id }}
@@ -193,7 +212,7 @@ jobs:
             --candidate-sha "$CANDIDATE_SHA"
 
       - name: Capture previous known-good PROD anchors before mutation
-        if: ${{ inputs.action != 'status' }}
+        if: ${{ inputs.action != 'verify-deployed-status' }}
         env:
           FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
           EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
@@ -339,7 +358,7 @@ jobs:
           fi
 
       - name: Prepare sanitized candidate payload on trusted baseline
-        if: ${{ inputs.action != 'status' }}
+        if: ${{ inputs.action != 'verify-deployed-status' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -363,11 +382,11 @@ jobs:
           cmp control-plane/frontend/vite.config.js deployment-source/frontend/vite.config.js
 
       - name: Install trusted deployment dependencies
-        if: ${{ inputs.action != 'status' }}
+        if: ${{ inputs.action != 'verify-deployed-status' }}
         run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
       - name: Execute reconciled PROD candidate promotion
-        if: ${{ inputs.action != 'status' }}
+        if: ${{ inputs.action != 'verify-deployed-status' }}
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           PROD_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
@@ -395,7 +414,7 @@ jobs:
             --result-output promotion-output/prod-deployment.json
 
       - name: Upload PROD reconciliation trace
-        if: ${{ always() && inputs.action != 'status' }}
+        if: ${{ always() && inputs.action != 'verify-deployed-status' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: reconciliation-prod-${{ github.run_id }}
@@ -404,7 +423,7 @@ jobs:
           retention-days: 90
 
       - name: Create minimal non-secret release record
-        if: ${{ inputs.action != 'status' }}
+        if: ${{ inputs.action != 'verify-deployed-status' }}
         env:
           CANDIDATE_SHA: ${{ inputs.source_sha }}
           EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
@@ -443,7 +462,7 @@ jobs:
             --output release-output/release-record.json
 
       - name: Upload release record
-        if: ${{ inputs.action != 'status' }}
+        if: ${{ inputs.action != 'verify-deployed-status' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: release-record
