@@ -6,6 +6,17 @@ import { runtimeDataFiles } from './plans.mjs';
 import { serializeSeed, shouldRefreshPristineSeed } from './seed.mjs';
 import { SHA_RE, redact } from './contract.mjs';
 import { assertPreCutoverLiveGate, verifyLocalSourceSha } from './live.mjs';
+import {
+  acceptRuntimeReconciliation,
+  buildReconciliationEvidence,
+  FunctionalVisibilityError,
+  reconcileRuntimeRepository,
+  ReconciliationBlockedError,
+  revertRuntimeReconciliation,
+  verifyProtectedFunctionalVisibility,
+  verifyRuntimePromotionSnapshot,
+  writeReconciliationEvidence,
+} from './reconciliation.mjs';
 
 const HEALTH_PROPAGATION_ATTEMPTS = 10;
 const HEALTH_PROPAGATION_DELAY_MS = 3000;
@@ -44,7 +55,8 @@ function run(command, args, options = {}) {
     cwd: options.cwd || process.cwd(),
     env: options.env || safeChildEnv(),
     encoding: 'utf8',
-    stdio: ['ignore', 'pipe', 'pipe'],
+    input: options.input,
+    stdio: [options.input == null ? 'ignore' : 'pipe', 'pipe', 'pipe'],
   });
 }
 
@@ -131,6 +143,41 @@ function configureRuntimeVariables(runtime) {
   run('gh', ['variable', 'set', 'APP_ENV', '--repo', runtime.runtimeRepository, '--body', runtime.environment], { env: ghEnv });
   run('gh', ['variable', 'set', 'SEARCH_MODE', '--repo', runtime.runtimeRepository, '--body', runtime.searchMode], { env: ghEnv });
   run('gh', ['variable', 'set', 'SOURCE_REPOSITORY', '--repo', runtime.runtimeRepository, '--body', runtime.sourceRepository], { env: ghEnv });
+}
+
+function configureBootstrapRuntimeSecrets(runtime) {
+  if (runtime.githubBootstrapToken === runtime.githubRuntimeToken) {
+    throw new Error('GitHub bootstrap and runtime credentials must be distinct');
+  }
+  if (runtime.githubRuntimeToken === runtime.sourceReadToken) {
+    throw new Error('GitHub runtime and source-read credentials must be distinct');
+  }
+  if (runtime.githubBootstrapToken === runtime.sourceReadToken) {
+    throw new Error('GitHub bootstrap and source-read credentials must be distinct');
+  }
+
+  run(
+    'gh',
+    ['secret', 'set', 'SOURCE_READ_TOKEN', '--repo', runtime.runtimeRepository],
+    { env: githubBootstrapEnv(runtime), input: runtime.sourceReadToken },
+  );
+
+  const cloudflareEnv = safeChildEnv({
+    CLOUDFLARE_ACCOUNT_ID: runtime.cloudflareAccountId,
+    CLOUDFLARE_API_TOKEN: runtime.cloudflareToken,
+    WRANGLER_SEND_METRICS: 'false',
+  });
+  const cwd = resolve(sourceWorkspace(), 'command-api');
+  run('npx', ['wrangler', 'secret', 'put', 'GITHUB_TOKEN', '--name', runtime.workerName], {
+    cwd,
+    env: cloudflareEnv,
+    input: runtime.githubRuntimeToken,
+  });
+  run('npx', ['wrangler', 'secret', 'put', 'ALLOWED_GOOGLE_SUB', '--name', runtime.workerName], {
+    cwd,
+    env: cloudflareEnv,
+    input: runtime.allowedGoogleSub,
+  });
 }
 
 function runtimeSnapshot(runtime) {
@@ -248,41 +295,142 @@ async function probeDeployedHealth(runtime, runtimeDataSha) {
   });
 }
 
+function requiredLiveReconciliationInputs() {
+  const controlPlaneSha = String(process.env.CONTROL_PLANE_SHA || '').trim().toLowerCase();
+  if (!SHA_RE.test(controlPlaneSha)) throw new Error('CONTROL_PLANE_SHA must be a full immutable commit SHA');
+  const candidateWorkspace = String(process.env.CANDIDATE_DATA_WORKSPACE || '').trim();
+  if (!candidateWorkspace) throw new Error('CANDIDATE_DATA_WORKSPACE is required for live deployment');
+  const functionalGoogleIdToken = String(process.env.FUNCTIONAL_GOOGLE_ID_TOKEN || '').trim();
+  if (!functionalGoogleIdToken) throw new Error('FUNCTIONAL_GOOGLE_ID_TOKEN is required for deployed protected functional verification');
+  return {
+    controlPlaneSha,
+    candidateWorkspace,
+    functionalGoogleIdToken,
+    evidencePath: String(process.env.RECONCILIATION_EVIDENCE_PATH || '').trim() || null,
+  };
+}
+
+async function deployCandidateWithReconciliation(runtime, { configureBootstrapSecrets = false } = {}) {
+  const inputs = requiredLiveReconciliationInputs();
+  const gitEnv = githubRuntimeEnv(runtime);
+  let reconciliation;
+
+  try {
+    reconciliation = reconcileRuntimeRepository(runtime, {
+      candidateWorkspace: inputs.candidateWorkspace,
+      controlPlaneSha: inputs.controlPlaneSha,
+      gitEnv,
+    });
+  } catch (error) {
+    if (error instanceof ReconciliationBlockedError && error.evidence) {
+      writeReconciliationEvidence(inputs.evidencePath, error.evidence);
+    }
+    throw error;
+  }
+
+  let health = null;
+  let snapshotVerification = 'NOT_RUN';
+  let functionalVisibility = null;
+  let acceptance = null;
+  let revert = null;
+
+  try {
+    const runtimeDataSha = deployWorker(runtime);
+    if (runtimeDataSha !== reconciliation.promotion_runtime_sha) {
+      throw new Error(`Runtime snapshot identity mismatch: expected ${reconciliation.promotion_runtime_sha}, got ${runtimeDataSha}`);
+    }
+    if (configureBootstrapSecrets) configureBootstrapRuntimeSecrets(runtime);
+    health = await probeDeployedHealth(runtime, runtimeDataSha);
+    try {
+      snapshotVerification = verifyRuntimePromotionSnapshot(runtime, reconciliation, { gitEnv });
+    } catch (error) {
+      snapshotVerification = 'FAIL';
+      throw error;
+    }
+    functionalVisibility = await verifyProtectedFunctionalVisibility(runtime, reconciliation, {
+      googleIdToken: inputs.functionalGoogleIdToken,
+    });
+    acceptance = acceptRuntimeReconciliation(runtime, reconciliation, {
+      gitEnv,
+      snapshotVerification,
+      functionalVisibility,
+    });
+    if (acceptance.status === 'DEGRADED') throw new Error(acceptance.reason || 'Baseline acceptance is degraded');
+
+    const evidence = buildReconciliationEvidence(reconciliation, {
+      health,
+      snapshotVerification,
+      functionalVisibility,
+      acceptance,
+      revert,
+    });
+    writeReconciliationEvidence(inputs.evidencePath, evidence);
+    return { runtimeDataSha, health, reconciliation: evidence };
+  } catch (error) {
+    if (error instanceof FunctionalVisibilityError && error.proof) {
+      functionalVisibility = error.proof;
+    }
+    if (acceptance?.status !== 'ACCEPTED') {
+      try {
+        revert = revertRuntimeReconciliation(runtime, reconciliation, { gitEnv });
+      } catch (revertError) {
+        revert = {
+          status: 'DEGRADED',
+          reason: `Compensating revert failed: ${revertError instanceof Error ? revertError.message : String(revertError)}`,
+        };
+      }
+    } else {
+      revert = { status: 'NOT_PERMITTED_AFTER_ACCEPTANCE' };
+    }
+
+    const evidence = buildReconciliationEvidence(reconciliation, {
+      health,
+      snapshotVerification,
+      functionalVisibility,
+      acceptance,
+      revert,
+    });
+    try { writeReconciliationEvidence(inputs.evidencePath, evidence); } catch {}
+    const suffix = revert?.status === 'DEGRADED' ? ` Runtime is DEGRADED/BLOCKED: ${revert.reason || 'concurrent mutation'}` : '';
+    throw new Error(`${error instanceof Error ? error.message : String(error)}.${suffix}`);
+  }
+}
+
 export async function provisionEnvironment(runtime) {
   assertPreCutoverLiveGate(runtime.environment, false);
   const created = ensureRuntimeRepository(runtime);
   syncRuntimeFiles(runtime);
   configureRuntimeVariables(runtime);
-  const runtimeDataSha = deployWorker(runtime);
-  const health = await probeDeployedHealth(runtime, runtimeDataSha);
+  const deployment = await deployCandidateWithReconciliation(runtime, { configureBootstrapSecrets: true });
   return {
     status: 'PASS',
     action: 'bootstrap',
     environment: runtime.environment,
     source_sha: runtime.sourceSha,
-    runtime_data_sha: runtimeDataSha,
+    runtime_data_sha: deployment.runtimeDataSha,
     runtime_repo: runtime.runtimeRepository,
     runtime_repo_created: created,
     cloudflare_account: redact(runtime.cloudflareAccountId),
     frontend_origin: runtime.frontendOrigin,
-    health,
+    health: deployment.health,
+    reconciliation: deployment.reconciliation,
   };
 }
 
 export async function deployEnvironment(runtime) {
   assertPreCutoverLiveGate(runtime.environment, false);
-  const runtimeDataSha = deployWorker(runtime);
-  const health = await probeDeployedHealth(runtime, runtimeDataSha);
+  const deployment = await deployCandidateWithReconciliation(runtime);
   return {
     status: 'PASS',
     action: 'deploy',
     environment: runtime.environment,
     source_sha: runtime.sourceSha,
-    runtime_data_sha: runtimeDataSha,
+    runtime_data_sha: deployment.runtimeDataSha,
     runtime_repo: runtime.runtimeRepository,
     cloudflare_account: redact(runtime.cloudflareAccountId),
     frontend_origin: runtime.frontendOrigin,
-    health,
+    health: deployment.health,
+    reconciliation: deployment.reconciliation,
   };
 }
 

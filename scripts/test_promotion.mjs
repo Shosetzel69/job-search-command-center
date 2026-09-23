@@ -15,6 +15,10 @@ const DEV_RUNTIME_SHA = 'c'.repeat(40);
 const TEST_RUNTIME_SHA = 'd'.repeat(40);
 const PROD_RUNTIME_SHA = 'e'.repeat(40);
 const PREVIOUS_PROD_SOURCE_SHA = 'f'.repeat(40);
+const CONTROL_PLANE_SHA = '9'.repeat(40);
+const RUNTIME_HEAD_BEFORE = '8'.repeat(40);
+const ACCEPTANCE_HEAD = '7'.repeat(40);
+const DIGEST = `sha256:${'1'.repeat(64)}`;
 
 function health(environment, sourceSha, runtimeSha) {
   const runtimeRepo = environment === 'dev'
@@ -34,6 +38,63 @@ function health(environment, sourceSha, runtimeSha) {
   };
 }
 
+function reconciliation(environment, sourceSha, runtimeSha) {
+  const fileEvidence = {
+    baseline_digest: DIGEST,
+    candidate_digest: DIGEST,
+    runtime_before_digest: DIGEST,
+    action: 'noop_baseline',
+    runtime_after_digest: DIGEST,
+    next_baseline_digest: DIGEST,
+    functional_expected_digest: DIGEST,
+  };
+  return {
+    schema_version: '1.0',
+    environment,
+    control_plane_sha: CONTROL_PLANE_SHA,
+    candidate_sha: sourceSha,
+    runtime_head_before: RUNTIME_HEAD_BEFORE,
+    promotion_runtime_sha: runtimeSha,
+    acceptance_runtime_head: ACCEPTANCE_HEAD,
+    allowlist_version: '1.0',
+    files: {
+      'data/sources.json': { ...fileEvidence },
+      'data/source-categories.json': { ...fileEvidence },
+      'data/nomenclatures.json': { ...fileEvidence },
+    },
+    reconciliation_result: 'PASS',
+    validation_result: 'PASS',
+    snapshot_verification: 'PASS',
+    functional_visibility: {
+      status: 'PASS',
+      method: 'deployed-protected-data',
+      files: {
+        'data/sources.json': {
+          expected_semantic_digest: DIGEST,
+          visible_semantic_digest: DIGEST,
+          visible_count: 1,
+        },
+        'data/source-categories.json': {
+          expected_semantic_digest: DIGEST,
+          visible_semantic_digest: DIGEST,
+          visible_count: 1,
+        },
+        'data/nomenclatures.json': {
+          expected_semantic_digest: DIGEST,
+          visible_semantic_digest: DIGEST,
+          visible_count: 6,
+        },
+      },
+    },
+    acceptance_result: 'NOT_REQUIRED',
+    health: {
+      source_sha: sourceSha,
+      runtime_data_sha: runtimeSha,
+    },
+    revert_result: 'NOT_REQUIRED',
+  };
+}
+
 function devRecord() {
   return createDevPassRecord({
     candidateSha: SHA,
@@ -41,6 +102,7 @@ function devRecord() {
     runId: '1001',
     runUrl: 'https://github.com/example/repo/actions/runs/1001',
     health: health('dev', SHA, DEV_RUNTIME_SHA),
+    reconciliation: reconciliation('dev', SHA, DEV_RUNTIME_SHA),
     createdAt: '2026-09-18T00:00:00.000Z',
   });
 }
@@ -52,6 +114,7 @@ function testDeployedRecord() {
     runId: '1002',
     runUrl: 'https://github.com/example/repo/actions/runs/1002',
     health: health('test', SHA, TEST_RUNTIME_SHA),
+    reconciliation: reconciliation('test', SHA, TEST_RUNTIME_SHA),
     createdAt: '2026-09-18T00:01:00.000Z',
   });
 }
@@ -96,6 +159,40 @@ test('DEV PASS freezes exact immutable candidate and Issue/PR evidence', () => {
   assert.doesNotThrow(() => assertDevPassRecord(record, SHA));
 });
 
+test('DEV PASS cannot be created from health evidence alone', () => {
+  assert.throws(() => createDevPassRecord({
+    candidateSha: SHA,
+    issuePr: '#325',
+    runId: '1001',
+    runUrl: 'https://github.com/example/repo/actions/runs/1001',
+    health: health('dev', SHA, DEV_RUNTIME_SHA),
+  }), /reconciliation evidence is missing/);
+});
+
+test('DEV PASS and TEST gate reject reconciliation without protected functional visibility proof', () => {
+  const failed = reconciliation('dev', SHA, DEV_RUNTIME_SHA);
+  failed.functional_visibility.status = 'FAIL';
+  assert.throws(() => createDevPassRecord({
+    candidateSha: SHA,
+    issuePr: '#325',
+    runId: '1001',
+    runUrl: 'https://github.com/example/repo/actions/runs/1001',
+    health: health('dev', SHA, DEV_RUNTIME_SHA),
+    reconciliation: failed,
+  }), /protected functional visibility must PASS/);
+
+  const missing = reconciliation('dev', SHA, DEV_RUNTIME_SHA);
+  delete missing.functional_visibility;
+  assert.throws(() => createDevPassRecord({
+    candidateSha: SHA,
+    issuePr: '#325',
+    runId: '1001',
+    runUrl: 'https://github.com/example/repo/actions/runs/1001',
+    health: health('dev', SHA, DEV_RUNTIME_SHA),
+    reconciliation: missing,
+  }), /protected functional visibility must PASS/);
+});
+
 test('TEST deployment rejects any candidate different from DEV PASS', () => {
   assert.throws(() => createTestDeployedRecord({
     devRecord: devRecord(),
@@ -103,6 +200,7 @@ test('TEST deployment rejects any candidate different from DEV PASS', () => {
     runId: '1002',
     runUrl: 'https://github.com/example/repo/actions/runs/1002',
     health: health('test', OTHER_SHA, TEST_RUNTIME_SHA),
+    reconciliation: reconciliation('test', OTHER_SHA, TEST_RUNTIME_SHA),
   }), /candidate does not match requested CANDIDATE_SHA/);
 });
 

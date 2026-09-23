@@ -4,6 +4,8 @@ import { pathToFileURL } from 'node:url';
 import { SHA_RE } from './contract.mjs';
 
 const SCHEMA_VERSION = '1.0';
+const RECONCILIATION_SCHEMA_VERSION = '1.0';
+const MANAGED_PATHS = Object.freeze(['data/sources.json','data/source-categories.json','data/nomenclatures.json']);
 const RUN_ID_RE = /^\d+$/;
 const DB_CHANGE_TYPES = new Set(['none', 'reversible', 'destructive']);
 
@@ -55,13 +57,87 @@ function normalizeHealth(health, environment, candidateSha) {
   };
 }
 
-function normalizeDeploymentEvidence({ environment, candidateSha, runId, runUrl, health }) {
-  return {
+function normalizeReconciliationEvidence(evidence, environment, candidateSha, runtimeDataSha) {
+  if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
+    throw new Error(`${environment.toUpperCase()} reconciliation evidence is missing`);
+  }
+  if (evidence.schema_version !== RECONCILIATION_SCHEMA_VERSION) {
+    throw new Error('Unsupported reconciliation evidence schema_version');
+  }
+  if (evidence.environment !== environment) throw new Error(`${environment.toUpperCase()} reconciliation environment mismatch`);
+  if (requireSha(evidence.candidate_sha, `${environment}.reconciliation.candidate_sha`) !== candidateSha) {
+    throw new Error(`${environment.toUpperCase()} reconciliation candidate_sha mismatch`);
+  }
+  if (requireSha(evidence.promotion_runtime_sha, `${environment}.reconciliation.promotion_runtime_sha`) !== runtimeDataSha) {
+    throw new Error(`${environment.toUpperCase()} reconciliation runtime_data_sha mismatch`);
+  }
+  requireSha(evidence.control_plane_sha, `${environment}.reconciliation.control_plane_sha`);
+  requireSha(evidence.runtime_head_before, `${environment}.reconciliation.runtime_head_before`);
+  if (evidence.acceptance_runtime_head != null) requireSha(evidence.acceptance_runtime_head, `${environment}.reconciliation.acceptance_runtime_head`);
+  if (requireText(evidence.allowlist_version, `${environment}.reconciliation.allowlist_version`) !== '1.0') {
+    throw new Error('Unsupported reconciliation allowlist_version');
+  }
+  if (evidence.reconciliation_result !== 'PASS') throw new Error(`${environment.toUpperCase()} reconciliation must PASS`);
+  if (evidence.validation_result !== 'PASS') throw new Error(`${environment.toUpperCase()} reconciliation validation must PASS`);
+  if (evidence.snapshot_verification !== 'PASS') throw new Error(`${environment.toUpperCase()} runtime snapshot verification must PASS`);
+  if (evidence.functional_visibility?.status !== 'PASS') {
+    throw new Error(`${environment.toUpperCase()} protected functional visibility must PASS`);
+  }
+  if (requireText(evidence.functional_visibility.method, `${environment}.functional_visibility.method`) !== 'deployed-protected-data') {
+    throw new Error(`${environment.toUpperCase()} functional visibility method is unsupported`);
+  }
+  if (!['ACCEPTED','NOT_REQUIRED'].includes(evidence.acceptance_result)) {
+    throw new Error(`${environment.toUpperCase()} reconciliation baseline is not accepted`);
+  }
+  if (evidence.revert_result !== 'NOT_REQUIRED') {
+    throw new Error(`${environment.toUpperCase()} reconciliation evidence contains a revert/degraded outcome`);
+  }
+  if (evidence.health?.source_sha !== candidateSha || evidence.health?.runtime_data_sha !== runtimeDataSha) {
+    throw new Error(`${environment.toUpperCase()} reconciliation health identity mismatch`);
+  }
+  for (const path of MANAGED_PATHS) {
+    const item = evidence.files?.[path];
+    if (!item || typeof item !== 'object') throw new Error(`Missing reconciliation file evidence: ${path}`);
+    for (const field of ['baseline_digest','candidate_digest','runtime_before_digest','runtime_after_digest','next_baseline_digest','functional_expected_digest']) {
+      if (!/^sha256:[0-9a-f]{64}$/.test(String(item[field] || ''))) {
+        throw new Error(`Invalid reconciliation digest ${path}.${field}`);
+      }
+    }
+    if (!['noop_baseline','noop_runtime_already_candidate','apply_candidate','preserve_runtime'].includes(item.action)) {
+      throw new Error(`Invalid reconciliation action for ${path}`);
+    }
+    const visible = evidence.functional_visibility.files?.[path];
+    if (!visible || typeof visible !== 'object') throw new Error(`Missing functional visibility evidence: ${path}`);
+    for (const field of ['expected_semantic_digest','visible_semantic_digest']) {
+      if (!/^sha256:[0-9a-f]{64}$/.test(String(visible[field] || ''))) {
+        throw new Error(`Invalid functional visibility digest ${path}.${field}`);
+      }
+    }
+    if (visible.expected_semantic_digest !== item.functional_expected_digest
+      || visible.visible_semantic_digest !== item.functional_expected_digest) {
+      throw new Error(`Functional visibility digest mismatch for ${path}`);
+    }
+  }
+  return evidence;
+}
+
+function normalizeDeploymentEvidence({ environment, candidateSha, runId, runUrl, health, reconciliation }) {
+  const normalizedHealth = normalizeHealth(health, environment, candidateSha);
+  const output = {
     verdict: 'PASS',
     run_id: requireRunId(runId),
     run_url: requireText(runUrl, 'run_url'),
-    ...normalizeHealth(health, environment, candidateSha),
+    ...normalizedHealth,
   };
+  if (environment !== 'prod' || reconciliation) {
+    output.reconciliation = normalizeReconciliationEvidence(
+      reconciliation,
+      environment,
+      candidateSha,
+      normalizedHealth.runtime_data_sha,
+    );
+  }
+  return output;
 }
 
 function assertBaseRecord(record, expectedStage, candidateSha) {
@@ -90,10 +166,13 @@ function assertDeploymentEvidence(evidence, environment, candidateSha) {
   if (requireSha(evidence.source_sha, `${environment}.source_sha`) !== candidateSha) {
     throw new Error(`${environment.toUpperCase()} evidence source_sha does not match CANDIDATE_SHA`);
   }
-  requireSha(evidence.runtime_data_sha, `${environment}.runtime_data_sha`);
+  const runtimeDataSha = requireSha(evidence.runtime_data_sha, `${environment}.runtime_data_sha`);
+  if (environment !== 'prod' || evidence.reconciliation) {
+    normalizeReconciliationEvidence(evidence.reconciliation, environment, candidateSha, runtimeDataSha);
+  }
 }
 
-export function createDevPassRecord({ candidateSha, issuePr, runId, runUrl, health, createdAt = new Date().toISOString() }) {
+export function createDevPassRecord({ candidateSha, issuePr, runId, runUrl, health, reconciliation, createdAt = new Date().toISOString() }) {
   const sha = requireSha(candidateSha, 'CANDIDATE_SHA');
   return {
     schema_version: SCHEMA_VERSION,
@@ -101,7 +180,7 @@ export function createDevPassRecord({ candidateSha, issuePr, runId, runUrl, heal
     issue_pr: requireText(issuePr, 'Issue / PR'),
     candidate_sha: sha,
     created_at: createdAt,
-    dev_pass: normalizeDeploymentEvidence({ environment: 'dev', candidateSha: sha, runId, runUrl, health }),
+    dev_pass: normalizeDeploymentEvidence({ environment: 'dev', candidateSha: sha, runId, runUrl, health, reconciliation }),
   };
 }
 
@@ -111,14 +190,14 @@ export function assertDevPassRecord(record, candidateSha) {
   return record;
 }
 
-export function createTestDeployedRecord({ devRecord, candidateSha, runId, runUrl, health, createdAt = new Date().toISOString() }) {
+export function createTestDeployedRecord({ devRecord, candidateSha, runId, runUrl, health, reconciliation, createdAt = new Date().toISOString() }) {
   const sha = requireSha(candidateSha, 'CANDIDATE_SHA');
   assertDevPassRecord(devRecord, sha);
   return {
     ...devRecord,
     stage: 'test_deployed',
     created_at: createdAt,
-    test_deploy: normalizeDeploymentEvidence({ environment: 'test', candidateSha: sha, runId, runUrl, health }),
+    test_deploy: normalizeDeploymentEvidence({ environment: 'test', candidateSha: sha, runId, runUrl, health, reconciliation }),
   };
 }
 
@@ -286,6 +365,7 @@ async function main(argv = process.argv.slice(2)) {
       runId: args.run_id,
       runUrl: args.run_url,
       health: readJson(args.health_file, 'DEV health evidence'),
+      reconciliation: readJson(args.reconciliation_file, 'DEV reconciliation evidence'),
     }));
     return;
   }
@@ -300,6 +380,7 @@ async function main(argv = process.argv.slice(2)) {
       runId: args.run_id,
       runUrl: args.run_url,
       health: readJson(args.health_file, 'TEST health evidence'),
+      reconciliation: readJson(args.reconciliation_file, 'TEST reconciliation evidence'),
     }));
     return;
   }

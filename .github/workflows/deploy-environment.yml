@@ -170,6 +170,21 @@ jobs:
           candidate="$(git -C candidate-source rev-parse HEAD)"
           test "${candidate,,}" = "${source_sha,,}" || { echo "candidate checkout does not match source_sha" >&2; exit 1; }
 
+      - name: Prepare inert candidate-managed data
+        if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf candidate-managed-data
+          mkdir -p candidate-managed-data/data
+          for path in data/sources.json data/source-categories.json data/nomenclatures.json; do
+            test -f "candidate-source/$path" || { echo "Missing candidate-managed file: $path" >&2; exit 1; }
+            test ! -L "candidate-source/$path" || { echo "Candidate-managed file must not be a symlink: $path" >&2; exit 1; }
+            cp "candidate-source/$path" "candidate-managed-data/$path"
+          done
+          mapfile -t copied < <(find candidate-managed-data -type f -print | sort)
+          test "${#copied[@]}" -eq 3 || { echo "Unexpected candidate-managed payload" >&2; exit 1; }
+
       - name: Run trusted environment contract tests
         working-directory: control-plane
         run: npm run test:environment
@@ -231,6 +246,7 @@ jobs:
         run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
       - name: Execute selected live environment action
+        id: live-action
         working-directory: control-plane
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
@@ -251,9 +267,16 @@ jobs:
           TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
           DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
           TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
+          FUNCTIONAL_GOOGLE_ID_TOKEN: ${{ secrets.FUNCTIONAL_GOOGLE_ID_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
+          if [ "${{ inputs.action }}" = "bootstrap" ] || [ "${{ inputs.action }}" = "deploy" ]; then
+            mkdir -p "$GITHUB_WORKSPACE/promotion-output"
+            export CONTROL_PLANE_SHA="$(git -C "$GITHUB_WORKSPACE/control-plane" rev-parse HEAD)"
+            export CANDIDATE_DATA_WORKSPACE="$GITHUB_WORKSPACE/candidate-managed-data"
+            export RECONCILIATION_EVIDENCE_PATH="$GITHUB_WORKSPACE/promotion-output/reconciliation.json"
+          fi
           case "${{ inputs.action }}" in
             validate) npm run env:validate -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
             bootstrap) npm run env:bootstrap -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
@@ -263,6 +286,15 @@ jobs:
             prod-preflight) echo "prod-preflight is dry-run only" >&2; exit 1 ;;
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
+
+      - name: Upload reconciliation trace on success or fail-closed exit
+        if: ${{ always() && (inputs.action == 'bootstrap' || inputs.action == 'deploy') && steps.live-action.outcome != 'skipped' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reconciliation-${{ inputs.environment }}-${{ github.run_id }}
+          path: promotion-output/reconciliation.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Capture immutable DEV / TEST deployment evidence
         if: ${{ inputs.action == 'deploy' }}
@@ -285,6 +317,7 @@ jobs:
               --run-id "$GITHUB_RUN_ID" \
               --run-url "$run_url" \
               --health-file promotion-output/health.json \
+              --reconciliation-file promotion-output/reconciliation.json \
               --output promotion-output/promotion-record.json
           else
             node control-plane/scripts/environment/promotion.mjs create-test-deployed \
@@ -293,6 +326,7 @@ jobs:
               --run-id "$GITHUB_RUN_ID" \
               --run-url "$run_url" \
               --health-file promotion-output/health.json \
+              --reconciliation-file promotion-output/reconciliation.json \
               --output promotion-output/promotion-record.json
           fi
 
@@ -313,29 +347,6 @@ jobs:
           path: promotion-output/promotion-record.json
           if-no-files-found: error
           retention-days: 90
-
-      - name: Configure runtime and Worker secrets with separated roles
-        if: ${{ inputs.action == 'bootstrap' }}
-        working-directory: deployment-source/command-api
-        env:
-          SELECTED_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          SELECTED_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
-          SELECTED_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
-          SELECTED_GITHUB_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
-          SELECTED_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
-          SELECTED_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "${{ inputs.environment }}" in
-            dev) runtime_repo="Shosetzel69/job-search-runtime-dev" ;;
-            test) runtime_repo="Shosetzel69/job-search-runtime-test" ;;
-            *) echo "Unsupported live environment" >&2; exit 1 ;;
-          esac
-          test "$SELECTED_GITHUB_BOOTSTRAP_TOKEN" != "$SELECTED_GITHUB_RUNTIME_TOKEN" || { echo "bootstrap/runtime token reuse is forbidden" >&2; exit 1; }
-          printf '%s' "$SELECTED_SOURCE_READ_TOKEN" | GH_TOKEN="$SELECTED_GITHUB_BOOTSTRAP_TOKEN" gh secret set SOURCE_READ_TOKEN --repo "$runtime_repo"
-          printf '%s' "$SELECTED_GITHUB_RUNTIME_TOKEN" | CLOUDFLARE_ACCOUNT_ID="$SELECTED_CLOUDFLARE_ACCOUNT_ID" CLOUDFLARE_API_TOKEN="$SELECTED_CLOUDFLARE_TOKEN" npx wrangler secret put GITHUB_TOKEN --name job-search-command-api
-          printf '%s' "$SELECTED_ALLOWED_GOOGLE_SUB" | CLOUDFLARE_ACCOUNT_ID="$SELECTED_CLOUDFLARE_ACCOUNT_ID" CLOUDFLARE_API_TOKEN="$SELECTED_CLOUDFLARE_TOKEN" npx wrangler secret put ALLOWED_GOOGLE_SUB --name job-search-command-api
 
       - name: Verify credential role separation and final health
         if: ${{ inputs.action == 'bootstrap' }}
