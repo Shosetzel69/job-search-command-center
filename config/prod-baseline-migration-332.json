@@ -1,0 +1,69 @@
+{
+  "schema_version": "1.0",
+  "migration_id": "prod-baseline-332-v1",
+  "migration_version": "1.0",
+  "environment": "prod",
+  "single_use": true,
+  "historical_candidate_sha": "aed15600a96b7da365e060212612dea0115f0d00",
+  "target_candidate_sha": "09a522d5a2217dd6039fe08430fe7c4137c2a9e3",
+  "expected_pre_migration_runtime_head": "db564f1749b989d0ce81ce49fc7b67bfc6da95c9",
+  "files": {
+    "data/sources.json": {
+      "historical_digest": "sha256:4cfb3cbf471a81b3eb7f1f6fa01a973c6a1019fef6161bf7f34c96f3504a40a0",
+      "target_candidate_digest": "sha256:076332af4550faa947f58988b0d2aedd865a4e04779bc8e6230b6cc99ad25392",
+      "expected_pre_migration_digest": "sha256:e646b3baf6a181e5c3e9692f1a7e33518fdc8c9ff7082a2c52559b62ef3a8ec3",
+      "resolved_target_digest": "sha256:f8fe93bebd1460d632ff6959f786e379948a1d99b5f3b387ef957367a5001482",
+      "current_prod_git_blob": "a5305c17dc74a0bcb8515dfbc7d088a574c5e7ae"
+    },
+    "data/source-categories.json": {
+      "historical_digest": "sha256:4b9dd05abb81cdb6c62b8646032d1d9108f57b95a1e99b921d45c1a8b8244ab5",
+      "target_candidate_digest": "sha256:4b9dd05abb81cdb6c62b8646032d1d9108f57b95a1e99b921d45c1a8b8244ab5",
+      "expected_pre_migration_digest": "sha256:4b9dd05abb81cdb6c62b8646032d1d9108f57b95a1e99b921d45c1a8b8244ab5",
+      "resolved_target_digest": "sha256:4b9dd05abb81cdb6c62b8646032d1d9108f57b95a1e99b921d45c1a8b8244ab5",
+      "current_prod_git_blob": "d1aacc547b55292347bb5514ef184b10c3cce63c"
+    },
+    "data/nomenclatures.json": {
+      "historical_digest": "sha256:f352e2f5317800ac3d10bd3b5d11f2277e3908c4141eb9577ec8a42cf3fa82f3",
+      "target_candidate_digest": "sha256:f352e2f5317800ac3d10bd3b5d11f2277e3908c4141eb9577ec8a42cf3fa82f3",
+      "expected_pre_migration_digest": "sha256:f352e2f5317800ac3d10bd3b5d11f2277e3908c4141eb9577ec8a42cf3fa82f3",
+      "resolved_target_digest": "sha256:f352e2f5317800ac3d10bd3b5d11f2277e3908c4141eb9577ec8a42cf3fa82f3",
+      "current_prod_git_blob": "d35b9f41caea79468f3b56c121e7a8bae202ef7f"
+    }
+  },
+  "approved_overlay": {
+    "path": "data/sources.json",
+    "source_id": "src-362eebc4",
+    "source_name": "Monster",
+    "historical_record": {
+      "id": "src-362eebc4",
+      "category": "Job boards si agregatoare",
+      "name": "Monster",
+      "url": "https://www.monster.com/jobs/",
+      "active": true,
+      "connector_available": true
+    },
+    "runtime_record": {
+      "id": "src-362eebc4",
+      "category": "Job boards si agregatoare",
+      "name": "Monster",
+      "url": "https://www.monster.com/jobs/",
+      "active": false,
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": null,
+      "validation_reason": "Exclus operational conform politicii curente.",
+      "policy_excluded": true
+    }
+  },
+  "provenance": {
+    "architecture_issue": 332,
+    "historical_prod_promotion_run": 35620592418,
+    "prod_runtime_source_update_commits": [
+      "2a02e4ece7513158eabe8d38d883d04539bc3995",
+      "268d929b966dcc2113a093dc082dbb831cb06608"
+    ],
+    "notes": "NTT RO transient add/remove is provenance only and must not be carried into the resolved target."
+  }
+}

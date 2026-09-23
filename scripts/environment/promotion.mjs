@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { SHA_RE } from './contract.mjs';
 
 const SCHEMA_VERSION = '1.0';
@@ -57,6 +57,87 @@ function normalizeHealth(health, environment, candidateSha) {
   };
 }
 
+const PROD_BASELINE_MIGRATION_MANIFEST = readJson(
+  resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'config', 'prod-baseline-migration-332.json'),
+  'PROD baseline migration manifest',
+);
+
+function requireDigest(value, name) {
+  const digest = String(value || '');
+  if (!/^sha256:[0-9a-f]{64}$/.test(digest)) throw new Error(`${name} must be a sha256 digest`);
+  return digest;
+}
+
+function normalizeOneTimeMigrationEvidence(evidence, candidateSha) {
+  const migration = evidence.migration;
+  const hasMigrationAction = MANAGED_PATHS.some(
+    path => String(evidence.files?.[path]?.action || '').startsWith('migration_'),
+  );
+
+  if (!migration) {
+    if (hasMigrationAction) {
+      throw new Error('One-time migration reconciliation actions require valid migration evidence');
+    }
+    return null;
+  }
+  if (!hasMigrationAction) {
+    throw new Error('One-time migration evidence cannot accompany generic reconciliation actions');
+  }
+  if (evidence.environment !== 'prod') throw new Error('One-time migration evidence is PROD-only');
+
+  const manifest = PROD_BASELINE_MIGRATION_MANIFEST;
+  if (migration.schema_version !== manifest.schema_version
+    || migration.migration_id !== manifest.migration_id
+    || migration.migration_version !== manifest.migration_version
+    || migration.path !== 'one_time_prod_baseline_migration') {
+    throw new Error('Unsupported one-time PROD migration evidence identity');
+  }
+  if (requireSha(migration.historical_candidate_sha, 'migration.historical_candidate_sha') !== manifest.historical_candidate_sha) {
+    throw new Error('One-time migration historical candidate mismatch');
+  }
+  const target = requireSha(migration.target_candidate_sha, 'migration.target_candidate_sha');
+  if (target !== manifest.target_candidate_sha || target !== candidateSha) {
+    throw new Error('One-time migration target candidate mismatch');
+  }
+  if (migration.result !== 'PASS' || migration.acceptance_result !== 'ACCEPTED' || evidence.acceptance_result !== 'ACCEPTED') {
+    throw new Error('One-time migration must be accepted before release evidence');
+  }
+  if (migration.approved_overlay?.path !== manifest.approved_overlay.path
+    || migration.approved_overlay?.source_id !== manifest.approved_overlay.source_id
+    || migration.approved_overlay?.source_name !== manifest.approved_overlay.source_name) {
+    throw new Error('One-time migration approved overlay mismatch');
+  }
+
+  for (const path of MANAGED_PATHS) {
+    const contract = manifest.files?.[path];
+    const item = evidence.files?.[path];
+    if (!contract || !item) throw new Error(`Missing one-time migration file contract: ${path}`);
+
+    const historical = requireDigest(migration.historical_digests?.[path], `migration.historical_digests.${path}`);
+    const preState = requireDigest(migration.pre_migration_digests?.[path], `migration.pre_migration_digests.${path}`);
+    const resolved = requireDigest(migration.resolved_target_digests?.[path], `migration.resolved_target_digests.${path}`);
+
+    if (historical !== contract.historical_digest
+      || preState !== contract.expected_pre_migration_digest
+      || resolved !== contract.resolved_target_digest) {
+      throw new Error(`One-time migration manifest digest mismatch for ${path}`);
+    }
+    if (item.baseline_digest !== historical
+      || item.candidate_digest !== contract.target_candidate_digest
+      || item.runtime_before_digest !== preState
+      || item.runtime_after_digest !== resolved
+      || item.next_baseline_digest !== contract.target_candidate_digest) {
+      throw new Error(`One-time migration reconciliation/file evidence mismatch for ${path}`);
+    }
+
+    const expectedAction = resolved === preState ? 'migration_noop_target' : 'migration_apply_resolved';
+    if (item.action !== expectedAction) {
+      throw new Error(`Invalid one-time migration action for ${path}`);
+    }
+  }
+  return migration;
+}
+
 function normalizeReconciliationEvidence(evidence, environment, candidateSha, runtimeDataSha) {
   if (!evidence || typeof evidence !== 'object' || Array.isArray(evidence)) {
     throw new Error(`${environment.toUpperCase()} reconciliation evidence is missing`);
@@ -95,6 +176,7 @@ function normalizeReconciliationEvidence(evidence, environment, candidateSha, ru
   if (evidence.health?.source_sha !== candidateSha || evidence.health?.runtime_data_sha !== runtimeDataSha) {
     throw new Error(`${environment.toUpperCase()} reconciliation health identity mismatch`);
   }
+  const migration = normalizeOneTimeMigrationEvidence(evidence, candidateSha);
   for (const path of MANAGED_PATHS) {
     const item = evidence.files?.[path];
     if (!item || typeof item !== 'object') throw new Error(`Missing reconciliation file evidence: ${path}`);
@@ -103,7 +185,7 @@ function normalizeReconciliationEvidence(evidence, environment, candidateSha, ru
         throw new Error(`Invalid reconciliation digest ${path}.${field}`);
       }
     }
-    if (!['noop_baseline','noop_runtime_already_candidate','apply_candidate','preserve_runtime'].includes(item.action)) {
+    if (!migration && !['noop_baseline','noop_runtime_already_candidate','apply_candidate','preserve_runtime'].includes(item.action)) {
       throw new Error(`Invalid reconciliation action for ${path}`);
     }
     const visible = evidence.functional_visibility.files?.[path];

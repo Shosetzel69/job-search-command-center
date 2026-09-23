@@ -528,6 +528,7 @@ export function reconcileRuntimeRepository(runtime, {
   controlPlaneSha,
   gitEnv,
   expectedRuntimeHead = null,
+  planner = planCandidateManagedReconciliation,
   now = new Date().toISOString(),
 } = {}) {
   const temp = cloneRuntime(runtime, gitEnv, 'job-search-runtime-reconcile-');
@@ -571,7 +572,7 @@ export function reconcileRuntimeRepository(runtime, {
       }));
     }
 
-    const plan = planCandidateManagedReconciliation({
+    const plan = planner({
       environment: runtime.environment,
       candidateSha: runtime.sourceSha,
       controlPlaneSha,
@@ -594,7 +595,9 @@ export function reconcileRuntimeRepository(runtime, {
 
     try {
       for (const path of CANDIDATE_MANAGED_PATHS) {
-        if (plan.files[path].action === 'apply_candidate') writeText(resolve(temp, path), plan.target_contents[path]);
+        if (plan.files[path].runtime_after_digest !== plan.files[path].runtime_before_digest) {
+          writeText(resolve(temp, path), plan.target_contents[path]);
+        }
       }
       if (plan.pending_metadata) {
         writeText(resolve(temp, RELEASE_CONTROL_METADATA_PATH), `${JSON.stringify(plan.pending_metadata, null, 2)}\n`);
@@ -921,6 +924,10 @@ export function buildReconciliationEvidence(reconciliation, {
       runtime_data_sha: health.runtime_data_sha,
     } : null,
     revert_result: revert?.status || 'NOT_REQUIRED',
+    migration: reconciliation.migration ? {
+      ...reconciliation.migration,
+      acceptance_result: acceptance?.status || 'NOT_RUN',
+    } : null,
   };
   if (reconciliation.reason) evidence.reason = reconciliation.reason;
   if (acceptance?.reason) evidence.acceptance_reason = acceptance.reason;
