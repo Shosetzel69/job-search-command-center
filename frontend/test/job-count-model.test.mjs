@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { jobCountScopeLabel, jobViewCounts, jobViewPopulation } from '../src/job-count-model.mjs';
 
-const ageHours = job => job.age;
+const ageHours = (_datePosted, age) => age;
 const jobs = [
   { id:'a', age:10, mode:'Remote', fit:90, b2b:true, repost:false },
   { id:'b', age:30, mode:'Remote', fit:85, b2b:false, repost:true },
