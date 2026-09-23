@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import {
   ALLOWLIST_VERSION,
   CANDIDATE_MANAGED_PATHS,
@@ -136,6 +138,29 @@ test('candidate-managed allowlist is explicit and exact', () => {
 
 test('full canonical source/category contracts accept normalized catalog plus explicit Monster legacy exception', () => {
   assert.doesNotThrow(() => validateCandidateManagedSet(managedSet()));
+});
+
+test('trusted validator accepts the repository canonical managed catalogs', () => {
+  const root = resolve(import.meta.dirname, '..');
+  const contents = Object.fromEntries(CANDIDATE_MANAGED_PATHS.map(path => [
+    path,
+    readFileSync(resolve(root, path), 'utf8'),
+  ]));
+  assert.doesNotThrow(() => validateCandidateManagedSet(contents));
+});
+
+test('source governance rejects invalid lifecycle state and missing canonical metadata', () => {
+  const invalidState = managedSet();
+  const statePayload = JSON.parse(invalidState['data/sources.json']);
+  statePayload.sources[0].active = true;
+  invalidState['data/sources.json'] = `${JSON.stringify(statePayload, null, 2)}\n`;
+  assert.throws(() => validateCandidateManagedSet(invalidState), /canonical governance form/);
+
+  const missingField = managedSet();
+  const missingPayload = JSON.parse(missingField['data/sources.json']);
+  delete missingPayload.sources[0].policy_excluded;
+  missingField['data/sources.json'] = `${JSON.stringify(missingPayload, null, 2)}\n`;
+  assert.throws(() => validateCandidateManagedSet(missingField), /canonical governance form/);
 });
 
 test('exact known seed bootstrap is recognized before strict operational runtime validation', () => {
