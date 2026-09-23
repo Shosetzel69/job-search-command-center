@@ -465,3 +465,35 @@ test('compensating revert is permitted only when runtime HEAD still equals promo
   assert.equal(blocked.status, 'DEGRADED');
   assert.match(blocked.reason, /compensating revert refused/);
 });
+
+test('failed functional verification leaves baseline pending and selects compensating revert', () => {
+  const baseline = managedSet();
+  const candidate = managedSet({
+    sources:[source(), source('src-two','Two','https://example.org/jobs')],
+  });
+  const result = plan({ candidateContents:candidate, runtimeContents:baseline, metadata:metadataFrom(baseline) });
+  result.promotion_runtime_sha = PROMOTION;
+  result.mutation_performed = true;
+
+  assert.ok(result.pending_metadata?.pending_promotion);
+  assert.throws(
+    () => prepareAcceptanceState({
+      environment:'dev',
+      currentHead:PROMOTION,
+      reconciliation:result,
+      metadata:result.pending_metadata,
+      snapshotVerification:'PASS',
+      functionalVisibility:{ status:'FAIL' },
+    }),
+    /functional visibility must PASS/,
+  );
+  assert.ok(result.pending_metadata?.pending_promotion, 'failed verification must not consume pending metadata');
+  assert.deepEqual(
+    compensatingRevertDecision({
+      mutationPerformed:true,
+      currentHead:PROMOTION,
+      promotionRuntimeSha:PROMOTION,
+    }),
+    { status:'REVERT', runtime_head:PROMOTION },
+  );
+});
