@@ -315,14 +315,17 @@ test('candidate-managed data stays inert and explicitly allowlisted in live depl
   assert.doesNotMatch(workflow, /cp -a candidate-source\/data/);
 });
 
-test('runtime reconciliation and protected functional verification precede baseline acceptance', () => {
+test('runtime reconciliation and deployed protected functional verification precede baseline acceptance', () => {
   const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
   const reconcileAt = provision.indexOf('reconcileRuntimeRepository(runtime');
   const deployAt = provision.indexOf('const runtimeDataSha = deployWorker(runtime)');
-  const functionalAt = provision.indexOf('verifyProtectedFunctionalVisibility(runtime, reconciliation)');
+  const configureAt = provision.indexOf('if (configureBootstrapSecrets) configureBootstrapRuntimeSecrets(runtime)');
+  const functionalAt = provision.indexOf('verifyProtectedFunctionalVisibility(runtime, reconciliation');
   const acceptAt = provision.indexOf('acceptRuntimeReconciliation(runtime, reconciliation');
   assert.ok(reconcileAt > -1 && deployAt > -1 && reconcileAt < deployAt);
-  assert.ok(functionalAt > deployAt && acceptAt > functionalAt);
+  assert.ok(configureAt > deployAt && functionalAt > configureAt && acceptAt > functionalAt);
+  assert.match(provision, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
+  assert.match(provision, /googleIdToken: inputs\.functionalGoogleIdToken/);
   assert.match(provision, /verifyRuntimePromotionSnapshot/);
   assert.match(provision, /revertRuntimeReconciliation/);
 });
@@ -358,6 +361,22 @@ test('fail-closed reconciliation evidence is retained even when live action fail
 test('DEV/TEST evidence contract requires protected functional visibility PASS', () => {
   const promotion = readFileSync(resolve(ROOT, 'scripts/environment/promotion.mjs'), 'utf8');
   assert.match(promotion, /protected functional visibility must PASS/);
-  assert.match(promotion, /canonical-protected-runtime-read/);
+  assert.match(promotion, /deployed-protected-data/);
   assert.match(promotion, /functional_expected_digest/);
+});
+
+
+test('functional visibility uses deployed protected data rather than direct control-plane GitHub reads', () => {
+  const reconciliation = readFileSync(resolve(ROOT, 'scripts/environment/reconciliation.mjs'), 'utf8');
+  assert.match(reconciliation, /deployed-protected-data/);
+  assert.match(reconciliation, /\/data\//);
+  assert.match(reconciliation, /Authorization/);
+  assert.doesNotMatch(reconciliation, /readRuntimeJson/);
+});
+
+test('live workflow supplies environment-scoped functional Google token and no longer post-configures Worker secrets', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
+  assert.match(workflow, /secrets\.FUNCTIONAL_GOOGLE_ID_TOKEN/);
+  assert.doesNotMatch(workflow, /- name: Configure runtime and Worker secrets with separated roles/);
 });
