@@ -5,6 +5,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os';
 import { CANDIDATE_MANAGED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import { assertNomenclatures } from '../../shared/nomenclatures.mjs';
+import {
+  normalizeCategoryCatalog,
+  normalizeSource,
+  sameUrl,
+} from '../../command-api/src/source-governance.js';
+import { readRuntimeJson } from '../../command-api/src/runtime-github.js';
 import { serializeSeed } from './seed.mjs';
 import { SHA_RE } from './contract.mjs';
 
@@ -20,6 +26,15 @@ const ACTIONS = new Set([
   'noop_runtime_already_candidate',
   'apply_candidate',
   'preserve_runtime',
+]);
+
+const LEGACY_MONSTER_KEYS = Object.freeze([
+  'active',
+  'category',
+  'connector_available',
+  'id',
+  'name',
+  'url',
 ]);
 
 function requireSha(value, label) {
@@ -39,6 +54,22 @@ function run(command, args, { cwd, env } = {}) {
 
 export function sha256Text(value) {
   return `sha256:${createHash('sha256').update(String(value), 'utf8').digest('hex')}`;
+}
+
+function stableValue(value) {
+  if (Array.isArray(value)) return value.map(stableValue);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.keys(value).sort().map(key => [key, stableValue(value[key])]));
+  }
+  return value;
+}
+
+function semanticallyEqual(a, b) {
+  return JSON.stringify(stableValue(a)) === JSON.stringify(stableValue(b));
+}
+
+function semanticDigest(value) {
+  return sha256Text(JSON.stringify(stableValue(value)));
 }
 
 function readText(path) {
@@ -62,52 +93,98 @@ function categoryKey(value) {
   return String(value || '').trim().replace(/\s+/g, ' ').toLocaleLowerCase('ro-RO');
 }
 
-function assertCatalogRoot(payload, kind) {
+function assertExactRoot(payload, kind, expectedKeys) {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
     throw new Error(`${kind} catalog must be an object`);
   }
-  if (payload.schema_version !== '1.0') throw new Error(`Unsupported ${kind} schema_version`);
+  const actual = Object.keys(payload).sort();
+  const expected = [...expectedKeys].sort();
+  if (actual.join('|') !== expected.join('|')) {
+    throw new Error(`${kind} catalog contains unsupported or missing root fields`);
+  }
 }
 
 function validateCategories(payload) {
-  assertCatalogRoot(payload, 'source categories');
+  assertExactRoot(payload, 'source categories', ['schema_version', 'count', 'categories']);
+  if (payload.schema_version !== '1.0') throw new Error('Unsupported source categories schema_version');
   if (!Array.isArray(payload.categories)) throw new Error('source categories must contain categories[]');
   if (payload.count !== payload.categories.length) throw new Error('source categories count mismatch');
-  const ids = new Set();
+
+  const normalized = normalizeCategoryCatalog(payload);
+  if (!semanticallyEqual(normalized, payload)) {
+    throw new Error('source categories are not in canonical normalized form');
+  }
+
   const labels = new Set();
   for (const category of payload.categories) {
-    const id = String(category?.id || '').trim();
-    const label = String(category?.label || '').trim();
-    if (!id || !label) throw new Error('source category id/label is required');
-    if (ids.has(id)) throw new Error(`duplicate source category id: ${id}`);
-    const key = categoryKey(label);
-    if (labels.has(key)) throw new Error(`duplicate source category label: ${label}`);
-    ids.add(id);
-    labels.add(key);
+    const keys = Object.keys(category || {}).sort();
+    if (keys.join('|') !== ['active','id','label','order'].sort().join('|')) {
+      throw new Error(`source category has unsupported or missing fields: ${category?.id || '<unknown>'}`);
+    }
+    labels.add(categoryKey(category.label));
   }
   return labels;
 }
 
+function isCanonicalSource(source) {
+  return semanticallyEqual(normalizeSource(source, { legacyApproved:true }), source);
+}
+
+function assertLegacyMonster(source) {
+  const keys = Object.keys(source || {}).sort();
+  if (keys.join('|') !== [...LEGACY_MONSTER_KEYS].sort().join('|')) {
+    throw new Error('Monster legacy record has unexpected physical fields');
+  }
+  if (source.active !== true || source.connector_available !== true) {
+    throw new Error('Monster legacy physical state is invalid');
+  }
+  const normalized = normalizeSource(source, { legacyApproved:true });
+  if (normalized.policy_excluded !== true || normalized.active !== false) {
+    throw new Error('Monster must remain operationally policy-excluded');
+  }
+}
+
 function validateSources(payload, categoryLabels) {
-  assertCatalogRoot(payload, 'sources');
+  assertExactRoot(payload, 'sources', ['schema_version', 'count', 'sources']);
+  if (payload.schema_version !== '1.0') throw new Error('Unsupported sources schema_version');
   if (!Array.isArray(payload.sources)) throw new Error('sources catalog must contain sources[]');
   if (payload.count !== payload.sources.length) throw new Error('sources count mismatch');
+
   const ids = new Set();
+  const urls = [];
+  let monsterCount = 0;
+
   for (const source of payload.sources) {
     const id = String(source?.id || '').trim();
     const name = String(source?.name || '').trim();
     const url = String(source?.url || '').trim();
     const category = String(source?.category || '').trim();
     if (!id || !name || !url || !category) throw new Error('source id/name/url/category is required');
+    if ('priority' in source) throw new Error(`source contains forbidden legacy priority: ${name}`);
     if (ids.has(id)) throw new Error(`duplicate source id: ${id}`);
     ids.add(id);
+
     let parsed;
     try { parsed = new URL(url); } catch { throw new Error(`invalid source URL: ${name}`); }
     if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error(`unsupported source URL protocol: ${name}`);
+    if (urls.some(existing => sameUrl(existing, url))) throw new Error(`duplicate source URL: ${url}`);
+    urls.push(url);
+
     if (!categoryLabels.has(categoryKey(category))) {
       throw new Error(`source references unknown category: ${name} -> ${category}`);
     }
+
+    if (name === 'Monster') {
+      monsterCount += 1;
+      if (!isCanonicalSource(source)) assertLegacyMonster(source);
+      continue;
+    }
+    if (!isCanonicalSource(source)) {
+      throw new Error(`source is not in canonical governance form: ${name}`);
+    }
   }
+
+  if (monsterCount !== 1) throw new Error('Exactly one Monster policy-excluded source is required');
 }
 
 export function validateCandidateManagedSet(contents) {
@@ -177,6 +254,13 @@ function digestSet(contents) {
   return Object.fromEntries(CANDIDATE_MANAGED_PATHS.map(path => [path, sha256Text(contents[path])]));
 }
 
+function semanticDigestSet(contents) {
+  return Object.fromEntries(CANDIDATE_MANAGED_PATHS.map(path => [
+    path,
+    semanticDigest(parseJson(contents[path], path)),
+  ]));
+}
+
 function explicitSeedBaseline(runtimeDigests) {
   for (const path of CANDIDATE_MANAGED_PATHS) {
     if (runtimeDigests[path] !== KNOWN_SEED_DIGESTS[path]) {
@@ -206,17 +290,32 @@ export function reconcileFileDecision({ baselineDigest, candidateDigest, runtime
   throw new Error('candidate/runtime conflict against accepted baseline');
 }
 
-function buildBlockedEvidence({ environment, candidateSha, controlPlaneSha, runtimeHead, files, reason }) {
+function buildBlockedEvidence({
+  environment,
+  candidateSha,
+  controlPlaneSha,
+  runtimeHead,
+  files = {},
+  reason,
+  failureStage = 'reconciliation',
+  validationResult = 'NOT_RUN',
+}) {
   return {
     schema_version: RECONCILIATION_SCHEMA_VERSION,
     environment,
     control_plane_sha: controlPlaneSha,
     candidate_sha: candidateSha,
     runtime_head_before: runtimeHead,
+    promotion_runtime_sha: null,
+    acceptance_runtime_head: null,
     allowlist_version: ALLOWLIST_VERSION,
     files,
     reconciliation_result: 'BLOCKED',
-    validation_result: 'NOT_RUN',
+    validation_result: validationResult,
+    failure_stage: failureStage,
+    functional_visibility: { status:'NOT_RUN', method:'canonical-protected-runtime-read', files:{} },
+    acceptance_result: 'NOT_RUN',
+    revert_result: 'NOT_REQUIRED',
     reason,
   };
 }
@@ -226,6 +325,14 @@ export class ReconciliationBlockedError extends Error {
     super(message);
     this.name = 'ReconciliationBlockedError';
     this.evidence = evidence;
+  }
+}
+
+export class FunctionalVisibilityError extends Error {
+  constructor(message, proof) {
+    super(message);
+    this.name = 'FunctionalVisibilityError';
+    this.proof = proof;
   }
 }
 
@@ -242,22 +349,27 @@ export function planCandidateManagedReconciliation({
   const candidate = requireSha(candidateSha, 'CANDIDATE_SHA');
   const controlPlane = requireSha(controlPlaneSha, 'CONTROL_PLANE_SHA');
   const runtimeBefore = requireSha(runtimeHead, 'runtime HEAD');
-
-  validateCandidateManagedSet(candidateContents);
-  validateCandidateManagedSet(runtimeContents);
-
-  const candidateDigests = digestSet(candidateContents);
-  const runtimeDigests = digestSet(runtimeContents);
-  const bootstrap = metadata == null;
-  const normalizedMetadata = bootstrap ? null : normalizeReleaseControlMetadata(metadata, environment);
-  const baselineDigests = bootstrap
-    ? explicitSeedBaseline(runtimeDigests)
-    : normalizedMetadata.accepted_baselines;
-
   const files = {};
-  const targetContents = {};
-  const nextBaselines = {};
+  let failureStage = 'candidate_validation';
+
   try {
+    validateCandidateManagedSet(candidateContents);
+    failureStage = 'runtime_validation';
+    validateCandidateManagedSet(runtimeContents);
+
+    const candidateDigests = digestSet(candidateContents);
+    const runtimeDigests = digestSet(runtimeContents);
+    const bootstrap = metadata == null;
+
+    failureStage = bootstrap ? 'bootstrap_validation' : 'metadata_validation';
+    const normalizedMetadata = bootstrap ? null : normalizeReleaseControlMetadata(metadata, environment);
+    const baselineDigests = bootstrap
+      ? explicitSeedBaseline(runtimeDigests)
+      : normalizedMetadata.accepted_baselines;
+
+    const targetContents = {};
+    const nextBaselines = {};
+    failureStage = 'decision_table';
     for (const path of CANDIDATE_MANAGED_PATHS) {
       const decision = reconcileFileDecision({
         baselineDigest: baselineDigests[path],
@@ -276,64 +388,70 @@ export function planCandidateManagedReconciliation({
         next_baseline_digest: decision.nextBaselineDigest,
       };
     }
-  } catch (error) {
-    throw new ReconciliationBlockedError(
-      error instanceof Error ? error.message : String(error),
-      buildBlockedEvidence({
-        environment,
-        candidateSha: candidate,
-        controlPlaneSha: controlPlane,
-        runtimeHead: runtimeBefore,
-        files,
-        reason: error instanceof Error ? error.message : String(error),
-      }),
+
+    failureStage = 'target_validation';
+    validateCandidateManagedSet(targetContents);
+    const targetSemanticDigests = semanticDigestSet(targetContents);
+    for (const path of CANDIDATE_MANAGED_PATHS) {
+      files[path].functional_expected_digest = targetSemanticDigests[path];
+    }
+
+    const baselineAdvances = CANDIDATE_MANAGED_PATHS.some(
+      path => nextBaselines[path] !== baselineDigests[path],
     );
-  }
+    const dataChanges = CANDIDATE_MANAGED_PATHS.some(
+      path => files[path].runtime_after_digest !== files[path].runtime_before_digest,
+    );
+    const requiresAcceptance = bootstrap || baselineAdvances;
+    const requiresMutation = dataChanges || requiresAcceptance;
 
-  validateCandidateManagedSet(targetContents);
+    const pendingMetadata = requiresAcceptance ? {
+      schema_version: RECONCILIATION_SCHEMA_VERSION,
+      allowlist_version: ALLOWLIST_VERSION,
+      environment,
+      accepted_baselines: { ...baselineDigests },
+      accepted_promotion: normalizedMetadata?.accepted_promotion || null,
+      previous_accepted_promotion: normalizedMetadata?.previous_accepted_promotion || null,
+      pending_promotion: {
+        candidate_sha: candidate,
+        control_plane_sha: controlPlane,
+        runtime_head_before: runtimeBefore,
+        started_at: now,
+        next_accepted_baselines: { ...nextBaselines },
+        files,
+      },
+    } : null;
 
-  const baselineAdvances = CANDIDATE_MANAGED_PATHS.some(
-    path => nextBaselines[path] !== baselineDigests[path],
-  );
-  const dataChanges = CANDIDATE_MANAGED_PATHS.some(
-    path => files[path].runtime_after_digest !== files[path].runtime_before_digest,
-  );
-  const requiresAcceptance = bootstrap || baselineAdvances;
-  const requiresMutation = dataChanges || requiresAcceptance;
-
-  const pendingMetadata = requiresAcceptance ? {
-    schema_version: RECONCILIATION_SCHEMA_VERSION,
-    allowlist_version: ALLOWLIST_VERSION,
-    environment,
-    accepted_baselines: { ...baselineDigests },
-    accepted_promotion: normalizedMetadata?.accepted_promotion || null,
-    previous_accepted_promotion: normalizedMetadata?.previous_accepted_promotion || null,
-    pending_promotion: {
-      candidate_sha: candidate,
+    return {
+      schema_version: RECONCILIATION_SCHEMA_VERSION,
+      environment,
       control_plane_sha: controlPlane,
+      candidate_sha: candidate,
       runtime_head_before: runtimeBefore,
-      started_at: now,
-      next_accepted_baselines: { ...nextBaselines },
+      allowlist_version: ALLOWLIST_VERSION,
+      bootstrap,
       files,
-    },
-  } : null;
-
-  return {
-    schema_version: RECONCILIATION_SCHEMA_VERSION,
-    environment,
-    control_plane_sha: controlPlane,
-    candidate_sha: candidate,
-    runtime_head_before: runtimeBefore,
-    allowlist_version: ALLOWLIST_VERSION,
-    bootstrap,
-    files,
-    reconciliation_result: 'PASS',
-    validation_result: 'PASS',
-    target_contents: targetContents,
-    requires_mutation: requiresMutation,
-    requires_acceptance: requiresAcceptance,
-    pending_metadata: pendingMetadata,
-  };
+      reconciliation_result: 'PASS',
+      validation_result: 'PASS',
+      target_contents: targetContents,
+      requires_mutation: requiresMutation,
+      requires_acceptance: requiresAcceptance,
+      pending_metadata: pendingMetadata,
+    };
+  } catch (error) {
+    if (error instanceof ReconciliationBlockedError) throw error;
+    const message = error instanceof Error ? error.message : String(error);
+    throw new ReconciliationBlockedError(message, buildBlockedEvidence({
+      environment,
+      candidateSha: candidate,
+      controlPlaneSha: controlPlane,
+      runtimeHead: runtimeBefore,
+      files,
+      reason: message,
+      failureStage,
+      validationResult: failureStage.includes('validation') ? 'FAIL' : 'NOT_RUN',
+    }));
+  }
 }
 
 function readManagedContents(root) {
@@ -405,16 +523,37 @@ export function reconcileRuntimeRepository(runtime, {
   now = new Date().toISOString(),
 } = {}) {
   const temp = cloneRuntime(runtime, gitEnv, 'job-search-runtime-reconcile-');
+  let runtimeHead = null;
   try {
-    const runtimeHead = requireSha(run('git', ['rev-parse', 'HEAD'], { cwd: temp, env: gitEnv }).trim(), 'runtime HEAD');
+    runtimeHead = requireSha(run('git', ['rev-parse', 'HEAD'], { cwd: temp, env: gitEnv }).trim(), 'runtime HEAD');
+    let candidateContents;
+    let runtimeContents;
+    let metadata;
+    try {
+      candidateContents = candidateManagedContentsFromWorkspace(candidateWorkspace);
+      runtimeContents = readManagedContents(temp);
+      metadata = readMetadata(temp);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ReconciliationBlockedError(message, buildBlockedEvidence({
+        environment: runtime.environment,
+        candidateSha: runtime.sourceSha,
+        controlPlaneSha,
+        runtimeHead,
+        reason: message,
+        failureStage: 'input_load',
+        validationResult: 'FAIL',
+      }));
+    }
+
     const plan = planCandidateManagedReconciliation({
       environment: runtime.environment,
       candidateSha: runtime.sourceSha,
       controlPlaneSha,
       runtimeHead,
-      candidateContents: candidateManagedContentsFromWorkspace(candidateWorkspace),
-      runtimeContents: readManagedContents(temp),
-      metadata: readMetadata(temp),
+      candidateContents,
+      runtimeContents,
+      metadata,
       now,
     });
 
@@ -470,8 +609,127 @@ export function verifyRuntimePromotionSnapshot(runtime, reconciliation, { gitEnv
   }
 }
 
+function runtimeReadConfig(runtime) {
+  const [runtimeOwner, runtimeRepo] = String(runtime.runtimeRepository || '').split('/');
+  if (!runtimeOwner || !runtimeRepo) throw new Error('Invalid runtime repository identity');
+  return {
+    runtimeOwner,
+    runtimeRepo,
+    runtimeRef: runtime.runtimeRef,
+  };
+}
+
+function payloadCount(path, payload) {
+  if (path === 'data/sources.json') return Number(payload?.count ?? payload?.sources?.length ?? 0);
+  if (path === 'data/source-categories.json') return Number(payload?.count ?? payload?.categories?.length ?? 0);
+  if (path === 'data/nomenclatures.json') return Object.keys(payload?.domains || {}).length;
+  return 0;
+}
+
+export async function verifyProtectedFunctionalVisibility(runtime, reconciliation, {
+  runtimeToken = runtime.githubRuntimeToken,
+  readJson = readRuntimeJson,
+} = {}) {
+  const proof = {
+    status: 'FAIL',
+    method: 'canonical-protected-runtime-read',
+    runtime_repository: runtime.runtimeRepository,
+    runtime_ref: runtime.runtimeRef,
+    files: {},
+  };
+
+  try {
+    const config = runtimeReadConfig(runtime);
+    const visibleContents = {};
+    for (const path of CANDIDATE_MANAGED_PATHS) {
+      const { payload } = await readJson({ GITHUB_TOKEN:runtimeToken }, config, path);
+      const visibleDigest = semanticDigest(payload);
+      const expectedDigest = reconciliation.files[path].functional_expected_digest;
+      proof.files[path] = {
+        expected_semantic_digest: expectedDigest,
+        visible_semantic_digest: visibleDigest,
+        visible_count: payloadCount(path, payload),
+      };
+      if (visibleDigest !== expectedDigest) {
+        throw new Error(`Protected functional visibility mismatch: ${path}`);
+      }
+      visibleContents[path] = `${JSON.stringify(payload, null, 2)}\n`;
+    }
+    validateCandidateManagedSet(visibleContents);
+    proof.status = 'PASS';
+    return proof;
+  } catch (error) {
+    proof.reason = error instanceof Error ? error.message : String(error);
+    throw new FunctionalVisibilityError(proof.reason, proof);
+  }
+}
+
+function requireSuccessfulVerification({ snapshotVerification, functionalVisibility }) {
+  if (snapshotVerification !== 'PASS') {
+    throw new Error('Runtime snapshot verification must PASS before baseline acceptance');
+  }
+  if (functionalVisibility?.status !== 'PASS') {
+    throw new Error('Protected functional visibility must PASS before baseline acceptance');
+  }
+}
+
+export function prepareAcceptanceState({
+  environment,
+  currentHead,
+  reconciliation,
+  metadata,
+  snapshotVerification,
+  functionalVisibility,
+  now = new Date().toISOString(),
+}) {
+  requireSuccessfulVerification({ snapshotVerification, functionalVisibility });
+  const head = requireSha(currentHead, 'runtime HEAD');
+  if (head !== reconciliation.promotion_runtime_sha) {
+    return {
+      status: 'DEGRADED',
+      reason: `Runtime changed before baseline acceptance: expected ${reconciliation.promotion_runtime_sha}, got ${head}`,
+      acceptance_runtime_head: head,
+      accepted_metadata: null,
+    };
+  }
+
+  if (!metadata?.pending_promotion) throw new Error('Pending release-control metadata is missing');
+  if (metadata.schema_version !== RECONCILIATION_SCHEMA_VERSION || metadata.allowlist_version !== ALLOWLIST_VERSION) {
+    throw new Error('Unsupported release-control metadata during acceptance');
+  }
+  if (metadata.environment !== environment) throw new Error('release-control environment mismatch during acceptance');
+
+  const pending = metadata.pending_promotion;
+  if (pending.candidate_sha !== reconciliation.candidate_sha
+    || pending.control_plane_sha !== reconciliation.control_plane_sha
+    || pending.runtime_head_before !== reconciliation.runtime_head_before) {
+    throw new Error('Pending promotion identity does not match reconciliation evidence');
+  }
+
+  return {
+    status: 'READY',
+    acceptance_runtime_head: head,
+    accepted_metadata: {
+      schema_version: RECONCILIATION_SCHEMA_VERSION,
+      allowlist_version: ALLOWLIST_VERSION,
+      environment,
+      accepted_baselines: { ...pending.next_accepted_baselines },
+      previous_accepted_promotion: metadata.accepted_promotion || null,
+      accepted_promotion: {
+        candidate_sha: reconciliation.candidate_sha,
+        control_plane_sha: reconciliation.control_plane_sha,
+        runtime_data_sha: reconciliation.promotion_runtime_sha,
+        accepted_at: now,
+      },
+      pending_promotion: null,
+    },
+  };
+}
+
 export function acceptRuntimeReconciliation(runtime, reconciliation, {
   gitEnv,
+  snapshotVerification,
+  functionalVisibility,
   now = new Date().toISOString(),
 } = {}) {
   if (!reconciliation.requires_acceptance) {
@@ -483,40 +741,21 @@ export function acceptRuntimeReconciliation(runtime, reconciliation, {
   const temp = cloneRuntime(runtime, gitEnv, 'job-search-runtime-accept-');
   try {
     const head = requireSha(run('git', ['rev-parse', 'HEAD'], { cwd: temp, env: gitEnv }).trim(), 'runtime HEAD');
-    if (head !== reconciliation.promotion_runtime_sha) {
-      return {
-        status: 'DEGRADED',
-        reason: `Runtime changed before baseline acceptance: expected ${reconciliation.promotion_runtime_sha}, got ${head}`,
-        acceptance_runtime_head: head,
-      };
-    }
-    const metadata = readMetadata(temp);
-    if (!metadata?.pending_promotion) throw new Error('Pending release-control metadata is missing');
-    if (metadata.schema_version !== RECONCILIATION_SCHEMA_VERSION || metadata.allowlist_version !== ALLOWLIST_VERSION) {
-      throw new Error('Unsupported release-control metadata during acceptance');
-    }
-    const pending = metadata.pending_promotion;
-    if (pending.candidate_sha !== reconciliation.candidate_sha
-      || pending.control_plane_sha !== reconciliation.control_plane_sha
-      || pending.runtime_head_before !== reconciliation.runtime_head_before) {
-      throw new Error('Pending promotion identity does not match reconciliation evidence');
-    }
-
-    const accepted = {
-      schema_version: RECONCILIATION_SCHEMA_VERSION,
-      allowlist_version: ALLOWLIST_VERSION,
+    const prepared = prepareAcceptanceState({
       environment: runtime.environment,
-      accepted_baselines: { ...pending.next_accepted_baselines },
-      previous_accepted_promotion: metadata.accepted_promotion || null,
-      accepted_promotion: {
-        candidate_sha: reconciliation.candidate_sha,
-        control_plane_sha: reconciliation.control_plane_sha,
-        runtime_data_sha: reconciliation.promotion_runtime_sha,
-        accepted_at: now,
-      },
-      pending_promotion: null,
-    };
-    writeText(resolve(temp, RELEASE_CONTROL_METADATA_PATH), `${JSON.stringify(accepted, null, 2)}\n`);
+      currentHead: head,
+      reconciliation,
+      metadata: readMetadata(temp),
+      snapshotVerification,
+      functionalVisibility,
+      now,
+    });
+    if (prepared.status === 'DEGRADED') return prepared;
+
+    writeText(
+      resolve(temp, RELEASE_CONTROL_METADATA_PATH),
+      `${JSON.stringify(prepared.accepted_metadata, null, 2)}\n`,
+    );
     const acceptedHead = commitAndPush(
       temp,
       runtime.runtimeRef,
@@ -530,6 +769,24 @@ export function acceptRuntimeReconciliation(runtime, reconciliation, {
   }
 }
 
+export function compensatingRevertDecision({
+  mutationPerformed,
+  currentHead,
+  promotionRuntimeSha,
+}) {
+  if (!mutationPerformed) return { status:'NOT_REQUIRED' };
+  const head = requireSha(currentHead, 'runtime HEAD');
+  const promotion = requireSha(promotionRuntimeSha, 'promotion runtime SHA');
+  if (head !== promotion) {
+    return {
+      status: 'DEGRADED',
+      reason: `Runtime changed after promotion; compensating revert refused: expected ${promotion}, got ${head}`,
+      runtime_head: head,
+    };
+  }
+  return { status:'REVERT', runtime_head:head };
+}
+
 export function revertRuntimeReconciliation(runtime, reconciliation, { gitEnv } = {}) {
   if (!reconciliation?.mutation_performed) {
     return { status: 'NOT_REQUIRED', runtime_head: reconciliation?.promotion_runtime_sha || null };
@@ -537,13 +794,13 @@ export function revertRuntimeReconciliation(runtime, reconciliation, { gitEnv } 
   const temp = cloneRuntime(runtime, gitEnv, 'job-search-runtime-revert-');
   try {
     const head = requireSha(run('git', ['rev-parse', 'HEAD'], { cwd: temp, env: gitEnv }).trim(), 'runtime HEAD');
-    if (head !== reconciliation.promotion_runtime_sha) {
-      return {
-        status: 'DEGRADED',
-        reason: `Runtime changed after promotion; compensating revert refused: expected ${reconciliation.promotion_runtime_sha}, got ${head}`,
-        runtime_head: head,
-      };
-    }
+    const decision = compensatingRevertDecision({
+      mutationPerformed: reconciliation.mutation_performed,
+      currentHead: head,
+      promotionRuntimeSha: reconciliation.promotion_runtime_sha,
+    });
+    if (decision.status === 'DEGRADED') return decision;
+
     assertExpectedRemoteHead(temp, runtime.runtimeRef, head, gitEnv);
     run('git', [
       '-c', 'user.name=job-search-environment-tool',
@@ -562,6 +819,7 @@ export function revertRuntimeReconciliation(runtime, reconciliation, { gitEnv } 
 export function buildReconciliationEvidence(reconciliation, {
   health = null,
   snapshotVerification = 'NOT_RUN',
+  functionalVisibility = null,
   acceptance = null,
   revert = null,
 } = {}) {
@@ -571,13 +829,19 @@ export function buildReconciliationEvidence(reconciliation, {
     control_plane_sha: reconciliation.control_plane_sha,
     candidate_sha: reconciliation.candidate_sha,
     runtime_head_before: reconciliation.runtime_head_before,
-    promotion_runtime_sha: reconciliation.promotion_runtime_sha,
+    promotion_runtime_sha: reconciliation.promotion_runtime_sha || null,
     acceptance_runtime_head: acceptance?.acceptance_runtime_head || null,
     allowlist_version: reconciliation.allowlist_version,
-    files: reconciliation.files,
+    files: reconciliation.files || {},
     reconciliation_result: reconciliation.reconciliation_result,
     validation_result: reconciliation.validation_result,
+    failure_stage: reconciliation.failure_stage || null,
     snapshot_verification: snapshotVerification,
+    functional_visibility: functionalVisibility || {
+      status:'NOT_RUN',
+      method:'canonical-protected-runtime-read',
+      files:{},
+    },
     acceptance_result: acceptance?.status || 'NOT_RUN',
     health: health ? {
       source_sha: health.source_sha,
@@ -585,6 +849,7 @@ export function buildReconciliationEvidence(reconciliation, {
     } : null,
     revert_result: revert?.status || 'NOT_REQUIRED',
   };
+  if (reconciliation.reason) evidence.reason = reconciliation.reason;
   if (acceptance?.reason) evidence.acceptance_reason = acceptance.reason;
   if (revert?.reason) evidence.revert_reason = revert.reason;
   return evidence;
