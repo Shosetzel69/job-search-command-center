@@ -1,0 +1,789 @@
+{
+  "schema_version": "1.0",
+  "domains": {
+    "regions": {
+      "kind": "system",
+      "extensible": false,
+      "values": [
+        {
+          "code": "EU",
+          "label": "Uniunea Europeana",
+          "active": true,
+          "sort_order": 10,
+          "country_codes": [
+            "AT",
+            "BE",
+            "BG",
+            "HR",
+            "CY",
+            "CZ",
+            "DK",
+            "EE",
+            "FI",
+            "FR",
+            "DE",
+            "GR",
+            "HU",
+            "IE",
+            "IT",
+            "LV",
+            "LT",
+            "LU",
+            "MT",
+            "NL",
+            "PL",
+            "PT",
+            "RO",
+            "SK",
+            "SI",
+            "ES",
+            "SE"
+          ]
+        },
+        {
+          "code": "US",
+          "label": "Statele Unite",
+          "active": true,
+          "sort_order": 20,
+          "country_codes": [
+            "US"
+          ]
+        },
+        {
+          "code": "ASIA",
+          "label": "Asia",
+          "active": true,
+          "sort_order": 30,
+          "country_codes": [
+            "AF",
+            "AM",
+            "AZ",
+            "BH",
+            "BD",
+            "BT",
+            "BN",
+            "KH",
+            "CN",
+            "GE",
+            "HK",
+            "IN",
+            "ID",
+            "IR",
+            "IQ",
+            "IL",
+            "JP",
+            "JO",
+            "KZ",
+            "KW",
+            "KG",
+            "LA",
+            "LB",
+            "MO",
+            "MY",
+            "MV",
+            "MN",
+            "MM",
+            "NP",
+            "KP",
+            "OM",
+            "PK",
+            "PS",
+            "PH",
+            "QA",
+            "SA",
+            "SG",
+            "KR",
+            "LK",
+            "SY",
+            "TW",
+            "TJ",
+            "TH",
+            "TL",
+            "TR",
+            "TM",
+            "AE",
+            "UZ",
+            "VN",
+            "YE"
+          ]
+        }
+      ]
+    },
+    "countries": {
+      "kind": "system",
+      "extensible": false,
+      "values": [
+        {
+          "code": "AF",
+          "label": "Afganistan",
+          "active": true,
+          "sort_order": 10
+        },
+        {
+          "code": "SA",
+          "label": "Arabia Saudita",
+          "active": true,
+          "sort_order": 20
+        },
+        {
+          "code": "AM",
+          "label": "Armenia",
+          "active": true,
+          "sort_order": 30
+        },
+        {
+          "code": "AT",
+          "label": "Austria",
+          "active": true,
+          "sort_order": 40
+        },
+        {
+          "code": "AZ",
+          "label": "Azerbaidjan",
+          "active": true,
+          "sort_order": 50
+        },
+        {
+          "code": "BH",
+          "label": "Bahrain",
+          "active": true,
+          "sort_order": 60
+        },
+        {
+          "code": "BD",
+          "label": "Bangladesh",
+          "active": true,
+          "sort_order": 70
+        },
+        {
+          "code": "BE",
+          "label": "Belgia",
+          "active": true,
+          "sort_order": 80,
+          "aliases": [
+            "Belgium"
+          ]
+        },
+        {
+          "code": "BT",
+          "label": "Bhutan",
+          "active": true,
+          "sort_order": 90
+        },
+        {
+          "code": "BN",
+          "label": "Brunei",
+          "active": true,
+          "sort_order": 100
+        },
+        {
+          "code": "BG",
+          "label": "Bulgaria",
+          "active": true,
+          "sort_order": 110
+        },
+        {
+          "code": "KH",
+          "label": "Cambodgia",
+          "active": true,
+          "sort_order": 120
+        },
+        {
+          "code": "CZ",
+          "label": "Cehia",
+          "active": true,
+          "sort_order": 130,
+          "aliases": [
+            "Czech Republic",
+            "Czechia"
+          ]
+        },
+        {
+          "code": "CN",
+          "label": "China",
+          "active": true,
+          "sort_order": 140
+        },
+        {
+          "code": "CY",
+          "label": "Cipru",
+          "active": true,
+          "sort_order": 150
+        },
+        {
+          "code": "KP",
+          "label": "Coreea de Nord",
+          "active": true,
+          "sort_order": 160
+        },
+        {
+          "code": "KR",
+          "label": "Coreea de Sud",
+          "active": true,
+          "sort_order": 170,
+          "aliases": [
+            "South Korea"
+          ]
+        },
+        {
+          "code": "HR",
+          "label": "Croatia",
+          "active": true,
+          "sort_order": 180
+        },
+        {
+          "code": "DK",
+          "label": "Danemarca",
+          "active": true,
+          "sort_order": 190,
+          "aliases": [
+            "Denmark"
+          ]
+        },
+        {
+          "code": "CH",
+          "label": "Elvetia",
+          "active": true,
+          "sort_order": 200,
+          "aliases": [
+            "Switzerland"
+          ]
+        },
+        {
+          "code": "AE",
+          "label": "Emiratele Arabe Unite",
+          "active": true,
+          "sort_order": 210,
+          "aliases": [
+            "United Arab Emirates",
+            "UAE"
+          ]
+        },
+        {
+          "code": "EE",
+          "label": "Estonia",
+          "active": true,
+          "sort_order": 220
+        },
+        {
+          "code": "PH",
+          "label": "Filipine",
+          "active": true,
+          "sort_order": 230
+        },
+        {
+          "code": "FI",
+          "label": "Finlanda",
+          "active": true,
+          "sort_order": 240,
+          "aliases": [
+            "Finland"
+          ]
+        },
+        {
+          "code": "FR",
+          "label": "Franta",
+          "active": true,
+          "sort_order": 250,
+          "aliases": [
+            "France"
+          ]
+        },
+        {
+          "code": "GE",
+          "label": "Georgia",
+          "active": true,
+          "sort_order": 260
+        },
+        {
+          "code": "DE",
+          "label": "Germania",
+          "active": true,
+          "sort_order": 270,
+          "aliases": [
+            "Germany"
+          ]
+        },
+        {
+          "code": "GR",
+          "label": "Grecia",
+          "active": true,
+          "sort_order": 280,
+          "aliases": [
+            "Greece"
+          ]
+        },
+        {
+          "code": "HK",
+          "label": "Hong Kong",
+          "active": true,
+          "sort_order": 290
+        },
+        {
+          "code": "IN",
+          "label": "India",
+          "active": true,
+          "sort_order": 300
+        },
+        {
+          "code": "ID",
+          "label": "Indonezia",
+          "active": true,
+          "sort_order": 310
+        },
+        {
+          "code": "JO",
+          "label": "Iordania",
+          "active": true,
+          "sort_order": 320
+        },
+        {
+          "code": "IQ",
+          "label": "Irak",
+          "active": true,
+          "sort_order": 330
+        },
+        {
+          "code": "IR",
+          "label": "Iran",
+          "active": true,
+          "sort_order": 340
+        },
+        {
+          "code": "IE",
+          "label": "Irlanda",
+          "active": true,
+          "sort_order": 350,
+          "aliases": [
+            "Ireland"
+          ]
+        },
+        {
+          "code": "IL",
+          "label": "Israel",
+          "active": true,
+          "sort_order": 360
+        },
+        {
+          "code": "IT",
+          "label": "Italia",
+          "active": true,
+          "sort_order": 370,
+          "aliases": [
+            "Italy"
+          ]
+        },
+        {
+          "code": "JP",
+          "label": "Japonia",
+          "active": true,
+          "sort_order": 380,
+          "aliases": [
+            "Japan"
+          ]
+        },
+        {
+          "code": "KG",
+          "label": "Kargazstan",
+          "active": true,
+          "sort_order": 390
+        },
+        {
+          "code": "KZ",
+          "label": "Kazahstan",
+          "active": true,
+          "sort_order": 400
+        },
+        {
+          "code": "KW",
+          "label": "Kuweit",
+          "active": true,
+          "sort_order": 410
+        },
+        {
+          "code": "LA",
+          "label": "Laos",
+          "active": true,
+          "sort_order": 420
+        },
+        {
+          "code": "LV",
+          "label": "Letonia",
+          "active": true,
+          "sort_order": 430,
+          "aliases": [
+            "Latvia"
+          ]
+        },
+        {
+          "code": "LB",
+          "label": "Liban",
+          "active": true,
+          "sort_order": 440
+        },
+        {
+          "code": "LT",
+          "label": "Lituania",
+          "active": true,
+          "sort_order": 450,
+          "aliases": [
+            "Lithuania"
+          ]
+        },
+        {
+          "code": "LU",
+          "label": "Luxemburg",
+          "active": true,
+          "sort_order": 460,
+          "aliases": [
+            "Luxembourg"
+          ]
+        },
+        {
+          "code": "MO",
+          "label": "Macao",
+          "active": true,
+          "sort_order": 470
+        },
+        {
+          "code": "MY",
+          "label": "Malaezia",
+          "active": true,
+          "sort_order": 480
+        },
+        {
+          "code": "MV",
+          "label": "Maldive",
+          "active": true,
+          "sort_order": 490
+        },
+        {
+          "code": "MT",
+          "label": "Malta",
+          "active": true,
+          "sort_order": 500
+        },
+        {
+          "code": "MN",
+          "label": "Mongolia",
+          "active": true,
+          "sort_order": 510
+        },
+        {
+          "code": "MM",
+          "label": "Myanmar",
+          "active": true,
+          "sort_order": 520
+        },
+        {
+          "code": "NP",
+          "label": "Nepal",
+          "active": true,
+          "sort_order": 530
+        },
+        {
+          "code": "NO",
+          "label": "Norvegia",
+          "active": true,
+          "sort_order": 540,
+          "aliases": [
+            "Norway"
+          ]
+        },
+        {
+          "code": "OM",
+          "label": "Oman",
+          "active": true,
+          "sort_order": 550
+        },
+        {
+          "code": "PK",
+          "label": "Pakistan",
+          "active": true,
+          "sort_order": 560
+        },
+        {
+          "code": "PS",
+          "label": "Palestina",
+          "active": true,
+          "sort_order": 570
+        },
+        {
+          "code": "PL",
+          "label": "Polonia",
+          "active": true,
+          "sort_order": 580,
+          "aliases": [
+            "Poland"
+          ]
+        },
+        {
+          "code": "PT",
+          "label": "Portugalia",
+          "active": true,
+          "sort_order": 590,
+          "aliases": [
+            "Portugal"
+          ]
+        },
+        {
+          "code": "QA",
+          "label": "Qatar",
+          "active": true,
+          "sort_order": 600
+        },
+        {
+          "code": "GB",
+          "label": "Regatul Unit",
+          "active": true,
+          "sort_order": 610,
+          "aliases": [
+            "United Kingdom",
+            "UK"
+          ]
+        },
+        {
+          "code": "RO",
+          "label": "Romania",
+          "active": true,
+          "sort_order": 620
+        },
+        {
+          "code": "SG",
+          "label": "Singapore",
+          "active": true,
+          "sort_order": 630
+        },
+        {
+          "code": "SY",
+          "label": "Siria",
+          "active": true,
+          "sort_order": 640
+        },
+        {
+          "code": "SK",
+          "label": "Slovacia",
+          "active": true,
+          "sort_order": 650,
+          "aliases": [
+            "Slovakia"
+          ]
+        },
+        {
+          "code": "SI",
+          "label": "Slovenia",
+          "active": true,
+          "sort_order": 660
+        },
+        {
+          "code": "ES",
+          "label": "Spania",
+          "active": true,
+          "sort_order": 670,
+          "aliases": [
+            "Spain"
+          ]
+        },
+        {
+          "code": "LK",
+          "label": "Sri Lanka",
+          "active": true,
+          "sort_order": 680
+        },
+        {
+          "code": "US",
+          "label": "Statele Unite",
+          "active": true,
+          "sort_order": 690,
+          "aliases": [
+            "United States",
+            "USA"
+          ]
+        },
+        {
+          "code": "SE",
+          "label": "Suedia",
+          "active": true,
+          "sort_order": 700,
+          "aliases": [
+            "Sweden"
+          ]
+        },
+        {
+          "code": "TJ",
+          "label": "Tadjikistan",
+          "active": true,
+          "sort_order": 710
+        },
+        {
+          "code": "TW",
+          "label": "Taiwan",
+          "active": true,
+          "sort_order": 720
+        },
+        {
+          "code": "NL",
+          "label": "Tarile de Jos",
+          "active": true,
+          "sort_order": 730,
+          "aliases": [
+            "Netherlands"
+          ]
+        },
+        {
+          "code": "TH",
+          "label": "Thailanda",
+          "active": true,
+          "sort_order": 740
+        },
+        {
+          "code": "TL",
+          "label": "Timorul de Est",
+          "active": true,
+          "sort_order": 750
+        },
+        {
+          "code": "TR",
+          "label": "Turcia",
+          "active": true,
+          "sort_order": 760,
+          "aliases": [
+            "Turkey",
+            "Türkiye"
+          ]
+        },
+        {
+          "code": "TM",
+          "label": "Turkmenistan",
+          "active": true,
+          "sort_order": 770
+        },
+        {
+          "code": "UA",
+          "label": "Ucraina",
+          "active": true,
+          "sort_order": 780,
+          "aliases": [
+            "Ukraine"
+          ]
+        },
+        {
+          "code": "HU",
+          "label": "Ungaria",
+          "active": true,
+          "sort_order": 790,
+          "aliases": [
+            "Hungary"
+          ]
+        },
+        {
+          "code": "UZ",
+          "label": "Uzbekistan",
+          "active": true,
+          "sort_order": 800
+        },
+        {
+          "code": "VN",
+          "label": "Vietnam",
+          "active": true,
+          "sort_order": 810
+        },
+        {
+          "code": "YE",
+          "label": "Yemen",
+          "active": true,
+          "sort_order": 820
+        }
+      ]
+    },
+    "work_modes": {
+      "kind": "system",
+      "extensible": false,
+      "technical_values": [
+        "unknown"
+      ],
+      "values": [
+        {
+          "code": "remote",
+          "label": "Remote",
+          "active": true,
+          "sort_order": 10,
+          "aliases": [
+            "remote"
+          ]
+        },
+        {
+          "code": "hybrid",
+          "label": "Hibrid",
+          "active": true,
+          "sort_order": 20,
+          "aliases": [
+            "hybrid"
+          ]
+        },
+        {
+          "code": "onsite",
+          "label": "Onsite",
+          "active": true,
+          "sort_order": 30,
+          "aliases": [
+            "onsite",
+            "on-site",
+            "office",
+            "in-office"
+          ]
+        }
+      ]
+    },
+    "contract_types": {
+      "kind": "system",
+      "extensible": false,
+      "technical_values": [
+        "unknown"
+      ],
+      "values": [
+        {
+          "code": "permanent",
+          "label": "Permanent",
+          "active": true,
+          "sort_order": 10
+        },
+        {
+          "code": "temporary",
+          "label": "Temporar",
+          "active": true,
+          "sort_order": 20
+        },
+        {
+          "code": "contract",
+          "label": "Contract",
+          "active": true,
+          "sort_order": 30
+        },
+        {
+          "code": "freelance",
+          "label": "Freelance",
+          "active": true,
+          "sort_order": 40
+        }
+      ]
+    },
+    "application_statuses": {
+      "kind": "extensible",
+      "extensible": true,
+      "values": [
+        {
+          "code": "applied",
+          "label": "Aplicat",
+          "active": true,
+          "sort_order": 10
+        }
+      ]
+    },
+    "seniority": {
+      "kind": "system",
+      "extensible": false,
+      "values": []
+    }
+  }
+}
