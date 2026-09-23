@@ -67,7 +67,7 @@ function reconciliation(environment, sourceSha, runtimeSha) {
     snapshot_verification: 'PASS',
     functional_visibility: {
       status: 'PASS',
-      method: 'canonical-protected-runtime-read',
+      method: 'deployed-protected-data',
       files: {
         'data/sources.json': {
           expected_semantic_digest: DIGEST,
