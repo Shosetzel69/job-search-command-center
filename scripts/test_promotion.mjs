@@ -20,6 +20,7 @@ const CONTROL_PLANE_SHA = '9'.repeat(40);
 const RUNTIME_HEAD_BEFORE = '8'.repeat(40);
 const ACCEPTANCE_HEAD = '7'.repeat(40);
 const PREVIOUS_ACCEPTANCE_HEAD = '5'.repeat(40);
+const POST_BOOTSTRAP_HEAD = '4'.repeat(40);
 const DIGEST = `sha256:${'1'.repeat(64)}`;
 
 function health(environment, sourceSha, runtimeSha) {
@@ -142,6 +143,7 @@ function prodArgs(overrides = {}) {
     },
     expectedRuntimeSha: PROD_RUNTIME_SHA,
     expectedRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
+    reconciliationRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
     rollbackReference: 'redeploy previous known-good PROD source/runtime pair',
     ownerGoReference: 'PROD_GO by owner',
     runId: '1004',
@@ -238,10 +240,10 @@ test('PROD release rejects previous deployed promotion runtime mismatch', () => 
   );
 });
 
-test('PROD release rejects current runtime HEAD that is not the prior acceptance head', () => {
+test('PROD deploy rejects reconciliation start head that differs from prior acceptance head', () => {
   assert.throws(
     () => createProdReleaseRecord(prodArgs({ expectedRuntimeHead: OTHER_SHA })),
-    /runtime_head_before does not match prior acceptance_runtime_head/,
+    /deploy reconciliation runtime head must equal prior acceptance_runtime_head/,
   );
 });
 
@@ -254,6 +256,40 @@ test('PROD release records deployed promotion snapshot separately from acceptanc
   assert.notEqual(
     record.prod_runtime_anchor.promotion_runtime_sha,
     record.prod_runtime_anchor.acceptance_runtime_head,
+  );
+});
+
+test('bootstrap-deploy accepts an authorized post-bootstrap runtime head distinct from prior acceptance head', () => {
+  const bootstrapReconciliation = {
+    ...reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+    runtime_head_before: POST_BOOTSTRAP_HEAD,
+  };
+  const record = createProdReleaseRecord(prodArgs({
+    action: 'bootstrap-deploy',
+    configRollbackReference: 'restore prior runtime workflow/config',
+    reconciliationRuntimeHead: POST_BOOTSTRAP_HEAD,
+    reconciliation: bootstrapReconciliation,
+  }));
+
+  assert.equal(record.previous_prod_runtime_anchor.acceptance_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
+  assert.equal(record.reconciliation_runtime_head, POST_BOOTSTRAP_HEAD);
+  assert.equal(record.configuration_change.runtime_head_before, PREVIOUS_ACCEPTANCE_HEAD);
+  assert.equal(record.configuration_change.authorized_post_bootstrap_runtime_head, POST_BOOTSTRAP_HEAD);
+});
+
+test('bootstrap-deploy fails closed if reconciliation evidence starts from any head other than authorized post-bootstrap head', () => {
+  const bootstrapReconciliation = {
+    ...reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+    runtime_head_before: OTHER_SHA,
+  };
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({
+      action: 'bootstrap-deploy',
+      configRollbackReference: 'restore prior runtime workflow/config',
+      reconciliationRuntimeHead: POST_BOOTSTRAP_HEAD,
+      reconciliation: bootstrapReconciliation,
+    })),
+    /runtime_head_before does not match authorized reconciliation runtime head/,
   );
 });
 
@@ -315,6 +351,7 @@ test('minimal PROD release record preserves candidate, TEST evidence, rollback a
   assert.equal(record.previous_prod_source_sha, PREVIOUS_PROD_SOURCE_SHA);
   assert.equal(record.previous_prod_runtime_data_sha, PROD_RUNTIME_SHA);
   assert.equal(record.previous_prod_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
+  assert.equal(record.reconciliation_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
   assert.equal(record.prod_deploy_evidence.source_sha, SHA);
   assert.equal(record.prod_deploy_evidence.runtime_data_sha, PROD_PROMOTION_RUNTIME_SHA);
   assert.equal(record.prod_deploy_evidence.reconciliation.environment, 'prod');
