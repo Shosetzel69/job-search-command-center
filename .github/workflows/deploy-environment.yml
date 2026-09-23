@@ -308,7 +308,21 @@ jobs:
           mkdir -p promotion-output
           frontend_origin="$(node -e 'process.stdout.write(String(process.env.FRONTEND_ORIGIN || "").trim().replace(/\/+$/, ""))')"
           test -n "$frontend_origin" || { echo "FRONTEND_ORIGIN is empty after normalization" >&2; exit 1; }
-          curl --fail --silent --show-error "$frontend_origin/health" > promotion-output/health.json
+          rm -f promotion-output/health.json
+          for attempt in 1 2 3 4 5 6 7 8 9 10; do
+            if curl --fail --silent --show-error "$frontend_origin/health" > promotion-output/health-candidate.json; then
+              if jq -e --arg source "$CANDIDATE_SHA" --arg environment "${{ inputs.environment }}"                 '.status == "ok" and .source_sha == $source and .environment == $environment'                 promotion-output/health-candidate.json >/dev/null; then
+                mv promotion-output/health-candidate.json promotion-output/health.json
+                break
+              fi
+            fi
+            echo "Waiting for ${{ inputs.environment }} health propagation to exact candidate (attempt $attempt/10)"
+            sleep 3
+          done
+          test -f promotion-output/health.json || {
+            echo "${{ inputs.environment }} health did not converge to exact candidate $CANDIDATE_SHA within bounded retry window" >&2
+            exit 1
+          }
           run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           if [ "${{ inputs.environment }}" = "dev" ]; then
             node control-plane/scripts/environment/promotion.mjs create-dev \
