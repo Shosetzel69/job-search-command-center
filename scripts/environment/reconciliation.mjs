@@ -10,7 +10,6 @@ import {
   normalizeSource,
   sameUrl,
 } from '../../command-api/src/source-governance.js';
-import { readRuntimeJson } from '../../command-api/src/runtime-github.js';
 import { serializeSeed } from './seed.mjs';
 import { SHA_RE } from './contract.mjs';
 
@@ -631,16 +630,6 @@ export function verifyRuntimePromotionSnapshot(runtime, reconciliation, { gitEnv
   }
 }
 
-function runtimeReadConfig(runtime) {
-  const [runtimeOwner, runtimeRepo] = String(runtime.runtimeRepository || '').split('/');
-  if (!runtimeOwner || !runtimeRepo) throw new Error('Invalid runtime repository identity');
-  return {
-    runtimeOwner,
-    runtimeRepo,
-    runtimeRef: runtime.runtimeRef,
-  };
-}
-
 function payloadCount(path, payload) {
   if (path === 'data/sources.json') return Number(payload?.count ?? payload?.sources?.length ?? 0);
   if (path === 'data/source-categories.json') return Number(payload?.count ?? payload?.categories?.length ?? 0);
@@ -649,34 +638,78 @@ function payloadCount(path, payload) {
 }
 
 export async function verifyProtectedFunctionalVisibility(runtime, reconciliation, {
-  runtimeToken = runtime.githubRuntimeToken,
-  readJson = readRuntimeJson,
+  googleIdToken,
+  fetchFn = fetch,
 } = {}) {
+  const token = String(googleIdToken || '').trim();
+  if (!token) {
+    const proof = {
+      status: 'FAIL',
+      method: 'deployed-protected-data',
+      origin: runtime.frontendOrigin,
+      files: {},
+      reason: 'FUNCTIONAL_GOOGLE_ID_TOKEN is required',
+    };
+    throw new FunctionalVisibilityError(proof.reason, proof);
+  }
+
+  const origin = String(runtime.frontendOrigin || '').trim().replace(/\/+$/, '');
+  if (!origin) {
+    const proof = {
+      status: 'FAIL',
+      method: 'deployed-protected-data',
+      origin: null,
+      files: {},
+      reason: 'Deployed environment origin is missing',
+    };
+    throw new FunctionalVisibilityError(proof.reason, proof);
+  }
+
   const proof = {
     status: 'FAIL',
-    method: 'canonical-protected-runtime-read',
-    runtime_repository: runtime.runtimeRepository,
-    runtime_ref: runtime.runtimeRef,
+    method: 'deployed-protected-data',
+    origin,
     files: {},
   };
 
   try {
-    const config = runtimeReadConfig(runtime);
     const visibleContents = {};
     for (const path of CANDIDATE_MANAGED_PATHS) {
-      const { payload } = await readJson({ GITHUB_TOKEN:runtimeToken }, config, path);
-      const visibleDigest = semanticDigest(payload);
-      const expectedDigest = reconciliation.files[path].functional_expected_digest;
-      proof.files[path] = {
-        expected_semantic_digest: expectedDigest,
-        visible_semantic_digest: visibleDigest,
-        visible_count: payloadCount(path, payload),
+      const file = path.slice('data/'.length);
+      const url = new URL(`/data/${encodeURIComponent(file)}`, origin);
+      const response = await fetchFn(url, {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      const item = {
+        path: url.pathname,
+        http_status: response.status,
+        expected_semantic_digest: reconciliation.files[path].functional_expected_digest,
+        visible_semantic_digest: null,
+        visible_count: null,
       };
+      proof.files[path] = item;
+
+      if (!response.ok) {
+        let detail = '';
+        try { detail = (await response.text()).slice(0, 300); } catch {}
+        throw new Error(`Deployed protected data read failed: ${url.pathname} -> HTTP ${response.status}${detail ? ` (${detail})` : ''}`);
+      }
+
+      const payload = await response.json();
+      const visibleDigest = semanticDigest(payload);
+      item.visible_semantic_digest = visibleDigest;
+      item.visible_count = payloadCount(path, payload);
+      const expectedDigest = reconciliation.files[path].functional_expected_digest;
       if (visibleDigest !== expectedDigest) {
-        throw new Error(`Protected functional visibility mismatch: ${path}`);
+        throw new Error(`Deployed protected functional visibility mismatch: ${url.pathname}`);
       }
       visibleContents[path] = `${JSON.stringify(payload, null, 2)}\n`;
     }
+
     validateCandidateManagedSet(visibleContents);
     proof.status = 'PASS';
     return proof;
