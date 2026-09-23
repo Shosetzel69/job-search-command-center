@@ -3,23 +3,31 @@ import assert from 'node:assert/strict';
 import {
   ALLOWLIST_VERSION,
   CANDIDATE_MANAGED_PATHS,
+  FunctionalVisibilityError,
   KNOWN_SEED_DIGESTS,
   RECONCILIATION_SCHEMA_VERSION,
+  ReconciliationBlockedError,
+  compensatingRevertDecision,
   planCandidateManagedReconciliation,
+  prepareAcceptanceState,
   reconcileFileDecision,
   sha256Text,
+  validateCandidateManagedSet,
+  verifyProtectedFunctionalVisibility,
 } from './environment/reconciliation.mjs';
 import { serializeSeed } from './environment/seed.mjs';
 
 const SHA = 'a'.repeat(40);
 const CONTROL = 'b'.repeat(40);
 const RUNTIME = 'c'.repeat(40);
+const PROMOTION = 'd'.repeat(40);
+const CONCURRENT = 'e'.repeat(40);
 
-function category(id = 'general', label = 'General') {
-  return { id, label, active: true, order: 10 };
+function category(id = 'general', label = 'General', extra = {}) {
+  return { id, label, active:true, order:10, ...extra };
 }
 
-function source(id = 'src-one', name = 'One', url = 'https://example.com/jobs', categoryLabel = 'General') {
+function source(id = 'src-one', name = 'One', url = 'https://example.com/jobs', categoryLabel = 'General', extra = {}) {
   return {
     id,
     category: categoryLabel,
@@ -33,12 +41,27 @@ function source(id = 'src-one', name = 'One', url = 'https://example.com/jobs', 
     last_validated_at: null,
     validation_reason: null,
     policy_excluded: false,
+    ...extra,
   };
 }
 
-function managedSet({ sources = [], categories = [] } = {}) {
+function monster(categoryLabel = 'General') {
   return {
-    'data/sources.json': `${JSON.stringify({ schema_version:'1.0', count:sources.length, sources }, null, 2)}\n`,
+    id: 'src-monster',
+    category: categoryLabel,
+    name: 'Monster',
+    url: 'https://www.monster.com/jobs/',
+    active: true,
+    connector_available: true,
+  };
+}
+
+function managedSet({ sources = [source()], categories = [category()], includeMonster = true } = {}) {
+  const finalSources = includeMonster && !sources.some(item => item.name === 'Monster')
+    ? [...sources, monster(categories[0]?.label || 'General')]
+    : [...sources];
+  return {
+    'data/sources.json': `${JSON.stringify({ schema_version:'1.0', count:finalSources.length, sources:finalSources }, null, 2)}\n`,
     'data/source-categories.json': `${JSON.stringify({ schema_version:'1.0', count:categories.length, categories }, null, 2)}\n`,
     'data/nomenclatures.json': serializeSeed('nomenclatures.json', {
       sourceSha: null,
@@ -47,6 +70,18 @@ function managedSet({ sources = [], categories = [] } = {}) {
       searchMode: 'disabled',
     }),
   };
+}
+
+function seedSet() {
+  return Object.fromEntries(CANDIDATE_MANAGED_PATHS.map(path => [
+    path,
+    serializeSeed(path.replace('data/', ''), {
+      sourceSha: null,
+      generatedAt: '1970-01-01T00:00:00.000Z',
+      environment: 'dev',
+      searchMode: 'disabled',
+    }),
+  ]));
 }
 
 function metadataFrom(contents, overrides = {}) {
@@ -76,6 +111,20 @@ function plan({ candidateContents, runtimeContents, metadata }) {
   });
 }
 
+function runtime() {
+  return {
+    environment:'dev',
+    sourceSha:SHA,
+    runtimeRepository:'Shosetzel69/job-search-runtime-dev',
+    runtimeRef:'main',
+    githubRuntimeToken:'test-runtime-token',
+  };
+}
+
+function parsedPayloads(contents) {
+  return Object.fromEntries(Object.entries(contents).map(([path,text]) => [path, JSON.parse(text)]));
+}
+
 test('candidate-managed allowlist is explicit and exact', () => {
   assert.deepEqual(CANDIDATE_MANAGED_PATHS, [
     'data/sources.json',
@@ -85,12 +134,13 @@ test('candidate-managed allowlist is explicit and exact', () => {
   assert.equal(Object.keys(KNOWN_SEED_DIGESTS).length, 3);
 });
 
-test('exact known seed bootstrap promotes candidate source registry atomically', () => {
-  const runtimeContents = managedSet();
-  const candidateContents = managedSet({
-    categories: [category()],
-    sources: [source()],
-  });
+test('full canonical source/category contracts accept normalized catalog plus explicit Monster legacy exception', () => {
+  assert.doesNotThrow(() => validateCandidateManagedSet(managedSet()));
+});
+
+test('exact known seed bootstrap is recognized before strict operational runtime validation', () => {
+  const runtimeContents = seedSet();
+  const candidateContents = managedSet();
   const result = plan({ candidateContents, runtimeContents, metadata:null });
   assert.equal(result.bootstrap, true);
   assert.equal(result.reconciliation_result, 'PASS');
@@ -103,19 +153,82 @@ test('exact known seed bootstrap promotes candidate source registry atomically',
   assert.ok(result.pending_metadata);
 });
 
-test('bootstrap fails closed when runtime is not an exact trusted seed', () => {
-  const runtimeContents = managedSet({ categories:[category()] });
-  const candidateContents = runtimeContents;
+test('bootstrap failure is structured and identifies bootstrap_validation', () => {
+  const runtimeContents = managedSet();
+  const candidateContents = managedSet();
   assert.throws(
     () => plan({ candidateContents, runtimeContents, metadata:null }),
-    /not an exact trusted seed/,
+    error => {
+      assert.ok(error instanceof ReconciliationBlockedError);
+      assert.equal(error.evidence.reconciliation_result, 'BLOCKED');
+      assert.equal(error.evidence.failure_stage, 'bootstrap_validation');
+      assert.match(error.evidence.reason, /not an exact trusted seed/);
+      return true;
+    },
   );
 });
 
+test('unsupported metadata schema fails closed with structured evidence', () => {
+  const contents = managedSet();
+  assert.throws(
+    () => plan({
+      candidateContents:contents,
+      runtimeContents:contents,
+      metadata:metadataFrom(contents, { schema_version:'9.9' }),
+    }),
+    error => {
+      assert.ok(error instanceof ReconciliationBlockedError);
+      assert.equal(error.evidence.failure_stage, 'metadata_validation');
+      assert.equal(error.evidence.validation_result, 'FAIL');
+      assert.match(error.evidence.reason, /Unsupported release-control metadata schema_version/);
+      return true;
+    },
+  );
+});
+
+test('candidate schema/governance failure is structured before mutation', () => {
+  const invalid = managedSet();
+  const payload = JSON.parse(invalid['data/sources.json']);
+  delete payload.sources[0].approval_status;
+  invalid['data/sources.json'] = `${JSON.stringify(payload, null, 2)}\n`;
+  assert.throws(
+    () => plan({ candidateContents:invalid, runtimeContents:seedSet(), metadata:null }),
+    error => {
+      assert.ok(error instanceof ReconciliationBlockedError);
+      assert.equal(error.evidence.failure_stage, 'candidate_validation');
+      assert.equal(error.evidence.validation_result, 'FAIL');
+      assert.match(error.evidence.reason, /canonical governance form/);
+      return true;
+    },
+  );
+});
+
+test('source category contract rejects unsupported fields', () => {
+  const invalid = managedSet({ categories:[category('general','General',{ unexpected:true })] });
+  assert.throws(
+    () => validateCandidateManagedSet(invalid),
+    /canonical normalized form|unsupported or missing fields/,
+  );
+});
+
+test('source registry rejects duplicate URLs and unknown category references', () => {
+  const duplicate = managedSet({
+    sources:[
+      source(),
+      source('src-two','Two','https://example.com/jobs'),
+    ],
+  });
+  assert.throws(() => validateCandidateManagedSet(duplicate), /duplicate source URL/);
+
+  const unknown = managedSet({
+    sources:[source('src-bad','Bad','https://bad.example/jobs','Missing')],
+  });
+  assert.throws(() => validateCandidateManagedSet(unknown), /unknown category/);
+});
+
 test('runtime-only change is preserved and does not advance candidate baseline', () => {
-  const baseline = managedSet({ categories:[category()], sources:[source()] });
+  const baseline = managedSet();
   const runtimeContents = managedSet({
-    categories:[category()],
     sources:[source(), source('src-two','Two','https://example.org/jobs')],
   });
   const result = plan({ candidateContents:baseline, runtimeContents, metadata:metadataFrom(baseline) });
@@ -126,9 +239,8 @@ test('runtime-only change is preserved and does not advance candidate baseline',
 });
 
 test('candidate change applies only when runtime still equals accepted baseline', () => {
-  const baseline = managedSet({ categories:[category()], sources:[source()] });
+  const baseline = managedSet();
   const candidateContents = managedSet({
-    categories:[category()],
     sources:[source(), source('src-two','Two','https://example.org/jobs')],
   });
   const result = plan({ candidateContents, runtimeContents:baseline, metadata:metadataFrom(baseline) });
@@ -136,10 +248,9 @@ test('candidate change applies only when runtime still equals accepted baseline'
   assert.equal(result.files['data/sources.json'].next_baseline_digest, sha256Text(candidateContents['data/sources.json']));
 });
 
-test('runtime already equal to changed candidate is a no-op but advances baseline after verification', () => {
-  const baseline = managedSet({ categories:[category()], sources:[source()] });
+test('runtime already equal to changed candidate is a no-op but requires verified baseline advancement', () => {
+  const baseline = managedSet();
   const candidateContents = managedSet({
-    categories:[category()],
     sources:[source(), source('src-two','Two','https://example.org/jobs')],
   });
   const result = plan({ candidateContents, runtimeContents:candidateContents, metadata:metadataFrom(baseline) });
@@ -147,35 +258,26 @@ test('runtime already equal to changed candidate is a no-op but advances baselin
   assert.equal(result.requires_acceptance, true);
 });
 
-test('candidate and runtime change on the same file conflicts and fails closed', () => {
-  const baseline = managedSet({ categories:[category()], sources:[source()] });
+test('candidate and runtime change on the same file conflicts with structured evidence', () => {
+  const baseline = managedSet();
   const candidateContents = managedSet({
-    categories:[category()],
     sources:[source(), source('src-two','Candidate','https://candidate.example/jobs')],
   });
   const runtimeContents = managedSet({
-    categories:[category()],
     sources:[source(), source('src-three','Runtime','https://runtime.example/jobs')],
   });
   assert.throws(
     () => plan({ candidateContents, runtimeContents, metadata:metadataFrom(baseline) }),
-    /candidate\/runtime conflict/,
+    error => {
+      assert.ok(error instanceof ReconciliationBlockedError);
+      assert.equal(error.evidence.failure_stage, 'decision_table');
+      assert.match(error.evidence.reason, /candidate\/runtime conflict/);
+      return true;
+    },
   );
 });
 
-test('unsupported release-control metadata schema fails closed', () => {
-  const contents = managedSet();
-  assert.throws(
-    () => plan({
-      candidateContents:contents,
-      runtimeContents:contents,
-      metadata:metadataFrom(contents, { schema_version:'9.9' }),
-    }),
-    /Unsupported release-control metadata schema_version/,
-  );
-});
-
-test('unresolved pending promotion fails closed', () => {
+test('unresolved pending promotion fails closed with metadata evidence', () => {
   const contents = managedSet();
   assert.throws(
     () => plan({
@@ -183,19 +285,12 @@ test('unresolved pending promotion fails closed', () => {
       runtimeContents:contents,
       metadata:metadataFrom(contents, { pending_promotion:{ candidate_sha:SHA } }),
     }),
-    /Unresolved pending/,
-  );
-});
-
-test('cross-file source/category integrity is validated before mutation', () => {
-  const runtimeContents = managedSet();
-  const candidateContents = managedSet({
-    categories:[category()],
-    sources:[source('src-bad','Bad','https://bad.example/jobs','Missing')],
-  });
-  assert.throws(
-    () => plan({ candidateContents, runtimeContents, metadata:null }),
-    /unknown category/,
+    error => {
+      assert.ok(error instanceof ReconciliationBlockedError);
+      assert.equal(error.evidence.failure_stage, 'metadata_validation');
+      assert.match(error.evidence.reason, /Unresolved pending/);
+      return true;
+    },
   );
 });
 
@@ -207,4 +302,141 @@ test('decision table rejects both-sides divergence', () => {
     () => reconcileFileDecision({ baselineDigest:a, candidateDigest:b, runtimeDigest:c }),
     /conflict/,
   );
+});
+
+test('protected functional visibility proves all managed files through canonical runtime read path', async () => {
+  const contents = managedSet();
+  const result = plan({ candidateContents:contents, runtimeContents:contents, metadata:metadataFrom(contents) });
+  result.promotion_runtime_sha = PROMOTION;
+  const payloads = parsedPayloads(contents);
+  const proof = await verifyProtectedFunctionalVisibility(runtime(), result, {
+    readJson: async (_env, _config, path) => ({ sha:'blob', payload:payloads[path] }),
+  });
+  assert.equal(proof.status, 'PASS');
+  assert.deepEqual(Object.keys(proof.files).sort(), [...CANDIDATE_MANAGED_PATHS].sort());
+  for (const path of CANDIDATE_MANAGED_PATHS) {
+    assert.equal(proof.files[path].visible_semantic_digest, result.files[path].functional_expected_digest);
+  }
+});
+
+test('functional visibility mismatch fails before acceptance with structured proof', async () => {
+  const contents = managedSet();
+  const result = plan({ candidateContents:contents, runtimeContents:contents, metadata:metadataFrom(contents) });
+  result.promotion_runtime_sha = PROMOTION;
+  const payloads = parsedPayloads(contents);
+  payloads['data/sources.json'].sources[0].name = 'Tampered';
+  await assert.rejects(
+    () => verifyProtectedFunctionalVisibility(runtime(), result, {
+      readJson: async (_env, _config, path) => ({ sha:'blob', payload:payloads[path] }),
+    }),
+    error => {
+      assert.ok(error instanceof FunctionalVisibilityError);
+      assert.equal(error.proof.status, 'FAIL');
+      assert.match(error.proof.reason, /visibility mismatch/);
+      return true;
+    },
+  );
+});
+
+test('accepted baseline cannot advance without snapshot and protected functional PASS', () => {
+  const baseline = managedSet();
+  const candidate = managedSet({
+    sources:[source(), source('src-two','Two','https://example.org/jobs')],
+  });
+  const result = plan({ candidateContents:candidate, runtimeContents:baseline, metadata:metadataFrom(baseline) });
+  result.promotion_runtime_sha = PROMOTION;
+
+  assert.throws(
+    () => prepareAcceptanceState({
+      environment:'dev',
+      currentHead:PROMOTION,
+      reconciliation:result,
+      metadata:result.pending_metadata,
+      snapshotVerification:'PASS',
+      functionalVisibility:{ status:'FAIL' },
+    }),
+    /functional visibility must PASS/,
+  );
+
+  assert.throws(
+    () => prepareAcceptanceState({
+      environment:'dev',
+      currentHead:PROMOTION,
+      reconciliation:result,
+      metadata:result.pending_metadata,
+      snapshotVerification:'FAIL',
+      functionalVisibility:{ status:'PASS' },
+    }),
+    /snapshot verification must PASS/,
+  );
+});
+
+test('successful verification prepares accepted baseline only after functional PASS', () => {
+  const baseline = managedSet();
+  const candidate = managedSet({
+    sources:[source(), source('src-two','Two','https://example.org/jobs')],
+  });
+  const result = plan({ candidateContents:candidate, runtimeContents:baseline, metadata:metadataFrom(baseline) });
+  result.promotion_runtime_sha = PROMOTION;
+  const prepared = prepareAcceptanceState({
+    environment:'dev',
+    currentHead:PROMOTION,
+    reconciliation:result,
+    metadata:result.pending_metadata,
+    snapshotVerification:'PASS',
+    functionalVisibility:{ status:'PASS' },
+    now:'2026-09-23T01:00:00.000Z',
+  });
+  assert.equal(prepared.status, 'READY');
+  assert.equal(prepared.accepted_metadata.pending_promotion, null);
+  assert.equal(
+    prepared.accepted_metadata.accepted_baselines['data/sources.json'],
+    result.files['data/sources.json'].next_baseline_digest,
+  );
+});
+
+test('concurrent mutation blocks baseline acceptance without overwrite', () => {
+  const baseline = managedSet();
+  const candidate = managedSet({
+    sources:[source(), source('src-two','Two','https://example.org/jobs')],
+  });
+  const result = plan({ candidateContents:candidate, runtimeContents:baseline, metadata:metadataFrom(baseline) });
+  result.promotion_runtime_sha = PROMOTION;
+  const prepared = prepareAcceptanceState({
+    environment:'dev',
+    currentHead:CONCURRENT,
+    reconciliation:result,
+    metadata:result.pending_metadata,
+    snapshotVerification:'PASS',
+    functionalVisibility:{ status:'PASS' },
+  });
+  assert.equal(prepared.status, 'DEGRADED');
+  assert.equal(prepared.accepted_metadata, null);
+  assert.match(prepared.reason, /Runtime changed before baseline acceptance/);
+});
+
+test('compensating revert is permitted only when runtime HEAD still equals promotion commit', () => {
+  assert.deepEqual(
+    compensatingRevertDecision({
+      mutationPerformed:false,
+      currentHead:PROMOTION,
+      promotionRuntimeSha:PROMOTION,
+    }),
+    { status:'NOT_REQUIRED' },
+  );
+  assert.deepEqual(
+    compensatingRevertDecision({
+      mutationPerformed:true,
+      currentHead:PROMOTION,
+      promotionRuntimeSha:PROMOTION,
+    }),
+    { status:'REVERT', runtime_head:PROMOTION },
+  );
+  const blocked = compensatingRevertDecision({
+    mutationPerformed:true,
+    currentHead:CONCURRENT,
+    promotionRuntimeSha:PROMOTION,
+  });
+  assert.equal(blocked.status, 'DEGRADED');
+  assert.match(blocked.reason, /compensating revert refused/);
 });
