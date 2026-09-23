@@ -32,6 +32,7 @@ function writeJson(path, payload) {
 async function main(argv = process.argv.slice(2)) {
   const args = parseArgs(argv);
   const sourceSha = requireSourceSha(args.source_sha || process.env.SOURCE_SHA);
+  const expectedRuntimeHead = requireSourceSha(args.expected_runtime_head || process.env.EXPECTED_RUNTIME_HEAD);
   if (String(args.owner_gate || '').trim() !== 'PROD_GO') {
     throw new Error('PROD reconciliation requires owner_gate=PROD_GO');
   }
@@ -42,6 +43,7 @@ async function main(argv = process.argv.slice(2)) {
 
   const deployment = await deployCandidateWithReconciliation(runtime, {
     configureBootstrapSecrets: true,
+    expectedRuntimeHead,
   });
 
   writeJson(args.health_output, deployment.health);
@@ -51,6 +53,7 @@ async function main(argv = process.argv.slice(2)) {
     environment: 'prod',
     source_sha: sourceSha,
     runtime_data_sha: deployment.runtimeDataSha,
+    expected_runtime_head: expectedRuntimeHead,
     health: deployment.health,
     reconciliation: deployment.reconciliation,
   });
