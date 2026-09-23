@@ -46,6 +46,7 @@ function reconciliation(environment, sourceSha, runtimeSha) {
     action: 'noop_baseline',
     runtime_after_digest: DIGEST,
     next_baseline_digest: DIGEST,
+    functional_expected_digest: DIGEST,
   };
   return {
     schema_version: '1.0',
@@ -64,6 +65,27 @@ function reconciliation(environment, sourceSha, runtimeSha) {
     reconciliation_result: 'PASS',
     validation_result: 'PASS',
     snapshot_verification: 'PASS',
+    functional_visibility: {
+      status: 'PASS',
+      method: 'canonical-protected-runtime-read',
+      files: {
+        'data/sources.json': {
+          expected_semantic_digest: DIGEST,
+          visible_semantic_digest: DIGEST,
+          visible_count: 1,
+        },
+        'data/source-categories.json': {
+          expected_semantic_digest: DIGEST,
+          visible_semantic_digest: DIGEST,
+          visible_count: 1,
+        },
+        'data/nomenclatures.json': {
+          expected_semantic_digest: DIGEST,
+          visible_semantic_digest: DIGEST,
+          visible_count: 6,
+        },
+      },
+    },
     acceptance_result: 'NOT_REQUIRED',
     health: {
       source_sha: sourceSha,
@@ -145,6 +167,30 @@ test('DEV PASS cannot be created from health evidence alone', () => {
     runUrl: 'https://github.com/example/repo/actions/runs/1001',
     health: health('dev', SHA, DEV_RUNTIME_SHA),
   }), /reconciliation evidence is missing/);
+});
+
+test('DEV PASS and TEST gate reject reconciliation without protected functional visibility proof', () => {
+  const failed = reconciliation('dev', SHA, DEV_RUNTIME_SHA);
+  failed.functional_visibility.status = 'FAIL';
+  assert.throws(() => createDevPassRecord({
+    candidateSha: SHA,
+    issuePr: '#325',
+    runId: '1001',
+    runUrl: 'https://github.com/example/repo/actions/runs/1001',
+    health: health('dev', SHA, DEV_RUNTIME_SHA),
+    reconciliation: failed,
+  }), /protected functional visibility must PASS/);
+
+  const missing = reconciliation('dev', SHA, DEV_RUNTIME_SHA);
+  delete missing.functional_visibility;
+  assert.throws(() => createDevPassRecord({
+    candidateSha: SHA,
+    issuePr: '#325',
+    runId: '1001',
+    runUrl: 'https://github.com/example/repo/actions/runs/1001',
+    health: health('dev', SHA, DEV_RUNTIME_SHA),
+    reconciliation: missing,
+  }), /protected functional visibility must PASS/);
 });
 
 test('TEST deployment rejects any candidate different from DEV PASS', () => {
