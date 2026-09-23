@@ -575,27 +575,41 @@ export function reconcileRuntimeRepository(runtime, {
       };
     }
 
-    for (const path of CANDIDATE_MANAGED_PATHS) {
-      if (plan.files[path].action === 'apply_candidate') writeText(resolve(temp, path), plan.target_contents[path]);
-    }
-    if (plan.pending_metadata) {
-      writeText(resolve(temp, RELEASE_CONTROL_METADATA_PATH), `${JSON.stringify(plan.pending_metadata, null, 2)}\n`);
-    }
+    try {
+      for (const path of CANDIDATE_MANAGED_PATHS) {
+        if (plan.files[path].action === 'apply_candidate') writeText(resolve(temp, path), plan.target_contents[path]);
+      }
+      if (plan.pending_metadata) {
+        writeText(resolve(temp, RELEASE_CONTROL_METADATA_PATH), `${JSON.stringify(plan.pending_metadata, null, 2)}\n`);
+      }
 
-    const promotionSha = commitAndPush(
-      temp,
-      runtime.runtimeRef,
-      runtimeHead,
-      `[PROMOTION] Reconcile candidate-managed data for ${runtime.environment.toUpperCase()}`,
-      gitEnv,
-    );
-    return {
-      ...plan,
-      target_contents: undefined,
-      pending_metadata: undefined,
-      mutation_performed: promotionSha !== runtimeHead,
-      promotion_runtime_sha: promotionSha,
-    };
+      const promotionSha = commitAndPush(
+        temp,
+        runtime.runtimeRef,
+        runtimeHead,
+        `[PROMOTION] Reconcile candidate-managed data for ${runtime.environment.toUpperCase()}`,
+        gitEnv,
+      );
+      return {
+        ...plan,
+        target_contents: undefined,
+        pending_metadata: undefined,
+        mutation_performed: promotionSha !== runtimeHead,
+        promotion_runtime_sha: promotionSha,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new ReconciliationBlockedError(message, buildBlockedEvidence({
+        environment: runtime.environment,
+        candidateSha: runtime.sourceSha,
+        controlPlaneSha,
+        runtimeHead,
+        files: plan.files,
+        reason: message,
+        failureStage: 'runtime_commit',
+        validationResult: 'PASS',
+      }));
+    }
   } finally {
     rmSync(temp, { recursive: true, force: true });
   }
