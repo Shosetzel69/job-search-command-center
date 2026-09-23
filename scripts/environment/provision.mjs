@@ -301,7 +301,12 @@ async function deployCandidateWithReconciliation(runtime) {
       throw new Error(`Runtime snapshot identity mismatch: expected ${reconciliation.promotion_runtime_sha}, got ${runtimeDataSha}`);
     }
     health = await probeDeployedHealth(runtime, runtimeDataSha);
-    snapshotVerification = verifyRuntimePromotionSnapshot(runtime, reconciliation, { gitEnv });
+    try {
+      snapshotVerification = verifyRuntimePromotionSnapshot(runtime, reconciliation, { gitEnv });
+    } catch (error) {
+      snapshotVerification = 'FAIL';
+      throw error;
+    }
     functionalVisibility = await verifyProtectedFunctionalVisibility(runtime, reconciliation);
     acceptance = acceptRuntimeReconciliation(runtime, reconciliation, {
       gitEnv,
