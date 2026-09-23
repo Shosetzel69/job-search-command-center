@@ -178,7 +178,7 @@ test('changed pre-state and extra runtime delta fail closed',()=>{
 
 test('wrong Monster overlay fails closed',()=>{
   const f=fixture();
-  const wrong=managed([{...monsterOverlay(),validation_reason:'other'}]);
+  const wrong=managed([{...monsterOverlay(),url:'https://www.monster.com/jobs/changed'}]);
   const manifest=structuredClone(f.manifest);
   manifest.files['data/sources.json'].expected_pre_migration_digest=sha256Text(wrong['data/sources.json']);
   assert.throws(()=>planFixture({runtimeContents:wrong,manifest}),/Monster overlay/);
