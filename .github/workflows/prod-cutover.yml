@@ -17,7 +17,11 @@ on:
         required: false
         type: string
       expected_runtime_sha:
-        description: Expected current job-search-prod main SHA before this action
+        description: Expected previous deployed PROD runtime_data_sha (prior promotion_runtime_sha)
+        required: true
+        type: string
+      expected_runtime_head:
+        description: Expected current job-search-prod main SHA (prior acceptance_runtime_head)
         required: true
         type: string
       rollback_reference:
@@ -73,6 +77,7 @@ jobs:
           SOURCE_SHA: ${{ inputs.source_sha }}
           TEST_PASS_RUN_ID: ${{ inputs.test_pass_run_id }}
           EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
+          EXPECTED_RUNTIME_HEAD: ${{ inputs.expected_runtime_head }}
           ROLLBACK_REFERENCE: ${{ inputs.rollback_reference }}
           CONFIG_ROLLBACK_REFERENCE: ${{ inputs.config_rollback_reference }}
           DATABASE_CHANGE: ${{ inputs.database_change }}
@@ -86,6 +91,7 @@ jobs:
           set -euo pipefail
           [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
           [[ "$EXPECTED_RUNTIME_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "expected_runtime_sha must be a full immutable commit SHA" >&2; exit 1; }
+          [[ "$EXPECTED_RUNTIME_HEAD" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "expected_runtime_head must be a full immutable commit SHA" >&2; exit 1; }
 
           if [ "${{ inputs.action }}" != "status" ]; then
             test "$GITHUB_REF" = "refs/heads/main" || { echo "PROD mutation workflow must run from main" >&2; exit 1; }
@@ -127,6 +133,21 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
           path: candidate-source
+
+      - name: Prepare inert candidate-managed data
+        if: ${{ inputs.action != 'status' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf candidate-managed-data
+          mkdir -p candidate-managed-data/data
+          for path in data/sources.json data/source-categories.json data/nomenclatures.json; do
+            test -f "candidate-source/$path" || { echo "Missing candidate-managed file: $path" >&2; exit 1; }
+            test ! -L "candidate-source/$path" || { echo "Candidate-managed file must not be a symlink: $path" >&2; exit 1; }
+            cp "candidate-source/$path" "candidate-managed-data/$path"
+          done
+          mapfile -t copied < <(find candidate-managed-data -type f -print | sort)
+          test "${#copied[@]}" -eq 3 || { echo "Unexpected candidate-managed payload" >&2; exit 1; }
 
       - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -188,7 +209,7 @@ jobs:
           [[ "$previous_source" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "Previous PROD source_sha is invalid" >&2; exit 1; }
           [[ "$previous_runtime" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "Previous PROD runtime_data_sha is invalid" >&2; exit 1; }
           test "${previous_runtime,,}" = "${EXPECTED_RUNTIME_SHA,,}" || {
-            echo "Previous PROD /health runtime_data_sha does not match expected_runtime_sha" >&2
+            echo "Previous PROD /health runtime_data_sha does not match prior promotion_runtime_sha" >&2
             exit 1
           }
           echo "Previous PROD SOURCE_SHA=$previous_source"
@@ -239,29 +260,38 @@ jobs:
           test "$worker_code" = "200" || { echo "PROD token cannot read dedicated Worker settings (HTTP $worker_code)" >&2; exit 1; }
           jq -e '.success == true' /tmp/prod-worker.json >/dev/null
 
-      - name: Verify immutable PROD runtime head
+      - name: Verify immutable PROD acceptance runtime head
         env:
           GH_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
-          EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
+          EXPECTED_RUNTIME_HEAD: ${{ inputs.expected_runtime_head }}
         shell: bash
         run: |
           set -euo pipefail
           current="$(GH_TOKEN="$GH_RUNTIME_TOKEN" gh api repos/Shosetzel69/job-search-prod/commits/main --jq .sha)"
-          test "${current,,}" = "${EXPECTED_RUNTIME_SHA,,}" || {
-            echo "job-search-prod main moved: expected $EXPECTED_RUNTIME_SHA got $current" >&2
+          test "${current,,}" = "${EXPECTED_RUNTIME_HEAD,,}" || {
+            echo "job-search-prod main moved: expected acceptance_runtime_head $EXPECTED_RUNTIME_HEAD got $current" >&2
             exit 1
           }
-          echo "Verified PROD runtime anchor: $current"
+          echo "RECONCILIATION_RUNTIME_HEAD=$current" >> "$GITHUB_ENV"
+          echo "Verified PROD acceptance runtime head: $current"
 
       - name: Install PROD runtime workflow without rewriting runtime data
         if: ${{ inputs.action == 'bootstrap-deploy' }}
         env:
           GH_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
+          EXPECTED_RUNTIME_HEAD: ${{ inputs.expected_runtime_head }}
         shell: bash
         run: |
           set -euo pipefail
+          repo="Shosetzel69/job-search-prod"
           rm -rf runtime-admin
-          GH_TOKEN="$GH_BOOTSTRAP_TOKEN" gh repo clone Shosetzel69/job-search-prod runtime-admin -- --depth=1 --branch main
+          GH_TOKEN="$GH_BOOTSTRAP_TOKEN" gh repo clone "$repo" runtime-admin -- --depth=1 --branch main
+          cloned_head="$(git -C runtime-admin rev-parse HEAD)"
+          test "${cloned_head,,}" = "${EXPECTED_RUNTIME_HEAD,,}" || {
+            echo "PROD runtime moved before bootstrap workflow update: expected $EXPECTED_RUNTIME_HEAD got $cloned_head" >&2
+            exit 1
+          }
+
           mkdir -p runtime-admin/.github/workflows
           cp control-plane/config/runtime-template/runtime.yml runtime-admin/.github/workflows/runtime.yml
           git -C runtime-admin add .github/workflows/runtime.yml
@@ -270,6 +300,15 @@ jobs:
               commit -m "[#198] Maintain isolated PROD runtime workflow"
             git -C runtime-admin push origin HEAD:main
           fi
+
+          authorized_head="$(git -C runtime-admin rev-parse HEAD)"
+          remote_head="$(GH_TOKEN="$GH_BOOTSTRAP_TOKEN" gh api "repos/$repo/commits/main" --jq .sha)"
+          test "${remote_head,,}" = "${authorized_head,,}" || {
+            echo "PROD runtime moved after authorized bootstrap workflow update: expected $authorized_head got $remote_head" >&2
+            exit 1
+          }
+          echo "RECONCILIATION_RUNTIME_HEAD=$authorized_head" >> "$GITHUB_ENV"
+          echo "Authorized post-bootstrap runtime head: $authorized_head"
 
       - name: Configure PROD runtime variables and secrets
         if: ${{ inputs.action == 'bootstrap-deploy' }}
@@ -299,20 +338,6 @@ jobs:
             printf '%s' "$LEGACY_APIFY_TOKEN" | GH_TOKEN="$GH_BOOTSTRAP_TOKEN" gh secret set APIFY_TOKEN --repo "$repo"
           fi
 
-      - name: Resolve deployment runtime snapshot
-        if: ${{ inputs.action != 'status' }}
-        env:
-          GH_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          runtime_sha="$(GH_TOKEN="$GH_RUNTIME_TOKEN" gh api repos/Shosetzel69/job-search-prod/commits/main --jq .sha)"
-          [[ "$runtime_sha" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "Invalid runtime SHA" >&2; exit 1; }
-          echo "RUNTIME_DATA_SHA=$runtime_sha" >> "$GITHUB_ENV"
-          rm -rf runtime-snapshot
-          GH_TOKEN="$GH_RUNTIME_TOKEN" gh repo clone Shosetzel69/job-search-prod runtime-snapshot -- --depth=1 --branch main
-          test "$(git -C runtime-snapshot rev-parse HEAD)" = "$runtime_sha"
-
       - name: Prepare sanitized candidate payload on trusted baseline
         if: ${{ inputs.action != 'status' }}
         shell: bash
@@ -341,79 +366,49 @@ jobs:
         if: ${{ inputs.action != 'status' }}
         run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
-      - name: Deploy exact TEST-passed candidate to dedicated PROD
+      - name: Execute reconciled PROD candidate promotion
         if: ${{ inputs.action != 'status' }}
-        working-directory: deployment-source/command-api
         env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
-          WRANGLER_SEND_METRICS: 'false'
           SOURCE_SHA: ${{ inputs.source_sha }}
-          APP_ENV: prod
-          TRUSTED_PAYLOAD_BUILD: '1'
-          RUNTIME_DATA_DIR: ${{ github.workspace }}/runtime-snapshot/data
-        shell: bash
-        run: |
-          set -euo pipefail
-          npx wrangler deploy --name job-search-command-api \
-            --var "APP_ENV:prod" \
-            --var "FRONTEND_ORIGIN:${{ vars.FRONTEND_ORIGIN }}" \
-            --var "GOOGLE_CLIENT_ID:${{ vars.GOOGLE_CLIENT_ID }}" \
-            --var "GITHUB_RUNTIME_OWNER:Shosetzel69" \
-            --var "GITHUB_RUNTIME_REPO:job-search-prod" \
-            --var "GITHUB_RUNTIME_REF:main" \
-            --var "GITHUB_WORKFLOW:runtime.yml" \
-            --var "SEARCH_MODE:live" \
-            --var "SEARCH_CONFIG_PATH:data/search-config.json" \
-            --var "SOURCES_PATH:data/sources.json" \
-            --var "SOURCE_CATEGORIES_PATH:data/source-categories.json" \
-            --var "NOMENCLATURES_PATH:data/nomenclatures.json" \
-            --var "APPLICATIONS_PATH:data/applications.json"
-
-      - name: Configure PROD Worker runtime secrets
-        if: ${{ inputs.action != 'status' }}
-        working-directory: deployment-source/command-api
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          PROD_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          PROD_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
+          PROD_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
           PROD_GITHUB_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
+          PROD_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
           PROD_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
+          PROD_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
+          PROD_FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          FUNCTIONAL_GOOGLE_ID_TOKEN: ${{ secrets.FUNCTIONAL_GOOGLE_ID_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$PROD_GITHUB_RUNTIME_TOKEN" | npx wrangler secret put GITHUB_TOKEN --name job-search-command-api
-          printf '%s' "$PROD_ALLOWED_GOOGLE_SUB" | npx wrangler secret put ALLOWED_GOOGLE_SUB --name job-search-command-api
+          export CONTROL_PLANE_SHA="$(git -C control-plane rev-parse HEAD)"
+          export CANDIDATE_DATA_WORKSPACE="$GITHUB_WORKSPACE/candidate-managed-data"
+          export RECONCILIATION_EVIDENCE_PATH="$GITHUB_WORKSPACE/promotion-output/reconciliation.json"
+          export SOURCE_WORKSPACE="$GITHUB_WORKSPACE/deployment-source"
+          mkdir -p promotion-output release-output
+          node control-plane/scripts/environment/prod-reconciliation.mjs \
+            --source-sha "$SOURCE_SHA" \
+            --expected-runtime-head "$RECONCILIATION_RUNTIME_HEAD" \
+            --owner-gate PROD_GO \
+            --health-output release-output/prod-health.json \
+            --result-output promotion-output/prod-deployment.json
 
-      - name: Verify dedicated PROD application health
-        env:
-          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          GH_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p release-output
-          runtime_sha="$(GH_TOKEN="$GH_RUNTIME_TOKEN" gh api repos/Shosetzel69/job-search-prod/commits/main --jq .sha)"
-          for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            if payload="$(curl --fail --silent --show-error "$FRONTEND_ORIGIN/health")"; then
-              if echo "$payload" | jq -e \
-                --arg source "$SOURCE_SHA" \
-                --arg runtime "$runtime_sha" \
-                '.environment == "prod" and .source_sha == $source and .runtime_repo == "Shosetzel69/job-search-prod" and .runtime_ref == "main" and .runtime_data_sha == $runtime and .search_mode == "live" and .auth_configured == true and .github_configured == true' >/dev/null; then
-                  printf '%s\n' "$payload" > release-output/prod-health.json
-                  exit 0
-              fi
-            fi
-            sleep 3
-          done
-          echo "Dedicated PROD health validation failed" >&2
-          exit 1
+      - name: Upload PROD reconciliation trace
+        if: ${{ always() && inputs.action != 'status' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reconciliation-prod-${{ github.run_id }}
+          path: promotion-output/reconciliation.json
+          if-no-files-found: error
+          retention-days: 90
 
       - name: Create minimal non-secret release record
         if: ${{ inputs.action != 'status' }}
         env:
           CANDIDATE_SHA: ${{ inputs.source_sha }}
           EXPECTED_RUNTIME_SHA: ${{ inputs.expected_runtime_sha }}
+          EXPECTED_RUNTIME_HEAD: ${{ inputs.expected_runtime_head }}
           ROLLBACK_REFERENCE: ${{ inputs.rollback_reference }}
           CONFIG_ROLLBACK_REFERENCE: ${{ inputs.config_rollback_reference }}
           DATABASE_CHANGE: ${{ inputs.database_change }}
@@ -430,11 +425,14 @@ jobs:
             --candidate-sha "$CANDIDATE_SHA" \
             --previous-health-file release-input/previous-prod-health.json \
             --expected-runtime-sha "$EXPECTED_RUNTIME_SHA" \
+            --expected-runtime-head "$EXPECTED_RUNTIME_HEAD" \
+            --reconciliation-runtime-head "$RECONCILIATION_RUNTIME_HEAD" \
             --rollback-reference "$ROLLBACK_REFERENCE" \
             --owner-go-reference "PROD_GO by ${GITHUB_ACTOR} in ${run_url}" \
             --run-id "$GITHUB_RUN_ID" \
             --run-url "$run_url" \
             --prod-health-file release-output/prod-health.json \
+            --reconciliation-file promotion-output/reconciliation.json \
             --action "${{ inputs.action }}" \
             --config-rollback-reference "${CONFIG_ROLLBACK_REFERENCE:-N/A}" \
             --database-change "$DATABASE_CHANGE" \

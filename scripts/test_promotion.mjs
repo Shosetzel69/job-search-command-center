@@ -14,10 +14,13 @@ const OTHER_SHA = 'b'.repeat(40);
 const DEV_RUNTIME_SHA = 'c'.repeat(40);
 const TEST_RUNTIME_SHA = 'd'.repeat(40);
 const PROD_RUNTIME_SHA = 'e'.repeat(40);
+const PROD_PROMOTION_RUNTIME_SHA = '6'.repeat(40);
 const PREVIOUS_PROD_SOURCE_SHA = 'f'.repeat(40);
 const CONTROL_PLANE_SHA = '9'.repeat(40);
 const RUNTIME_HEAD_BEFORE = '8'.repeat(40);
 const ACCEPTANCE_HEAD = '7'.repeat(40);
+const PREVIOUS_ACCEPTANCE_HEAD = '5'.repeat(40);
+const POST_BOOTSTRAP_HEAD = '4'.repeat(40);
 const DIGEST = `sha256:${'1'.repeat(64)}`;
 
 function health(environment, sourceSha, runtimeSha) {
@@ -139,11 +142,17 @@ function prodArgs(overrides = {}) {
       runtime_data_sha: PROD_RUNTIME_SHA,
     },
     expectedRuntimeSha: PROD_RUNTIME_SHA,
+    expectedRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
+    reconciliationRuntimeHead: PREVIOUS_ACCEPTANCE_HEAD,
     rollbackReference: 'redeploy previous known-good PROD source/runtime pair',
     ownerGoReference: 'PROD_GO by owner',
     runId: '1004',
     runUrl: 'https://github.com/example/repo/actions/runs/1004',
-    prodHealth: health('prod', SHA, PROD_RUNTIME_SHA),
+    prodHealth: health('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+    reconciliation: {
+      ...reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+      runtime_head_before: PREVIOUS_ACCEPTANCE_HEAD,
+    },
     createdAt: '2026-09-18T00:03:00.000Z',
     ...overrides,
   };
@@ -224,8 +233,79 @@ test('mutating candidate identity after TEST PASS invalidates promotion evidence
   assert.throws(() => assertTestPassRecord(testPassRecord(), OTHER_SHA), /candidate does not match requested CANDIDATE_SHA/);
 });
 
-test('PROD release rejects previous runtime anchor mismatch before acceptance', () => {
-  assert.throws(() => createProdReleaseRecord(prodArgs({ expectedRuntimeSha: OTHER_SHA })), /does not match expected_runtime_sha/);
+test('PROD release rejects previous deployed promotion runtime mismatch', () => {
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({ expectedRuntimeSha: OTHER_SHA })),
+    /does not match prior promotion_runtime_sha/,
+  );
+});
+
+test('PROD deploy rejects reconciliation start head that differs from prior acceptance head', () => {
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({ expectedRuntimeHead: OTHER_SHA })),
+    /deploy reconciliation runtime head must equal prior acceptance_runtime_head/,
+  );
+});
+
+test('PROD release records deployed promotion snapshot separately from acceptance runtime head', () => {
+  const record = createProdReleaseRecord(prodArgs());
+  assert.equal(record.previous_prod_runtime_anchor.promotion_runtime_sha, PROD_RUNTIME_SHA);
+  assert.equal(record.previous_prod_runtime_anchor.acceptance_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
+  assert.equal(record.prod_runtime_anchor.promotion_runtime_sha, PROD_PROMOTION_RUNTIME_SHA);
+  assert.equal(record.prod_runtime_anchor.acceptance_runtime_head, ACCEPTANCE_HEAD);
+  assert.notEqual(
+    record.prod_runtime_anchor.promotion_runtime_sha,
+    record.prod_runtime_anchor.acceptance_runtime_head,
+  );
+});
+
+test('bootstrap-deploy accepts an authorized post-bootstrap runtime head distinct from prior acceptance head', () => {
+  const bootstrapReconciliation = {
+    ...reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+    runtime_head_before: POST_BOOTSTRAP_HEAD,
+  };
+  const record = createProdReleaseRecord(prodArgs({
+    action: 'bootstrap-deploy',
+    configRollbackReference: 'restore prior runtime workflow/config',
+    reconciliationRuntimeHead: POST_BOOTSTRAP_HEAD,
+    reconciliation: bootstrapReconciliation,
+  }));
+
+  assert.equal(record.previous_prod_runtime_anchor.acceptance_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
+  assert.equal(record.reconciliation_runtime_head, POST_BOOTSTRAP_HEAD);
+  assert.equal(record.configuration_change.runtime_head_before, PREVIOUS_ACCEPTANCE_HEAD);
+  assert.equal(record.configuration_change.authorized_post_bootstrap_runtime_head, POST_BOOTSTRAP_HEAD);
+});
+
+test('bootstrap-deploy fails closed if reconciliation evidence starts from any head other than authorized post-bootstrap head', () => {
+  const bootstrapReconciliation = {
+    ...reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA),
+    runtime_head_before: OTHER_SHA,
+  };
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({
+      action: 'bootstrap-deploy',
+      configRollbackReference: 'restore prior runtime workflow/config',
+      reconciliationRuntimeHead: POST_BOOTSTRAP_HEAD,
+      reconciliation: bootstrapReconciliation,
+    })),
+    /runtime_head_before does not match authorized reconciliation runtime head/,
+  );
+});
+
+test('PROD release requires accepted candidate-managed reconciliation evidence', () => {
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({ reconciliation: undefined })),
+    /PROD reconciliation evidence is missing/,
+  );
+
+  const failed = reconciliation('prod', SHA, PROD_PROMOTION_RUNTIME_SHA);
+  failed.runtime_head_before = PREVIOUS_ACCEPTANCE_HEAD;
+  failed.functional_visibility.status = 'FAIL';
+  assert.throws(
+    () => createProdReleaseRecord(prodArgs({ reconciliation: failed })),
+    /protected functional visibility must PASS/,
+  );
 });
 
 test('reversible DB change records migration version without destructive backup fields', () => {
@@ -270,7 +350,12 @@ test('minimal PROD release record preserves candidate, TEST evidence, rollback a
   assert.equal(record.test_pass_evidence.verdict, 'PASS');
   assert.equal(record.previous_prod_source_sha, PREVIOUS_PROD_SOURCE_SHA);
   assert.equal(record.previous_prod_runtime_data_sha, PROD_RUNTIME_SHA);
+  assert.equal(record.previous_prod_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
+  assert.equal(record.reconciliation_runtime_head, PREVIOUS_ACCEPTANCE_HEAD);
   assert.equal(record.prod_deploy_evidence.source_sha, SHA);
+  assert.equal(record.prod_deploy_evidence.runtime_data_sha, PROD_PROMOTION_RUNTIME_SHA);
+  assert.equal(record.prod_deploy_evidence.reconciliation.environment, 'prod');
+  assert.equal(record.prod_deploy_evidence.reconciliation.functional_visibility.status, 'PASS');
   assert.equal(record.prod_smoke_verdict, 'PASS');
   assert.equal(record.final_state, 'ACCEPTED');
   assert.equal(record.database_change, undefined);

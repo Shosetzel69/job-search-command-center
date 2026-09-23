@@ -310,7 +310,10 @@ function requiredLiveReconciliationInputs() {
   };
 }
 
-async function deployCandidateWithReconciliation(runtime, { configureBootstrapSecrets = false } = {}) {
+export async function deployCandidateWithReconciliation(runtime, {
+  configureBootstrapSecrets = false,
+  expectedRuntimeHead = null,
+} = {}) {
   const inputs = requiredLiveReconciliationInputs();
   const gitEnv = githubRuntimeEnv(runtime);
   let reconciliation;
@@ -320,6 +323,7 @@ async function deployCandidateWithReconciliation(runtime, { configureBootstrapSe
       candidateWorkspace: inputs.candidateWorkspace,
       controlPlaneSha: inputs.controlPlaneSha,
       gitEnv,
+      expectedRuntimeHead,
     });
   } catch (error) {
     if (error instanceof ReconciliationBlockedError && error.evidence) {

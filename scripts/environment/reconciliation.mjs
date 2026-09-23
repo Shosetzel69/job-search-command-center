@@ -527,12 +527,30 @@ export function reconcileRuntimeRepository(runtime, {
   candidateWorkspace,
   controlPlaneSha,
   gitEnv,
+  expectedRuntimeHead = null,
   now = new Date().toISOString(),
 } = {}) {
   const temp = cloneRuntime(runtime, gitEnv, 'job-search-runtime-reconcile-');
   let runtimeHead = null;
   try {
     runtimeHead = requireSha(run('git', ['rev-parse', 'HEAD'], { cwd: temp, env: gitEnv }).trim(), 'runtime HEAD');
+    if (expectedRuntimeHead != null) {
+      const expected = requireSha(expectedRuntimeHead, 'expected runtime HEAD');
+      if (runtimeHead !== expected) {
+        throw new ReconciliationBlockedError(
+          `Runtime HEAD moved before reconciliation: expected ${expected}, got ${runtimeHead}`,
+          buildBlockedEvidence({
+            environment: runtime.environment,
+            candidateSha: runtime.sourceSha,
+            controlPlaneSha,
+            runtimeHead,
+            reason: `Runtime HEAD moved before reconciliation: expected ${expected}, got ${runtimeHead}`,
+            failureStage: 'runtime_anchor',
+            validationResult: 'NOT_RUN',
+          }),
+        );
+      }
+    }
     let candidateContents;
     let runtimeContents;
     let metadata;
