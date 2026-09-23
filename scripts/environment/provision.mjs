@@ -310,7 +310,7 @@ function requiredLiveReconciliationInputs() {
   };
 }
 
-async function deployCandidateWithReconciliation(runtime, { configureBootstrapSecrets = false } = {}) {
+export async function deployCandidateWithReconciliation(runtime, { configureBootstrapSecrets = false } = {}) {
   const inputs = requiredLiveReconciliationInputs();
   const gitEnv = githubRuntimeEnv(runtime);
   let reconciliation;
