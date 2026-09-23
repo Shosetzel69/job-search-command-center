@@ -313,6 +313,7 @@ function requiredLiveReconciliationInputs() {
 export async function deployCandidateWithReconciliation(runtime, {
   configureBootstrapSecrets = false,
   expectedRuntimeHead = null,
+  reconciliationPlanner = null,
 } = {}) {
   const inputs = requiredLiveReconciliationInputs();
   const gitEnv = githubRuntimeEnv(runtime);
@@ -324,6 +325,7 @@ export async function deployCandidateWithReconciliation(runtime, {
       controlPlaneSha: inputs.controlPlaneSha,
       gitEnv,
       expectedRuntimeHead,
+      planner: reconciliationPlanner || undefined,
     });
   } catch (error) {
     if (error instanceof ReconciliationBlockedError && error.evidence) {
