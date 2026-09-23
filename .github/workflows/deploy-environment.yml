@@ -285,6 +285,15 @@ jobs:
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
 
+      - name: Upload reconciliation trace on success or fail-closed exit
+        if: ${{ always() && (inputs.action == 'bootstrap' || inputs.action == 'deploy') }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: reconciliation-${{ inputs.environment }}-${{ github.run_id }}
+          path: promotion-output/reconciliation.json
+          if-no-files-found: warn
+          retention-days: 90
+
       - name: Capture immutable DEV / TEST deployment evidence
         if: ${{ inputs.action == 'deploy' }}
         env:
