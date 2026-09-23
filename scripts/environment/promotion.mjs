@@ -279,6 +279,7 @@ export function createProdReleaseRecord({
   runId,
   runUrl,
   prodHealth,
+  reconciliation,
   action = 'deploy',
   configRollbackReference,
   databaseChange = 'none',
@@ -298,7 +299,15 @@ export function createProdReleaseRecord({
     throw new Error('Previous PROD /health runtime_data_sha does not match expected_runtime_sha');
   }
 
-  const prodPass = normalizeDeploymentEvidence({ environment: 'prod', candidateSha: sha, runId, runUrl, health: prodHealth });
+  if (!reconciliation) throw new Error('PROD reconciliation evidence is missing');
+  const prodPass = normalizeDeploymentEvidence({
+    environment: 'prod',
+    candidateSha: sha,
+    runId,
+    runUrl,
+    health: prodHealth,
+    reconciliation,
+  });
   const record = {
     schema_version: SCHEMA_VERSION,
     stage: 'prod_pass',
@@ -413,6 +422,7 @@ async function main(argv = process.argv.slice(2)) {
       runId: args.run_id,
       runUrl: args.run_url,
       prodHealth: readJson(args.prod_health_file, 'PROD health evidence'),
+      reconciliation: readJson(args.reconciliation_file, 'PROD reconciliation evidence'),
       action: args.action,
       configRollbackReference: args.config_rollback_reference,
       databaseChange: args.database_change,
