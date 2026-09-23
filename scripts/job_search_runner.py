@@ -162,11 +162,54 @@ def append_run_history() -> None:
     )
 
 
+
+def stamp_jobs_provenance() -> bool:
+    """Bind a newly generated jobs snapshot to the exact terminal run.
+
+    Existing/stale jobs are intentionally left byte-for-byte unchanged when a run
+    does not produce a new jobs snapshot.
+    """
+    try:
+        status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+        jobs = json.loads(engine.JOBS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return False
+
+    if jobs.get("generated_at") != status.get("started_at"):
+        return False
+
+    jobs["run_id"] = status.get("run_id")
+    jobs["run_status"] = status.get("status")
+    jobs["run_completed_at"] = status.get("completed_at")
+    if status.get("source_sha"):
+        jobs["source_sha"] = status.get("source_sha")
+    engine.JOBS_PATH.write_text(
+        json.dumps(jobs, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return True
+
+
 def validate_history() -> None:
     payload = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
     assert payload.get("schema_version") == engine.SCHEMA_VERSION
     assert isinstance(payload.get("runs"), list)
     assert len(payload["runs"]) <= HISTORY_LIMIT
+
+    status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+    if status.get("status") in {"completed", "completed_with_errors", "failed"}:
+        assert payload["runs"], "terminal run must have a corresponding history entry"
+        assert payload["runs"][0].get("run_id") == status.get("run_id"), "latest history run must match terminal run-status"
+
+    try:
+        jobs = json.loads(engine.JOBS_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        jobs = {}
+    if jobs.get("generated_at") == status.get("started_at"):
+        assert jobs.get("run_id") == status.get("run_id"), "new jobs snapshot must identify its producing run"
+        assert jobs.get("run_status") == status.get("status")
+        if status.get("source_sha"):
+            assert jobs.get("source_sha") == status.get("source_sha")
 
 
 def main() -> int:
@@ -182,6 +225,7 @@ def main() -> int:
     code = orchestration.run(config, now)
 
     append_run_history()
+    stamp_jobs_provenance()
     if code == 0:
         engine.validate_output()
     optimized.validate_state()
