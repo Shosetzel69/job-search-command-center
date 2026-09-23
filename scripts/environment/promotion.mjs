@@ -274,6 +274,7 @@ export function createProdReleaseRecord({
   candidateSha,
   previousHealth,
   expectedRuntimeSha,
+  expectedRuntimeHead,
   rollbackReference,
   ownerGoReference,
   runId,
@@ -295,11 +296,15 @@ export function createProdReleaseRecord({
   const previousSourceSha = requireSha(previousHealth?.source_sha, 'previous PROD source_sha');
   const previousRuntimeDataSha = requireSha(previousHealth?.runtime_data_sha, 'previous PROD runtime_data_sha');
   const expectedRuntime = requireSha(expectedRuntimeSha, 'expected_runtime_sha');
+  const expectedHead = requireSha(expectedRuntimeHead, 'expected_runtime_head');
   if (previousRuntimeDataSha !== expectedRuntime) {
-    throw new Error('Previous PROD /health runtime_data_sha does not match expected_runtime_sha');
+    throw new Error('Previous PROD /health runtime_data_sha does not match prior promotion_runtime_sha');
   }
 
   if (!reconciliation) throw new Error('PROD reconciliation evidence is missing');
+  if (requireSha(reconciliation.runtime_head_before, 'prod.reconciliation.runtime_head_before') !== expectedHead) {
+    throw new Error('PROD reconciliation runtime_head_before does not match prior acceptance_runtime_head');
+  }
   const prodPass = normalizeDeploymentEvidence({
     environment: 'prod',
     candidateSha: sha,
@@ -319,6 +324,15 @@ export function createProdReleaseRecord({
     test_pass_evidence: testRecord.test_pass,
     previous_prod_source_sha: previousSourceSha,
     previous_prod_runtime_data_sha: previousRuntimeDataSha,
+    previous_prod_runtime_head: expectedHead,
+    previous_prod_runtime_anchor: {
+      promotion_runtime_sha: previousRuntimeDataSha,
+      acceptance_runtime_head: expectedHead,
+    },
+    prod_runtime_anchor: {
+      promotion_runtime_sha: prodPass.runtime_data_sha,
+      acceptance_runtime_head: prodPass.reconciliation.acceptance_runtime_head,
+    },
     rollback_action_reference: requireText(rollbackReference, 'rollback_reference'),
     owner_go: requireText(ownerGoReference, 'owner_go_reference'),
     prod_deploy_evidence: prodPass,
@@ -417,6 +431,7 @@ async function main(argv = process.argv.slice(2)) {
       candidateSha: args.candidate_sha,
       previousHealth: readJson(args.previous_health_file, 'previous PROD health evidence'),
       expectedRuntimeSha: args.expected_runtime_sha,
+      expectedRuntimeHead: args.expected_runtime_head,
       rollbackReference: args.rollback_reference,
       ownerGoReference: args.owner_go_reference,
       runId: args.run_id,
