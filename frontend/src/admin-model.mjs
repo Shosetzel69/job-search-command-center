@@ -21,12 +21,37 @@ export function sourcePolicyExcluded(source = {}) {
 }
 
 export function adminSourceSummary(sources = []) {
+  const active = sources.filter(source => source.active && !sourcePolicyExcluded(source)).length;
   return {
-    active: sources.filter(source => source.active && !sourcePolicyExcluded(source)).length,
-    validating: sources.filter(source => ['pending','validating'].includes(source.validationStatus)).length,
-    problems: sources.filter(source => ['requires_connector','rejected'].includes(source.validationStatus)).length,
-    approvedInactive: sources.filter(source => source.approvalStatus === 'approved' && (!source.active || sourcePolicyExcluded(source))).length,
+    total:sources.length,
+    active,
+    inactive:sources.length - active,
+    pendingApproval:sources.filter(source => source.approvalStatus === 'pending' && !sourcePolicyExcluded(source)).length,
+    validated:sources.filter(source => source.validationStatus === 'validated').length,
+    validating:sources.filter(source => ['pending','validating'].includes(source.validationStatus)).length,
+    problems:sources.filter(source => ['requires_connector','rejected'].includes(source.validationStatus)).length,
+    approvedInactive:sources.filter(source => source.approvalStatus === 'approved' && (!source.active || sourcePolicyExcluded(source))).length,
+    policyExcluded:sources.filter(sourcePolicyExcluded).length,
   };
+}
+
+export function sortSources(sources = []) {
+  return [...sources].sort((a,b) => String(a.name || '').localeCompare(String(b.name || ''), 'ro', { sensitivity:'base' }));
+}
+
+export function sourceNeedsGovernanceAttention(source = {}) {
+  if (sourcePolicyExcluded(source)) return false;
+  return source.approvalStatus === 'pending'
+    || ['pending','validating','requires_connector','rejected'].includes(source.validationStatus);
+}
+
+export function approvalSourceRows(sources = [], { mode='attention', query='' } = {}) {
+  const q = String(query || '').trim().toLocaleLowerCase('ro-RO');
+  return sortSources(sources).filter(source => {
+    const matches = !q || `${source.name || ''} ${source.category || ''} ${source.url || ''}`.toLocaleLowerCase('ro-RO').includes(q);
+    if (!matches) return false;
+    return mode === 'all' ? true : sourceNeedsGovernanceAttention(source);
+  });
 }
 
 export function sourceGovernanceActions(source = {}) {
