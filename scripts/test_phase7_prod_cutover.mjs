@@ -117,6 +117,27 @@ test('PROD reconciliation runs only after immutable runtime anchor and TEST PASS
   assert.ok(guard >= 0 && anchor > guard && reconcile > anchor && release > reconcile);
 });
 
+test('bootstrap-deploy advances from pre-bootstrap anchor to an explicitly authorized post-bootstrap reconciliation head', () => {
+  const bootstrap = promotion.match(/- name: Install PROD runtime workflow without rewriting runtime data[\s\S]*?- name: Configure PROD runtime variables and secrets/)?.[0] || '';
+  assert.match(bootstrap, /EXPECTED_RUNTIME_HEAD/);
+  assert.match(bootstrap, /cloned_head=/);
+  assert.match(bootstrap, /PROD runtime moved before bootstrap workflow update/);
+  assert.match(bootstrap, /authorized_head=/);
+  assert.match(bootstrap, /remote_head=/);
+  assert.match(bootstrap, /PROD runtime moved after authorized bootstrap workflow update/);
+  assert.match(bootstrap, /RECONCILIATION_RUNTIME_HEAD=\$authorized_head/);
+
+  const execute = promotion.match(/- name: Execute reconciled PROD candidate promotion[\s\S]*?- name: Upload PROD reconciliation trace/)?.[0] || '';
+  assert.match(execute, /--expected-runtime-head "\$RECONCILIATION_RUNTIME_HEAD"/);
+  assert.doesNotMatch(execute, /--expected-runtime-head "\$\{\{ inputs\.expected_runtime_head \}\}"/);
+});
+
+test('PROD reconciliation artifact is mandatory evidence', () => {
+  const upload = promotion.match(/- name: Upload PROD reconciliation trace[\s\S]*?- name: Create minimal non-secret release record/)?.[0] || '';
+  assert.match(upload, /if-no-files-found: error/);
+  assert.doesNotMatch(upload, /if-no-files-found: warn/);
+});
+
 test('PROD reconciled deployment refreshes Worker runtime secrets before protected verification', () => {
   assert.match(prodExecutor, /configureBootstrapSecrets: true/);
   assert.match(provision, /'secret', 'put', 'GITHUB_TOKEN'/);
