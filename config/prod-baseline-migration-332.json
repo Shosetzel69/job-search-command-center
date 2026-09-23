@@ -23,10 +23,10 @@
       "current_prod_git_blob": "d1aacc547b55292347bb5514ef184b10c3cce63c"
     },
     "data/nomenclatures.json": {
-      "historical_digest": "sha256:3bd457d676216504d62957b9558fdf5dff9e56268950cb974bdd1b7abe9161b2",
-      "target_candidate_digest": "sha256:3bd457d676216504d62957b9558fdf5dff9e56268950cb974bdd1b7abe9161b2",
-      "expected_pre_migration_digest": "sha256:3bd457d676216504d62957b9558fdf5dff9e56268950cb974bdd1b7abe9161b2",
-      "resolved_target_digest": "sha256:3bd457d676216504d62957b9558fdf5dff9e56268950cb974bdd1b7abe9161b2",
+      "historical_digest": "sha256:f352e2f5317800ac3d10bd3b5d11f2277e3908c4141eb9577ec8a42cf3fa82f3",
+      "target_candidate_digest": "sha256:f352e2f5317800ac3d10bd3b5d11f2277e3908c4141eb9577ec8a42cf3fa82f3",
+      "expected_pre_migration_digest": "sha256:f352e2f5317800ac3d10bd3b5d11f2277e3908c4141eb9577ec8a42cf3fa82f3",
+      "resolved_target_digest": "sha256:f352e2f5317800ac3d10bd3b5d11f2277e3908c4141eb9577ec8a42cf3fa82f3",
       "current_prod_git_blob": "d35b9f41caea79468f3b56c121e7a8bae202ef7f"
     }
   },
