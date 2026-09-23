@@ -13,6 +13,12 @@ on:
         description: Immutable source commit SHA
         required: true
         type: string
+      execution_mode:
+        description: Runtime execution policy; test-full is an explicit TEST-only manual Full Search
+        required: false
+        default: policy
+        type: choice
+        options: [policy, test-full]
 
 permissions:
   contents: write
@@ -30,6 +36,7 @@ jobs:
       APP_ENV: ${{ vars.APP_ENV }}
       SEARCH_MODE: ${{ vars.SEARCH_MODE }}
       SOURCE_REPOSITORY: ${{ vars.SOURCE_REPOSITORY }}
+      EXECUTION_MODE: ${{ inputs.execution_mode || 'policy' }}
     steps:
       - name: Validate runtime identity
         shell: bash
@@ -39,6 +46,12 @@ jobs:
           test -n "$APP_ENV" || { echo "APP_ENV is required" >&2; exit 1; }
           test -n "$SEARCH_MODE" || { echo "SEARCH_MODE is required" >&2; exit 1; }
           test -n "$SOURCE_REPOSITORY" || { echo "SOURCE_REPOSITORY is required" >&2; exit 1; }
+          case "$EXECUTION_MODE" in policy|test-full) ;; *) echo "Unsupported execution_mode: $EXECUTION_MODE" >&2; exit 1 ;; esac
+          if [ "$EXECUTION_MODE" = "test-full" ]; then
+            test "$APP_ENV" = "test" || { echo "test-full execution is TEST-only" >&2; exit 1; }
+            test "$SEARCH_MODE" = "smoke" || { echo "test-full requires TEST SEARCH_MODE=smoke" >&2; exit 1; }
+            test "${{ inputs.run_trigger || 'manual-ui' }}" = "manual-ui" || { echo "test-full requires manual-ui run_trigger" >&2; exit 1; }
+          fi
           case "$APP_ENV" in
             dev)
               test "$SEARCH_MODE" = "disabled" || { echo "DEV must remain SEARCH_MODE=disabled" >&2; exit 1; }
@@ -105,9 +118,82 @@ jobs:
           }
 
       - name: TEST smoke boundary
-        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' }}
+        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && (inputs.execution_mode || 'policy') != 'test-full' }}
         run: |
           echo "TEST smoke policy verified immutable source checkout only. Full Search was not executed."
+
+      - name: Prepare controlled TEST full-search workspace
+        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf search-source
+          cp -a candidate-source search-source
+          rm -rf search-source/.git search-source/data
+          cp -a runtime/data search-source/data
+          python3 -m py_compile \
+            search-source/scripts/job_search.py \
+            search-source/scripts/job_search_optimized.py \
+            search-source/scripts/job_search_apify.py \
+            search-source/scripts/job_search_runner.py \
+            search-source/scripts/source_orchestration.py \
+            search-source/scripts/job_search_web.py \
+            search-source/scripts/web_browser.py \
+            search-source/scripts/web_transport.py
+
+      - name: Install TEST browser fallback
+        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+        working-directory: search-source
+        run: |
+          python3 -m pip install --disable-pip-version-check -r requirements-search.txt
+          python3 -m playwright install --with-deps chromium
+
+      - name: Collect normalize filter and score in controlled TEST
+        id: test_search
+        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+        continue-on-error: true
+        working-directory: search-source
+        env:
+          JOBSPIPE_API_KEY: ${{ secrets.JOBSPIPE_API_KEY }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
+          RUN_TRIGGER: manual-ui
+          RUNTIME_REF: main
+          PUBLISH_BRANCH: main
+        run: python3 scripts/job_search_runner.py
+
+      - name: Validate generated TEST JSON contract
+        if: ${{ always() && vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+        working-directory: search-source
+        run: python3 scripts/job_search_runner.py --validate-only
+
+      - name: Stage controlled TEST result files
+        if: ${{ always() && vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in jobs.json run-status.json run-history.json search-state.json; do
+            test -f "search-source/data/$file" || { echo "Missing generated TEST file: $file" >&2; exit 1; }
+            cp "search-source/data/$file" "runtime/data/$file"
+          done
+
+      - name: Publish controlled TEST results safely
+        if: ${{ always() && vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+        working-directory: runtime
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PUBLISH_BASE_SHA: ${{ github.sha }}
+          PUBLISH_BRANCH: main
+        shell: bash
+        run: |
+          set -euo pipefail
+          git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          bash ../control-plane/scripts/publish_results.sh
+
+      - name: Mark total controlled TEST collection failure
+        if: ${{ always() && vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' && steps.test_search.outcome != 'success' }}
+        run: |
+          echo "Controlled TEST Full Search failed. TEST runtime status was persisted."
+          exit 1
 
       - name: Prepare PROD search workspace from runtime snapshot
         if: ${{ vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
