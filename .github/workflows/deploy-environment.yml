@@ -267,6 +267,7 @@ jobs:
           TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
           DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
           TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
+          FUNCTIONAL_GOOGLE_ID_TOKEN: ${{ secrets.FUNCTIONAL_GOOGLE_ID_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -346,29 +347,6 @@ jobs:
           path: promotion-output/promotion-record.json
           if-no-files-found: error
           retention-days: 90
-
-      - name: Configure runtime and Worker secrets with separated roles
-        if: ${{ inputs.action == 'bootstrap' }}
-        working-directory: deployment-source/command-api
-        env:
-          SELECTED_CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          SELECTED_CLOUDFLARE_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
-          SELECTED_GITHUB_BOOTSTRAP_TOKEN: ${{ secrets.GH_BOOTSTRAP_TOKEN }}
-          SELECTED_GITHUB_RUNTIME_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
-          SELECTED_SOURCE_READ_TOKEN: ${{ secrets.SOURCE_READ_TOKEN }}
-          SELECTED_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          case "${{ inputs.environment }}" in
-            dev) runtime_repo="Shosetzel69/job-search-runtime-dev" ;;
-            test) runtime_repo="Shosetzel69/job-search-runtime-test" ;;
-            *) echo "Unsupported live environment" >&2; exit 1 ;;
-          esac
-          test "$SELECTED_GITHUB_BOOTSTRAP_TOKEN" != "$SELECTED_GITHUB_RUNTIME_TOKEN" || { echo "bootstrap/runtime token reuse is forbidden" >&2; exit 1; }
-          printf '%s' "$SELECTED_SOURCE_READ_TOKEN" | GH_TOKEN="$SELECTED_GITHUB_BOOTSTRAP_TOKEN" gh secret set SOURCE_READ_TOKEN --repo "$runtime_repo"
-          printf '%s' "$SELECTED_GITHUB_RUNTIME_TOKEN" | CLOUDFLARE_ACCOUNT_ID="$SELECTED_CLOUDFLARE_ACCOUNT_ID" CLOUDFLARE_API_TOKEN="$SELECTED_CLOUDFLARE_TOKEN" npx wrangler secret put GITHUB_TOKEN --name job-search-command-api
-          printf '%s' "$SELECTED_ALLOWED_GOOGLE_SUB" | CLOUDFLARE_ACCOUNT_ID="$SELECTED_CLOUDFLARE_ACCOUNT_ID" CLOUDFLARE_API_TOKEN="$SELECTED_CLOUDFLARE_TOKEN" npx wrangler secret put ALLOWED_GOOGLE_SUB --name job-search-command-api
 
       - name: Verify credential role separation and final health
         if: ${{ inputs.action == 'bootstrap' }}
