@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 
 import { INTERNAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
-import commandApi, { authorizeGooglePayload, protectedRuntimePath, readProtectedRuntimeData, validateUserConfigPatch } from '../src/index.js';
+import commandApi, { authorizeGithubOidcPayload, authorizeGooglePayload, protectedRuntimePath, readProtectedRuntimeData, validateUserConfigPatch, verifyGithubActionsOidcToken } from '../src/index.js';
 import secureEntry, { fullSearchAllowed } from '../src/secure-entry.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -31,6 +32,102 @@ test('unauthorized Google subject is rejected independently of token parsing', (
     error => error?.status === 403 && /not authorized/i.test(error.message),
   );
   assert.equal(authorizeGooglePayload({ sub:env.ALLOWED_GOOGLE_SUB }, env).sub, env.ALLOWED_GOOGLE_SUB);
+});
+
+
+const OIDC_NOW = 1_800_000_000;
+const validOidcClaims = overrides => ({
+  iss:'https://token.actions.githubusercontent.com',
+  aud:'jscc-functional-verification',
+  repository:'Shosetzel69/job-search-command-center',
+  repository_id:'1356423874',
+  environment:'test',
+  workflow_ref:'Shosetzel69/job-search-command-center/.github/workflows/deploy-environment.yml@refs/heads/main',
+  event_name:'workflow_dispatch',
+  iat:OIDC_NOW - 10,
+  nbf:OIDC_NOW - 10,
+  exp:OIDC_NOW + 300,
+  sub:'repo:Shosetzel69/job-search-command-center:environment:test',
+  ...overrides,
+});
+
+test('GitHub Actions OIDC claim boundary accepts only exact functional verification identity', () => {
+  assert.equal(authorizeGithubOidcPayload(validOidcClaims(), env, OIDC_NOW).environment, 'test');
+  for (const [name,override] of [
+    ['issuer',{ iss:'https://evil.example.test' }],
+    ['audience',{ aud:'wrong-audience' }],
+    ['repository',{ repository:'other/repo' }],
+    ['repository_id',{ repository_id:'999' }],
+    ['environment',{ environment:'prod' }],
+    ['workflow',{ workflow_ref:'Shosetzel69/job-search-command-center/.github/workflows/other.yml@refs/heads/main' }],
+    ['event',{ event_name:'push' }],
+  ]) {
+    assert.throws(
+      () => authorizeGithubOidcPayload(validOidcClaims(override), env, OIDC_NOW),
+      error => error?.status === 403,
+      name,
+    );
+  }
+  assert.throws(
+    () => authorizeGithubOidcPayload(validOidcClaims({ exp:OIDC_NOW - 1 }), env, OIDC_NOW),
+    error => error?.status === 401 && /expired/i.test(error.message),
+  );
+  assert.throws(
+    () => authorizeGithubOidcPayload(validOidcClaims({ nbf:OIDC_NOW + 120 }), env, OIDC_NOW),
+    error => error?.status === 401 && /not yet valid/i.test(error.message),
+  );
+  assert.throws(
+    () => authorizeGithubOidcPayload(validOidcClaims({ iat:OIDC_NOW + 120 }), env, OIDC_NOW),
+    error => error?.status === 401 && /issued-at/i.test(error.message),
+  );
+});
+
+test('GitHub Actions OIDC verifier requires a valid signature, issuer and audience', async () => {
+  const { publicKey, privateKey } = await generateKeyPair('RS256');
+  const jwk = await exportJWK(publicKey);
+  jwk.kid = 'functional-test';
+  jwk.alg = 'RS256';
+  const jwks = createLocalJWKSet({ keys:[jwk] });
+  const sign = async claims => new SignJWT(claims)
+    .setProtectedHeader({ alg:'RS256', kid:'functional-test' })
+    .sign(privateKey);
+
+  const token = await sign(validOidcClaims());
+  const payload = await verifyGithubActionsOidcToken(token, env, {
+    jwks,
+    currentDate:new Date(OIDC_NOW * 1000),
+  });
+  assert.equal(payload.repository_id, '1356423874');
+
+  const wrongAudience = await sign(validOidcClaims({ aud:'wrong-audience' }));
+  await assert.rejects(
+    () => verifyGithubActionsOidcToken(wrongAudience, env, { jwks, currentDate:new Date(OIDC_NOW * 1000) }),
+  );
+
+  const { privateKey:otherPrivateKey } = await generateKeyPair('RS256');
+  const badSignature = await new SignJWT(validOidcClaims())
+    .setProtectedHeader({ alg:'RS256', kid:'functional-test' })
+    .sign(otherPrivateKey);
+  await assert.rejects(
+    () => verifyGithubActionsOidcToken(badSignature, env, { jwks, currentDate:new Date(OIDC_NOW * 1000) }),
+  );
+});
+
+test('GitHub Actions OIDC is rejected on mutation endpoints before Google verification', async () => {
+  const header = Buffer.from(JSON.stringify({ alg:'none', typ:'JWT' })).toString('base64url');
+  const payload = Buffer.from(JSON.stringify(validOidcClaims())).toString('base64url');
+  const fakeOidc = `${header}.${payload}.`;
+
+  const response = await commandApi.fetch(new Request('https://app.example.test/commands/run', {
+    method:'POST',
+    headers:{
+      Origin:env.FRONTEND_ORIGIN,
+      Authorization:`Bearer ${fakeOidc}`,
+    },
+  }), env);
+  assert.equal(response.status, 403);
+  const body = await response.json();
+  assert.match(body.error, /OIDC is not allowed/i);
 });
 
 test('invalid configuration payloads fail closed at validation boundary', () => {
