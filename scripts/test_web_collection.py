@@ -261,6 +261,35 @@ class WebTests(unittest.TestCase):
             "denied",
         )
 
+    def test_profile_rejects_external_ats_and_preserves_partial_records(self):
+        profile = web.WEB_PROFILES["Toptal"]
+        roots = {"toptal.com"}
+        self.assertIsNone(
+            web.candidate(
+                {"url": "https://boards.greenhouse.io/example/jobs/1", "text": "Project Manager"},
+                profile["start_url"],
+                roots,
+                profile,
+            )
+        )
+
+        source = {"name": "Toptal", "url": "https://www.toptal.com/", "id": "toptal-partial"}
+        detail = "https://www.toptal.com/freelance-jobs/project-manager"
+        missing = "https://www.toptal.com/freelance-jobs/delivery-manager"
+        client = FakeClient({
+            profile["start_url"]: (
+                '<a href="/freelance-jobs/project-manager">Project Manager</a>'
+                '<a href="/freelance-jobs/delivery-manager">Delivery Manager</a>'
+            ),
+            detail: html({**JOB, "url": detail, "identifier": "profile-partial"}),
+        })
+        results, details = web.collect(source, {}, NOW, client)
+        records = [record for result in results if result.ok for record in result.records]
+        self.assertEqual(len(records), 1)
+        self.assertIn(missing, client.called)
+        self.assertEqual(details["web_outcome"], "partial")
+        self.assertTrue(any(not result.ok for result in results))
+
     def test_generic_non_profile_behavior_and_entrypoint_remain_unchanged(self):
         source = {"name": "Generic Example", "url": "https://example.com/careers", "id": "generic"}
         detail = "https://example.com/careers/project-manager"
