@@ -7,6 +7,7 @@ import {
   errorMessageWithReferences,
   sortedDomainValues,
 } from './nomenclature-admin-model.mjs';
+import ActionDialog from './action-dialog.jsx';
 
 const cx = (...values) => values.filter(Boolean).join(' ');
 
@@ -41,6 +42,7 @@ export default function NomenclaturesAdmin({ token, notify }) {
   const [loading,setLoading] = useState(true);
   const [busy,setBusy] = useState(false);
   const [error,setError] = useState(null);
+  const [dialog,setDialog] = useState(null);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -73,20 +75,7 @@ export default function NomenclaturesAdmin({ token, notify }) {
     }
   };
 
-  const edit = item => {
-    const label = window.prompt('Eticheta afisata', item.label);
-    if (label == null) return;
-    const orderRaw = window.prompt('Ordine afisare', String(item.sort_order ?? 0));
-    if (orderRaw == null) return;
-    const sortOrder = Number(orderRaw);
-    apply(
-      () => api(`/nomenclatures/${encodeURIComponent(selected)}/${encodeURIComponent(item.code)}`, token, {
-        method:'PUT',
-        body:JSON.stringify({ label, sort_order:sortOrder }),
-      }),
-      'Valoarea nomenclatorului a fost actualizata.',
-    );
-  };
+  const edit = item => setDialog({ type:'edit', item, label:item.label, sortOrder:String(item.sort_order ?? 0) });
 
   const toggle = item => apply(
     () => api(`/nomenclatures/${encodeURIComponent(selected)}/${encodeURIComponent(item.code)}`, token, {
@@ -98,26 +87,52 @@ export default function NomenclaturesAdmin({ token, notify }) {
 
   const add = () => {
     if (!domainIsExtensible(domain)) return;
-    const code = window.prompt('Cod tehnic stabil (ex. interview)')?.trim();
-    if (!code) return;
-    const label = window.prompt('Eticheta afisata')?.trim();
-    if (!label) return;
-    apply(
-      () => api(`/nomenclatures/${encodeURIComponent(selected)}`, token, {
-        method:'POST',
-        body:JSON.stringify({ code, label }),
-      }),
-      'Valoarea a fost adaugata.',
-    );
+    setDialog({ type:'add', code:'', label:'' });
   };
 
   const remove = item => {
     if (!domainIsExtensible(domain)) return;
-    if (!window.confirm(`Stergi valoarea "${item.label}" (${item.code})?`)) return;
-    apply(
-      () => api(`/nomenclatures/${encodeURIComponent(selected)}/${encodeURIComponent(item.code)}`, token, { method:'DELETE' }),
-      'Valoarea a fost stearsa.',
-    );
+    setDialog({ type:'delete', item });
+  };
+
+  const confirmDialog = async () => {
+    const current = dialog;
+    if (!current) return;
+    if (current.type === 'edit') {
+      const label = current.label.trim();
+      const sortOrder = Number(current.sortOrder);
+      if (!label || !Number.isFinite(sortOrder)) return;
+      setDialog(null);
+      await apply(
+        () => api(`/nomenclatures/${encodeURIComponent(selected)}/${encodeURIComponent(current.item.code)}`, token, {
+          method:'PUT',
+          body:JSON.stringify({ label, sort_order:sortOrder }),
+        }),
+        'Valoarea nomenclatorului a fost actualizata.',
+      );
+      return;
+    }
+    if (current.type === 'add') {
+      const code = current.code.trim();
+      const label = current.label.trim();
+      if (!code || !label) return;
+      setDialog(null);
+      await apply(
+        () => api(`/nomenclatures/${encodeURIComponent(selected)}`, token, {
+          method:'POST',
+          body:JSON.stringify({ code, label }),
+        }),
+        'Valoarea a fost adaugata.',
+      );
+      return;
+    }
+    if (current.type === 'delete') {
+      setDialog(null);
+      await apply(
+        () => api(`/nomenclatures/${encodeURIComponent(selected)}/${encodeURIComponent(current.item.code)}`, token, { method:'DELETE' }),
+        'Valoarea a fost stearsa.',
+      );
+    }
   };
 
   if (loading) return <div className="rounded-2xl border border-slate-200 bg-white p-6 text-sm text-slate-500 shadow-sm">Se incarca nomenclatoarele canonice...</div>;
@@ -144,5 +159,31 @@ export default function NomenclaturesAdmin({ token, notify }) {
       <div className="divide-y divide-slate-100">{rows.map(item => <div key={item.code} className="grid gap-3 px-5 py-3 text-sm md:grid-cols-[130px_minmax(0,1fr)_90px_90px_230px] md:items-center"><div className="font-mono text-xs font-semibold text-slate-600">{item.code}</div><div><div className="font-medium text-slate-800">{item.label}</div>{Array.isArray(item.aliases) && item.aliases.length > 0 && <div className="mt-0.5 text-xs text-slate-400">Aliases tehnice: {item.aliases.join(', ')}</div>}{Array.isArray(item.country_codes) && item.country_codes.length > 0 && <div className="mt-0.5 text-xs text-slate-400">{item.country_codes.length} tari membre</div>}</div><div className="text-xs text-slate-500">{item.sort_order}</div><div><StateBadge active={item.active}/></div><div className="flex flex-wrap justify-end gap-2"><button disabled={busy} onClick={() => edit(item)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-50">Editeaza</button><button disabled={busy} onClick={() => toggle(item)} className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-xs font-semibold text-slate-600 disabled:opacity-50">{item.active ? 'Dezactiveaza' : 'Activeaza'}</button>{domainIsExtensible(domain) && <button disabled={busy} onClick={() => remove(item)} className="rounded-lg border border-red-200 px-2.5 py-1.5 text-xs font-semibold text-red-600 disabled:opacity-50">Sterge</button>}</div></div>)}</div>
       {!rows.length && <div className="px-5 py-10 text-center text-sm text-slate-500">Nu exista valori. {selected === 'seniority' ? 'Domeniul este pregatit doar ca infrastructura.' : ''}</div>}
     </section>
+    {dialog?.type === 'edit' && <ActionDialog
+      title="Editeaza valoarea"
+      fields={[{name:'label',label:'Eticheta afisata',autoFocus:true},{name:'sortOrder',label:'Ordine afisare',type:'number'}]}
+      values={{label:dialog.label,sortOrder:dialog.sortOrder}}
+      onChange={(name,value) => setDialog(current => ({...current,[name]:value}))}
+      onCancel={() => setDialog(null)}
+      onConfirm={confirmDialog}
+      confirmDisabled={!dialog.label.trim() || !Number.isFinite(Number(dialog.sortOrder))}
+    />}
+    {dialog?.type === 'add' && <ActionDialog
+      title="Adauga valoare"
+      fields={[{name:'code',label:'Cod tehnic stabil',placeholder:'ex. interview',autoFocus:true},{name:'label',label:'Eticheta afisata'}]}
+      values={{code:dialog.code,label:dialog.label}}
+      onChange={(name,value) => setDialog(current => ({...current,[name]:value}))}
+      onCancel={() => setDialog(null)}
+      onConfirm={confirmDialog}
+      confirmDisabled={!dialog.code.trim() || !dialog.label.trim()}
+    />}
+    {dialog?.type === 'delete' && <ActionDialog
+      title="Sterge valoarea"
+      description={`Stergi valoarea "${dialog.item.label}" (${dialog.item.code})?`}
+      confirmLabel="Sterge"
+      danger
+      onCancel={() => setDialog(null)}
+      onConfirm={confirmDialog}
+    />}
   </div>;
 }
