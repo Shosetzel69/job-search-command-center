@@ -1,5 +1,4 @@
 import json
-import re
 import subprocess
 import tempfile
 import unittest
@@ -220,7 +219,7 @@ class WorkflowContractTests(unittest.TestCase):
 
         self.assertIn("CONFIRM_VALIDATION: ${{ inputs.confirm_validation }}", workflow)
         self.assertIn("SOURCE_SHA_INPUT: ${{ inputs.source_sha }}", workflow)
-        self.assertRegex(workflow, re.compile(r'test "\\$CONFIRM_VALIDATION" = "VALIDATE"'))
+        self.assertIn('test "$CONFIRM_VALIDATION" = "VALIDATE"', workflow)
         self.assertIn('[[ "$SOURCE_SHA_INPUT" =~ ^[0-9a-fA-F]{40}$ ]]', workflow)
 
 
