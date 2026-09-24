@@ -22,7 +22,7 @@ Deployment functional verification is machine-to-machine and must not depend on 
 - browser/user authentication remains Google Identity Services;
 - DEV/TEST/PROD deployment workflows request a short-lived GitHub Actions OIDC token at run time;
 - the OIDC audience is `jscc-functional-verification`;
-- Worker authorization is restricted to the protected read-only `/data/*` evidence surface and exact repository/environment/workflow claims;
+- Worker authorization is restricted to the read-only evidence surface limitata la `GET /data/sources.json`, `GET /data/source-categories.json` si `GET /data/nomenclatures.json` and exact repository/environment/workflow claims;
 - no GitHub Environment secret containing a Google user ID token is required for release progression.
 
 ## 2. Canonical flow
