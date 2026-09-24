@@ -1,7 +1,7 @@
 # Functionalitati
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-18`
+Ultima actualizare: `2026-09-25`
 Status baseline: `STABLE / CLOSE`
 
 ## 1. Acces
@@ -130,6 +130,8 @@ Reguli:
 - valideaza configuratia curenta;
 - evita pornirea unei a doua rulari active;
 - declanseaza maximum un `workflow_dispatch` cu trigger canonic `manual-ui`;
+- in DEV si TEST foloseste explicit `execution_mode=manual-full`, pastrand `SEARCH_MODE=disabled` respectiv `smoke`;
+- in PROD pastreaza executia `policy/live` existenta;
 - frontend-ul urmareste run-ul pana la stare terminala reala si recupereaza starea dupa refresh;
 - reincarca datele dupa publicare.
 
@@ -210,7 +212,7 @@ Aceste componente nu sunt dependinta functionala pentru cautarea joburilor.
 
 ## 11. Limitari si backlog
 
-- #49 este parcat si exclus din Package 2; nu este criteriu de stabilizare;
+- #49 este reactivat prin decizia ownerului din 2026-09-25; Full Search traverseaza toate sursele active eligibile operational;
 - #93 ramane cleanup semantic Source Registry;
 - scheduler-ul configurabil ramane Package 2B;
 - connectorii suplimentari se valideaza/activeaza incremental in Package 2C;
