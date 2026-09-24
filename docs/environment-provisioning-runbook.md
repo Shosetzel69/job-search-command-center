@@ -2,7 +2,7 @@
 
 Status: DEV / TEST / PROD infrastructure operational. Phase 7 migration/bootstrap/deploy completed; final acceptance/remediation remains tracked separately. Permanent delivery lifecycle is defined by #197.
 Data initiala: 2026-09-11
-Revizie curenta: 2026-09-18
+Revizie curenta: 2026-09-25
 ADR: `docs/adr/ADR-003-environment-isolation.md`
 Delivery lifecycle: `docs/software-delivery-lifecycle.md`
 Release record: `docs/release-record-template.md`
@@ -207,9 +207,9 @@ Role rules:
 Canonical mapping:
 
 ```text
-dev  -> job-search-runtime-dev  -> SEARCH_MODE=disabled
-test -> job-search-runtime-test -> SEARCH_MODE=smoke
-prod -> job-search-prod         -> SEARCH_MODE=live
+dev  -> job-search-runtime-dev  -> SEARCH_MODE=disabled  + explicit manual-full
+test -> job-search-runtime-test -> SEARCH_MODE=smoke     + explicit manual-full
+prod -> job-search-prod         -> SEARCH_MODE=live      + existing policy execution
 ```
 
 UI environment marker behavior:
@@ -318,7 +318,7 @@ For PROD live execution it must:
 9. rebuild/redeploy only the PROD Worker with that exact runtime snapshot;
 10. verify post-redeploy `/health.runtime_data_sha` equals the published runtime SHA.
 
-DEV must fail closed for live collection. TEST may perform smoke validation but not live external collection/publication.
+DEV and TEST fail closed for automatic/heavy collection by default. An authenticated explicit manual operator action may use `execution_mode=manual-full` in the isolated DEV or TEST runtime; no scheduler/push/deploy/save action may select that mode. PROD behavior is unchanged.
 
 ## 9. Static build and identity
 
