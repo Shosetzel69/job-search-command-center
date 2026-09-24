@@ -128,6 +128,27 @@ class GeographyTests(unittest.TestCase):
         self.assertFalse(engine.geography_matches(set(), "Unknown", config, False))
 
 
+
+
+class JobsPipeConfigurationTests(unittest.TestCase):
+    def test_test_style_disabled_mode_accepts_zero_apify_limit(self) -> None:
+        config = {
+            "jobspipe_mode": "disabled",
+            "jobspipe_apify_max_items_per_run": 0,
+            "jobspipe_credit_budget_per_run": 0,
+            "jobspipe_monthly_credit_guard": 0,
+        }
+        self.assertEqual(engine.validate_jobspipe_config(config), "disabled")
+
+    def test_apify_mode_still_rejects_zero_limit(self) -> None:
+        config = {
+            "jobspipe_mode": "apify",
+            "jobspipe_apify_max_items_per_run": 0,
+        }
+        with self.assertRaisesRegex(RuntimeError, "must be 100-20000"):
+            engine.validate_jobspipe_config(config)
+
+
 class CanonicalNomenclatureTests(unittest.TestCase):
     def test_work_mode_alias_maps_to_onsite(self) -> None:
         self.assertEqual(

@@ -380,3 +380,23 @@ test('live workflow supplies environment-scoped functional Google token and no l
   assert.match(workflow, /secrets\.FUNCTIONAL_GOOGLE_ID_TOKEN/);
   assert.doesNotMatch(workflow, /- name: Configure runtime and Worker secrets with separated roles/);
 });
+
+
+test('controlled TEST Full Search is explicit manual-only and keeps TEST smoke identity', () => {
+  const runtime = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
+  const control = readFileSync(resolve(ROOT, '.github/workflows/test-full-search.yml'), 'utf8');
+  assert.match(runtime, /execution_mode:/);
+  assert.match(runtime, /test-full execution is TEST-only/);
+  assert.match(runtime, /test-full requires TEST SEARCH_MODE=smoke/);
+  assert.match(runtime, /test-full requires manual-ui run_trigger/);
+  assert.match(runtime, /Collect normalize filter and score in controlled TEST/);
+  assert.match(runtime, /Publish controlled TEST results safely/);
+  assert.doesNotMatch(runtime, /APP_ENV == 'dev'.*test-full/);
+  assert.match(control, /environment: test/);
+  assert.match(control, /job-search-runtime-test/);
+  assert.match(control, /\.environment == "test" and \.source_sha == \$sha and \.search_mode == "smoke"/);
+  assert.match(control, /select\(\.status == "queued" or \.status == "in_progress"\)/);
+  assert.match(control, /execution_mode=test-full/);
+  assert.doesNotMatch(control, /job-search-prod/);
+  assert.doesNotMatch(control, /schedule:/);
+});
