@@ -1,4 +1,4 @@
-import { createRemoteJWKSet, jwtVerify } from 'jose';
+import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { activeCodes, assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
 import { PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import {
@@ -20,6 +20,16 @@ import { BUILD_IDENTITY } from './build-identity.generated.js';
 import { canAccessRuntimeRepository, dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-github.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
+const GITHUB_ACTIONS_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
+const GITHUB_ACTIONS_OIDC_JWKS = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
+const GITHUB_FUNCTIONAL_OIDC_AUDIENCE = 'jscc-functional-verification';
+const GITHUB_FUNCTIONAL_REPOSITORY = 'Shosetzel69/job-search-command-center';
+const GITHUB_FUNCTIONAL_REPOSITORY_ID = '1356423874';
+const GITHUB_FUNCTIONAL_WORKFLOW_REFS = Object.freeze({
+  dev: 'Shosetzel69/job-search-command-center/.github/workflows/deploy-environment.yml@refs/heads/main',
+  test: 'Shosetzel69/job-search-command-center/.github/workflows/deploy-environment.yml@refs/heads/main',
+  prod: 'Shosetzel69/job-search-command-center/.github/workflows/prod-cutover.yml@refs/heads/main',
+});
 
 function json(body, status = 200, headers = {}) {
   return new Response(JSON.stringify(body), {
@@ -51,12 +61,65 @@ function googleConfigured(env) {
   return Boolean(env.GOOGLE_CLIENT_ID && env.ALLOWED_GOOGLE_SUB);
 }
 
-async function verifyGoogleToken(request, env) {
-  if (!env.GOOGLE_CLIENT_ID) throw Object.assign(new Error('Google OAuth client is not configured'), { status: 503 });
+function bearerToken(request, missingMessage = 'Missing ID token') {
   const authorization = request.headers.get('Authorization') || '';
   const match = authorization.match(/^Bearer\s+(.+)$/i);
-  if (!match) throw Object.assign(new Error('Missing Google ID token'), { status: 401 });
-  const { payload } = await jwtVerify(match[1], GOOGLE_JWKS, {
+  if (!match) throw Object.assign(new Error(missingMessage), { status: 401 });
+  return match[1];
+}
+
+function githubOidcAudienceMatches(audience) {
+  const values = Array.isArray(audience) ? audience : [audience];
+  return values.includes(GITHUB_FUNCTIONAL_OIDC_AUDIENCE);
+}
+
+export function authorizeGithubOidcPayload(payload, env, nowSeconds = Math.floor(Date.now() / 1000)) {
+  const environment = String(env.APP_ENV || '').trim().toLowerCase();
+  const expectedWorkflowRef = GITHUB_FUNCTIONAL_WORKFLOW_REFS[environment];
+  const forbidden = message => { throw Object.assign(new Error(message), { status: 403 }); };
+  const unauthenticated = message => { throw Object.assign(new Error(message), { status: 401 }); };
+
+  if (payload?.iss !== GITHUB_ACTIONS_OIDC_ISSUER) forbidden('GitHub Actions OIDC issuer is not authorized');
+  if (!githubOidcAudienceMatches(payload?.aud)) forbidden('GitHub Actions OIDC audience is not authorized');
+  if (String(payload?.repository_id || '') !== GITHUB_FUNCTIONAL_REPOSITORY_ID) forbidden('GitHub Actions OIDC repository identity is not authorized');
+  if (payload?.repository !== GITHUB_FUNCTIONAL_REPOSITORY) forbidden('GitHub Actions OIDC repository is not authorized');
+  if (!environment || payload?.environment !== environment) forbidden('GitHub Actions OIDC environment is not authorized');
+  if (!expectedWorkflowRef || payload?.workflow_ref !== expectedWorkflowRef) forbidden('GitHub Actions OIDC workflow is not authorized');
+  if (payload?.event_name !== 'workflow_dispatch') forbidden('GitHub Actions OIDC event is not authorized');
+
+  const exp = Number(payload?.exp);
+  const iat = Number(payload?.iat);
+  const nbf = payload?.nbf == null ? null : Number(payload.nbf);
+  if (!Number.isFinite(exp) || exp <= nowSeconds) unauthenticated('GitHub Actions OIDC token is expired');
+  if (!Number.isFinite(iat) || iat > nowSeconds + 60) unauthenticated('GitHub Actions OIDC token issued-at time is invalid');
+  if (nbf != null && (!Number.isFinite(nbf) || nbf > nowSeconds + 60)) unauthenticated('GitHub Actions OIDC token is not yet valid');
+  return payload;
+}
+
+export async function verifyGithubActionsOidcToken(token, env, {
+  jwks = GITHUB_ACTIONS_OIDC_JWKS,
+  currentDate = new Date(),
+} = {}) {
+  const { payload } = await jwtVerify(token, jwks, {
+    issuer: GITHUB_ACTIONS_OIDC_ISSUER,
+    audience: GITHUB_FUNCTIONAL_OIDC_AUDIENCE,
+    currentDate,
+  });
+  return authorizeGithubOidcPayload(payload, env, Math.floor(currentDate.getTime() / 1000));
+}
+
+function isGithubActionsOidcToken(token) {
+  try {
+    return decodeJwt(token)?.iss === GITHUB_ACTIONS_OIDC_ISSUER;
+  } catch {
+    return false;
+  }
+}
+
+async function verifyGoogleToken(request, env) {
+  if (!env.GOOGLE_CLIENT_ID) throw Object.assign(new Error('Google OAuth client is not configured'), { status: 503 });
+  const token = bearerToken(request, 'Missing Google ID token');
+  const { payload } = await jwtVerify(token, GOOGLE_JWKS, {
     issuer: ['https://accounts.google.com', 'accounts.google.com'],
     audience: env.GOOGLE_CLIENT_ID,
   });
@@ -71,7 +134,14 @@ function authorizeGooglePayload(payload, env) {
   return payload;
 }
 
-async function authenticate(request, env) {
+async function authenticate(request, env, { allowGithubOidc = false } = {}) {
+  const token = bearerToken(request);
+  if (isGithubActionsOidcToken(token)) {
+    if (!allowGithubOidc) {
+      throw Object.assign(new Error('GitHub Actions OIDC is not allowed for this endpoint'), { status: 403 });
+    }
+    return verifyGithubActionsOidcToken(token, env);
+  }
   if (!env.ALLOWED_GOOGLE_SUB) throw Object.assign(new Error('Authorization is not configured'), { status: 503 });
   const payload = await verifyGoogleToken(request, env);
   return authorizeGooglePayload(payload, env);
@@ -394,15 +464,16 @@ export default {
         return json({ status:'ok', email:user.email || null }, 200, cors);
       }
 
-      const user = await authenticate(request, env);
-
       if (request.method === 'GET' && url.pathname.startsWith('/data/')) {
+        await authenticate(request, env, { allowGithubOidc:true });
         const file = decodeURIComponent(url.pathname.slice('/data/'.length));
         if (!file || file.includes('/') || !PROTECTED_DATA_FILES.includes(file)) {
           return json({ error:'Not found' }, 404, cors);
         }
         return json(await readProtectedRuntimeData(env, file), 200, cors);
       }
+
+      const user = await authenticate(request, env);
 
       if (request.method === 'POST' && url.pathname === '/commands/run') {
         if (runtime.searchMode !== 'live') throw Object.assign(new Error('Full search is disabled for this environment'), { status: 409 });
