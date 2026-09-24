@@ -23,6 +23,8 @@ Protected runtime contracts:
 Manifestul canonic pentru publicare/protectie este `shared/runtime-data.mjs`.
 `search-state.json` este intern si nu este publicat.
 
+Invariant observability: pentru orice run terminal nou, `run-status.json` trebuie sa aiba un entry corespondent ca primul element din `run-history.json`. Cand run-ul produce un nou `jobs.json`, snapshot-ul include `run_id`, `run_status`, `run_completed_at` si, cand este disponibil, `source_sha`. Un run care nu produce un nou jobs snapshot nu reatribuie joburile istorice run-ului curent.
+
 Protected runtime JSON este citit la request din repository-ul runtime configurat pentru mediul curent. Static Assets livreaza frontend-ul, dar nu reprezinta sursa de adevar pentru fisierele runtime mutabile. Astfel, mutatiile prin Command API devin vizibile la urmatorul reload fara redeploy.
 
 ## 2. `data/jobs.json`
