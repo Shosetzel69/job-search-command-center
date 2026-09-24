@@ -261,17 +261,16 @@ class WebTests(unittest.TestCase):
             "denied",
         )
 
-    def test_profile_rejects_external_ats_and_preserves_partial_records(self):
+    def test_profile_preserves_external_ats_and_partial_records(self):
         profile = web.WEB_PROFILES["Toptal"]
         roots = {"toptal.com"}
-        self.assertIsNone(
-            web.candidate(
-                {"url": "https://boards.greenhouse.io/example/jobs/1", "text": "Project Manager"},
-                profile["start_url"],
-                roots,
-                profile,
-            )
+        ats = web.candidate(
+            {"url": "https://boards.greenhouse.io/example/jobs/1", "text": "Project Manager"},
+            profile["start_url"],
+            roots,
+            profile,
         )
+        self.assertIsNotNone(ats)
 
         source = {"name": "Toptal", "url": "https://www.toptal.com/", "id": "toptal-partial"}
         detail = "https://www.toptal.com/freelance-jobs/project-manager"
@@ -289,6 +288,27 @@ class WebTests(unittest.TestCase):
         self.assertIn(missing, client.called)
         self.assertEqual(details["web_outcome"], "partial")
         self.assertTrue(any(not result.ok for result in results))
+
+    def test_sgi_profile_can_follow_public_candidate_hop_to_job_details(self):
+        profile = web.WEB_PROFILES["Source Group International"]
+        source = {
+            "name": "Source Group International",
+            "url": "https://www.sourcegroupinternational.com/jobs/",
+            "id": "sgi",
+        }
+        candidate_page = "https://www.sourcegroupinternational.com/candidate/"
+        detail = "https://www.sourcegroupinternational.com/jobs/project-manager-london-123/"
+        client = FakeClient({
+            profile["start_url"]: '<a href="/candidate/">Browse Tech Jobs</a>',
+            candidate_page: '<a href="/jobs/project-manager-london-123/">Project Manager</a>',
+            detail: html({**JOB, "url": detail, "identifier": "sgi-1"}),
+        })
+        results, details = web.collect(source, {}, NOW, client)
+        records = [record for result in results if result.ok for record in result.records]
+        self.assertIn(candidate_page, client.called)
+        self.assertIn(detail, client.called)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(details["profile_name"], "Source Group International")
 
     def test_generic_non_profile_behavior_and_entrypoint_remain_unchanged(self):
         source = {"name": "Generic Example", "url": "https://example.com/careers", "id": "generic"}
