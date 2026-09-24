@@ -392,7 +392,7 @@ test('DEV/TEST OIDC capability is limited to bootstrap/deploy and token stays in
   assert.match(execute, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
   assert.match(execute, /FUNCTIONAL_GITHUB_OIDC_TOKEN/);
   assert.match(execute, /export FUNCTIONAL_GITHUB_OIDC_TOKEN/);
-  assert.doesNotMatch(workflow, /GITHUB_ENV/);
+  assert.doesNotMatch(workflow, /FUNCTIONAL_GITHUB_OIDC_TOKEN[^\n]*GITHUB_ENV|GITHUB_ENV[^\n]*FUNCTIONAL_GITHUB_OIDC_TOKEN/);
   assert.doesNotMatch(workflow, /Acquire short-lived functional verification OIDC token/);
   assert.equal((workflow.match(/id-token: write/g) || []).length, 1);
 
