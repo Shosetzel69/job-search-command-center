@@ -324,8 +324,9 @@ test('runtime reconciliation and deployed protected functional verification prec
   const acceptAt = provision.indexOf('acceptRuntimeReconciliation(runtime, reconciliation');
   assert.ok(reconcileAt > -1 && deployAt > -1 && reconcileAt < deployAt);
   assert.ok(configureAt > deployAt && functionalAt > configureAt && acceptAt > functionalAt);
-  assert.match(provision, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
-  assert.match(provision, /googleIdToken: inputs\.functionalGoogleIdToken/);
+  assert.match(provision, /FUNCTIONAL_GITHUB_OIDC_TOKEN/);
+  assert.match(provision, /oidcToken: inputs\.functionalGithubOidcToken/);
+  assert.doesNotMatch(provision, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
   assert.match(provision, /verifyRuntimePromotionSnapshot/);
   assert.match(provision, /revertRuntimeReconciliation/);
 });
@@ -374,10 +375,16 @@ test('functional visibility uses deployed protected data rather than direct cont
   assert.doesNotMatch(reconciliation, /readRuntimeJson/);
 });
 
-test('live workflow supplies environment-scoped functional Google token and no longer post-configures Worker secrets', () => {
+test('live DEV/TEST workflow acquires short-lived GitHub OIDC for functional verification', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
-  assert.match(workflow, /secrets\.FUNCTIONAL_GOOGLE_ID_TOKEN/);
+  assert.match(workflow, /live-environment:[\s\S]*?id-token: write/);
+  assert.match(workflow, /Acquire short-lived functional verification OIDC token/);
+  assert.match(workflow, /jscc-functional-verification/);
+  assert.match(workflow, /ACTIONS_ID_TOKEN_REQUEST_URL/);
+  assert.match(workflow, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
+  assert.match(workflow, /FUNCTIONAL_GITHUB_OIDC_TOKEN/);
+  assert.doesNotMatch(workflow, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
+  assert.doesNotMatch(workflow, /secrets\.FUNCTIONAL_GOOGLE_ID_TOKEN/);
   assert.doesNotMatch(workflow, /- name: Configure runtime and Worker secrets with separated roles/);
 });
 
