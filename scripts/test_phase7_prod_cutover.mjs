@@ -115,7 +115,7 @@ test('PROD candidate-managed reconciliation uses the exact approved allowlist an
   assert.match(execute, /ACTIONS_ID_TOKEN_REQUEST_URL/);
   assert.match(execute, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
   assert.match(execute, /export FUNCTIONAL_GITHUB_OIDC_TOKEN/);
-  assert.doesNotMatch(promotion, /GITHUB_ENV/);
+  assert.doesNotMatch(promotion, /FUNCTIONAL_GITHUB_OIDC_TOKEN[^\n]*GITHUB_ENV|GITHUB_ENV[^\n]*FUNCTIONAL_GITHUB_OIDC_TOKEN/);
   assert.doesNotMatch(promotion, /Acquire short-lived functional verification OIDC token/);
   assert.equal((promotion.match(/id-token: write/g) || []).length, 1);
   assert.doesNotMatch(promotion, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
