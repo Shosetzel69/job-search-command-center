@@ -14,11 +14,11 @@ on:
         required: true
         type: string
       execution_mode:
-        description: Runtime execution policy; test-full is an explicit TEST-only manual Full Search
+        description: Runtime execution policy; manual-full is explicit DEV/TEST UI Full Search; test-full remains TEST compatibility
         required: false
         default: policy
         type: choice
-        options: [policy, test-full]
+        options: [policy, manual-full, test-full]
 
 permissions:
   contents: write
@@ -37,6 +37,7 @@ jobs:
       SEARCH_MODE: ${{ vars.SEARCH_MODE }}
       SOURCE_REPOSITORY: ${{ vars.SOURCE_REPOSITORY }}
       EXECUTION_MODE: ${{ inputs.execution_mode || 'policy' }}
+      RUN_TRIGGER_INPUT: ${{ inputs.run_trigger || 'manual-ui' }}
     steps:
       - name: Validate runtime identity
         shell: bash
@@ -46,11 +47,19 @@ jobs:
           test -n "$APP_ENV" || { echo "APP_ENV is required" >&2; exit 1; }
           test -n "$SEARCH_MODE" || { echo "SEARCH_MODE is required" >&2; exit 1; }
           test -n "$SOURCE_REPOSITORY" || { echo "SOURCE_REPOSITORY is required" >&2; exit 1; }
-          case "$EXECUTION_MODE" in policy|test-full) ;; *) echo "Unsupported execution_mode: $EXECUTION_MODE" >&2; exit 1 ;; esac
+          case "$EXECUTION_MODE" in policy|manual-full|test-full) ;; *) echo "Unsupported execution_mode: $EXECUTION_MODE" >&2; exit 1 ;; esac
           if [ "$EXECUTION_MODE" = "test-full" ]; then
             test "$APP_ENV" = "test" || { echo "test-full execution is TEST-only" >&2; exit 1; }
             test "$SEARCH_MODE" = "smoke" || { echo "test-full requires TEST SEARCH_MODE=smoke" >&2; exit 1; }
-            test "${{ inputs.run_trigger || 'manual-ui' }}" = "manual-ui" || { echo "test-full requires manual-ui run_trigger" >&2; exit 1; }
+            test "$RUN_TRIGGER_INPUT" = "manual-ui" || { echo "test-full requires manual-ui run_trigger" >&2; exit 1; }
+          fi
+          if [ "$EXECUTION_MODE" = "manual-full" ]; then
+            test "$RUN_TRIGGER_INPUT" = "manual-ui" || { echo "manual-full requires manual-ui run_trigger" >&2; exit 1; }
+            case "$APP_ENV" in
+              dev) test "$SEARCH_MODE" = "disabled" || { echo "DEV manual-full requires SEARCH_MODE=disabled" >&2; exit 1; } ;;
+              test) test "$SEARCH_MODE" = "smoke" || { echo "TEST manual-full requires SEARCH_MODE=smoke" >&2; exit 1; } ;;
+              *) echo "manual-full is DEV/TEST-only" >&2; exit 1 ;;
+            esac
           fi
           case "$APP_ENV" in
             dev)
@@ -69,13 +78,13 @@ jobs:
           esac
 
       - name: Guard disabled search policy
-        if: ${{ vars.SEARCH_MODE == 'disabled' }}
+        if: ${{ vars.SEARCH_MODE == 'disabled' && inputs.execution_mode != 'manual-full' }}
         run: |
           echo "Full Search is disabled for this runtime. No search execution occurred."
           exit 1
 
       - name: Check out runtime repository without persisted credentials
-        if: ${{ vars.SEARCH_MODE != 'disabled' }}
+        if: ${{ vars.SEARCH_MODE != 'disabled' || inputs.execution_mode == 'manual-full' }}
         uses: actions/checkout@v4
         with:
           path: runtime
@@ -83,7 +92,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out exact source commit read-only
-        if: ${{ vars.SEARCH_MODE != 'disabled' }}
+        if: ${{ vars.SEARCH_MODE != 'disabled' || inputs.execution_mode == 'manual-full' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.SOURCE_REPOSITORY }}
@@ -94,7 +103,7 @@ jobs:
           fetch-depth: 1
 
       - name: Check out trusted control-plane baseline read-only
-        if: ${{ vars.SEARCH_MODE != 'disabled' }}
+        if: ${{ vars.SEARCH_MODE != 'disabled' || inputs.execution_mode == 'manual-full' }}
         uses: actions/checkout@v4
         with:
           repository: ${{ vars.SOURCE_REPOSITORY }}
@@ -105,7 +114,7 @@ jobs:
           fetch-depth: 0
 
       - name: Verify immutable source and trusted ancestry
-        if: ${{ vars.SEARCH_MODE != 'disabled' }}
+        if: ${{ vars.SEARCH_MODE != 'disabled' || inputs.execution_mode == 'manual-full' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -118,12 +127,12 @@ jobs:
           }
 
       - name: TEST smoke boundary
-        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && (inputs.execution_mode || 'policy') != 'test-full' }}
+        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && (inputs.execution_mode || 'policy') != 'test-full' && inputs.execution_mode != 'manual-full' }}
         run: |
           echo "TEST smoke policy verified immutable source checkout only. Full Search was not executed."
 
-      - name: Prepare controlled TEST full-search workspace
-        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+      - name: Prepare controlled non-PROD full-search workspace
+        if: ${{ vars.APP_ENV != 'prod' && (inputs.execution_mode == 'manual-full' || inputs.execution_mode == 'test-full') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -141,16 +150,16 @@ jobs:
             search-source/scripts/web_browser.py \
             search-source/scripts/web_transport.py
 
-      - name: Install TEST browser fallback
-        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+      - name: Install non-PROD browser fallback
+        if: ${{ vars.APP_ENV != 'prod' && (inputs.execution_mode == 'manual-full' || inputs.execution_mode == 'test-full') }}
         working-directory: search-source
         run: |
           python3 -m pip install --disable-pip-version-check -r requirements-search.txt
           python3 -m playwright install --with-deps chromium
 
-      - name: Collect normalize filter and score in controlled TEST
+      - name: Collect normalize filter and score in controlled non-PROD
         id: test_search
-        if: ${{ vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+        if: ${{ vars.APP_ENV != 'prod' && (inputs.execution_mode == 'manual-full' || inputs.execution_mode == 'test-full') }}
         continue-on-error: true
         working-directory: search-source
         env:
@@ -162,12 +171,12 @@ jobs:
         run: python3 scripts/job_search_runner.py
 
       - name: Validate generated TEST JSON contract
-        if: ${{ always() && vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+        if: ${{ always() && vars.APP_ENV != 'prod' && (inputs.execution_mode == 'manual-full' || inputs.execution_mode == 'test-full') }}
         working-directory: search-source
         run: python3 scripts/job_search_runner.py --validate-only
 
-      - name: Stage controlled TEST result files
-        if: ${{ always() && vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+      - name: Stage controlled non-PROD result files
+        if: ${{ always() && vars.APP_ENV != 'prod' && (inputs.execution_mode == 'manual-full' || inputs.execution_mode == 'test-full') }}
         shell: bash
         run: |
           set -euo pipefail
@@ -176,8 +185,8 @@ jobs:
             cp "search-source/data/$file" "runtime/data/$file"
           done
 
-      - name: Publish controlled TEST results safely
-        if: ${{ always() && vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' }}
+      - name: Publish controlled non-PROD results safely
+        if: ${{ always() && vars.APP_ENV != 'prod' && (inputs.execution_mode == 'manual-full' || inputs.execution_mode == 'test-full') }}
         working-directory: runtime
         env:
           GITHUB_TOKEN: ${{ github.token }}
@@ -189,10 +198,10 @@ jobs:
           git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
           bash ../control-plane/scripts/publish_results.sh
 
-      - name: Mark total controlled TEST collection failure
-        if: ${{ always() && vars.APP_ENV == 'test' && vars.SEARCH_MODE == 'smoke' && inputs.execution_mode == 'test-full' && steps.test_search.outcome != 'success' }}
+      - name: Mark total controlled non-PROD collection failure
+        if: ${{ always() && vars.APP_ENV != 'prod' && (inputs.execution_mode == 'manual-full' || inputs.execution_mode == 'test-full') && steps.test_search.outcome != 'success' }}
         run: |
-          echo "Controlled TEST Full Search failed. TEST runtime status was persisted."
+          echo "Controlled non-PROD Full Search failed. non-PROD runtime status was persisted."
           exit 1
 
       - name: Prepare PROD search workspace from runtime snapshot
