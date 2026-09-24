@@ -72,7 +72,7 @@ Target ADR-005:
 
 La autentificare reusita, frontend-ul poate retine local numai adresa de email autorizata ca `login_hint` non-secret pentru Google Identity Services. Google ID token nu este persistat: ramane exclusiv in memoria paginii. La reload, frontend-ul poate cere Google Identity Services sa emita un credential nou pentru contul cunoscut; credentialul este revalidat integral prin `POST /auth/session`. Logout explicit dezactiveaza auto-select pentru a evita reautentificarea imediata.
 
-CI/CD are o identitate separata de utilizator. Workflow-urile canonice de deploy obtin un GitHub Actions OIDC token short-lived cu audience `jscc-functional-verification`. Worker-ul valideaza issuer-ul GitHub Actions, audience, repository identity, GitHub Environment, `workflow_ref` si timpul tokenului. Aceasta identitate poate citi numai setul protejat `GET /data/*` necesar reconciliation/functional verification; nu poate autentifica `/auth/session` si nu poate autoriza endpoint-uri de comanda sau mutatie.
+CI/CD are o identitate separata de utilizator. Workflow-urile canonice de deploy obtin un GitHub Actions OIDC token short-lived cu audience `jscc-functional-verification`. Worker-ul valideaza issuer-ul GitHub Actions, audience, repository identity, GitHub Environment, `workflow_ref` si timpul tokenului. Aceasta identitate poate citi numai `GET /data/sources.json`, `GET /data/source-categories.json` si `GET /data/nomenclatures.json`, necesare reconciliation/functional verification; nu poate autentifica `/auth/session` si nu poate autoriza endpoint-uri de comanda sau mutatie.
 
 ## Endpoint-uri publice
 
