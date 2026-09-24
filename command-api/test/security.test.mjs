@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 
-import { INTERNAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
+import { CANDIDATE_MANAGED_DATA_FILES, INTERNAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import commandApi, { authorizeGithubOidcPayload, authorizeGooglePayload, protectedRuntimePath, readProtectedRuntimeData, validateUserConfigPatch, verifyGithubActionsOidcToken } from '../src/index.js';
 import secureEntry, { fullSearchAllowed } from '../src/secure-entry.js';
 import { readFileSync } from 'node:fs';
@@ -128,6 +128,72 @@ test('GitHub Actions OIDC is rejected on mutation endpoints before Google verifi
   assert.equal(response.status, 403);
   const body = await response.json();
   assert.match(body.error, /OIDC is not allowed/i);
+});
+
+
+test('route-level GitHub OIDC access is limited to exactly candidate-managed reconciliation files', async () => {
+  const { publicKey, privateKey } = await generateKeyPair('RS256');
+  const jwk = await exportJWK(publicKey);
+  jwk.kid = 'route-functional-test';
+  jwk.alg = 'RS256';
+  const now = Math.floor(Date.now() / 1000);
+  const token = await new SignJWT(validOidcClaims({
+    iat:now - 10,
+    nbf:now - 10,
+    exp:now + 300,
+  }))
+    .setProtectedHeader({ alg:'RS256', kid:'route-functional-test' })
+    .sign(privateKey);
+
+  const runtimePayloads = {
+    'sources.json': { schema_version:'1.0', count:0, sources:[] },
+    'source-categories.json': { schema_version:'1.0', count:0, categories:[] },
+    'nomenclatures.json': { schema_version:'1.0', domains:{} },
+  };
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async url => {
+    const value = String(url);
+    if (value === 'https://token.actions.githubusercontent.com/.well-known/jwks') {
+      return new Response(JSON.stringify({ keys:[jwk] }), {
+        status:200,
+        headers:{ 'content-type':'application/json', 'cache-control':'max-age=60' },
+      });
+    }
+    const match = value.match(/\/contents\/data\/([^?]+)\?ref=main$/);
+    if (match) {
+      const file = decodeURIComponent(match[1]);
+      const payload = runtimePayloads[file];
+      assert.ok(payload, `unexpected runtime read for ${file}`);
+      return new Response(JSON.stringify({
+        sha:`blob-${file}`,
+        content:Buffer.from(JSON.stringify(payload), 'utf8').toString('base64'),
+      }), { status:200, headers:{ 'content-type':'application/json' } });
+    }
+    throw new Error(`unexpected fetch: ${value}`);
+  };
+
+  try {
+    const runtimeEnv = { ...env, GITHUB_TOKEN:'test-runtime-token' };
+    for (const file of CANDIDATE_MANAGED_DATA_FILES) {
+      const response = await secureEntry.fetch(new Request(`https://app.example.test/data/${file}`, {
+        headers:{ Authorization:`Bearer ${token}` },
+      }), runtimeEnv);
+      assert.equal(response.status, 200, `OIDC should read ${file}`);
+    }
+
+    const blocked = PROTECTED_DATA_FILES.filter(file => !CANDIDATE_MANAGED_DATA_FILES.includes(file));
+    assert.ok(blocked.length > 0);
+    for (const file of blocked) {
+      const response = await secureEntry.fetch(new Request(`https://app.example.test/data/${file}`, {
+        headers:{ Authorization:`Bearer ${token}` },
+      }), runtimeEnv);
+      assert.equal(response.status, 403, `OIDC must not read ${file}`);
+      const body = await response.json();
+      assert.match(body.error, /not authorized for this protected data file/i);
+    }
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
 
 test('invalid configuration payloads fail closed at validation boundary', () => {
