@@ -402,16 +402,23 @@ test('DEV/TEST OIDC capability is limited to bootstrap/deploy and token stays in
 });
 
 
-test('controlled TEST Full Search is explicit manual-only and keeps TEST smoke identity', () => {
+test('controlled non-PROD Full Search supports UI manual-full and TEST compatibility', () => {
   const runtime = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
   const control = readFileSync(resolve(ROOT, '.github/workflows/test-full-search.yml'), 'utf8');
-  assert.match(runtime, /execution_mode:/);
+
+  assert.match(runtime, /options: \[policy, manual-full, test-full\]/);
+  assert.match(runtime, /manual-full requires manual-ui run_trigger/);
+  assert.match(runtime, /DEV manual-full requires SEARCH_MODE=disabled/);
+  assert.match(runtime, /TEST manual-full requires SEARCH_MODE=smoke/);
+  assert.match(runtime, /manual-full is DEV\/TEST-only/);
+  assert.match(runtime, /SEARCH_MODE == 'disabled' && inputs\.execution_mode != 'manual-full'/);
+  assert.match(runtime, /Collect normalize filter and score in controlled non-PROD/);
+  assert.match(runtime, /Publish controlled non-PROD results safely/);
+
   assert.match(runtime, /test-full execution is TEST-only/);
   assert.match(runtime, /test-full requires TEST SEARCH_MODE=smoke/);
   assert.match(runtime, /test-full requires manual-ui run_trigger/);
-  assert.match(runtime, /Collect normalize filter and score in controlled TEST/);
-  assert.match(runtime, /Publish controlled TEST results safely/);
-  assert.doesNotMatch(runtime, /APP_ENV == 'dev'.*test-full/);
+
   assert.match(control, /environment: test/);
   assert.match(control, /job-search-runtime-test/);
   assert.match(control, /\.environment == "test" and \.source_sha == \$sha and \.search_mode == "smoke"/);
