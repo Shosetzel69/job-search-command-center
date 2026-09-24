@@ -90,6 +90,27 @@ test('workflow dispatch transports exact immutable source_sha', async () => {
   assert.equal(body.ref, 'runtime-ref');
   assert.equal(body.inputs.run_trigger, 'manual-ui');
   assert.equal(body.inputs.source_sha, runtime.sourceSha);
+  assert.equal(body.inputs.execution_mode, 'policy');
+});
+
+test('workflow dispatch transports explicit manual-full mode', async () => {
+  let body = null;
+  await withFetch(async (_url, init) => {
+    body = JSON.parse(init.body);
+    return new Response(null, { status:204 });
+  }, async () => {
+    await dispatchWorkflow(env, runtime, 'manual-ui', false, 'manual-full');
+  });
+  assert.equal(body.inputs.run_trigger, 'manual-ui');
+  assert.equal(body.inputs.source_sha, runtime.sourceSha);
+  assert.equal(body.inputs.execution_mode, 'manual-full');
+});
+
+test('workflow dispatch rejects unknown execution mode', async () => {
+  await assert.rejects(
+    () => dispatchWorkflow(env, runtime, 'manual-ui', false, 'unsafe-full'),
+    error => error?.status === 400 && /execution mode/i.test(error.message),
+  );
 });
 
 
