@@ -1,7 +1,7 @@
 # Command API
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-24`
+Ultima actualizare: `2026-09-25`
 
 ## Scop
 
@@ -31,7 +31,8 @@ PUT /config
 POST /commands/run
 -> valideaza configuratia
 -> blocheaza daca exista run activ
--> workflow_dispatch(run_trigger=manual-ui, source_sha=SOURCE_SHA)
+-> DEV/TEST: workflow_dispatch(run_trigger=manual-ui, source_sha=SOURCE_SHA, execution_mode=manual-full)
+-> PROD: workflow_dispatch(run_trigger=manual-ui, source_sha=SOURCE_SHA, execution_mode=policy)
 ```
 
 Target ADR-005:
@@ -130,7 +131,7 @@ Reguli geografice:
 
 ### `POST /commands/run`
 
-**AS-IS:** porneste exact un full search manual dupa validarea configuratiei. Run activ -> 409.
+**AS-IS:** porneste exact un Full Search manual dupa validarea configuratiei. DEV si TEST folosesc explicit `execution_mode=manual-full` peste rolurile canonice `disabled` / `smoke`; PROD pastreaza `policy/live`. Run activ -> 409.
 
 **Target ADR-005:** endpoint-ul de manual collection este ADMIN-only si global, nu profile-owned. Run admission garanteaza maximum o executie grea globala. USER nu primeste acest drept.
 
