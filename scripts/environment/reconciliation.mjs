@@ -659,17 +659,17 @@ function payloadCount(path, payload) {
 }
 
 export async function verifyProtectedFunctionalVisibility(runtime, reconciliation, {
-  googleIdToken,
+  oidcToken,
   fetchFn = fetch,
 } = {}) {
-  const token = String(googleIdToken || '').trim();
+  const token = String(oidcToken || '').trim();
   if (!token) {
     const proof = {
       status: 'FAIL',
       method: 'deployed-protected-data',
       origin: runtime.frontendOrigin,
       files: {},
-      reason: 'FUNCTIONAL_GOOGLE_ID_TOKEN is required',
+      reason: 'FUNCTIONAL_GITHUB_OIDC_TOKEN is required',
     };
     throw new FunctionalVisibilityError(proof.reason, proof);
   }

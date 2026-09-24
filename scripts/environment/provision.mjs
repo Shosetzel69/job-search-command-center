@@ -300,12 +300,12 @@ function requiredLiveReconciliationInputs() {
   if (!SHA_RE.test(controlPlaneSha)) throw new Error('CONTROL_PLANE_SHA must be a full immutable commit SHA');
   const candidateWorkspace = String(process.env.CANDIDATE_DATA_WORKSPACE || '').trim();
   if (!candidateWorkspace) throw new Error('CANDIDATE_DATA_WORKSPACE is required for live deployment');
-  const functionalGoogleIdToken = String(process.env.FUNCTIONAL_GOOGLE_ID_TOKEN || '').trim();
-  if (!functionalGoogleIdToken) throw new Error('FUNCTIONAL_GOOGLE_ID_TOKEN is required for deployed protected functional verification');
+  const functionalGithubOidcToken = String(process.env.FUNCTIONAL_GITHUB_OIDC_TOKEN || '').trim();
+  if (!functionalGithubOidcToken) throw new Error('FUNCTIONAL_GITHUB_OIDC_TOKEN is required for deployed protected functional verification');
   return {
     controlPlaneSha,
     candidateWorkspace,
-    functionalGoogleIdToken,
+    functionalGithubOidcToken,
     evidencePath: String(process.env.RECONCILIATION_EVIDENCE_PATH || '').trim() || null,
   };
 }
@@ -354,7 +354,7 @@ export async function deployCandidateWithReconciliation(runtime, {
       throw error;
     }
     functionalVisibility = await verifyProtectedFunctionalVisibility(runtime, reconciliation, {
-      googleIdToken: inputs.functionalGoogleIdToken,
+      oidcToken: inputs.functionalGithubOidcToken,
     });
     acceptance = acceptRuntimeReconciliation(runtime, reconciliation, {
       gitEnv,

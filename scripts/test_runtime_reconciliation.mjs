@@ -337,7 +337,7 @@ test('protected functional visibility proves managed files through deployed Work
   const payloads = parsedPayloads(contents);
   const seen = [];
   const proof = await verifyProtectedFunctionalVisibility(runtime(), result, {
-    googleIdToken:'test-google-id-token',
+    oidcToken:'test-github-oidc-token',
     fetchFn: async (url, init) => {
       const path = `data/${decodeURIComponent(new URL(url).pathname.slice('/data/'.length))}`;
       seen.push({
@@ -354,7 +354,7 @@ test('protected functional visibility proves managed files through deployed Work
   assert.equal(proof.method, 'deployed-protected-data');
   assert.deepEqual(Object.keys(proof.files).sort(), [...CANDIDATE_MANAGED_PATHS].sort());
   assert.ok(seen.every(item => item.url.startsWith('https://dev.example.test/data/')));
-  assert.ok(seen.every(item => item.authorization === 'Bearer test-google-id-token'));
+  assert.ok(seen.every(item => item.authorization === 'Bearer test-github-oidc-token'));
   for (const path of CANDIDATE_MANAGED_PATHS) {
     assert.equal(proof.files[path].http_status, 200);
     assert.equal(proof.files[path].visible_semantic_digest, result.files[path].functional_expected_digest);
@@ -369,7 +369,7 @@ test('deployed functional visibility mismatch fails before acceptance with struc
   payloads['data/sources.json'].sources[0].name = 'Tampered';
   await assert.rejects(
     () => verifyProtectedFunctionalVisibility(runtime(), result, {
-      googleIdToken:'test-google-id-token',
+      oidcToken:'test-github-oidc-token',
       fetchFn: async url => {
         const path = `data/${decodeURIComponent(new URL(url).pathname.slice('/data/'.length))}`;
         return new Response(JSON.stringify(payloads[path]), { status:200 });
@@ -392,16 +392,16 @@ test('deployed functional visibility fails closed without auth token or on prote
 
   await assert.rejects(
     () => verifyProtectedFunctionalVisibility(runtime(), result, {
-      googleIdToken:'',
+      oidcToken:'',
       fetchFn: async () => new Response('{}', { status:200 }),
     }),
     error => error instanceof FunctionalVisibilityError
-      && /FUNCTIONAL_GOOGLE_ID_TOKEN is required/.test(error.proof.reason),
+      && /FUNCTIONAL_GITHUB_OIDC_TOKEN is required/.test(error.proof.reason),
   );
 
   await assert.rejects(
     () => verifyProtectedFunctionalVisibility(runtime(), result, {
-      googleIdToken:'test-google-id-token',
+      oidcToken:'test-github-oidc-token',
       fetchFn: async () => new Response(JSON.stringify({ error:'GitHub token is not configured' }), { status:503 }),
     }),
     error => error instanceof FunctionalVisibilityError
