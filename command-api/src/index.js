@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { activeCodes, assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
-import { PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
+import { CANDIDATE_MANAGED_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import {
   applySourceAction,
   assertUniqueCategoryLabel,
@@ -134,11 +134,14 @@ function authorizeGooglePayload(payload, env) {
   return payload;
 }
 
-async function authenticate(request, env, { allowGithubOidc = false } = {}) {
+async function authenticate(request, env, { allowGithubOidc = false, oidcDataFile = null } = {}) {
   const token = bearerToken(request);
   if (isGithubActionsOidcToken(token)) {
     if (!allowGithubOidc) {
       throw Object.assign(new Error('GitHub Actions OIDC is not allowed for this endpoint'), { status: 403 });
+    }
+    if (!oidcDataFile || !CANDIDATE_MANAGED_DATA_FILES.includes(oidcDataFile)) {
+      throw Object.assign(new Error('GitHub Actions OIDC is not authorized for this protected data file'), { status: 403 });
     }
     return verifyGithubActionsOidcToken(token, env);
   }
@@ -465,11 +468,11 @@ export default {
       }
 
       if (request.method === 'GET' && url.pathname.startsWith('/data/')) {
-        await authenticate(request, env, { allowGithubOidc:true });
         const file = decodeURIComponent(url.pathname.slice('/data/'.length));
         if (!file || file.includes('/') || !PROTECTED_DATA_FILES.includes(file)) {
           return json({ error:'Not found' }, 404, cors);
         }
+        await authenticate(request, env, { allowGithubOidc:true, oidcDataFile:file });
         return json(await readProtectedRuntimeData(env, file), 200, cors);
       }
 
