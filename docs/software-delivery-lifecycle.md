@@ -15,6 +15,16 @@ The process must answer four questions at any time:
 3. What exact code is running in PROD?
 4. How do we return to the previous known-good PROD state?
 
+## 1.1 Functional verification identity
+
+Deployment functional verification is machine-to-machine and must not depend on a manually refreshed user credential.
+
+- browser/user authentication remains Google Identity Services;
+- DEV/TEST/PROD deployment workflows request a short-lived GitHub Actions OIDC token at run time;
+- the OIDC audience is `jscc-functional-verification`;
+- Worker authorization is restricted to the protected read-only `/data/*` evidence surface and exact repository/environment/workflow claims;
+- no GitHub Environment secret containing a Google user ID token is required for release progression.
+
 ## 2. Canonical flow
 
 ```text
