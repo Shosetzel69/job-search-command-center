@@ -223,7 +223,7 @@ Selectiile concrete curente din `data/search-config.json` sunt runtime data si p
 ### 6.3 Restrictii
 
 - catalogul Source Registry poate contine surse fara ruta operationala; activarea nu echivaleaza automat cu validarea unui connector;
-- #49 este parcat si exclus din Package 2 pana la o noua decizie explicita;
+- #49 este reactivat prin decizia ownerului din 2026-09-25; Full Search trebuie sa traverseze toate sursele active eligibile operational;
 - arhivarea joburilor este locala;
 - aplicarile nu sunt editabile server-side;
 - fara baza de date activa;
@@ -246,7 +246,7 @@ Selectiile concrete curente din `data/search-config.json` sunt runtime data si p
 
 ## 7. Clarificare #49
 
-Issue #49 nu face parte din baseline-ul de stabilizare si este exclus explicit din Package 2 prin decizia ownerului. Nu exista cerinta curenta ca toate sursele active sa fie colectate egal sau ca un Full Search sa dovedeasca acoperire completa a catalogului. Connectorii individuali pot fi implementati si validati separat, apoi activati controlat.
+Decizia ownerului din 2026-09-25 reactiveaza #49. Runner-ul pastreaza strategia `all active sources equally` pentru toate sursele eligibile operational. Excluderile de politica, credentialele lipsa, rutele nevalidate si providerii amanati raman fail-closed si sunt raportati explicit; nu se introduc bypass-uri pentru a obtine acoperire artificiala.
 
 ## 8. Stare stabilizare
 
