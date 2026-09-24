@@ -136,6 +136,10 @@ jobs:
   live-environment:
     if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') }}
     needs: validate-request
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
     runs-on: ubuntu-latest
     timeout-minutes: 20
     environment: ${{ inputs.environment }}
@@ -245,6 +249,23 @@ jobs:
         if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
         run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
+      - name: Acquire short-lived functional verification OIDC token
+        if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
+        shell: bash
+        env:
+          OIDC_AUDIENCE: jscc-functional-verification
+        run: |
+          set -euo pipefail
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || { echo "GitHub OIDC request URL is unavailable" >&2; exit 1; }
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || { echo "GitHub OIDC request token is unavailable" >&2; exit 1; }
+          token_json="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          token="$(jq -r '.value // empty' <<<"$token_json")"
+          test -n "$token" || { echo "GitHub OIDC provider returned no token" >&2; exit 1; }
+          echo "::add-mask::$token"
+          printf 'FUNCTIONAL_GITHUB_OIDC_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
       - name: Execute selected live environment action
         id: live-action
         working-directory: control-plane
@@ -267,7 +288,6 @@ jobs:
           TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
           DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
           TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
-          FUNCTIONAL_GOOGLE_ID_TOKEN: ${{ secrets.FUNCTIONAL_GOOGLE_ID_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
