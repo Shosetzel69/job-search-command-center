@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adminSourceSummary, categoryDuplicate, sortCategories, sourceGovernanceActions, sourcePolicyExcluded } from '../src/admin-model.mjs';
+import { adminSourceSummary, approvalSourceRows, categoryDuplicate, sortCategories, sortSources, sourceGovernanceActions, sourceNeedsGovernanceAttention, sourcePolicyExcluded } from '../src/admin-model.mjs';
 
 test('admin source summary separates active, validation and problem states', () => {
   const summary = adminSourceSummary([
@@ -10,7 +10,7 @@ test('admin source summary separates active, validation and problem states', () 
     { active:false, validationStatus:'requires_connector', approvalStatus:'pending' },
     { active:false, validationStatus:'validated', approvalStatus:'approved' },
   ]);
-  assert.deepEqual(summary, { active:1, validating:2, problems:1, approvedInactive:1 });
+  assert.deepEqual(summary, { total:5, active:1, inactive:4, pendingApproval:3, validated:2, validating:2, problems:1, approvedInactive:1, policyExcluded:0 });
 });
 
 test('category duplicate detection is trim/case insensitive', () => {
@@ -40,5 +40,24 @@ test('Monster is displayed as policy excluded and cannot expose activation actio
   const monster = { name:'Monster', active:true, validationStatus:'validated', approvalStatus:'approved' };
   assert.equal(sourcePolicyExcluded(monster), true);
   assert.deepEqual(sourceGovernanceActions(monster), []);
-  assert.deepEqual(adminSourceSummary([monster]), { active:0, validating:0, problems:0, approvedInactive:1 });
+  assert.deepEqual(adminSourceSummary([monster]), { total:1, active:0, inactive:1, pendingApproval:0, validated:1, validating:0, problems:0, approvedInactive:1, policyExcluded:1 });
+});
+
+
+test('sources use one canonical alphabetical ordering', () => {
+  const rows = sortSources([{name:'Zulu'},{name:'Alpha'},{name:'beta'}]);
+  assert.deepEqual(rows.map(row => row.name), ['Alpha','beta','Zulu']);
+});
+
+test('approval default exposes only governance attention and all mode remains inspectable', () => {
+  const rows = [
+    {name:'Approved active',active:true,validationStatus:'validated',approvalStatus:'approved'},
+    {name:'Pending approval',active:false,validationStatus:'validated',approvalStatus:'pending'},
+    {name:'Needs connector',active:false,validationStatus:'requires_connector',approvalStatus:'pending'},
+    {name:'Monster',active:false,validationStatus:'validated',approvalStatus:'approved'},
+  ];
+  assert.equal(sourceNeedsGovernanceAttention(rows[0]), false);
+  assert.equal(sourceNeedsGovernanceAttention(rows[1]), true);
+  assert.deepEqual(approvalSourceRows(rows).map(row => row.name), ['Needs connector','Pending approval']);
+  assert.deepEqual(approvalSourceRows(rows,{mode:'all'}).map(row => row.name), ['Approved active','Monster','Needs connector','Pending approval']);
 });
