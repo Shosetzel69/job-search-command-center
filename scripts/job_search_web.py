@@ -250,6 +250,8 @@ def candidate(link, page_url, roots, profile=None):
         return None
     internal = any(host == root or host.endswith("." + root) for root in roots)
     ats = any(host == root or host.endswith("." + root) for root in ATS_HOSTS)
+    if profile and not internal:
+        return None
     if not internal and not ats:
         return None
     text = link.get("text") or ""
