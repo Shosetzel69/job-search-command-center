@@ -375,14 +375,27 @@ test('functional visibility uses deployed protected data rather than direct cont
   assert.doesNotMatch(reconciliation, /readRuntimeJson/);
 });
 
-test('live DEV/TEST workflow acquires short-lived GitHub OIDC for functional verification', () => {
+test('DEV/TEST OIDC capability is limited to bootstrap/deploy and token stays inside execution step', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /live-environment:[\s\S]*?id-token: write/);
-  assert.match(workflow, /Acquire short-lived functional verification OIDC token/);
-  assert.match(workflow, /jscc-functional-verification/);
-  assert.match(workflow, /ACTIONS_ID_TOKEN_REQUEST_URL/);
-  assert.match(workflow, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
-  assert.match(workflow, /FUNCTIONAL_GITHUB_OIDC_TOKEN/);
+  const readonly = workflow.match(/  live-readonly:[\s\S]*?(?=\n  live-environment:)/)?.[0] || '';
+  const oidcJob = workflow.match(/  live-environment:[\s\S]*$/)?.[0] || '';
+  const execute = oidcJob.match(/- name: Execute selected live environment action[\s\S]*?- name: Upload reconciliation trace/)?.[0] || '';
+
+  assert.match(readonly, /inputs\.action == 'validate' \|\| inputs\.action == 'status'/);
+  assert.doesNotMatch(readonly, /id-token: write/);
+  assert.doesNotMatch(readonly, /ACTIONS_ID_TOKEN_REQUEST_/);
+
+  assert.match(oidcJob, /inputs\.action == 'bootstrap' \|\| inputs\.action == 'deploy'/);
+  assert.match(oidcJob, /id-token: write/);
+  assert.match(execute, /jscc-functional-verification/);
+  assert.match(execute, /ACTIONS_ID_TOKEN_REQUEST_URL/);
+  assert.match(execute, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
+  assert.match(execute, /FUNCTIONAL_GITHUB_OIDC_TOKEN/);
+  assert.match(execute, /export FUNCTIONAL_GITHUB_OIDC_TOKEN/);
+  assert.doesNotMatch(workflow, /GITHUB_ENV/);
+  assert.doesNotMatch(workflow, /Acquire short-lived functional verification OIDC token/);
+  assert.equal((workflow.match(/id-token: write/g) || []).length, 1);
+
   assert.doesNotMatch(workflow, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
   assert.doesNotMatch(workflow, /secrets\.FUNCTIONAL_GOOGLE_ID_TOKEN/);
   assert.doesNotMatch(workflow, /- name: Configure runtime and Worker secrets with separated roles/);
