@@ -185,6 +185,110 @@ class WebTests(unittest.TestCase):
         self.assertTrue(all(item["status"] == "completed" for item in plan))
 
 
+    def test_profile_registry_contains_exactly_the_seven_authorized_sources(self):
+        self.assertEqual(
+            set(web.WEB_PROFILES),
+            {
+                "Hipo",
+                "Toptal",
+                "Crossover",
+                "Vector Synergy",
+                "Worldline",
+                "Source Group International",
+                "Prohuman",
+            },
+        )
+        self.assertEqual(web.MAX_PAGES, 12)
+        self.assertEqual(web.MAX_SECONDS, 45)
+
+    def test_each_authorized_profile_uses_bounded_entrypoint_and_detail_paths(self):
+        cases = {
+            "Hipo": ("https://www.hipo.ro/", "https://www.hipo.ro/locuri-de-munca/", "/locuri-de-munca/project-manager-123"),
+            "Toptal": ("https://www.toptal.com/", "https://www.toptal.com/freelance-jobs", "/freelance-jobs/project-manager"),
+            "Crossover": ("https://www.crossover.com/jobs", "https://www.crossover.com/jobs", "/jobs/project-manager-123"),
+            "Vector Synergy": ("https://vectorsynergy.com/careers/", "https://vectorsynergy.com/job-board", "/job-board/project-manager-123"),
+            "Worldline": ("https://jobs.worldline.com/", "https://jobs.worldline.com/", "/job/project-manager-123"),
+            "Source Group International": (
+                "https://www.sourcegroupinternational.com/jobs/",
+                "https://www.sourcegroupinternational.com/jobs/",
+                "/jobs/project-manager-123",
+            ),
+            "Prohuman": ("https://prohumanhr.ro/job-uri/", "https://prohumanhr.ro/job-uri/", "/job-uri/project-manager-123"),
+        }
+        for index, (name, (canonical, entrypoint, detail_path)) in enumerate(cases.items()):
+            with self.subTest(name=name):
+                detail_url = entrypoint.split("/", 3)[:3]
+                detail_url = "/".join(detail_url) + detail_path
+                source = {"name": name, "url": canonical, "id": f"profile-{index}"}
+                node = {**JOB, "identifier": f"{index}", "url": detail_url}
+                client = FakeClient({
+                    entrypoint: (
+                        f'<a href="{detail_path}">Project Manager</a>'
+                        '<a href="/careers/project-manager">Project Manager</a>'
+                    ),
+                    detail_url: html(node),
+                })
+                results, details = web.collect(source, {}, NOW, client)
+                records = [record for result in results if result.ok for record in result.records]
+                self.assertEqual(details["profile_name"], name)
+                self.assertEqual(details["profile_entrypoint"], entrypoint)
+                self.assertEqual(client.called[0], entrypoint)
+                self.assertIn(detail_url, client.called)
+                self.assertFalse(any("/careers/project-manager" in url for url in client.called))
+                self.assertEqual(len(records), 1)
+
+    def test_profile_path_roles_reject_irrelevant_and_apply_routes(self):
+        for name, profile in web.WEB_PROFILES.items():
+            with self.subTest(name=name):
+                start = profile["start_url"]
+                self.assertEqual(web.profile_path_role(profile, start), "list")
+                roots = {web.site_root(web.urlsplit(start).hostname)}
+                self.assertIsNone(
+                    web.candidate(
+                        {"url": "/careers/project-manager", "text": "Project Manager"},
+                        start,
+                        roots,
+                        profile,
+                    )
+                )
+        toptal = web.WEB_PROFILES["Toptal"]
+        self.assertEqual(
+            web.profile_path_role(toptal, "https://www.toptal.com/freelance-jobs/project-manager"),
+            "detail",
+        )
+        self.assertEqual(
+            web.profile_path_role(toptal, "https://www.toptal.com/freelance-jobs/apply"),
+            "denied",
+        )
+
+    def test_generic_non_profile_behavior_and_entrypoint_remain_unchanged(self):
+        source = {"name": "Generic Example", "url": "https://example.com/careers", "id": "generic"}
+        detail = "https://example.com/careers/project-manager"
+        client = FakeClient({
+            source["url"]: '<a href="/careers/project-manager">Project Manager</a>',
+            detail: html({**JOB, "url": detail, "identifier": "generic"}),
+        })
+        results, details = web.collect(source, {}, NOW, client)
+        self.assertEqual(client.called[0], source["url"])
+        self.assertIsNone(details["profile_name"])
+        self.assertIsNone(details["profile_entrypoint"])
+        self.assertTrue(any(result.ok and result.records for result in results))
+
+    def test_registry_repairs_only_expected_profile_entrypoints(self):
+        payload = json.loads((engine.DATA / "sources.json").read_text(encoding="utf-8"))
+        by_name = {item["name"]: item for item in payload["sources"]}
+        self.assertEqual(by_name["Worldline"]["url"], "https://jobs.worldline.com/")
+        self.assertEqual(by_name["Prohuman"]["url"], "https://prohumanhr.ro/job-uri/")
+        self.assertEqual(by_name["Hipo"]["url"], "https://www.hipo.ro/")
+        self.assertEqual(by_name["Toptal"]["url"], "https://www.toptal.com/")
+        self.assertEqual(by_name["Crossover"]["url"], "https://www.crossover.com/jobs")
+        self.assertEqual(by_name["Vector Synergy"]["url"], "https://vectorsynergy.com/careers/")
+        self.assertEqual(
+            by_name["Source Group International"]["url"],
+            "https://www.sourcegroupinternational.com/jobs/",
+        )
+
+
 class TransportTests(unittest.TestCase):
     def test_robots_wildcard_end_anchor_and_longest_allow(self):
         policy = transport.RobotsPolicy()
