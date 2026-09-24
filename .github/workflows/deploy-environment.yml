@@ -133,8 +133,61 @@ jobs:
             *) echo "Unsupported action" >&2; exit 1 ;;
           esac
 
+  live-readonly:
+    if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') && (inputs.action == 'validate' || inputs.action == 'status') }}
+    needs: validate-request
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: ${{ inputs.environment }}
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted control-plane from main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          path: control-plane
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Execute live read-only environment action
+        working-directory: control-plane
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          DEV_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'dev' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
+          TEST_CLOUDFLARE_ACCOUNT_ID: ${{ inputs.environment == 'test' && vars.CLOUDFLARE_ACCOUNT_ID || '' }}
+          DEV_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'dev' && secrets.CLOUDFLARE_TOKEN || '' }}
+          TEST_CLOUDFLARE_TOKEN: ${{ inputs.environment == 'test' && secrets.CLOUDFLARE_TOKEN || '' }}
+          DEV_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'dev' && 'bootstrap-not-required' || '' }}
+          TEST_GITHUB_BOOTSTRAP_TOKEN: ${{ inputs.environment == 'test' && 'bootstrap-not-required' || '' }}
+          DEV_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'dev' && secrets.GH_RUNTIME_TOKEN || '' }}
+          TEST_GITHUB_RUNTIME_TOKEN: ${{ inputs.environment == 'test' && secrets.GH_RUNTIME_TOKEN || '' }}
+          DEV_SOURCE_READ_TOKEN: ${{ inputs.environment == 'dev' && secrets.SOURCE_READ_TOKEN || '' }}
+          TEST_SOURCE_READ_TOKEN: ${{ inputs.environment == 'test' && secrets.SOURCE_READ_TOKEN || '' }}
+          DEV_ALLOWED_GOOGLE_SUB: ${{ inputs.environment == 'dev' && secrets.ALLOWED_GOOGLE_SUB || '' }}
+          TEST_ALLOWED_GOOGLE_SUB: ${{ inputs.environment == 'test' && secrets.ALLOWED_GOOGLE_SUB || '' }}
+          DEV_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'dev' && vars.GOOGLE_CLIENT_ID || '' }}
+          TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
+          DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
+          TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${{ inputs.action }}" in
+            validate) npm run env:validate -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
+            status) npm run env:status -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
+            *) echo "Read-only live job accepts only validate/status" >&2; exit 1 ;;
+          esac
+
   live-environment:
-    if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') }}
+    if: ${{ inputs.dry_run == false && (inputs.environment == 'dev' || inputs.environment == 'test') && (inputs.action == 'bootstrap' || inputs.action == 'deploy') }}
     needs: validate-request
     permissions:
       contents: read
@@ -249,23 +302,6 @@ jobs:
         if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
         run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
-      - name: Acquire short-lived functional verification OIDC token
-        if: ${{ inputs.action == 'bootstrap' || inputs.action == 'deploy' }}
-        shell: bash
-        env:
-          OIDC_AUDIENCE: jscc-functional-verification
-        run: |
-          set -euo pipefail
-          test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || { echo "GitHub OIDC request URL is unavailable" >&2; exit 1; }
-          test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || { echo "GitHub OIDC request token is unavailable" >&2; exit 1; }
-          token_json="$(curl --fail --silent --show-error \
-            --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
-          token="$(jq -r '.value // empty' <<<"$token_json")"
-          test -n "$token" || { echo "GitHub OIDC provider returned no token" >&2; exit 1; }
-          echo "::add-mask::$token"
-          printf 'FUNCTIONAL_GITHUB_OIDC_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
-
       - name: Execute selected live environment action
         id: live-action
         working-directory: control-plane
@@ -288,9 +324,19 @@ jobs:
           TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
           DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
           TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
+          OIDC_AUDIENCE: jscc-functional-verification
         shell: bash
         run: |
           set -euo pipefail
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || { echo "GitHub OIDC request URL is unavailable" >&2; exit 1; }
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || { echo "GitHub OIDC request token is unavailable" >&2; exit 1; }
+          token_json="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          FUNCTIONAL_GITHUB_OIDC_TOKEN="$(jq -r '.value // empty' <<<"$token_json")"
+          test -n "$FUNCTIONAL_GITHUB_OIDC_TOKEN" || { echo "GitHub OIDC provider returned no token" >&2; exit 1; }
+          echo "::add-mask::$FUNCTIONAL_GITHUB_OIDC_TOKEN"
+          export FUNCTIONAL_GITHUB_OIDC_TOKEN
           if [ "${{ inputs.action }}" = "bootstrap" ] || [ "${{ inputs.action }}" = "deploy" ]; then
             mkdir -p "$GITHUB_WORKSPACE/promotion-output"
             export CONTROL_PLANE_SHA="$(git -C "$GITHUB_WORKSPACE/control-plane" rev-parse HEAD)"
@@ -298,13 +344,9 @@ jobs:
             export RECONCILIATION_EVIDENCE_PATH="$GITHUB_WORKSPACE/promotion-output/reconciliation.json"
           fi
           case "${{ inputs.action }}" in
-            validate) npm run env:validate -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
             bootstrap) npm run env:bootstrap -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
             deploy) npm run env:deploy -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
-            status) npm run env:status -- --env "${{ inputs.environment }}" --source-sha "$SOURCE_SHA" ;;
-            isolation-test) echo "Use independent QA for provider isolation" >&2; exit 1 ;;
-            prod-preflight) echo "prod-preflight is dry-run only" >&2; exit 1 ;;
-            *) echo "Unsupported action" >&2; exit 1 ;;
+            *) echo "OIDC-capable live job accepts only bootstrap/deploy" >&2; exit 1 ;;
           esac
 
       - name: Upload reconciliation trace on success or fail-closed exit
