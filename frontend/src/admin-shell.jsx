@@ -1,13 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
-import { failureGroupRows, sourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
+import ActionDialog from './action-dialog.jsx';
+import { failureGroupRows, runSummaryLabel, sourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
 import {
   ADMIN_SECTIONS,
   SOURCE_SECTIONS,
   adminSourceSummary,
+  approvalSourceRows,
   categoryDuplicate,
   sortCategories,
+  sortSources,
   sourceApprovalLabel,
   sourceGovernanceActions,
   sourcePolicyExcluded,
@@ -165,9 +168,10 @@ function Registry({ sources, categories, token, notify, setSources, setCategorie
   const [editing,setEditing] = useState(null);
   const [open,setOpen] = useState(false);
   const [saving,setSaving] = useState(false);
+  const [deleteTarget,setDeleteTarget] = useState(null);
   const rows = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return sources.filter(source => !q || `${source.name} ${source.category} ${source.url}`.toLowerCase().includes(q)).sort((a,b) => a.name.localeCompare(b.name));
+    const q = query.trim().toLocaleLowerCase('ro-RO');
+    return sortSources(sources).filter(source => !q || `${source.name} ${source.category} ${source.url}`.toLocaleLowerCase('ro-RO').includes(q));
   }, [sources,query]);
   const applyCatalog = payload => setSources((payload?.catalog?.sources || []).map(normalizeSource));
   const createCategory = async label => {
@@ -193,22 +197,27 @@ function Registry({ sources, categories, token, notify, setSources, setCategorie
     finally { setSaving(false); }
   };
   const remove = async source => {
-    if (!window.confirm(`Elimini definitiv sursa "${source.name}"?`)) return;
     try {
       const payload = await api(`/sources/${encodeURIComponent(source.id)}`, token, { method:'DELETE' });
       applyCatalog(payload); notify('Sursa a fost eliminata.','success');
     } catch (error) { notify(`Sursa nu a putut fi eliminata: ${error.message}`,'error'); }
+    finally { setDeleteTarget(null); }
   };
   return <div className="space-y-4">
     <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:flex-row"><input value={query} onChange={event => setQuery(event.target.value)} placeholder="Cauta sursa" className="h-10 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm"/><button onClick={() => { setEditing(null); setOpen(true); }} className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">Adauga sursa</button></div>
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="hidden grid-cols-[minmax(0,1fr)_170px_120px_120px_105px] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:grid"><span>Sursa</span><span>Categorie</span><span>Validare</span><span>Aprobare</span><span>Actiuni</span></div><div className="divide-y divide-slate-100">{rows.map(source => <div key={source.id} className="grid gap-3 px-5 py-3 text-sm md:grid-cols-[minmax(0,1fr)_170px_120px_120px_105px] md:items-center"><div className="min-w-0"><a href={source.url} target="_blank" rel="noreferrer" className="truncate font-semibold text-slate-800 hover:text-blue-700">{source.name}</a><div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-400"><span>{source.collectionMethod || 'fara metoda'}</span>{source.policyExcluded ? <Pill tone="red">Exclus operational</Pill> : source.active ? <Pill tone="green">Activa</Pill> : <Pill>Inactiva</Pill>}</div></div><div className="text-xs text-slate-600">{source.category}</div><div><Pill tone={source.validationStatus === 'validated' ? 'green' : source.validationStatus === 'requires_connector' ? 'amber' : source.validationStatus === 'rejected' ? 'red' : 'blue'}>{sourceValidationLabel(source.validationStatus)}</Pill></div><div><Pill tone={source.approvalStatus === 'approved' ? 'green' : source.approvalStatus === 'rejected' ? 'red' : 'slate'}>{sourceApprovalLabel(source.approvalStatus)}</Pill></div><div className="flex gap-2"><button onClick={() => { setEditing(source); setOpen(true); }} className="text-xs font-semibold text-slate-600 hover:text-slate-900">Editeaza</button><button onClick={() => remove(source)} className="text-xs font-semibold text-red-600">Elimina</button></div></div>)}</div></div>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="hidden grid-cols-[minmax(0,1fr)_170px_120px_120px_105px] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:grid"><span>Sursa</span><span>Categorie</span><span>Validare</span><span>Aprobare</span><span>Actiuni</span></div><div className="divide-y divide-slate-100">{rows.map(source => <div key={source.id} className="grid gap-3 px-5 py-3 text-sm md:grid-cols-[minmax(0,1fr)_170px_120px_120px_105px] md:items-center"><div className="min-w-0"><a href={source.url} target="_blank" rel="noreferrer" className="truncate font-semibold text-slate-800 hover:text-blue-700">{source.name}</a><div className="mt-1 flex flex-wrap gap-2 text-xs text-slate-400"><span>{source.collectionMethod || 'fara metoda'}</span>{source.policyExcluded ? <Pill tone="red">Exclus operational</Pill> : source.active ? <Pill tone="green">Activa</Pill> : <Pill>Inactiva</Pill>}</div></div><div className="text-xs text-slate-600">{source.category}</div><div><Pill tone={source.validationStatus === 'validated' ? 'green' : source.validationStatus === 'requires_connector' ? 'amber' : source.validationStatus === 'rejected' ? 'red' : 'blue'}>{sourceValidationLabel(source.validationStatus)}</Pill></div><div><Pill tone={source.approvalStatus === 'approved' ? 'green' : source.approvalStatus === 'rejected' ? 'red' : 'slate'}>{sourceApprovalLabel(source.approvalStatus)}</Pill></div><div className="flex gap-2"><button onClick={() => { setEditing(source); setOpen(true); }} className="text-xs font-semibold text-slate-600 hover:text-slate-900">Editeaza</button><button onClick={() => setDeleteTarget(source)} className="text-xs font-semibold text-red-600">Elimina</button></div></div>)}</div></div>
     {!rows.length && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Nicio sursa.</div>}
-    {open && <SourceDialog source={editing} categories={categories} saving={saving} onClose={() => { setOpen(false); setEditing(null); }} onSave={save} onCreateCategory={createCategory}/>} 
+    {open && <SourceDialog source={editing} categories={categories} saving={saving} onClose={() => { setOpen(false); setEditing(null); }} onSave={save} onCreateCategory={createCategory}/>}
+    {deleteTarget && <ActionDialog title="Elimina sursa" description={`Elimini definitiv sursa "${deleteTarget.name}"?`} confirmLabel="Elimina" danger onCancel={() => setDeleteTarget(null)} onConfirm={() => remove(deleteTarget)}/>}
   </div>;
 }
 
 function Approval({ sources, token, notify, setSources }) {
-  const rows = sources;
+  const [mode,setMode] = useState('attention');
+  const [query,setQuery] = useState('');
+  const rows = useMemo(() => approvalSourceRows(sources,{mode,query}), [sources,mode,query]);
+  const attentionCount = useMemo(() => approvalSourceRows(sources).length, [sources]);
+  const [reasonDialog,setReasonDialog] = useState(null);
   const apply = payload => setSources((payload?.catalog?.sources || []).map(normalizeSource));
   const action = async (source, actionName, reason = null) => {
     try {
@@ -217,18 +226,38 @@ function Approval({ sources, token, notify, setSources }) {
       apply(payload); notify(`Actiune aplicata: ${actionName}.`,'success');
     } catch (error) { notify(`Actiunea nu a putut fi aplicata: ${error.message}`,'error'); }
   };
+  const requestReason = (source, actionName, title) => setReasonDialog({ source, actionName, title, reason:'' });
   return <div className="space-y-3">
-    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">2A implementeaza contractul si tranzitiile manuale de guvernanta. Validarea tehnica automata URL/API/ATS intra in 2C; nicio sursa nu este activata automat.</div>
+    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">Validarea, aprobarea si activarea sunt stari distincte. Implicit sunt afisate sursele care necesita atentie; "Toate" pastreaza inspectabilitatea intregului registru.</div>
+    <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm sm:flex-row sm:items-center">
+      <div className="flex gap-2">
+        <button onClick={() => setMode('attention')} className={cx('rounded-xl px-3 py-2 text-xs font-semibold',mode==='attention'?'bg-slate-900 text-white':'bg-slate-100 text-slate-600')}>Necesita atentie ({attentionCount})</button>
+        <button onClick={() => setMode('all')} className={cx('rounded-xl px-3 py-2 text-xs font-semibold',mode==='all'?'bg-slate-900 text-white':'bg-slate-100 text-slate-600')}>Toate ({sources.length})</button>
+      </div>
+      <input value={query} onChange={event => setQuery(event.target.value)} placeholder="Cauta sursa" className="h-9 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm sm:ml-auto sm:max-w-xs"/>
+    </div>
     {rows.map(source => {
       const actions = sourceGovernanceActions(source);
-      return <section key={source.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-col gap-3 lg:flex-row lg:items-center"><div className="min-w-0 flex-1"><div className="font-semibold text-slate-900">{source.name}</div><div className="mt-1 text-xs text-slate-500">{source.category} · {source.url}</div><div className="mt-2 flex flex-wrap gap-2"><Pill tone={source.validationStatus === 'validated' ? 'green' : source.validationStatus === 'requires_connector' ? 'amber' : source.validationStatus === 'rejected' ? 'red' : 'blue'}>{sourceValidationLabel(source.validationStatus)}</Pill><Pill tone={source.approvalStatus === 'approved' ? 'green' : source.approvalStatus === 'rejected' ? 'red' : 'slate'}>{sourceApprovalLabel(source.approvalStatus)}</Pill>{source.policyExcluded ? <Pill tone="red">Exclus operational</Pill> : source.active ? <Pill tone="green">Activa</Pill> : <Pill>Inactiva</Pill>}{source.validationReason && <span className="text-xs text-amber-700">{source.validationReason}</span>}</div></div><div className="flex flex-wrap gap-2">{actions.includes('submit_validation') && <button onClick={() => action(source,'submit_validation')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Trimite la validare</button>}{actions.includes('mark_validated') && <button onClick={() => action(source,'mark_validated')} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Marcheaza validata</button>}{actions.includes('mark_requires_connector') && <button onClick={() => action(source,'mark_requires_connector',window.prompt('Motiv / connector necesar (optional)') || null)} className="rounded-xl border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700">Necesita connector</button>}{actions.includes('revalidate') && <button onClick={() => action(source,'revalidate')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Retrimite la validare</button>}{actions.includes('approve') && <button onClick={() => action(source,'approve')} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Aproba</button>}{actions.includes('activate') && <button onClick={() => action(source,'activate')} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Activeaza</button>}{actions.includes('disable') && <button onClick={() => action(source,'disable')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Dezactiveaza</button>}{actions.includes('reject') && <button onClick={() => action(source,'reject',window.prompt('Motiv respingere (optional)') || null)} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-700">Respinge</button>}</div></div></section>;
+      return <section key={source.id} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="flex flex-col gap-3 lg:flex-row lg:items-center"><div className="min-w-0 flex-1"><div className="font-semibold text-slate-900">{source.name}</div><div className="mt-1 text-xs text-slate-500">{source.category} · {source.url}</div><div className="mt-2 flex flex-wrap gap-2"><Pill tone={source.validationStatus === 'validated' ? 'green' : source.validationStatus === 'requires_connector' ? 'amber' : source.validationStatus === 'rejected' ? 'red' : 'blue'}>{sourceValidationLabel(source.validationStatus)}</Pill><Pill tone={source.approvalStatus === 'approved' ? 'green' : source.approvalStatus === 'rejected' ? 'red' : 'slate'}>{sourceApprovalLabel(source.approvalStatus)}</Pill>{source.policyExcluded ? <Pill tone="red">Exclus operational</Pill> : source.active ? <Pill tone="green">Activa</Pill> : <Pill>Inactiva</Pill>}{source.validationReason && <span className="text-xs text-amber-700">{source.validationReason}</span>}</div></div><div className="flex flex-wrap gap-2">{actions.includes('submit_validation') && <button onClick={() => action(source,'submit_validation')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Trimite la validare</button>}{actions.includes('mark_validated') && <button onClick={() => action(source,'mark_validated')} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Marcheaza validata</button>}{actions.includes('mark_requires_connector') && <button onClick={() => requestReason(source,'mark_requires_connector','Necesita connector')} className="rounded-xl border border-amber-200 px-3 py-2 text-xs font-semibold text-amber-700">Necesita connector</button>}{actions.includes('revalidate') && <button onClick={() => action(source,'revalidate')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Retrimite la validare</button>}{actions.includes('approve') && <button onClick={() => action(source,'approve')} className="rounded-xl bg-blue-600 px-3 py-2 text-xs font-semibold text-white">Aproba</button>}{actions.includes('activate') && <button onClick={() => action(source,'activate')} className="rounded-xl bg-emerald-600 px-3 py-2 text-xs font-semibold text-white">Activeaza</button>}{actions.includes('disable') && <button onClick={() => action(source,'disable')} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-semibold">Dezactiveaza</button>}{actions.includes('reject') && <button onClick={() => requestReason(source,'reject','Respinge sursa')} className="rounded-xl border border-red-200 px-3 py-2 text-xs font-semibold text-red-700">Respinge</button>}</div></div></section>;
     })}
     {!rows.length && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Nu exista surse in registru.</div>}
+    {reasonDialog && <ActionDialog
+      title={reasonDialog.title}
+      description="Motivul este optional."
+      fields={[{name:'reason',label:'Motiv (optional)',autoFocus:true}]}
+      values={{reason:reasonDialog.reason}}
+      onChange={(_,value) => setReasonDialog(current => ({...current,reason:value}))}
+      onCancel={() => setReasonDialog(null)}
+      onConfirm={async () => { const current=reasonDialog; setReasonDialog(null); await action(current.source,current.actionName,current.reason.trim() || null); }}
+    />}
   </div>;
 }
 
 function Categories({ categories, sources, token, notify, setCategories, setSources }) {
   const [newLabel,setNewLabel] = useState('');
+  const [renameTarget,setRenameTarget] = useState(null);
+  const [renameValue,setRenameValue] = useState('');
+  const [deleteTarget,setDeleteTarget] = useState(null);
   const ordered = sortCategories(categories);
   const apply = payload => setCategories(payload?.catalog?.categories || []);
   const create = async () => {
@@ -238,30 +267,51 @@ function Categories({ categories, sources, token, notify, setCategories, setSour
     catch (error) { notify(`Categoria nu a putut fi creata: ${error.message}`,'error'); }
   };
   const rename = async category => {
-    const label = window.prompt('Noul nume al categoriei', category.label)?.trim().replace(/\s+/g,' ');
+    const label = renameValue.trim().replace(/\s+/g,' ');
     if (!label || label === category.label || categoryDuplicate(categories,label,category.id)) return;
     try { const payload = await api(`/source-categories/${encodeURIComponent(category.id)}`, token, { method:'PUT', body:JSON.stringify({ label }) }); apply(payload); setSources(current => current.map(source => source.category === category.label ? {...source,category:label} : source)); notify('Categoria a fost redenumita.','success'); }
     catch (error) { notify(`Categoria nu a putut fi redenumita: ${error.message}`,'error'); }
+    finally { setRenameTarget(null); setRenameValue(''); }
   };
   const toggle = async category => {
     try { const payload = await api(`/source-categories/${encodeURIComponent(category.id)}`, token, { method:'PUT', body:JSON.stringify({ active:!category.active }) }); apply(payload); notify('Starea categoriei a fost actualizata.','success'); }
     catch (error) { notify(`Categoria nu a putut fi actualizata: ${error.message}`,'error'); }
   };
   const remove = async category => {
-    if (sources.some(source => source.category === category.label)) { notify('Muta mai intai sursele din aceasta categorie.','error'); return; }
-    if (!window.confirm(`Stergi categoria "${category.label}"?`)) return;
     try { const payload = await api(`/source-categories/${encodeURIComponent(category.id)}`, token, { method:'DELETE' }); apply(payload); notify('Categoria a fost stearsa.','success'); }
     catch (error) { notify(`Categoria nu a putut fi stearsa: ${error.message}`,'error'); }
+    finally { setDeleteTarget(null); }
+  };
+  const requestDelete = category => {
+    if (sources.some(source => source.category === category.label)) { notify('Muta mai intai sursele din aceasta categorie.','error'); return; }
+    setDeleteTarget(category);
   };
   return <div className="space-y-4">
     <div className="flex gap-2 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><input value={newLabel} onChange={event => setNewLabel(event.target.value)} placeholder="Categorie noua" className="h-10 flex-1 rounded-xl border border-slate-200 px-3 text-sm"/><button disabled={!newLabel.trim() || categoryDuplicate(categories,newLabel)} onClick={create} className="h-10 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-50">Adauga</button></div>
-    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="divide-y divide-slate-100">{ordered.map(category => <div key={category.id} className="flex flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center"><div className="flex-1"><div className="font-semibold text-slate-800">{category.label}</div><div className="text-xs text-slate-400">ID: {category.id} · ordine {category.order} · {sources.filter(source => source.category === category.label).length} surse</div></div><Pill tone={category.active ? 'green' : 'slate'}>{category.active ? 'Activa' : 'Inactiva'}</Pill><button onClick={() => rename(category)} className="text-xs font-semibold text-slate-600">Redenumeste</button><button onClick={() => toggle(category)} className="text-xs font-semibold text-slate-600">{category.active ? 'Dezactiveaza' : 'Activeaza'}</button><button onClick={() => remove(category)} className="text-xs font-semibold text-red-600">Sterge</button></div>)}</div></div>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div className="divide-y divide-slate-100">{ordered.map(category => <div key={category.id} className="flex flex-col gap-3 px-5 py-3 sm:flex-row sm:items-center"><div className="flex-1"><div className="font-semibold text-slate-800">{category.label}</div><div className="text-xs text-slate-400">ID: {category.id} · ordine {category.order} · {sources.filter(source => source.category === category.label).length} surse</div></div><Pill tone={category.active ? 'green' : 'slate'}>{category.active ? 'Activa' : 'Inactiva'}</Pill><button onClick={() => { setRenameTarget(category); setRenameValue(category.label); }} className="text-xs font-semibold text-slate-600">Redenumeste</button><button onClick={() => toggle(category)} className="text-xs font-semibold text-slate-600">{category.active ? 'Dezactiveaza' : 'Activeaza'}</button><button onClick={() => requestDelete(category)} className="text-xs font-semibold text-red-600">Sterge</button></div>)}</div></div>
+    {renameTarget && <ActionDialog title="Redenumeste categoria" fields={[{name:'label',label:'Nume categorie',autoFocus:true}]} values={{label:renameValue}} onChange={(_,value) => setRenameValue(value)} onCancel={() => { setRenameTarget(null); setRenameValue(''); }} onConfirm={() => rename(renameTarget)} confirmDisabled={!renameValue.trim() || renameValue.trim() === renameTarget.label || categoryDuplicate(categories,renameValue,renameTarget.id)}/>}
+    {deleteTarget && <ActionDialog title="Sterge categoria" description={`Stergi categoria "${deleteTarget.label}"?`} confirmLabel="Sterge" danger onCancel={() => setDeleteTarget(null)} onConfirm={() => remove(deleteTarget)}/>}
   </div>;
 }
 
 function SourcesAdmin(props) {
   const [section,setSection] = useState('registry');
-  return <div className="space-y-4"><Tabs value={section} onChange={setSection} items={SOURCE_SECTIONS.map(key => [key, ({registry:'Surse',approval:'Aprobare surse',categories:'Categorii surse'})[key]])}/>{section === 'registry' && <Registry {...props}/>} {section === 'approval' && <Approval {...props}/>} {section === 'categories' && <Categories {...props}/>}</div>;
+  const summary = adminSourceSummary(props.sources);
+  const counters = [
+    ['Total',summary.total],
+    ['Active',summary.active],
+    ['Inactive',summary.inactive],
+    ['Asteapta aprobare',summary.pendingApproval],
+    ['Validate',summary.validated],
+    ['Probleme',summary.problems],
+  ];
+  return <div className="space-y-4">
+    <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">{counters.map(([label,value]) => <div key={label} className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm"><div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div><div className="mt-1 text-xl font-bold text-slate-900">{value}</div></div>)}</div>
+    <Tabs value={section} onChange={setSection} items={SOURCE_SECTIONS.map(key => [key, ({registry:'Surse',approval:'Aprobare surse',categories:'Categorii surse'})[key]])}/>
+    {section === 'registry' && <Registry {...props}/>} 
+    {section === 'approval' && <Approval {...props}/>} 
+    {section === 'categories' && <Categories {...props}/>} 
+  </div>;
 }
 
 function Nomenclatures() {
@@ -286,7 +336,7 @@ function Logs({ runs }) {
         <div><div className="font-semibold text-slate-900">{formatTime(run.completed_at || run.started_at)}</div><div className="text-xs text-slate-400">{run.run_id}</div></div>
         <Pill tone={run.status === 'completed' ? 'green' : run.status === 'completed_with_errors' ? 'amber' : 'red'}>{run.status}</Pill>
         <div className="text-xs text-slate-600">Trigger: {run.trigger || '—'}</div>
-        <div className="text-xs text-slate-500">{run.sources_attempted ?? run.sources_processed ?? 0} surse · {run.jobs_published ?? 0} publicate</div>
+        <div className="text-xs text-slate-500">{runSummaryLabel(run)}</div>
       </button>
       {open === run.run_id && <div className="border-t border-slate-100 bg-slate-50 p-4 text-xs text-slate-600">
         <div className="grid gap-2 md:grid-cols-3"><span>Durata: {run.duration_seconds != null ? `${run.duration_seconds}s` : '—'}</span><span>Brute: {run.records_inspected ?? 0}</span><span>Excluse: {run.excluded ?? 0}</span></div>

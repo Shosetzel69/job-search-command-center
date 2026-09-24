@@ -55,6 +55,7 @@ class OrchestrationTests(unittest.TestCase):
     def run_search(self, config=None):
         code = orchestration.run(config or CONFIG, NOW)
         runner.append_run_history()
+        runner.stamp_jobs_provenance()
         return code, json.loads(engine.STATUS_PATH.read_text())
 
     def test_all_active_sources_run_and_history_reports_real_coverage(self):
@@ -83,6 +84,10 @@ class OrchestrationTests(unittest.TestCase):
         history = json.loads(runner.HISTORY_PATH.read_text())["runs"][0]
         self.assertEqual(history["sources_attempted"], 2)
         self.assertEqual(history["source_strategy"], CONFIG["source_strategy"])
+        jobs = json.loads(engine.JOBS_PATH.read_text())
+        self.assertEqual(jobs["run_id"], status["run_id"])
+        self.assertEqual(jobs["run_status"], status["status"])
+        runner.validate_history()
         engine.validate_output()
 
     def test_failure_is_isolated(self):
@@ -275,6 +280,8 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertEqual(status["jobs_published"], 1)
         self.assertEqual(engine.JOBS_PATH.read_bytes(), before)
+        history = json.loads(runner.HISTORY_PATH.read_text())["runs"][0]
+        self.assertEqual(history["run_id"], status["run_id"])
 
     def test_hourly_jobicy_limit_is_not_counted_as_attempt(self):
         self.run_search()

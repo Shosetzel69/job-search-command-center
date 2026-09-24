@@ -1,0 +1,62 @@
+name: Controlled TEST Full Search
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact immutable candidate SHA already deployed to TEST
+        required: true
+        type: string
+      owner_gate:
+        description: Explicit operator confirmation
+        required: true
+        type: choice
+        options: [APPROVED]
+
+permissions:
+  contents: read
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: test
+    concurrency:
+      group: controlled-test-full-search
+      cancel-in-progress: false
+    steps:
+      - name: Checkout trusted control-plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Validate exact TEST identity and dispatch boundary
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          GH_TOKEN: ${{ secrets.GH_RUNTIME_TOKEN }}
+          RUNTIME_REPOSITORY: Shosetzel69/job-search-runtime-test
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be an immutable SHA" >&2; exit 1; }
+          test "${{ inputs.owner_gate }}" = "APPROVED" || { echo "Explicit owner/operator gate required" >&2; exit 1; }
+
+          origin="$(node -e 'process.stdout.write(String(process.env.FRONTEND_ORIGIN || "").trim().replace(/\/+$/, ""))')"
+          test -n "$origin" || { echo "TEST FRONTEND_ORIGIN is required" >&2; exit 1; }
+          health="$(curl --fail --silent --show-error "$origin/health")"
+          jq -e --arg sha "$SOURCE_SHA" '.environment == "test" and .source_sha == $sha and .search_mode == "smoke"' <<<"$health" >/dev/null || {
+            echo "Exact candidate is not the currently deployed isolated TEST identity" >&2
+            exit 1
+          }
+
+          active="$(gh api "repos/$RUNTIME_REPOSITORY/actions/workflows/runtime.yml/runs?per_page=20" --jq '[.workflow_runs[] | select(.status == "queued" or .status == "in_progress")] | length')"
+          test "$active" = "0" || { echo "A TEST runtime execution is already active; no second dispatch" >&2; exit 1; }
+
+          gh workflow run runtime.yml --repo "$RUNTIME_REPOSITORY" --ref main \
+            -f "source_sha=$SOURCE_SHA" \
+            -f "run_trigger=manual-ui" \
+            -f "execution_mode=test-full"
+
+          echo "Controlled TEST Full Search dispatched once for $SOURCE_SHA"

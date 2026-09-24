@@ -86,3 +86,10 @@ export function sourceResultRows(run) {
     message:item?.error || item?.failure_reason || null,
   }));
 }
+
+
+export function runSummaryLabel(run) {
+  const sources = Number(run?.sources_attempted ?? run?.sources_processed ?? 0);
+  const jobs = Number(run?.jobs_published ?? 0);
+  return `${sources} surse evaluate · ${jobs} joburi publicate`;
+}

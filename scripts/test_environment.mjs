@@ -382,6 +382,26 @@ test('live workflow supplies environment-scoped functional Google token and no l
 });
 
 
+test('controlled TEST Full Search is explicit manual-only and keeps TEST smoke identity', () => {
+  const runtime = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
+  const control = readFileSync(resolve(ROOT, '.github/workflows/test-full-search.yml'), 'utf8');
+  assert.match(runtime, /execution_mode:/);
+  assert.match(runtime, /test-full execution is TEST-only/);
+  assert.match(runtime, /test-full requires TEST SEARCH_MODE=smoke/);
+  assert.match(runtime, /test-full requires manual-ui run_trigger/);
+  assert.match(runtime, /Collect normalize filter and score in controlled TEST/);
+  assert.match(runtime, /Publish controlled TEST results safely/);
+  assert.doesNotMatch(runtime, /APP_ENV == 'dev'.*test-full/);
+  assert.match(control, /environment: test/);
+  assert.match(control, /job-search-runtime-test/);
+  assert.match(control, /\.environment == "test" and \.source_sha == \$sha and \.search_mode == "smoke"/);
+  assert.match(control, /select\(\.status == "queued" or \.status == "in_progress"\)/);
+  assert.match(control, /execution_mode=test-full/);
+  assert.doesNotMatch(control, /job-search-prod/);
+  assert.doesNotMatch(control, /schedule:/);
+});
+
+
 test('DEV/TEST promotion evidence retries bounded propagation and requires exact candidate identity', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
   assert.match(workflow, /for attempt in 1 2 3 4 5 6 7 8 9 10/);

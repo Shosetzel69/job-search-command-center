@@ -209,15 +209,21 @@ def load_config() -> dict[str, Any]:
     if unsupported_contract_types:
         raise RuntimeError(f"Unsupported contract type: {', '.join(sorted(unsupported_contract_types))}")
 
-    mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
-    if mode not in {"disabled", "apify", "direct"}:
-        raise RuntimeError("jobspipe_mode must be disabled, apify or direct")
-    apify_max = int(config.get("jobspipe_apify_max_items_per_run", 5000))
-    if apify_max < 100 or apify_max > 20000:
-        raise RuntimeError("jobspipe_apify_max_items_per_run must be 100-20000")
+    validate_jobspipe_config(config)
 
     validate_geography_config(config)
     return config
+
+
+def validate_jobspipe_config(config: dict[str, Any]) -> str:
+    mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
+    if mode not in {"disabled", "apify", "direct"}:
+        raise RuntimeError("jobspipe_mode must be disabled, apify or direct")
+    if mode == "apify":
+        apify_max = int(config.get("jobspipe_apify_max_items_per_run", 5000))
+        if apify_max < 100 or apify_max > 20000:
+            raise RuntimeError("jobspipe_apify_max_items_per_run must be 100-20000")
+    return mode
 
 
 def compile_config_patterns(config: dict[str, Any]):

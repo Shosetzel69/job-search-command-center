@@ -6,6 +6,7 @@ import {
   failureGroupRows,
   sourceResultRows,
   sourceSummaryRows,
+  runSummaryLabel,
 } from '../src/admin-log-model.mjs';
 
 test('uses persisted structured aggregates without parsing messages', () => {
@@ -98,4 +99,16 @@ test('source rows expose structured failure detail and human message separately'
   assert.equal(rows[0].failureStage, 'authentication');
   assert.equal(rows[0].httpStatus, 403);
   assert.equal(rows[0].message, 'Human-readable detail');
+});
+
+
+test('run summary labels distinguish source attempts from published jobs', () => {
+  assert.equal(
+    runSummaryLabel({ sources_attempted:116, sources_processed:117, jobs_published:29 }),
+    '116 surse evaluate · 29 joburi publicate',
+  );
+  assert.equal(
+    runSummaryLabel({ sources_processed:10, jobs_published:3 }),
+    '10 surse evaluate · 3 joburi publicate',
+  );
 });
