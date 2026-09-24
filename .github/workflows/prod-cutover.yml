@@ -65,6 +65,10 @@ permissions:
 
 jobs:
   prod-promotion:
+    permissions:
+      contents: read
+      actions: read
+      id-token: write
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: prod
@@ -385,6 +389,23 @@ jobs:
         if: ${{ inputs.action != 'verify-deployed-status' }}
         run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
+      - name: Acquire short-lived functional verification OIDC token
+        if: ${{ inputs.action != 'verify-deployed-status' }}
+        shell: bash
+        env:
+          OIDC_AUDIENCE: jscc-functional-verification
+        run: |
+          set -euo pipefail
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_URL:-}" || { echo "GitHub OIDC request URL is unavailable" >&2; exit 1; }
+          test -n "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}" || { echo "GitHub OIDC request token is unavailable" >&2; exit 1; }
+          token_json="$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
+            "${ACTIONS_ID_TOKEN_REQUEST_URL}&audience=${OIDC_AUDIENCE}")"
+          token="$(jq -r '.value // empty' <<<"$token_json")"
+          test -n "$token" || { echo "GitHub OIDC provider returned no token" >&2; exit 1; }
+          echo "::add-mask::$token"
+          printf 'FUNCTIONAL_GITHUB_OIDC_TOKEN=%s\n' "$token" >> "$GITHUB_ENV"
+
       - name: Execute reconciled PROD candidate promotion
         if: ${{ inputs.action != 'verify-deployed-status' }}
         env:
@@ -397,7 +418,6 @@ jobs:
           PROD_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
           PROD_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           PROD_FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
-          FUNCTIONAL_GOOGLE_ID_TOKEN: ${{ secrets.FUNCTIONAL_GOOGLE_ID_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
