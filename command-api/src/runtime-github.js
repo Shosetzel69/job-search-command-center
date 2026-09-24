@@ -105,12 +105,15 @@ export async function hasActiveWorkflowRun(env, runtime) {
   return (payload?.workflow_runs || []).some(run => run.status === 'queued' || run.status === 'in_progress');
 }
 
-export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', checkActive = true) {
+export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', checkActive = true, executionMode = 'policy') {
   if (checkActive && await hasActiveWorkflowRun(env, runtime)) {
     throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
   }
   if (!['manual-ui', 'scheduled', 'system'].includes(runTrigger)) {
     throw Object.assign(new Error('Invalid run trigger'), { status: 400 });
+  }
+  if (!['policy', 'manual-full'].includes(executionMode)) {
+    throw Object.assign(new Error('Invalid execution mode'), { status: 400 });
   }
   const workflow = encodeURIComponent(runtime.workflow);
   return runtimeGithubRequest(env, runtime, `/actions/workflows/${workflow}/dispatches`, {
@@ -118,7 +121,7 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       ref: runtime.runtimeRef,
-      inputs: { run_trigger: runTrigger, source_sha: runtime.sourceSha },
+      inputs: { run_trigger: runTrigger, source_sha: runtime.sourceSha, execution_mode: executionMode },
     }),
   });
 }

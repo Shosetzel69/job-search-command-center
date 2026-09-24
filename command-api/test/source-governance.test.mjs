@@ -116,6 +116,20 @@ test('physical source registry is canonical for all non-deferred sources', () =>
   assert.equal(deferredMonster, 1, 'Exactly one deferred Monster physical record is expected');
 });
 
+test('owner-activated registry leaves only Oyster physically inactive', () => {
+  const catalog = JSON.parse(readFileSync(resolve(process.cwd(), '../data/sources.json'), 'utf8'));
+  const inactive = catalog.sources.filter(source => source.active !== true);
+  assert.deepEqual(inactive.map(source => source.name), ['Oyster']);
+
+  const oyster = inactive[0];
+  assert.equal(oyster.validation_status, 'validating');
+  assert.equal(oyster.approval_status, 'pending');
+
+  const pending = catalog.sources.filter(source => source.name !== 'Monster' && source.approval_status === 'pending');
+  assert.deepEqual(pending.map(source => source.name), ['Oyster']);
+  assert.equal(catalog.sources.filter(source => source.active === true).length, 159);
+});
+
 test('legacy executable source is normalized as approved/validated', () => {
   const source = normalizeSource({
     id:'src-jobicy',

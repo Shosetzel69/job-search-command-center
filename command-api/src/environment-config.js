@@ -38,6 +38,15 @@ function requiredOrigin(value) {
   return normalized;
 }
 
+export function manualSearchExecutionMode(appEnv, searchMode) {
+  const environment = String(appEnv || '').trim().toLowerCase();
+  const mode = String(searchMode || '').trim().toLowerCase();
+  if (environment === 'dev' && mode === 'disabled') return 'manual-full';
+  if (environment === 'test' && mode === 'smoke') return 'manual-full';
+  if (environment === 'prod' && mode === 'live') return 'policy';
+  return null;
+}
+
 export function assertEnvironmentConfig(env = {}, buildIdentity = {}) {
   const appEnv = requiredString(env.APP_ENV, 'APP_ENV').toLowerCase();
   if (!ENVIRONMENTS.has(appEnv)) throw configError('APP_ENV must be dev, test or prod');

@@ -253,7 +253,7 @@ class RemoteFirstRoutingTests(unittest.TestCase):
         float_item = self._plan("Float", "https://www.float.com/careers")
         self.assertEqual(float_item["connector"], "web")
 
-    def test_new_registry_entries_are_unique_gated_and_canonical(self):
+    def test_new_registry_entries_are_unique_governed_and_canonical(self):
         catalog = json.loads(
             (engine.DATA / "sources.json").read_text(encoding="utf-8")
         )
@@ -264,10 +264,12 @@ class RemoteFirstRoutingTests(unittest.TestCase):
             matches = [source for source in catalog["sources"] if source["name"] == name]
             self.assertEqual(len(matches), 1, name)
             source = matches[0]
-            self.assertFalse(source["active"], name)
             expected_validation = "validating" if name == "Oyster" else "validated"
+            expected_approval = "pending" if name == "Oyster" else "approved"
+            expected_active = name != "Oyster"
+            self.assertEqual(source["active"], expected_active, name)
             self.assertEqual(source["validation_status"], expected_validation, name)
-            self.assertEqual(source["approval_status"], "pending", name)
+            self.assertEqual(source["approval_status"], expected_approval, name)
             self.assertFalse(source["policy_excluded"], name)
             if name == "Oyster":
                 self.assertIn("connector-level live validation", source["validation_reason"])

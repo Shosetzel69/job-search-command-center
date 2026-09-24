@@ -319,10 +319,15 @@ test('preflight from a forbidden origin is rejected', async () => {
   assert.equal(response.status, 403);
 });
 
-test('full search is allowed only in explicit live search mode', () => {
-  assert.equal(fullSearchAllowed('live'), true);
-  assert.equal(fullSearchAllowed('LIVE'), true);
-  assert.equal(fullSearchAllowed('smoke'), false);
-  assert.equal(fullSearchAllowed('disabled'), false);
-  assert.equal(fullSearchAllowed(undefined), false);
+test('manual full search admission is explicit per environment role', () => {
+  assert.equal(fullSearchAllowed('disabled', 'dev'), true);
+  assert.equal(fullSearchAllowed('smoke', 'test'), true);
+  assert.equal(fullSearchAllowed('live', 'prod'), true);
+
+  assert.equal(fullSearchAllowed('smoke', 'dev'), false);
+  assert.equal(fullSearchAllowed('live', 'dev'), false);
+  assert.equal(fullSearchAllowed('disabled', 'test'), false);
+  assert.equal(fullSearchAllowed('live', 'test'), false);
+  assert.equal(fullSearchAllowed('smoke', 'prod'), false);
+  assert.equal(fullSearchAllowed(undefined, 'dev'), false);
 });
