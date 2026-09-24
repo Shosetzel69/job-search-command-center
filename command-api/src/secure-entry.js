@@ -1,5 +1,6 @@
 import { protectedDataPaths } from '../../shared/runtime-data.mjs';
 import commandApi from './index.js';
+import { manualSearchExecutionMode } from './environment-config.js';
 import nomenclatureApi from './nomenclature-api.js';
 import {
   clearSessionCookie,
@@ -50,8 +51,8 @@ async function verifyProtectedDataRequest(request, env) {
   return commandApi.fetch(sessionRequest, env);
 }
 
-export function fullSearchAllowed(searchMode) {
-  return String(searchMode || '').toLowerCase() === 'live';
+export function fullSearchAllowed(searchMode, appEnv) {
+  return Boolean(manualSearchExecutionMode(appEnv, searchMode));
 }
 
 export default {
@@ -97,7 +98,7 @@ export default {
       return noStoreResponse(copyAuthCors(response, authResponse));
     }
 
-    if (url.pathname === '/commands/run' && request.method === 'POST' && !fullSearchAllowed(env.SEARCH_MODE)) {
+    if (url.pathname === '/commands/run' && request.method === 'POST' && !fullSearchAllowed(env.SEARCH_MODE, env.APP_ENV)) {
       const authResponse = await verifyProtectedDataRequest(authorizedRequest, env);
       if (!authResponse.ok) return noStoreResponse(authResponse);
       const response = jsonResponse({ error:'Full search is disabled for this environment' }, 403);
