@@ -102,7 +102,12 @@ test('PROD candidate-managed reconciliation uses the exact approved allowlist an
   assert.doesNotMatch(promotion, /cp -a candidate-source\/data/);
   assert.doesNotMatch(promotion, /Resolve deployment runtime snapshot/);
   assert.doesNotMatch(promotion, /Deploy exact TEST-passed candidate to dedicated PROD/);
-  assert.match(promotion, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
+  assert.match(promotion, /id-token: write/);
+  assert.match(promotion, /Acquire short-lived functional verification OIDC token/);
+  assert.match(promotion, /FUNCTIONAL_GITHUB_OIDC_TOKEN/);
+  assert.match(promotion, /jscc-functional-verification/);
+  assert.doesNotMatch(promotion, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
+  assert.doesNotMatch(promotion, /secrets\.FUNCTIONAL_GOOGLE_ID_TOKEN/);
   assert.match(promotion, /RECONCILIATION_EVIDENCE_PATH/);
   assert.match(promotion, /reconciliation-prod-\$\{\{ github\.run_id \}\}/);
   assert.match(promotion, /--reconciliation-file promotion-output\/reconciliation\.json/);
