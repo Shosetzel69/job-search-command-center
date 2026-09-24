@@ -15,7 +15,7 @@ import {
   validateCategoryInput,
   validateSourceInput,
 } from './source-governance.js';
-import { assertEnvironmentConfig } from './environment-config.js';
+import { assertEnvironmentConfig, manualSearchExecutionMode } from './environment-config.js';
 import { BUILD_IDENTITY } from './build-identity.generated.js';
 import { canAccessRuntimeRepository, dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-github.js';
 
@@ -158,8 +158,8 @@ async function hasActiveRun(env) {
   return hasActiveWorkflowRun(env, runtimeConfig(env));
 }
 
-async function dispatchRun(env, runTrigger = 'manual-ui', checkActive = true) {
-  return dispatchWorkflow(env, runtimeConfig(env), runTrigger, checkActive);
+async function dispatchRun(env, runTrigger = 'manual-ui', checkActive = true, executionMode = 'policy') {
+  return dispatchWorkflow(env, runtimeConfig(env), runTrigger, checkActive, executionMode);
 }
 
 async function readRepoJson(env, path) {
@@ -479,7 +479,8 @@ export default {
       const user = await authenticate(request, env);
 
       if (request.method === 'POST' && url.pathname === '/commands/run') {
-        if (runtime.searchMode !== 'live') throw Object.assign(new Error('Full search is disabled for this environment'), { status: 409 });
+        const executionMode = manualSearchExecutionMode(runtime.appEnv, runtime.searchMode);
+        if (!executionMode) throw Object.assign(new Error('Full search is disabled for this environment'), { status: 409 });
         if (await hasActiveRun(env)) throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
         const input = await optionalJsonBody(request);
         const nomenclatures = (await readNomenclatures(env)).payload;
@@ -491,8 +492,8 @@ export default {
         } else {
           await readSearchConfig(env, nomenclatures);
         }
-        await dispatchRun(env, 'manual-ui', false);
-        return json({ status:'accepted', requested_by:user.sub, trigger:'manual-ui', source_sha:runtime.sourceSha, config_commit:configCommit }, 202, cors);
+        await dispatchRun(env, 'manual-ui', false, executionMode);
+        return json({ status:'accepted', requested_by:user.sub, trigger:'manual-ui', execution_mode:executionMode, source_sha:runtime.sourceSha, config_commit:configCommit }, 202, cors);
       }
 
       if (request.method === 'PUT' && url.pathname === '/config') {
