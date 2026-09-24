@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.16`
+Versiune document: `v1.17`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-23`
+Ultima actualizare: `2026-09-25`
 
 ## 1. Rol
 
@@ -95,8 +95,8 @@ Reguli:
 - Google ID token ramane numai in memoria paginii;
 - filtrele/KPI locale nu declanseaza provider request;
 - modificarile administrative nu pornesc full search;
-- in target-ul ADR-005, USER nu are comanda de Run/Search; manual collection este actiune administrativa exceptionala, ADMIN-only;
-- orice control existent de `Ruleaza verificarea` / `Ruleaza acum` este AS-IS tranzitoriu pana la rebaseline-ul Package 2B;
+- in target-ul ADR-005, retrieval-ul ramane shared/system-owned; manual collection este o actiune administrativa/operator, nu un retrieval per profil;
+- `Ruleaza verificarea` / `Ruleaza acum` poate porni explicit o collection run globala in DEV si TEST prin `manual-full`; nu exista trigger automat si nu se schimba politica PROD;
 - dupa Package 2A8, UI nu mai detine liste functionale independente pentru regions/countries/work_modes/contract_types.
 
 ## 5. Command API
@@ -126,7 +126,8 @@ Semantica executiei:
 - source/category/nomenclature CRUD nu face dispatch;
 - target-ul ADR-005 separa configuratia shared/system de profilul personal;
 - collection run este global/shared, nu profile-owned;
-- numai ADMIN poate solicita manual o collection run globala;
+- operatorul autorizat poate solicita manual o collection run globala;
+- DEV (`SEARCH_MODE=disabled`) si TEST (`SEARCH_MODE=smoke`) permit heavy collection numai prin explicit `manual-full`; PROD pastreaza `live`/policy;
 - exista maximum o executie grea globala admisa simultan;
 - schimbarile profilului produc re-evaluare personala, nu provider retrieval;
 - target geografic gol ramane invalid pentru profilurile care folosesc criterii geografice.
@@ -945,7 +946,7 @@ Contract:
 - environment-ul este obligatoriu si poate fi numai `dev|test|prod`;
 - `SOURCE_SHA` este obligatoriu si trebuie sa fie SHA complet immutable;
 - runtime repository este mapat canonic per environment;
-- DEV foloseste `SEARCH_MODE=disabled`, TEST `smoke`, PROD `live`;
+- DEV foloseste `SEARCH_MODE=disabled`, TEST `smoke`, PROD `live`; aceste roluri raman canonice, iar DEV/TEST au numai exceptia explicita manual-only `manual-full` pentru Full Search;
 - lipsa account ID / credential / origin produce FAIL;
 - `bootstrap-all` include structural numai DEV + TEST;
 - orice operatie PROD necesita owner gate explicit;
