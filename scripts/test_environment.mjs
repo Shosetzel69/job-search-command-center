@@ -400,3 +400,24 @@ test('controlled TEST Full Search is explicit manual-only and keeps TEST smoke i
   assert.doesNotMatch(control, /job-search-prod/);
   assert.doesNotMatch(control, /schedule:/);
 });
+
+
+test('DEV/TEST promotion evidence retries bounded propagation and requires exact candidate identity', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
+  assert.match(workflow, /for attempt in 1 2 3 4 5 6 7 8 9 10/);
+  assert.match(workflow, /\.source_sha == \$source and \.environment == \$environment/);
+  assert.match(workflow, /health did not converge to exact candidate/);
+  assert.match(workflow, /sleep 3/);
+});
+
+test('PROD workflow distinguishes readiness from post-deploy status verification', () => {
+  const cutover = readFileSync(resolve(ROOT, '.github/workflows/prod-cutover.yml'), 'utf8');
+  const readiness = readFileSync(resolve(ROOT, '.github/workflows/prod-readiness.yml'), 'utf8');
+  assert.match(cutover, /options: \[bootstrap-deploy, deploy, verify-deployed-status\]/);
+  assert.doesNotMatch(cutover, /options: \[bootstrap-deploy, deploy, status\]/);
+  assert.match(cutover, /post-deploy verification only/);
+  assert.match(cutover, /Use PROD Readiness \(Non-Mutating\) before cutover/);
+  assert.match(cutover, /inputs\.action == 'verify-deployed-status'/);
+  assert.match(readiness, /name: PROD Readiness \(Non-Mutating\)/);
+  assert.match(readiness, /Phase 6 readiness only/);
+});

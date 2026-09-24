@@ -345,6 +345,20 @@ hotfix Issue
 
 Any reduced test scope is explicitly accepted by the owner.
 
+### 10.1 PROD workflow selection
+
+Operational workflow ownership is explicit:
+
+| Intent | Workflow | Action |
+|---|---|---|
+| Pre-cutover, non-mutating PROD readiness | `PROD Readiness (Non-Mutating)` | workflow itself |
+| Deploy reviewed TEST-passed candidate | `PROD promotion` | `deploy` or `bootstrap-deploy` |
+| Verify a candidate/runtime already deployed in PROD | `PROD promotion` | `verify-deployed-status` |
+
+`verify-deployed-status` is not a readiness/preflight action. It fails early with guidance when the requested candidate/runtime is not already deployed.
+
+DEV/TEST post-deploy evidence uses a bounded propagation retry and accepts health only when environment and exact `CANDIDATE_SHA` match. Timeout fails closed.
+
 ## 11. Automation enforcement
 
 The permanent artifact chain is:
