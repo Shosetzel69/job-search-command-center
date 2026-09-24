@@ -431,8 +431,12 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 
 ## 13. Autentificare si securitate
 
-- Google Identity Services ramane IdP;
+- Google Identity Services ramane IdP pentru utilizatorii browser;
 - Worker valideaza semnatura JWT, issuer si audience;
+- CI/CD functional verification foloseste separat GitHub Actions OIDC, cu token short-lived emis per workflow run;
+- GitHub OIDC este acceptat numai pentru read-only protected functional verification pe `GET /data/*`, cu issuer/audience/repository_id/environment/workflow_ref/time claims validate fail-closed;
+- GitHub OIDC nu autorizeaza `/commands`, configuratie sau alte mutatii si nu substituie autentificarea Google a utilizatorului;
+- lifecycle-ul nu depinde de un Google user ID token stocat manual in GitHub Environments;
 - target multiuser: `Google sub -> app_user.user_id -> profile.profile_id`, cu exact un profil per user in MVP;
 - `ALLOWED_GOOGLE_SUB` ramane numai mecanism AS-IS single-user pana la cutover;
 - profilul autorizat este rezolvat server-side; un `profile_id` trimis de browser nu confera acces;
