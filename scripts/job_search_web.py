@@ -30,6 +30,65 @@ SKIP = re.compile(
 )
 DYNAMIC = re.compile(r"<script[^>]+src=|__NEXT_DATA__|webpack|data-reactroot|id=[\"'](?:root|app|__next)[\"']", re.I)
 
+PROFILE_DENY = (r"/(?:apply|application)(?:/|$)",)
+WEB_PROFILES = {
+    "Hipo": {
+        "start_url": "https://www.hipo.ro/locuri-de-munca/",
+        "allow_paths": (r"^/locuri-de-munca(?:/|$)",),
+        "deny_paths": PROFILE_DENY,
+        "list_paths": (r"^/locuri-de-munca/?$",),
+        "detail_paths": (r"^/locuri-de-munca/.+",),
+    },
+    "Toptal": {
+        "start_url": "https://www.toptal.com/freelance-jobs",
+        "allow_paths": (r"^/freelance-jobs(?:/|$)",),
+        "deny_paths": PROFILE_DENY,
+        "list_paths": (r"^/freelance-jobs/?$",),
+        "detail_paths": (r"^/freelance-jobs/.+",),
+    },
+    "Crossover": {
+        "start_url": "https://www.crossover.com/jobs",
+        "allow_paths": (r"^/jobs(?:/|$)",),
+        "deny_paths": PROFILE_DENY,
+        "list_paths": (r"^/jobs/?$",),
+        "detail_paths": (r"^/jobs/.+",),
+    },
+    "Vector Synergy": {
+        "start_url": "https://vectorsynergy.com/job-board",
+        "allow_paths": (r"^/job-board(?:/|$)",),
+        "deny_paths": PROFILE_DENY,
+        "list_paths": (r"^/job-board/?$",),
+        "detail_paths": (r"^/job-board/.+",),
+    },
+    "Worldline": {
+        "start_url": "https://jobs.worldline.com/",
+        "allow_paths": (
+            r"^/$",
+            r"^/(?:job|jobs|search|job-search|search-results)(?:/|$)",
+        ),
+        "deny_paths": PROFILE_DENY,
+        "list_paths": (
+            r"^/$",
+            r"^/(?:jobs|search|job-search|search-results)/?$",
+        ),
+        "detail_paths": (r"^/(?:job|jobs)/.+",),
+    },
+    "Source Group International": {
+        "start_url": "https://www.sourcegroupinternational.com/jobs/",
+        "allow_paths": (r"^/jobs(?:/|$)",),
+        "deny_paths": PROFILE_DENY,
+        "list_paths": (r"^/jobs/?$",),
+        "detail_paths": (r"^/jobs/.+",),
+    },
+    "Prohuman": {
+        "start_url": "https://prohumanhr.ro/job-uri/",
+        "allow_paths": (r"^/job-uri(?:/|$)",),
+        "deny_paths": PROFILE_DENY,
+        "list_paths": (r"^/job-uri/?$",),
+        "detail_paths": (r"^/job-uri/.+",),
+    },
+}
+
 
 class Page(HTMLParser):
     def __init__(self, html):
@@ -156,7 +215,31 @@ def site_root(host):
     return re.sub(r"^(www|jobs|careers|career)\.", "", host or "")
 
 
-def candidate(link, page_url, roots):
+def web_profile(source):
+    return WEB_PROFILES.get(str(source.get("name") or ""))
+
+
+def profile_entrypoint(source, profile=None):
+    profile = profile if profile is not None else web_profile(source)
+    return public_url((profile or {}).get("start_url") or source["url"])
+
+
+def profile_path_role(profile, url):
+    if not profile:
+        return None
+    path = urlsplit(url).path or "/"
+    if any(re.search(pattern, path, re.I) for pattern in profile.get("deny_paths", ())):
+        return "denied"
+    if not any(re.search(pattern, path, re.I) for pattern in profile.get("allow_paths", ())):
+        return "denied"
+    if any(re.search(pattern, path, re.I) for pattern in profile.get("detail_paths", ())):
+        return "detail"
+    if any(re.search(pattern, path, re.I) for pattern in profile.get("list_paths", ())):
+        return "list"
+    return "allowed"
+
+
+def candidate(link, page_url, roots, profile=None):
     try:
         url = public_url(urljoin(page_url, unescape(link["url"])))
     except FetchError:
@@ -170,7 +253,23 @@ def candidate(link, page_url, roots):
     if not internal and not ats:
         return None
     text = link.get("text") or ""
-    if ROLE.search(text + " " + path):
+    if profile and internal:
+        profile_role = profile_path_role(profile, url)
+        if profile_role == "denied":
+            return None
+        if profile_role == "detail":
+            priority = 0
+        elif link.get("next") or re.search(r"^(next|suivant|urmatoarea|weiter|[2-9])$", text.strip(), re.I):
+            priority = 2
+        elif profile_role == "list":
+            priority = 1
+        elif ROLE.search(text + " " + path):
+            priority = 0
+        elif CAREER.search(text + " " + path):
+            priority = 3
+        else:
+            return None
+    elif ROLE.search(text + " " + path):
         priority = 0
     elif link.get("next") or re.search(r"^(next|suivant|urmatoarea|weiter|[2-9])$", text.strip(), re.I):
         priority = 2
@@ -217,10 +316,15 @@ def collect(source, config, now=None, client=None):
     deadline = time.monotonic() + MAX_SECONDS
     client = client or PublicClient(deadline)
     connector = "web:" + str(source.get("id") or hashlib.sha256(source["url"].encode()).hexdigest()[:12])
+    profile = web_profile(source)
+    entrypoint = profile_entrypoint(source, profile)
     queue, queued, visited, records, diagnostics = [], set(), set(), {}, []
-    roots = {site_root(urlsplit(source["url"]).hostname)}
-    heapq.heappush(queue, (0, source["url"]))
-    queued.add(source["url"])
+    roots = {
+        site_root(urlsplit(source["url"]).hostname),
+        site_root(urlsplit(entrypoint).hostname),
+    }
+    heapq.heappush(queue, (0, entrypoint))
+    queued.add(entrypoint)
     pages, detected, malformed, expired = 0, 0, 0, 0
     browser_attempted = False
     browser_status = "not_attempted"
@@ -291,6 +395,7 @@ def collect(source, config, now=None, client=None):
                 "query": requested,
                 "requested_url": requested,
                 "final_url": final_url,
+                "profile_route": profile_path_role(profile, final_url) if profile else None,
                 "status": "fetched",
                 "transport": "http",
                 "http_status": getattr(client, "last_status", None),
@@ -301,15 +406,17 @@ def collect(source, config, now=None, client=None):
                 "error": "; ".join(diagnostic_error) or None,
             })
             for link in page.links[:MAX_LINKS]:
-                option = candidate(link, final_url, roots)
+                option = candidate(link, final_url, roots, profile)
                 if option and option[1] not in queued and option[1] not in visited and len(queued) < MAX_LINKS:
                     queued.add(option[1])
                     heapq.heappush(queue, option)
         except (FetchError, ValueError, OSError, RecursionError) as exc:
+            failed_final_url = getattr(exc, "final_url", None) or getattr(client, "last_url", None)
             diagnostics.append({
                 "query": requested,
                 "requested_url": getattr(exc, "requested_url", None) or requested,
-                "final_url": getattr(exc, "final_url", None) or getattr(client, "last_url", None),
+                "final_url": failed_final_url,
+                "profile_route": profile_path_role(profile, failed_final_url) if profile and failed_final_url else None,
                 "status": getattr(exc, "kind", "error"),
                 "transport": "http",
                 "http_status": getattr(exc, "status_code", None) or getattr(client, "last_status", None),
@@ -352,6 +459,8 @@ def collect(source, config, now=None, client=None):
         "web_outcome": outcome,
         "collection_method": "http+browser" if browser_attempted else "http",
         "requested_url": source.get("url"),
+        "profile_name": source.get("name") if profile else None,
+        "profile_entrypoint": entrypoint if profile else None,
         "final_url": first_final_url or getattr(client, "last_url", None),
         "http_status": first_http_status,
         "robots_status": first_robots_status,
