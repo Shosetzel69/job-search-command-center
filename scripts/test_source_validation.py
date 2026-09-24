@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -189,6 +190,38 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertIn("if: ${{ always() }}", workflow)
         self.assertNotIn("workflow_call:", workflow)
         self.assertNotIn("repository:", workflow)
+
+    def test_workflow_dispatch_inputs_are_never_interpolated_inside_shell_run_blocks(self):
+        workflow = (engine.ROOT / ".github/workflows/dev-source-validation.yml").read_text(encoding="utf-8")
+        lines = workflow.splitlines()
+        run_blocks = []
+        index = 0
+        while index < len(lines):
+            line = lines[index]
+            if line.lstrip().startswith("run: |"):
+                base_indent = len(line) - len(line.lstrip())
+                block = []
+                index += 1
+                while index < len(lines):
+                    current = lines[index]
+                    if current.strip():
+                        current_indent = len(current) - len(current.lstrip())
+                        if current_indent <= base_indent:
+                            break
+                    block.append(current)
+                    index += 1
+                run_blocks.append("\n".join(block))
+                continue
+            index += 1
+
+        self.assertTrue(run_blocks)
+        for block in run_blocks:
+            self.assertNotIn("${{ inputs.", block)
+
+        self.assertIn("CONFIRM_VALIDATION: ${{ inputs.confirm_validation }}", workflow)
+        self.assertIn("SOURCE_SHA_INPUT: ${{ inputs.source_sha }}", workflow)
+        self.assertRegex(workflow, re.compile(r'test "\\$CONFIRM_VALIDATION" = "VALIDATE"'))
+        self.assertIn('[[ "$SOURCE_SHA_INPUT" =~ ^[0-9a-fA-F]{40}$ ]]', workflow)
 
 
 if __name__ == "__main__":
