@@ -1,7 +1,7 @@
 # Strategia surselor
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-22`
+Ultima actualizare: `2026-09-25`
 
 ## 1. Principiu
 
@@ -27,7 +27,7 @@ O regula explicita de excludere operationala prevaleaza peste un eventual `activ
 
 Stare curenta:
 
-- 160 intrari in catalog, inclusiv JobsPipe explicit; 29 surse Remote-first noi sunt fail-closed: 28 sunt tehnic validate, Oyster ramane in validare connector-level, iar toate 29 sunt neaprobate si inactive;
+- 160 intrari in catalog, inclusiv JobsPipe explicit; 159 sunt fizic active dupa decizia ownerului din 2026-09-25, iar Oyster ramane singura intrare inactiva (`validating + pending`); Monster ramane exclus operational indiferent de starea legacy fizica;
 - adaptere API existente sunt validate/activate controlat conform Package 2C;
 - JobsPipe este `disabled` in configuratia runtime;
 - Jobicy ramane operational independent;
@@ -197,7 +197,7 @@ implementat
 -> activare registry
 ```
 
-Nu se introduce in Package 2 obiectivul de acoperire completa a tuturor surselor active. #49 ramane exclus din Package 2 conform deciziei ownerului.
+Decizia ownerului din 2026-09-25 reactiveaza #49: Full Search normal traverseaza intregul registru activ prin orchestrarea existenta. Excluderile de politica, credentialele lipsa, providerii amanati si rutele nevalidate raman fail-closed si sunt raportate prin outcome-uri explicite.
 
 ### Remote-first batch #313-#320
 
@@ -212,7 +212,7 @@ Rutarea reutilizeaza:
 - Traefik Labs printr-un collector bounded, source-specific, care reutilizeaza transportul web securizat;
 - Float prin collectorul web existent, unde zero rezultate valide ramane `success_empty`.
 
-Niciuna dintre aceste intrari nu este activata de simpla prezenta a rutei. Validarea concreta, aprobarea si activarea raman tranzitii distincte.
+Cele 28 de intrari Remote-first deja validate au fost aprobate si activate prin decizia ownerului din 2026-09-25. Oyster ramane `validating + pending + inactive` pana la validarea connector-level. Validarea, aprobarea si activarea raman tranzitii distincte pentru sursele viitoare.
 
 Referinta pentru date structurate: https://schema.org/JobPosting
 
