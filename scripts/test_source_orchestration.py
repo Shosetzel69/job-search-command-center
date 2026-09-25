@@ -103,11 +103,19 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(status["jobs_published"], 1)
         self.assertEqual(json.loads(engine.JOBS_PATH.read_text())["jobs"][0]["source"], "Jobicy")
 
-    def test_partial_queries_count_provider_once_as_failed(self):
-        self.apify.return_value.append(engine.CollectionResult("jobspipe-apify", "remote", False, [], 0, "timeout"))
+    def test_partial_queries_are_warning_not_hard_failure(self):
+        self.apify.return_value.append(engine.CollectionResult(
+            "jobspipe-apify", "remote", False, [], 0, "timeout",
+            error_code="TIMEOUT", failure_stage="fetch",
+        ))
         _, status = self.run_search()
         self.assertEqual(status["sources_attempted"], 2)
-        self.assertEqual(status["sources_failed"], 1)
+        self.assertEqual(status["sources_failed"], 0)
+        self.assertEqual(status["sources_partial"], 1)
+        jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
+        self.assertEqual(jobs_pipe["outcome"], "partial")
+        self.assertEqual(jobs_pipe["records"], 1)
+        self.assertEqual(jobs_pipe["error_code"], "TIMEOUT")
         self.assertEqual(status["records_inspected"], 2)
 
     def test_disabled_jobspipe_does_not_disable_other_sources(self):
@@ -304,6 +312,29 @@ class OrchestrationTests(unittest.TestCase):
         for url in ("https://jobicy.com.evil.example/", "https://jobicy.com@evil.example/", "http://jobicy.com/", "https://jobicy.com:444/"):
             self.assertIsNone(orchestration.connector_for({"url": url, "connector_available": True}))
         self.assertEqual(orchestration.connector_for({"url": "https://jobicy.com/", "connector_available": False}), "jobicy")
+
+    def test_public_board_hosts_resolve_to_dedicated_connectors(self):
+        expected = {
+            "https://remoteok.com/": "remoteok",
+            "https://himalayas.app/jobs": "himalayas",
+            "https://www.workingnomads.com/jobs": "workingnomads",
+            "https://jobgether.com/": "jobgether",
+            "https://weworkremotely.com/": "wwr",
+            "https://nodesk.co/remote-jobs/": "nodesk",
+            "https://euremotejobs.com/": "euremotejobs",
+            "https://landing.jobs/": "landingjobs",
+            "https://eures.europa.eu/": "eures",
+        }
+        for url, connector in expected.items():
+            self.assertEqual(orchestration.connector_for({"url": url}), connector)
+
+    def test_source_specific_web_seed_is_planned_without_changing_catalog_url(self):
+        plan = orchestration.build_plan({"sources":[{
+            "id":"ejobs","name":"eJobs","url":"https://www.ejobs.ro/","active":True,
+        }]})
+        self.assertEqual(plan[0]["connector"], "web")
+        self.assertEqual(plan[0]["url"], "https://www.ejobs.ro/")
+        self.assertEqual(plan[0]["retrieval_url"], "https://www.ejobs.ro/locuri-de-munca")
 
     def test_provider_local_ids_do_not_drop_unrelated_jobs(self):
         other = record("Jobicy")
