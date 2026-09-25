@@ -489,6 +489,7 @@ def run(config, now):
     )
     collection, metadata, mode = collect_sources(config, state, now, plan, run_id)
     successful = any(result.ok for result in collection)
+    output = None
     if successful:
         output = engine.process_records(config, collection, now)
         output = optimized.merge_with_existing(output, state, config, now)
@@ -503,6 +504,12 @@ def run(config, now):
         apify.update_status([r for r in collection if r.connector.startswith("jobspipe")],
                             max(100, min(20000, int(config.get("jobspipe_apify_max_items_per_run", 5000)))))
     status = json.loads(engine.STATUS_PATH.read_text())
+    if output is not None:
+        status["excluded_by_reason"] = output.get("excluded_by_reason") or {}
+        status["excluded_by_category"] = output.get("excluded_by_category") or {}
+    else:
+        status["excluded_by_reason"] = {}
+        status["excluded_by_category"] = {}
     finalize_source_outcomes(plan, status["run_id"])
     status["source_outcome_schema_version"] = "1.0"
     status.update(aggregate_source_results(plan))
