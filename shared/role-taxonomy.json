@@ -1,0 +1,144 @@
+{
+  "schema_version": "1.0",
+  "taxonomy_version": "2026.09.25-1",
+  "canonical_families": [
+    "PROJECT_MANAGEMENT",
+    "DELIVERY",
+    "SERVICE_MANAGEMENT",
+    "SCRUM_AGILE",
+    "PROGRAM_PMO",
+    "UNKNOWN"
+  ],
+  "families": {
+    "PROJECT_MANAGEMENT": {
+      "label": "Project Management",
+      "members": [
+        {
+          "code": "project_manager",
+          "label": "Project Manager",
+          "include_patterns": [
+            "\\bproject\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "it_project_manager",
+          "label": "IT Project Manager",
+          "include_patterns": [
+            "\\bit\\s+project\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "technical_project_manager",
+          "label": "Technical Project Manager",
+          "include_patterns": [
+            "\\btechnical\\s+project\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "agile_project_manager",
+          "label": "Agile Project Manager",
+          "include_patterns": [
+            "\\bagile\\s+project\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        }
+      ]
+    },
+    "DELIVERY": {
+      "label": "Delivery",
+      "members": [
+        {
+          "code": "delivery_manager",
+          "label": "Delivery Manager",
+          "include_patterns": [
+            "\\bdelivery\\s+manager\\b"
+          ],
+          "exclude_patterns": [
+            "\\bservice\\s+delivery\\s+manager\\b"
+          ]
+        },
+        {
+          "code": "technical_delivery_manager",
+          "label": "Technical Delivery Manager",
+          "include_patterns": [
+            "\\btechnical\\s+delivery\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        }
+      ]
+    },
+    "SERVICE_MANAGEMENT": {
+      "label": "Service Management",
+      "members": [
+        {
+          "code": "service_manager",
+          "label": "Service Manager",
+          "include_patterns": [
+            "\\b(?:it\\s+)?service\\s+manager\\b"
+          ],
+          "exclude_patterns": [
+            "\\bcustomer\\s+service\\s+manager\\b",
+            "\\bfield\\s+service\\s+manager\\b"
+          ]
+        },
+        {
+          "code": "service_delivery_manager",
+          "label": "Service Delivery Manager",
+          "include_patterns": [
+            "\\bservice\\s+delivery\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        }
+      ]
+    },
+    "SCRUM_AGILE": {
+      "label": "Scrum / Agile",
+      "members": [
+        {
+          "code": "scrum_master",
+          "label": "Scrum Master",
+          "include_patterns": [
+            "\\bscrum\\s+master\\b"
+          ],
+          "exclude_patterns": []
+        }
+      ]
+    },
+    "PROGRAM_PMO": {
+      "label": "Program / PMO",
+      "members": [
+        {
+          "code": "program_manager",
+          "label": "Program Manager",
+          "include_patterns": [
+            "\\b(?:program|programme)\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "technical_program_manager",
+          "label": "Technical Program Manager",
+          "include_patterns": [
+            "\\btechnical\\s+(?:program|programme)\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "pmo_manager",
+          "label": "PMO Manager",
+          "include_patterns": [
+            "\\bpmo\\s+manager\\b"
+          ],
+          "exclude_patterns": []
+        }
+      ]
+    },
+    "UNKNOWN": {
+      "label": "Unknown",
+      "members": []
+    }
+  }
+}
