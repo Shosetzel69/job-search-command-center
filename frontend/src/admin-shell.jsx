@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
 import ActionDialog from './action-dialog.jsx';
-import { exclusionGroupRows, failureGroupRows, runSummaryLabel, sourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
+import { exclusionGroupRows, failureGroupRows, runSummaryLabel, sourceResultDetail, sourceResultRows, sortSourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
 import {
   ADMIN_SECTIONS,
   SOURCE_SECTIONS,
@@ -326,12 +326,23 @@ function Nomenclatures() {
 
 function Logs({ runs }) {
   const [open,setOpen] = useState(null);
+  const [sourceSort,setSourceSort] = useState({key:'source',direction:'asc'});
+  const toggleSourceSort = key => setSourceSort(current => ({
+    key,
+    direction:current.key===key && current.direction==='asc' ? 'desc' : 'asc',
+  }));
+  const SortHeader = ({field,children}) => {
+    const active=sourceSort.key===field;
+    return <button type="button" onClick={()=>toggleSourceSort(field)} className="flex w-full items-center gap-1 text-left font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-800">
+      <span>{children}</span><span aria-hidden="true">{active?(sourceSort.direction==='asc'?'↑':'↓'):'↕'}</span>
+    </button>;
+  };
   if (!runs.length) return <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Nu exista istoric de rulari.</div>;
   return <div className="space-y-3">{runs.slice(0,10).map(run => {
     const summary = sourceSummaryRows(run);
     const failureGroups = failureGroupRows(run);
     const exclusionGroups = exclusionGroupRows(run);
-    const sourceRows = sourceResultRows(run);
+    const sourceRows = sortSourceResultRows(sourceResultRows(run),sourceSort.key,sourceSort.direction);
     return <section key={run.run_id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <button onClick={() => setOpen(open === run.run_id ? null : run.run_id)} className="grid w-full gap-2 px-5 py-4 text-left sm:grid-cols-[160px_120px_120px_1fr]">
         <div><div className="font-semibold text-slate-900">{formatTime(run.completed_at || run.started_at)}</div><div className="text-xs text-slate-400">{run.run_id}</div></div>
@@ -370,17 +381,25 @@ function Logs({ runs }) {
         </div>}
 
         {sourceRows.length > 0 && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <div className="min-w-[760px] divide-y divide-slate-100">
-            {sourceRows.map((item,index) => <div key={`${item.source}-${index}`} className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 px-3 py-2">
-              <div className="font-medium text-slate-700">{item.source}</div>
-              <div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div>
-              <div>{item.records} joburi</div>
-              <div className={item.outcome === 'failed' ? 'text-red-700' : 'text-slate-500'}>
-                {item.outcome === 'failed'
-                  ? [item.errorCode, item.failureStage, item.httpStatus ? `HTTP ${item.httpStatus}` : null].filter(Boolean).join(' · ') || 'Eroare clasificata'
-                  : item.outcomeMeta.kind === 'expected' ? 'Neexecutata conform starii/politicii curente' : '—'}
-              </div>
-            </div>)}
+          <div className="min-w-[760px]">
+            <div className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px]">
+              <SortHeader field="source">Sursa</SortHeader>
+              <SortHeader field="status">Status</SortHeader>
+              <SortHeader field="jobs">Joburi</SortHeader>
+              <SortHeader field="detail">Detaliu</SortHeader>
+            </div>
+            <div className="divide-y divide-slate-100">
+              {sourceRows.map((item,index) => {
+                const detail=sourceResultDetail(item);
+                const warning=['partial','blocked','no_extractable_jobs'].includes(item.outcome);
+                return <div key={`${item.source}-${index}`} className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 px-3 py-2">
+                  <div className="font-medium text-slate-700">{item.source}</div>
+                  <div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div>
+                  <div>{item.jobsLabel}</div>
+                  <div className={item.outcome === 'failed' ? 'text-red-700' : warning ? 'text-amber-700' : 'text-slate-500'} title={item.message || undefined}>{detail}</div>
+                </div>;
+              })}
+            </div>
           </div>
         </div>}
 
