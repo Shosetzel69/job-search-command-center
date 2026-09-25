@@ -103,11 +103,15 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(status["jobs_published"], 1)
         self.assertEqual(json.loads(engine.JOBS_PATH.read_text())["jobs"][0]["source"], "Jobicy")
 
-    def test_partial_queries_count_provider_once_as_failed(self):
+    def test_partial_queries_preserve_usable_records_without_hard_failure(self):
         self.apify.return_value.append(engine.CollectionResult("jobspipe-apify", "remote", False, [], 0, "timeout"))
         _, status = self.run_search()
         self.assertEqual(status["sources_attempted"], 2)
-        self.assertEqual(status["sources_failed"], 1)
+        self.assertEqual(status["sources_failed"], 0)
+        self.assertEqual(status["sources_partial"], 1)
+        jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
+        self.assertEqual(jobs_pipe["outcome"], "partial")
+        self.assertEqual(jobs_pipe["records"], 1)
         self.assertEqual(status["records_inspected"], 2)
 
     def test_disabled_jobspipe_does_not_disable_other_sources(self):
@@ -168,6 +172,41 @@ class OrchestrationTests(unittest.TestCase):
         outcomes = {item["source"]: item["outcome"] for item in status["source_results"]}
         self.assertEqual(outcomes["JobsPipe"], "success_empty")
         self.assertEqual(outcomes["Jobicy"], "success_empty")
+
+    def test_generic_web_no_extractable_is_diagnostic_not_hard_error(self):
+        item = {"source":"Example","source_id":"x","status":"pending","records":0,
+                "error":None,"failure_reason":"HTML accessible but no extractor",
+                "http_status":200,"web_outcome":"no_extractable_jobs"}
+        result = engine.CollectionResult("web:x","no_extractable_jobs",False,[],0,
+                                         "HTML accessible but no extractor",
+                                         error_code="CONNECTOR_ERROR",failure_stage="fetch",http_status=200)
+        orchestration.record_results(item,[result])
+        self.assertEqual(item["status"],"completed")
+        self.assertEqual(item["outcome"],"no_extractable_jobs")
+        self.assertEqual(item["records"],0)
+        self.assertIsNone(item["error_code"])
+
+    def test_blocked_web_retrieve_is_distinct_from_failed_and_zero_jobs(self):
+        item = {"source":"Example","source_id":"x","status":"pending","records":0,
+                "error":None,"failure_reason":"Disallowed by robots.txt",
+                "http_status":403,"web_outcome":"blocked"}
+        result = engine.CollectionResult("web:x","blocked",False,[],0,
+                                         "Disallowed by robots.txt",
+                                         error_code="ACCESS_DENIED",failure_stage="fetch",http_status=403)
+        orchestration.record_results(item,[result])
+        self.assertEqual(item["status"],"completed")
+        self.assertEqual(item["outcome"],"blocked")
+        self.assertEqual(item["records"],0)
+        self.assertEqual(item["http_status"],403)
+
+    def test_public_board_sources_get_unique_dedicated_routes(self):
+        catalog = {"sources":[
+            {"id":"a","name":"Remote OK","url":"https://remoteok.com/","active":True},
+            {"id":"b","name":"Himalayas","url":"https://himalayas.app/jobs","active":True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        self.assertEqual([item["connector"] for item in plan],["public_board","public_board"])
+        self.assertTrue(all(item["status"]=="pending" for item in plan))
 
     def test_http_429_is_structured_without_parsing_message(self):
         self.apify.side_effect = HTTPError("https://example.invalid", 429, "quota", {}, None)
