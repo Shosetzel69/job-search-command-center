@@ -17,6 +17,7 @@ import job_search_greenhouse as greenhouse
 import job_search_jobicy as jobicy
 import job_search_lever as lever
 import job_search_pinpoint as pinpoint
+import job_search_public_boards as public_boards
 import job_search_recruitee as recruitee
 import job_search_smartrecruiters as smartrecruiters
 import job_search_traefik as traefik
@@ -31,6 +32,23 @@ COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "source
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
 POLICY_EXCLUDED_SOURCE_NAMES = {"monster"}
+
+PUBLIC_BOARD_CONNECTORS = {
+    "remoteok", "himalayas", "workingnomads", "jobgether",
+    "wwr", "nodesk", "euremotejobs", "landingjobs", "eures",
+}
+
+WEB_SOURCE_SEEDS = {
+    "eJobs": "https://www.ejobs.ro/locuri-de-munca",
+    "Hipo": "https://www.hipo.ro/locuri-de-munca/cautajobfiltre/6",
+    "EU Careers / EPSO": "https://eu-careers.europa.eu/en/job-opportunities",
+    "EuroBrussels": "https://www.eurobrussels.com/jobs",
+    "eFinancialCareers": "https://www.efinancialcareers.com/jobs/search",
+    "Hays Romania": "https://www.hays.ro/cauta-locuri-de-munca",
+    "Remote.co": "https://remote.co/remote-jobs/",
+    "Wellfound": "https://wellfound.com/jobs",
+    "Flexa": "https://flexa.careers/jobs",
+}
 
 DEFERRED_PROVIDER_ROOTS = {
     "linkedin.com": ("LinkedIn", "jobs"),
@@ -97,6 +115,7 @@ class ClassifiedSourceError(Exception):
 CANONICAL_OUTCOMES = {
     "success",
     "success_empty",
+    "partial",
     "failed",
     "deferred_provider",
     "blocked_credentials",
@@ -197,7 +216,7 @@ def finalize_source_outcomes(plan, run_id):
                 item["outcome"] = "skipped"
         if item["outcome"] not in CANONICAL_OUTCOMES:
             raise ValueError(f"Unsupported source outcome: {item['outcome']}")
-        if item["outcome"] != "failed":
+        if item["outcome"] not in {"failed", "partial"}:
             item["error_code"] = None
             item["failure_stage"] = None
 
@@ -214,7 +233,7 @@ def emit_source_started(run_id, item):
 
 def emit_source_final(run_id, item):
     outcome = item.get("outcome")
-    if outcome in {"success", "success_empty"}:
+    if outcome in {"success", "success_empty", "partial"}:
         event_name = "source.collection.completed"
     elif outcome == "failed":
         event_name = "source.collection.failed"
@@ -280,6 +299,7 @@ def build_plan(catalog):
                 "source_id": source.get("id") or source.get("url"), "url": source.get("url"),
                 "connector": "deferred" if deferred else connector,
                 "collection_method": "deferred" if deferred else connector,
+                "retrieval_url": WEB_SOURCE_SEEDS.get(source.get("name"), source.get("url")),
                 "active": source.get("active") is not False and not excluded_by_policy, "status": "pending",
                 "outcome": None, "source_execution_id": None,
                 "records": 0, "error": None, "failure_reason": None,
@@ -327,7 +347,7 @@ def collect_sources(config, state, now, plan, run_id=None):
             emit_source_started(run_id, item)
             futures[item["source_id"]] = pool.submit(
                 web.collect,
-                {"id": item["source_id"], "name": item["source"], "url": item["url"]},
+                {"id": item["source_id"], "name": item["source"], "url": item["url"], "retrieval_url": item.get("retrieval_url")},
                 config,
                 now,
             )
@@ -348,20 +368,31 @@ def collect_sources(config, state, now, plan, run_id=None):
 
 
 def record_results(item, results):
+    successful = [result for result in results if result.ok]
     failed = [result for result in results if not result.ok]
-    item["status"] = "completed" if results and not failed else "failed"
-    item["records"] = sum(len(result.records) for result in results if result.ok)
+    item["records"] = sum(len(result.records) for result in successful)
     item["error"] = "; ".join(
         diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
     ) or None
     if not results:
+        item["status"] = "failed"
         item["outcome"] = "failed"
         item["error"] = item["error"] or "Connector returned no collection result"
         item["failure_reason"] = item.get("failure_reason") or item["error"]
         item["error_code"] = "CONNECTOR_ERROR"
         item["failure_stage"] = "fetch"
         item["http_status"] = None
+    elif successful and failed:
+        item["status"] = "completed"
+        item["outcome"] = "partial"
+        first = failed[0]
+        http_status = first.http_status if first.http_status is not None else item.get("http_status")
+        item["http_status"] = http_status
+        item["error_code"] = first.error_code or error_code_for_http_status(http_status) or "CONNECTOR_ERROR"
+        item["failure_stage"] = first.failure_stage or "fetch"
+        item["failure_reason"] = item.get("failure_reason") or item["error"]
     elif failed:
+        item["status"] = "failed"
         item["outcome"] = "failed"
         first = failed[0]
         http_status = first.http_status if first.http_status is not None else item.get("http_status")
@@ -369,6 +400,7 @@ def record_results(item, results):
         item["error_code"] = first.error_code or error_code_for_http_status(http_status) or "CONNECTOR_ERROR"
         item["failure_stage"] = first.failure_stage or "fetch"
     else:
+        item["status"] = "completed"
         item["outcome"] = "success" if item["records"] else "success_empty"
         item["error_code"] = None
         item["failure_stage"] = None
@@ -447,6 +479,8 @@ def collect_api_sources(config, state, now, plan, run_id=None):
                 results = traefik.collect(item["url"], item["source"])
             elif connector == "jobicy":
                 results = jobicy.collect(config)
+            elif connector in PUBLIC_BOARD_CONNECTORS:
+                results = public_boards.collect(connector, {"id": item["source_id"], "name": item["source"], "url": item["url"]}, now)
             elif connector == "jobspipe" and mode == "apify":
                 results = apify.collect(config)
             elif connector == "jobspipe" and mode == "direct":
@@ -525,7 +559,8 @@ def run(config, now):
                          ("skipped", "skipped"), ("inactive", "inactive")):
         status["sources_" + field] = sum(item["status"] == value for item in plan)
     status["sources_with_records"] = sum(item["records"] > 0 for item in plan)
-    for outcome in ("partial", "blocked", "no_extractable_jobs"):
+    status["sources_partial"] = sum(item.get("outcome") == "partial" for item in plan)
+    for outcome in ("blocked", "no_extractable_jobs"):
         status["sources_" + outcome] = sum(item.get("web_outcome") == outcome for item in plan)
     status["limitations"] = [f'{item["source"]}: {item["error"]}' for item in plan if item["status"] in {"skipped", "unsupported", "inactive"} and item.get("error")]
     if not collection and not status["sources_unsupported"]:
