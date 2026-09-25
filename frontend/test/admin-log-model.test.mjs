@@ -3,11 +3,35 @@ import test from 'node:test';
 
 import {
   deriveSourceAggregates,
+  exclusionGroupRows,
   failureGroupRows,
   sourceResultRows,
   sourceSummaryRows,
   runSummaryLabel,
 } from '../src/admin-log-model.mjs';
+
+test('exclusion grouping sorts dominant categories and exact reasons by count', () => {
+  const rows = exclusionGroupRows({
+    excluded_by_category:{ geo:12, role:40, freshness:7 },
+    excluded_by_reason:{
+      'title outside target':35,
+      'outside target or excluded geography':12,
+      'older than 24 hours':7,
+      'non-IT role':5,
+    },
+  });
+  assert.deepEqual(rows.categories, [
+    { key:'role', count:40, label:'Rol' },
+    { key:'geo', count:12, label:'Geografie' },
+    { key:'freshness', count:7, label:'Freshness' },
+  ]);
+  assert.deepEqual(rows.reasons.map(item => [item.key,item.count]), [
+    ['title outside target',35],
+    ['outside target or excluded geography',12],
+    ['older than 24 hours',7],
+    ['non-IT role',5],
+  ]);
+});
 
 test('uses persisted structured aggregates without parsing messages', () => {
   const run = {
