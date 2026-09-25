@@ -129,9 +129,18 @@ def request_once(url, deadline, delay=0.5):
         HOST_LAST[host] = time.monotonic()
         connection = PinnedHTTP(host, addresses[0], port, min(8, max(0.1, deadline - time.monotonic())), parsed.scheme == "https")
         try:
-            request_path = quote(parsed.path or "/", safe="/%:@!            connection.request("GET", urlunsplit(("", "", parsed.path or "/", parsed.query, "")),
-                               headers={"User-Agent": USER_AGENT, "Accept": "text/html,application/xhtml+xml,application/json,text/plain", "Accept-Encoding": "identity"})'()*+,;=-._~")
-            request_query = quote(parsed.query or "", safe="=&%:@!
+            request_path = quote(parsed.path or "/", safe="/%:@!$&()*+,;=-._~")
+            request_query = quote(parsed.query or "", safe="=&%:@!$()*+,;/?-._~")
+            request_target = urlunsplit(("", "", request_path, request_query, ""))
+            connection.request(
+                "GET",
+                request_target,
+                headers={
+                    "User-Agent": USER_AGENT,
+                    "Accept": "text/html,application/xhtml+xml,application/json,text/plain",
+                    "Accept-Encoding": "identity",
+                },
+            )
             response = connection.getresponse()
             headers = {key.lower(): value for key, value in response.getheaders()}
             chunks, length = [], 0
