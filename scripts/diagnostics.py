@@ -150,7 +150,7 @@ def source_fields(item: dict[str, Any]) -> dict[str, Any]:
 
 def source_level(item: dict[str, Any]) -> str:
     outcome = item.get("outcome")
-    if outcome == "failed":
+    if outcome in {"failed", "partial"}:
         return "WARN"
     if outcome == "blocked_credentials":
         return "WARN"
