@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
 import ActionDialog from './action-dialog.jsx';
-import { failureGroupRows, runSummaryLabel, sourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
+import { exclusionGroupRows, failureGroupRows, runSummaryLabel, sourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
 import {
   ADMIN_SECTIONS,
   SOURCE_SECTIONS,
@@ -330,6 +330,7 @@ function Logs({ runs }) {
   return <div className="space-y-3">{runs.slice(0,10).map(run => {
     const summary = sourceSummaryRows(run);
     const failureGroups = failureGroupRows(run);
+    const exclusionGroups = exclusionGroupRows(run);
     const sourceRows = sourceResultRows(run);
     return <section key={run.run_id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <button onClick={() => setOpen(open === run.run_id ? null : run.run_id)} className="grid w-full gap-2 px-5 py-4 text-left sm:grid-cols-[160px_120px_120px_1fr]">
@@ -344,6 +345,17 @@ function Logs({ runs }) {
         {summary.length > 0 && <div className="mt-4">
           <div className="mb-2 font-semibold text-slate-700">Rezultat surse</div>
           <div className="flex flex-wrap gap-2">{summary.map(item => <Pill key={item.outcome} tone={item.tone}>{item.label}: {item.count}</Pill>)}</div>
+        </div>}
+
+        {(exclusionGroups.categories.length > 0 || exclusionGroups.reasons.length > 0) && <div className="mt-4 grid gap-3 md:grid-cols-2">
+          <div className="rounded-xl border border-amber-100 bg-white p-3">
+            <div className="font-semibold text-slate-700">Excluderi dupa categorie</div>
+            <div className="mt-2 space-y-1">{exclusionGroups.categories.map(item => <div key={item.key} className="flex justify-between gap-3"><span>{item.label}</span><span className="font-semibold">{item.count}</span></div>)}</div>
+          </div>
+          <div className="rounded-xl border border-amber-100 bg-white p-3">
+            <div className="font-semibold text-slate-700">Excluderi dupa motiv exact</div>
+            <div className="mt-2 space-y-1">{exclusionGroups.reasons.map(item => <div key={item.key} className="flex justify-between gap-3"><span>{item.key}</span><span className="font-semibold">{item.count}</span></div>)}</div>
+          </div>
         </div>}
 
         {(failureGroups.errorCodes.length > 0 || failureGroups.failureStages.length > 0) && <div className="mt-4 grid gap-3 md:grid-cols-2">

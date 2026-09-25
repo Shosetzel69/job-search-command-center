@@ -107,3 +107,9 @@ test('legacy JobsPipe run budget maps to its own config field', () => {
   const config = applyUserConfigPatch(baseConfig(), patch);
   assert.equal(config.jobspipe_credit_budget_per_run, 23);
 });
+
+
+test('720h freshness is accepted for diagnostic runs', () => {
+  const patch = validateUserConfigPatch({ freshness:720 }, nomenclatures);
+  assert.equal(patch.freshness, 720);
+});
