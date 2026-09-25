@@ -124,7 +124,8 @@ Campul legacy `status` ramane temporar pentru compatibilitate (`inactive|unsuppo
 
 - `success`;
 - `success_empty`;
-- `failed`;
+- `partial` — exista rezultate utilizabile, dar una sau mai multe sub-incercari au esuat; este warning, nu hard failure;
+- `failed` — nu exista niciun rezultat utilizabil si retrieve-ul a esuat/blocat;
 - `deferred_provider`;
 - `blocked_credentials`;
 - `validation_pending`;
@@ -217,3 +218,17 @@ Cele 28 de intrari Remote-first deja validate au fost aprobate si activate prin 
 Referinta pentru date structurate: https://schema.org/JobPosting
 
 Decizie initiala colectare web: `docs/adr/ADR-001-web-source-collection.md`.
+
+
+## Public job-board retrieval hardening — ATC-402-06
+
+Pentru board-urile publice active, ruta preferata este mecanismul machine-readable public si bounded atunci cand exista:
+Remote OK JSON, Himalayas JSON, Working Nomads JSON, Jobgether JSON, We Work Remotely RSS, NoDesk RSS, EU Remote Jobs feed, Landing.Jobs public jobs endpoint si EURES public search API.
+
+Reguli:
+- collection ramane broad/shared; criteriile de profil nu sunt injectate in query-urile providerilor;
+- API/feed este preferat fata de crawling-ul generic al homepage-ului;
+- pentru board-uri fara API/feed public stabil se foloseste un seed web specific paginii de joburi, pastrand aceleasi limite HTTP/browser si fara bypass CAPTCHA/login/robots;
+- un retrieve valid cu zero rezultate este `success_empty`;
+- rezultate utilizabile + sub-incercari esuate = `partial`;
+- `failed` este rezervat situatiei fara rezultat utilizabil.
