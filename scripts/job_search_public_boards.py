@@ -20,6 +20,7 @@ USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
 PUBLIC_BOARD_SOURCES = {
+    "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
     "Remote OK": {"kind": "remoteok", "url": "https://remoteok.com/api"},
     "Himalayas": {"kind": "himalayas", "url": "https://himalayas.app/jobs/api?limit=100"},
     "Working Nomads": {"kind": "workingnomads", "url": "https://www.workingnomads.com/api/exposed_jobs/"},
@@ -60,6 +61,50 @@ def _fetch(url, accept):
     if len(body) > MAX_BYTES:
         raise ValueError("Public board response exceeds 12 MiB limit")
     return status, content_type, body
+
+
+def _post_json(url, payload):
+    data = json.dumps(payload).encode("utf-8")
+    request = Request(
+        url,
+        data=data,
+        method="POST",
+        headers={"Accept":"application/json","Content-Type":"application/json","User-Agent":USER_AGENT},
+    )
+    with urlopen(request, timeout=30) as response:
+        body=response.read(MAX_BYTES+1)
+        status=getattr(response,"status",200)
+    if len(body)>MAX_BYTES:
+        raise ValueError("Public board response exceeds 12 MiB limit")
+    if status!=200:
+        raise RuntimeError(f"Public board endpoint HTTP {status}")
+    return json.loads(body.decode("utf-8",errors="replace"))
+
+
+def _eures(payload):
+    if not isinstance(payload,dict) or not isinstance(payload.get("jvs"),list):
+        raise ValueError("EURES response must contain jvs[]")
+    records=[]
+    for item in payload["jvs"]:
+        if not isinstance(item,dict) or not item.get("id") or not item.get("title"):
+            continue
+        employer=item.get("employer") if isinstance(item.get("employer"),dict) else {}
+        location_map=item.get("locationMap") if isinstance(item.get("locationMap"),dict) else {}
+        codes=[str(code).upper() for code in location_map if str(code).upper() in engine.COUNTRY_NAMES]
+        countries=[engine.COUNTRY_NAMES[code] for code in codes]
+        description=item.get("description")
+        translations=item.get("translations") if isinstance(item.get("translations"),dict) else {}
+        en=translations.get("en") if isinstance(translations.get("en"),dict) else {}
+        description=description or en.get("description") or item.get("title")
+        title=en.get("title") or item.get("title")
+        records.append(_record(
+            "EURES",item["id"],title,employer.get("name") or "EURES",description,
+            f"https://europa.eu/eures/portal/jv-se/jv-details/{item['id']}?lang=en",
+            date_posted=_epoch_iso(item.get("creationDate")),
+            location=", ".join(countries),countries=countries,remote=False,
+            employment_statuses=item.get("positionScheduleCodes") or [],
+        ))
+    return records
 
 
 def _country_names_from_text(value):
@@ -267,20 +312,32 @@ def collect(source, config=None):
     if not spec:
         raise ValueError(f"Unsupported public-board source: {name}")
     kind, url = spec["kind"], spec["url"]
-    accept = "application/json" if kind != "rss" else "application/rss+xml, application/xml, text/xml, */*"
-    status, _content_type, body = _fetch(url, accept)
-    if status != 200:
-        raise RuntimeError(f"{name} public endpoint HTTP {status}")
-    if kind == "rss":
-        records = _rss(body, name, url)
+    if kind == "eures":
+        payload=_post_json(url,{
+            "resultsPerPage":100,"page":1,"sortSearch":"MOST_RECENT","keywords":[],
+            "publicationPeriod":None,"occupationUris":[],"skillUris":[],
+            "requiredExperienceCodes":[],"positionScheduleCodes":[],"sectorCodes":[],
+            "educationAndQualificationLevelCodes":[],"positionOfferingCodes":[],
+            "locationCodes":[],"euresFlagCodes":[],"otherBenefitsCodes":[],
+            "requiredLanguages":[],"minNumberPost":None,
+            "sessionId":"jscc-global-collection","requestLanguage":"en",
+        })
+        records=_eures(payload)
     else:
-        payload = json.loads(body.decode("utf-8", errors="replace"))
-        parser = {
-            "remoteok": _remoteok,
-            "himalayas": _himalayas,
-            "workingnomads": _workingnomads,
-            "jobgether": _jobgether,
-            "landingjobs": _landingjobs,
-        }[kind]
-        records = parser(payload)
+        accept = "application/json" if kind != "rss" else "application/rss+xml, application/xml, text/xml, */*"
+        status, _content_type, body = _fetch(url, accept)
+        if status != 200:
+            raise RuntimeError(f"{name} public endpoint HTTP {status}")
+        if kind == "rss":
+            records = _rss(body, name, url)
+        else:
+            payload = json.loads(body.decode("utf-8", errors="replace"))
+            parser = {
+                "remoteok": _remoteok,
+                "himalayas": _himalayas,
+                "workingnomads": _workingnomads,
+                "jobgether": _jobgether,
+                "landingjobs": _landingjobs,
+            }[kind]
+            records = parser(payload)
     return [engine.CollectionResult("public_board", kind, True, records, len(records))]
