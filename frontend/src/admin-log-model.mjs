@@ -33,6 +33,8 @@ export const SOURCE_OUTCOME_META = Object.freeze({
   failed: { label:'Eroare', tone:'red', kind:'failure' },
   deferred_provider: { label:'Provider amanat', tone:'slate', kind:'expected' },
   blocked_credentials: { label:'Credentiale necesare', tone:'amber', kind:'expected' },
+  blocked_policy: { label:'Restrictie provider', tone:'amber', kind:'expected' },
+  provider_alias: { label:'Acoperita de alta sursa', tone:'slate', kind:'expected' },
   validation_pending: { label:'Validare in asteptare', tone:'amber', kind:'expected' },
   disabled_config: { label:'Dezactivata prin configuratie', tone:'slate', kind:'expected' },
   excluded_policy: { label:'Exclusa prin politica', tone:'slate', kind:'expected' },
