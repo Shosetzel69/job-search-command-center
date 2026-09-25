@@ -168,9 +168,11 @@ Pagina `Loguri`:
 - foloseste `data/run-history.json`;
 - pastreaza maximum 10 rulari de cautare;
 - afiseaza status, trigger, ora, durata, surse procesate si rezultate;
-- afiseaza agregate separate pentru `success`, `success_empty`, `failed` si starile asteptate de neexecutie;
-- erorile sunt grupate dupa `error_code` si `failure_stage`;
-- source results afiseaza outcome-ul structurat si, numai pentru failures, codul/etapa/statusul HTTP;
+- afiseaza agregate separate pentru `success`, `success_empty`, `partial`, `failed` si starile asteptate de neexecutie;
+- `partial` este warning: exista joburi utilizabile, dar retrieve-ul nu a fost complet;
+- erorile hard sunt grupate dupa `error_code` si `failure_stage`;
+- source results foloseste tabel cu cap explicit `Sursa / Stare / Joburi / Diagnostic`, toate coloanele fiind sortabile;
+- pentru `failed` si `partial`, diagnosticul afiseaza codul/etapa/statusul HTTP cand exista;
 - starile `deferred_provider`, `blocked_credentials`, `validation_pending`, `disabled_config`, `excluded_policy` si `skipped` nu sunt etichetate ca runtime errors;
 - mesajele text sanitizate raman detaliu uman si nu sunt folosite de UI pentru clasificare;
 - istoricul este protejat prin Cloudflare Worker.
