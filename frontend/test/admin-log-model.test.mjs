@@ -74,6 +74,8 @@ test('expected non-executed outcomes are not classified as failures', () => {
     source_outcome_counts:{
       deferred_provider:1,
       blocked_credentials:1,
+      blocked_policy:1,
+      provider_alias:1,
       validation_pending:1,
       disabled_config:1,
       excluded_policy:1,
