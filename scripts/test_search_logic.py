@@ -243,6 +243,51 @@ class OutputTests(unittest.TestCase):
 
 
 
+    def test_process_records_reports_complete_exclusion_counts(self) -> None:
+        config = {
+            "freshness_hours": 24,
+            "collection_freshness_hours": 24,
+            "fit_threshold": 60,
+            "keep_reposts": True,
+            "work_modes": {"remote": True, "hybrid": True, "onsite": False},
+            "contract_types": ["permanent", "temporary", "contract", "freelance"],
+            "target_regions": [],
+            "target_country_codes": ["RO"],
+            "excluded_regions": [],
+            "excluded_country_codes": [],
+            "role_groups": {"pm": {"enabled": True, "titles": ["Project Manager"]}},
+        }
+        now = datetime(2026, 9, 25, 9, 0, tzinfo=timezone.utc)
+        fresh = "2026-09-25T08:00:00+00:00"
+        old = "2026-09-23T08:00:00+00:00"
+        records = [
+            {"id":"ok","job_title":"Project Manager","company":"A","country_code":"RO","location":"Bucharest","work_arrangement":"hybrid","date_posted":fresh},
+            {"id":"ok","job_title":"Project Manager","company":"A","country_code":"RO","location":"Bucharest","work_arrangement":"hybrid","date_posted":fresh},
+            {"id":"date","job_title":"Project Manager","company":"B","country_code":"RO","location":"Bucharest","work_arrangement":"hybrid"},
+            {"id":"role","job_title":"Software Engineer","company":"C","country_code":"RO","location":"Bucharest","work_arrangement":"hybrid","date_posted":fresh},
+            {"id":"onsite","job_title":"Project Manager","company":"D","country_code":"RO","location":"Bucharest","work_arrangement":"onsite","date_posted":fresh},
+            {"id":"geo","job_title":"Project Manager","company":"E","country_code":"US","location":"New York","work_arrangement":"hybrid","date_posted":fresh},
+            {"id":"old","job_title":"Project Manager","company":"F","country_code":"RO","location":"Bucharest","work_arrangement":"hybrid","date_posted":old},
+        ]
+        collection = [engine.CollectionResult("web:test", "q", True, records, len(records))]
+        output = engine.process_records(config, collection, now)
+        self.assertEqual(output["results"], 1)
+        self.assertEqual(output["excluded_count"], 6)
+        self.assertEqual(output["excluded_by_category"], {
+            "date": 1,
+            "duplicate": 1,
+            "freshness": 1,
+            "geo": 1,
+            "role": 1,
+            "work_mode": 1,
+        })
+        self.assertEqual(output["excluded_by_reason"]["duplicate"], 1)
+        self.assertEqual(output["excluded_by_reason"]["web publication date unavailable"], 1)
+        self.assertEqual(output["excluded_by_reason"]["title outside target"], 1)
+        self.assertEqual(output["excluded_by_reason"]["onsite disabled by configuration"], 1)
+        self.assertEqual(output["excluded_by_reason"]["outside target or excluded geography"], 1)
+        self.assertEqual(output["excluded_by_reason"]["older than 24 hours"], 1)
+
     def test_country_aliases_are_deduplicated_to_canonical_label(self):
         job = {
             "title": "Project Manager",
