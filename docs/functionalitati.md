@@ -21,12 +21,14 @@ Status baseline: `STABLE / CLOSE`
 - lista joburilor publicate de motor;
 - KPI numai in `Joburi noi`;
 - KPI `Roluri noi`, `Fit ridicat`, `Repostari`, `Remote` sunt filtre rapide single-select;
+- filtrele de pe pagina Joburi sunt marcate explicit **GUI ONLY** si nu pornesc Retrieve/provider calls;
 - filtre text, FIT, B2B, vechime 24h/36h/48h/5 zile;
-- multiselect Remote/Hibrid/Onsite;
-- `unknown`/N/A este stare tehnica pentru date incomplete, nu optiune normala de selectie;
+- multiselect Remote/Hibrid/Onsite pentru prezentare;
+- `Mod lucru: Toate` inseamna lipsa filtrului de prezentare pe mod de lucru si include inclusiv starea tehnica `N/A`;
+- selectarea unui subset Remote/Hibrid/Onsite filtreaza strict acel subset;
 - sortare FIT;
 - reset filtre, inclusiv filtrul KPI;
-- `De evaluat`: badge-ul si baza listei folosesc aceeasi eligibilitate pentru status review, freshness si mod de lucru;
+- `De evaluat` se deriva din scorul FIT si pragul FIT salvat curent, nu din statusul backend ramas de la un run anterior;
 - tara afisata separat in liste;
 - multi-country afisat compact `prima tara + N`;
 - tabel compact cu arhivare locala, aplicare si detalii;
@@ -43,33 +45,46 @@ Status baseline: `STABLE / CLOSE`
 
 ## 4. Criterii de selectie
 
-UI permite configurarea:
+Pagina separa explicit doua clase:
 
-- grupuri de roluri;
+### 4.1 Criterii RETRIEVE
+
+Aceste controale afecteaza urmatorul Full Search si setul publicat in runtime-ul JSON tranzitoriu curent:
+
+- grupuri de roluri — selectie runtime legacy pana la cutover-ul taxonomiei #403;
 - Remote / Hibrid / Onsite;
-- regiuni canonice `EU`, `US`, `ASIA`;
-- tari individuale;
-- excluderi teritoriale pe regiuni si tari;
+- regiuni/tari incluse si excluse;
 - tipuri contract canonice Permanent / Temporar / Contract / Freelance;
-- JobsPipe: Oprit / Apify / Direct, cu baseline Oprit;
-- limite provider atunci cand un mod este aprobat/activat;
-- freshness;
-- prag FIT;
-- repostari;
-- interval B2B;
-- disponibilitate imediata;
+- freshness / vechime maxima;
+- pastrare/excludere repostari;
 - excluderi de business.
 
-Reguli:
+Validari fail-safe:
+- minimum un grup de roluri;
+- minimum un mod de lucru;
+- minimum un tip de contract;
+- target geografic nenul;
+- fara conflicte include/exclude.
 
-- `Worldwide` si `EMEA` sunt scope-uri Remote, nu regiuni selectabile in criteriul principal;
-- Remote fara teritoriu explicit = `Worldwide`;
-- Remote cu tari explicite necesita Romania in lista acceptata conform regulii curente;
-- targetul geografic complet gol este invalid;
-- conflictul dintre includeri si excluderi geografice blocheaza salvarea;
-- cardul Excluderi este compact;
-- `Salveaza preferintele` face `PUT /config` si se opreste;
-- Save nu porneste Full Search.
+`Salveaza preferintele` persista configuratia prin `PUT /config` si nu porneste Full Search.
+
+### 4.2 Preferinte GUI
+
+- pragul High FIT este marcat **GUI**;
+- schimbarea lui nu porneste Full Search;
+- High FIT / De evaluat se recalculeaza in frontend pe baza `job.fit` si a pragului curent.
+
+### 4.3 Controale scoase din Criteria
+
+- JobsPipe/providerii apartin zonei Administrare, nu criteriilor utilizatorului;
+- rate min/max si Disponibilitate imediata nu sunt afisate ca filtre active cat timp motorul curent nu le aplica efectiv.
+
+### 4.4 Limitare tranzitorie
+
+Aceasta separare face explicita semantica runtime-ului curent, dar nu reprezinta cutover-ul complet ADR-005:
+- taxonomia #403 nu este inca S5 runtime;
+- corpusul canonic shared si Profile Evaluation raman dependente de ATC-402-02..04 / #275;
+- un criteriu RETRIEVE modificat necesita inca un Full Search in runtime-ul tranzitoriu.
 
 ## 5. Administrare
 
