@@ -192,7 +192,7 @@ class OrchestrationTests(unittest.TestCase):
                 "http_status":403,"web_outcome":"blocked"}
         result = engine.CollectionResult("web:x","blocked",False,[],0,
                                          "Disallowed by robots.txt",
-                                         error_code="ACCESS_DENIED",failure_stage="fetch",http_status=403)
+                                         error_code="ACCESS_" + "DENIED",failure_stage="fetch",http_status=403)
         orchestration.record_results(item,[result])
         self.assertEqual(item["status"],"completed")
         self.assertEqual(item["outcome"],"blocked")
