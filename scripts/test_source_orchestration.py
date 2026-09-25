@@ -212,6 +212,8 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(history["source_outcome_counts"], status["source_outcome_counts"])
         self.assertEqual(history["source_failure_codes"], status["source_failure_codes"])
         self.assertEqual(history["source_failure_stages"], status["source_failure_stages"])
+        self.assertEqual(history["excluded_by_reason"], status["excluded_by_reason"])
+        self.assertEqual(history["excluded_by_category"], status["excluded_by_category"])
 
     def test_structured_lifecycle_events_are_correlated(self):
         events = []
