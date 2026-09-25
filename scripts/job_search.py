@@ -122,6 +122,47 @@ def configured_titles(config: dict[str, Any]) -> list[str]:
     return list(dict.fromkeys(str(title).strip() for title in titles if str(title).strip()))
 
 
+ROLE_NEAR_MISS_PATTERNS = {
+    "manager": re.compile(r"\bmanager\b", re.I),
+    "lead": re.compile(r"\blead\b", re.I),
+    "leader": re.compile(r"\bleader\b", re.I),
+    "coordinator": re.compile(r"\bcoordinator\b", re.I),
+    "agile": re.compile(r"\bagile\b", re.I),
+    "transition": re.compile(r"\btransition\b", re.I),
+    "transformation": re.compile(r"\btransformation\b", re.I),
+    "implementation": re.compile(r"\bimplementation\b", re.I),
+    "release": re.compile(r"\brelease\b", re.I),
+    "portfolio": re.compile(r"\bportfolio\b", re.I),
+    "engagement": re.compile(r"\bengagement\b", re.I),
+}
+
+ROLE_GENERIC_KEYWORDS = ("project", "program", "programme", "delivery", "service", "scrum", "pmo")
+
+
+def normalize_role_text(value: Any) -> str:
+    return re.sub(r"\W+", " ", str(value or "").casefold()).strip()
+
+
+def configured_role_phrases(config: dict[str, Any]) -> list[str]:
+    return [
+        normalized
+        for normalized in (normalize_role_text(title) for title in configured_titles(config))
+        if normalized
+    ]
+
+
+def title_contains_role_phrase(title: str, phrases: list[str]) -> bool:
+    normalized = f" {normalize_role_text(title)} "
+    return any(f" {phrase} " in normalized for phrase in phrases)
+
+
+def append_role_audit_example(target: dict[str, list[dict[str, str]]], key: str, title: str, company: str, limit: int = 10) -> None:
+    examples = target.setdefault(key, [])
+    example = {"title": title, "company": company}
+    if len(examples) < limit and example not in examples:
+        examples.append(example)
+
+
 def normalize_region(value: Any) -> str:
     return str(value or "").strip().upper()
 
@@ -387,6 +428,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     target_codes = set(resolve_target_country_codes(config))
     excluded_company, excluded_role, deep_erp = compile_config_patterns(config)
     target_title = re.compile(r"\b(project|program|programme|delivery|service|scrum|pmo)\b", re.I)
+    configured_phrases = configured_role_phrases(config)
 
     raw: list[dict[str, Any]] = []
     totals: dict[str, int] = {}
@@ -400,6 +442,18 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     excluded: list[dict[str, str]] = []
     excluded_by_reason: dict[str, int] = {}
     excluded_by_category: dict[str, int] = {}
+    role_filter_audit: dict[str, Any] = {
+        "role_gate_evaluated": 0,
+        "role_rejected_total": 0,
+        "rejected_near_miss_total": 0,
+        "rejected_near_miss_by_signal": {},
+        "rejected_near_miss_examples": {},
+        "accepted_title_gate_total": 0,
+        "explicit_role_match_count": 0,
+        "generic_keyword_only_count": 0,
+        "generic_keyword_only_by_keyword": {},
+        "generic_keyword_only_examples": {},
+    }
 
     def record_exclusion(reason: str, count: int = 1) -> None:
         excluded_by_reason[reason] = excluded_by_reason.get(reason, 0) + count
@@ -442,29 +496,68 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             reason = "duplicate"
         elif str(origin).startswith("web:") and not posted_dt:
             reason = "web publication date unavailable"
-        elif not target_title.search(title):
-            reason = "title outside target"
-        elif excluded_company and excluded_company.search(company):
+        else:
+            role_filter_audit["role_gate_evaluated"] += 1
+            title_match = target_title.search(title)
+            if not title_match:
+                role_filter_audit["role_rejected_total"] += 1
+                near_miss_signals = [
+                    signal for signal, pattern in ROLE_NEAR_MISS_PATTERNS.items()
+                    if pattern.search(title)
+                ]
+                if near_miss_signals:
+                    role_filter_audit["rejected_near_miss_total"] += 1
+                    for signal in near_miss_signals:
+                        counts = role_filter_audit["rejected_near_miss_by_signal"]
+                        counts[signal] = counts.get(signal, 0) + 1
+                        append_role_audit_example(
+                            role_filter_audit["rejected_near_miss_examples"],
+                            signal,
+                            title,
+                            company,
+                        )
+                reason = "title outside target"
+            else:
+                role_filter_audit["accepted_title_gate_total"] += 1
+                if title_contains_role_phrase(title, configured_phrases):
+                    role_filter_audit["explicit_role_match_count"] += 1
+                else:
+                    role_filter_audit["generic_keyword_only_count"] += 1
+                    generic_matches = sorted({
+                        match.group(1).casefold()
+                        for match in target_title.finditer(title)
+                    })
+                    for keyword in generic_matches:
+                        counts = role_filter_audit["generic_keyword_only_by_keyword"]
+                        counts[keyword] = counts.get(keyword, 0) + 1
+                        append_role_audit_example(
+                            role_filter_audit["generic_keyword_only_examples"],
+                            keyword,
+                            title,
+                            company,
+                        )
+
+        if reason is None and excluded_company and excluded_company.search(company):
             reason = "excluded company"
-        elif excluded_role and excluded_role.search(title):
+        if reason is None and excluded_role and excluded_role.search(title):
             reason = "non-IT role"
-        elif deep_erp and deep_erp.search(text) and re.search(r"implement|consultant|specialist|functional", text, re.I):
+        if reason is None and deep_erp and deep_erp.search(text) and re.search(r"implement|consultant|specialist|functional", text, re.I):
             reason = "deep ERP/SAP implementation"
-        elif arrangement_code == "remote" and not work_modes.get("remote", True):
+        if reason is None and arrangement_code == "remote" and not work_modes.get("remote", True):
             reason = "remote disabled by configuration"
-        elif arrangement_code == "hybrid" and not work_modes.get("hybrid", True):
+        if reason is None and arrangement_code == "hybrid" and not work_modes.get("hybrid", True):
             reason = "hybrid disabled by configuration"
-        elif arrangement_code == "onsite" and not work_modes.get("onsite", False):
+        if reason is None and arrangement_code == "onsite" and not work_modes.get("onsite", False):
             reason = "onsite disabled by configuration"
-        elif contract_type != "unknown" and selected_contract_types and contract_type not in selected_contract_types:
+        if reason is None and contract_type != "unknown" and selected_contract_types and contract_type not in selected_contract_types:
             reason = "contract type disabled by configuration"
-        elif remote and not romania_eligible:
+        if reason is None and remote and not romania_eligible:
             reason = "remote not eligible from Romania"
-        elif not geography_matches(codes, remote_scope, config, remote):
+        if reason is None and not geography_matches(codes, remote_scope, config, remote):
             reason = "outside target or excluded geography"
-        elif not keep_reposts and bool(job.get("reposted")):
+        if reason is None and not keep_reposts and bool(job.get("reposted")):
             reason = "repost disabled by configuration"
-        elif posted_dt and (now - posted_dt).total_seconds() > collection_freshness_hours * 3600:
+        if reason is None and posted_dt and (now - posted_dt).total_seconds() > collection_freshness_hours * 3600:
             reason = f"older than {collection_freshness_hours} hours"
 
         if reason:
@@ -601,6 +694,11 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
         "excluded_count": len(excluded),
         "excluded_by_reason": sorted_counts(excluded_by_reason),
         "excluded_by_category": sorted_counts(excluded_by_category),
+        "role_filter_audit": {
+            **role_filter_audit,
+            "rejected_near_miss_by_signal": sorted_counts(role_filter_audit["rejected_near_miss_by_signal"]),
+            "generic_keyword_only_by_keyword": sorted_counts(role_filter_audit["generic_keyword_only_by_keyword"]),
+        },
         "jobs": selected,
         "excluded_sample": excluded[:20],
     }
