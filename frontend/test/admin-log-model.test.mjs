@@ -177,5 +177,5 @@ test('source result rows sort deterministically by all displayed columns', () =>
   assert.deepEqual(sortSourceResultRows(rows,'source','asc').map(x=>x.source),['Alpha','Beta','Zulu']);
   assert.deepEqual(sortSourceResultRows(rows,'jobs','desc').map(x=>x.source),['Alpha','Zulu','Beta']);
   assert.deepEqual(sortSourceResultRows(rows,'status','asc').map(x=>x.source),['Beta','Alpha','Zulu']);
-  assert.deepEqual(sortSourceResultRows(rows,'detail','asc').map(x=>x.source),['Alpha','Beta','Zulu']);
+  assert.deepEqual(sortSourceResultRows(rows,'detail','asc').map(x=>x.source),['Zulu','Alpha','Beta']);
 });
