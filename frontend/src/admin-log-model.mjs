@@ -1,3 +1,29 @@
+export const EXCLUSION_CATEGORY_LABELS = Object.freeze({
+  duplicate:'Duplicate',
+  date:'Data publicarii',
+  role:'Rol',
+  company:'Companie',
+  work_mode:'Mod de lucru',
+  contract:'Tip contract',
+  geo:'Geografie',
+  repost:'Repostare',
+  freshness:'Freshness',
+  other:'Altele',
+});
+
+export function exclusionGroupRows(run) {
+  const categories = run?.excluded_by_category || {};
+  const reasons = run?.excluded_by_reason || {};
+  const sortRows = entries => Object.entries(entries)
+    .filter(([,count]) => Number(count) > 0)
+    .map(([key,count]) => ({ key, count:Number(count) }))
+    .sort((a,b) => b.count - a.count || a.key.localeCompare(b.key));
+  return {
+    categories:sortRows(categories).map(item => ({...item,label:EXCLUSION_CATEGORY_LABELS[item.key] || item.key})),
+    reasons:sortRows(reasons),
+  };
+}
+
 export const SOURCE_OUTCOME_META = Object.freeze({
   success: { label:'Succes', tone:'green', kind:'success' },
   success_empty: { label:'Succes fara rezultate', tone:'blue', kind:'success' },
