@@ -109,7 +109,7 @@ test('legacy JobsPipe run budget maps to its own config field', () => {
 });
 
 
-test('720h freshness is accepted for diagnostic runs', async () => {
-  const source = await import('../src/index.js');
-  assert.equal(typeof source.default, 'object');
+test('720h freshness is accepted for diagnostic runs', () => {
+  const patch = validateUserConfigPatch({ freshness:720 }, nomenclatures);
+  assert.equal(patch.freshness, 720);
 });
