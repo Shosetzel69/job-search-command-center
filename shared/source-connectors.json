@@ -20,5 +20,69 @@
       "traefik.io",
       "www.traefik.io"
     ]
+  },
+  "remoteok": {
+    "name": "Remote OK",
+    "hosts": [
+      "remoteok.com",
+      "www.remoteok.com"
+    ]
+  },
+  "himalayas": {
+    "name": "Himalayas",
+    "hosts": [
+      "himalayas.app",
+      "www.himalayas.app"
+    ]
+  },
+  "workingnomads": {
+    "name": "Working Nomads",
+    "hosts": [
+      "workingnomads.com",
+      "www.workingnomads.com"
+    ]
+  },
+  "jobgether": {
+    "name": "Jobgether",
+    "hosts": [
+      "jobgether.com",
+      "www.jobgether.com"
+    ]
+  },
+  "wwr": {
+    "name": "We Work Remotely",
+    "hosts": [
+      "weworkremotely.com",
+      "www.weworkremotely.com",
+      "remoteineurope.com",
+      "www.remoteineurope.com"
+    ]
+  },
+  "nodesk": {
+    "name": "NoDesk",
+    "hosts": [
+      "nodesk.co",
+      "www.nodesk.co"
+    ]
+  },
+  "euremotejobs": {
+    "name": "EU Remote Jobs",
+    "hosts": [
+      "euremotejobs.com",
+      "www.euremotejobs.com"
+    ]
+  },
+  "landingjobs": {
+    "name": "Landing.Jobs",
+    "hosts": [
+      "landing.jobs",
+      "www.landing.jobs"
+    ]
+  },
+  "eures": {
+    "name": "EURES",
+    "hosts": [
+      "eures.europa.eu"
+    ]
   }
 }
