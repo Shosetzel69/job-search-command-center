@@ -4,6 +4,20 @@ import job_search_public_boards as boards
 
 
 class PublicBoardAdapterTests(unittest.TestCase):
+    def test_eures_normalizes_public_search_response(self):
+        rows=boards._eures({"numberRecords":1,"jvs":[{
+            "id":"abc123","title":"IT Project Manager","description":"Coordinate delivery",
+            "creationDate":1790330400000,
+            "locationMap":{"RO":["RO321"]},
+            "positionScheduleCodes":["fulltime"],
+            "employer":{"name":"Example SA"},
+            "translations":{},
+        }]})
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["company"],"Example SA")
+        self.assertEqual(rows[0]["countries"],["Romania"])
+        self.assertIn("abc123",rows[0]["source_url"])
+
     def test_remoteok_normalizes_public_api(self):
         rows = boards._remoteok([
             {"legal":"meta"},
@@ -66,7 +80,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["source_url"],"https://example.com/jobs/7")
 
     def test_supported_sources_are_explicit(self):
-        for name in ["Remote OK","Himalayas","Working Nomads","Jobgether",
+        for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk",
                      "EU Remote Jobs","Remote in Europe"]:
             self.assertTrue(boards.source_supported(name))
