@@ -5,8 +5,10 @@ import {
   deriveSourceAggregates,
   exclusionGroupRows,
   failureGroupRows,
+  sourceDiagnosticText,
   sourceResultRows,
   sourceSummaryRows,
+  sortSourceResultRows,
   runSummaryLabel,
 } from '../src/admin-log-model.mjs';
 
@@ -135,4 +137,28 @@ test('run summary labels distinguish source attempts from published jobs', () =>
     runSummaryLabel({ sources_processed:10, jobs_published:3 }),
     '10 surse evaluate · 3 joburi publicate',
   );
+});
+
+
+test('partial source outcome is a warning, not a failure', () => {
+  const row = sourceResultRows({ source_results:[{
+    source:'eJobs', outcome:'partial', records:8,
+    error_code:'CONNECTOR_ERROR', failure_stage:'fetch', http_status:200,
+  }]})[0];
+  assert.equal(row.outcomeMeta.kind,'warning');
+  assert.equal(row.outcomeMeta.label,'Partial');
+  assert.equal(sourceDiagnosticText(row),'CONNECTOR_ERROR · fetch · HTTP 200');
+  assert.equal(failureGroupRows({source_results:[row]}).errorCodes.length,0);
+});
+
+test('source-result table sorting is deterministic for all columns', () => {
+  const rows = sourceResultRows({source_results:[
+    {source:'Zulu',outcome:'success_empty',records:0},
+    {source:'Alpha',outcome:'failed',records:0,error_code:'TIMEOUT',failure_stage:'fetch'},
+    {source:'Beta',outcome:'partial',records:8,error_code:'PARSE_ERROR',failure_stage:'parse'},
+  ]});
+  assert.deepEqual(sortSourceResultRows(rows,{key:'source',direction:'asc'}).map(x=>x.source),['Alpha','Beta','Zulu']);
+  assert.deepEqual(sortSourceResultRows(rows,{key:'records',direction:'desc'}).map(x=>x.source),['Beta','Zulu','Alpha']);
+  assert.deepEqual(sortSourceResultRows(rows,{key:'status',direction:'asc'}).map(x=>x.source),['Alpha','Beta','Zulu']);
+  assert.deepEqual(sortSourceResultRows(rows,{key:'diagnostic',direction:'asc'}).map(x=>x.source),['Zulu','Beta','Alpha']);
 });
