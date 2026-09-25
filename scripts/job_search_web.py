@@ -217,10 +217,11 @@ def collect(source, config, now=None, client=None):
     deadline = time.monotonic() + MAX_SECONDS
     client = client or PublicClient(deadline)
     connector = "web:" + str(source.get("id") or hashlib.sha256(source["url"].encode()).hexdigest()[:12])
+    start_url = source.get("retrieval_url") or source["url"]
     queue, queued, visited, records, diagnostics = [], set(), set(), {}, []
-    roots = {site_root(urlsplit(source["url"]).hostname)}
-    heapq.heappush(queue, (0, source["url"]))
-    queued.add(source["url"])
+    roots = {site_root(urlsplit(start_url).hostname)}
+    heapq.heappush(queue, (0, start_url))
+    queued.add(start_url)
     pages, detected, malformed, expired = 0, 0, 0, 0
     browser_attempted = False
     browser_status = "not_attempted"
@@ -351,7 +352,7 @@ def collect(source, config, now=None, client=None):
     return results, {
         "web_outcome": outcome,
         "collection_method": "http+browser" if browser_attempted else "http",
-        "requested_url": source.get("url"),
+        "requested_url": start_url,
         "final_url": first_final_url or getattr(client, "last_url", None),
         "http_status": first_http_status,
         "robots_status": first_robots_status,
