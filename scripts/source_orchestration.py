@@ -507,9 +507,11 @@ def run(config, now):
     if output is not None:
         status["excluded_by_reason"] = output.get("excluded_by_reason") or {}
         status["excluded_by_category"] = output.get("excluded_by_category") or {}
+        status["role_filter_audit"] = output.get("role_filter_audit") or {}
     else:
         status["excluded_by_reason"] = {}
         status["excluded_by_category"] = {}
+        status["role_filter_audit"] = {}
     finalize_source_outcomes(plan, status["run_id"])
     status["source_outcome_schema_version"] = "1.0"
     status.update(aggregate_source_results(plan))

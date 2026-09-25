@@ -144,6 +144,7 @@ def append_run_history() -> None:
         "excluded": int(status.get("excluded") or 0),
         "excluded_by_reason": status.get("excluded_by_reason") or {},
         "excluded_by_category": status.get("excluded_by_category") or {},
+        "role_filter_audit": status.get("role_filter_audit") or {},
         "source_results": status.get("source_results") or [],
         "source_outcome_counts": status.get("source_outcome_counts") or {},
         "source_failure_codes": status.get("source_failure_codes") or {},

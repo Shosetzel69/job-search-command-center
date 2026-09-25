@@ -243,6 +243,54 @@ class OutputTests(unittest.TestCase):
 
 
 
+    def test_role_filter_audit_separates_near_misses_from_generic_keyword_matches(self) -> None:
+        config = {
+            "freshness_hours": 720,
+            "collection_freshness_hours": 720,
+            "fit_threshold": 60,
+            "keep_reposts": True,
+            "work_modes": {"remote": True, "hybrid": True, "onsite": True},
+            "contract_types": ["permanent", "temporary", "contract", "freelance"],
+            "target_regions": ["EU"],
+            "target_country_codes": ["RO"],
+            "excluded_regions": [],
+            "excluded_country_codes": [],
+            "role_groups": {
+                "pm": {"enabled": True, "titles": ["Project Manager", "IT Project Manager"]},
+                "service": {"enabled": True, "titles": ["Service Manager"]},
+            },
+        }
+        now = datetime(2026, 9, 25, 9, 0, tzinfo=timezone.utc)
+        fresh = "2026-09-25T08:00:00+00:00"
+        records = [
+            {"id":"explicit","job_title":"Senior IT Project Manager","company":"A","remote":True,"location":"Remote","date_posted":fresh},
+            {"id":"generic","job_title":"Service Desk Operator","company":"B","remote":True,"location":"Remote","date_posted":fresh},
+            {"id":"transition","job_title":"Transition Manager","company":"C","remote":True,"location":"Remote","date_posted":fresh},
+            {"id":"agile","job_title":"Agile Coach","company":"D","remote":True,"location":"Remote","date_posted":fresh},
+            {"id":"release","job_title":"Release Train Engineer","company":"E","remote":True,"location":"Remote","date_posted":fresh},
+        ]
+        output = engine.process_records(
+            config,
+            [engine.CollectionResult("jobspipe", "q", True, records, len(records))],
+            now,
+        )
+        audit = output["role_filter_audit"]
+        self.assertEqual(audit["role_gate_evaluated"], 5)
+        self.assertEqual(audit["role_rejected_total"], 3)
+        self.assertEqual(audit["rejected_near_miss_total"], 3)
+        self.assertEqual(audit["accepted_title_gate_total"], 2)
+        self.assertEqual(audit["explicit_role_match_count"], 1)
+        self.assertEqual(audit["generic_keyword_only_count"], 1)
+        self.assertEqual(audit["generic_keyword_only_by_keyword"], {"service": 1})
+        self.assertEqual(audit["rejected_near_miss_by_signal"], {
+            "agile": 1,
+            "manager": 1,
+            "release": 1,
+            "transition": 1,
+        })
+        self.assertEqual(audit["generic_keyword_only_examples"]["service"][0]["title"], "Service Desk Operator")
+        self.assertEqual(audit["rejected_near_miss_examples"]["transition"][0]["title"], "Transition Manager")
+
     def test_process_records_reports_complete_exclusion_counts(self) -> None:
         config = {
             "freshness_hours": 24,
