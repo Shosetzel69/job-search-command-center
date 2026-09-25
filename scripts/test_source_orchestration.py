@@ -208,6 +208,23 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual([item["connector"] for item in plan],["public_board","public_board"])
         self.assertTrue(all(item["status"]=="pending" for item in plan))
 
+    def test_policy_and_alias_dispositions_are_explicit_non_failures(self):
+        catalog = {"sources":[
+            {"id":"eures","name":"EURES","url":"https://eures.europa.eu/","active":True},
+            {"id":"efc","name":"eFinancialCareers","url":"https://www.efinancialcareers.com/","active":True},
+            {"id":"rie","name":"Remote in Europe","url":"https://remoteineurope.com/","active":True},
+        ]}
+        plan = {item["source"]:item for item in orchestration.build_plan(catalog)}
+        self.assertEqual(plan["EURES"]["status"],"skipped")
+        self.assertEqual(plan["EURES"]["outcome"],"blocked_policy")
+        self.assertEqual(plan["EURES"]["connector"],"policy")
+        self.assertEqual(plan["eFinancialCareers"]["status"],"skipped")
+        self.assertEqual(plan["eFinancialCareers"]["outcome"],"blocked_credentials")
+        self.assertEqual(plan["eFinancialCareers"]["connector"],"credentialed_api")
+        self.assertEqual(plan["Remote in Europe"]["status"],"skipped")
+        self.assertEqual(plan["Remote in Europe"]["outcome"],"provider_alias")
+        self.assertEqual(plan["Remote in Europe"]["connector"],"alias")
+
     def test_http_429_is_structured_without_parsing_message(self):
         self.apify.side_effect = HTTPError("https://example.invalid", 429, "quota", {}, None)
         _, status = self.run_search()
