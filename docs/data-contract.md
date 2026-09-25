@@ -77,7 +77,7 @@ Agregatele source sunt derivate exclusiv din campurile structurate ale `source_r
 - `source_failure_codes` grupeaza numai `outcome=failed` dupa `error_code`;
 - `source_failure_stages` grupeaza numai `outcome=failed` dupa `failure_stage`.
 
-`success_empty` ramane distinct de `failed`, iar starile asteptate de neexecutie (`deferred_provider`, `blocked_credentials`, `validation_pending`, `disabled_config`, `excluded_policy`, `skipped`) nu sunt raportate ca runtime failures.
+`success_empty` ramane distinct de `failed`. `partial` inseamna ca sursa a produs rezultate utilizabile dar are si sub-incercari esuate; nu este contabilizat ca hard failure. Starile asteptate de neexecutie (`deferred_provider`, `blocked_credentials`, `validation_pending`, `disabled_config`, `excluded_policy`, `skipped`) nu sunt raportate ca runtime failures.
 
 Stari active UI: `queued`, `pending`, `running`, `in_progress`.
 Stari terminale: `completed`, `completed_with_errors`, `failed`.
