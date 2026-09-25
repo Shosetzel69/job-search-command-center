@@ -7,7 +7,7 @@ canonical filtering/FIT engine. It never bypasses login, CAPTCHA, robots or payw
 import json
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
 from html.entities import html5
@@ -419,10 +419,10 @@ def _relative_date(text):
     if re.search(r"\bToday\b", value, re.I):
         return now.isoformat()
     if re.search(r"\bYesterday\b", value, re.I):
-        return (now.replace(hour=12, minute=0, second=0, microsecond=0) - __import__("datetime").timedelta(days=1)).isoformat()
+        return (now.replace(hour=12, minute=0, second=0, microsecond=0) - timedelta(days=1)).isoformat()
     match = re.search(r"\b(\d+)\s+days?\s+ago\b", value, re.I)
     if match:
-        return (now - __import__("datetime").timedelta(days=int(match.group(1)))).isoformat()
+        return (now - timedelta(days=int(match.group(1)))).isoformat()
     return None
 
 
