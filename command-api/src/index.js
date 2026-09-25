@@ -270,7 +270,7 @@ function validateUserConfigPatch(input, nomenclatures) {
   }
   if ('freshness' in input) {
     const value = Number(input.freshness);
-    if (![24,36,48,120].includes(value)) throw Object.assign(new Error('freshness must be 24, 36, 48 or 120'), { status: 400 });
+    if (![24,36,48,120,720].includes(value)) throw Object.assign(new Error('freshness must be 24, 36, 48, 120 or 720'), { status: 400 });
     output.freshness = value;
   }
   if ('fitThreshold' in input) {
