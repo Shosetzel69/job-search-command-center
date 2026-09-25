@@ -238,6 +238,33 @@ def compile_config_patterns(config: dict[str, Any]):
     return excluded_company, excluded_role, deep_erp
 
 
+def exclusion_category(reason: str) -> str:
+    normalized = str(reason or "").strip().lower()
+    if normalized in {"duplicate", "cross-source duplicate"}:
+        return "duplicate"
+    if normalized == "web publication date unavailable":
+        return "date"
+    if normalized in {"title outside target", "non-it role", "deep erp/sap implementation"}:
+        return "role"
+    if normalized == "excluded company":
+        return "company"
+    if normalized.endswith("disabled by configuration") and normalized.split(" ", 1)[0] in {"remote", "hybrid", "onsite"}:
+        return "work_mode"
+    if normalized == "contract type disabled by configuration":
+        return "contract"
+    if normalized in {"remote not eligible from romania", "outside target or excluded geography"}:
+        return "geo"
+    if normalized == "repost disabled by configuration":
+        return "repost"
+    if normalized.startswith("older than ") and normalized.endswith(" hours"):
+        return "freshness"
+    return "other"
+
+
+def sorted_counts(counts: dict[str, int]) -> dict[str, int]:
+    return dict(sorted(counts.items(), key=lambda item: (-item[1], item[0])))
+
+
 def parse_posted_datetime(value: Any) -> datetime | None:
     if value is None or value == "":
         return None
@@ -371,6 +398,13 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     seen: set[Any] = set()
     selected: list[dict[str, Any]] = []
     excluded: list[dict[str, str]] = []
+    excluded_by_reason: dict[str, int] = {}
+    excluded_by_category: dict[str, int] = {}
+
+    def record_exclusion(reason: str, count: int = 1) -> None:
+        excluded_by_reason[reason] = excluded_by_reason.get(reason, 0) + count
+        category = exclusion_category(reason)
+        excluded_by_category[category] = excluded_by_category.get(category, 0) + count
 
     for job in raw:
         title = str(job.get("job_title") or job.get("title") or "").strip()
@@ -435,6 +469,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
 
         if reason:
             excluded.append({"title": title, "company": company, "reason": reason})
+            record_exclusion(reason)
             continue
         seen.add(key)
 
@@ -533,7 +568,10 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
         })
 
     unique = deduplicate(selected)
-    excluded.extend({"reason": "cross-source duplicate"} for _ in range(len(selected) - len(unique)))
+    cross_source_duplicates = len(selected) - len(unique)
+    if cross_source_duplicates:
+        excluded.extend({"reason": "cross-source duplicate"} for _ in range(cross_source_duplicates))
+        record_exclusion("cross-source duplicate", cross_source_duplicates)
     selected = unique
     selected.sort(key=lambda item: (-item["fit"], item["age"], item["company"].lower()))
     return {
@@ -561,6 +599,8 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
         "records_inspected": len(raw),
         "results": len(selected),
         "excluded_count": len(excluded),
+        "excluded_by_reason": sorted_counts(excluded_by_reason),
+        "excluded_by_category": sorted_counts(excluded_by_category),
         "jobs": selected,
         "excluded_sample": excluded[:20],
     }
