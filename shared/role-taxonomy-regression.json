@@ -1,0 +1,289 @@
+{
+  "schema_version": "1.0",
+  "taxonomy_version": "2026.09.25-1",
+  "cases": [
+    {
+      "id": "pm-basic",
+      "title": "Project Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROJECT_MANAGEMENT",
+        "role_member": [
+          "project_manager"
+        ]
+      },
+      "evidence": "#399 explicit/current target"
+    },
+    {
+      "id": "pm-it",
+      "title": "IT Project Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROJECT_MANAGEMENT",
+        "role_member": [
+          "it_project_manager",
+          "project_manager"
+        ]
+      },
+      "evidence": "#399/current target"
+    },
+    {
+      "id": "pm-technical",
+      "title": "Technical Project Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROJECT_MANAGEMENT",
+        "role_member": [
+          "project_manager",
+          "technical_project_manager"
+        ]
+      },
+      "evidence": "#399/current target"
+    },
+    {
+      "id": "pm-agile",
+      "title": "Agile Project Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROJECT_MANAGEMENT",
+        "role_member": [
+          "agile_project_manager",
+          "project_manager"
+        ]
+      },
+      "evidence": "current target"
+    },
+    {
+      "id": "delivery-basic",
+      "title": "Delivery Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "DELIVERY",
+        "role_member": [
+          "delivery_manager"
+        ]
+      },
+      "evidence": "current target"
+    },
+    {
+      "id": "delivery-technical",
+      "title": "Technical Delivery Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "DELIVERY",
+        "role_member": [
+          "delivery_manager",
+          "technical_delivery_manager"
+        ]
+      },
+      "evidence": "current target"
+    },
+    {
+      "id": "service-basic",
+      "title": "Service Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "SERVICE_MANAGEMENT",
+        "role_member": [
+          "service_manager"
+        ]
+      },
+      "evidence": "current target"
+    },
+    {
+      "id": "service-it",
+      "title": "IT Service Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "SERVICE_MANAGEMENT",
+        "role_member": [
+          "service_manager"
+        ]
+      },
+      "evidence": "#399 generic-only interpretation: missing alias"
+    },
+    {
+      "id": "service-delivery",
+      "title": "Service Delivery Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "SERVICE_MANAGEMENT",
+        "role_member": [
+          "service_delivery_manager"
+        ]
+      },
+      "evidence": "current target"
+    },
+    {
+      "id": "scrum-master",
+      "title": "Scrum Master",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "SCRUM_AGILE",
+        "role_member": [
+          "scrum_master"
+        ]
+      },
+      "evidence": "current target"
+    },
+    {
+      "id": "program-manager",
+      "title": "Program Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROGRAM_PMO",
+        "role_member": [
+          "program_manager"
+        ]
+      },
+      "evidence": "current target"
+    },
+    {
+      "id": "programme-manager",
+      "title": "Programme Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROGRAM_PMO",
+        "role_member": [
+          "program_manager"
+        ]
+      },
+      "evidence": "#399 generic spelling"
+    },
+    {
+      "id": "technical-program-manager",
+      "title": "Technical Program Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROGRAM_PMO",
+        "role_member": [
+          "program_manager",
+          "technical_program_manager"
+        ]
+      },
+      "evidence": "target-adjacent technical program"
+    },
+    {
+      "id": "pmo-manager",
+      "title": "PMO Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROGRAM_PMO",
+        "role_member": [
+          "pmo_manager"
+        ]
+      },
+      "evidence": "current target"
+    },
+    {
+      "id": "negative-project-purchaser",
+      "title": "Project Purchaser",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "#399 generic-only false-positive example"
+    },
+    {
+      "id": "negative-service-desk-operator",
+      "title": "Service Desk Operator",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "#399 generic-only false-positive example"
+    },
+    {
+      "id": "negative-engagement-manager",
+      "title": "Engagement Manager",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "#399 near-miss; not promoted without label evidence"
+    },
+    {
+      "id": "negative-implementation-manager",
+      "title": "Implementation Manager",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "#399 near-miss; not promoted without label evidence"
+    },
+    {
+      "id": "negative-agile-coach",
+      "title": "Agile Coach",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "#399 near-miss; not promoted without label evidence"
+    },
+    {
+      "id": "negative-change-release-coordinator",
+      "title": "Change and Release Coordinator",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "#399 near-miss; not promoted without label evidence"
+    },
+    {
+      "id": "negative-sales-manager",
+      "title": "Sales Manager",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "#399 manager near-miss"
+    },
+    {
+      "id": "negative-store-manager",
+      "title": "Store Manager",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "#399 manager near-miss"
+    },
+    {
+      "id": "negative-product-manager",
+      "title": "Product Manager",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "lookalike"
+    },
+    {
+      "id": "negative-customer-service-manager",
+      "title": "Customer Service Manager",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "same-member exclusion"
+    },
+    {
+      "id": "negative-field-service-manager",
+      "title": "Field Service Manager",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "same-member exclusion"
+    }
+  ]
+}
