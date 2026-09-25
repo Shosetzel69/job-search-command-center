@@ -6,6 +6,8 @@ import {
   exclusionGroupRows,
   failureGroupRows,
   sourceResultRows,
+  sourceResultDetail,
+  sortSourceResultRows,
   sourceSummaryRows,
   runSummaryLabel,
 } from '../src/admin-log-model.mjs';
@@ -135,4 +137,45 @@ test('run summary labels distinguish source attempts from published jobs', () =>
     runSummaryLabel({ sources_processed:10, jobs_published:3 }),
     '10 surse evaluate · 3 joburi publicate',
   );
+});
+
+
+test('partial and blocked outcomes are warnings, not hard failures', () => {
+  const rows = sourceSummaryRows({
+    source_outcome_counts:{ partial:2, blocked:1, no_extractable_jobs:1, failed:1 },
+    source_failure_codes:{ CONNECTOR_ERROR:1 },
+    source_failure_stages:{ fetch:1 },
+  });
+  const byOutcome = Object.fromEntries(rows.map(row => [row.outcome,row]));
+  assert.equal(byOutcome.partial.kind,'warning');
+  assert.equal(byOutcome.blocked.kind,'warning');
+  assert.equal(byOutcome.no_extractable_jobs.kind,'warning');
+  assert.equal(byOutcome.failed.kind,'failure');
+});
+
+test('untrusted zero records display dash while valid empty displays zero', () => {
+  const rows = sourceResultRows({source_results:[
+    { source:'Empty OK', outcome:'success_empty', records:0 },
+    { source:'Blocked', outcome:'blocked', records:0, failure_reason:'robots' },
+    { source:'Failed', outcome:'failed', records:0, error_code:'TIMEOUT', failure_stage:'fetch' },
+    { source:'Partial', outcome:'partial', records:3, failure_reason:'page budget' },
+  ]});
+  const bySource=Object.fromEntries(rows.map(row=>[row.source,row]));
+  assert.equal(bySource['Empty OK'].jobsLabel,'0 joburi');
+  assert.equal(bySource.Blocked.jobsLabel,'—');
+  assert.equal(bySource.Failed.jobsLabel,'—');
+  assert.equal(bySource.Partial.jobsLabel,'3 joburi');
+  assert.equal(sourceResultDetail(bySource.Blocked),'robots');
+});
+
+test('source result rows sort deterministically by all displayed columns', () => {
+  const rows=sourceResultRows({source_results:[
+    {source:'Zulu',outcome:'success',records:2},
+    {source:'Alpha',outcome:'partial',records:8,failure_reason:'limit'},
+    {source:'Beta',outcome:'failed',records:0,error_code:'TIMEOUT',failure_stage:'fetch'},
+  ]});
+  assert.deepEqual(sortSourceResultRows(rows,'source','asc').map(x=>x.source),['Alpha','Beta','Zulu']);
+  assert.deepEqual(sortSourceResultRows(rows,'jobs','desc').map(x=>x.source),['Alpha','Zulu','Beta']);
+  assert.deepEqual(sortSourceResultRows(rows,'status','asc').map(x=>x.source),['Beta','Alpha','Zulu']);
+  assert.deepEqual(sortSourceResultRows(rows,'detail','asc').map(x=>x.source),['Alpha','Beta','Zulu']);
 });
