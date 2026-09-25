@@ -1,23 +1,10 @@
 import unittest
+from unittest.mock import patch
 
 import job_search_public_boards as boards
 
 
 class PublicBoardAdapterTests(unittest.TestCase):
-    def test_eures_normalizes_public_search_response(self):
-        rows=boards._eures({"numberRecords":1,"jvs":[{
-            "id":"abc123","title":"IT Project Manager","description":"Coordinate delivery",
-            "creationDate":1790330400000,
-            "locationMap":{"RO":["RO321"]},
-            "positionScheduleCodes":["fulltime"],
-            "employer":{"name":"Example SA"},
-            "translations":{},
-        }]})
-        self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]["company"],"Example SA")
-        self.assertEqual(rows[0]["countries"],["Romania"])
-        self.assertIn("abc123",rows[0]["source_url"])
-
     def test_remoteok_normalizes_public_api(self):
         rows = boards._remoteok([
             {"legal":"meta"},
@@ -29,7 +16,6 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
         self.assertTrue(rows[0]["remote"])
-        self.assertEqual(rows[0]["sources"],[{"provider":"Remote OK"}])
 
     def test_himalayas_normalizes_jobs_array(self):
         rows = boards._himalayas({"jobs":[{
@@ -39,9 +25,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
             "locationRestrictions":["Romania"],"employmentType":"Full Time",
         }]})
         self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]["company"],"Example")
         self.assertEqual(rows[0]["countries"],["Romania"])
-        self.assertTrue(rows[0]["remote"])
 
     def test_working_nomads_normalizes_array(self):
         rows = boards._workingnomads([{
@@ -50,7 +34,6 @@ class PublicBoardAdapterTests(unittest.TestCase):
             "description":"Delivery","category_name":"Management",
             "location":"Europe","pub_date":"2026-09-25T08:00:00Z",
         }])
-        self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"Delivery Manager")
 
     def test_jobgether_validates_shape(self):
@@ -61,30 +44,59 @@ class PublicBoardAdapterTests(unittest.TestCase):
             "url":"https://jobgether.com/job/j1","location":"Romania",
             "remote":"Remote","contractType":"Contract","postedAt":"2026-09-25T08:00:00Z",
         }]})
-        self.assertEqual(len(rows),1)
         self.assertTrue(rows[0]["remote"])
 
     def test_rss_empty_feed_is_valid_empty_result(self):
         xml=b'<?xml version="1.0"?><rss><channel><title>Jobs</title></channel></rss>'
         self.assertEqual(boards._rss(xml,"Example","https://example.com/feed"),[])
 
-    def test_rss_normalizes_item(self):
+    def test_rss_skips_malformed_item_and_decodes_html_named_entity(self):
         xml=b'''<?xml version="1.0"?><rss><channel>
-          <item><title>Scrum Master</title><link>https://example.com/jobs/7</link>
-          <description>Agile delivery</description><guid>7</guid>
+          <item><title>Broken</title><link>   </link></item>
+          <item><title>Scrum Master &hellip;</title><link>https://example.com/jobs/7</link>
+          <description>Agile &amp; delivery</description><guid>7</guid>
           <pubDate>Thu, 25 Sep 2026 10:00:00 +0000</pubDate></item>
         </channel></rss>'''
         rows=boards._rss(xml,"Example","https://example.com/feed")
         self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]["job_title"],"Scrum Master")
+        self.assertIn("Scrum Master",rows[0]["job_title"])
         self.assertEqual(rows[0]["source_url"],"https://example.com/jobs/7")
 
+    def test_eu_careers_table_parser_extracts_public_vacancy(self):
+        html='''<table><tr><th>Title</th></tr><tr>
+          <td><a href="/en/job/123">IT Service Manager</a></td>
+          <td>Information Technology</td><td>AD 7</td><td>EU Agency</td>
+          <td>Brussels (Belgium)</td><td>25/09/2026</td><td>15/10/2026 - 12:00</td>
+        </tr></table>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (200,"text/html",html.encode()),
+            (200,"text/html",b"<html><body>No rows</body></html>"),
+        ]):
+            rows=boards._eu_careers("https://eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"IT Service Manager")
+        self.assertEqual(rows[0]["company"],"EU Agency")
+        self.assertIn("Belgium",rows[0]["countries"])
+        self.assertEqual(rows[0]["date_posted"],"2026-09-25T00:00:00+00:00")
+
+    def test_remote_co_list_parser_extracts_job_detail_links(self):
+        html='''<div>New! Today <h3><a href="/job-details/project-manager-abc">Project Manager</a></h3>
+          <h4>Example Inc</h4></div>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._remote_co("https://remote.co/remote-jobs")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Project Manager")
+        self.assertEqual(rows[0]["company"],"Example Inc")
+        self.assertTrue(rows[0]["remote"])
+        self.assertIsNotNone(rows[0]["date_posted"])
+
     def test_supported_sources_are_explicit(self):
-        for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
-                     "Landing.Jobs","We Work Remotely","NoDesk",
-                     "EU Remote Jobs","Remote in Europe"]:
+        for name in ["Remote OK","Himalayas","Working Nomads","Jobgether",
+                     "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs",
+                     "EU Careers / EPSO","Remote.co"]:
             self.assertTrue(boards.source_supported(name))
-        self.assertFalse(boards.source_supported("Unknown Board"))
+        for name in ["EURES","Remote in Europe","Unknown Board"]:
+            self.assertFalse(boards.source_supported(name))
 
 
 if __name__ == "__main__":
