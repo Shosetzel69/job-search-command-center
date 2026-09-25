@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import copy
 import unittest
+from unittest.mock import patch
 
 import role_taxonomy
 
@@ -19,6 +20,16 @@ class RoleTaxonomyTests(unittest.TestCase):
 
     def test_regression_corpus_passes(self) -> None:
         role_taxonomy.validate_regression_corpus(self.taxonomy, self.corpus)
+
+    def test_gate_order_is_schema_compile_conflict(self) -> None:
+        order: list[str] = []
+        with (
+            patch.object(role_taxonomy, "_validate_schema", side_effect=lambda _: order.append("schema")),
+            patch.object(role_taxonomy, "_compile_patterns", side_effect=lambda _: order.append("compile")),
+            patch.object(role_taxonomy, "_detect_pattern_conflicts", side_effect=lambda _: order.append("conflict")),
+        ):
+            role_taxonomy.validate_taxonomy(self.taxonomy)
+        self.assertEqual(order, ["schema", "compile", "conflict"])
 
     def test_unknown_is_non_negative(self) -> None:
         self.assertEqual(
