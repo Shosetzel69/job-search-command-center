@@ -68,7 +68,7 @@ def _assert_no_provider_query_contract(value: Any, path: str = "$") -> None:
             _assert_no_provider_query_contract(child, f"{path}[{index}]")
 
 
-def validate_taxonomy(taxonomy: dict[str, Any]) -> None:
+def _validate_schema(taxonomy: dict[str, Any]) -> None:
     _require(taxonomy.get("schema_version") == SCHEMA_VERSION, "unsupported taxonomy schema_version")
     version = taxonomy.get("taxonomy_version")
     _require(
@@ -83,8 +83,6 @@ def validate_taxonomy(taxonomy: dict[str, Any]) -> None:
     _assert_no_provider_query_contract(taxonomy)
 
     member_codes: set[str] = set()
-    global_include_patterns: dict[str, str] = {}
-
     for family_code in CANONICAL_FAMILIES:
         family = families[family_code]
         _require(isinstance(family, dict), f"{family_code}: family must be an object")
@@ -112,24 +110,48 @@ def validate_taxonomy(taxonomy: dict[str, Any]) -> None:
             excludes = member.get("exclude_patterns")
             _require(isinstance(includes, list) and includes, f"{code}: include_patterns must be non-empty")
             _require(isinstance(excludes, list), f"{code}: exclude_patterns must be an array")
-
-            include_keys: set[str] = set()
-            exclude_keys: set[str] = set()
-            for kind, patterns, seen in (
-                ("include", includes, include_keys),
-                ("exclude", excludes, exclude_keys),
-            ):
+            for kind, patterns in (("include", includes), ("exclude", excludes)):
                 for pattern in patterns:
                     _require(isinstance(pattern, str) and pattern.strip(), f"{code}: empty {kind} pattern")
-                    key = pattern.casefold()
-                    _require(key not in seen, f"{code}: duplicate {kind} pattern {pattern!r}")
-                    seen.add(key)
+
+
+def _compile_patterns(taxonomy: dict[str, Any]) -> None:
+    for family_code in CANONICAL_FAMILIES:
+        if family_code == "UNKNOWN":
+            continue
+        for member in taxonomy["families"][family_code]["members"]:
+            for kind, patterns in (
+                ("include", member["include_patterns"]),
+                ("exclude", member["exclude_patterns"]),
+            ):
+                for pattern in patterns:
                     try:
                         re.compile(pattern, re.IGNORECASE)
                     except re.error as exc:
                         raise TaxonomyValidationError(
-                            f"{code}: invalid {kind} regex {pattern!r}: {exc}"
+                            f"{member['code']}: invalid {kind} regex {pattern!r}: {exc}"
                         ) from exc
+
+
+def _detect_pattern_conflicts(taxonomy: dict[str, Any]) -> None:
+    global_include_patterns: dict[str, str] = {}
+
+    for family_code in CANONICAL_FAMILIES:
+        if family_code == "UNKNOWN":
+            continue
+        for member in taxonomy["families"][family_code]["members"]:
+            code = member["code"]
+            include_keys: set[str] = set()
+            exclude_keys: set[str] = set()
+
+            for kind, patterns, seen in (
+                ("include", member["include_patterns"], include_keys),
+                ("exclude", member["exclude_patterns"], exclude_keys),
+            ):
+                for pattern in patterns:
+                    key = pattern.casefold()
+                    _require(key not in seen, f"{code}: duplicate {kind} pattern {pattern!r}")
+                    seen.add(key)
 
             overlap = include_keys & exclude_keys
             _require(
@@ -137,7 +159,7 @@ def validate_taxonomy(taxonomy: dict[str, Any]) -> None:
                 f"{code}: same pattern cannot be both include and exclude: {sorted(overlap)}",
             )
 
-            for pattern in includes:
+            for pattern in member["include_patterns"]:
                 key = pattern.casefold()
                 prior = global_include_patterns.get(key)
                 _require(
@@ -146,6 +168,12 @@ def validate_taxonomy(taxonomy: dict[str, Any]) -> None:
                 )
                 global_include_patterns[key] = code
 
+
+def validate_taxonomy(taxonomy: dict[str, Any]) -> None:
+    # The contract requires the gate to fail closed in this exact order.
+    _validate_schema(taxonomy)
+    _compile_patterns(taxonomy)
+    _detect_pattern_conflicts(taxonomy)
 
 def classify_title(title: object, taxonomy: dict[str, Any]) -> dict[str, Any]:
     validate_taxonomy(taxonomy)
