@@ -33,6 +33,27 @@ COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "source
             "sources_blocked", "sources_no_extractable_jobs")
 POLICY_EXCLUDED_SOURCE_NAMES = {"monster"}
 
+SOURCE_DISPOSITIONS = {
+    "EURES": {
+        "outcome": "blocked_policy",
+        "connector": "policy",
+        "reason": "EURES terms prohibit automated extraction or API use except for recognised EURES partner organisations",
+    },
+    "eFinancialCareers": {
+        "outcome": "blocked_credentials",
+        "connector": "credentialed_api",
+        "reason": "Official eFinancialCareers Job API requires recruiter/provider credentials; no unauthenticated API route is enabled",
+    },
+    "Remote in Europe": {
+        "outcome": "provider_alias",
+        "connector": "alias",
+        "reason": "remoteineurope.com now redirects to We Work Remotely Europe; retrieval is covered by the We Work Remotely source",
+    },
+}
+
+def source_disposition(source):
+    return SOURCE_DISPOSITIONS.get(str(source.get("name") or "").strip())
+
 DEFERRED_PROVIDER_ROOTS = {
     "linkedin.com": ("LinkedIn", "jobs"),
     "www.linkedin.com": ("LinkedIn", "jobs"),
@@ -106,6 +127,8 @@ CANONICAL_OUTCOMES = {
     "failed",
     "deferred_provider",
     "blocked_credentials",
+    "blocked_policy",
+    "provider_alias",
     "validation_pending",
     "disabled_config",
     "excluded_policy",
@@ -268,16 +291,19 @@ def build_plan(catalog):
     plan = []
     seen = set()
     for source in catalog["sources"]:
+        disposition = source_disposition(source)
         route = ATS_ROUTES.get(source.get("name"))
-        connector = connector_for(source)
-        deferred = None if connector else deferred_provider(source)
-        if not connector and not deferred:
+        connector = None if disposition else connector_for(source)
+        deferred = None if disposition or connector else deferred_provider(source)
+        if not disposition and not connector and not deferred:
             try:
                 web.public_url(source.get("url") or "")
                 connector = "web"
             except web.FetchError:
                 connector = None
-        if route:
+        if disposition:
+            route_key = "disposition:" + str(source.get("id") or source.get("name") or source.get("url"))
+        elif route:
             route_key = "ats:" + source.get("name", "")
         elif connector == "public_board":
             route_key = "public_board:" + str(source.get("id") or source.get("name") or source.get("url"))
@@ -286,8 +312,8 @@ def build_plan(catalog):
         excluded_by_policy = policy_excluded(source)
         item = {"source": source.get("name") or source.get("url") or "Unknown",
                 "source_id": source.get("id") or source.get("url"), "url": source.get("url"),
-                "connector": "deferred" if deferred else connector,
-                "collection_method": "deferred" if deferred else connector,
+                "connector": disposition.get("connector") if disposition else ("deferred" if deferred else connector),
+                "collection_method": disposition.get("connector") if disposition else ("deferred" if deferred else connector),
                 "active": source.get("active") is not False and not excluded_by_policy, "status": "pending",
                 "outcome": None, "source_execution_id": None,
                 "records": 0, "error": None, "failure_reason": None,
@@ -296,6 +322,9 @@ def build_plan(catalog):
         if excluded_by_policy:
             reason = "Excluded operationally by project source policy"
             item.update(status="inactive", outcome="excluded_policy", error=reason, failure_reason=reason)
+        if disposition and item["status"] == "pending":
+            reason = disposition["reason"]
+            item.update(status="skipped", outcome=disposition["outcome"], error=reason, failure_reason=reason)
         if route:
             item["connector_config"] = route
             if route.get("enabled") is False:
