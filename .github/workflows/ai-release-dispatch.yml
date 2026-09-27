@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   dispatch:
-    if: ${{ github.actor == 'Shosetzel69' && (startsWith(github.event.comment.body, '/jscc-deploy') || startsWith(github.event.comment.body, '/jscc-search')) }}
+    if: ${{ github.actor == 'Shosetzel69' && (startsWith(github.event.comment.body, '/jscc-deploy') || startsWith(github.event.comment.body, '/jscc-search') || startsWith(github.event.comment.body, '/jscc-validate')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -38,7 +38,7 @@ jobs:
           workflow="$(jq -r '.workflow' <<<"$envelope")"
           payload="$(jq -c '.payload' <<<"$envelope")"
           case "$workflow" in
-            deploy-environment.yml|test-full-search.yml) ;;
+            deploy-environment.yml|test-full-search.yml|dev-source-validation.yml) ;;
             *) echo "Unexpected workflow target" >&2; exit 1 ;;
           esac
           printf '%s' "$payload" | gh api \
@@ -50,5 +50,5 @@ jobs:
             echo
             echo "Accepted owner command from issue #$ISSUE_NUMBER / comment $COMMENT_ID."
             echo "Allowlisted workflow: $workflow."
-            echo "PROD search is not supported by this trigger."
+            echo "PROD search/validation is not supported by this trigger."
           } >> "$GITHUB_STEP_SUMMARY"
