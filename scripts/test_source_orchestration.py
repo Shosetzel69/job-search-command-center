@@ -208,6 +208,14 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual([item["connector"] for item in plan],["public_board","public_board"])
         self.assertTrue(all(item["status"]=="pending" for item in plan))
 
+    def test_worldline_uses_bounded_web_collection(self):
+        source = {"id":"src-81d05cc7","name":"Worldline",
+                  "url":"https://jobs.worldline.com/viewalljobs/","active":True}
+        plan = orchestration.build_plan({"sources":[source]})
+        self.assertEqual(plan[0]["connector"], "web")
+        self.assertEqual(plan[0]["status"], "pending")
+        self.assertFalse(orchestration.public_boards.source_supported("Worldline"))
+
     def test_policy_and_alias_dispositions_are_explicit_non_failures(self):
         catalog = {"sources":[
             {"id":"eures","name":"EURES","url":"https://eures.europa.eu/","active":True},
