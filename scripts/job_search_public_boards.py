@@ -25,14 +25,15 @@ PUBLIC_BOARD_SOURCES = {
     "Himalayas": {"kind": "himalayas", "url": "https://himalayas.app/jobs/api?limit=100"},
     "Working Nomads": {"kind": "workingnomads", "url": "https://www.workingnomads.com/api/exposed_jobs/"},
     "Jobgether": {"kind": "jobgether", "url": "https://jobgether.com/api/v1/jobs?limit=25&sort=date"},
-    "Landing.Jobs": {"kind": "rss", "url": "https://landing.jobs/feed"},
+    "Landing.Jobs": {"kind": "landingjobs", "url": "https://landing.jobs/api/v1/jobs"},
     "We Work Remotely": {"kind": "rss", "url": "https://weworkremotely.com/remote-jobs.rss"},
     "NoDesk": {"kind": "rss", "url": "https://nodesk.co/remote-jobs/index.xml"},
-    "EU Remote Jobs": {"kind": "rss", "url": "https://euremotejobs.com/feed/"},
+    "EU Remote Jobs": {"kind": "eu_remote", "url": "https://euremotejobs.com/", "feed_url": "https://euremotejobs.com/feed/"},
     "EU Careers / EPSO": {"kind": "eu_careers", "url": "https://eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast"},
     "Remote.co": {"kind": "remote_co", "url": "https://remote.co/remote-jobs"},
     "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/viewalljobs/"},
+    "Worldline": {"kind": "worldline", "url": "https://jobs.worldline.com/viewalljobs/"},
     "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/joblist.ftl?lang=en"},
 }
 
@@ -423,9 +424,15 @@ def _relative_date(text):
         return now.isoformat()
     if re.search(r"\bYesterday\b", value, re.I):
         return (now.replace(hour=12, minute=0, second=0, microsecond=0) - timedelta(days=1)).isoformat()
+    match = re.search(r"\b(\d+)\s+hours?\s+ago\b", value, re.I)
+    if match:
+        return (now - timedelta(hours=int(match.group(1)))).isoformat()
     match = re.search(r"\b(\d+)\s+days?\s+ago\b", value, re.I)
     if match:
         return (now - timedelta(days=int(match.group(1)))).isoformat()
+    match = re.search(r"\b(\d+)\s+weeks?\s+ago\b", value, re.I)
+    if match:
+        return (now - timedelta(weeks=int(match.group(1)))).isoformat()
     return None
 
 
@@ -470,6 +477,113 @@ def _remotive(payload):
             countries=_country_names_from_text(location), remote=True,
             employment_statuses=item.get("job_type"),
         ))
+    return records
+
+
+
+def _landing_jobs_api(base_url):
+    records = {}
+    for offset in range(0, 201, 50):
+        sep = "&" if "?" in base_url else "?"
+        status, _kind, body = _fetch(
+            f"{base_url}{sep}limit=50&offset={offset}",
+            "application/json",
+        )
+        if status != 200:
+            raise RuntimeError(f"Landing.Jobs public API HTTP {status}")
+        payload = json.loads(body.decode("utf-8", errors="replace"))
+        page = _landingjobs(payload)
+        for record in page:
+            records[record["id"]] = record
+        if not isinstance(payload, list) or len(payload) < 50:
+            break
+    return list(records.values())
+
+
+class _EuRemoteJobsList(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.anchor = None
+        self.anchor_parts = []
+        self.current_href = None
+        self.context_parts = []
+
+    def _flush_context(self):
+        if self.current_href and self.current_href in self.jobs:
+            self.jobs[self.current_href]["context"] = " ".join(self.context_parts[-24:])
+        self.context_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href")
+        if tag == "a" and href and re.search(r"/job/[^/?#]+", href):
+            self._flush_context()
+            self.anchor = href
+            self.current_href = href
+            self.anchor_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        if self.anchor is not None:
+            self.anchor_parts.append(text)
+        if self.current_href:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None:
+            title = " ".join(self.anchor_parts).strip()
+            if title and title.casefold() not in {"apply", "read more", "view job"}:
+                self.jobs.setdefault(self.anchor, {"title": title, "context": ""})
+            self.anchor = None
+            self.anchor_parts = []
+
+    def close(self):
+        super().close()
+        self._flush_context()
+
+
+def _eu_remote_jobs(base_url, feed_url):
+    # Prefer the site's feed when it contains usable items. Some edge/CDN paths
+    # return 202 while still carrying a feed body, so status alone is not failure.
+    try:
+        status, _kind, body = _fetch(
+            feed_url,
+            "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+        )
+        if status in {200, 202}:
+            try:
+                records = _rss(body, "EU Remote Jobs", feed_url)
+            except ValueError:
+                records = []
+            if records:
+                return records
+    except Exception:
+        pass
+
+    status, _kind, body = _fetch(base_url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"EU Remote Jobs public page HTTP {status}")
+    parser = _EuRemoteJobsList()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = []
+    for href, item in parser.jobs.items():
+        title = item.get("title")
+        if not title:
+            continue
+        context = item.get("context") or title
+        link = urljoin(base_url, href)
+        identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+        records.append(_record(
+            "EU Remote Jobs", identity, title, "EU Remote Jobs", context, link,
+            date_posted=_relative_date(context),
+            location="Europe", countries=[], remote=True,
+        ))
+    if not records:
+        raise ValueError("EU Remote Jobs page contained no extractable job links")
     return records
 
 
@@ -519,14 +633,14 @@ def _atos_date(value):
     return None
 
 
-def _atos(base_url):
+def _rmk_jobs(base_url, provider, company):
     records = {}
-    for startrow in range(0, 201, 25):
+    for startrow in range(0, 251, 50):
         sep = "&" if "?" in base_url else "?"
         url = f"{base_url}{sep}q=&sortColumn=referencedate&sortDirection=desc&startrow={startrow}"
         status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
         if status != 200:
-            raise RuntimeError(f"Atos jobs page HTTP {status}")
+            raise RuntimeError(f"{provider} jobs page HTTP {status}")
         parser = _AtosJobsTable()
         parser.feed(body.decode("utf-8", errors="replace"))
         added = 0
@@ -544,7 +658,7 @@ def _atos(base_url):
                 if match and match.group(1) in engine.COUNTRY_NAMES:
                     countries = [engine.COUNTRY_NAMES[match.group(1)]]
             record = _record(
-                "Atos", identity, title, "Atos", title, link,
+                provider, identity, title, company, title, link,
                 date_posted=_atos_date(published), location=location,
                 countries=countries,
                 remote=bool(re.search(r"\bremote\b", f"{title} {location}", re.I)),
@@ -556,6 +670,13 @@ def _atos(base_url):
             break
     return list(records.values())
 
+
+def _atos(base_url):
+    return _rmk_jobs(base_url, "Atos", "Atos")
+
+
+def _worldline(base_url):
+    return _rmk_jobs(base_url, "Worldline", "Worldline")
 
 class _NatoTaleoText(HTMLParser):
     def __init__(self):
@@ -613,6 +734,12 @@ def collect(source, config=None):
         records = _remote_co(url)
     elif kind == "atos":
         records = _atos(url)
+    elif kind == "worldline":
+        records = _worldline(url)
+    elif kind == "landingjobs":
+        records = _landing_jobs_api(url)
+    elif kind == "eu_remote":
+        records = _eu_remote_jobs(url, spec["feed_url"])
     elif kind == "nato_taleo":
         records = _nato_taleo(url)
     else:
