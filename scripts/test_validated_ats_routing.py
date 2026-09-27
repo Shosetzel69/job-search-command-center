@@ -59,6 +59,19 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             self.assertEqual(plan[0]["connector_config"]["career_url"],url)
             self.assertTrue(plan[0]["active"])
 
+    def test_zero_output_sources_use_verified_direct_ats_routes(self):
+        expected = {
+            "Snyk": ("greenhouse", "board_token", "snyk"),
+            "Storyblok": ("greenhouse", "board_token", "storyblok2"),
+            "Kong": ("ashby", "board_name", "kong"),
+            "LocalStack": ("ashby", "board_name", "localstack"),
+        }
+        for name, (connector, key, value) in expected.items():
+            plan = orchestration.build_plan({"sources":[{"id":name.lower(),"name":name,"url":"https://example.invalid/","active":True}]})
+            self.assertEqual(plan[0]["connector"], connector)
+            self.assertEqual(plan[0]["connector_config"][key], value)
+            self.assertTrue(plan[0]["active"])
+
 
 if __name__ == "__main__":
     unittest.main()
