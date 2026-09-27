@@ -537,10 +537,15 @@ def _atos(base_url):
                 continue
             link = urljoin(base_url, href)
             identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+            countries = _country_names_from_text(location)
+            if not countries:
+                match = re.search(r"(?:,|\\s)\\s*([A-Z]{2})(?:\\b|$)", location)
+                if match and match.group(1) in engine.COUNTRY_NAMES:
+                    countries = [engine.COUNTRY_NAMES[match.group(1)]]
             record = _record(
                 "Atos", identity, title, "Atos", title, link,
                 date_posted=_atos_date(published), location=location,
-                countries=_country_names_from_text(location),
+                countries=countries,
                 remote=bool(re.search(r"\bremote\b", f"{title} {location}", re.I)),
             )
             if record["id"] not in records:
