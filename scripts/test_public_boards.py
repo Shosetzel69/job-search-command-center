@@ -134,17 +134,26 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Franta",rows[0]["countries"])
 
     def test_nato_taleo_parser_extracts_public_vacancy_rows(self):
-        html='''<div><h3>Support Analyst (CapDev)</h3>
-        Job Number: 261453 - Belgium-Mons Application Deadline: 02-Oct-2026, 11:59:00 PM
-        NATO Body: Supreme Headquarters Allied Powers Europe (SHAPE) - Grade: NATO Grade G12 Apply
-        Add to My Job Cart</div>'''
-        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
-            rows=boards._nato_taleo("https://nato.taleo.net/careersection/2/joblist.ftl?lang=en")
+        payload={
+            "requisitionList":[{
+                "jobId":"261453",
+                "contestNo":"261453",
+                "column":["Support Analyst (CapDev)", "[\"Belgium-Mons\"]", "Sep 27, 2026"],
+            }],
+            "pagingData":{"currentPageNo":1,"pageSize":25,"totalCount":1},
+        }
+        with patch.object(boards,"_taleo_post_json",return_value=payload) as post:
+            rows=boards._nato_taleo(
+                "https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en",
+                "101430233",
+                "2",
+            )
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"Support Analyst (CapDev)")
         self.assertEqual(rows[0]["company"],"NATO")
         self.assertIn("Belgia",rows[0]["countries"])
-        self.assertTrue(rows[0]["source_url"].endswith("job=261453"))
+        self.assertIn("job=261453",rows[0]["source_url"])
+        self.assertIn("portal=101430233",post.call_args.args[0])
 
     def test_atos_table_parser_extracts_public_job_rows(self):
         html='''<table><tr>
@@ -155,12 +164,30 @@ class PublicBoardAdapterTests(unittest.TestCase):
             (200,"text/html",html.encode()),
             (200,"text/html",html.encode()),
         ]):
-            rows=boards._atos("https://jobs.atos.net/viewalljobs/")
+            rows=boards._atos("https://jobs.atos.net/go/Jobs-in-Romania/3686501/")
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"Project Manager")
         self.assertEqual(rows[0]["company"],"Atos")
         self.assertEqual(rows[0]["date_posted"],"2026-09-27T00:00:00+00:00")
         self.assertIn("Romania",rows[0]["countries"])
+
+    def test_rmk_anchor_fallback_and_path_pagination(self):
+        html='''<section>
+          <a class="jobTitle-link" href="/job/Bucharest-Delivery-Manager/987654/">Delivery Manager</a>
+          Bucharest, RO Sep 26, 2026
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())) as fetch:
+            rows=boards._worldline("https://jobs.worldline.com/viewalljobs/")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Delivery Manager")
+        self.assertIn("Romania",rows[0]["countries"])
+        self.assertEqual(rows[0]["date_posted"],"2026-09-26T00:00:00+00:00")
+        self.assertIn("sortColumn=referencedate",fetch.call_args.args[0])
+        self.assertIn("/viewalljobs/",fetch.call_args.args[0])
+        self.assertEqual(
+            boards._rmk_page_url("https://jobs.worldline.com/viewalljobs/",50),
+            "https://jobs.worldline.com/viewalljobs/50/?q=&sortColumn=referencedate&sortDirection=desc",
+        )
 
     def test_remote_co_list_parser_extracts_job_detail_links(self):
         html='''<div>New! Today <h3><a href="/job-details/project-manager-abc">Project Manager</a></h3>
