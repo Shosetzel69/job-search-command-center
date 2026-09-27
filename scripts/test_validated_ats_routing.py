@@ -52,6 +52,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             "Deutsche Bank": "https://db.wd3.myworkdayjobs.com/DBWebsite",
             "DXC Technology": "https://dxctechnology.wd1.myworkdayjobs.com/DXCJobs",
             "Accenture": "https://accenture.wd103.myworkdayjobs.com/AccentureCareers",
+            "NTT DATA Romania": "https://nttlimited.wd3.myworkdayjobs.com/NTT_Careers",
         }.items():
             plan = orchestration.build_plan({"sources":[{"id":name.lower().replace(" ","-"),"name":name,"url":"https://example.invalid/","active":True}]})
             self.assertEqual(plan[0]["connector"],"workday")
