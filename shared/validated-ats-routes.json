@@ -254,6 +254,12 @@
       "connector": "smartrecruiters",
       "company_identifier": "talan",
       "enabled": true
+    },
+    "Toptal": {
+      "connector": "lever",
+      "site": "toptal",
+      "region": "global",
+      "enabled": true
     }
   }
 }
