@@ -19,6 +19,7 @@ import job_search_lever as lever
 import job_search_pinpoint as pinpoint
 import job_search_recruitee as recruitee
 import job_search_smartrecruiters as smartrecruiters
+import job_search_successfactors as successfactors
 import job_search_traefik as traefik
 import job_search_web as web
 import job_search_workday as workday
@@ -454,6 +455,13 @@ def collect_ats(item):
     company = item["source"]
     if connector == "smartrecruiters":
         return smartrecruiters.collect(route["company_identifier"])
+    if connector == "successfactors":
+        return successfactors.collect(
+            route["career_site_url"],
+            route["company_id"],
+            company,
+            locale=route.get("locale"),
+        )
     if connector == "workday":
         return workday.collect(route["career_url"], company)
     if connector == "greenhouse":
@@ -477,7 +485,7 @@ def collect_api_sources(config, state, now, plan, run_id=None):
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
-    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint"}
+    ats_connectors = {"smartrecruiters", "successfactors", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint"}
     for item in plan:
         if item["status"] != "pending" or item["connector"] == "web":
             continue
