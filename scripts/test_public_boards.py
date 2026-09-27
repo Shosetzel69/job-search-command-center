@@ -90,6 +90,49 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"IT Project Manager")
         self.assertTrue(rows[0]["remote"])
 
+    def test_landing_jobs_api_paginates_public_json(self):
+        page=[{"id":1,"title":"Project Manager","country_name":"Portugal",
+               "city":"Lisbon","published_at":"2026-09-27T08:00:00Z"}]
+        with patch.object(boards,"_fetch",return_value=(200,"application/json",__import__("json").dumps(page).encode())):
+            rows=boards._landing_jobs_api("https://landing.jobs/api/v1/jobs")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Project Manager")
+
+    def test_eu_remote_uses_202_feed_when_it_contains_jobs(self):
+        xml=b'''<?xml version="1.0"?><rss><channel><item>
+          <title>Remote Project Manager</title><link>https://euremotejobs.com/job/remote-project-manager/</link>
+          <pubDate>Sun, 27 Sep 2026 08:00:00 +0000</pubDate></item></channel></rss>'''
+        with patch.object(boards,"_fetch",return_value=(202,"application/rss+xml",xml)):
+            rows=boards._eu_remote_jobs("https://euremotejobs.com/","https://euremotejobs.com/feed/")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Remote Project Manager")
+
+    def test_eu_remote_falls_back_to_public_html_jobs(self):
+        html='''<div><a href="/job/pm-123/">Technical Project Manager</a>
+        Example Co Europe Full Time Project Management Posted 6 hours ago</div>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (202,"application/rss+xml",b"<html>pending</html>"),
+            (200,"text/html",html.encode()),
+        ]):
+            rows=boards._eu_remote_jobs("https://euremotejobs.com/","https://euremotejobs.com/feed/")
+        self.assertEqual(len(rows),1)
+        self.assertTrue(rows[0]["remote"])
+        self.assertIsNotNone(rows[0]["date_posted"])
+
+    def test_worldline_uses_rmk_public_job_table(self):
+        html='''<table><tr>
+          <td><a href="/job/Paris-Technical-Project-Manager/789/">Technical Project Manager</a></td>
+          <td>Paris, FR</td><td>Sep 27, 2026</td>
+        </tr></table>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (200,"text/html",html.encode()),
+            (200,"text/html",html.encode()),
+        ]):
+            rows=boards._worldline("https://jobs.worldline.com/viewalljobs/")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["company"],"Worldline")
+        self.assertIn("Franta",rows[0]["countries"])
+
     def test_nato_taleo_parser_extracts_public_vacancy_rows(self):
         html='''<div><h3>Support Analyst (CapDev)</h3>
         Job Number: 261453 - Belgium-Mons Application Deadline: 02-Oct-2026, 11:59:00 PM
@@ -133,7 +176,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
     def test_supported_sources_are_explicit(self):
         for name in ["Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs",
-                     "EU Careers / EPSO","Remote.co","Remotive","Atos","NATO Careers"]:
+                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers"]:
             self.assertTrue(boards.source_supported(name))
         for name in ["EURES","Remote in Europe","Unknown Board"]:
             self.assertFalse(boards.source_supported(name))
