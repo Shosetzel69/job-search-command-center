@@ -260,6 +260,11 @@
       "site": "toptal",
       "region": "global",
       "enabled": true
+    },
+    "GlobalLogic": {
+      "connector": "smartrecruiters",
+      "company_identifier": "GlobalLogic4",
+      "enabled": true
     }
   }
 }
