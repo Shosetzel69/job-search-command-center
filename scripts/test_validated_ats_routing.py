@@ -84,5 +84,12 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             self.assertTrue(plan[0]["active"])
 
 
+    def test_globallogic_uses_public_smartrecruiters_route(self):
+        plan = orchestration.build_plan({"sources":[{"id":"src-673ff124","name":"GlobalLogic","url":"https://www.globallogic.com/careers/","active":True}]})
+        self.assertEqual(plan[0]["connector"], "smartrecruiters")
+        self.assertEqual(plan[0]["connector_config"]["company_identifier"], "GlobalLogic4")
+        self.assertTrue(plan[0]["active"])
+
+
 if __name__ == "__main__":
     unittest.main()
