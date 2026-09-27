@@ -223,6 +223,26 @@
       "connector": "workday",
       "career_url": "https://nttlimited.wd3.myworkdayjobs.com/NTT_Careers",
       "enabled": true
+    },
+    "Snyk": {
+      "connector": "greenhouse",
+      "board_token": "snyk",
+      "enabled": true
+    },
+    "Storyblok": {
+      "connector": "greenhouse",
+      "board_token": "storyblok2",
+      "enabled": true
+    },
+    "Kong": {
+      "connector": "ashby",
+      "board_name": "kong",
+      "enabled": true
+    },
+    "LocalStack": {
+      "connector": "ashby",
+      "board_name": "localstack",
+      "enabled": true
     }
   }
 }
