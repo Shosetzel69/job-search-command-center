@@ -484,14 +484,37 @@ def _remotive(payload):
 
 def _landing_jobs_api(base_url):
     records = {}
+    roots = [str(base_url or "").rstrip("/")]
+    if not roots[0].endswith(".json"):
+        roots.append(roots[0] + ".json")
+    selected_root = None
+
     for offset in range(0, 201, 50):
-        sep = "&" if "?" in base_url else "?"
-        status, _kind, body = _fetch(
-            f"{base_url}{sep}limit=50&offset={offset}",
-            "application/json",
-        )
-        if status != 200:
-            raise RuntimeError(f"Landing.Jobs public API HTTP {status}")
+        body = None
+        last_error = None
+        candidates = [selected_root] if selected_root else roots
+        for root in candidates:
+            if not root:
+                continue
+            sep = "&" if "?" in root else "?"
+            try:
+                status, _kind, candidate_body = _fetch(
+                    f"{root}{sep}limit=50&offset={offset}",
+                    "application/json",
+                )
+            except Exception as exc:
+                last_error = exc
+                continue
+            if status == 200:
+                selected_root = root
+                body = candidate_body
+                break
+            last_error = RuntimeError(f"Landing.Jobs public API HTTP {status}")
+        if body is None:
+            if last_error:
+                raise last_error
+            raise RuntimeError("Landing.Jobs public API unavailable")
+
         payload = json.loads(body.decode("utf-8", errors="replace"))
         page = _landingjobs(payload)
         for record in page:
@@ -565,7 +588,7 @@ def _eu_remote_jobs(base_url, feed_url):
         pass
 
     status, _kind, body = _fetch(base_url, "text/html,application/xhtml+xml")
-    if status != 200:
+    if status not in {200, 202}:
         raise RuntimeError(f"EU Remote Jobs public page HTTP {status}")
     parser = _EuRemoteJobsList()
     parser.feed(body.decode("utf-8", errors="replace"))
