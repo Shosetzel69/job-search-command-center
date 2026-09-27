@@ -218,6 +218,11 @@
       "connector": "workday",
       "career_url": "https://accenture.wd103.myworkdayjobs.com/AccentureCareers",
       "enabled": true
+    },
+    "NTT DATA Romania": {
+      "connector": "workday",
+      "career_url": "https://nttlimited.wd3.myworkdayjobs.com/NTT_Careers",
+      "enabled": true
     }
   }
 }
