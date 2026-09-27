@@ -25,7 +25,7 @@ PUBLIC_BOARD_SOURCES = {
     "Himalayas": {"kind": "himalayas", "url": "https://himalayas.app/jobs/api?limit=100"},
     "Working Nomads": {"kind": "workingnomads", "url": "https://www.workingnomads.com/api/exposed_jobs/"},
     "Jobgether": {"kind": "jobgether", "url": "https://jobgether.com/api/v1/jobs?limit=25&sort=date"},
-    "Landing.Jobs": {"kind": "landingjobs", "url": "https://landing.jobs/api/v1/jobs"},
+    "Landing.Jobs": {"kind": "landing_feed", "url": "https://landing.jobs/feed"},
     "We Work Remotely": {"kind": "rss", "url": "https://weworkremotely.com/remote-jobs.rss"},
     "NoDesk": {"kind": "rss", "url": "https://nodesk.co/remote-jobs/index.xml"},
     "EU Remote Jobs": {"kind": "eu_remote", "url": "https://euremotejobs.com/", "feed_url": "https://euremotejobs.com/feed/"},
@@ -250,6 +250,59 @@ def _sanitize_xml_entities(payload):
             return " "
         return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
     return re.sub(r"&([A-Za-z][A-Za-z0-9]+);", replace, text)
+
+
+
+def _xml_local_text(element, name):
+    for child in element.iter():
+        if child.tag.rsplit("}", 1)[-1] == name:
+            text = " ".join("".join(child.itertext()).split())
+            if text:
+                return text
+    return None
+
+
+def _landing_atom(payload, feed_url):
+    try:
+        root = ET.fromstring(_sanitize_xml_entities(payload))
+    except ET.ParseError as exc:
+        raise ValueError(f"Landing.Jobs Atom parse error: {exc}") from exc
+    entries = [x for x in root.iter() if x.tag.rsplit("}", 1)[-1] == "entry"]
+    records = []
+    for index, item in enumerate(entries):
+        title = _xml_local_text(item, "title") or ""
+        link = ""
+        for child in list(item):
+            if child.tag.rsplit("}", 1)[-1] == "link" and child.attrib.get("href"):
+                link = str(child.attrib["href"]).strip()
+                if link:
+                    break
+        if not link:
+            link = _xml_local_text(item, "link") or ""
+        if not title or not link:
+            continue
+        identity = _xml_local_text(item, "id") or link or str(index)
+        company = _xml_local_text(item, "author") or "Landing.Jobs"
+        description = _xml_local_text(item, "content") or _xml_local_text(item, "summary") or title
+        city = _xml_local_text(item, "city") or ""
+        country = _xml_local_text(item, "country") or ""
+        remote_policy = _xml_local_text(item, "remote_policy") or ""
+        location = ", ".join(x for x in (city, country) if x)
+        remote = "full remote" in remote_policy.casefold()
+        if not location and remote:
+            location = "Remote"
+        date = _xml_local_text(item, "published") or _xml_local_text(item, "updated")
+        try:
+            records.append(_record(
+                "Landing.Jobs", identity, title, company, description, urljoin(feed_url, link),
+                date_posted=_rss_date(date), location=location,
+                countries=_country_names_from_text(country or location), remote=remote,
+            ))
+        except ValueError:
+            continue
+    if not records:
+        raise ValueError("Landing.Jobs feed contained no extractable entries")
+    return records
 
 
 def _rss(payload, provider, feed_url):
@@ -1002,8 +1055,11 @@ def collect(source, config=None):
         records = _worldline(url)
     elif kind == "jobs4it":
         records = _jobs4it(url)
-    elif kind == "landingjobs":
-        records = _landing_jobs_api(url)
+    elif kind == "landing_feed":
+        status, _content_type, body = _fetch(url, "application/atom+xml, application/xml, text/xml, */*")
+        if status != 200:
+            raise RuntimeError(f"Landing.Jobs public feed HTTP {status}")
+        records = _landing_atom(body, url)
     elif kind == "eu_remote":
         records = _eu_remote_jobs(url, spec["feed_url"])
     elif kind == "nato_taleo":
