@@ -84,5 +84,13 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             self.assertTrue(plan[0]["active"])
 
 
+    def test_toptal_uses_public_lever_route(self):
+        plan = orchestration.build_plan({"sources":[{"id":"src-d7caf4d7","name":"Toptal","url":"https://www.toptal.com/","active":True}]})
+        self.assertEqual(plan[0]["connector"], "lever")
+        self.assertEqual(plan[0]["connector_config"]["site"], "toptal")
+        self.assertEqual(plan[0]["connector_config"]["region"], "global")
+        self.assertTrue(plan[0]["active"])
+
+
 if __name__ == "__main__":
     unittest.main()
