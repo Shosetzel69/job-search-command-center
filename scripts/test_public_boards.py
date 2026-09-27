@@ -79,6 +79,33 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Belgia",rows[0]["countries"])
         self.assertEqual(rows[0]["date_posted"],"2026-09-25T00:00:00+00:00")
 
+    def test_remotive_public_api_normalizes_jobs(self):
+        rows = boards._remotive({"jobs":[{
+            "id":123,"title":"IT Project Manager","company_name":"Example",
+            "description":"Lead delivery","candidate_required_location":"Europe",
+            "url":"https://remotive.com/remote-jobs/project-management/it-project-manager-123",
+            "publication_date":"2026-09-27T08:00:00Z","job_type":"full_time",
+        }]})
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"IT Project Manager")
+        self.assertTrue(rows[0]["remote"])
+
+    def test_atos_table_parser_extracts_public_job_rows(self):
+        html='''<table><tr>
+          <td><a href="/job/Timisoara-Project-Manager/123456/">Project Manager</a></td>
+          <td>Timisoara, RO</td><td>Sep 27, 2026</td>
+        </tr></table>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (200,"text/html",html.encode()),
+            (200,"text/html",html.encode()),
+        ]):
+            rows=boards._atos("https://jobs.atos.net/viewalljobs/")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Project Manager")
+        self.assertEqual(rows[0]["company"],"Atos")
+        self.assertEqual(rows[0]["date_posted"],"2026-09-27T00:00:00+00:00")
+        self.assertIn("Romania",rows[0]["countries"])
+
     def test_remote_co_list_parser_extracts_job_detail_links(self):
         html='''<div>New! Today <h3><a href="/job-details/project-manager-abc">Project Manager</a></h3>
           <h4>Example Inc</h4></div>'''
@@ -93,7 +120,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
     def test_supported_sources_are_explicit(self):
         for name in ["Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs",
-                     "EU Careers / EPSO","Remote.co"]:
+                     "EU Careers / EPSO","Remote.co","Remotive","Atos"]:
             self.assertTrue(boards.source_supported(name))
         for name in ["EURES","Remote in Europe","Unknown Board"]:
             self.assertFalse(boards.source_supported(name))
