@@ -173,10 +173,26 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(rows[0]["remote"])
         self.assertIsNotNone(rows[0]["date_posted"])
 
+    def test_jobs4it_parser_extracts_recent_public_jobs(self):
+        html='''<section>
+          <div><a href="/job/scrum-master-project-manager/">Scrum Master/Project Manager</a>
+          Industry: European Institution Remote Freelance Full Time September 24, 2026</div>
+          <div><a href="/job/it-project-manager-26/">IT Project Manager</a>
+          Athens, Greece Hybrid Full Time September 26, 2026</div>
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._jobs4it("https://jobs4it.gr/")
+        self.assertEqual(len(rows),2)
+        by_title={row["job_title"]:row for row in rows}
+        self.assertTrue(by_title["Scrum Master/Project Manager"]["remote"])
+        self.assertEqual(by_title["Scrum Master/Project Manager"]["date_posted"],"2026-09-24T00:00:00+00:00")
+        self.assertIn("Grecia",by_title["IT Project Manager"]["countries"])
+        self.assertTrue(by_title["IT Project Manager"]["source_url"].endswith("/job/it-project-manager-26/"))
+
     def test_supported_sources_are_explicit(self):
         for name in ["Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs",
-                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers"]:
+                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds"]:
             self.assertTrue(boards.source_supported(name))
         for name in ["EURES","Remote in Europe","Unknown Board"]:
             self.assertFalse(boards.source_supported(name))
