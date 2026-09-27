@@ -254,6 +254,11 @@
       "connector": "smartrecruiters",
       "company_identifier": "talan",
       "enabled": true
+    },
+    "GlobalLogic": {
+      "connector": "smartrecruiters",
+      "company_identifier": "GlobalLogic4",
+      "enabled": true
     }
   }
 }
