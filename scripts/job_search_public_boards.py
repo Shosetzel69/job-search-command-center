@@ -539,7 +539,7 @@ def _atos(base_url):
             identity = link.rstrip("/").rsplit("/", 1)[-1] or link
             countries = _country_names_from_text(location)
             if not countries:
-                match = re.search(r"(?:,|\\s)\\s*([A-Z]{2})(?:\\b|$)", location)
+                match = re.search(r"(?:,|\s)\s*([A-Z]{2})(?:\b|$)", location)
                 if match and match.group(1) in engine.COUNTRY_NAMES:
                     countries = [engine.COUNTRY_NAMES[match.group(1)]]
             record = _record(
