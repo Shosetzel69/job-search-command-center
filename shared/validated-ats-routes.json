@@ -243,6 +243,17 @@
       "connector": "ashby",
       "board_name": "localstack",
       "enabled": true
+    },
+    "Contentsquare": {
+      "connector": "lever",
+      "site": "contentsquare",
+      "region": "global",
+      "enabled": true
+    },
+    "Talan Belgium / Luxembourg": {
+      "connector": "smartrecruiters",
+      "company_identifier": "talan",
+      "enabled": true
     }
   }
 }
