@@ -151,9 +151,10 @@ Commands:
 /jscc-deploy dev <40-char CANDIDATE_SHA>
 /jscc-deploy test <40-char CANDIDATE_SHA> <DEV_EVIDENCE_RUN_ID>
 /jscc-search test <40-char CANDIDATE_SHA>
+/jscc-validate dev <40-char CANDIDATE_SHA> <comma-separated-source-ids>
 ```
 
-The comment trigger is restricted to GitHub actor `Shosetzel69`, uses only the repository `GITHUB_TOKEN`, and cannot select PROD, another repository, another ref, or workflows outside the fixed allowlist (`deploy-environment.yml`, `test-full-search.yml`). The search command can target TEST only and passes the exact immutable `source_sha` with `owner_gate=APPROVED` to the existing controlled TEST workflow. The bridge implementation is therefore retained as an optional future integration rather than a prerequisite for ChatGPT release operation.
+The comment trigger is restricted to GitHub actor `Shosetzel69`, uses only the repository `GITHUB_TOKEN`, and cannot select PROD, another repository, another ref, or workflows outside the fixed allowlist (`deploy-environment.yml`, `test-full-search.yml`, `dev-source-validation.yml`). The search command can target TEST only and passes the exact immutable `source_sha` with `owner_gate=APPROVED` to the existing controlled TEST workflow. The validation command can target DEV only, accepts 1..20 canonical source IDs, fixes `confirm_validation=VALIDATE`, and dispatches only the existing read-only source-cohort validation workflow. The bridge implementation is therefore retained as an optional future integration rather than a prerequisite for ChatGPT release operation.
 
 ## Audit
 
