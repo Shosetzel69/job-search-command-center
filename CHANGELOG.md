@@ -73,6 +73,8 @@
 
 ### Documentatie
 
+- 2026-09-27: standardizata evaluarea surselor noi in `docs/source-strategy.md`: acoperire geografica reala, roluri tinta, remote/eligibilitate, volum relevant dupa filtre, calitate/duplicate, contract, acces tehnic, ToS si canonical company-site resolution. `.ai-instructions.md` v1.16 adauga triggerul `JSCC + URL` care obliga consultarea acestei reguli inainte de verdict, fara a reintroduce `priority` in Source Registry.
+
 - #288: `docs/agentflow.md` -> v1.1; aliniat contractul canonic cu modelul DTP din Discovery: DTP devine handoff formal Discovery -> Development, Discovery ramane sursa de adevar pentru intentia de business, Development pentru implementare, iar boundary-ul intre etape/chaturi si stop conditions sunt explicite; template-ul Discovery este versionat separat la v2.0 si foloseste taxonomia canonica Phase/Status.
 
 - #285: documentatia AgentFlow este consolidata in `docs/agentflow.md` v1.0, aliniata cu `GOVERNANCE.md` v1.11 si taxonomia canonica Phase/Status; sunt definite routing-ul AGENTFLOW/LEGACY-ADAPTED, control tokens `APPROVE_TRANSFER`, `APPROVE_TASK_CONTRACT`, `PROD_GO`, architecture delta check si handoff-ul catre lifecycle-ul DEV -> TEST -> PROD.
