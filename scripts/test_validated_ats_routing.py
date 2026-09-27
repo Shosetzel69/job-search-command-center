@@ -84,5 +84,29 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             self.assertTrue(plan[0]["active"])
 
 
+    def test_worldline_successfactors_route_is_validation_pending(self):
+        source = {"id":"src-81d05cc7","name":"Worldline","url":"https://jobs.worldline.com/","active":True}
+        plan = orchestration.build_plan({"sources":[source]})
+        self.assertEqual(plan[0]["connector"],"successfactors")
+        self.assertEqual(plan[0]["status"],"inactive")
+        self.assertEqual(plan[0]["outcome"],"validation_pending")
+        route=plan[0]["connector_config"]
+        self.assertEqual(route["career_site_url"],"https://jobs.worldline.com/career")
+        self.assertEqual(route["company_id"],"worldline")
+
+    def test_successfactors_dispatch_uses_exact_route_configuration(self):
+        item={"source":"Worldline","connector":"successfactors","connector_config":{
+            "career_site_url":"https://jobs.worldline.com/career",
+            "company_id":"worldline",
+            "locale":"en_US",
+        }}
+        expected=[engine.CollectionResult("successfactors:worldline","public_xml_feed",True,[],0)]
+        with patch.object(orchestration.successfactors,"collect",return_value=expected) as collect:
+            self.assertEqual(orchestration.collect_ats(item),expected)
+            collect.assert_called_once_with(
+                "https://jobs.worldline.com/career","worldline","Worldline",locale="en_US"
+            )
+
+
 if __name__ == "__main__":
     unittest.main()
