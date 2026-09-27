@@ -50,6 +50,20 @@ class SuccessFactorsTests(unittest.TestCase):
         )[0].records[0]
         self.assertEqual(record["countries"], ["Romania"])
 
+    def test_collect_sanitizes_invalid_xml_characters_and_entities(self):
+        xml = b"""<?xml version='1.0' encoding='UTF-8'?>
+        <Job-Listing><Job><ReqId>456</ReqId><JobTitle>Service &amp; Delivery Manager</JobTitle>
+        <Location>Bucharest, Romania</Location>
+        <Job-Description>Lead delivery\x0b &nbsp; operations & support</Job-Description>
+        <Posted-Date>2026-09-27</Posted-Date></Job></Job-Listing>"""
+        opener = Mock(return_value=FakeResponse(xml, raw=True))
+        result = successfactors.collect(
+            "https://jobs.example.com/career", "example", "Example Co", opener=opener
+        )[0]
+        self.assertEqual(result.total_available, 1)
+        self.assertEqual(result.records[0]["job_title"], "Service & Delivery Manager")
+        self.assertIn("operations & support", result.records[0]["description"])
+
     def test_invalid_url_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "HTTPS"):
             successfactors.collect("http://example.com/career", "X", "Example")
