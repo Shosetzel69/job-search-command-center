@@ -1,7 +1,7 @@
 # Strategia surselor
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-25`
+Ultima actualizare: `2026-09-27`
 
 ## 1. Principiu
 
@@ -61,6 +61,36 @@ Reguli:
 - o sursa HTTP(S) activa este colectata numai daca exista o strategie operationala permisa pentru ea.
 
 Categoriile sunt controlate prin `data/source-categories.json`; nu se creeaza accidental prin text liber. Redenumirea muta referintele surselor, iar stergerea unei categorii este blocata cat timp exista surse asociate.
+
+### 3.1 Evaluarea unei surse noi
+
+O sursa candidata se evalueaza dupa valoarea reala pentru corpusul JSCC, nu dupa popularitatea site-ului sau numarul total de anunturi afisat de provider.
+
+Auditul minim obligatoriu verifica:
+
+1. **Acoperire geografica reala** — tarile/regiunile dominante in joburile efectiv publicate, nu doar aria declarata de platforma.
+2. **Relevanta pentru rolurile tinta JSCC** — Project Manager, IT Project Manager, Agile Project Manager, Scrum Master, Service Manager si Delivery/Technical PM.
+3. **Remote real si eligibilitate geografica** — se distinge `worldwide / Europe / EU` de formule restrictive precum `remote from country X`, rezidenta obligatorie sau relocare.
+4. **Volum relevant dupa filtrele JSCC** — se estimeaza joburile care pot supravietui criteriilor JSCC; volumul total al platformei nu este criteriu de calificare.
+5. **Recente/calitate/duplicate** — activitatea anunturilor, vechimea, repostarile, duplicatele si semnalele de joburi expirate sau agregate slab.
+6. **Tip contractual** — B2B/contract/freelance/permanent si, unde exista, transparenta ratei sau salariului.
+7. **Acces tehnic** — API/feed/sitemap/ATS/pagini publice, stabilitatea rutei, limite tehnice, robots/challenge/login si necesitatea unui connector dedicat.
+8. **Permisiune de colectare** — ToS/licenta/conditii de reutilizare si orice restrictie care face colectarea automata neautorizata sau nepotrivita.
+9. **Canonical source resolution** — posibilitatea de a rezolva anuntul catre pagina first-party a angajatorului si de a pastra provenance fara a folosi agregatorul drept identitate canonica.
+
+Regula de calificare:
+
+> O sursa nu se califica dupa volumul total de joburi, ci dupa volumul estimat de joburi relevante si eligibile care supravietuiesc filtrelor JSCC.
+
+Outputul unei evaluari trebuie sa contina cel putin:
+- valoare JSCC `HIGH / MEDIUM / LOW` ca evaluare analitica, nu ca field operational din Source Registry;
+- scope geografic util si restrictiile de eligibilitate;
+- ruta tehnica disponibila sau blocker-ul;
+- restrictii ToS/policy relevante;
+- recomandarea de guvernanta (`validate`, `defer` sau `reject`) si next action;
+- daca sursa intra in registry, starea initiala ramane conform fluxului canonic: `pending`, `approval_status=pending`, `active=false`.
+
+Aceasta sectiune nu reintroduce campul legacy `priority` si nu modifica schema Source Registry. Ea standardizeaza analiza care precede o decizie de validare/aprobare.
 
 ## 4. Excluderi operationale de politica
 
