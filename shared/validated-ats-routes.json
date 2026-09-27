@@ -254,6 +254,14 @@
       "connector": "smartrecruiters",
       "company_identifier": "talan",
       "enabled": true
+    },
+    "Worldline": {
+      "connector": "successfactors",
+      "career_site_url": "https://jobs.worldline.com/career",
+      "company_id": "worldline",
+      "locale": "en_US",
+      "enabled": false,
+      "disabled_reason": "live_api_route_not_validated"
     }
   }
 }
