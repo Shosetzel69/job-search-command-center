@@ -33,6 +33,7 @@ PUBLIC_BOARD_SOURCES = {
     "Remote.co": {"kind": "remote_co", "url": "https://remote.co/remote-jobs"},
     "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/viewalljobs/"},
+    "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/joblist.ftl?lang=en"},
 }
 
 
@@ -555,6 +556,51 @@ def _atos(base_url):
             break
     return list(records.values())
 
+
+class _NatoTaleoText(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if text:
+            self.parts.append(text)
+
+
+def _nato_taleo(url):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"NATO Taleo jobs page HTTP {status}")
+    parser = _NatoTaleoText()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    text = " ".join(parser.parts)
+
+    pattern = re.compile(
+        r"(?P<title>[^|]{2,180}?)\s+Job Number:\s*(?P<job>\d{5,})\s*-\s*"
+        r"(?P<location>.+?)\s+Application Deadline:\s*(?P<deadline>.+?)\s+"
+        r"NATO Body:\s*(?P<body>.+?)\s*-\s*Grade:\s*(?P<grade>.*?)\s*(?:Apply|Add to My Job Cart)",
+        re.I,
+    )
+    records = {}
+    for match in pattern.finditer(text):
+        title = re.sub(r"^(?:Apply|Add to My Job Cart|\|\s*)+", "", match.group("title")).strip(" |-")
+        job_number = match.group("job")
+        location = " ".join(match.group("location").split())
+        if not title or not job_number:
+            continue
+        link = f"https://nato.taleo.net/careersection/2/jobdetail.ftl?job={job_number}"
+        countries = _country_names_from_text(location)
+        record = _record(
+            "NATO Careers", job_number, title, "NATO",
+            f"{match.group('body').strip()} {match.group('grade').strip()}",
+            link, location=location, countries=countries, remote=False,
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError("NATO Taleo page contained no extractable job rows")
+    return list(records.values())
+
 def collect(source, config=None):
     name = str(source.get("name") or "")
     spec = PUBLIC_BOARD_SOURCES.get(name)
@@ -567,6 +613,8 @@ def collect(source, config=None):
         records = _remote_co(url)
     elif kind == "atos":
         records = _atos(url)
+    elif kind == "nato_taleo":
+        records = _nato_taleo(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
