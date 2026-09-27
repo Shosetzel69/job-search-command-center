@@ -198,6 +198,16 @@
       "connector": "pinpoint",
       "subdomain": "safetywing",
       "enabled": true
+    },
+    "ING Careers": {
+      "connector": "workday",
+      "career_url": "https://ing.wd3.myworkdayjobs.com/ICSGBLCOR",
+      "enabled": true
+    },
+    "Deutsche Bank": {
+      "connector": "workday",
+      "career_url": "https://db.wd3.myworkdayjobs.com/DBWebsite",
+      "enabled": true
     }
   }
 }
