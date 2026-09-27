@@ -90,6 +90,19 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"IT Project Manager")
         self.assertTrue(rows[0]["remote"])
 
+    def test_nato_taleo_parser_extracts_public_vacancy_rows(self):
+        html='''<div><h3>Support Analyst (CapDev)</h3>
+        Job Number: 261453 - Belgium-Mons Application Deadline: 02-Oct-2026, 11:59:00 PM
+        NATO Body: Supreme Headquarters Allied Powers Europe (SHAPE) - Grade: NATO Grade G12 Apply
+        Add to My Job Cart</div>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._nato_taleo("https://nato.taleo.net/careersection/2/joblist.ftl?lang=en")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Support Analyst (CapDev)")
+        self.assertEqual(rows[0]["company"],"NATO")
+        self.assertIn("Belgia",rows[0]["countries"])
+        self.assertTrue(rows[0]["source_url"].endswith("job=261453"))
+
     def test_atos_table_parser_extracts_public_job_rows(self):
         html='''<table><tr>
           <td><a href="/job/Timisoara-Project-Manager/123456/">Project Manager</a></td>
@@ -120,7 +133,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
     def test_supported_sources_are_explicit(self):
         for name in ["Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs",
-                     "EU Careers / EPSO","Remote.co","Remotive","Atos"]:
+                     "EU Careers / EPSO","Remote.co","Remotive","Atos","NATO Careers"]:
             self.assertTrue(boards.source_supported(name))
         for name in ["EURES","Remote in Europe","Unknown Board"]:
             self.assertFalse(boards.source_supported(name))
