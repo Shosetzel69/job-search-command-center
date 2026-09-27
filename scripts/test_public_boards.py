@@ -98,6 +98,18 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"Project Manager")
 
+    def test_landing_jobs_api_falls_back_to_json_suffix(self):
+        page=[{"id":1,"title":"Project Manager","country_name":"Portugal",
+               "city":"Lisbon","published_at":"2026-09-27T08:00:00Z"}]
+        def fake_fetch(url, accept):
+            if "/jobs?" in url:
+                raise RuntimeError("HTTP 403")
+            return (200,"application/json",__import__("json").dumps(page).encode())
+        with patch.object(boards,"_fetch",side_effect=fake_fetch) as fetch:
+            rows=boards._landing_jobs_api("https://landing.jobs/api/v1/jobs")
+        self.assertEqual(len(rows),1)
+        self.assertTrue(any("/jobs.json?" in call.args[0] for call in fetch.call_args_list))
+
     def test_eu_remote_uses_202_feed_when_it_contains_jobs(self):
         xml=b'''<?xml version="1.0"?><rss><channel><item>
           <title>Remote Project Manager</title><link>https://euremotejobs.com/job/remote-project-manager/</link>
@@ -106,6 +118,17 @@ class PublicBoardAdapterTests(unittest.TestCase):
             rows=boards._eu_remote_jobs("https://euremotejobs.com/","https://euremotejobs.com/feed/")
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"Remote Project Manager")
+
+    def test_eu_remote_accepts_202_html_fallback(self):
+        html='''<div><a href="/job/pm-202/">Project Manager</a>
+        Example Europe Full Time Project Management Posted 2 hours ago</div>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (202,"text/html",b"<html>pending</html>"),
+            (202,"text/html",html.encode()),
+        ]):
+            rows=boards._eu_remote_jobs("https://euremotejobs.com/","https://euremotejobs.com/feed/")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Project Manager")
 
     def test_eu_remote_falls_back_to_public_html_jobs(self):
         html='''<div><a href="/job/pm-123/">Technical Project Manager</a>
