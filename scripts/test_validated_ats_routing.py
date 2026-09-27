@@ -46,6 +46,16 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             self.assertEqual(orchestration.collect_ats(item), expected)
             collect.assert_called_once_with("https://thales.wd3.myworkdayjobs.com/Careers", "Thales")
 
+    def test_ing_and_deutsche_bank_use_individual_workday_routes(self):
+        for name, url in {
+            "ING Careers": "https://ing.wd3.myworkdayjobs.com/ICSGBLCOR",
+            "Deutsche Bank": "https://db.wd3.myworkdayjobs.com/DBWebsite",
+        }.items():
+            plan = orchestration.build_plan({"sources":[{"id":name.lower().replace(" ","-"),"name":name,"url":"https://example.invalid/","active":True}]})
+            self.assertEqual(plan[0]["connector"],"workday")
+            self.assertEqual(plan[0]["connector_config"]["career_url"],url)
+            self.assertTrue(plan[0]["active"])
+
 
 if __name__ == "__main__":
     unittest.main()
