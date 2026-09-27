@@ -110,6 +110,29 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertTrue(any("/jobs.json?" in call.args[0] for call in fetch.call_args_list))
 
+    def test_landing_jobs_atom_feed_normalizes_jobs(self):
+        xml=b'''<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom" xmlns:lj="https://landing.jobs/feed">
+          <entry>
+            <id>tag:landing.jobs,2026:123</id>
+            <title>Technical Project Manager</title>
+            <author><name>Example Tech</name></author>
+            <link href="https://landing.jobs/at/example/jobs/123"/>
+            <published>2026-09-27T08:00:00Z</published>
+            <content type="html">Lead delivery</content>
+            <lj:city>Lisbon</lj:city>
+            <lj:country>Portugal</lj:country>
+            <lj:remote_policy>Full remote</lj:remote_policy>
+          </entry>
+        </feed>'''
+        rows=boards._landing_atom(xml,"https://landing.jobs/feed")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
+        self.assertEqual(rows[0]["company"],"Example Tech")
+        self.assertTrue(rows[0]["remote"])
+        self.assertIn("Portugalia",rows[0]["countries"])
+        self.assertEqual(rows[0]["date_posted"],"2026-09-27T08:00:00Z")
+
     def test_eu_remote_uses_202_feed_when_it_contains_jobs(self):
         xml=b'''<?xml version="1.0"?><rss><channel><item>
           <title>Remote Project Manager</title><link>https://euremotejobs.com/job/remote-project-manager/</link>
