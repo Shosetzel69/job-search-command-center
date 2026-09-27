@@ -76,7 +76,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"IT Service Manager")
         self.assertEqual(rows[0]["company"],"EU Agency")
-        self.assertIn("Belgium",rows[0]["countries"])
+        self.assertIn("Belgia",rows[0]["countries"])
         self.assertEqual(rows[0]["date_posted"],"2026-09-25T00:00:00+00:00")
 
     def test_remote_co_list_parser_extracts_job_detail_links(self):
