@@ -31,6 +31,8 @@ PUBLIC_BOARD_SOURCES = {
     "EU Remote Jobs": {"kind": "rss", "url": "https://euremotejobs.com/feed/"},
     "EU Careers / EPSO": {"kind": "eu_careers", "url": "https://eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast"},
     "Remote.co": {"kind": "remote_co", "url": "https://remote.co/remote-jobs"},
+    "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
+    "Atos": {"kind": "atos", "url": "https://jobs.atos.net/viewalljobs/"},
 }
 
 
@@ -447,6 +449,107 @@ def _remote_co(url):
         ))
     return records
 
+
+def _remotive(payload):
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+        raise ValueError("Remotive response must contain jobs[]")
+    records = []
+    for item in payload["jobs"]:
+        if not isinstance(item, dict):
+            continue
+        location = item.get("candidate_required_location") or "Remote"
+        identity = item.get("id") or item.get("url")
+        if not identity or not item.get("title") or not item.get("url"):
+            continue
+        records.append(_record(
+            "Remotive", identity, item.get("title"),
+            item.get("company_name") or "Remotive",
+            item.get("description") or item.get("title"), item.get("url"),
+            date_posted=item.get("publication_date"), location=location,
+            countries=_country_names_from_text(location), remote=True,
+            employment_statuses=item.get("job_type"),
+        ))
+    return records
+
+
+class _AtosJobsTable(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows = []
+        self.in_row = False
+        self.in_cell = False
+        self.cells = []
+        self.parts = []
+        self.job_href = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "tr":
+            self.in_row = True
+            self.cells = []
+            self.job_href = None
+        elif self.in_row and tag == "td":
+            self.in_cell = True
+            self.parts = []
+        elif self.in_row and tag == "a" and attrs.get("href") and "/job/" in attrs["href"] and self.job_href is None:
+            self.job_href = attrs["href"]
+
+    def handle_data(self, data):
+        if self.in_cell:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "td" and self.in_cell:
+            self.cells.append(" ".join(" ".join(self.parts).split()))
+            self.in_cell = False
+        elif tag == "tr" and self.in_row:
+            if self.job_href and self.cells:
+                self.rows.append((self.job_href, list(self.cells)))
+            self.in_row = False
+
+
+def _atos_date(value):
+    text = " ".join(str(value or "").split())
+    for fmt in ("%b %d, %Y", "%d %b %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _atos(base_url):
+    records = {}
+    for startrow in range(0, 201, 25):
+        sep = "&" if "?" in base_url else "?"
+        url = f"{base_url}{sep}q=&sortColumn=referencedate&sortDirection=desc&startrow={startrow}"
+        status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+        if status != 200:
+            raise RuntimeError(f"Atos jobs page HTTP {status}")
+        parser = _AtosJobsTable()
+        parser.feed(body.decode("utf-8", errors="replace"))
+        added = 0
+        for href, cells in parser.rows:
+            title = cells[0] if cells else ""
+            location = cells[1] if len(cells) > 1 else ""
+            published = cells[2] if len(cells) > 2 else ""
+            if not title or not href:
+                continue
+            link = urljoin(base_url, href)
+            identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+            record = _record(
+                "Atos", identity, title, "Atos", title, link,
+                date_posted=_atos_date(published), location=location,
+                countries=_country_names_from_text(location),
+                remote=bool(re.search(r"\bremote\b", f"{title} {location}", re.I)),
+            )
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+        if not parser.rows or added == 0:
+            break
+    return list(records.values())
+
 def collect(source, config=None):
     name = str(source.get("name") or "")
     spec = PUBLIC_BOARD_SOURCES.get(name)
@@ -457,6 +560,8 @@ def collect(source, config=None):
         records = _eu_careers(url)
     elif kind == "remote_co":
         records = _remote_co(url)
+    elif kind == "atos":
+        records = _atos(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
@@ -472,6 +577,7 @@ def collect(source, config=None):
                 "workingnomads": _workingnomads,
                 "jobgether": _jobgether,
                 "landingjobs": _landingjobs,
+                "remotive": _remotive,
             }[kind]
             records = parser(payload)
     return [engine.CollectionResult("public_board", kind, True, records, len(records))]
