@@ -50,6 +50,8 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         for name, url in {
             "ING Careers": "https://ing.wd3.myworkdayjobs.com/ICSGBLCOR",
             "Deutsche Bank": "https://db.wd3.myworkdayjobs.com/DBWebsite",
+            "DXC Technology": "https://dxctechnology.wd1.myworkdayjobs.com/DXCJobs",
+            "Accenture": "https://accenture.wd103.myworkdayjobs.com/AccentureCareers",
         }.items():
             plan = orchestration.build_plan({"sources":[{"id":name.lower().replace(" ","-"),"name":name,"url":"https://example.invalid/","active":True}]})
             self.assertEqual(plan[0]["connector"],"workday")
