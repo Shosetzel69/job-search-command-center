@@ -33,6 +33,7 @@ PUBLIC_BOARD_SOURCES = {
     "Remote.co": {"kind": "remote_co", "url": "https://remote.co/remote-jobs"},
     "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/viewalljobs/"},
+    "UpcoMinds": {"kind": "jobs4it", "url": "https://jobs4it.gr/"},
     "Worldline": {"kind": "worldline", "url": "https://jobs.worldline.com/viewalljobs/"},
     "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/joblist.ftl?lang=en"},
 }
@@ -678,6 +679,99 @@ def _atos(base_url):
 def _worldline(base_url):
     return _rmk_jobs(base_url, "Worldline", "Worldline")
 
+class _Jobs4ItHome(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.anchor = None
+        self.anchor_parts = []
+        self.current_href = None
+        self.context_parts = []
+
+    def _flush_context(self):
+        if self.current_href and self.current_href in self.jobs:
+            self.jobs[self.current_href]["context"] = " ".join(self.context_parts[-24:])
+        self.context_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href")
+        if tag == "a" and href and re.search(r"/job/[^/?#]+/?(?:[?#].*)?$", href):
+            self._flush_context()
+            self.anchor = href
+            self.current_href = href
+            self.anchor_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        if self.anchor is not None:
+            self.anchor_parts.append(text)
+        if self.current_href:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None:
+            title = " ".join(self.anchor_parts).strip()
+            if title and title.casefold() not in {"apply now", "bookmark it", "see all recent jobs"}:
+                self.jobs.setdefault(self.anchor, {"title": title, "context": ""})
+            self.anchor = None
+            self.anchor_parts = []
+
+    def close(self):
+        super().close()
+        self._flush_context()
+
+
+def _jobs4it_date(value):
+    text = " ".join(str(value or "").split())
+    match = re.search(
+        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
+        text,
+        re.I,
+    )
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(0), "%B %d, %Y").replace(tzinfo=timezone.utc).isoformat()
+    except ValueError:
+        return None
+
+
+def _jobs4it(base_url):
+    status, _kind, body = _fetch(base_url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Jobs4IT public jobs page HTTP {status}")
+    parser = _Jobs4ItHome()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = {}
+    for href, item in parser.jobs.items():
+        title = item.get("title")
+        if not title:
+            continue
+        context = item.get("context") or title
+        link = urljoin(base_url, href)
+        identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+        countries = _country_names_from_text(context)
+        remote = bool(re.search(r"\bremote\b", context, re.I))
+        location = ", ".join(countries) or ("Remote" if remote else "")
+        employment = []
+        for label in ("Freelance", "Full Time", "Part Time", "Contract", "Permanent", "Temporary", "Internship"):
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I):
+                employment.append(label)
+        record = _record(
+            "UpcoMinds", identity, title, "UpcoMinds", context, link,
+            date_posted=_jobs4it_date(context), location=location,
+            countries=countries, remote=remote, employment_statuses=employment,
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError("Jobs4IT page contained no extractable job links")
+    return list(records.values())
+
+
 class _NatoTaleoText(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -736,6 +830,8 @@ def collect(source, config=None):
         records = _atos(url)
     elif kind == "worldline":
         records = _worldline(url)
+    elif kind == "jobs4it":
+        records = _jobs4it(url)
     elif kind == "landingjobs":
         records = _landing_jobs_api(url)
     elif kind == "eu_remote":
