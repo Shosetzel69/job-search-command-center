@@ -208,6 +208,16 @@
       "connector": "workday",
       "career_url": "https://db.wd3.myworkdayjobs.com/DBWebsite",
       "enabled": true
+    },
+    "DXC Technology": {
+      "connector": "workday",
+      "career_url": "https://dxctechnology.wd1.myworkdayjobs.com/DXCJobs",
+      "enabled": true
+    },
+    "Accenture": {
+      "connector": "workday",
+      "career_url": "https://accenture.wd103.myworkdayjobs.com/AccentureCareers",
+      "enabled": true
     }
   }
 }
