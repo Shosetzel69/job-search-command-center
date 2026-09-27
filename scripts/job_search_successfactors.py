@@ -2,6 +2,7 @@
 
 import re
 import xml.etree.ElementTree as ET
+from html.entities import html5
 from html.parser import HTMLParser
 from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
@@ -25,6 +26,38 @@ def plain_text(value):
     parser = PlainText()
     parser.feed(str(value or ""))
     return " ".join(part.strip() for part in parser.parts if part.strip())
+
+
+def _sanitize_xml_feed(payload):
+    text = payload.decode("utf-8", errors="replace") if isinstance(payload, (bytes, bytearray)) else str(payload)
+    # XML 1.0 forbids most C0 control characters even when upstream data contains them.
+    text = "".join(
+        ch for ch in text
+        if ch in "\t\n\r" or ord(ch) >= 0x20
+    )
+    allowed = {"amp", "lt", "gt", "quot", "apos"}
+
+    def replace_named(match):
+        name = match.group(1)
+        if name in allowed:
+            return match.group(0)
+        value = html5.get(name + ";")
+        if value is None:
+            return "&amp;" + name + ";"
+        return (
+            value.replace("&", "&amp;")
+                 .replace("<", "&lt;")
+                 .replace(">", "&gt;")
+        )
+
+    text = re.sub(r"&([A-Za-z][A-Za-z0-9]+);", replace_named, text)
+    # Preserve valid XML/numeric entities and escape only truly bare ampersands.
+    text = re.sub(
+        r"&(?!amp;|lt;|gt;|quot;|apos;|#[0-9]+;|#x[0-9A-Fa-f]+;)",
+        "&amp;",
+        text,
+    )
+    return text
 
 
 def _key(tag):
@@ -104,7 +137,7 @@ def collect(career_site_url, company_id, company_name, locale=None, max_postings
         body = response.read(MAX_BYTES + 1)
     if len(body) > MAX_BYTES:
         raise ValueError("SuccessFactors response exceeds size limit")
-    root = ET.fromstring(body)
+    root = ET.fromstring(_sanitize_xml_feed(body))
     jobs = [node for node in root.iter() if _key(node.tag) == "job"]
     records = [normalize(node, company_id, company_name, origin) for node in jobs[:max_postings]]
     return [engine.CollectionResult(f"successfactors:{company_id}", "public_xml_feed", True, records, len(jobs))]
