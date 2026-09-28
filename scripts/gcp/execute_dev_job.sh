@@ -10,8 +10,21 @@ active="$(
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
     --job="${JOB_NAME}" \
-    --format='value(metadata.name,status.conditions[0].type,status.conditions[0].status)' 2>/dev/null \
-    | awk '$2 != "Completed" || $3 != "True" {print $1}'
+    --format=json 2>/dev/null \
+  | python3 -c '
+import json
+import sys
+
+for execution in json.load(sys.stdin):
+    conditions = execution.get("status", {}).get("conditions", []) or []
+    completed = any(
+        condition.get("type") == "Completed"
+        and str(condition.get("status")).lower() == "true"
+        for condition in conditions
+    )
+    if not completed:
+        print(execution.get("metadata", {}).get("name", "unknown-execution"))
+'
 )"
 
 if [[ -n "${active}" ]]; then
