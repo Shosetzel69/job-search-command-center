@@ -8,7 +8,8 @@ LABEL org.opencontainers.image.source="https://github.com/Shosetzel69/job-search
       org.opencontainers.image.revision="${GIT_SHA}"
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+    PYTHONUNBUFFERED=1 \
+    JSCC_RUNTIME_MODE=container
 
 WORKDIR /app
 
@@ -17,8 +18,8 @@ RUN python3 -m pip install --no-cache-dir --disable-pip-version-check -r require
 
 COPY scripts/ ./scripts/
 COPY shared/ ./shared/
-COPY data/ ./data/
 COPY config/ ./config/
+COPY data/sources.json data/source-categories.json data/nomenclatures.json ./data/
 
 RUN python3 -m py_compile \
     scripts/job_search.py \
