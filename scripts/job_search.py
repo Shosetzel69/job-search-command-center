@@ -20,10 +20,32 @@ from job_identity import deduplicate
 import nomenclatures as canonical_nomenclatures
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = ROOT / "data"
-CONFIG_PATH = DATA / "search-config.json"
-JOBS_PATH = DATA / "jobs.json"
-STATUS_PATH = DATA / "run-status.json"
+CANDIDATE_DATA = ROOT / "data"
+
+def _runtime_data_dir() -> Path:
+    configured = str(os.environ.get("JSCC_RUNTIME_DATA_DIR") or "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve()
+
+    runtime_mode = str(os.environ.get("JSCC_RUNTIME_MODE") or "").strip().lower()
+    cloud_runtime = bool(
+        os.environ.get("K_SERVICE")
+        or os.environ.get("CLOUD_RUN_JOB")
+        or os.environ.get("CLOUD_RUN_EXECUTION")
+    )
+    if runtime_mode in {"container", "gcp", "cloud-run"} or cloud_runtime:
+        raise RuntimeError(
+            "JSCC_RUNTIME_DATA_DIR is required in container/GCP runtime; "
+            "repository data fallback is disabled"
+        )
+    return CANDIDATE_DATA
+
+RUNTIME_DATA = _runtime_data_dir()
+# Backward-compatible alias for modules that mean mutable application runtime data.
+DATA = RUNTIME_DATA
+CONFIG_PATH = RUNTIME_DATA / "search-config.json"
+JOBS_PATH = RUNTIME_DATA / "jobs.json"
+STATUS_PATH = RUNTIME_DATA / "run-status.json"
 SCHEMA_VERSION = "1.0"
 
 NOMENCLATURES = canonical_nomenclatures.load_nomenclatures()
