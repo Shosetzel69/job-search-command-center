@@ -22,6 +22,7 @@ must(deploy, /matchesPrefix.*runs\//s, 'Lifecycle must target transient runs onl
 must(deploy, /NILE_DATABASE_URL=NILE_DATABASE_URL:latest/, 'Secrets must be injected from Secret Manager');
 must(deploy, /JSCC_RUNTIME_DATA_DIR/, 'Runtime-data root must be explicit');
 must(deploy, /runs\/.*CLOUD_RUN_EXECUTION/s, 'Each execution must write below runs/{run_id}');
+must(deploy, /gcp-dev-boundary-validation/, 'DEV validation seed must be deterministic');
 must(deploy, /--validate-only/, 'Initial DEV execution must be targeted validation only');
 
 for (const forbidden of [/jscc-test/, /jscc-prod/, /gcloud\s+run\s+deploy\s+/i, /scheduler/i]) {
