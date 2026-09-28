@@ -46,7 +46,8 @@ steps:
     args:
       - -ceu
       - |
-        python -m unittest -v scripts.test_source_orchestration
+        cd scripts
+        python -m unittest -v test_source_orchestration
 
 options:
   logging: CLOUD_LOGGING_ONLY
