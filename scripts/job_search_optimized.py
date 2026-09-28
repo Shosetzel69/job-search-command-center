@@ -15,7 +15,7 @@ from typing import Any
 import job_search as engine
 from job_identity import deduplicate
 
-STATE_PATH = engine.DATA / "search-state.json"
+STATE_PATH = engine.RUNTIME_DATA / "search-state.json"
 
 
 def load_state(now: datetime) -> dict[str, Any]:
