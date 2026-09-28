@@ -61,7 +61,7 @@ gcloud run jobs deploy "${JOB_NAME}" \
   --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest" \
   --add-volume="mount-path=${MOUNT_PATH},type=cloud-storage,bucket=${BUCKET},readonly=false" \
   --command="/bin/bash" \
-  --args="-ceu,run_dir='${MOUNT_PATH}/runs/'\"${CLOUD_RUN_EXECUTION:?CLOUD_RUN_EXECUTION is required}\"; mkdir -p \"${run_dir}\"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp '${MOUNT_PATH}/seed/'\"${f}\" \"${run_dir}/${f}\"; done; export JSCC_RUNTIME_DATA_DIR=\"${run_dir}\"; exec python3 scripts/job_search_runner.py --validate-only"
+  --args="-ceu,run_dir='${MOUNT_PATH}/runs/'\"\${CLOUD_RUN_EXECUTION:?CLOUD_RUN_EXECUTION is required}\"; mkdir -p \"\${run_dir}\"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp '${MOUNT_PATH}/seed/'\"\${f}\" \"\${run_dir}/\${f}\"; done; export JSCC_RUNTIME_DATA_DIR=\"\${run_dir}\"; exec python3 scripts/job_search_runner.py --validate-only"
 
 echo "DEV_JOB=${JOB_NAME}"
 echo "DEV_BUCKET=gs://${BUCKET}"
