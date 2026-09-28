@@ -22,7 +22,7 @@ The #424 image is a terminating job process and does not contain a Cloud Run HTT
 
 ## One-active-run status
 
-Cloud Run `parallelism=1` limits tasks inside one execution; it does not prevent multiple job executions from overlapping. The checked-in manual execution wrapper rejects a second active execution before starting another run. This is sufficient for the initial manual DEV validation path only.
+Cloud Run `parallelism=1` limits tasks inside one execution; it does not prevent multiple job executions from overlapping. The checked-in manual execution wrapper acquires `locks/heavy-search.lock` with Cloud Storage `if-generation-match=0` before execution. Concurrent acquisition therefore fails atomically, so a second manual DEV run is rejected before Cloud Run execution starts. The lock is removed after the synchronous execution returns; an interrupted operator session leaves a stale lock fail-closed and requires explicit cleanup after verifying no execution is active.
 
 Before automated/scheduled invocation is authorized, admission must be enforced server-side through the future authenticated command/API boundary with an atomic environment-local lock. Cloud Scheduler remains out of scope.
 
