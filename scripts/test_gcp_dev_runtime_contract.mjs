@@ -29,7 +29,8 @@ for (const forbidden of [/jscc-test/, /jscc-prod/, /gcloud\s+run\s+deploy\s+/i, 
 }
 
 must(execute, /ACTIVE_RUN_REJECTED/, 'Manual execution wrapper must reject overlap');
-must(execute, /gcloud run jobs executions list/, 'Manual execution wrapper must inspect active executions');
+must(execute, /--if-generation-match=0/, 'Manual execution wrapper must acquire the heavy-run lock atomically');
+must(execute, /heavy-search\.lock/, 'Manual execution wrapper must use the environment-local heavy-run lock');
 must(execute, /gcloud run jobs execute/, 'Manual execution wrapper must execute only the DEV job');
 
 console.log('GCP DEV runtime contract validation: PASS');
