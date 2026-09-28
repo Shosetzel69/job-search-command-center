@@ -1,6 +1,6 @@
 # ADR-006 — Google Cloud runtime and immutable container promotion
 
-Status: `WORKING`  
+Status: `ACCEPTED`  
 Version: `v1.0`  
 Applicability: `CURRENT`  
 Applies to: `AGENTFLOW`  
@@ -118,9 +118,20 @@ Sharding by source is deferred until runtime evidence justifies it.
 
 Platform migration precedes persistence migration.
 
-During the initial cloud-runtime phase, current JSON-compatible run artifacts may remain. Every run must write under a unique `run_id` path; shared/current pointers must be updated atomically with Cloud Storage generation preconditions where applicable.
+During the initial cloud-runtime phase, current JSON-compatible run artifacts may remain in **Cloud Storage as transient runtime artifacts only**.
 
-After the PostgreSQL migration slices in #275/#293, migrated domains follow ADR-004/ADR-005 and PostgreSQL becomes authoritative for those domains. Permanent JSON/PostgreSQL dual-write remains prohibited.
+Cloud Storage contract:
+- one environment-owned bucket per GCP project (`jscc-dev`, `jscc-test`, `jscc-prod`); no shared runtime-data bucket and no cross-environment fallback;
+- buckets use the same regional placement as the runtime baseline (`europe-west1`) and Standard storage unless a separately approved change says otherwise;
+- each run writes only under `runs/{run_id}/...`; a run never overwrites another run's path;
+- the environment pointer is a small `current.json` object containing at minimum `run_id` and the referenced artifact identity; pointer updates use Cloud Storage generation-match preconditions and fail on concurrent modification;
+- runtime service/job identities receive only the minimum object permissions required in their own environment bucket; no DEV identity may read or write TEST/PROD buckets, and no TEST identity may read or write PROD;
+- migration/administrative bucket authority remains separate from routine runtime authority;
+- transient run artifacts are lifecycle-deleted after 30 days; governance/release evidence is not stored in this runtime-artifact bucket and is therefore not subject to this lifecycle;
+- object versioning is not required for the runtime pointer contract; atomicity is provided by generation preconditions;
+- bucket usage and storage cost are included in the aggregate DEV+TEST+PROD cost guardrail.
+
+After the PostgreSQL migration slices in #275/#293, migrated domains follow ADR-004/ADR-005 and PostgreSQL becomes authoritative for those domains. Cloud Storage must not become a second authoritative store for migrated domains. Permanent JSON/PostgreSQL dual-write remains prohibited.
 
 ### PostgreSQL
 
