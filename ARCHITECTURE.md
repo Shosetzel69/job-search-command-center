@@ -292,6 +292,8 @@ Reguli:
 
 Detaliile, fazele, rollback-ul si cost guardrails sunt canonice in ADR-006.
 
+Pentru artefactele tranzitorii de run din faza de migrare, Cloud Storage este environment-owned: cate un bucket in fiecare proiect DEV/TEST/PROD, fara bucket runtime comun si fara cross-environment access. Run-urile scriu sub `runs/{run_id}/...`, iar `current.json` se actualizeaza atomic prin generation precondition. Artefactele runtime tranzitorii au lifecycle de 30 zile; costul lor intra in guardrail-ul agregat. PostgreSQL ramane authoritative pentru domeniile migrate.
+
 ## 8. GitHub Actions
 
 Full search: `.github/workflows/job-search-full.yml`.
@@ -649,13 +651,14 @@ Tenant isolation este defense-in-depth:
 
 ### 16.5 Runtime connectivity si privilege gate
 
-Path target:
+Path target conform ADR-006:
 
-`Cloudflare Worker -> repository/data-access -> node-postgres (pg) -> Cloudflare Hyperdrive -> Nile PostgreSQL`
+`Cloud Run Service/Job -> repository/data-access -> node-postgres (pg) -> Nile PostgreSQL`
 
-- Hyperdrive este folosit pentru pooling;
-- query caching este initial OFF pentru persistence runtime;
-- DEV/TEST/PROD folosesc bindings statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- Cloudflare Hyperdrive nu face parte din target-ul GCP;
+- pooling/concurrency PostgreSQL se configureaza in clientul/runtime-ul Cloud Run si trebuie validat prin #293 inainte de implementare;
+- DEV/TEST/PROD folosesc binding-uri/secrete statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- `NILE_DATABASE_URL` este injectat per environment din Secret Manager si nu este selectabil din request;
 - request-selected DB si cross-environment fallback sunt interzise;
 - runtime CRUD authority trebuie separata demonstrabil de migration/DDL authority inainte de personal-data/multiuser PROD cutover;
 - broad DDL poate fi tolerat temporar numai in DEV/TEST si migration work controlat;
