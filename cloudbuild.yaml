@@ -1,0 +1,72 @@
+# GCP-01 / #424: build once from one exact Git SHA and push only.
+# No deploy command is permitted in this build contract.
+substitutions:
+  _GIT_SHA: ""
+
+steps:
+  - id: validate-candidate
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ ! "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "_GIT_SHA must be a full lowercase 40-character Git SHA" >&2
+          exit 2
+        fi
+        if [[ ! "${COMMIT_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "COMMIT_SHA is required; run this config from a repository revision/trigger context" >&2
+          exit 2
+        fi
+        if [[ "${_GIT_SHA}" != "${COMMIT_SHA}" ]]; then
+          echo "Candidate mismatch: _GIT_SHA does not match Cloud Build COMMIT_SHA" >&2
+          exit 2
+        fi
+        echo "CANDIDATE_GIT_SHA=${_GIT_SHA}"
+
+  - id: static-contract
+    name: node:22-bookworm-slim
+    entrypoint: node
+    args:
+      - scripts/validate_gcp_container.mjs
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull
+      - --build-arg
+      - GIT_SHA=${_GIT_SHA}
+      - --tag
+      - europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}
+
+  - id: capture-digest
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}"
+        digest="$(gcloud artifacts docker images describe "${image}" --format='value(image_summary.digest)')"
+        if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+          echo "Artifact Registry did not return a valid immutable digest" >&2
+          exit 3
+        fi
+        printf '%s\n' "${digest}" > /workspace/image-digest.txt
+        echo "IMAGE_URI=${image}"
+        echo "IMAGE_DIGEST=${digest}"
+
+images:
+  - europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}
+
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com
+
+options:
+  logging: CLOUD_LOGGING_ONLY
