@@ -113,7 +113,7 @@ print(json.dumps(payload))
                     "results": 0,
                     "excluded_count": 0,
                     "jobs": [],
-                }) + "\\n",
+                }) + "\n",
                 encoding="utf-8",
             )
             (runtime / "run-status.json").write_text(
@@ -129,11 +129,11 @@ print(json.dumps(payload))
                     "jobs_published": 0,
                     "excluded": 0,
                     "limitations": [],
-                }) + "\\n",
+                }) + "\n",
                 encoding="utf-8",
             )
             (runtime / "run-history.json").write_text(
-                json.dumps({"schema_version": "1.0", "runs": []}) + "\\n",
+                json.dumps({"schema_version": "1.0", "runs": []}) + "\n",
                 encoding="utf-8",
             )
             (runtime / "search-state.json").write_text(
@@ -142,7 +142,7 @@ print(json.dumps(payload))
                     "query_progress": {},
                     "job_first_seen": {},
                     "usage": {},
-                }) + "\\n",
+                }) + "\n",
                 encoding="utf-8",
             )
 
