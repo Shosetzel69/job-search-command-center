@@ -42,8 +42,25 @@ gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
   --member="serviceAccount:${RUNTIME_SA}" \
   --role="roles/storage.objectUser" >/dev/null
 
+seed_dir="$(mktemp -d)"
+trap 'rm -f "${lifecycle}"; rm -rf "${seed_dir}"' EXIT
+cp data/search-config.json "${seed_dir}/search-config.json"
+
+cat >"${seed_dir}/jobs.json" <<'JSON'
+{"schema_version":"1.0","generated_at":"2026-01-01T00:00:00+00:00","freshness_hours":24,"criteria":{},"records_inspected":0,"results":0,"excluded_count":0,"jobs":[]}
+JSON
+cat >"${seed_dir}/run-status.json" <<'JSON'
+{"schema_version":"1.0","run_id":"gcp-dev-boundary-validation","status":"running","started_at":"2026-01-01T00:00:01+00:00","completed_at":null,"sources":[],"sources_processed":0,"records_inspected":0,"jobs_published":0,"excluded":0,"limitations":[]}
+JSON
+cat >"${seed_dir}/run-history.json" <<'JSON'
+{"schema_version":"1.0","runs":[]}
+JSON
+cat >"${seed_dir}/search-state.json" <<'JSON'
+{"schema_version":"1.0","query_progress":{},"job_first_seen":{},"usage":{}}
+JSON
+
 for file in search-config.json jobs.json run-status.json run-history.json search-state.json; do
-  gcloud storage cp "data/${file}" "gs://${BUCKET}/seed/${file}"
+  gcloud storage cp "${seed_dir}/${file}" "gs://${BUCKET}/seed/${file}"
 done
 
 gcloud run jobs deploy "${JOB_NAME}" \
