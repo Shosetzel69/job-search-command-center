@@ -96,25 +96,55 @@ print(json.dumps(payload))
     def test_validate_only_runs_with_external_runtime_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             runtime = Path(tmp)
-            for name in RUNTIME_FILES:
-                source = ROOT / "data" / name
-                if source.exists():
-                    (runtime / name).write_bytes(source.read_bytes())
 
-            # The source-controlled runtime snapshot predates jobs provenance
-            # stamping. Normalize only the temporary fixture so validate-only
-            # tests the external runtime boundary against a coherent snapshot.
-            status = json.loads((runtime / "run-status.json").read_text(encoding="utf-8"))
-            jobs = json.loads((runtime / "jobs.json").read_text(encoding="utf-8"))
-            if jobs.get("generated_at") == status.get("started_at"):
-                jobs["run_id"] = status.get("run_id")
-                jobs["run_status"] = status.get("status")
-                if status.get("source_sha"):
-                    jobs["source_sha"] = status.get("source_sha")
-                (runtime / "jobs.json").write_text(
-                    json.dumps(jobs, ensure_ascii=False, indent=2) + "\\n",
-                    encoding="utf-8",
-                )
+            # Keep the real search-config contract, but use deterministic minimal
+            # runtime artifacts so this test validates the external boundary
+            # rather than historical source-controlled runtime snapshots.
+            (runtime / "search-config.json").write_bytes(
+                (ROOT / "data" / "search-config.json").read_bytes()
+            )
+            (runtime / "jobs.json").write_text(
+                json.dumps({
+                    "schema_version": "1.0",
+                    "generated_at": "2026-01-01T00:00:00+00:00",
+                    "freshness_hours": 24,
+                    "criteria": {},
+                    "records_inspected": 0,
+                    "results": 0,
+                    "excluded_count": 0,
+                    "jobs": [],
+                }) + "\\n",
+                encoding="utf-8",
+            )
+            (runtime / "run-status.json").write_text(
+                json.dumps({
+                    "schema_version": "1.0",
+                    "run_id": "boundary-validation",
+                    "status": "running",
+                    "started_at": "2026-01-01T00:00:01+00:00",
+                    "completed_at": None,
+                    "sources": [],
+                    "sources_processed": 0,
+                    "records_inspected": 0,
+                    "jobs_published": 0,
+                    "excluded": 0,
+                    "limitations": [],
+                }) + "\\n",
+                encoding="utf-8",
+            )
+            (runtime / "run-history.json").write_text(
+                json.dumps({"schema_version": "1.0", "runs": []}) + "\\n",
+                encoding="utf-8",
+            )
+            (runtime / "search-state.json").write_text(
+                json.dumps({
+                    "schema_version": "1.0",
+                    "query_progress": {},
+                    "job_first_seen": {},
+                    "usage": {},
+                }) + "\\n",
+                encoding="utf-8",
+            )
 
             env = os.environ.copy()
             env.update({
