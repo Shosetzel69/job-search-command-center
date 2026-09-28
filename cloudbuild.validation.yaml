@@ -1,0 +1,54 @@
+steps:
+  - id: validate-candidate
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ ! "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "_GIT_SHA must be a full lowercase 40-character Git SHA" >&2
+          exit 2
+        fi
+        if [[ ! "${COMMIT_SHA}" =~ ^[0-9a-f]{40}$ ]]; then
+          echo "COMMIT_SHA is required from repository revision/trigger context" >&2
+          exit 2
+        fi
+        if [[ "${_GIT_SHA}" != "${COMMIT_SHA}" ]]; then
+          echo "Candidate mismatch: _GIT_SHA != COMMIT_SHA" >&2
+          exit 2
+        fi
+        echo "CANDIDATE_GIT_SHA=${_GIT_SHA}"
+
+  - id: syntax
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        python -m py_compile \
+          scripts/job_search.py \
+          scripts/job_search_runner.py \
+          scripts/job_search_optimized.py \
+          scripts/source_orchestration.py \
+          scripts/test_runtime_data_boundary.py
+
+  - id: runtime-boundary-tests
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        python -m unittest -v scripts.test_runtime_data_boundary
+
+  - id: existing-search-tests
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        python -m unittest -v scripts.test_source_orchestration
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com
