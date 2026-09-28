@@ -1,0 +1,15 @@
+.git
+.github
+.ai-instructions.md
+ai-github-bridge
+command-api
+frontend
+docs
+*.md
+node_modules
+**/node_modules
+__pycache__
+**/__pycache__
+*.pyc
+.env
+.env.*
