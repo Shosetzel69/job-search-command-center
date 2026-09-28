@@ -24,11 +24,54 @@ steps:
         fi
         echo "CANDIDATE_GIT_SHA=${_GIT_SHA}"
 
+  - id: registry-immutability
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        immutable="$(gcloud artifacts repositories describe jscc           --project=jscc-shared           --location=europe-west1           --format='value(dockerConfig.immutableTags)')"
+        if [[ "${immutable}" != "True" && "${immutable}" != "true" ]]; then
+          echo "Artifact Registry repository jscc must have immutable tags enabled" >&2
+          exit 4
+        fi
+
+  - id: reject-duplicate-sha
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}"
+        if gcloud artifacts docker images describe "${image}"           --project=jscc-shared           --format='value(image_summary.digest)' >/tmp/existing-digest 2>/dev/null; then
+          digest="$(cat /tmp/existing-digest)"
+          echo "DUPLICATE_SHA_REJECTED image=${image} digest=${digest}" >&2
+          exit 5
+        fi
+        echo "SHA_TAG_AVAILABLE=${image}"
+
   - id: static-contract
     name: node:22-bookworm-slim
     entrypoint: node
     args:
       - scripts/validate_gcp_container.mjs
+
+  - id: packaging-guard
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        python scripts/validate_container_packaging.py Dockerfile
+        python -m unittest -v scripts.test_container_packaging
+
+  - id: runtime-boundary-tests
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        python -m unittest -v scripts.test_runtime_data_boundary
 
   - id: build
     name: gcr.io/cloud-builders/docker
@@ -54,7 +97,7 @@ steps:
       - -ceu
       - |
         image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}"
-        digest="$(gcloud artifacts docker images describe "${image}" --format='value(image_summary.digest)')"
+        digest="$(gcloud artifacts docker images describe "${image}"           --project=jscc-shared           --format='value(image_summary.digest)')"
         if [[ ! "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]]; then
           echo "Artifact Registry did not return a valid immutable digest" >&2
           exit 3
@@ -62,9 +105,6 @@ steps:
         printf '%s\n' "${digest}" > /workspace/image-digest.txt
         echo "IMAGE_URI=${image}"
         echo "IMAGE_DIGEST=${digest}"
-
-images:
-  - europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}
 
 serviceAccount: projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com
 
