@@ -26,7 +26,7 @@ import job_search_optimized as optimized
 
 REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
 ATS_ROUTES = json.loads((engine.ROOT / "shared/validated-ats-routes.json").read_text()).get("routes", {})
-SOURCES_PATH = engine.DATA / "sources.json"
+SOURCES_PATH = engine.CANDIDATE_DATA / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
