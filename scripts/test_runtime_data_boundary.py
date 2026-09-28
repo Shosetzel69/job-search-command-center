@@ -101,6 +101,21 @@ print(json.dumps(payload))
                 if source.exists():
                     (runtime / name).write_bytes(source.read_bytes())
 
+            # The source-controlled runtime snapshot predates jobs provenance
+            # stamping. Normalize only the temporary fixture so validate-only
+            # tests the external runtime boundary against a coherent snapshot.
+            status = json.loads((runtime / "run-status.json").read_text(encoding="utf-8"))
+            jobs = json.loads((runtime / "jobs.json").read_text(encoding="utf-8"))
+            if jobs.get("generated_at") == status.get("started_at"):
+                jobs["run_id"] = status.get("run_id")
+                jobs["run_status"] = status.get("status")
+                if status.get("source_sha"):
+                    jobs["source_sha"] = status.get("source_sha")
+                (runtime / "jobs.json").write_text(
+                    json.dumps(jobs, ensure_ascii=False, indent=2) + "\\n",
+                    encoding="utf-8",
+                )
+
             env = os.environ.copy()
             env.update({
                 "JSCC_RUNTIME_MODE": "container",
