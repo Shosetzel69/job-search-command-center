@@ -13,7 +13,7 @@ import job_search_apify as apify
 import job_search_optimized as optimized
 import source_orchestration as orchestration
 
-HISTORY_PATH = engine.DATA / "run-history.json"
+HISTORY_PATH = engine.RUNTIME_DATA / "run-history.json"
 HISTORY_LIMIT = 10
 
 
