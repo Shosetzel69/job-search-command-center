@@ -21,13 +21,29 @@ requireMatch(
 );
 requireMatch(
   dockerfile,
+  /JSCC_RUNTIME_MODE=container/,
+  'Dockerfile must enable fail-closed container runtime-data mode'
+);
+requireMatch(
+  dockerfile,
+  /COPY data\/sources\.json data\/source-categories\.json data\/nomenclatures\.json \.\/data\//,
+  'Dockerfile must copy only the explicit candidate-managed data allowlist'
+);
+requireMatch(
+  dockerfile,
   /ENTRYPOINT \["python3", "scripts\/job_search_runner\.py"\]/,
   'Dockerfile must preserve the existing search-runner entry point'
 );
 
-for (const forbidden of [/NILE_DATABASE_URL\s*=/, /APIFY_TOKEN\s*=/, /JOBSPIPE_API_KEY\s*=/]) {
+for (const forbidden of [
+  /COPY\s+data\/?\s+/i,
+  /COPY\s+\.\s+\./i,
+  /NILE_DATABASE_URL\s*=/,
+  /APIFY_TOKEN\s*=/,
+  /JOBSPIPE_API_KEY\s*=/,
+]) {
   if (forbidden.test(dockerfile)) {
-    throw new Error('Dockerfile must not embed runtime secrets');
+    throw new Error('Dockerfile violates the candidate/runtime packaging or secret boundary');
   }
 }
 
@@ -39,7 +55,7 @@ requireMatch(
 requireMatch(
   cloudbuild,
   /europe-west1-docker\.pkg\.dev\/jscc-shared\/jscc\/jscc:\$\{_GIT_SHA\}/,
-  'Cloud Build must push only the exact-SHA tag to the shared registry'
+  'Cloud Build must use only the exact-SHA tag in the shared registry'
 );
 requireMatch(
   cloudbuild,
@@ -53,9 +69,29 @@ requireMatch(
 );
 requireMatch(
   cloudbuild,
+  /dockerConfig\.immutableTags/,
+  'Cloud Build must fail closed unless Artifact Registry immutable tags are enabled'
+);
+requireMatch(
+  cloudbuild,
+  /DUPLICATE_SHA_REJECTED/,
+  'Cloud Build must reject an already-published exact-SHA tag before building'
+);
+requireMatch(
+  cloudbuild,
+  /validate_container_packaging\.py Dockerfile/,
+  'Cloud Build must validate the actual Dockerfile packaging contract'
+);
+requireMatch(
+  cloudbuild,
   /IMAGE_DIGEST=.*digest/,
   'Cloud Build must expose the immutable digest as build evidence'
 );
+
+const buildCount = (cloudbuild.match(/\n  - id: build\n/g) || []).length;
+if (buildCount !== 1) {
+  throw new Error(`Cloud Build must contain exactly one image build step; found ${buildCount}`);
+}
 
 for (const forbidden of [
   /gcloud\s+run\s+deploy/i,
