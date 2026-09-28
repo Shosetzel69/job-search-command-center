@@ -11,6 +11,7 @@
     "env:isolation-test": "node scripts/environment.mjs isolation-test",
     "env:prod-preflight": "node scripts/environment.mjs prod-preflight",
     "test:environment": "node --test scripts/test_environment.mjs scripts/test_runtime_reconciliation.mjs scripts/test_promotion.mjs scripts/test_prod_readiness.mjs scripts/test_prod_reconciliation.mjs scripts/test_prod_baseline_migration.mjs scripts/test_prod_baseline_provenance.mjs scripts/test_g6_prod_isolation.mjs scripts/test_security_s2.mjs scripts/test_security_s3.mjs scripts/test_cloudflare_preflight.mjs scripts/test_phase7_prod_cutover.mjs scripts/test_ai_release_dispatch.mjs scripts/test_project_sanity.mjs scripts/test_action_pinning.mjs && node --check scripts/project_sanity.mjs && node --check scripts/environment.mjs && node --check scripts/environment/cloudflare-preflight.mjs && node --check scripts/environment/provision.mjs && node --check scripts/environment/prod-reconciliation.mjs && node --check scripts/environment/prod-baseline-migration.mjs && node --check scripts/test_prod_baseline_provenance.mjs && node --check scripts/environment/reconciliation.mjs && node --check scripts/environment/prod-preflight.mjs && node --check scripts/environment/promotion.mjs && node --check scripts/environment/ai-release-dispatch.mjs && node --check command-api/scripts/write-build-identity.mjs",
-    "sanity:project": "node scripts/project_sanity.mjs"
+    "sanity:project": "node scripts/project_sanity.mjs",
+    "validate:gcp-container": "node scripts/validate_gcp_container.mjs"
   }
 }
