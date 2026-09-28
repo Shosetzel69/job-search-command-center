@@ -19,6 +19,7 @@ Documente complementare:
 - `docs/adr/ADR-003-environment-isolation.md` — decizia acceptata pentru izolarea DEV / TEST / PROD;
 - `docs/adr/ADR-004-nile-postgresql-backend.md` — Nile/PostgreSQL ca target persistent backend si principiile de migrare;
 - `docs/adr/ADR-005-multiuser-ownership-isolation-shared-collection.md` — ownership multiuser, izolare tenant, shared collection si scheduler global;
+- `docs/adr/ADR-006-google-cloud-runtime.md` — target hosting/runtime GCP, build-once si promovare prin image digest;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
@@ -32,7 +33,7 @@ Principii:
 
 - frontend static React;
 - operatiile privilegiate trec prin Cloudflare Worker;
-- full search ruleaza separat in GitHub Actions;
+- full search ruleaza separat de request-ul HTTP; runtime-ul curent foloseste GitHub Actions, iar target-ul aprobat pentru hosting este Cloud Run Jobs conform ADR-006;
 - search engine este independent de UI;
 - Source Registry este separat de connectorii operationali;
 - geografia este separata de FIT/scoring;
@@ -52,7 +53,12 @@ Principii:
 |---|---|
 | `frontend` | autentificare, joburi, filtre locale, criterii, aplicari, Administrare |
 | `Cloudflare Worker / Command API` | auth, autorizare, protectie date, comenzi, configuratie, source governance, nomenclatoare |
-| `GitHub Actions` | orchestration full search, secrets runtime, publicare rezultate |
+| `GitHub Actions` | runtime/orchestration curent tranzitoriu; dupa cutover nu mai este dependency critica pentru PROD |
+| `Cloud Build` | target CI/build; construieste o singura imagine per Git SHA |
+| `Artifact Registry` | registry Docker comun; artifact immutable promovat DEV -> TEST -> PROD |
+| `Cloud Run Service` | target hosting pentru aplicatie/API |
+| `Cloud Run Jobs` | target execution pentru heavy search async/manual/scheduled |
+| `Cloud Scheduler` | target scheduling pentru search PROD |
 | `search engine` | colectare, normalizare, geografie, dedupe/repost, filtrare, FIT |
 | `connectors` | transport/provider specific, fara FIT |
 | `data/*.json` | persistenta runtime/versionata curenta si compatibilitate tranzitorie in timpul migrarii |
@@ -252,6 +258,41 @@ request deactivate/delete
 ```
 
 Aceasta regula este obligatorie pentru geografie si orice valoare referentiata de `search-config.json`.
+
+## 7A. Target cloud runtime — ADR-006
+
+Target-ul de hosting/runtime este Google Cloud, fara redeschiderea deciziei Nile/PostgreSQL.
+
+```text
+GitHub
+ -> Cloud Build
+ -> Artifact Registry
+ -> same immutable image digest
+      -> DEV
+      -> TEST
+      -> PROD
+
+Cloud Run Service -> UI/API
+Cloud Run Jobs    -> heavy search
+Cloud Scheduler   -> scheduled PROD search
+Secret Manager    -> secrets
+Nile/PostgreSQL   -> persistent backend target
+```
+
+Reguli:
+- proiecte separate `jscc-dev`, `jscc-test`, `jscc-prod`;
+- infrastructura comuna de build/artifacts in `jscc-shared`;
+- build once per exact Git SHA;
+- promovare prin acelasi immutable image digest, fara rebuild intre medii;
+- heavy search este async si are initial maximum o executie activa per environment;
+- Cloud SQL si Firestore nu sunt introduse de migrarea de hosting;
+- TEST trebuie sa compare source-health inainte/dupa migrare;
+- costul se masoara agregat DEV+TEST+PROD;
+- target PROD nu depinde de GitHub-hosted Actions minutes dupa cutover.
+
+Detaliile, fazele, rollback-ul si cost guardrails sunt canonice in ADR-006.
+
+Pentru artefactele tranzitorii de run din faza de migrare, Cloud Storage este environment-owned: cate un bucket in fiecare proiect DEV/TEST/PROD, fara bucket runtime comun si fara cross-environment access. Run-urile scriu sub `runs/{run_id}/...`, iar `current.json` se actualizeaza atomic prin generation precondition. Artefactele runtime tranzitorii au lifecycle de 30 zile; costul lor intra in guardrail-ul agregat. PostgreSQL ramane authoritative pentru domeniile migrate.
 
 ## 8. GitHub Actions
 
@@ -610,13 +651,14 @@ Tenant isolation este defense-in-depth:
 
 ### 16.5 Runtime connectivity si privilege gate
 
-Path target:
+Path target conform ADR-006:
 
-`Cloudflare Worker -> repository/data-access -> node-postgres (pg) -> Cloudflare Hyperdrive -> Nile PostgreSQL`
+`Cloud Run Service/Job -> repository/data-access -> node-postgres (pg) -> Nile PostgreSQL`
 
-- Hyperdrive este folosit pentru pooling;
-- query caching este initial OFF pentru persistence runtime;
-- DEV/TEST/PROD folosesc bindings statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- Cloudflare Hyperdrive nu face parte din target-ul GCP;
+- pooling/concurrency PostgreSQL se configureaza in clientul/runtime-ul Cloud Run si trebuie validat prin #293 inainte de implementare;
+- DEV/TEST/PROD folosesc binding-uri/secrete statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- `NILE_DATABASE_URL` este injectat per environment din Secret Manager si nu este selectabil din request;
 - request-selected DB si cross-environment fallback sunt interzise;
 - runtime CRUD authority trebuie separata demonstrabil de migration/DDL authority inainte de personal-data/multiuser PROD cutover;
 - broad DDL poate fi tolerat temporar numai in DEV/TEST si migration work controlat;
