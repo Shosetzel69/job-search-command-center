@@ -1,0 +1,84 @@
+# GCP-05 / #432: build the DEV Command API service once from exact Git SHA.
+substitutions:
+  _GIT_SHA: ""
+
+steps:
+  - id: validate-candidate
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        [[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "_GIT_SHA must be a full SHA" >&2; exit 2; }
+        [[ "${COMMIT_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "COMMIT_SHA is required" >&2; exit 2; }
+        [[ "${_GIT_SHA}" == "${COMMIT_SHA}" ]] || { echo "candidate mismatch" >&2; exit 2; }
+        echo "CANDIDATE_GIT_SHA=${_GIT_SHA}"
+
+  - id: registry-immutability
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        immutable="$(gcloud artifacts repositories describe jscc --project=jscc-shared --location=europe-west1 --format="value(dockerConfig.immutableTags)")"
+        [[ "${immutable}" == "True" || "${immutable}" == "true" ]] || { echo "immutable tags required" >&2; exit 4; }
+
+  - id: reject-duplicate-sha
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}"
+        if gcloud artifacts docker images describe "${image}" --project=jscc-shared --format="value(image_summary.digest)" >/tmp/existing 2>/dev/null; then
+          echo "DUPLICATE_SHA_REJECTED image=${image} digest=$(cat /tmp/existing)" >&2
+          exit 5
+        fi
+
+  - id: adapter-tests
+    name: node:22-bookworm-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        cd command-api
+        npm install --ignore-scripts --no-audit --no-fund
+        node --test test/*.test.mjs
+        node --check src/server.js
+        node --check src/runtime-backend.js
+        node --check src/runtime-gcp.js
+
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull
+      - --file
+      - Dockerfile.service
+      - --build-arg
+      - GIT_SHA=${_GIT_SHA}
+      - --tag
+      - europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}
+      - .
+
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}
+
+  - id: capture-digest
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}"
+        digest="$(gcloud artifacts docker images describe "${image}" --project=jscc-shared --format="value(image_summary.digest)")"
+        [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "invalid digest" >&2; exit 3; }
+        echo "IMAGE_URI=${image}"
+        echo "IMAGE_DIGEST=${digest}"
+
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
