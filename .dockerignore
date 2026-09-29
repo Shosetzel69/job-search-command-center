@@ -2,7 +2,7 @@
 .github
 .ai-instructions.md
 ai-github-bridge
-command-api
+
 frontend
 docs
 *.md

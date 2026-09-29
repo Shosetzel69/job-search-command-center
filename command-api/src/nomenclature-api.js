@@ -6,7 +6,7 @@ import {
 } from './nomenclature-governance.js';
 import { assertEnvironmentConfig } from './environment-config.js';
 import { BUILD_IDENTITY } from './build-identity.generated.js';
-import { readRuntimeJson, writeRuntimeJson } from './runtime-github.js';
+import { readRuntimeJson, writeRuntimeJson } from './runtime-backend.js';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {

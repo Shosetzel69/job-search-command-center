@@ -51,10 +51,30 @@ export function assertEnvironmentConfig(env = {}, buildIdentity = {}) {
   const appEnv = requiredString(env.APP_ENV, 'APP_ENV').toLowerCase();
   if (!ENVIRONMENTS.has(appEnv)) throw configError('APP_ENV must be dev, test or prod');
 
-  const runtimeOwner = requiredString(env.GITHUB_RUNTIME_OWNER, 'GITHUB_RUNTIME_OWNER');
-  const runtimeRepo = requiredString(env.GITHUB_RUNTIME_REPO, 'GITHUB_RUNTIME_REPO');
-  const runtimeRef = requiredString(env.GITHUB_RUNTIME_REF, 'GITHUB_RUNTIME_REF');
-  const workflow = requiredString(env.GITHUB_WORKFLOW, 'GITHUB_WORKFLOW');
+  const runtimeBackend = String(env.JSCC_RUNTIME_BACKEND || 'github').trim().toLowerCase();
+  if (!['github','gcp'].includes(runtimeBackend)) throw configError('JSCC_RUNTIME_BACKEND must be github or gcp');
+
+  let runtimeOwner = null;
+  let runtimeRepo = null;
+  let runtimeRef = null;
+  let workflow = null;
+  let gcpProjectId = null;
+  let gcpRuntimeBucket = null;
+  let gcpSearchJob = null;
+  let gcpRegion = null;
+
+  if (runtimeBackend === 'github') {
+    runtimeOwner = requiredString(env.GITHUB_RUNTIME_OWNER, 'GITHUB_RUNTIME_OWNER');
+    runtimeRepo = requiredString(env.GITHUB_RUNTIME_REPO, 'GITHUB_RUNTIME_REPO');
+    runtimeRef = requiredString(env.GITHUB_RUNTIME_REF, 'GITHUB_RUNTIME_REF');
+    workflow = requiredString(env.GITHUB_WORKFLOW, 'GITHUB_WORKFLOW');
+  } else {
+    gcpProjectId = requiredString(env.GCP_PROJECT_ID, 'GCP_PROJECT_ID');
+    gcpRuntimeBucket = requiredString(env.GCP_RUNTIME_BUCKET, 'GCP_RUNTIME_BUCKET');
+    gcpSearchJob = requiredString(env.GCP_SEARCH_JOB, 'GCP_SEARCH_JOB');
+    gcpRegion = requiredString(env.GCP_REGION || 'europe-west1', 'GCP_REGION');
+    runtimeRef = 'gcp-runtime';
+  }
   const sourceSha = identitySha('SOURCE_SHA', env.SOURCE_SHA, buildIdentity.sourceSha);
   const runtimeDataSha = identitySha('RUNTIME_DATA_SHA', env.RUNTIME_DATA_SHA, buildIdentity.runtimeDataSha);
   const searchMode = requiredString(env.SEARCH_MODE, 'SEARCH_MODE').toLowerCase();
@@ -65,15 +85,20 @@ export function assertEnvironmentConfig(env = {}, buildIdentity = {}) {
   const frontendOrigin = requiredOrigin(env.FRONTEND_ORIGIN);
   return Object.freeze({
     appEnv,
+    runtimeBackend,
     runtimeOwner,
     runtimeRepo,
     runtimeRef,
     workflow,
+    gcpProjectId,
+    gcpRuntimeBucket,
+    gcpSearchJob,
+    gcpRegion,
     sourceSha,
     runtimeDataSha,
     searchMode,
     frontendOrigin,
-    runtimeRepository: `${runtimeOwner}/${runtimeRepo}`,
+    runtimeRepository: runtimeBackend === 'github' ? `${runtimeOwner}/${runtimeRepo}` : `gcp://${gcpProjectId}/${gcpRuntimeBucket}`,
   });
 }
 
