@@ -17,7 +17,7 @@ import {
 } from './source-governance.js';
 import { assertEnvironmentConfig, manualSearchExecutionMode } from './environment-config.js';
 import { BUILD_IDENTITY } from './build-identity.generated.js';
-import { canAccessRuntimeRepository, dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-github.js';
+import { canAccessRuntimeRepository, dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-backend.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const GITHUB_ACTIONS_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
