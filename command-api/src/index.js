@@ -445,6 +445,7 @@ export default {
 
       const url = new URL(request.url);
       if (request.method === 'GET' && url.pathname === '/health') {
+        const runtimeConfigured = await canAccessRuntimeRepository(env, runtime);
         return json({
           status:'ok',
           environment:runtime.appEnv,
@@ -453,8 +454,10 @@ export default {
           runtime_ref:runtime.runtimeRef,
           runtime_data_sha:runtime.runtimeDataSha,
           search_mode:runtime.searchMode,
+          runtime_backend:runtime.runtimeBackend,
+          runtime_configured:runtimeConfigured,
           auth_configured:googleConfigured(env),
-          github_configured:await canAccessRuntimeRepository(env, runtime),
+          github_configured:runtime.runtimeBackend === 'github' ? runtimeConfigured : false,
         }, 200, cors);
       }
       if (request.method === 'GET' && url.pathname === '/auth/config') {
