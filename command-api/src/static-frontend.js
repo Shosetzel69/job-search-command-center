@@ -66,6 +66,13 @@ export async function staticFrontendResponse(request, { root = resolve(process.c
     if (error?.code !== 'ENOENT' && error?.code !== 'EISDIR') throw error;
   }
 
+  if (extname(url.pathname)) {
+    return new Response('Not found', {
+      status:404,
+      headers:{ 'content-type':'text/plain; charset=utf-8', 'cache-control':'no-store' },
+    });
+  }
+
   const indexPath = resolve(root, 'index.html');
   return responseFor(await readFile(indexPath), indexPath, request.method);
 }
