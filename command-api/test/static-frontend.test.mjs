@@ -33,6 +33,9 @@ test('serves index, static assets and SPA fallback', async () => {
   const spa = await staticFrontendResponse(new Request('https://dev.example/review'), { root });
   assert.equal(spa.status, 200);
   assert.match(await spa.text(), /id="root"/);
+
+  const missingAsset = await staticFrontendResponse(new Request('https://dev.example/assets/missing.js'), { root });
+  assert.equal(missingAsset.status, 404);
 });
 
 test('API request returns null so Command API retains authority', async () => {
