@@ -127,9 +127,25 @@ export async function hasActiveWorkflowRun(env) {
 }
 
 function fullRunArgs() {
+  const publishPointer = [
+    'import json, os, urllib.parse, urllib.request',
+    'meta=urllib.request.Request("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",headers={"Metadata-Flavor":"Google"})',
+    'token=json.load(urllib.request.urlopen(meta))["access_token"]',
+    'bucket=os.environ["GCP_RUNTIME_BUCKET"]; run_id=os.environ["CLOUD_RUN_EXECUTION"]',
+    'base="https://storage.googleapis.com/storage/v1/b/"+urllib.parse.quote(bucket,safe="")+"/o/"+urllib.parse.quote("current.json",safe="")',
+    'req=urllib.request.Request(base,headers={"Authorization":"Bearer "+token})',
+    'generation="0"',
+    'try: generation=str(json.load(urllib.request.urlopen(req))["generation"])',
+    'except urllib.error.HTTPError as exc:',
+    '  if exc.code != 404: raise',
+    'body=json.dumps({"run_id":run_id,"artifact_identity":"runs/"+run_id+"/jobs.json"}).encode()',
+    'url="https://storage.googleapis.com/upload/storage/v1/b/"+urllib.parse.quote(bucket,safe="")+"/o?uploadType=media&name=current.json&ifGenerationMatch="+generation',
+    'put=urllib.request.Request(url,data=body,method="POST",headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})',
+    'urllib.request.urlopen(put).read()',
+  ].join('; ');
   return [
     '-ceu',
-    'run_dir="/runtime/runs/${CLOUD_RUN_EXECUTION:?CLOUD_RUN_EXECUTION is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; rm -f /runtime/locks/heavy-search.lock; exit ${rc}'
+    'run_dir="/runtime/runs/${CLOUD_RUN_EXECUTION:?CLOUD_RUN_EXECUTION is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 -c ' + JSON.stringify(publishPointer) + '; rm -f /runtime/locks/heavy-search.lock; exit ${rc}'
   ];
 }
 
@@ -148,7 +164,8 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
           args:fullRunArgs(),
           env:[
             { name:'RUN_TRIGGER', value:runTrigger },
-            { name:'SOURCE_SHA', value:runtime.sourceSha }
+            { name:'SOURCE_SHA', value:runtime.sourceSha },
+            { name:'GCP_RUNTIME_BUCKET', value:bucket(env) }
           ]
         }],
         taskCount:1,
