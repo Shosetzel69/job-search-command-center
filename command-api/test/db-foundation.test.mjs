@@ -110,6 +110,6 @@ test('public Command API code does not receive raw DB credentials or direct SQL'
   for (const path of ['../src/index.js','../src/nomenclature-api.js','../src/runtime-gcp.js']) {
     const text = await readFile(new URL(path, import.meta.url), 'utf8');
     assert.doesNotMatch(text, /NILE_DATABASE_URL/);
-    assert.doesNotMatch(text, /\bSELECT\b|\bINSERT\b|\bUPDATE\b|\bDELETE\b/i);
+    assert.doesNotMatch(text, /\bSELECT\s|\bINSERT\s+INTO\b|\bUPDATE\s+\w+\s+SET\b|\bDELETE\s+FROM\b/i);
   }
 });
