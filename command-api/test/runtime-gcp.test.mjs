@@ -34,7 +34,8 @@ test('GCP runtime adapter protects candidate-managed catalogs and uses atomic co
   assert.match(text, /candidate-managed; create a new candidate/);
   assert.match(text, /ifGenerationMatch=0/);
   assert.match(text, /ifGenerationMatch=\$\{encodeURIComponent\(generation\)\}/);
-  assert.match(text, /jobs\/\$\{job\(env\)\}:run/);
+  assert.match(text, /const name = `projects\//);
+  assert.match(text, /Cloud Run Job invocation failed/);
   assert.match(text, /heavy-search\.lock/);
   assert.match(text, /GCP_CURRENT_GENERATION/);
   assert.match(text, /current\.json&ifGenerationMatch/);
