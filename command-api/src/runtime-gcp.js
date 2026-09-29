@@ -1,4 +1,13 @@
 import { CANDIDATE_MANAGED_DATA_FILES } from '../../shared/runtime-data.mjs';
+import sources from '../../data/sources.json' with { type:'json' };
+import sourceCategories from '../../data/source-categories.json' with { type:'json' };
+import nomenclatures from '../../data/nomenclatures.json' with { type:'json' };
+
+const CANDIDATE_DATA = Object.freeze({
+  'sources.json':sources,
+  'source-categories.json':sourceCategories,
+  'nomenclatures.json':nomenclatures,
+});
 
 const METADATA_TOKEN_URL = 'http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token';
 const STORAGE_API = 'https://storage.googleapis.com';
@@ -81,10 +90,10 @@ async function deleteObject(env, object) {
 
 async function readCandidateJson(path) {
   const name = path.split('/').pop();
-  if (!CANDIDATE_MANAGED_DATA_FILES.includes(name)) throw runtimeError('Candidate asset is not allowlisted', 404);
-  const { readFile } = await import('node:fs/promises');
-  const url = new URL(`../../data/${name}`, import.meta.url);
-  return JSON.parse(await readFile(url, 'utf8'));
+  if (!CANDIDATE_MANAGED_DATA_FILES.includes(name) || !CANDIDATE_DATA[name]) {
+    throw runtimeError('Candidate asset is not allowlisted', 404);
+  }
+  return structuredClone(CANDIDATE_DATA[name]);
 }
 
 async function runtimeObjectForRead(env, path) {
@@ -128,7 +137,7 @@ export async function hasActiveWorkflowRun(env) {
 
 function fullRunArgs() {
   const publishPointer = [
-    'import json, os, urllib.parse, urllib.request',
+    'import json, os, urllib.error, urllib.parse, urllib.request',
     'meta=urllib.request.Request("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",headers={"Metadata-Flavor":"Google"})',
     'token=json.load(urllib.request.urlopen(meta))["access_token"]',
     'bucket=os.environ["GCP_RUNTIME_BUCKET"]; run_id=os.environ["CLOUD_RUN_EXECUTION"]',
