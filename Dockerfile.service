@@ -1,4 +1,13 @@
-# GCP-05 / #432: Cloud Run Service image for authenticated Command API.
+# GCP-05 / #432 + GCP-06 / #436: Cloud Run Service image for UI + authenticated Command API.
+FROM node:22-bookworm-slim AS frontend-build
+WORKDIR /app
+
+COPY frontend/package.json ./frontend/package.json
+RUN cd frontend && npm install --ignore-scripts --no-audit --no-fund
+COPY frontend/ ./frontend/
+COPY shared/ ./shared/
+RUN npm --prefix frontend run build
+
 FROM node:22-bookworm-slim
 
 ARG GIT_SHA
@@ -16,6 +25,7 @@ COPY command-api/migrations/ ./command-api/migrations/
 COPY command-api/scripts/db-*.mjs ./command-api/scripts/
 COPY shared/ ./shared/
 COPY data/sources.json data/source-categories.json data/nomenclatures.json ./data/
+COPY --from=frontend-build /app/frontend/dist ./frontend/dist/
 
 RUN printf "export const BUILD_IDENTITY = Object.freeze({\\n  sourceSha: '%s',\\n  runtimeDataSha: '%s',\\n});\\n" "${GIT_SHA}" "${GIT_SHA}" > command-api/src/build-identity.generated.js
 
@@ -26,7 +36,8 @@ RUN node --check command-api/src/server.js \
  && node --check command-api/src/db/config.js \
  && node --check command-api/src/db/pool.js \
  && node --check command-api/src/db/readiness.js \
- && node --check command-api/src/db/migrations.js
+ && node --check command-api/src/db/migrations.js \
+ && node --check command-api/src/static-frontend.js
 
 EXPOSE 8080
 CMD ["node", "command-api/src/server.js"]
