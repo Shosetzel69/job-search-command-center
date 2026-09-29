@@ -1,5 +1,6 @@
 import http from 'node:http';
 import commandApi from './secure-entry.js';
+import { databaseReadiness } from './db/readiness.js';
 
 function envObject() { return { ...process.env }; }
 
@@ -26,10 +27,20 @@ async function writeResponse(res, response) {
 
 const port = Number(process.env.PORT || 8080);
 const server = http.createServer(async (req, res) => {
-  try { await writeResponse(res, await commandApi.fetch(await toRequest(req), envObject())); }
+  try {
+    if (req.method === 'GET' && req.url === '/health/db') {
+      const result = await databaseReadiness(envObject());
+      res.statusCode = 200;
+      res.setHeader('content-type','application/json; charset=utf-8');
+      res.setHeader('cache-control','no-store');
+      res.end(JSON.stringify(result));
+      return;
+    }
+    await writeResponse(res, await commandApi.fetch(await toRequest(req), envObject()));
+  }
   catch (error) {
     console.error(error);
-    res.statusCode = 500;
+    res.statusCode = Number(error?.status) || 500;
     res.setHeader('content-type','application/json; charset=utf-8');
     res.end(JSON.stringify({ error:'Command API error' }));
   }
