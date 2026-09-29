@@ -3,7 +3,7 @@
 .ai-instructions.md
 ai-github-bridge
 
-frontend
+frontend/dist
 docs
 *.md
 node_modules

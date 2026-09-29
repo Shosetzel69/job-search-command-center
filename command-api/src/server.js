@@ -1,6 +1,7 @@
 import http from 'node:http';
 import commandApi from './secure-entry.js';
 import { databaseReadiness } from './db/readiness.js';
+import { staticFrontendResponse } from './static-frontend.js';
 
 function envObject() { return { ...process.env }; }
 
@@ -36,7 +37,13 @@ const server = http.createServer(async (req, res) => {
       res.end(JSON.stringify(result));
       return;
     }
-    await writeResponse(res, await commandApi.fetch(await toRequest(req), envObject()));
+    const request = await toRequest(req);
+    const staticResponse = await staticFrontendResponse(request);
+    if (staticResponse) {
+      await writeResponse(res, staticResponse);
+      return;
+    }
+    await writeResponse(res, await commandApi.fetch(request, envObject()));
   }
   catch (error) {
     console.error(error);
