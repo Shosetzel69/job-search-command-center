@@ -36,7 +36,9 @@ test('GCP runtime adapter protects candidate-managed catalogs and uses atomic co
   assert.match(text, /ifGenerationMatch=\$\{encodeURIComponent\(generation\)\}/);
   assert.match(text, /jobs\/\$\{job\(env\)\}:run/);
   assert.match(text, /heavy-search\.lock/);
-  assert.match(text, /rm -f \/runtime\/locks\/heavy-search\.lock/);
+  assert.match(text, /GCP_CURRENT_GENERATION/);
+  assert.match(text, /current\.json&ifGenerationMatch/);
+  assert.match(text, /trap .*heavy-search\.lock/);
 });
 
 test('Node server listens on PORT and delegates to the existing secure handler', () => {
