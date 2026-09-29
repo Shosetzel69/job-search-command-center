@@ -12,6 +12,8 @@ COPY command-api/package.json ./command-api/package.json
 RUN cd command-api && npm install --omit=dev --ignore-scripts --no-audit --no-fund
 
 COPY command-api/src/ ./command-api/src/
+COPY command-api/migrations/ ./command-api/migrations/
+COPY command-api/scripts/db-*.mjs ./command-api/scripts/
 COPY shared/ ./shared/
 COPY data/sources.json data/source-categories.json data/nomenclatures.json ./data/
 
@@ -20,7 +22,11 @@ RUN printf "export const BUILD_IDENTITY = Object.freeze({\\n  sourceSha: '%s',\\
 RUN node --check command-api/src/server.js \
  && node --check command-api/src/runtime-backend.js \
  && node --check command-api/src/runtime-gcp.js \
- && node --check command-api/src/index.js
+ && node --check command-api/src/index.js \
+ && node --check command-api/src/db/config.js \
+ && node --check command-api/src/db/pool.js \
+ && node --check command-api/src/db/readiness.js \
+ && node --check command-api/src/db/migrations.js
 
 EXPOSE 8080
 CMD ["node", "command-api/src/server.js"]
