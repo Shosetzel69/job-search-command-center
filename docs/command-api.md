@@ -1,7 +1,7 @@
 # Command API
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-25`
+Ultima actualizare: `2026-09-30`
 
 ## Scop
 
@@ -53,27 +53,49 @@ USER nu are manual Run/Search in target. Manual collection este ADMIN-only. Modi
 
 ## Autentificare
 
-Browser:
+### AS-IS single-user
+
+Browserul obtine un Google ID token prin Google Identity Services. Command API valideaza server-side Google JWKS, issuer si `GOOGLE_CLIENT_ID`, iar autorizarea curenta este limitata prin `ALLOWED_GOOGLE_SUB`.
+
+Current compatibility behavior may still place the verified Google ID token in the current `__Host-jscc_session` cookie until the multiuser cutover.
+
+### Target ADR-005 + ADR-007
+
+Identity resolution:
 
 ```text
-Authorization: Bearer <GOOGLE_ID_TOKEN>
+Google ID token
+ -> server-side verify
+ -> user_identity(provider=GOOGLE, provider_subject=sub)
+ -> app_user.user_id
+ -> profile.profile_id
 ```
 
-Worker verifica Google JWKS, issuer si `GOOGLE_CLIENT_ID`.
-
-AS-IS, autorizarea este limitata prin `ALLOWED_GOOGLE_SUB`.
-
-Target ADR-005:
-- `Google sub -> app_user.user_id -> profile.profile_id`;
+Rules:
+- Google remains Stage-1 IdP;
+- Google `sub` is an external subject, not an internal FK;
+- account/profile resolution is server-side;
 - exactly one profile per user in MVP;
-- account lookup/provisioning si profile resolution se fac server-side;
-- browser-supplied user/profile identifiers nu confera autoritate;
-- roles: `USER` si `ADMIN`;
-- ADMIN nu poate citi continutul personal al altui user.
+- roles are `USER` and `ADMIN`;
+- browser-supplied user/profile identifiers do not confer authority;
+- ADMIN cannot read another user's personal content.
 
-La autentificare reusita, frontend-ul poate retine local numai adresa de email autorizata ca `login_hint` non-secret pentru Google Identity Services. Google ID token nu este persistat: ramane exclusiv in memoria paginii. La reload, frontend-ul poate cere Google Identity Services sa emita un credential nou pentru contul cunoscut; credentialul este revalidat integral prin `POST /auth/session`. Logout explicit dezactiveaza auto-select pentru a evita reautentificarea imediata.
+On successful Google authentication, JSCC creates a fresh application-owned opaque session:
+- cookie `__Host-jscc_session`;
+- `Secure; HttpOnly; SameSite=Strict; Path=/`;
+- no Domain attribute;
+- raw token only in browser cookie;
+- only token hash persisted server-side;
+- Stage-1 absolute maximum lifetime 60 minutes;
+- logout/deactivation/deletion invalidate server-side sessions.
 
-CI/CD are o identitate separata de utilizator. Workflow-urile canonice de deploy obtin un GitHub Actions OIDC token short-lived cu audience `jscc-functional-verification`. Worker-ul valideaza issuer-ul GitHub Actions, audience, repository identity, GitHub Environment, `workflow_ref` si timpul tokenului. Aceasta identitate poate citi numai `GET /data/sources.json`, `GET /data/source-categories.json` si `GET /data/nomenclatures.json`, necesare reconciliation/functional verification; nu poate autentifica `/auth/session` si nu poate autoriza endpoint-uri de comanda sau mutatie.
+After the multiuser cutover, Google ID tokens are accepted at the session-establishment boundary, not as direct authorization bypass for normal protected application endpoints.
+
+Business/repository code receives server-derived `AuthContext(user_id, profile_id, role, status)` and does not consume Google claims directly.
+
+Frontend may retain only non-secret Google login hint metadata for UX. Authentication/session tokens are not persisted in browser Web Storage.
+
+CI/CD keeps its separate GitHub Actions OIDC identity. It remains limited to the already-approved read-only functional-verification surface and cannot establish an end-user session or authorize mutations.
 
 ## Endpoint-uri publice
 
@@ -82,7 +104,43 @@ CI/CD are o identitate separata de utilizator. Workflow-urile canonice de deploy
 
 ## Endpoint autentificare
 
-- `POST /auth/session`
+### `POST /auth/session`
+
+Target behavior:
+- with a Google bearer credential: verify Google token, resolve/provision account, create a fresh JSCC session and set the session cookie;
+- with only a valid JSCC session cookie: validate the existing session and return the current account/profile summary without extending the absolute expiry;
+- DEACTIVATED account -> denied;
+- invalid/expired/revoked session -> denied;
+- no silent fallback to `ALLOWED_GOOGLE_SUB` after multiuser cutover.
+
+### `POST /auth/logout`
+
+Target:
+- same-origin;
+- revoke current server-side session if present;
+- clear cookie;
+- idempotent.
+
+### `GET /me`
+
+Target authenticated identity summary:
+- own role/status;
+- account email metadata when needed by UI;
+- own profile identity.
+
+No caller-selected user/profile authority.
+
+
+## Target auth/authorization error semantics
+
+After multiuser cutover:
+- `401` — missing, invalid, expired or revoked JSCC session; invalid Google credential at session establishment;
+- `403` — authenticated account is DEACTIVATED or authenticated role lacks the requested capability;
+- `404` — tenant-scoped object is not visible in the caller's personal domain, including cross-tenant object-id probing;
+- `409` — legitimate state/version/concurrency conflict that is not an authorization failure;
+- `503` — required auth/security configuration or persistence dependency is unavailable; fail closed.
+
+Mutating cookie-authenticated requests remain same-origin and validate the environment `FRONTEND_ORIGIN`.
 
 ## Date protejate
 
@@ -136,6 +194,28 @@ Reguli geografice:
 **Target ADR-005:** endpoint-ul de manual collection este ADMIN-only si global, nu profile-owned. Run admission garanteaza maximum o executie grea globala. USER nu primeste acest drept.
 
 Dispatch-ul continua sa transporte obligatoriu `source_sha` exact al Worker-ului; workflow-ul valideaza SHA-ul si face checkout la acel commit inainte de executie.
+
+## Target personal/admin API boundary
+
+Personal operations derive the tenant from the authenticated JSCC session.
+
+Preferred target surface:
+- `GET/PUT /me/preferences`;
+- personal job-state operations by shared `job_id`;
+- `GET/POST /applications`;
+- `PUT/DELETE /applications/:application_id`.
+
+Compatibility endpoints such as current `PUT /config` may remain temporarily during migration, but the effective `profile_id` is always server-derived.
+
+ADMIN account lifecycle surface may expose:
+- account list/metadata required for administration;
+- deactivate;
+- reactivate;
+- delete.
+
+ADMIN endpoints do not expose another user's profile preferences, FIT/evaluation, applications, notes or personal workspace.
+
+Current `POST /commands/run` may remain the manual collection endpoint, but the ADR-005 target authorizes it only for ADMIN/system global collection.
 
 ## Source Registry
 
@@ -308,19 +388,23 @@ Personal repositories primesc profile context derivat server-side din principalu
 Defense in depth:
 - server-side account/profile resolution;
 - repository scoping;
-- PostgreSQL RLS pe personal tables;
-- `FORCE ROW LEVEL SECURITY` unde se aplica;
-- ADMIN fara personal-content bypass.
+- `profile` uses mandatory RLS + `FORCE ROW LEVEL SECURITY` scoped by server-derived `user_id`;
+- every Stage-1 personal-content table stores `profile_id` directly and uses mandatory RLS + `FORCE ROW LEVEL SECURITY`;
+- Stage-1 personal tables do not rely on join-derived tenant scope;
+- ADMIN has no personal-content bypass.
 
 ### Connectivity
 
-`Worker -> repository/data-access -> pg -> Hyperdrive -> Nile PostgreSQL`
+Target runtime per ADR-006:
 
-- Hyperdrive pooling;
-- query caching initial OFF;
-- bindings distincte DEV/TEST/PROD;
-- fara runtime-selected DB;
-- fara cross-environment fallback.
+`Cloud Run Service/Job -> repository/data-access -> pg -> Nile PostgreSQL`
+
+- PostgreSQL pooling/concurrency is owned by the Cloud Run runtime/client configuration;
+- environment-specific DB credentials are obtained from Secret Manager;
+- DEV/TEST/PROD bind independently to `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- no runtime-selected DB;
+- no cross-environment fallback;
+- Cloudflare Hyperdrive is legacy/superseded and is not part of the target GCP path.
 
 ### Runtime privileges
 
@@ -328,7 +412,9 @@ Inainte de personal-data/multiuser PROD, runtime CRUD authority trebuie separata
 
 ### Account deletion
 
-DELETE personal account/profile este hard delete al personal domain. Shared jobs/sources/runs/nomenclatures nu sunt sterse.
+DELETE este un account-domain hard delete. After ADMIN authorization on the caller's own AuthContext, AccountRepository deletes only the target `app_user` row; FK `ON DELETE CASCADE` removes `user_identity`, `user_session`, `profile` and all profile-owned rows. Shared jobs/sources/runs/nomenclatures are not owned by the user and are not cascaded.
+
+ADMIN does not assume the target tenant context, does not receive `BYPASSRLS`, and the delete operation does not return target personal content.
 
 Se poate pastra maximum 90 zile numai un audit event neidentificabil, fara user/profile identifiers sau date care permit relinkarea.
 

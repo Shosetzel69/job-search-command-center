@@ -73,6 +73,8 @@
 
 ### Documentatie
 
+- #450 / ADR-007: aprobat si documentat target-ul Multiuser Google-first: `user_identity -> app_user -> profile`, sesiuni JSCC opace/revocabile, `AuthContext`, RLS transaction-local, lifecycle/ADMIN privacy, authority matrix JSON->PostgreSQL si pregatirea extensiei viitoare email/parola fara redesign de tenancy. Implementarea ramane neautorizata si fara mutatii DEV/TEST/PROD.
+
 - 2026-09-27: standardizata evaluarea surselor noi in `docs/source-strategy.md`: acoperire geografica reala, roluri tinta, remote/eligibilitate, volum relevant dupa filtre, calitate/duplicate, contract, acces tehnic, ToS si canonical company-site resolution. `.ai-instructions.md` v1.16 adauga triggerul `JSCC + URL` care obliga consultarea acestei reguli inainte de verdict, fara a reintroduce `priority` in Source Registry.
 
 - #288: `docs/agentflow.md` -> v1.1; aliniat contractul canonic cu modelul DTP din Discovery: DTP devine handoff formal Discovery -> Development, Discovery ramane sursa de adevar pentru intentia de business, Development pentru implementare, iar boundary-ul intre etape/chaturi si stop conditions sunt explicite; template-ul Discovery este versionat separat la v2.0 si foloseste taxonomia canonica Phase/Status.

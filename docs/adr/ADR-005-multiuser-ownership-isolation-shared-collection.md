@@ -25,6 +25,8 @@ Canonical identity mapping:
 
 `Google sub -> app_user.user_id -> profile.profile_id`
 
+**Refinement:** ADR-007 preserves this semantic mapping while introducing the physical provider-neutral boundary `Google sub -> user_identity -> app_user -> profile` and a JSCC-owned application session. ADR-007 is authoritative for Stage-1 identity/session implementation details.
+
 MVP invariant: one user has exactly one job-search profile, while `user_id` and `profile_id` remain separate identifiers.
 
 MVP roles are exactly:
@@ -111,7 +113,7 @@ Personal access uses defense in depth:
 2. server resolves `app_user` and `profile_id`;
 3. personal repository operations require authenticated profile context;
 4. PostgreSQL Row Level Security protects personal tables;
-5. `FORCE ROW LEVEL SECURITY` is used where applicable.
+5. ADR-007 refinement: `profile` and every Stage-1 personal-content table use mandatory `FORCE ROW LEVEL SECURITY`; each personal-content table stores `profile_id` directly.
 
 Browser-supplied profile identifiers never confer authorization.
 
@@ -224,17 +226,13 @@ MVP canonical families:
 
 ADMIN may maintain title-to-family mappings but may not create/delete/redefine canonical families in MVP.
 
-### Cloudflare connectivity
+### Runtime connectivity — superseded by ADR-006
 
-Canonical runtime path:
+The original ADR-005 connectivity choice (`Cloudflare Worker -> Hyperdrive -> Nile`) was superseded by ADR-006. The current target runtime path is:
 
-`Cloudflare Worker -> repository/data-access layer -> node-postgres (pg) -> Cloudflare Hyperdrive -> Nile PostgreSQL`
+`Cloud Run Service/Job -> repository/data-access -> node-postgres (pg) -> Nile PostgreSQL`
 
-- standard PostgreSQL driver is used instead of a Nile-specific persistence API;
-- Hyperdrive provides connection pooling;
-- query caching is initially disabled for JSCC persistence;
-- DEV, TEST and PROD use separate static bindings to `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
-- request-selected database and cross-environment fallback are prohibited.
+ADR-006 is authoritative for runtime hosting, environment secrets, pooling/concurrency and immutable promotion. ADR-005 remains authoritative for PostgreSQL ownership/tenancy semantics. Request-selected database and cross-environment fallback remain prohibited.
 
 ### Cost guardrail
 

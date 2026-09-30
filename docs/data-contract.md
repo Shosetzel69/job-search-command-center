@@ -2,7 +2,7 @@
 
 Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-09-22`
+Ultima actualizare: `2026-09-30`
 
 ## 1. Reguli generale
 
@@ -167,11 +167,47 @@ Fiecare entry pastreaza `source_results` si agregatele `source_outcome_counts`, 
 
 **AS-IS:** sursa canonica single-user pentru selectiile efective ale motorului. Valorile controlate sunt definite de `data/nomenclatures.json`.
 
-**Target ADR-005:** acest fisier nu are succesor 1:1. Contractul se desparte in:
-- system/collection configuration — source strategy, provider/collector limits, collection freshness si alte politici globale;
-- profile-owned job-search preferences — role-family interests, geography, work mode, contract, compensation, personal exclusions, relevance/FIT preferences si display preferences.
+**Target ADR-005/ADR-007:** acest fisier nu are succesor 1:1. Fiecare top-level key curent are exact o destinatie:
 
-O modificare de profil nu declanseaza provider retrieval; ea declanseaza numai re-evaluarea personala necesara.
+| Legacy key | Dispozitie | Target |
+|---|---|---|
+| `schema_version` | retired | none; target DB/contracts carry their own schema/migration versions |
+| `role_groups` | profile | `profile_preferences.role_groups` |
+| `work_modes` | profile | `profile_preferences.work_modes` |
+| `contract_types` | profile | `profile_preferences.contract_types` |
+| `freshness_hours` | profile | `profile_preferences.display_freshness_hours` |
+| `collection_freshness_hours` | system | `collection_policy.collection_freshness_hours` |
+| `fit_threshold` | profile | `profile_preferences.fit_threshold` |
+| `keep_reposts` | profile | `profile_preferences.keep_reposts` |
+| `rate_min_eur_day` | profile | `profile_preferences.rate_min_eur_day` |
+| `rate_max_eur_day` | profile | `profile_preferences.rate_max_eur_day` |
+| `immediate_start` | profile | `profile_preferences.immediate_start` |
+| `target_regions` | profile | `profile_preferences.target_regions` |
+| `target_country_codes` | profile | `profile_preferences.target_country_codes` |
+| `excluded_regions` | profile | `profile_preferences.excluded_regions` |
+| `excluded_country_codes` | profile | `profile_preferences.excluded_country_codes` |
+| `search_country_codes` | derived then retired | compatibility projection of `profile_preferences.target_country_codes` during rollback window only |
+| `eligible_remote_country_codes` | profile | `profile_preferences.remote_eligible_country_codes` |
+| `work_mode_priority` | profile | `profile_preferences.work_mode_priority` |
+| `source_strategy` | system | `collection_policy.source_strategy` |
+| `web_browser_fallback_enabled` | system | `collection_policy.web_browser_fallback_enabled` |
+| `jobspipe_credit_budget_per_run` | system | `collection_policy.jobspipe_credit_budget_per_run` |
+| `jobspipe_monthly_credit_guard` | system | `collection_policy.jobspipe_monthly_credit_guard` |
+| `jobspipe_incremental_overlap_minutes` | system | `collection_policy.jobspipe_incremental_overlap_minutes` |
+| `exclusions` | profile | `profile_preferences.exclusions` |
+| `excluded_company_patterns` | profile | `profile_preferences.excluded_company_patterns` |
+| `excluded_role_keywords` | profile | `profile_preferences.excluded_role_keywords` |
+| `deep_erp_terms` | profile | `profile_preferences.deep_erp_terms` |
+| `jobspipe_mode` | system | `collection_policy.jobspipe_mode` |
+| `jobspipe_apify_max_items_per_run` | system | `collection_policy.jobspipe_apify_max_items_per_run` |
+
+Invariants:
+- `freshness_hours` si `collection_freshness_hours` devin campuri target distincte; nu raman un singur concept ambiguu;
+- target/search geography si remote-eligibility geography raman distincte;
+- `search_country_codes` este numai alias legacy derivat si nu devine o a doua authority;
+- machine exclusions (`excluded_company_patterns`, `excluded_role_keywords`, `deep_erp_terms`) sunt profile-owned deoarece exprima excluderile personale curente; o politica globala viitoare foloseste un contract separat;
+- profile preference change produce numai personal re-evaluation, niciodata provider retrieval;
+- setarile provider/browser/JobsPipe sunt system/collection-owned.
 
 Geografie:
 - `target_regions`;
@@ -425,6 +461,17 @@ Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/index
 - Source Registry / source categories;
 - nomenclatures.
 
+### Account/security
+
+- `app_user` cu internal `user_id`, role si ACTIVE/DEACTIVATED;
+- `user_identity` cu provider + provider subject; Stage 1 provider = GOOGLE;
+- `profile` ramane separat de account, cu exact un profil/user in MVP;
+- `user_session` este security state account-owned, cu token opac si numai hash persistat;
+- Google `sub` si email nu devin foreign keys pentru personal-domain data;
+- `DELETED` este operatie de hard-delete, nu status persistent.
+
+Contractul detaliat este in `docs/multiuser-auth-security-contract.md`.
+
 ### Personal/profile-owned
 
 - Profile;
@@ -477,3 +524,15 @@ Application este profile-owned.
 `User Profile + Shared Job -> User-Job Evaluation`
 
 FIT este personal si incremental. Hard eligibility exclude numai pe contradictie explicita. Missing/unknown nu inseamna incompatibilitate.
+
+
+## 14. Multiuser migration authority
+
+Planul canonic pentru trecerea JSON -> PostgreSQL pe domenii este `docs/multiuser-data-migration-plan.md`.
+
+Reguli suplimentare:
+- fiecare domeniu are o singura read/write authority dupa cutover;
+- permanent dual-write este interzis;
+- compatibility export este derivat one-way si limitat la rollback window;
+- identity/session/account state nu foloseste JSON ca authority dupa multiuser auth cutover;
+- personal data este intotdeauna profile-scoped si protejata prin repository authorization + PostgreSQL RLS.
