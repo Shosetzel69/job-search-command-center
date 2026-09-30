@@ -130,6 +130,16 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         sql = "\n".join(query for query, _ in cursor.queries)
         self.assertNotIn("INSERT INTO canonical_jobs", sql)
 
+    def test_only_complete_sources_advance_lifecycle(self):
+        plan = [
+            {"source_id": "src-a", "outcome": "success"},
+            {"source_id": "src-b", "outcome": "success_empty"},
+            {"source_id": "src-c", "outcome": "partial"},
+            {"source_id": "src-d", "outcome": "failed"},
+            {"source_id": "src-e", "outcome": "blocked"},
+        ]
+        self.assertEqual(repository._complete_source_ids(plan), {"src-a", "src-b"})
+
     def test_database_binding_is_fail_closed(self):
         expected, _ = repository.expected_database({
             "APP_ENV": "dev",
