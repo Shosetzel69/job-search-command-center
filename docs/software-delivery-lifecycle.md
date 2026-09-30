@@ -123,6 +123,57 @@ Default post-deploy validation is a small smoke test, not a second full QA cycle
 ### LEGACY
 Temporary fallback only. No normal code/config/data change.
 
+### 4.1 Mandatory Environment Functional Acceptance Suite
+
+A deployment is not equivalent to a functional environment.
+
+Before DEV, TEST or PROD can receive a functional PASS, execute every mandatory test applicable to that environment and the candidate. The baseline suite is:
+
+| ID | Mandatory validation |
+|---|---|
+| EFA-01 | Exact candidate/source identity, intended revision and 100% traffic |
+| EFA-02 | `/health` and runtime-backend/configuration identity |
+| EFA-03 | `/health/db` and exact environment database binding when persistence is used |
+| EFA-04 | Browser application loads from the canonical environment origin |
+| EFA-05 | Authentication/login succeeds for the authorized user |
+| EFA-06 | Protected application data loads through the authenticated path |
+| EFA-07 | Environment configuration can be read and, where the product permits mutation, saved/read back correctly |
+| EFA-08 | Authenticated manual command/run is accepted through the real application/API path |
+| EFA-09 | Service -> execution backend dispatch succeeds |
+| EFA-10 | Execution/Job starts and reaches a terminal state |
+| EFA-11 | Runtime output/state is persisted to the environment-local runtime store and the current-result pointer/state is updated |
+| EFA-12 | UI observes the active run and the terminal status/results produced by that same run |
+| EFA-13 | One-active-run/concurrency protection behaves as specified |
+| EFA-14 | Negative authorization/error paths fail closed with the expected status |
+| EFA-15 | Source/connector smoke and source-health checks required for that release stage pass or have explicitly accepted non-blocking limitations |
+| EFA-16 | Database migration/version/idempotency checks pass when the candidate changes schema/migration behavior |
+| EFA-17 | All candidate-specific acceptance criteria and regression tests pass |
+
+Rules:
+
+1. Every applicable EFA test is mandatory.
+2. A mandatory test may not be silently skipped. `N/A` requires an explicit rationale tied to the candidate/environment.
+3. Any mandatory `FAIL` or `BLOCKED` means the environment is **not functional** and prevents the next lifecycle gate.
+4. Technical evidence such as successful deploy, health, DB connectivity, seed provisioning or artifact identity is reported as **technical deployment readiness** only.
+5. A TEST environment cannot receive `TEST_PASS` until the real user path is proven end-to-end, including command/run execution and result visibility.
+6. A PROD environment cannot receive `PROD_SMOKE_PASS` or be described as functional until the applicable suite passes after deployment.
+7. Candidate-specific acceptance criteria extend this suite; they never reduce it unless the owner explicitly authorizes a hotfix reduction under section 10.
+
+### 4.2 Mandatory Functional Evidence Matrix
+
+Every functional environment verdict must return an explicit result matrix. Minimum fields:
+
+```text
+Test ID
+Scope / user path
+Expected result
+Actual result
+Evidence reference
+Status: PASS | FAIL | BLOCKED | N/A
+```
+
+The summary must include counts by status and the exact candidate SHA. A blanket statement such as "environment functional", "TEST PASS" or "ready for PROD" is invalid without this matrix.
+
 ## 5. Five release gates
 
 ### G1 - Scope approved
@@ -137,7 +188,8 @@ Minimum:
 Minimum:
 - implementation complete on branch;
 - required automated tests green;
-- DEV verification PASS;
+- mandatory Environment Functional Acceptance Suite PASS for DEV;
+- DEV functional evidence matrix returned;
 - exact `CANDIDATE_SHA` recorded.
 
 From this point, candidate mutation invalidates the promotion cycle.
@@ -146,7 +198,10 @@ From this point, candidate mutation invalidates the promotion cycle.
 
 Minimum:
 - TEST runs the exact frozen candidate;
-- expected behavior validated;
+- mandatory Environment Functional Acceptance Suite PASS for TEST;
+- real authenticated end-to-end run path proven through terminal result visibility;
+- all candidate-specific acceptance criteria PASS;
+- TEST functional evidence matrix returned;
 - no unresolved blocker/major defect;
 - verdict recorded.
 
@@ -169,7 +224,8 @@ Additional requirements are conditional:
 Minimum:
 - PROD runs the expected candidate;
 - `/health.source_sha` matches `CANDIDATE_SHA`;
-- core smoke PASS;
+- mandatory Environment Functional Acceptance Suite PASS for PROD;
+- PROD functional evidence matrix returned;
 - release record completed.
 
 The Issue may then close.
@@ -440,9 +496,9 @@ For a multi-wave release, checkpoint PASS means only that the tested wave/scope 
 
 A software release/change is complete when:
 - approved scope is implemented;
-- DEV PASS exists;
+- DEV PASS exists with the mandatory functional evidence matrix;
 - one frozen candidate SHA is recorded;
-- TEST PASS exists for that exact SHA;
+- TEST PASS exists for that exact SHA with the mandatory functional evidence matrix;
 - candidate is integrated without identity rewrite;
 - rollback is known;
 - owner GO is recorded;
