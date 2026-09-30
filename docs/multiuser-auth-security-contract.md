@@ -91,6 +91,18 @@ If identity does not exist:
 
 Concurrent first sign-in must converge to one account through uniqueness constraints and transactional retry/read-after-conflict behavior.
 
+## 3.3 Self-service admission and capacity guard
+
+Stage 1 self-service means any Google identity that passes the configured Google token validation may create a JSCC account; invitation/domain allowlisting is out of MVP scope.
+
+Before PROD multiuser enablement, account creation is also subject to the ADR-005/ATC-275-10 capacity guard:
+- no automatic paid capacity;
+- at the approved capacity threshold, creation of new accounts is fail-closed/degraded before paid consumption;
+- existing authenticated users should remain available where the capacity policy permits;
+- account-admission rejection does not create partial user/identity/profile rows.
+
+The capacity signal is system-owned and cannot be overridden by browser input.
+
 ## 4. JSCC application session
 
 `user_session`
@@ -122,6 +134,18 @@ __Host-jscc_session=<opaque token>; Path=/; Secure; HttpOnly; SameSite=Strict
 ```
 
 No `Domain`.
+
+## 4.1 Legacy cookie cutover
+
+The current single-user cookie uses the same `__Host-jscc_session` name but contains a Google ID token.
+
+At the multiuser cutover:
+- the new runtime never interprets an unrecognized cookie value as a Google credential;
+- a cookie with no matching JSCC session row is invalid;
+- the auth boundary clears the invalid/legacy cookie and requires Google session establishment again;
+- there is no compatibility path that re-authorizes the legacy JWT cookie directly.
+
+This provides a deterministic one-time reauthentication instead of mixed session semantics.
 
 ## 5. Auth endpoints
 
@@ -404,10 +428,11 @@ Mandatory cases:
 - invalid Google signature -> 401;
 - wrong issuer/audience -> 401;
 - expired Google credential -> 401;
-- unknown valid Google subject -> exactly one new USER/profile;
+- unknown valid Google subject below capacity gate -> exactly one new USER/profile;
+- unknown valid Google subject when account-admission capacity gate is closed -> no partial account and fail-closed response;
 - concurrent first sign-in -> exactly one USER/profile;
 - DEACTIVATED -> session establishment denied and an already-issued session is denied even if its row was not yet cleaned up;
-- revoked/expired JSCC session -> 401;
+- revoked/expired/unrecognized legacy cookie -> 401 + cookie clear where applicable;
 - Google bearer used directly on ordinary protected endpoint after cutover -> rejected;
 - cross-origin session establishment/mutation -> denied;
 - profile-id tampering -> no authority change;
