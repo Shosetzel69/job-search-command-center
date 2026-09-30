@@ -1,0 +1,117 @@
+name: QA GCP TEST Public Functional Probe
+
+on:
+  push:
+    branches: [qa-test-functional-445]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Execute public and negative-path functional probes
+        shell: bash
+        env:
+          ORIGIN: https://jscc-command-api-test-458209223616.europe-west1.run.app
+          EXPECTED_SHA: 9c3dc487720815e8aa40f779b72808691d39f651
+        run: |
+          set -euo pipefail
+          tmp="$(mktemp -d)"
+          trap 'rm -rf "$tmp"' EXIT
+          failures=0
+
+          record() {
+            id="$1"; status="$2"; detail="$3"
+            printf '%s|%s|%s\n' "$id" "$status" "$detail"
+            [ "$status" = PASS ] || failures=$((failures+1))
+          }
+
+          code="$(curl -sS -o "$tmp/root" -w '%{http_code}' "$ORIGIN/")"
+          if [ "$code" = 200 ] && grep -qi '<html' "$tmp/root"; then
+            record EFA-04 PASS "root HTTP 200 and HTML returned"
+          else
+            record EFA-04 FAIL "root HTTP=$code"
+          fi
+
+          code="$(curl -sS -o "$tmp/health" -w '%{http_code}' "$ORIGIN/health")"
+          if [ "$code" = 200 ] && jq -e --arg sha "$EXPECTED_SHA" '.status=="ok" and .environment=="test" and .source_sha==$sha and .runtime_backend=="gcp" and .runtime_configured==true and .auth_configured==true' "$tmp/health" >/dev/null; then
+            record EFA-01 PASS "exact TEST candidate/runtime identity"
+            record EFA-02 PASS "/health contract"
+          else
+            record EFA-01 FAIL "health identity mismatch HTTP=$code body=$(tr '\n' ' ' < "$tmp/health" | head -c 300)"
+            record EFA-02 FAIL "/health contract failed"
+          fi
+
+          code="$(curl -sS -o "$tmp/db" -w '%{http_code}' "$ORIGIN/health/db")"
+          if [ "$code" = 200 ] && jq -e '.status=="ok" and .environment=="test" and .database=="jobsearch_test"' "$tmp/db" >/dev/null; then
+            record EFA-03 PASS "jobsearch_test readiness"
+          else
+            record EFA-03 FAIL "db readiness HTTP=$code body=$(tr '\n' ' ' < "$tmp/db" | head -c 300)"
+          fi
+
+          code="$(curl -sS -o "$tmp/authcfg" -w '%{http_code}' "$ORIGIN/auth/config")"
+          if [ "$code" = 200 ] && jq -e '.configured==true and (.client_id|type=="string") and (.client_id|length>10)' "$tmp/authcfg" >/dev/null; then
+            record AUTH-CONFIG PASS "Google auth configured"
+          else
+            record AUTH-CONFIG FAIL "auth config HTTP=$code"
+          fi
+
+          code="$(curl -sS -o "$tmp/protected" -w '%{http_code}' "$ORIGIN/data/jobs.json")"
+          if [ "$code" = 401 ]; then
+            record EFA-14A PASS "anonymous protected data rejected 401"
+          else
+            record EFA-14A FAIL "anonymous protected data HTTP=$code"
+          fi
+
+          code="$(curl -sS -X POST -H 'Content-Type: application/json' --data '{}' -o "$tmp/run" -w '%{http_code}' "$ORIGIN/commands/run")"
+          if [ "$code" = 401 ]; then
+            record EFA-14B PASS "anonymous command rejected 401"
+          else
+            record EFA-14B FAIL "anonymous command HTTP=$code"
+          fi
+
+          code="$(curl -sS -X OPTIONS -H 'Origin: https://invalid.example' -H 'Access-Control-Request-Method: POST' -o "$tmp/cors" -w '%{http_code}' "$ORIGIN/commands/run")"
+          if [ "$code" = 403 ]; then
+            record EFA-14C PASS "cross-origin preflight rejected 403"
+          else
+            record EFA-14C FAIL "cross-origin preflight HTTP=$code"
+          fi
+
+          asset="$(grep -oE 'src="[^"]+\.js[^"]*"' "$tmp/root" | head -1 | sed -E 's/^src="//;s/"$//' || true)"
+          if [ -n "$asset" ]; then
+            case "$asset" in
+              http*) asset_url="$asset" ;;
+              /*) asset_url="$ORIGIN$asset" ;;
+              *) asset_url="$ORIGIN/$asset" ;;
+            esac
+            headers="$(curl -sS -D - -o "$tmp/asset" "$asset_url")"
+            status="$(printf '%s' "$headers" | awk 'NR==1{print $2}')"
+            ctype="$(printf '%s' "$headers" | awk -F': ' 'tolower($1)=="content-type"{gsub("\r","",$2); print tolower($2); exit}')"
+            if [ "$status" = 200 ] && [[ "$ctype" == *javascript* ]]; then
+              record STATIC-JS PASS "frontend JS asset HTTP 200 with JS MIME"
+            else
+              record STATIC-JS FAIL "asset status=$status content-type=$ctype url=$asset_url"
+            fi
+          else
+            record STATIC-JS FAIL "no JS asset found in application HTML"
+          fi
+
+          code="$(curl -sS -o "$tmp/spa" -w '%{http_code}' "$ORIGIN/jobs")"
+          if [ "$code" = 200 ] && grep -qi '<html' "$tmp/spa"; then
+            record SPA PASS "SPA route /jobs returns application HTML"
+          else
+            record SPA FAIL "SPA route HTTP=$code"
+          fi
+
+          code="$(curl -sS -o "$tmp/missing" -w '%{http_code}' "$ORIGIN/assets/definitely-missing-jscc-445.js")"
+          if [ "$code" = 404 ]; then
+            record STATIC-404 PASS "missing asset returns 404"
+          else
+            record STATIC-404 FAIL "missing asset HTTP=$code"
+          fi
+
+          echo "PUBLIC_PROBE_FAILURES=$failures"
+          exit "$failures"
