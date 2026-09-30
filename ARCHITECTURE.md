@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.17`
+Versiune document: `v1.18`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-25`
+Ultima actualizare: `2026-09-30`
 
 ## 1. Rol
 
@@ -20,6 +20,7 @@ Documente complementare:
 - `docs/adr/ADR-004-nile-postgresql-backend.md` — Nile/PostgreSQL ca target persistent backend si principiile de migrare;
 - `docs/adr/ADR-005-multiuser-ownership-isolation-shared-collection.md` — ownership multiuser, izolare tenant, shared collection si scheduler global;
 - `docs/adr/ADR-006-google-cloud-runtime.md` — target hosting/runtime GCP, build-once si promovare prin image digest;
+- `docs/adr/ADR-007-google-first-multiuser-identity-session.md` — identity mapping provider-neutral si sesiune JSCC pentru multiuser Google-first;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
@@ -473,19 +474,24 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 
 ## 13. Autentificare si securitate
 
-- Google Identity Services ramane IdP pentru utilizatorii browser;
-- Worker valideaza semnatura JWT, issuer si audience;
+- Google Identity Services ramane IdP pentru utilizatorii browser in Stage 1;
+- serverul valideaza semnatura JWT Google, issuer, audience si expirarea;
 - CI/CD functional verification foloseste separat GitHub Actions OIDC, cu token short-lived emis per workflow run;
 - GitHub OIDC este acceptat numai pentru read-only functional verification numai pentru `GET /data/sources.json`, `GET /data/source-categories.json` si `GET /data/nomenclatures.json`, cu issuer/audience/repository_id/environment/workflow_ref/time claims validate fail-closed;
 - GitHub OIDC nu autorizeaza `/commands`, configuratie sau alte mutatii si nu substituie autentificarea Google a utilizatorului;
-- lifecycle-ul nu depinde de un Google user ID token stocat manual in GitHub Environments;
-- target multiuser: `Google sub -> app_user.user_id -> profile.profile_id`, cu exact un profil per user in MVP;
-- `ALLOWED_GOOGLE_SUB` ramane numai mecanism AS-IS single-user pana la cutover;
+- target multiuser ADR-007: `Google sub -> user_identity -> app_user.user_id -> profile.profile_id`, cu exact un profil per user in MVP;
+- `Google sub` este external identity subject; nu este PK/FK pentru datele personale si nu este authority furnizata de browser;
+- `ALLOWED_GOOGLE_SUB` ramane numai mecanism AS-IS single-user pana la cutover si nu exista fallback silent la el dupa cutover;
+- la autentificare Google reusita, target-ul emite o sesiune JSCC opaca, server-controlled, in cookie `__Host-jscc_session; Secure; HttpOnly; SameSite=Strict; Path=/`;
+- target Stage 1 foloseste sesiuni cu maximum absolut 60 minute; logout, DEACTIVATED si DELETE invalideaza server-side sesiunile;
+- dupa cutover, Google ID token este acceptat la boundary-ul de stabilire a sesiunii, nu ca bypass direct pentru endpoint-urile aplicatiei protejate;
+- business/repository code consuma `AuthContext(user_id, profile_id, role, status)`, nu claims Google;
 - profilul autorizat este rezolvat server-side; un `profile_id` trimis de browser nu confera acces;
-- repository-urile personale necesita profile context autentificat;
+- repository-urile personale necesita profile context autentificat si transaction-local;
 - tabelele personale folosesc PostgreSQL RLS si `FORCE ROW LEVEL SECURITY` unde se aplica;
+- tenant context pe conexiuni pooled foloseste numai `SET LOCAL`/echivalent transaction-local; context persistent pe conexiune este interzis;
 - ADMIN nu primeste bypass pentru continutul personal al altor utilizatori;
-- credentialele GitHub nu ajung in browser;
+- credentialele/tokens de autentificare nu ajung in `localStorage`, loguri sau date persistente;
 - `/data/*` necesita autentificare;
 - protected data foloseste `no-store`;
 - fara secrete in cod/documentatie;
@@ -627,7 +633,8 @@ Lifecycle:
 
 `ACTIVE <-> DEACTIVATED -> DELETED`
 
-- DEACTIVATED blocheaza accesul si pastreaza datele personale pentru reactivare;
+- `DELETED` este o operatie terminala de hard-delete, nu un status pastrat in `app_user`;
+- DEACTIVATED blocheaza accesul, invalideaza sesiunile si pastreaza datele personale pentru reactivare;
 - DELETED sterge ireversibil domeniul personal si pastreaza datele shared/system;
 - nu se pastreaza tombstone identificabil;
 - se poate pastra maximum 90 zile un deletion audit event neidentificabil;
