@@ -37,7 +37,7 @@ class GcpPromotionContractTests(unittest.TestCase):
     def test_job_invoker_binding_is_applied_after_job_deploy(self):
         deploy = PROMOTE.index('gcloud run jobs deploy')
         bind = PROMOTE.index('gcloud run jobs add-iam-policy-binding')
-        service = PROMOTE.index('gcloud run services deploy')
+        service = PROMOTE.index('gcloud run deploy')
         self.assertLess(deploy, bind)
         self.assertLess(bind, service)
         self.assertIn('roles/run.invoker', PROMOTE)
