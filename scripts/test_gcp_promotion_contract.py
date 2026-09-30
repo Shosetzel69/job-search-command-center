@@ -49,6 +49,13 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('gcloud run deploy "${SERVICE_NAME}"', PROMOTE)
         self.assertNotIn('gcloud run services deploy', PROMOTE)
 
+    def test_cloud_run_url_gate_accepts_reported_url_and_probes_canonical_origin(self):
+        self.assertIn('reported_service_url=', PROMOTE)
+        self.assertIn('https://*.run.app', PROMOTE)
+        self.assertIn('"${frontend_origin}/health"', PROMOTE)
+        self.assertIn('"${frontend_origin}/health/db"', PROMOTE)
+        self.assertNotIn('test "${service_url}" = "${frontend_origin}"', PROMOTE)
+
     def test_cloudbuild_reuses_artifacts_and_promotes_dev_first(self):
         self.assertIn("build-job-if-missing", BUILD)
         self.assertIn("build-service-if-missing", BUILD)
