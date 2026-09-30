@@ -201,8 +201,9 @@ Requirements:
 
 After MU-S1/S3/S4 are stable:
 - replace `ALLOWED_GOOGLE_SUB` authorization with account lookup/provisioning;
+- clear/reject legacy Google-JWT session cookies and require one-time Google reauthentication into the new JSCC session model;
 - exchange Google credential for JSCC session;
-- enable self-service first sign-in;
+- enable self-service first sign-in subject to the approved account-admission/capacity guard;
 - enable ACTIVE/DEACTIVATED lifecycle;
 - enable ADMIN account lifecycle operations;
 - implement hard deletion.
@@ -332,6 +333,7 @@ Operational backup existence does not change the product semantic that DELETE ca
 ## 12. Database privilege gate
 
 Before PROD multiuser:
+- account-admission/capacity guard prevents new self-service accounts from causing automatic paid capacity consumption;
 - routine runtime credential supports only required application DML;
 - migration identity owns approved DDL/migration capability;
 - runtime cannot CREATE/ALTER/DROP protected schema objects;
@@ -412,6 +414,8 @@ All required:
 - runtime/DDL privilege separation PASS;
 - RLS negative matrix PASS;
 - session revocation/deactivation PASS;
+- legacy-cookie cutover / forced reauthentication PASS;
+- new-account capacity admission guard PASS;
 - owner bootstrap/migration parity PASS;
 - backup/rollback prerequisites PASS;
 - one authority per migrated domain;
