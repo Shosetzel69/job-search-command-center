@@ -171,7 +171,7 @@ Fiecare entry pastreaza `source_results` si agregatele `source_outcome_counts`, 
 
 | Legacy key | Dispozitie | Target |
 |---|---|---|
-| `schema_version` | retired | target DB/contracts own schema/migration versions |
+| `schema_version` | retired | none; target DB/contracts carry their own schema/migration versions |
 | `role_groups` | profile | `profile_preferences.role_groups` |
 | `work_modes` | profile | `profile_preferences.work_modes` |
 | `contract_types` | profile | `profile_preferences.contract_types` |
@@ -186,7 +186,7 @@ Fiecare entry pastreaza `source_results` si agregatele `source_outcome_counts`, 
 | `target_country_codes` | profile | `profile_preferences.target_country_codes` |
 | `excluded_regions` | profile | `profile_preferences.excluded_regions` |
 | `excluded_country_codes` | profile | `profile_preferences.excluded_country_codes` |
-| `search_country_codes` | derived then retired | compatibility projection from target countries only during rollback window |
+| `search_country_codes` | derived then retired | compatibility projection of `profile_preferences.target_country_codes` during rollback window only |
 | `eligible_remote_country_codes` | profile | `profile_preferences.remote_eligible_country_codes` |
 | `work_mode_priority` | profile | `profile_preferences.work_mode_priority` |
 | `source_strategy` | system | `collection_policy.source_strategy` |
