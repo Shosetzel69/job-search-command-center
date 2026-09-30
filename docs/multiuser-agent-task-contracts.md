@@ -1,0 +1,688 @@
+# Multiuser Agent Task Contracts — Google-first Stage 1
+
+Status: **WORKING**  
+Version: **v1.0**  
+Applicability: **CURRENT**  
+Applies to: **AGENTFLOW**  
+Phase: **TASK_CONTRACT**  
+Workflow status: **TASK_CONTRACT_PROPOSED**  
+Parent requirement: #265  
+Development Analysis: #275  
+Architecture tracker: #450  
+Architecture: ADR-005, ADR-006, ADR-007
+
+## 1. Purpose
+
+Persist the proposed Multiuser Agent Task Contracts in the repository so implementation scope, acceptance and evidence can be independently reviewed from an exact candidate SHA.
+
+These contracts are **not executable** until the owner issues the exact AgentFlow token:
+
+`APPROVE_TASK_CONTRACT <ATC-ref>`
+
+No contract below authorizes code, schema/data mutation, deploy, DEV/TEST/PROD change or release promotion by its existence.
+
+## 2. Shared constraints
+
+All Multiuser ATCs preserve:
+- Google Identity Services as Stage-1 IdP;
+- `Google sub -> user_identity -> app_user -> profile`;
+- exactly one profile per user in MVP;
+- USER and ADMIN roles only;
+- shared/system-owned external collection;
+- profile-owned preference/FIT/state/application data;
+- server-derived AuthContext;
+- mandatory RLS + FORCE RLS for profile/personal tables;
+- no ADMIN personal-content bypass;
+- no permanent JSON/PostgreSQL dual-write;
+- ADR-006 Cloud Run/Nile runtime boundary;
+- no cross-environment fallback;
+- no PROD execution without canonical release gates.
+
+# ATC-275-04 v2 — User / external identity / profile core + tenant isolation
+
+## Objective
+
+Establish the multiuser tenancy foundation without opening public multiuser access.
+
+## Scope
+
+- create `app_user` with opaque UUID `user_id`;
+- role constraint `USER|ADMIN`;
+- lifecycle state `ACTIVE|DEACTIVATED`;
+- create `user_identity`;
+- Stage-1 provider `GOOGLE`;
+- store Google `sub` only as `provider_subject`;
+- optional account email/email_verified metadata;
+- create separate `profile` with opaque UUID `profile_id`;
+- exactly one profile per user MVP;
+- bootstrap current owner as ADMIN + GOOGLE identity + profile;
+- introduce server-derived DB context:
+  - `jscc.user_id`;
+  - `jscc.profile_id`;
+- `profile`: mandatory ENABLE + FORCE RLS scoped by `jscc.user_id`;
+- every Stage-1 personal-content table introduced here/subsequently stores `profile_id` directly and uses mandatory ENABLE + FORCE RLS;
+- negative tenant-isolation tests including pooled-connection reuse.
+
+## Out of scope
+
+- public self-service sign-up;
+- JSCC application-session cutover;
+- preferences/FIT implementation;
+- applications migration;
+- account deletion API/UI;
+- multiple profiles;
+- email/password.
+
+## Dependencies
+
+- ATC-275-01 PostgreSQL repository foundation complete;
+- ADR-005/006/007;
+- #439 environment lifecycle stable before execution begins.
+
+## Constraints
+
+- `Google sub` cannot be application PK/FK;
+- browser user/profile IDs cannot establish tenant authority;
+- Stage-1 personal tables do not use join-derived tenant scope;
+- runtime code receives repository/AuthContext interfaces, not generic SQL;
+- ADMIN receives no RLS bypass.
+
+## Acceptance criteria
+
+- `UNIQUE(user_identity.provider, user_identity.provider_subject)`;
+- `UNIQUE(user_identity.user_id, user_identity.provider)`;
+- `UNIQUE(profile.user_id)`;
+- owner bootstrap is deterministic/idempotent;
+- missing tenant context exposes no profile/personal rows;
+- profile A cannot read/write profile B;
+- ADMIN test principal cannot read/write B personal rows;
+- pooled connection A -> B carries no A context;
+- runtime identity acting as table owner still cannot cross tenant because FORCE RLS applies;
+- no environment fallback.
+
+## Retry limit
+
+2 implementation approaches. Then `IMPLEMENTATION_BLOCKED`.
+
+## Stop conditions
+
+- provider cannot support required RLS behavior;
+- implementation requires BYPASSRLS/superuser for normal runtime;
+- tenant context must be browser-selected;
+- new identity provider/service is required.
+
+## Evidence Bundle
+
+- migration/schema;
+- role/constraint matrix;
+- RLS policies;
+- exact tenant-context implementation;
+- owner bootstrap evidence;
+- negative matrix including table-owner/FORCE-RLS test;
+- pool-reuse isolation proof;
+- exact PR/SHA and tests.
+
+# ATC-275-05 v2 — Profile preferences, personal job state and FIT
+
+## Objective
+
+Split the current singleton `search-config.json` into profile-owned preferences and shared/system collection policy, then make job state/evaluation profile-owned.
+
+## Scope
+
+Implement the exhaustive mapping in `docs/multiuser-data-migration-plan.md` and `docs/data-contract.md`.
+
+Profile-owned target includes:
+- role groups;
+- work modes and work-mode priority;
+- contract types;
+- display freshness;
+- FIT threshold;
+- repost preference;
+- compensation;
+- immediate-start preference;
+- target/excluded geography;
+- remote-eligible geography;
+- human and machine personal exclusions.
+
+System/collection target includes:
+- collection freshness;
+- source strategy;
+- browser fallback;
+- JobsPipe mode/budgets/guards/overlap/item limits.
+
+Also:
+- profile job seen/review/archive state;
+- profile eligibility/FIT evaluation;
+- evaluation versioning;
+- current-owner deterministic import;
+- rollback compatibility projection only inside defined window.
+
+## Out of scope
+
+- application history;
+- new FIT algorithm semantics;
+- external collection scheduler implementation;
+- global compliance exclusions not already approved;
+- email/password.
+
+## Dependencies
+
+- ATC-275-03 shared canonical job corpus;
+- ATC-275-04 v2.
+
+## Constraints
+
+- `search_country_codes` is compatibility-derived then retired;
+- profile target geography and remote-eligibility geography remain distinct;
+- preference save never triggers provider retrieval;
+- no mixed global singleton target;
+- no permanent dual-write.
+
+## Acceptance criteria
+
+- every current top-level `search-config.json` key has exactly one disposition: profile/system/derived/retired;
+- mapping is identical to canonical data/migration docs;
+- two profiles may hold contradictory preferences without overwrite;
+- same shared job may have different state/FIT by profile;
+- profile change produces zero provider calls;
+- old personal config is no longer system authority after cutover;
+- rollback authority and window documented;
+- no stale compatibility write remains after target authority switch.
+
+## Retry limit
+
+2.
+
+## Stop conditions
+
+- field cannot be classified without new product semantics;
+- implementation recreates mixed singleton authority;
+- provider retrieval becomes profile-triggered.
+
+## Evidence Bundle
+
+- legacy->target field matrix;
+- import parity;
+- profile A/B preference isolation;
+- same-job/different-FIT proof;
+- zero-provider-call proof;
+- read/write authority statement;
+- rollback evidence.
+
+# ATC-275-06 v2 — Profile-owned applications
+
+## Objective
+
+Move application history into the personal tenant domain without coupling it to shared-job lifecycle.
+
+## Scope
+
+- `applications` with direct `profile_id`;
+- mandatory ENABLE + FORCE RLS;
+- `profile_id -> profile ON DELETE CASCADE`;
+- optional canonical `job_id`;
+- external application with `job_id = NULL`;
+- application-time snapshot fields;
+- canonical application-status validation;
+- current owner import;
+- tenant-scoped object lookup/update/delete.
+
+## Out of scope
+
+- recruitment-email ingestion;
+- CV/ATS functionality;
+- new application workflow statuses;
+- shared job lifecycle changes.
+
+## Dependencies
+
+- ATC-275-03;
+- ATC-275-04 v2.
+
+## Constraints
+
+- application belongs to exactly one profile;
+- shared job deletion/inactivation cannot erase application history;
+- cross-tenant object probing must not disclose ownership.
+
+## Acceptance criteria
+
+- deterministic/idempotent import;
+- A can read/write A application;
+- A using B application UUID receives not-found-equivalent result;
+- ADMIN cannot read B applications;
+- runtime table-owner/FORCE-RLS negative test passes;
+- external application works with NULL `job_id`;
+- snapshot survives shared job changes;
+- profile/account cascade removes application on account hard-delete.
+
+## Retry limit
+
+2.
+
+## Stop conditions
+
+- requires ADMIN personal-content bypass;
+- requires shared job to own application lifecycle;
+- cannot preserve current owner history deterministically.
+
+## Evidence Bundle
+
+- schema/migration;
+- import parity;
+- RLS/IDOR tests;
+- lifecycle/cascade tests;
+- exact candidate.
+
+# ATC-275-07A — Google authentication + JSCC application sessions + self-service provisioning
+
+## Objective
+
+Replace the single `ALLOWED_GOOGLE_SUB` authorization boundary with Google-first account resolution and revocable JSCC application sessions.
+
+## Scope
+
+- Google token verification server-side;
+- resolve `GOOGLE/sub -> user_identity -> app_user -> profile`;
+- first valid unknown Google identity provisions ACTIVE USER + one profile transactionally;
+- capacity/admission guard applies before provisioning;
+- 256-bit CSPRNG opaque session token;
+- persist SHA-256 token hash only;
+- `__Host-jscc_session; Secure; HttpOnly; SameSite=Strict; Path=/`;
+- absolute Stage-1 session lifetime 60 minutes;
+- fresh session after authentication;
+- session/account status checked for protected requests;
+- logout revokes session and clears cookie;
+- server-derived `AuthContext(user_id,profile_id,role,status)`;
+- after cutover, normal protected browser endpoints authenticate via JSCC session;
+- Google bearer remains session-establishment credential only;
+- legacy cookie containing Google JWT is rejected/cleared and user reauthenticates once;
+- remove `ALLOWED_GOOGLE_SUB` as authorization authority at cutover;
+- same-origin/`FRONTEND_ORIGIN` validation for session establishment and cookie-auth mutations.
+
+## Out of scope
+
+- email/password;
+- account ADMIN lifecycle/delete;
+- multiple profiles;
+- identity linking between providers.
+
+## Dependencies
+
+- ATC-275-04 v2;
+- account-admission/capacity contract from ATC-275-10 for PROD enablement;
+- #439 before DEV execution.
+
+## Constraints
+
+- no token in browser Web Storage;
+- no raw session token or Google ID token in DB/logs;
+- no Google-bearer fallback for protected resources;
+- no legacy allowlist fallback;
+- invalid capacity admission leaves no partial account rows.
+
+## Acceptance criteria
+
+- valid existing Google identity -> fresh JSCC session;
+- valid unknown identity -> exactly one USER/profile when capacity gate open;
+- concurrent first sign-in -> one account/profile;
+- capacity gate closed -> no partial user/identity/profile;
+- bad signature/issuer/audience/expiry -> 401;
+- revoked/expired session -> 401;
+- DEACTIVATED account is denied even if stale session row remains;
+- legacy Google-JWT cookie is not reinterpreted as application session;
+- Google bearer direct to ordinary protected endpoint after cutover is rejected;
+- cross-origin session establishment/mutation denied;
+- no secrets/tokens in logs/storage.
+
+## Retry limit
+
+2.
+
+## Stop conditions
+
+- requires direct bearer bypass;
+- requires email as identity key;
+- requires a new auth provider;
+- requires paid service without owner decision.
+
+## Evidence Bundle
+
+- auth flow tests;
+- first-sign-in race test;
+- session persistence/revocation tests;
+- legacy-cookie cutover proof;
+- origin/CORS evidence;
+- token/secret log scan;
+- exact PR/SHA.
+
+# ATC-275-07B — Account lifecycle, ADMIN boundary and irreversible deletion
+
+## Objective
+
+Implement account lifecycle over the approved identity/session foundation without granting ADMIN access to personal content.
+
+## Scope
+
+- ACTIVE <-> DEACTIVATED;
+- deactivation revokes all live sessions;
+- reactivation restores retained data but not old sessions;
+- ADMIN lifecycle endpoints;
+- ADMIN remains USER for own profile only;
+- hard-delete through narrow AccountRepository delete of target `app_user`;
+- FK cascades:
+  - identity -> app_user;
+  - session -> app_user;
+  - profile -> app_user;
+  - every personal-content row -> profile;
+- preserve shared/system data;
+- optional 90-day non-identifying deletion event;
+- re-signup after delete creates new account/profile.
+
+## Out of scope
+
+- support impersonation;
+- delegated personal access;
+- generic admin SQL;
+- password reset;
+- recoverable product tombstone.
+
+## Dependencies
+
+- ATC-275-04 v2;
+- ATC-275-05 v2;
+- ATC-275-06 v2;
+- ATC-275-07A.
+
+## Constraints
+
+- ADMIN does not set target `jscc.user_id`/`jscc.profile_id`;
+- ADMIN does not get BYPASSRLS;
+- delete does not read/export target personal rows;
+- shared/system tables have no ownership cascade from user/profile.
+
+## Acceptance criteria
+
+- ACTIVE -> DEACTIVATED immediately denies current sessions;
+- reactivation requires fresh auth and restores retained workspace;
+- ADMIN delete returns lifecycle metadata only;
+- deleting account leaves zero identity/session/profile/personal rows;
+- shared canonical jobs/sources/system state remain;
+- ADMIN cannot read B personal data before/during/after deletion;
+- deletion mechanism cannot be reused as list/export path;
+- optional deletion event contains no identifier/email/sub/relinkable hash/content;
+- re-signup after deletion creates different user/profile IDs.
+
+## Retry limit
+
+2.
+
+## Stop conditions
+
+- cascade cannot be proven complete;
+- implementation requires target tenant impersonation;
+- implementation requires RLS bypass;
+- delete requires returning personal payload.
+
+## Evidence Bundle
+
+- FK/cascade schema;
+- deactivation/session proof;
+- ADMIN negative privacy matrix;
+- deletion before/after counts without personal payload;
+- audit sample;
+- re-signup proof;
+- exact candidate.
+
+# ATC-275-08 v2 — Global ADMIN scheduler and collection authorization
+
+## Objective
+
+Implement the ADR-005 global collection/scheduler model using application authorization rather than single-user Google claims.
+
+## Scope
+
+- one global automation configuration/state;
+- ADMIN/system-controlled scheduled collection;
+- ADMIN-only exceptional manual collection;
+- USER has no Run/Search provider retrieval capability;
+- one heavy collection admitted at a time per environment;
+- observable scheduled/manual origin;
+- profile preference changes cause personal re-evaluation only;
+- rebaseline legacy #86/#97-#101 semantics.
+
+## Out of scope
+
+- per-user scheduler;
+- profile-triggered provider retrieval;
+- multiple heavy collections;
+- connector redesign.
+
+## Dependencies
+
+- ATC-275-01;
+- ATC-275-02;
+- ATC-275-03;
+- ATC-275-07A AuthContext.
+
+## Constraints
+
+- authorization uses `AuthContext.role`, never Google sub/email;
+- user count does not multiply provider traffic.
+
+## Acceptance criteria
+
+- USER cannot trigger provider retrieval;
+- ADMIN/system may trigger according to policy;
+- at most one heavy collection admitted;
+- no-op scheduler tick has zero provider calls;
+- preference update has zero provider calls;
+- output lands in shared corpus;
+- obsolete profile-owned scheduler assumptions explicitly removed/reframed.
+
+## Retry limit
+
+2.
+
+## Stop conditions
+
+- user-owned provider retrieval required;
+- per-profile external scheduler reintroduced;
+- new orchestration architecture required.
+
+## Evidence Bundle
+
+- scheduler authorization tests;
+- admission/concurrency evidence;
+- provider-call invariance;
+- mapping of superseded legacy scheduler tickets;
+- exact candidate.
+
+# ATC-275-09 v2 — Runtime CRUD vs migration/DDL privilege separation
+
+## Objective
+
+Prove the database privilege boundary required before protected Multiuser PROD cutover.
+
+## Scope
+
+- environment-specific Cloud Run runtime identity;
+- Secret Manager runtime DB credential;
+- runtime credential supports required repository DML only;
+- migration identity can apply approved DDL;
+- runtime cannot CREATE/ALTER/DROP protected app schema;
+- runtime is not superuser;
+- runtime has no `BYPASSRLS`;
+- DEV first, then TEST proof.
+
+## Out of scope
+
+- compensating controls as permanent equivalent;
+- PROD cutover without proof;
+- auth/RLS redesign.
+
+## Dependencies
+
+- ATC-275-01.
+
+## Constraints
+
+- ADR-006 path: `Cloud Run -> repository/data-access -> pg -> Nile`;
+- no cross-environment credential reuse/fallback.
+
+## Acceptance criteria
+
+- runtime CRUD required by application works;
+- runtime DDL negative tests fail as expected;
+- runtime has no superuser/BYPASSRLS;
+- migration identity applies migration;
+- FORCE-RLS tenant negative tests pass under runtime identity;
+- DEV and TEST binding evidence contains no secrets.
+
+## Retry limit
+
+2 technical approaches, then `IMPLEMENTATION_BLOCKED`.
+
+## Stop conditions
+
+- Nile/provider cannot provide demonstrable separation;
+- separation requires unsupported paid architecture without decision.
+
+## Evidence Bundle
+
+- role/privilege matrix;
+- negative DDL tests;
+- RLS privilege evidence;
+- environment binding evidence;
+- provider limitation evidence if blocked.
+
+# ATC-275-11 v2 — Integrated Multiuser evidence and independent TEST contract
+
+## Objective
+
+Prove all implemented Multiuser slices work together and produce an exact immutable candidate for independent TEST.
+
+## Scope
+
+- integrated regression across migrated domains;
+- authority declaration per domain;
+- rollback-window verification;
+- three-identity multiuser matrix;
+- shared collection/provider-call invariance;
+- ADMIN privacy;
+- account lifecycle/deletion;
+- session revocation/legacy-cookie cutover;
+- pooled-connection tenant isolation;
+- runtime privilege evidence;
+- migration versions;
+- TEST contract for exact ADR-006 candidate.
+
+## Out of scope
+
+- new features;
+- architecture changes;
+- PROD GO/deploy;
+- fixing TEST/PROD directly.
+
+## Dependencies
+
+- relevant completed ATC-275-01..08 slices;
+- ATC-275-09 PASS before Multiuser PROD candidate;
+- ATC-275-10 PASS before irreversible PROD migration/Multiuser enablement;
+- #439 stable DEV->TEST lifecycle.
+
+## Constraints
+
+TEST identities:
+- TEST_ADMIN;
+- TEST_USER_A;
+- TEST_USER_B.
+
+No credentials are stored in repository/evidence.
+
+## Acceptance criteria
+
+- every migrated domain has exactly one authority;
+- no permanent dual-write;
+- A/B concurrent sessions PASS;
+- conflicting profile preferences do not overwrite;
+- same shared job has independent A/B state/FIT;
+- applications independent;
+- IDOR/object probing negative tests PASS;
+- ADMIN cannot read another user's personal content;
+- ADMIN cascade-delete/no-impersonation/no-personal-read PASS;
+- deactivation invalidates live session;
+- reactivation requires fresh auth and restores retained data;
+- deletion + re-signup PASS;
+- runtime table-owner cross-tenant denial + FORCE RLS PASS;
+- pooled A->B connection has no tenant leakage;
+- missing tenant context default-deny;
+- legacy-cookie forced reauthentication PASS;
+- account-admission capacity guard PASS;
+- user count does not multiply provider calls;
+- full relevant CI green;
+- full DEV functional acceptance suite passes before candidate freeze;
+- exact SHA/image digest preserved into TEST contract.
+
+## Retry limit
+
+1 integration correction cycle, then `IMPLEMENTATION_BLOCKED`.
+
+## Stop conditions
+
+- any architecture invariant above requires change;
+- required security/privilege evidence unavailable;
+- mandatory environment suite has FAIL/BLOCKED;
+- exact candidate identity cannot be preserved.
+
+## Evidence Bundle
+
+- full AC matrix;
+- exact PR/SHA/image digest;
+- migration versions per environment;
+- authority matrix;
+- RLS/IDOR/concurrency results;
+- account/session lifecycle results;
+- privilege gate results;
+- provider-call invariance;
+- rollback anchors;
+- known limitations;
+- independent TEST handoff.
+
+## 3. Dependency spine
+
+```text
+ATC-275-01
+   ├─> ATC-275-03 shared corpus
+   ├─> ATC-275-04 v2 identity/profile/RLS
+   ├─> ATC-275-09 v2 privilege gate
+   └─> ATC-275-10 backup/capacity
+
+ATC-275-03 + ATC-275-04 v2
+   ├─> ATC-275-05 v2 preferences/FIT
+   └─> ATC-275-06 v2 applications
+
+04 + 05 + 06
+   -> ATC-275-07A auth/session
+
+07A + 05 + 06
+   -> ATC-275-07B lifecycle/admin/delete
+
+01 + 02 + 03 + 07A
+   -> ATC-275-08 v2 scheduler
+
+completed relevant slices + 09 security gate
+   -> ATC-275-11 v2 integrated evidence / TEST contract
+```
+
+## 4. Current execution state
+
+All contracts in this document are `TASK_CONTRACT_PROPOSED`.
+
+Architecture approval does **not** authorize their execution.
+
+The first implementation step remains blocked until:
+1. documentation/remediation review passes;
+2. #439 establishes the stable DEV->TEST lifecycle;
+3. the owner issues the exact `APPROVE_TASK_CONTRACT <ATC-ref>` token for the selected first contract.
