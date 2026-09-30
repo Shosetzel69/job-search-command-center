@@ -57,6 +57,18 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('gcloud run deploy "${SERVICE_NAME}"', PROMOTE)
         self.assertNotIn('gcloud run services deploy', PROMOTE)
 
+    def test_cloud_run_service_receives_canonical_data_paths(self):
+        expected = {
+            'SEARCH_CONFIG_PATH':'data/search-config.json',
+            'SOURCES_PATH':'data/sources.json',
+            'SOURCE_CATEGORIES_PATH':'data/source-categories.json',
+            'NOMENCLATURES_PATH':'data/nomenclatures.json',
+            'APPLICATIONS_PATH':'data/applications.json',
+        }
+        for key, value in expected.items():
+            self.assertIn(f'{key}={value}', PROMOTE)
+
+
     def test_cloud_run_url_gate_accepts_reported_url_and_probes_canonical_origin(self):
         self.assertIn('reported_service_url=', PROMOTE)
         self.assertIn('https://*.run.app', PROMOTE)
