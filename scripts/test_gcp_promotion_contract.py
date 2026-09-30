@@ -34,6 +34,14 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('/health/db")', PROMOTE)
         self.assertIn('EXPECTED_DATABASE', PROMOTE)
 
+    def test_job_invoker_binding_is_applied_after_job_deploy(self):
+        deploy = PROMOTE.index('gcloud run jobs deploy')
+        bind = PROMOTE.index('gcloud run jobs add-iam-policy-binding')
+        service = PROMOTE.index('gcloud run services deploy')
+        self.assertLess(deploy, bind)
+        self.assertLess(bind, service)
+        self.assertIn('roles/run.invoker', PROMOTE)
+
     def test_cloudbuild_reuses_artifacts_and_promotes_dev_first(self):
         self.assertIn("build-job-if-missing", BUILD)
         self.assertIn("build-service-if-missing", BUILD)
