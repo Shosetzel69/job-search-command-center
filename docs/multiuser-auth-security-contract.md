@@ -100,6 +100,10 @@ Concurrent first sign-in must converge to one account through uniqueness constra
 - `expires_at`;
 - `revoked_at NULL`.
 
+Required indexes:
+- `user_id` for revoke-all/delete paths;
+- `expires_at` for bounded cleanup.
+
 Rules:
 - generate 256 random bits using a CSPRNG;
 - raw token only in the browser cookie;
@@ -140,8 +144,11 @@ Two target behaviors:
 
 2. with only a valid JSCC session cookie:
    - validate existing session;
+   - re-check current `app_user.status`;
    - return current account/profile summary;
    - do not extend beyond its absolute expiry.
+
+Session establishment is same-origin only. A request with an explicit `Origin` different from the environment `FRONTEND_ORIGIN` is rejected.
 
 After multiuser cutover, Google bearer credentials are not accepted as direct authorization for ordinary protected application endpoints.
 
@@ -181,7 +188,7 @@ AuthContext {
 Rules:
 - built server-side from the session/account/profile;
 - unavailable for anonymous or invalid sessions;
-- DEACTIVATED status fails before business-data access;
+- every session-authenticated request re-checks account status; DEACTIVATED fails before business-data access;
 - repositories receive this context or a derived profile-scoped transaction context;
 - Google claims do not flow into business repositories.
 
@@ -198,7 +205,17 @@ Preferred shape:
 
 Compatibility aliases may exist during migration, but effective `profile_id` is always session-derived.
 
-For object IDs such as `application_id`, repository lookup must also be tenant-scoped. Knowing another user's object UUID must not grant access.
+For object IDs such as `application_id`, repository lookup must also be tenant-scoped. Knowing another user's object UUID must not grant access. Cross-tenant object lookup should normally be indistinguishable from an object that does not exist (for example 404/zero-row semantics) rather than revealing ownership.
+
+## 7.1 Cookie-authenticated mutation protection
+
+For the current same-origin application architecture:
+- session cookie uses `SameSite=Strict`;
+- every state-changing cookie-authenticated request validates `Origin` when present and permits only the environment `FRONTEND_ORIGIN`;
+- CORS does not reflect arbitrary origins;
+- authentication/session/logout endpoints follow the same origin contract.
+
+This is the Stage-1 CSRF boundary. If the application later requires cross-site cookies or a cross-origin frontend/API topology, Architecture must re-evaluate and introduce an explicit anti-CSRF token mechanism before that change.
 
 ## 8. ADMIN API boundary
 
@@ -370,6 +387,17 @@ Do not log:
 
 Internal `user_id` may be used in restricted operational logs where required for traceability, except the non-identifying deletion audit.
 
+## 16.1 Authentication abuse hardening
+
+Google remains responsible for credential issuance and its own sign-in abuse controls. JSCC still rejects malformed/invalid credentials fail-closed.
+
+For the initial controlled pilot, a new paid WAF/rate-limit service is not introduced solely for Multiuser. Authentication request-rate monitoring is required, and a project-wide rate-limit mechanism becomes a PROD hardening gate if observed traffic/abuse or broader public exposure makes provider-side controls insufficient.
+
+Any future rate limiter must:
+- operate without storing raw IP addresses longer than operationally necessary;
+- avoid a new paid dependency without owner approval;
+- fail safely without turning rate-limit state into an authorization bypass.
+
 ## 17. Negative security acceptance matrix
 
 Mandatory cases:
@@ -378,9 +406,10 @@ Mandatory cases:
 - expired Google credential -> 401;
 - unknown valid Google subject -> exactly one new USER/profile;
 - concurrent first sign-in -> exactly one USER/profile;
-- DEACTIVATED -> session establishment denied;
+- DEACTIVATED -> session establishment denied and an already-issued session is denied even if its row was not yet cleaned up;
 - revoked/expired JSCC session -> 401;
 - Google bearer used directly on ordinary protected endpoint after cutover -> rejected;
+- cross-origin session establishment/mutation -> denied;
 - profile-id tampering -> no authority change;
 - A reads/writes A -> allowed;
 - A reads/writes B -> denied/zero visible rows;
