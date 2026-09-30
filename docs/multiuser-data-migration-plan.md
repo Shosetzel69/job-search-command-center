@@ -84,37 +84,56 @@ This plan is documentation only until the relevant Agent Task Contracts are expl
 | run status/history | runtime JSON/GCS transitional state | PostgreSQL operational history when slice migrates | system | migrate separately |
 | scheduler | current/provisional runtime model | global PostgreSQL/system state | system | rebaseline after shared corpus |
 
-## 5. `search-config.json` field ownership
+## 5. `search-config.json` exhaustive field ownership
 
-The current file is a mixed transitional contract and has no 1:1 target.
+The current file is a mixed transitional contract and has no 1:1 target. Every current top-level key has exactly one target disposition:
 
-### Profile-owned
+| Legacy top-level key | Disposition | Explicit target | Rationale |
+|---|---|---|---|
+| `schema_version` | retired | none; target DB/contracts carry their own schema/migration versions | legacy JSON envelope metadata |
+| `role_groups` | profile | `profile_preferences.role_groups` | personal target-role choice |
+| `work_modes` | profile | `profile_preferences.work_modes` | personal work-mode eligibility |
+| `contract_types` | profile | `profile_preferences.contract_types` | personal contract preference |
+| `freshness_hours` | profile | `profile_preferences.display_freshness_hours` | user-visible job-age preference |
+| `collection_freshness_hours` | system | `collection_policy.collection_freshness_hours` | provider retrieval lookback, independent of profile |
+| `fit_threshold` | profile | `profile_preferences.fit_threshold` | personal evaluation/display threshold |
+| `keep_reposts` | profile | `profile_preferences.keep_reposts` | personal presentation/evaluation preference |
+| `rate_min_eur_day` | profile | `profile_preferences.rate_min_eur_day` | personal compensation constraint |
+| `rate_max_eur_day` | profile | `profile_preferences.rate_max_eur_day` | personal compensation constraint |
+| `immediate_start` | profile | `profile_preferences.immediate_start` | personal availability criterion |
+| `target_regions` | profile | `profile_preferences.target_regions` | personal target geography |
+| `target_country_codes` | profile | `profile_preferences.target_country_codes` | personal explicit target countries |
+| `excluded_regions` | profile | `profile_preferences.excluded_regions` | personal geographic exclusion |
+| `excluded_country_codes` | profile | `profile_preferences.excluded_country_codes` | personal geographic exclusion |
+| `search_country_codes` | derived then retired | compatibility projection of `profile_preferences.target_country_codes` during rollback window only | legacy fallback alias; never a second authority |
+| `eligible_remote_country_codes` | profile | `profile_preferences.remote_eligible_country_codes` | personal remote-eligibility geography, distinct from search-target geography |
+| `work_mode_priority` | profile | `profile_preferences.work_mode_priority` | personal ordering preference |
+| `source_strategy` | system | `collection_policy.source_strategy` | shared provider/source collection policy |
+| `web_browser_fallback_enabled` | system | `collection_policy.web_browser_fallback_enabled` | shared connector transport behavior |
+| `jobspipe_credit_budget_per_run` | system | `collection_policy.jobspipe_credit_budget_per_run` | shared provider budget |
+| `jobspipe_monthly_credit_guard` | system | `collection_policy.jobspipe_monthly_credit_guard` | shared cost/capacity guard |
+| `jobspipe_incremental_overlap_minutes` | system | `collection_policy.jobspipe_incremental_overlap_minutes` | shared provider incremental-fetch policy |
+| `exclusions` | profile | `profile_preferences.exclusions` | human-readable personal exclusion rules |
+| `excluded_company_patterns` | profile | `profile_preferences.excluded_company_patterns` | current values encode profile-specific company exclusions; system-wide bans require a separate system policy |
+| `excluded_role_keywords` | profile | `profile_preferences.excluded_role_keywords` | current values encode profile-specific role exclusions; not shared source governance |
+| `deep_erp_terms` | profile | `profile_preferences.deep_erp_terms` | profile-specific exclusion evidence for deep ERP roles |
+| `jobspipe_mode` | system | `collection_policy.jobspipe_mode` | provider transport/enablement policy |
+| `jobspipe_apify_max_items_per_run` | system | `collection_policy.jobspipe_apify_max_items_per_run` | shared provider execution limit |
 
-- `role_groups`;
-- `work_modes.remote|hybrid|onsite`;
-- `contract_types`;
-- `freshness_hours` when representing user-visible job age/freshness preference;
-- `fit_threshold`;
-- `keep_reposts`;
-- `rate_min_eur_day`;
-- `rate_max_eur_day`;
-- `immediate_start`;
-- `target_regions`;
-- `target_country_codes`;
-- `excluded_regions`;
-- `excluded_country_codes`;
-- personal `exclusions`.
+### 5.1 Dual-meaning separation invariants
 
-### System / collection-owned
+Legacy fields that previously affected both collection and presentation are split explicitly:
+- `freshness_hours` -> `profile_preferences.display_freshness_hours`;
+- `collection_freshness_hours` -> `collection_policy.collection_freshness_hours`.
 
-- source/provider strategy;
-- provider/connector enablement and execution policy;
-- global collection freshness/cadence;
-- collection budgets/limits;
-- JobsPipe/provider transport settings;
-- scheduler/run-admission policy.
+Geography remains semantically distinct:
+- `target_country_codes` / `target_regions` define what the profile searches/evaluates for;
+- `remote_eligible_country_codes` defines where a remote role may be acceptable to that profile;
+- `search_country_codes` is compatibility-only and is retired after rollback compatibility ends.
 
-Where one legacy field combines both meanings, migration must create two explicit target fields instead of preserving ambiguity.
+Machine exclusion fields remain profile-owned in Stage 1 because their current semantics implement the user's personal job-fit exclusions. A future global compliance/policy exclusion must use a separately named system-owned contract and must not overload these profile fields.
+
+No target implementation may recreate the legacy mixed singleton as an authoritative JSON/JSONB blob.
 
 ## 6. Minimum profile preference shape
 
