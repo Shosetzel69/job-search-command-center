@@ -8,6 +8,8 @@ ENV=(ROOT/"scripts/gcp/environment.sh").read_text()
 SEED=(ROOT/"scripts/gcp/seed_runtime.sh").read_text()
 LEGACY=(ROOT/"scripts/gcp/deploy_dev_job.sh").read_text()
 BUILD=(ROOT/"cloudbuild.promotion.yaml").read_text()
+IAM=(ROOT/"scripts/gcp/reconcile_job_invocation_iam.sh").read_text()
+RUNTIME=(ROOT/"command-api/src/runtime-gcp.js").read_text()
 
 class GcpPromotionContractTests(unittest.TestCase):
     def test_supported_environments_are_bounded(self):
@@ -34,13 +36,19 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('/health/db")', PROMOTE)
         self.assertIn('EXPECTED_DATABASE', PROMOTE)
 
-    def test_job_invoker_binding_is_applied_after_job_deploy(self):
+    def test_job_override_iam_is_reconciled_after_job_deploy_before_service(self):
         deploy = PROMOTE.index('gcloud run jobs deploy')
-        bind = PROMOTE.index('gcloud run jobs add-iam-policy-binding')
+        reconcile = PROMOTE.index('reconcile_job_invocation_iam.sh')
         service = PROMOTE.index('gcloud run deploy')
-        self.assertLess(deploy, bind)
-        self.assertLess(bind, service)
-        self.assertIn('roles/run.invoker', PROMOTE)
+        self.assertLess(deploy, reconcile)
+        self.assertLess(reconcile, service)
+
+    def test_override_runtime_requires_override_capable_job_role(self):
+        self.assertIn('overrides:{', RUNTIME)
+        self.assertIn('roles/run.jobsExecutorWithOverrides', IAM)
+        self.assertNotIn('roles/run.invoker', IAM)
+        self.assertIn('gcloud run jobs add-iam-policy-binding', IAM)
+        self.assertIn('gcloud run jobs get-iam-policy', IAM)
 
     def test_seed_runtime_is_invoked_through_bash(self):
         self.assertIn('bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"', PROMOTE)
