@@ -23,7 +23,7 @@ service_digest="$(gcloud artifacts docker images describe "${SERVICE_IMAGE_REPO}
 [[ "${job_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Missing immutable Job artifact for candidate" >&2; exit 8; }
 [[ "${service_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Missing immutable Service artifact for candidate" >&2; exit 9; }
 
-"${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"
+bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"
 
 for secret in NILE_DATABASE_URL ALLOWED_GOOGLE_SUB GOOGLE_CLIENT_ID; do
   gcloud secrets describe "${secret}" --project="${PROJECT_ID}" >/dev/null     || { echo "Required secret is missing in ${PROJECT_ID}: ${secret}" >&2; exit 10; }
