@@ -131,6 +131,17 @@ Target authenticated identity summary:
 No caller-selected user/profile authority.
 
 
+## Target auth/authorization error semantics
+
+After multiuser cutover:
+- `401` — missing, invalid, expired or revoked JSCC session; invalid Google credential at session establishment;
+- `403` — authenticated account is DEACTIVATED or authenticated role lacks the requested capability;
+- `404` — tenant-scoped object is not visible in the caller's personal domain, including cross-tenant object-id probing;
+- `409` — legitimate state/version/concurrency conflict that is not an authorization failure;
+- `503` — required auth/security configuration or persistence dependency is unavailable; fail closed.
+
+Mutating cookie-authenticated requests remain same-origin and validate the environment `FRONTEND_ORIGIN`.
+
 ## Date protejate
 
 Manifestul canonic este `shared/runtime-data.mjs`.
