@@ -27,6 +27,9 @@ export function exclusionGroupRows(run) {
 export const SOURCE_OUTCOME_META = Object.freeze({
   success: { label:'Succes', tone:'green', kind:'success' },
   success_empty: { label:'Succes fara rezultate', tone:'blue', kind:'success' },
+  partial: { label:'Partial', tone:'amber', kind:'warning' },
+  blocked: { label:'Blocat', tone:'amber', kind:'warning' },
+  no_extractable_jobs: { label:'Fara extractor', tone:'amber', kind:'warning' },
   failed: { label:'Eroare', tone:'red', kind:'failure' },
   deferred_provider: { label:'Provider amanat', tone:'slate', kind:'expected' },
   blocked_credentials: { label:'Credentiale necesare', tone:'amber', kind:'expected' },
@@ -81,7 +84,7 @@ export function sourceSummaryRows(run) {
       ...sourceOutcomeMeta(outcome),
     }))
     .sort((a,b) => {
-      const order = { failure:0, success:1, expected:2, unknown:3 };
+      const order = { failure:0, warning:1, success:2, expected:3, unknown:4 };
       return (order[a.kind] ?? 9) - (order[b.kind] ?? 9) || a.label.localeCompare(b.label);
     });
 }
@@ -101,16 +104,54 @@ export function failureGroupRows(run) {
 }
 
 export function sourceResultRows(run) {
-  return (run?.source_results || []).map(item => ({
-    source:item?.source || item?.source_id || 'Sursa',
-    outcome:item?.outcome || 'unknown',
-    outcomeMeta:sourceOutcomeMeta(item?.outcome || 'unknown'),
-    records:Number(item?.records || 0),
-    errorCode:item?.error_code || null,
-    failureStage:item?.failure_stage || null,
-    httpStatus:item?.http_status ?? null,
-    message:item?.error || item?.failure_reason || null,
-  }));
+  return (run?.source_results || []).map(item => {
+    const outcome = item?.outcome || 'unknown';
+    const records = Number(item?.records || 0);
+    const recordsTrusted = ['success','success_empty','partial'].includes(outcome);
+    return {
+      source:item?.source || item?.source_id || 'Sursa',
+      outcome,
+      outcomeMeta:sourceOutcomeMeta(outcome),
+      records,
+      recordsTrusted,
+      jobsLabel:recordsTrusted ? `${records} joburi` : '—',
+      errorCode:item?.error_code || null,
+      failureStage:item?.failure_stage || null,
+      httpStatus:item?.http_status ?? null,
+      message:item?.error || item?.failure_reason || null,
+    };
+  });
+}
+
+export function sourceResultDetail(item) {
+  if (!item) return '—';
+  if (item.outcome === 'failed') {
+    return [item.errorCode, item.failureStage, item.httpStatus ? `HTTP ${item.httpStatus}` : null]
+      .filter(Boolean).join(' · ') || item.message || 'Eroare clasificata';
+  }
+  if (['partial','blocked','no_extractable_jobs'].includes(item.outcome)) {
+    return item.message || [item.httpStatus ? `HTTP ${item.httpStatus}` : null].filter(Boolean).join(' · ') || 'Diagnostic disponibil';
+  }
+  if (item.outcomeMeta?.kind === 'expected') return item.message || 'Neexecutata conform starii/politicii curente';
+  return item.message || '—';
+}
+
+export function sortSourceResultRows(rows = [], key = 'source', direction = 'asc') {
+  const sign = direction === 'desc' ? -1 : 1;
+  const value = (row, field) => {
+    if (field === 'status') return row?.outcomeMeta?.label || '';
+    if (field === 'jobs') return row?.recordsTrusted ? Number(row.records || 0) : Number.NEGATIVE_INFINITY;
+    if (field === 'detail') return sourceResultDetail(row);
+    return row?.source || '';
+  };
+  return [...rows].sort((a,b) => {
+    const av=value(a,key), bv=value(b,key);
+    let cmp;
+    if (typeof av === 'number' && typeof bv === 'number') cmp=av-bv;
+    else cmp=String(av).localeCompare(String(bv),'ro',{sensitivity:'base'});
+    if (cmp === 0) cmp=String(a.source||'').localeCompare(String(b.source||''),'ro',{sensitivity:'base'});
+    return cmp*sign;
+  });
 }
 
 

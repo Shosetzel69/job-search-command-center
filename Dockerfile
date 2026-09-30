@@ -27,6 +27,7 @@ RUN python3 -m py_compile \
     scripts/job_search_apify.py \
     scripts/job_search_runner.py \
     scripts/source_orchestration.py \
+    scripts/job_search_public_boards.py \
     scripts/job_search_web.py \
     scripts/web_browser.py \
     scripts/web_transport.py

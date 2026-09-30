@@ -12,6 +12,7 @@ IMAGE="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc@${IMAGE_DIGEST}"
 project_number="$(gcloud projects describe "${PROJECT_ID}" --format='value(projectNumber)')"
 BUCKET="jscc-dev-runtime-${project_number}"
 MOUNT_PATH="/runtime"
+SEED_MANIFEST="scripts/gcp/runtime_seed_files.txt"
 
 gcloud config set project "${PROJECT_ID}" >/dev/null
 gcloud services enable run.googleapis.com storage.googleapis.com secretmanager.googleapis.com
@@ -45,6 +46,7 @@ gcloud storage buckets add-iam-policy-binding "gs://${BUCKET}" \
 seed_dir="$(mktemp -d)"
 trap 'rm -f "${lifecycle}"; rm -rf "${seed_dir}"' EXIT
 cp data/search-config.json "${seed_dir}/search-config.json"
+cp data/applications.json "${seed_dir}/applications.json"
 
 cat >"${seed_dir}/jobs.json" <<'JSON'
 {"schema_version":"1.0","generated_at":"2026-01-01T00:00:00+00:00","freshness_hours":24,"criteria":{},"records_inspected":0,"results":0,"excluded_count":0,"jobs":[]}
@@ -59,9 +61,17 @@ cat >"${seed_dir}/search-state.json" <<'JSON'
 {"schema_version":"1.0","query_progress":{},"job_first_seen":{},"usage":{}}
 JSON
 
-for file in search-config.json jobs.json run-status.json run-history.json search-state.json; do
-  gcloud storage cp "${seed_dir}/${file}" "gs://${BUCKET}/seed/${file}"
-done
+while IFS= read -r file; do
+  [[ -n "${file}" ]] || continue
+  [[ -f "${seed_dir}/${file}" ]] || { echo "Missing mandatory runtime seed file: ${file}" >&2; exit 6; }
+  gcloud storage cp "${seed_dir}/${file}" "gs://${BUCKET}/seed/${file}" --project="${PROJECT_ID}"
+done < "${SEED_MANIFEST}"
+
+while IFS= read -r file; do
+  [[ -n "${file}" ]] || continue
+  gcloud storage objects describe "gs://${BUCKET}/seed/${file}" --project="${PROJECT_ID}" >/dev/null \
+    || { echo "Runtime seed verification failed: ${file}" >&2; exit 7; }
+done < "${SEED_MANIFEST}"
 
 gcloud run jobs deploy "${JOB_NAME}" \
   --project="${PROJECT_ID}" \

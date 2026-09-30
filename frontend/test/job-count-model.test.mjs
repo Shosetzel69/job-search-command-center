@@ -8,6 +8,7 @@ const jobs = [
   { id:'b', age:30, mode:'Remote', fit:85, b2b:false, repost:true },
   { id:'c', age:80, mode:'Hybrid', fit:95, b2b:true, repost:false },
   { id:'d', age:10, mode:'Onsite', fit:60, b2b:false, repost:false },
+  { id:'e', age:8, mode:'N/A', fit:70, b2b:false, repost:false },
 ];
 
 test('Joburi noi counts derive from one freshness/work-mode population', () => {
@@ -23,7 +24,21 @@ test('freshness changes displayed population but not underlying jobs', () => {
   const pop120 = jobViewPopulation(jobs,{freshness:120,workModes:['Remote','Hybrid']},ageHours);
   assert.equal(jobViewCounts(pop24,80,ageHours).all,1);
   assert.equal(jobViewCounts(pop120,80,ageHours).all,3);
-  assert.equal(jobs.length,4);
+  assert.equal(jobs.length,5);
+});
+
+test('work mode Toate means no GUI work-mode filter and includes technical N/A', () => {
+  const population = jobViewPopulation(
+    jobs,
+    { freshness:24, workModes:['Remote','Hybrid','Onsite'] },
+    ageHours,
+  );
+  assert.deepEqual(population.map(job => job.id), ['a','d','e']);
+});
+
+test('work mode subset still excludes N/A and unselected canonical modes', () => {
+  const population = jobViewPopulation(jobs,{freshness:24,workModes:['Remote']},ageHours);
+  assert.deepEqual(population.map(job => job.id), ['a']);
 });
 
 test('scope labels explain current population', () => {

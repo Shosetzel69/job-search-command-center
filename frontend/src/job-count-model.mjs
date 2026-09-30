@@ -1,9 +1,17 @@
+const CANONICAL_WORK_MODES = ['Remote', 'Hybrid', 'Onsite'];
+
+function allCanonicalWorkModesSelected(workModes = []) {
+  const selected = new Set(workModes);
+  return CANONICAL_WORK_MODES.every(mode => selected.has(mode));
+}
+
 export function jobViewPopulation(jobs = [], filters = {}, ageHours) {
   const freshness = Number(filters.freshness ?? 24);
   const workModes = Array.isArray(filters.workModes) ? filters.workModes : [];
+  const noWorkModePresentationFilter = allCanonicalWorkModesSelected(workModes);
   return jobs.filter(job =>
     ageHours(job.date_posted, job.age) <= freshness
-    && workModes.includes(job.mode)
+    && (noWorkModePresentationFilter || workModes.includes(job.mode))
   );
 }
 
