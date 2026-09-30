@@ -651,10 +651,12 @@ Tenant isolation este defense-in-depth:
 
 - authenticated identity -> server-side app_user/profile resolution;
 - repository scoping obligatoriu pentru personal data;
-- PostgreSQL RLS pe personal tables;
-- `FORCE ROW LEVEL SECURITY` unde se aplica;
+- `profile` foloseste obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY` pe baza server-derived `user_id`;
+- fiecare personal-content table stocheaza direct `profile_id` si foloseste obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY`;
+- Stage 1 nu foloseste personal tables cu tenant scope derivat prin join; o astfel de exceptie necesita Architecture review separat;
 - browser-supplied user/profile id nu confera autoritate;
-- ADMIN nu primeste personal-content RLS bypass.
+- ADMIN nu primeste personal-content RLS bypass;
+- ADMIN delete este account-domain delete prin FK `ON DELETE CASCADE`; ADMIN nu asuma tenant context-ul userului tinta si nu citeste continutul personal pentru a-l sterge.
 
 ### 16.5 Runtime connectivity si privilege gate
 
