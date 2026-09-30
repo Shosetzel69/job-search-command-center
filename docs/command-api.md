@@ -388,19 +388,23 @@ Personal repositories primesc profile context derivat server-side din principalu
 Defense in depth:
 - server-side account/profile resolution;
 - repository scoping;
-- PostgreSQL RLS pe personal tables;
-- `FORCE ROW LEVEL SECURITY` unde se aplica;
-- ADMIN fara personal-content bypass.
+- `profile` uses mandatory RLS + `FORCE ROW LEVEL SECURITY` scoped by server-derived `user_id`;
+- every Stage-1 personal-content table stores `profile_id` directly and uses mandatory RLS + `FORCE ROW LEVEL SECURITY`;
+- Stage-1 personal tables do not rely on join-derived tenant scope;
+- ADMIN has no personal-content bypass.
 
 ### Connectivity
 
-`Worker -> repository/data-access -> pg -> Hyperdrive -> Nile PostgreSQL`
+Target runtime per ADR-006:
 
-- Hyperdrive pooling;
-- query caching initial OFF;
-- bindings distincte DEV/TEST/PROD;
-- fara runtime-selected DB;
-- fara cross-environment fallback.
+`Cloud Run Service/Job -> repository/data-access -> pg -> Nile PostgreSQL`
+
+- PostgreSQL pooling/concurrency is owned by the Cloud Run runtime/client configuration;
+- environment-specific DB credentials are obtained from Secret Manager;
+- DEV/TEST/PROD bind independently to `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
+- no runtime-selected DB;
+- no cross-environment fallback;
+- Cloudflare Hyperdrive is legacy/superseded and is not part of the target GCP path.
 
 ### Runtime privileges
 
@@ -408,7 +412,9 @@ Inainte de personal-data/multiuser PROD, runtime CRUD authority trebuie separata
 
 ### Account deletion
 
-DELETE personal account/profile este hard delete al personal domain. Shared jobs/sources/runs/nomenclatures nu sunt sterse.
+DELETE este un account-domain hard delete. After ADMIN authorization on the caller's own AuthContext, AccountRepository deletes only the target `app_user` row; FK `ON DELETE CASCADE` removes `user_identity`, `user_session`, `profile` and all profile-owned rows. Shared jobs/sources/runs/nomenclatures are not owned by the user and are not cascaded.
+
+ADMIN does not assume the target tenant context, does not receive `BYPASSRLS`, and the delete operation does not return target personal content.
 
 Se poate pastra maximum 90 zile numai un audit event neidentificabil, fara user/profile identifiers sau date care permit relinkarea.
 
