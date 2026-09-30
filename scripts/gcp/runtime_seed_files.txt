@@ -1,0 +1,6 @@
+applications.json
+jobs.json
+run-history.json
+run-status.json
+search-config.json
+search-state.json
