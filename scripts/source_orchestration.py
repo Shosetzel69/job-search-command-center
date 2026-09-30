@@ -23,6 +23,7 @@ import job_search_traefik as traefik
 import job_search_web as web
 import job_search_workday as workday
 import job_search_optimized as optimized
+import job_search_public_boards as public_boards
 
 REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
 ATS_ROUTES = json.loads((engine.ROOT / "shared/validated-ats-routes.json").read_text()).get("routes", {})
@@ -58,6 +59,8 @@ def connector_for(source):
     route = ATS_ROUTES.get(source.get("name"))
     if route:
         return route.get("connector")
+    if public_boards.source_supported(source.get("name")):
+        return "public_board"
     try:
         parsed = urlsplit(source.get("url") or "")
         if parsed.scheme != "https" or parsed.username or parsed.password or parsed.port:
@@ -97,6 +100,9 @@ class ClassifiedSourceError(Exception):
 CANONICAL_OUTCOMES = {
     "success",
     "success_empty",
+    "partial",
+    "blocked",
+    "no_extractable_jobs",
     "failed",
     "deferred_provider",
     "blocked_credentials",
@@ -214,7 +220,7 @@ def emit_source_started(run_id, item):
 
 def emit_source_final(run_id, item):
     outcome = item.get("outcome")
-    if outcome in {"success", "success_empty"}:
+    if outcome in {"success", "success_empty", "partial"}:
         event_name = "source.collection.completed"
     elif outcome == "failed":
         event_name = "source.collection.failed"
@@ -273,6 +279,8 @@ def build_plan(catalog):
                 connector = None
         if route:
             route_key = "ats:" + source.get("name", "")
+        elif connector == "public_board":
+            route_key = "public_board:" + str(source.get("id") or source.get("name") or source.get("url"))
         else:
             route_key = source.get("url") if connector == "web" else connector or ("deferred:" + deferred if deferred else None)
         excluded_by_policy = policy_excluded(source)
@@ -348,32 +356,57 @@ def collect_sources(config, state, now, plan, run_id=None):
 
 
 def record_results(item, results):
+    ok = [result for result in results if result.ok]
     failed = [result for result in results if not result.ok]
-    item["status"] = "completed" if results and not failed else "failed"
-    item["records"] = sum(len(result.records) for result in results if result.ok)
+    item["records"] = sum(len(result.records) for result in ok)
     item["error"] = "; ".join(
         diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
     ) or None
+
+    web_outcome = item.get("web_outcome")
     if not results:
-        item["outcome"] = "failed"
-        item["error"] = item["error"] or "Connector returned no collection result"
-        item["failure_reason"] = item.get("failure_reason") or item["error"]
-        item["error_code"] = "CONNECTOR_ERROR"
-        item["failure_stage"] = "fetch"
-        item["http_status"] = None
-    elif failed:
+        item.update(
+            status="failed",
+            outcome="failed",
+            error=item.get("error") or "Connector returned no collection result",
+            error_code="CONNECTOR_ERROR",
+            failure_stage="fetch",
+            http_status=None,
+        )
+    elif ok and failed:
+        # Usable records exist, therefore the source is partial rather than failed.
+        item["status"] = "completed"
+        item["outcome"] = "partial"
+        first = failed[0]
+        item["http_status"] = first.http_status if first.http_status is not None else item.get("http_status")
+        item["error_code"] = None
+        item["failure_stage"] = None
+    elif ok:
+        item["status"] = "completed"
+        item["outcome"] = "success" if item["records"] else "success_empty"
+        item["error_code"] = None
+        item["failure_stage"] = None
+    elif web_outcome in {"blocked", "no_extractable_jobs"}:
+        # A blocked/non-extractable public page is diagnostic, not evidence of zero vacancies
+        # and not a connector runtime failure.
+        item["status"] = "completed"
+        item["outcome"] = web_outcome
+        first = failed[0]
+        item["http_status"] = first.http_status if first.http_status is not None else item.get("http_status")
+        item["error_code"] = None
+        item["failure_stage"] = None
+    else:
+        item["status"] = "failed"
         item["outcome"] = "failed"
         first = failed[0]
         http_status = first.http_status if first.http_status is not None else item.get("http_status")
         item["http_status"] = http_status
         item["error_code"] = first.error_code or error_code_for_http_status(http_status) or "CONNECTOR_ERROR"
         item["failure_stage"] = first.failure_stage or "fetch"
-    else:
-        item["outcome"] = "success" if item["records"] else "success_empty"
-        item["error_code"] = None
-        item["failure_stage"] = None
+
     if item.get("error") and not item.get("failure_reason"):
         item["failure_reason"] = item["error"]
+
     item["queries"] = [{
         "query": result.query,
         "status": "completed" if result.ok else "failed",
@@ -447,6 +480,11 @@ def collect_api_sources(config, state, now, plan, run_id=None):
                 results = traefik.collect(item["url"], item["source"])
             elif connector == "jobicy":
                 results = jobicy.collect(config)
+            elif connector == "public_board":
+                results = public_boards.collect(
+                    {"id": item["source_id"], "name": item["source"], "url": item["url"]},
+                    config,
+                )
             elif connector == "jobspipe" and mode == "apify":
                 results = apify.collect(config)
             elif connector == "jobspipe" and mode == "direct":
@@ -526,7 +564,7 @@ def run(config, now):
         status["sources_" + field] = sum(item["status"] == value for item in plan)
     status["sources_with_records"] = sum(item["records"] > 0 for item in plan)
     for outcome in ("partial", "blocked", "no_extractable_jobs"):
-        status["sources_" + outcome] = sum(item.get("web_outcome") == outcome for item in plan)
+        status["sources_" + outcome] = sum(item.get("outcome") == outcome for item in plan)
     status["limitations"] = [f'{item["source"]}: {item["error"]}' for item in plan if item["status"] in {"skipped", "unsupported", "inactive"} and item.get("error")]
     if not collection and not status["sources_unsupported"]:
         status["status"] = "completed"
