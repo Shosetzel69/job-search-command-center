@@ -1,9 +1,9 @@
 # AgentFlow - Operating Contract
 
 Status: **CANONICAL**  
-Version: **1.2**  
+Version: **1.3**  
 Applies to: **AGENTFLOW**  
-Last verified: **2026-09-23**
+Last verified: **2026-09-30**
 
 ## 1. Purpose
 
@@ -228,6 +228,8 @@ DEV -> candidate freeze -> TEST -> RELEASE -> PROD_GO -> PROD -> smoke
 ```
 
 AgentFlow nu redefineste candidate identity, TEST independence, rollback sau PROD gates.
+
+AgentFlow nu poate declara un mediu `functional` si nu poate emite/accepta `DEV_PASS`, `TEST_PASS` sau `PROD_SMOKE_PASS` pe baza unui subset de health/deploy checks. Handoff-ul catre release lifecycle trebuie sa respecte Mandatory Environment Functional Acceptance Suite si sa returneze matricea completa de rezultate definita in `docs/software-delivery-lifecycle.md`. Orice test mandatory FAIL/BLOCKED opreste gate-ul.
 
 Pentru ATC-uri care modifica fisierele candidate-managed shared/product aprobate prin #322, handoff-ul foloseste contractul de reconciliere si evidence din `docs/software-delivery-lifecycle.md` sectiunea 6.1. AgentFlow nu autorizeaza implicit mutatia runtime asociata promovarii.
 
