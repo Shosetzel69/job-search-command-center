@@ -45,6 +45,10 @@ class GcpPromotionContractTests(unittest.TestCase):
     def test_seed_runtime_is_invoked_through_bash(self):
         self.assertIn('bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"', PROMOTE)
 
+    def test_cloud_run_service_uses_supported_deploy_command(self):
+        self.assertIn('gcloud run deploy "${SERVICE_NAME}"', PROMOTE)
+        self.assertNotIn('gcloud run services deploy', PROMOTE)
+
     def test_cloudbuild_reuses_artifacts_and_promotes_dev_first(self):
         self.assertIn("build-job-if-missing", BUILD)
         self.assertIn("build-service-if-missing", BUILD)
