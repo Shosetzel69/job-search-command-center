@@ -17,6 +17,7 @@ The initial DEV migration proved the architecture but exposed operational defect
 9. Legacy DEV/TEST were assumed older than GCP DEV before exact deployment evidence was checked; in reality GCP DEV was behind the legacy promoted candidate.
 10. UI parity and runtime parity were initially treated as one gate; they must be evidenced separately.
 11. GitHub Actions jobs may currently fail before steps execute, so GCP promotion must not rely on GitHub-hosted runners as its only executor.
+12. DEV -> TEST promotion initially reproduced artifacts but not the effective Service -> Job override IAM contract; control-plane parity is therefore an explicit promotion responsibility.
 
 ## 2. Canonical model
 
@@ -140,6 +141,10 @@ Runtime service accounts require access to their own:
 - OAuth client-id secret;
 - Cloud Run Job invocation boundary as required by the Service.
 
+The Service invokes Cloud Run Jobs with per-execution overrides. Therefore the runtime service account must receive the predefined least-privilege role `roles/run.jobsExecutorWithOverrides` on its environment Job. `roles/run.invoker` is insufficient for this path because it does not grant `run.jobs.runWithOverrides`.
+
+Promotion applies and verifies this binding through `scripts/gcp/reconcile_job_invocation_iam.sh`. The same script is the control-plane-only remediation entry point for an already deployed environment; it changes IAM only and does not rebuild or redeploy Service/Job images.
+
 No cross-environment fallback is permitted.
 
 ## 8. Gates
@@ -149,6 +154,7 @@ Promotion fails immediately if:
 - immutable Job or Service image cannot be resolved/built;
 - a mandatory runtime seed is missing after provisioning;
 - a required environment secret is missing;
+- the environment runtime service account does not have the verified override-capable Job execution binding;
 - Service does not route 100% to the new revision;
 - Service URL differs from canonical run.app origin;
 - /health does not report the exact candidate;
