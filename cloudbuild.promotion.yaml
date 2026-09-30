@@ -46,7 +46,7 @@ steps:
       - -ceu
       - |
         image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}"
-        if gcloud artifacts docker images describe "${image}" --project=jscc-shared --format='value(image_summary.digest)' >/dev/null 2>&1; then
+        if docker manifest inspect "${image}" >/dev/null 2>&1; then
           echo "REUSE_JOB_ARTIFACT=${image}"
         else
           docker build --pull --build-arg "GIT_SHA=${_GIT_SHA}" -t "${image}" .
@@ -60,7 +60,7 @@ steps:
       - -ceu
       - |
         image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}"
-        if gcloud artifacts docker images describe "${image}" --project=jscc-shared --format='value(image_summary.digest)' >/dev/null 2>&1; then
+        if docker manifest inspect "${image}" >/dev/null 2>&1; then
           echo "REUSE_SERVICE_ARTIFACT=${image}"
         else
           docker build --pull --file Dockerfile.service --build-arg "GIT_SHA=${_GIT_SHA}" -t "${image}" .
