@@ -18,6 +18,7 @@ The initial DEV migration proved the architecture but exposed operational defect
 10. UI parity and runtime parity were initially treated as one gate; they must be evidenced separately.
 11. GitHub Actions jobs may currently fail before steps execute, so GCP promotion must not rely on GitHub-hosted runners as its only executor.
 12. DEV -> TEST promotion initially reproduced artifacts but not the effective Service -> Job override IAM contract; control-plane parity is therefore an explicit promotion responsibility.
+13. The first GCP promotion also omitted canonical Command API data-path variables that existed in the prior environment contract; TEST manual run then failed before dispatch because `SEARCH_CONFIG_PATH` was undefined.
 
 ## 2. Canonical model
 
@@ -145,6 +146,13 @@ The Service invokes Cloud Run Jobs with per-execution overrides. Therefore the r
 
 Promotion applies and verifies this binding through `scripts/gcp/reconcile_job_invocation_iam.sh`. The same script is the control-plane-only remediation entry point for an already deployed environment; it changes IAM only and does not rebuild or redeploy Service/Job images.
 
+Canonical Command API path variables are also part of environment parity and are set explicitly on every GCP Service deployment:
+- `SEARCH_CONFIG_PATH=data/search-config.json`
+- `SOURCES_PATH=data/sources.json`
+- `SOURCE_CATEGORIES_PATH=data/source-categories.json`
+- `NOMENCLATURES_PATH=data/nomenclatures.json`
+- `APPLICATIONS_PATH=data/applications.json`
+
 No cross-environment fallback is permitted.
 
 ## 8. Gates
@@ -155,6 +163,7 @@ Promotion fails immediately if:
 - a mandatory runtime seed is missing after provisioning;
 - a required environment secret is missing;
 - the environment runtime service account does not have the verified override-capable Job execution binding;
+- any canonical Command API data-path variable is missing from the Service runtime contract;
 - Service does not route 100% to the new revision;
 - Service URL differs from canonical run.app origin;
 - /health does not report the exact candidate;
