@@ -488,7 +488,7 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 - business/repository code consuma `AuthContext(user_id, profile_id, role, status)`, nu claims Google;
 - profilul autorizat este rezolvat server-side; un `profile_id` trimis de browser nu confera acces;
 - repository-urile personale necesita profile context autentificat si transaction-local;
-- tabelele personale folosesc PostgreSQL RLS si `FORCE ROW LEVEL SECURITY` unde se aplica;
+- `profile` si toate Stage-1 personal-content tables folosesc obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY`; personal-content rows stocheaza direct `profile_id`;
 - tenant context pe conexiuni pooled foloseste numai `SET LOCAL`/echivalent transaction-local; context persistent pe conexiune este interzis;
 - ADMIN nu primeste bypass pentru continutul personal al altor utilizatori;
 - credentialele/tokens de autentificare nu ajung in `localStorage`, loguri sau date persistente;
