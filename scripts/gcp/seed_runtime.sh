@@ -33,7 +33,7 @@ gcloud storage buckets add-iam-policy-binding "gs://${RUNTIME_BUCKET}"   --proje
 
 while IFS= read -r file; do
   [[ -n "${file}" ]] || continue
-  test -f "${SEED_DIR}/${file}" || { echo "Missing mandatory seed source: ${file}" >&2; exit 5; }
+  test -f "${SEED_DIR}/${file}" || { echo "Missing mandatory runtime seed file: ${file}" >&2; exit 5; }
 
   if gcloud storage objects describe "gs://${RUNTIME_BUCKET}/seed/${file}" --project="${PROJECT_ID}" >/dev/null 2>&1; then
     echo "SEED_EXISTS=${file}"
@@ -45,7 +45,7 @@ done < "${MANIFEST}"
 
 while IFS= read -r file; do
   [[ -n "${file}" ]] || continue
-  gcloud storage objects describe "gs://${RUNTIME_BUCKET}/seed/${file}" --project="${PROJECT_ID}" >/dev/null     || { echo "Seed verification failed: ${file}" >&2; exit 6; }
+  gcloud storage objects describe "gs://${RUNTIME_BUCKET}/seed/${file}" --project="${PROJECT_ID}" >/dev/null     || { echo "Runtime seed verification failed: ${file}" >&2; exit 6; }
 done < "${MANIFEST}"
 
 echo "SEED_MANIFEST_PASS=${ENVIRONMENT}"
