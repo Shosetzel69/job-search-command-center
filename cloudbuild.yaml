@@ -71,7 +71,16 @@ steps:
     args:
       - -ceu
       - |
-        python -m unittest -v scripts.test_runtime_data_boundary
+        python -m unittest -v scripts.test_runtime_data_boundary scripts.test_gcp_runtime_seed_manifest
+
+  - id: functional-parity-tests
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        cd scripts
+        python -m unittest -v test_source_orchestration test_public_boards
 
   - id: build
     name: gcr.io/cloud-builders/docker
