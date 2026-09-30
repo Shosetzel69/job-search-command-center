@@ -50,15 +50,15 @@ gcloud run jobs get-iam-policy "${JOB_NAME}" \
 
 gcloud run deploy "${SERVICE_NAME}"   --project="${PROJECT_ID}"   --region="${REGION}"   --image="${SERVICE_IMAGE_REPO}@${service_digest}"   --service-account="${RUNTIME_SA}"   --allow-unauthenticated   --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},RUNTIME_DATA_SHA=${CANDIDATE_SHA},SEARCH_MODE=${SEARCH_MODE},JSCC_RUNTIME_BACKEND=gcp,GCP_PROJECT_ID=${PROJECT_ID},GCP_RUNTIME_BUCKET=${RUNTIME_BUCKET},GCP_SEARCH_JOB=${JOB_NAME},GCP_REGION=${REGION},FRONTEND_ORIGIN=${frontend_origin},SERVICE_ORIGIN=${frontend_origin}"   --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest,ALLOWED_GOOGLE_SUB=ALLOWED_GOOGLE_SUB:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest"
 
-service_url="$(gcloud run services describe "${SERVICE_NAME}"   --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
+reported_service_url="$(gcloud run services describe "${SERVICE_NAME}"   --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
 latest_ready="$(gcloud run services describe "${SERVICE_NAME}"   --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.latestReadyRevisionName)')"
 traffic="$(gcloud run services describe "${SERVICE_NAME}"   --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.traffic[0].percent)')"
 
-test "${service_url}" = "${frontend_origin}" || { echo "Unexpected service URL: ${service_url}" >&2; exit 11; }
+[[ "${reported_service_url}" == https://*.run.app ]] || { echo "Unexpected Cloud Run reported URL: ${reported_service_url}" >&2; exit 11; }
 test "${traffic}" = "100" || { echo "Latest revision does not have 100% traffic" >&2; exit 12; }
 
-health="$(curl --fail --silent --show-error "${service_url}/health")"
-db_health="$(curl --fail --silent --show-error "${service_url}/health/db")"
+health="$(curl --fail --silent --show-error "${frontend_origin}/health")"
+db_health="$(curl --fail --silent --show-error "${frontend_origin}/health/db")"
 
 HEALTH_JSON="${health}" DB_HEALTH_JSON="${db_health}" python3 - "${ENVIRONMENT}" "${CANDIDATE_SHA}" "${EXPECTED_DATABASE}" <<'PY'
 import json, os, sys
@@ -77,9 +77,9 @@ assert db.get("environment")==env, db
 assert db.get("database")==expected_db, db
 PY
 
-python3 - "${EVIDENCE_FILE}" "${ENVIRONMENT}" "${CANDIDATE_SHA}" "${job_digest}" "${service_digest}" "${latest_ready}" "${service_url}" "${EXPECTED_DATABASE}" <<'PY'
+python3 - "${EVIDENCE_FILE}" "${ENVIRONMENT}" "${CANDIDATE_SHA}" "${job_digest}" "${service_digest}" "${latest_ready}" "${frontend_origin}" "${reported_service_url}" "${EXPECTED_DATABASE}" <<'PY'
 import json, sys, datetime
-path, env, sha, job_digest, service_digest, revision, url, database = sys.argv[1:]
+path, env, sha, job_digest, service_digest, revision, url, reported_url, database = sys.argv[1:]
 payload={
   "schema_version":"1.0",
   "environment":env,
@@ -88,6 +88,7 @@ payload={
   "service_digest":service_digest,
   "service_revision":revision,
   "service_url":url,
+  "reported_service_url":reported_url,
   "database":database,
   "health":"PASS",
   "db_health":"PASS",
