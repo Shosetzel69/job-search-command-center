@@ -1,12 +1,12 @@
 # GOVERNANCE.md - Job Search Command Center
 
 Status: `CANONICAL`
-Version: `v1.13`
+Version: `v1.14`
 Applicability: `CURRENT`
 Applies to: `BOTH`
 Effective from: `2026-09-23`
-Supersedes: `v1.12`
-Last updated: `2026-09-23`
+Supersedes: `v1.13`
+Last updated: `2026-09-30`
 
 ## 1. Principiu
 
@@ -378,6 +378,22 @@ Pentru logica critica se mentin teste pentru:
 CI trebuie sa valideze cel putin Python, JSON, React/Vite si Cloudflare Worker dry-run.
 
 TEST este mediul canonic de validare independenta a candidate-ului frozen. QA trebuie sa inregistreze SHA-ul exact testat si verdictul aferent.
+
+### 6.1 Environment Functional Acceptance Gate
+
+Un mediu DEV, TEST sau PROD nu poate fi declarat `functional`, `PASS`, `ready` sau echivalent doar pe baza deploy-ului, `/health`, `/health/db`, traffic-ului, seed-ului sau identitatii artifactului.
+
+Inainte de orice verdict functional sunt obligatorii:
+
+- executarea tuturor testelor mandatory aplicabile mediului din `docs/software-delivery-lifecycle.md`;
+- executarea tuturor acceptance criteria specifice candidate-ului/release-ului;
+- validarea reala a fluxurilor end-to-end relevante, nu doar a prerechizitelor tehnice;
+- returnarea rezultatelor intr-o matrice explicita de evidence cu status per test;
+- orice test mandatory `FAIL` sau `BLOCKED` blocheaza verdictul functional si gate-ul urmator;
+- un test mandatory nu poate fi `SKIPPED`; `N/A` este permis numai cu justificare explicita si verificabila;
+- deployment/health PASS se raporteaza separat ca `technical deployment readiness`, nu ca functional acceptance.
+
+Pentru TEST, minimum-ul functional include autentificare, protected data, comanda/rulare reala, Service -> Job, finalizarea Job-ului, publicarea runtime data, observarea rezultatului terminal in UI, DB readiness unde este aplicabil, error/concurrency paths si source/connector smoke relevant.
 
 Pentru testarea UI browser-based, contractul canonic de testabilitate este `docs/testing/qa-testability-ui-contract.md`. Fluxurile nominale DEV/TEST trebuie sa fie operabile prin controale DOM-addressable; blocajele produse de dialoguri browser-native sau alte controale non-DOM se trateaza ca `BLOCKED-TESTABILITY`, nu ca owner action accidental.
 
