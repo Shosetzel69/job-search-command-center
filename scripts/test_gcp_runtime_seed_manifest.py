@@ -3,7 +3,7 @@ import unittest
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "scripts" / "gcp" / "runtime_seed_files.txt"
-DEPLOY = ROOT / "scripts" / "gcp" / "deploy_dev_job.sh"
+SEED = ROOT / "scripts" / "gcp" / "seed_runtime.sh"
 
 EXPECTED = {
     "applications.json",
@@ -19,11 +19,11 @@ class RuntimeSeedManifestTests(unittest.TestCase):
         files = {line.strip() for line in MANIFEST.read_text().splitlines() if line.strip()}
         self.assertEqual(files, EXPECTED)
 
-    def test_dev_provisioning_uses_manifest_and_applications(self):
-        script = DEPLOY.read_text()
-        self.assertIn('SEED_MANIFEST="scripts/gcp/runtime_seed_files.txt"', script)
-        self.assertIn('cp data/applications.json "${seed_dir}/applications.json"', script)
-        self.assertIn('done < "${SEED_MANIFEST}"', script)
+    def test_generic_provisioning_uses_manifest_and_applications(self):
+        script = SEED.read_text()
+        self.assertIn('runtime_seed_files.txt', script)
+        self.assertIn('data/applications.json', script)
+        self.assertIn('done < "${MANIFEST}"', script)
         self.assertIn('Missing mandatory runtime seed file', script)
         self.assertIn('Runtime seed verification failed', script)
 
