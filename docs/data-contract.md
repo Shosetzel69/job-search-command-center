@@ -2,7 +2,7 @@
 
 Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-09-22`
+Ultima actualizare: `2026-09-30`
 
 ## 1. Reguli generale
 
@@ -167,9 +167,15 @@ Fiecare entry pastreaza `source_results` si agregatele `source_outcome_counts`, 
 
 **AS-IS:** sursa canonica single-user pentru selectiile efective ale motorului. Valorile controlate sunt definite de `data/nomenclatures.json`.
 
-**Target ADR-005:** acest fisier nu are succesor 1:1. Contractul se desparte in:
-- system/collection configuration — source strategy, provider/collector limits, collection freshness si alte politici globale;
+**Target ADR-005/ADR-007:** acest fisier nu are succesor 1:1. Contractul se desparte in:
+- system/collection configuration — source strategy, provider/collector limits, collection freshness/cadence, provider transport/budgets si alte politici globale;
 - profile-owned job-search preferences — role-family interests, geography, work mode, contract, compensation, personal exclusions, relevance/FIT preferences si display preferences.
+
+Field ownership target:
+- profile: `role_groups`, `work_modes`, `contract_types`, user-facing `freshness_hours`, `fit_threshold`, `keep_reposts`, rates, `immediate_start`, target/excluded geography, personal exclusions;
+- system: source/provider strategy, connector/provider enablement, collection freshness/cadence, provider budgets/limits, scheduler/run-admission settings.
+
+Daca un camp legacy combina semantica personala si de collection policy, migrarea il separa in doua campuri explicite; nu pastreaza ambiguitatea intr-un singleton global.
 
 O modificare de profil nu declanseaza provider retrieval; ea declanseaza numai re-evaluarea personala necesara.
 
@@ -425,6 +431,17 @@ Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/index
 - Source Registry / source categories;
 - nomenclatures.
 
+### Account/security
+
+- `app_user` cu internal `user_id`, role si ACTIVE/DEACTIVATED;
+- `user_identity` cu provider + provider subject; Stage 1 provider = GOOGLE;
+- `profile` ramane separat de account, cu exact un profil/user in MVP;
+- `user_session` este security state account-owned, cu token opac si numai hash persistat;
+- Google `sub` si email nu devin foreign keys pentru personal-domain data;
+- `DELETED` este operatie de hard-delete, nu status persistent.
+
+Contractul detaliat este in `docs/multiuser-auth-security-contract.md`.
+
 ### Personal/profile-owned
 
 - Profile;
@@ -477,3 +494,15 @@ Application este profile-owned.
 `User Profile + Shared Job -> User-Job Evaluation`
 
 FIT este personal si incremental. Hard eligibility exclude numai pe contradictie explicita. Missing/unknown nu inseamna incompatibilitate.
+
+
+## 14. Multiuser migration authority
+
+Planul canonic pentru trecerea JSON -> PostgreSQL pe domenii este `docs/multiuser-data-migration-plan.md`.
+
+Reguli suplimentare:
+- fiecare domeniu are o singura read/write authority dupa cutover;
+- permanent dual-write este interzis;
+- compatibility export este derivat one-way si limitat la rollback window;
+- identity/session/account state nu foloseste JSON ca authority dupa multiuser auth cutover;
+- personal data este intotdeauna profile-scoped si protejata prin repository authorization + PostgreSQL RLS.
