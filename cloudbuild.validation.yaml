@@ -30,6 +30,7 @@ steps:
           scripts/job_search_runner.py \
           scripts/job_search_optimized.py \
           scripts/source_orchestration.py \
+          scripts/job_search_public_boards.py \
           scripts/validate_container_packaging.py \
           scripts/test_runtime_data_boundary.py \
           scripts/test_container_packaging.py
@@ -42,7 +43,8 @@ steps:
       - |
         python -m unittest -v \
           scripts.test_runtime_data_boundary \
-          scripts.test_container_packaging
+          scripts.test_container_packaging \
+          scripts.test_gcp_runtime_seed_manifest
 
   - id: existing-search-tests
     name: python:3.12-slim
@@ -51,7 +53,7 @@ steps:
       - -ceu
       - |
         cd scripts
-        python -m unittest -v test_source_orchestration
+        python -m unittest -v test_source_orchestration test_public_boards
 
 options:
   logging: CLOUD_LOGGING_ONLY
