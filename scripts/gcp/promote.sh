@@ -33,6 +33,21 @@ frontend_origin="https://${SERVICE_NAME}-${PROJECT_NUMBER}.${REGION}.run.app"
 
 gcloud run jobs deploy "${JOB_NAME}"   --project="${PROJECT_ID}"   --region="${REGION}"   --image="${JOB_IMAGE_REPO}@${job_digest}"   --service-account="${RUNTIME_SA}"   --cpu=2   --memory=4Gi   --tasks=1   --parallelism=1   --max-retries=1   --task-timeout=45m   --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},RUN_TRIGGER=gcp-system,GCP_RUNTIME_BUCKET=${RUNTIME_BUCKET}"   --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest"   --add-volume="mount-path=/runtime,type=cloud-storage,bucket=${RUNTIME_BUCKET},readonly=false"
 
+gcloud run jobs add-iam-policy-binding "${JOB_NAME}" \
+  --project="${PROJECT_ID}" \
+  --region="${REGION}" \
+  --member="serviceAccount:${RUNTIME_SA}" \
+  --role="roles/run.invoker" \
+  --quiet >/dev/null
+
+gcloud run jobs get-iam-policy "${JOB_NAME}" \
+  --project="${PROJECT_ID}" \
+  --region="${REGION}" \
+  --flatten="bindings[].members" \
+  --filter="bindings.members:serviceAccount:${RUNTIME_SA} AND bindings.role:roles/run.invoker" \
+  --format="value(bindings.role)" | grep -qx "roles/run.invoker" \
+  || { echo "Runtime service account cannot invoke ${JOB_NAME}" >&2; exit 13; }
+
 gcloud run services deploy "${SERVICE_NAME}"   --project="${PROJECT_ID}"   --region="${REGION}"   --image="${SERVICE_IMAGE_REPO}@${service_digest}"   --service-account="${RUNTIME_SA}"   --allow-unauthenticated   --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},RUNTIME_DATA_SHA=${CANDIDATE_SHA},SEARCH_MODE=${SEARCH_MODE},JSCC_RUNTIME_BACKEND=gcp,GCP_PROJECT_ID=${PROJECT_ID},GCP_RUNTIME_BUCKET=${RUNTIME_BUCKET},GCP_SEARCH_JOB=${JOB_NAME},GCP_REGION=${REGION},FRONTEND_ORIGIN=${frontend_origin},SERVICE_ORIGIN=${frontend_origin}"   --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest,ALLOWED_GOOGLE_SUB=ALLOWED_GOOGLE_SUB:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest"
 
 service_url="$(gcloud run services describe "${SERVICE_NAME}"   --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
