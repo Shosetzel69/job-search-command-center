@@ -265,6 +265,29 @@ ADMIN may not read another user's:
 
 ADMIN has no personal-table RLS bypass.
 
+## 8.1 ADMIN-initiated account deletion mechanism
+
+ADMIN deletion is an **account-domain delete**, not impersonation of the target profile.
+
+Canonical mechanism:
+1. ADMIN authorization is checked from the caller's own AuthContext.
+2. The AccountRepository issues one narrow delete against the target `app_user.user_id`.
+3. Foreign keys perform cleanup:
+   - `user_identity.user_id -> app_user ON DELETE CASCADE`;
+   - `user_session.user_id -> app_user ON DELETE CASCADE`;
+   - `profile.user_id -> app_user ON DELETE CASCADE`;
+   - every personal-content `profile_id -> profile ON DELETE CASCADE`.
+4. Shared/system rows have no ownership FK that cascades from `app_user` or `profile`.
+5. The operation returns lifecycle metadata only (success/not-found); it never selects or returns target personal content.
+
+Explicit prohibitions:
+- ADMIN must not set/assume the target user's `jscc.user_id` or `jscc.profile_id` tenant context;
+- ADMIN receives no `BYPASSRLS`;
+- deletion must not be implemented by reading target personal rows and deleting them one by one through a fabricated tenant session;
+- a privileged generic SQL/admin endpoint is prohibited.
+
+The FK cascade path is part of the schema contract and must be integration-tested. If the selected PostgreSQL/provider behavior cannot demonstrate complete cascaded cleanup while preserving the no-read/no-impersonation boundary, implementation stops and returns to Architecture.
+
 ## 9. PostgreSQL tenant context
 
 All personal repository operations run in a DB transaction.
@@ -273,10 +296,13 @@ Canonical pattern:
 
 ```text
 BEGIN
+ -> SET LOCAL jscc.user_id = <authenticated user UUID>
  -> SET LOCAL jscc.profile_id = <authenticated profile UUID>
  -> personal queries
 COMMIT/ROLLBACK
 ```
+
+Both values are server-derived from the authenticated session. Browser input never sets either context.
 
 Equivalent transaction-local `set_config(..., true)` is allowed.
 
@@ -286,32 +312,56 @@ Missing tenant context must produce default-deny behavior.
 
 ## 10. RLS contract
 
-Every personal table directly stores or unambiguously derives `profile_id`.
+RLS is mandatory, not optional, for the Stage-1 personal domain.
 
-For directly scoped tables:
-- `ENABLE ROW LEVEL SECURITY`;
-- `FORCE ROW LEVEL SECURITY` where applicable;
-- SELECT/UPDATE/DELETE policy requires row `profile_id` == transaction profile context;
-- INSERT uses `WITH CHECK` for the same condition.
+### 10.1 Profile tenancy row
 
-Runtime database identity:
-- must not be superuser;
-- must not have `BYPASSRLS`;
-- must not retain migration/DDL authority before PROD multiuser cutover.
+The `profile` tenancy table:
+- uses `ENABLE ROW LEVEL SECURITY`;
+- uses `FORCE ROW LEVEL SECURITY`;
+- authorizes the row by server-set `jscc.user_id`;
+- does not accept caller-selected `user_id` or `profile_id` as authority.
 
-RLS is defense in depth, not the only authorization mechanism.
+### 10.2 Personal-content tables
+
+Every Stage-1 personal-content table:
+- stores `profile_id UUID NOT NULL` directly;
+- references `profile(profile_id) ON DELETE CASCADE`;
+- uses `ENABLE ROW LEVEL SECURITY`;
+- uses `FORCE ROW LEVEL SECURITY`;
+- SELECT/UPDATE/DELETE policy requires row `profile_id = current_setting('jscc.profile_id', true)::uuid`;
+- INSERT policy uses `WITH CHECK` with the same condition.
+
+**Derived tenant scope is not used for Stage 1 personal-content tables.** This deliberately denormalizes the tenant key into each personal row so RLS does not depend on joins or on application code correctly traversing a parent relationship.
+
+If a future personal table cannot store `profile_id` directly, it requires a separately reviewed RLS design before implementation; it is not covered by an implicit "derived scope" exception.
+
+### 10.3 FORCE RLS and runtime role
+
+There is no "where applicable" exception for Stage-1 personal/profile tables: FORCE RLS is mandatory.
+
+This remains required even if the runtime credential is temporarily the table owner in DEV/TEST. The negative test suite must prove that the runtime identity, **including when it is table owner**, cannot read/write another tenant's rows.
+
+Before PROD Multiuser:
+- runtime identity is not superuser;
+- runtime identity has no `BYPASSRLS`;
+- ATC-275-09 proves routine runtime DML authority is distinct from migration/DDL authority.
+
+RLS remains defense in depth; repository authorization and server-derived AuthContext are still mandatory.
 
 ## 11. Personal tables in initial scope
 
 At minimum:
-- `profile`-owned preference state;
+- `profile_preferences`;
 - `profile_job_state`;
 - `profile_job_evaluation`;
 - `applications`;
 - personal notes if/when persisted;
 - server-persisted UI preferences.
 
-`user_session` is account-scoped security data, not profile workspace content.
+Each of these stores `profile_id` directly and uses mandatory ENABLE + FORCE RLS.
+
+`profile` itself is tenancy/account metadata and uses its own mandatory user-scoped ENABLE + FORCE RLS policy as defined above. `user_session` is account-scoped security data, not profile workspace content.
 
 Shared/system tables do not receive profile RLS merely to imitate tenancy.
 
@@ -343,13 +393,11 @@ Effects:
 
 ### DELETE
 
-Irreversible transaction or verified transactional procedure:
-- revoke/delete sessions;
-- delete external identity;
-- delete profile-owned data;
-- delete profile;
-- delete account;
-- preserve shared/canonical/system data.
+Irreversible account-domain delete using the FK cascade contract in §8.1:
+- deleting `app_user` cascades identity/session/profile rows;
+- deleting the profile cascades every personal-content row;
+- shared/canonical/system data is preserved;
+- ADMIN never assumes the target tenant context and never reads target personal content.
 
 A later Google sign-in creates a fresh account/profile.
 
@@ -444,7 +492,10 @@ Mandatory cases:
 - application ID belonging to B used by A -> denied;
 - pooled connection reused A -> B -> no tenant leakage;
 - missing DB tenant context -> no personal rows;
-- runtime role attempts DDL/BYPASSRLS path -> denied by privilege contract.
+- runtime role attempts DDL/BYPASSRLS path -> denied by privilege contract;
+- runtime role acting as table owner still cannot read/write another profile because FORCE RLS applies;
+- ADMIN account deletion returns no personal content, requires no target tenant context, and leaves zero target personal rows after cascade;
+- ADMIN cannot use deletion machinery as a read/list/export path.
 
 ## 18. Concurrency acceptance
 
