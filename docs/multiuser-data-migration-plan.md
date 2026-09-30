@@ -349,10 +349,31 @@ Before PROD enables deletion:
 
 Operational backup existence does not change the product semantic that DELETE cannot be undone by normal account operations.
 
+## 11.1 ADMIN delete implementation contract
+
+The target deletion path is schema-driven and does not require ADMIN to enter the target tenant context.
+
+Required foreign keys:
+- `user_identity.user_id -> app_user(user_id) ON DELETE CASCADE`;
+- `user_session.user_id -> app_user(user_id) ON DELETE CASCADE`;
+- `profile.user_id -> app_user(user_id) ON DELETE CASCADE`;
+- every profile-owned personal-content row: `profile_id -> profile(profile_id) ON DELETE CASCADE`.
+
+ADMIN performs a narrow AccountRepository delete of the target `app_user` after role/lifecycle authorization. The operation:
+- must not select/export target personal rows;
+- must not set `jscc.user_id` or `jscc.profile_id` to the target;
+- must not use `BYPASSRLS`;
+- returns only lifecycle result metadata;
+- leaves shared/system data unchanged.
+
+DEV and TEST integration evidence must prove zero personal residue after cascade and no personal-content exposure during the operation.
+
 ## 12. Database privilege gate
 
 Before PROD multiuser:
 - account-admission/capacity guard prevents new self-service accounts from causing automatic paid capacity consumption;
+- `profile` and every personal-content table use mandatory `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`;
+- every Stage-1 personal-content table stores `profile_id` directly; join-derived tenant scope is not used;
 - routine runtime credential supports only required application DML;
 - migration identity owns approved DDL/migration capability;
 - runtime cannot CREATE/ALTER/DROP protected schema objects;
@@ -431,7 +452,8 @@ All required:
 - stable GCP DEV -> TEST promotion path;
 - full multiuser TEST PASS;
 - runtime/DDL privilege separation PASS;
-- RLS negative matrix PASS;
+- RLS negative matrix PASS, including runtime-table-owner cross-tenant denial and mandatory FORCE RLS;
+- ADMIN cascade-delete/no-impersonation/no-personal-read PASS;
 - session revocation/deactivation PASS;
 - legacy-cookie cutover / forced reauthentication PASS;
 - new-account capacity admission guard PASS;
