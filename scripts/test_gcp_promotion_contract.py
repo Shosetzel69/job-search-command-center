@@ -42,6 +42,9 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertLess(bind, service)
         self.assertIn('roles/run.invoker', PROMOTE)
 
+    def test_seed_runtime_is_invoked_through_bash(self):
+        self.assertIn('bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"', PROMOTE)
+
     def test_cloudbuild_reuses_artifacts_and_promotes_dev_first(self):
         self.assertIn("build-job-if-missing", BUILD)
         self.assertIn("build-service-if-missing", BUILD)
