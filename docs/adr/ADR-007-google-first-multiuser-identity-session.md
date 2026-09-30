@@ -235,6 +235,8 @@ ADMIN:
 
 ADMIN receives no RLS bypass.
 
+ADMIN-initiated account deletion is a narrow account-domain delete. The AccountRepository deletes the target `app_user`; FK `ON DELETE CASCADE` removes identity, sessions, profile and profile-owned personal rows. ADMIN does not assume the target tenant context and the operation never returns target personal content.
+
 ### 9. Environment isolation
 
 ADR-003/006 remains authoritative:
@@ -265,6 +267,8 @@ The design follows these principles:
 - Secure/HttpOnly/SameSite cookies are used;
 - session identifier is regenerated at authentication;
 - personal authorization is server-derived and reinforced by PostgreSQL RLS;
+- `profile` and every Stage-1 personal-content table use mandatory `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`;
+- each Stage-1 personal-content table stores `profile_id` directly; join-derived tenant scope is not used in Stage 1;
 - runtime DB authority must not have `BYPASSRLS` and must be separated from migration/DDL authority before PROD multiuser.
 
 ## Consequences
