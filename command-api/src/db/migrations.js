@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { withTransaction, getMigrationPool } from './pool.js';
+import { getMigrationPool } from './pool.js';
 
 const DEFAULT_DIR = fileURLToPath(new URL('../../migrations/', import.meta.url));
 const FILE_RE = /^(\d{3,})_([a-z0-9][a-z0-9_-]*)\.sql$/;
@@ -33,22 +33,31 @@ async function appliedMigrations(db) {
 
 export async function migrate({ env = process.env, db = getMigrationPool(env), dir = DEFAULT_DIR } = {}) {
   const migrations = await loadMigrations(dir);
-  const applied = await appliedMigrations(db);
+  const client = await db.connect();
   const executed = [];
-  for (const migration of migrations) {
-    const existing = applied.get(migration.version);
-    if (existing) {
-      if (existing !== migration.checksum) throw new Error(`Migration checksum mismatch for ${migration.name}`);
-      continue;
-    }
-    await withTransaction(async tx => {
-      await tx.query(migration.sql);
-      await tx.query(
+  try {
+    await client.query('BEGIN');
+    await client.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-schema-migrate'))`);
+    const applied = await appliedMigrations(client);
+    for (const migration of migrations) {
+      const existing = applied.get(migration.version);
+      if (existing) {
+        if (existing !== migration.checksum) throw new Error(`Migration checksum mismatch for ${migration.name}`);
+        continue;
+      }
+      await client.query(migration.sql);
+      await client.query(
         'INSERT INTO schema_migrations(version, name, checksum) VALUES ($1, $2, $3)',
         [migration.version, migration.name, migration.checksum],
       );
-    }, { env, db });
-    executed.push(migration.name);
+      executed.push(migration.name);
+    }
+    await client.query('COMMIT');
+    return { applied:executed, current:migrations.at(-1).version };
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw error;
+  } finally {
+    client.release();
   }
-  return { applied:executed, current:migrations.at(-1).version };
 }

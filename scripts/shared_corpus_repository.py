@@ -659,7 +659,11 @@ def shared_collection_config(config: Mapping[str, Any]) -> dict[str, Any]:
             if label and label not in titles:
                 titles.append(label)
 
-    shared = dict(config)
+    shared = {
+        key: config[key]
+        for key in SYSTEM_COLLECTION_KEYS
+        if key in config
+    }
     shared["role_groups"] = {
         "shared_canonical_roles": {
             "enabled": True,

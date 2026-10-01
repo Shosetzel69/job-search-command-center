@@ -145,6 +145,74 @@ async function contextForIdentity(tx, subject) {
   });
 }
 
+function legacyApplicationId(item) {
+  const deterministic = createHash('sha256')
+    .update(JSON.stringify([item?.id || '', item?.company || '', item?.title || '', item?.applied_at || '']))
+    .digest('hex');
+  return [
+    deterministic.slice(0,8),
+    deterministic.slice(8,12),
+    '4' + deterministic.slice(13,16),
+    'a' + deterministic.slice(17,20),
+    deterministic.slice(20,32),
+  ].join('-');
+}
+
+async function importBootstrapData(tx, profileId, bootstrapSeed) {
+  const config = jsonObject(bootstrapSeed?.config);
+  const applicationsPayload = jsonObject(bootstrapSeed?.applications);
+  const { personal, system } = splitLegacyConfig(config);
+
+  await tx.query(
+    `INSERT INTO profile_preferences(profile_id, preferences, updated_at)
+     VALUES ($1, $2::jsonb, now())
+     ON CONFLICT(profile_id)
+     DO UPDATE SET preferences=EXCLUDED.preferences, updated_at=now()`,
+    [profileId, JSON.stringify(personal)],
+  );
+  await tx.query(
+    `UPDATE collection_policy
+        SET policy=$1::jsonb, updated_at=now()
+      WHERE singleton=true`,
+    [JSON.stringify(system)],
+  );
+
+  for (const item of applicationsPayload.applications || []) {
+    const id = legacyApplicationId(item);
+    await tx.query(
+      `INSERT INTO applications(
+          application_id, profile_id, company, title, location, countries,
+          reference, status, applied_at, next_status_check, source_url, snapshot
+        )
+        VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12::jsonb)
+        ON CONFLICT(application_id) DO NOTHING`,
+      [
+        id,
+        profileId,
+        String(item.company || 'Unknown'),
+        String(item.title || 'Unknown'),
+        item.location || null,
+        JSON.stringify(Array.isArray(item.countries) ? item.countries : []),
+        item.reference || null,
+        item.status || 'applied',
+        item.applied_at || null,
+        item.next_status_check || null,
+        item.url || null,
+        JSON.stringify(item),
+      ],
+    );
+  }
+}
+
+export async function ownerBootstrapPending(subject, env = process.env, { db = getPool(env) } = {}) {
+  const bootstrapAdmin = String(env.BOOTSTRAP_ADMIN_GOOGLE_SUB || env.ALLOWED_GOOGLE_SUB || '').trim();
+  if (!bootstrapAdmin || String(subject || '').trim() !== bootstrapAdmin) return false;
+  const result = await db.query(
+    'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton=true',
+  );
+  return !result.rows?.[0]?.owner_bootstrapped_at;
+}
+
 async function assertAdmissionAllowed(tx, env) {
   await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-admission'))`);
   const policyResult = await tx.query(
@@ -167,11 +235,12 @@ async function assertAdmissionAllowed(tx, env) {
   if (count >= limit) throw httpError('Account capacity limit reached', 503);
 }
 
-export async function resolveOrProvisionGoogleIdentity(payload, env = process.env, { db = getPool(env) } = {}) {
+export async function resolveOrProvisionGoogleIdentity(payload, env = process.env, { db = getPool(env), bootstrapSeed = null } = {}) {
   const subject = String(payload?.sub || '').trim();
   if (!subject) throw httpError('Google subject is required', 401);
 
   return withTransaction(async tx => {
+    await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-provision'))`);
     const existing = await contextForIdentity(tx, subject);
     if (existing) {
       await tx.query(
@@ -201,7 +270,7 @@ export async function resolveOrProvisionGoogleIdentity(payload, env = process.en
     const userId = bootstrapPending ? deterministicBootstrapUuid('user', appEnv, subject) : randomUUID();
     const profileId = bootstrapPending ? deterministicBootstrapUuid('profile', appEnv, subject) : randomUUID();
     const identityId = bootstrapPending ? deterministicBootstrapUuid('identity', appEnv, subject) : randomUUID();
-    const role = bootstrapAdmin && subject === bootstrapAdmin ? 'ADMIN' : 'USER';
+    const role = bootstrapPending ? 'ADMIN' : 'USER';
 
     await tx.query(
       'INSERT INTO app_user(user_id, role, status) VALUES ($1, $2, \'ACTIVE\')',
@@ -226,9 +295,24 @@ export async function resolveOrProvisionGoogleIdentity(payload, env = process.en
 
     await tx.query(`SELECT set_config('jscc.user_id', $1, true)`, [userId]);
     await tx.query('INSERT INTO profile(profile_id, user_id) VALUES ($1, $2)', [profileId, userId]);
+    await tx.query(`SELECT set_config('jscc.profile_id', $1, true)`, [profileId]);
+    await tx.query(
+      `INSERT INTO profile_preferences(profile_id, preferences)
+       VALUES ($1, '{}'::jsonb)
+       ON CONFLICT(profile_id) DO NOTHING`,
+      [profileId],
+    );
+
     if (bootstrapPending) {
+      if (!bootstrapSeed) throw httpError('Bootstrap seed is required for initial owner provisioning', 503);
+      await importBootstrapData(tx, profileId, bootstrapSeed);
       await tx.query(
-        'UPDATE system_bootstrap SET owner_bootstrapped_at = COALESCE(owner_bootstrapped_at, now()), updated_at = now() WHERE singleton = true',
+        `UPDATE system_bootstrap
+            SET owner_preferences_imported_at=COALESCE(owner_preferences_imported_at, now()),
+                owner_applications_imported_at=COALESCE(owner_applications_imported_at, now()),
+                owner_bootstrapped_at=COALESCE(owner_bootstrapped_at, now()),
+                updated_at=now()
+          WHERE singleton=true`,
       );
     }
 
@@ -306,25 +390,8 @@ export async function revokeSession(rawToken, env = process.env, options = {}) {
   return Number(result.rowCount || 0) > 0;
 }
 
-async function ensureConfigRows(tx, authContext, legacyConfig) {
-  const { personal, system } = splitLegacyConfig(legacyConfig);
-  await tx.query(
-    `INSERT INTO profile_preferences(profile_id, preferences)
-     VALUES ($1, $2::jsonb)
-     ON CONFLICT(profile_id) DO NOTHING`,
-    [authContext.profile_id, JSON.stringify(personal)],
-  );
-  await tx.query(
-    `INSERT INTO collection_policy(singleton, policy)
-     VALUES (true, $1::jsonb)
-     ON CONFLICT(singleton) DO NOTHING`,
-    [JSON.stringify(system)],
-  );
-}
-
-export async function effectiveConfig(authContext, legacyConfig = {}, env = process.env, { db = getPool(env) } = {}) {
+export async function effectiveConfig(authContext, env = process.env, { db = getPool(env) } = {}) {
   return withTenantTransaction(authContext, async tx => {
-    await ensureConfigRows(tx, authContext, legacyConfig);
     const [personalResult, systemResult] = await Promise.all([
       tx.query('SELECT preferences FROM profile_preferences WHERE profile_id = $1', [authContext.profile_id]),
       tx.query('SELECT policy FROM collection_policy WHERE singleton = true'),
@@ -446,6 +513,14 @@ export async function evaluateProfileJobs(authContext, preferences, nomenclature
   }, { env, db });
 }
 
+export async function nomenclatureReferenceCount(domain, code, env = process.env, { db = getPool(env) } = {}) {
+  const result = await db.query(
+    'SELECT public.jscc_nomenclature_reference_count($1, $2)::integer AS count',
+    [String(domain || ''), String(code || '')],
+  );
+  return Number(result.rows?.[0]?.count || 0);
+}
+
 export async function operationalHistory(authContext, env = process.env, { db = getPool(env) } = {}) {
   requireAdmin(authContext);
   const result = await db.query(
@@ -500,51 +575,6 @@ export async function listApplications(authContext, env = process.env, { db = ge
       [authContext.profile_id],
     );
     return { schema_version:'1.0', applications:result.rows || [] };
-  }, { env, db });
-}
-
-export async function seedApplications(authContext, legacyApplications, env = process.env, { db = getPool(env) } = {}) {
-  if (!Array.isArray(legacyApplications) || !legacyApplications.length) return 0;
-  return withTenantTransaction(authContext, async tx => {
-    const count = await tx.query('SELECT count(*)::integer AS count FROM applications WHERE profile_id = $1', [authContext.profile_id]);
-    if (Number(count.rows?.[0]?.count || 0) > 0) return 0;
-    let inserted = 0;
-    for (const item of legacyApplications) {
-      const deterministic = createHash('sha256')
-        .update(JSON.stringify([item.id || '', item.company || '', item.title || '', item.applied_at || '']))
-        .digest('hex');
-      const id = [
-        deterministic.slice(0,8),
-        deterministic.slice(8,12),
-        '4' + deterministic.slice(13,16),
-        'a' + deterministic.slice(17,20),
-        deterministic.slice(20,32),
-      ].join('-');
-      await tx.query(
-        `INSERT INTO applications(
-            application_id, profile_id, company, title, location, countries,
-            reference, status, applied_at, next_status_check, source_url, snapshot
-          )
-          VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12::jsonb)
-          ON CONFLICT(application_id) DO NOTHING`,
-        [
-          id,
-          authContext.profile_id,
-          String(item.company || 'Unknown'),
-          String(item.title || 'Unknown'),
-          item.location || null,
-          JSON.stringify(Array.isArray(item.countries) ? item.countries : []),
-          item.reference || null,
-          item.status || 'applied',
-          item.applied_at || null,
-          item.next_status_check || null,
-          item.url || null,
-          JSON.stringify(item),
-        ],
-      );
-      inserted += 1;
-    }
-    return inserted;
   }, { env, db });
 }
 

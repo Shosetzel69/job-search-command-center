@@ -107,8 +107,14 @@ CREATE TABLE collection_policy (
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
+INSERT INTO collection_policy(singleton, policy)
+VALUES (true, '{}'::jsonb)
+ON CONFLICT(singleton) DO NOTHING;
+
 CREATE TABLE system_bootstrap (
   singleton boolean PRIMARY KEY DEFAULT true CHECK (singleton),
+  owner_preferences_imported_at timestamptz,
+  owner_applications_imported_at timestamptz,
   owner_bootstrapped_at timestamptz,
   updated_at timestamptz NOT NULL DEFAULT now()
 );

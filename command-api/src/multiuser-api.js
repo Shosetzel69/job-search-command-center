@@ -20,6 +20,7 @@ import {
   operationalHistory,
   readCollectionPolicy,
   resolveOrProvisionGoogleIdentity,
+  ownerBootstrapPending,
   resolveSession,
   revokeSession,
   saveCapacityPolicy,
@@ -27,7 +28,6 @@ import {
   savePreferences,
   saveSchedulerConfig,
   schedulerConfig,
-  seedApplications,
   setAccountStatus,
   setJobState,
 } from './multiuser-repository.js';
@@ -121,7 +121,15 @@ export async function handleAuthRoute(request, env) {
     const direct = bearer(request);
     if (direct && direct !== COOKIE_SENTINEL) {
       const payload = await verifyGoogle(request, env);
-      const context = await resolveOrProvisionGoogleIdentity(payload, env);
+      let bootstrapSeed = null;
+      if (await ownerBootstrapPending(payload.sub, env)) {
+        const [config, applications] = await Promise.all([
+          readProtectedRuntimeData(env, 'search-config.json'),
+          readProtectedRuntimeData(env, 'applications.json'),
+        ]);
+        bootstrapSeed = { config, applications };
+      }
+      const context = await resolveOrProvisionGoogleIdentity(payload, env, { bootstrapSeed });
       const created = await createSession(context, env);
       return withCookie(json(summary(context)), sessionCookie(created.rawToken));
     }
@@ -145,28 +153,8 @@ export async function handleAuthRoute(request, env) {
   return null;
 }
 
-async function legacyConfig(env) {
-  try { return await readProtectedRuntimeData(env, 'search-config.json'); }
-  catch { return {}; }
-}
-
 async function currentPreferences(context, env) {
-  const legacy = await legacyConfig(env);
-  return effectiveConfig(context, legacy, env);
-}
-
-async function applicationsWithBootstrap(context, env) {
-  let result = await listApplications(context, env);
-  if (!result.applications.length && context.role === 'ADMIN') {
-    try {
-      const legacy = await readProtectedRuntimeData(env, 'applications.json');
-      await seedApplications(context, legacy?.applications || [], env);
-      result = await listApplications(context, env);
-    } catch {
-      // Bootstrap import is best-effort before cutover; the DB remains authoritative.
-    }
-  }
-  return result;
+  return effectiveConfig(context, env);
 }
 
 function requireAdmin(context) {
@@ -245,7 +233,7 @@ export async function handleAuthenticatedRoute(request, env, context) {
   }
 
   if (request.method === 'GET' && (url.pathname === '/applications' || url.pathname === '/data/applications.json')) {
-    return json(await applicationsWithBootstrap(context, env));
+    return json(await listApplications(context, env));
   }
 
   if (request.method === 'GET' && url.pathname === '/data/run-history.json') {

@@ -33,7 +33,11 @@ class SharedCorpusProjectionTests(unittest.TestCase):
             "role_groups": {"owner": {"enabled": True, "titles": ["Owner-only title"]}},
             "target_country_codes": ["RO"],
             "excluded_country_codes": ["DE"],
+            "work_modes": {"remote": False},
+            "excluded_company_patterns": ["owner-secret"],
+            "rate_min_eur_day": 999,
             "collection_freshness_hours": 24,
+            "source_strategy": "shared",
         }
         shared = repository.shared_collection_config(config)
         titles = shared["role_groups"]["shared_canonical_roles"]["titles"]
@@ -42,6 +46,11 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         self.assertNotIn("Owner-only title", titles)
         self.assertEqual(shared["target_country_codes"], [])
         self.assertEqual(shared["excluded_country_codes"], [])
+        self.assertNotIn("work_modes", shared)
+        self.assertNotIn("excluded_company_patterns", shared)
+        self.assertNotIn("rate_min_eur_day", shared)
+        self.assertEqual(shared["collection_freshness_hours"], 24)
+        self.assertEqual(shared["source_strategy"], "shared")
         self.assertTrue(shared["_jscc_shared_collection"])
 
     def test_shared_jobspipe_query_count_is_constant(self):

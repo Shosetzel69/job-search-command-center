@@ -44,6 +44,7 @@ RUN node --check command-api/src/server.js \
  && node --check command-api/src/db/readiness.js \
  && node --check command-api/src/db/migrations.js \
  && node --check command-api/src/db/privilege-readiness.js \
+ && node --check command-api/scripts/db-provision-runtime.mjs \
  && node --check command-api/src/static-frontend.js
 
 EXPOSE 8080

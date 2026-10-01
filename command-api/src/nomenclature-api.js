@@ -7,6 +7,7 @@ import {
 import { assertEnvironmentConfig } from './environment-config.js';
 import { BUILD_IDENTITY } from './build-identity.generated.js';
 import { readRuntimeJson, writeRuntimeJson } from './runtime-backend.js';
+import { nomenclatureReferenceCount } from './multiuser-repository.js';
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -42,14 +43,8 @@ async function readCatalog(env) {
   }
 }
 
-async function readContext(env) {
-  const configPath = env.SEARCH_CONFIG_PATH || 'data/search-config.json';
-  const applicationsPath = env.APPLICATIONS_PATH || 'data/applications.json';
-  const [{ payload:searchConfig }, { payload:applications }] = await Promise.all([
-    readRepoJson(env, configPath),
-    readRepoJson(env, applicationsPath),
-  ]);
-  return { searchConfig, applications };
+async function readContext(env, domain, code) {
+  return { dbReferenceCount:await nomenclatureReferenceCount(domain, code, env) };
 }
 
 async function parseJson(request) {
@@ -81,7 +76,7 @@ export default {
         const domain = decodeURIComponent(valueMatch[1]);
         const code = decodeURIComponent(valueMatch[2]);
         const { path, sha, catalog } = await readCatalog(env);
-        const context = await readContext(env);
+        const context = await readContext(env, domain, code);
         updateNomenclatureValue(catalog, domain, code, await parseJson(request), context);
         const commit = await writeRepoJson(env, path, sha, catalog, `Update ${domain}:${code} nomenclature value`);
         return json({ status:'saved', commit, catalog });

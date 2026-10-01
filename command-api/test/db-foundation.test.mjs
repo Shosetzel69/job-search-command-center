@@ -35,6 +35,13 @@ test('runtime and migration credentials are separately bound to the same environ
     /must be distinct/,
   );
   assert.throws(
+    () => migrationDatabaseConfig({
+      ...env,
+      NILE_MIGRATION_DATABASE_URL:'postgresql://runtime:different-password@db.example/jobsearch_test?sslmode=require',
+    }),
+    /roles must be distinct/,
+  );
+  assert.throws(
     () => migrationDatabaseConfig({ ...env, NILE_MIGRATION_DATABASE_URL:'postgresql://migration:secret@db.example/jobsearch_prod' }),
     /Database binding mismatch/,
   );
@@ -78,7 +85,7 @@ test('migration loader is ordered and checksum-stable', async () => {
   assert.equal(migrations[0].checksum, migrationChecksum('SELECT 1;\n'));
 });
 
-test('migration runner applies once and then is idempotent', async () => {
+test('migration runner applies once, is advisory-locked and then idempotent', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'jscc-db-migrate-'));
   const sql = 'CREATE TABLE schema_migrations(version text primary key, name text, checksum text);\n';
   await writeFile(join(dir, '001_schema_migrations.sql'), sql);
@@ -89,39 +96,39 @@ test('migration runner applies once and then is idempotent', async () => {
     query:async (text, params=[]) => {
       queries.push([text, params]);
       if (text === 'BEGIN' || text === 'COMMIT' || text === 'ROLLBACK') return { rows:[] };
+      if (text.includes("pg_advisory_xact_lock(hashtext('jscc-schema-migrate'))")) return { rows:[{}] };
+      if (text.includes("to_regclass('public.schema_migrations')")) return { rows:[{ table_name:tableExists ? 'schema_migrations' : null }] };
+      if (text.startsWith('SELECT version, checksum')) return { rows:[...applied].map(([version,checksum]) => ({version,checksum})) };
       if (text.includes('CREATE TABLE schema_migrations')) { tableExists = true; return { rows:[] }; }
       if (text.startsWith('INSERT INTO schema_migrations')) { applied.set(params[0], params[2]); return { rows:[] }; }
       return { rows:[] };
     },
     release:() => {},
   };
-  const db = {
-    connect:async () => client,
-    query:async text => {
-      if (text.includes("to_regclass('public.schema_migrations')")) return { rows:[{ table_name:tableExists ? 'schema_migrations' : null }] };
-      if (text.startsWith('SELECT version, checksum')) return { rows:[...applied].map(([version,checksum]) => ({version,checksum})) };
-      throw new Error(`unexpected query: ${text}`);
-    },
-  };
+  const db = { connect:async () => client };
   const first = await migrate({ env:{}, db, dir });
   assert.deepEqual(first.applied, ['001_schema_migrations.sql']);
   const second = await migrate({ env:{}, db, dir });
   assert.deepEqual(second.applied, []);
   assert.equal(applied.size, 1);
+  assert.equal(queries.filter(([text]) => text.includes("pg_advisory_xact_lock")).length, 2);
 });
 
-test('migration runner rejects checksum drift', async () => {
+test('migration runner rejects checksum drift under the migration lock', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'jscc-db-drift-'));
   const sql = 'SELECT 1;\n';
   await writeFile(join(dir, '001_foundation.sql'), sql);
-  const db = {
+  const client = {
     query:async text => {
+      if (text === 'BEGIN' || text === 'ROLLBACK') return { rows:[] };
+      if (text.includes("pg_advisory_xact_lock(hashtext('jscc-schema-migrate'))")) return { rows:[{}] };
       if (text.includes("to_regclass('public.schema_migrations')")) return { rows:[{ table_name:'schema_migrations' }] };
       if (text.startsWith('SELECT version, checksum')) return { rows:[{ version:'001', checksum:'different' }] };
       throw new Error(`unexpected query: ${text}`);
     },
+    release:() => {},
   };
-  await assert.rejects(migrate({ env:{}, db, dir }), /checksum mismatch/);
+  await assert.rejects(migrate({ env:{}, db:{ connect:async () => client }, dir }), /checksum mismatch/);
 });
 
 test('public Command API code does not receive raw DB credentials or direct SQL', async () => {

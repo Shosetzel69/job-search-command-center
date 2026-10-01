@@ -37,8 +37,15 @@ export function databaseConfig(env = process.env) {
 export function migrationDatabaseConfig(env = process.env) {
   const migration = connectionConfig(env, 'NILE_MIGRATION_DATABASE_URL');
   const runtime = String(env.NILE_DATABASE_URL || '').trim();
-  if (runtime && runtime === migration.connectionString) {
-    throw configError('Runtime and migration database credentials must be distinct');
+  if (runtime) {
+    const runtimeConfig = connectionConfig(env, 'NILE_DATABASE_URL');
+    const migrationUrl = new URL(migration.connectionString);
+    const runtimeUrl = new URL(runtimeConfig.connectionString);
+    const samePrincipal = decodeURIComponent(migrationUrl.username || '') === decodeURIComponent(runtimeUrl.username || '')
+      && migrationUrl.hostname === runtimeUrl.hostname
+      && (migrationUrl.port || '5432') === (runtimeUrl.port || '5432')
+      && decodeURIComponent(migrationUrl.pathname) === decodeURIComponent(runtimeUrl.pathname);
+    if (samePrincipal) throw configError('Runtime and migration database roles must be distinct');
   }
   return migration;
 }

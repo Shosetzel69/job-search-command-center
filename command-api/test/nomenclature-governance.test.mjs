@@ -69,8 +69,8 @@ test('configured work mode and contract type cannot be deactivated', () => {
 });
 
 test('applied application status is protected by application history', () => {
-  const refs = nomenclatureReferences('application_statuses', 'applied', { ...baseContext, nomenclatures:catalog() });
-  assert.deepEqual(refs, ['applications.status']);
+  const refs = nomenclatureReferences('application_statuses', 'applied', { ...baseContext, nomenclatures:catalog(), dbReferenceCount:2 });
+  assert.deepEqual(refs, ['applications.status', 'database.application_statuses']);
   assert.throws(
     () => deleteNomenclatureValue(catalog(), 'application_statuses', 'applied', baseContext),
     error => error.status === 409 && error.references.includes('applications.status'),

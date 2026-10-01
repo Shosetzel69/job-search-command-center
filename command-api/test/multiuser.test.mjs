@@ -138,12 +138,15 @@ test('multiuser migration encodes mandatory direct tenant RLS and account cascad
     assert.match(sql, new RegExp(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`));
   }
   for (const table of ['profile_preferences','profile_job_state','profile_job_evaluation','applications','profile_notes','profile_ui_preferences']) {
-    assert.match(sql, new RegExp(`profile_id uuid[^;]+REFERENCES profile\\(profile_id\\) ON DELETE CASCADE`, 's'));
+    const block = sql.match(new RegExp(`CREATE TABLE ${table} \\([\\s\\S]*?\\n\\);`))?.[0] || '';
+    assert.ok(block, `missing CREATE TABLE block for ${table}`);
+    assert.match(block, /profile_id uuid[^,\n]*REFERENCES profile\(profile_id\) ON DELETE CASCADE/);
   }
   assert.match(sql, /user_id uuid NOT NULL REFERENCES app_user\(user_id\) ON DELETE CASCADE/);
   assert.match(sql, /current_setting\('jscc\.profile_id', true\)/);
   assert.match(sql, /current_setting\('jscc\.user_id', true\)/);
   assert.match(sql, /CREATE TABLE system_bootstrap/);
+  assert.doesNotMatch(sql, /owner_profile_id/);
   assert.doesNotMatch(sql, /BYPASSRLS/i);
 });
 
