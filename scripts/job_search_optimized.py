@@ -88,6 +88,13 @@ def build_query_specs(config: dict[str, Any], state: dict[str, Any], now: dateti
         "include_total_results": True,
     }
     specs: dict[str, dict[str, Any]] = {}
+    if config.get("_jscc_shared_collection"):
+        specs["global_scope"] = {
+            **common,
+            **incremental_fields("global_scope"),
+        }
+        return specs
+
     if target_countries:
         specs["target_geography"] = {
             **common,
@@ -95,8 +102,6 @@ def build_query_specs(config: dict[str, Any], state: dict[str, Any], now: dateti
             **incremental_fields("target_geography"),
         }
 
-    # Remote is deliberately queried without a country restriction. This allows
-    # Worldwide / EU / EMEA scopes to be evaluated by the canonical local filter.
     specs["remote_scope"] = {
         **common,
         "remote": True,
@@ -145,6 +150,10 @@ def allocate_budget(counts: dict[str, int], budget: int) -> dict[str, int]:
     """Favor remote coverage while preserving target-geography coverage."""
     allocations = {name: 0 for name in counts}
     if budget <= 0:
+        return allocations
+
+    if "global_scope" in counts:
+        allocations["global_scope"] = min(max(0, counts["global_scope"]), budget)
         return allocations
 
     base_targets = {"remote_scope": 8, "target_geography": 6}

@@ -645,3 +645,205 @@ def persist_collection(
         "lifecycle_suppressed_sources": sorted(incomplete_source_ids),
         "global_projection_gap": global_projection_gap,
     }
+
+
+def shared_collection_config(config: Mapping[str, Any]) -> dict[str, Any]:
+    """Build a user-count-invariant retrieval envelope from the canonical taxonomy."""
+    taxonomy = _taxonomy()
+    titles: list[str] = []
+    for family in role_taxonomy.CANONICAL_FAMILIES:
+        if family == "UNKNOWN":
+            continue
+        for member in taxonomy["families"][family]["members"]:
+            label = _text(member.get("label"))
+            if label and label not in titles:
+                titles.append(label)
+
+    shared = dict(config)
+    shared["role_groups"] = {
+        "shared_canonical_roles": {
+            "enabled": True,
+            "titles": titles,
+        }
+    }
+    shared["target_regions"] = []
+    shared["target_country_codes"] = []
+    shared["search_country_codes"] = []
+    shared["excluded_regions"] = []
+    shared["excluded_country_codes"] = []
+    shared["_jscc_shared_collection"] = True
+    return shared
+
+
+SYSTEM_COLLECTION_KEYS = (
+    "collection_freshness_hours",
+    "source_strategy",
+    "web_browser_fallback_enabled",
+    "jobspipe_credit_budget_per_run",
+    "jobspipe_monthly_credit_guard",
+    "jobspipe_incremental_overlap_minutes",
+    "jobspipe_mode",
+    "jobspipe_apify_max_items_per_run",
+)
+
+
+def _db_connect(runtime_env: Mapping[str, str], connect: Any | None = None):
+    expected, connection_string = expected_database(runtime_env)
+    if connect is None:
+        try:
+            import psycopg
+        except ImportError as exc:
+            raise SharedCorpusError("psycopg is required for PostgreSQL persistence") from exc
+        connect = psycopg.connect
+    return expected, connection_string, connect
+
+
+def apply_collection_policy(
+    config: Mapping[str, Any],
+    *,
+    env: Mapping[str, str] | None = None,
+    connect: Any | None = None,
+) -> dict[str, Any]:
+    """Overlay only system-owned collection settings from PostgreSQL.
+
+    Profile criteria remain outside this system policy. The legacy file is still
+    accepted as the transitional collector baseline until final JSON retirement.
+    """
+    runtime_env = os.environ if env is None else env
+    connection_string = str(runtime_env.get("NILE_DATABASE_URL") or "").strip()
+    if not connection_string:
+        if _is_cloud_runtime(runtime_env):
+            raise SharedCorpusError("NILE_DATABASE_URL is required in container/GCP runtime")
+        return dict(config)
+
+    expected, connection_string, connector = _db_connect(runtime_env, connect)
+    with connector(connection_string) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            row = cursor.fetchone()
+            if not row or str(row[0]) != expected:
+                raise SharedCorpusError(f"Connected database does not match environment binding: expected {expected}")
+            cursor.execute("SELECT policy FROM collection_policy WHERE singleton = true")
+            row = cursor.fetchone()
+            policy = row[0] if row and isinstance(row[0], dict) else {}
+
+    merged = dict(config)
+    for key in SYSTEM_COLLECTION_KEYS:
+        if key in policy:
+            merged[key] = policy[key]
+    return merged
+
+
+def persist_operational_run(
+    status: Mapping[str, Any],
+    *,
+    env: Mapping[str, str] | None = None,
+    connect: Any | None = None,
+) -> dict[str, Any]:
+    """Persist run history as system-owned PostgreSQL state."""
+    runtime_env = os.environ if env is None else env
+    connection_string = str(runtime_env.get("NILE_DATABASE_URL") or "").strip()
+    if not connection_string:
+        if _is_cloud_runtime(runtime_env):
+            raise SharedCorpusError("NILE_DATABASE_URL is required in container/GCP runtime")
+        return {"status": "local_not_configured"}
+
+    expected, connection_string, connector = _db_connect(runtime_env, connect)
+    run_id = _text(status.get("run_id"))
+    if not run_id:
+        raise SharedCorpusError("run_id is required for operational history persistence")
+
+    with connector(connection_string) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            row = cursor.fetchone()
+            if not row or str(row[0]) != expected:
+                raise SharedCorpusError(f"Connected database does not match environment binding: expected {expected}")
+
+            cursor.execute(
+                """
+                INSERT INTO search_runs(
+                    run_id, status, started_at, completed_at, records_inspected,
+                    jobs_published, excluded, payload
+                )
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                ON CONFLICT(run_id)
+                DO UPDATE SET status = EXCLUDED.status,
+                              started_at = EXCLUDED.started_at,
+                              completed_at = EXCLUDED.completed_at,
+                              records_inspected = EXCLUDED.records_inspected,
+                              jobs_published = EXCLUDED.jobs_published,
+                              excluded = EXCLUDED.excluded,
+                              payload = EXCLUDED.payload
+                """,
+                (
+                    run_id,
+                    _text(status.get("status")) or "unknown",
+                    status.get("started_at"),
+                    status.get("completed_at"),
+                    int(status.get("records_inspected") or 0),
+                    int(status.get("jobs_published") or 0),
+                    int(status.get("excluded") or 0),
+                    json.dumps(_json_safe(dict(status)), ensure_ascii=False),
+                ),
+            )
+
+            for item in status.get("source_results") or []:
+                if not isinstance(item, Mapping):
+                    continue
+                execution_id = _text(item.get("source_execution_id"))
+                if not execution_id:
+                    continue
+                cursor.execute(
+                    """
+                    INSERT INTO source_run_results(
+                        source_execution_id, run_id, source_id, source, connector,
+                        collection_method, outcome, records, error_code,
+                        failure_stage, http_status, payload
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s::jsonb)
+                    ON CONFLICT(source_execution_id)
+                    DO UPDATE SET outcome = EXCLUDED.outcome,
+                                  records = EXCLUDED.records,
+                                  error_code = EXCLUDED.error_code,
+                                  failure_stage = EXCLUDED.failure_stage,
+                                  http_status = EXCLUDED.http_status,
+                                  payload = EXCLUDED.payload
+                    """,
+                    (
+                        execution_id,
+                        run_id,
+                        item.get("source_id"),
+                        item.get("source"),
+                        item.get("connector"),
+                        item.get("collection_method"),
+                        item.get("outcome"),
+                        int(item.get("records") or 0),
+                        item.get("error_code"),
+                        item.get("failure_stage"),
+                        item.get("http_status"),
+                        json.dumps(_json_safe(dict(item)), ensure_ascii=False),
+                    ),
+                )
+
+            cursor.execute(
+                """
+                INSERT INTO scheduler_state(singleton, last_triggered_at, last_run_id, state, updated_at)
+                VALUES (true, %s, %s, %s::jsonb, now())
+                ON CONFLICT(singleton)
+                DO UPDATE SET last_triggered_at = EXCLUDED.last_triggered_at,
+                              last_run_id = EXCLUDED.last_run_id,
+                              state = EXCLUDED.state,
+                              updated_at = now()
+                """,
+                (
+                    status.get("started_at"),
+                    run_id,
+                    json.dumps({
+                        "status": status.get("status"),
+                        "completed_at": status.get("completed_at"),
+                    }, ensure_ascii=False),
+                ),
+            )
+
+    return {"status": "persisted", "run_id": run_id}

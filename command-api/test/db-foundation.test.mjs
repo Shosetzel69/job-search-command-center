@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { databaseConfig, expectedDatabase } from '../src/db/config.js';
+import { databaseConfig, expectedDatabase, migrationDatabaseConfig } from '../src/db/config.js';
 import { databaseReadiness } from '../src/db/readiness.js';
 import { withTransaction } from '../src/db/pool.js';
 import { loadMigrations, migrate, migrationChecksum } from '../src/db/migrations.js';
@@ -19,6 +19,25 @@ test('database binding is environment-static and fail-closed', () => {
   assert.equal(config.poolMax, 2);
   assert.throws(() => databaseConfig({ ...env, NILE_DATABASE_URL:'postgresql://user:secret@db.example/jobsearch_prod' }), /Database binding mismatch/);
   assert.throws(() => databaseConfig({ APP_ENV:'dev' }), /NILE_DATABASE_URL is required/);
+});
+
+test('runtime and migration credentials are separately bound to the same environment database', () => {
+  const env = {
+    APP_ENV:'test',
+    NILE_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_test',
+    NILE_MIGRATION_DATABASE_URL:'postgresql://migration:secret@db.example/jobsearch_test',
+  };
+  assert.equal(databaseConfig(env).expectedDatabase, 'jobsearch_test');
+  assert.equal(migrationDatabaseConfig(env).expectedDatabase, 'jobsearch_test');
+  assert.notEqual(databaseConfig(env).connectionString, migrationDatabaseConfig(env).connectionString);
+  assert.throws(
+    () => migrationDatabaseConfig({ ...env, NILE_MIGRATION_DATABASE_URL:env.NILE_DATABASE_URL }),
+    /must be distinct/,
+  );
+  assert.throws(
+    () => migrationDatabaseConfig({ ...env, NILE_MIGRATION_DATABASE_URL:'postgresql://migration:secret@db.example/jobsearch_prod' }),
+    /Database binding mismatch/,
+  );
 });
 
 test('database readiness returns non-secret identity only', async () => {

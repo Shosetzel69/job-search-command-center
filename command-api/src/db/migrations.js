@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { readdir, readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { withTransaction, getPool } from './pool.js';
+import { withTransaction, getMigrationPool } from './pool.js';
 
 const DEFAULT_DIR = fileURLToPath(new URL('../../migrations/', import.meta.url));
 const FILE_RE = /^(\d{3,})_([a-z0-9][a-z0-9_-]*)\.sql$/;
@@ -31,7 +31,7 @@ async function appliedMigrations(db) {
   return new Map(result.rows.map(row => [String(row.version), String(row.checksum)]));
 }
 
-export async function migrate({ env = process.env, db = getPool(env), dir = DEFAULT_DIR } = {}) {
+export async function migrate({ env = process.env, db = getMigrationPool(env), dir = DEFAULT_DIR } = {}) {
   const migrations = await loadMigrations(dir);
   const applied = await appliedMigrations(db);
   const executed = [];

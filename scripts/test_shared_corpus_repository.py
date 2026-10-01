@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from unittest.mock import patch
 
+import job_search_apify as apify
+import job_search_optimized as optimized
 import shared_corpus_repository as repository
 
 
@@ -26,6 +28,39 @@ class FakeCursor:
 
 
 class SharedCorpusProjectionTests(unittest.TestCase):
+    def test_shared_collection_envelope_is_profile_independent(self):
+        config = {
+            "role_groups": {"owner": {"enabled": True, "titles": ["Owner-only title"]}},
+            "target_country_codes": ["RO"],
+            "excluded_country_codes": ["DE"],
+            "collection_freshness_hours": 24,
+        }
+        shared = repository.shared_collection_config(config)
+        titles = shared["role_groups"]["shared_canonical_roles"]["titles"]
+        self.assertIn("Project Manager", titles)
+        self.assertIn("Scrum Master", titles)
+        self.assertNotIn("Owner-only title", titles)
+        self.assertEqual(shared["target_country_codes"], [])
+        self.assertEqual(shared["excluded_country_codes"], [])
+        self.assertTrue(shared["_jscc_shared_collection"])
+
+    def test_shared_jobspipe_query_count_is_constant(self):
+        config = repository.shared_collection_config({
+            "collection_freshness_hours": 24,
+            "jobspipe_incremental_overlap_minutes": 2,
+            "jobspipe_apify_max_items_per_run": 5000,
+        })
+        specs = optimized.build_query_specs(config, {}, NOW)
+        self.assertEqual(list(specs), ["global_scope"])
+        self.assertNotIn("job_country_code_or", specs["global_scope"])
+        self.assertNotIn("remote", specs["global_scope"])
+        self.assertEqual(optimized.allocate_budget({"global_scope": 1000}, 14), {"global_scope": 14})
+        apify_specs = apify._query_specs(config)
+        self.assertEqual(len(apify_specs), 1)
+        self.assertEqual(apify_specs[0][0], "global_scope")
+        self.assertNotIn("countries", apify_specs[0][1])
+        self.assertNotIn("remote", apify_specs[0][1])
+
     def test_external_id_precedes_url_and_personal_fields_are_not_persisted(self):
         with patch.object(repository, "_role_family", return_value=("PROJECT_MANAGEMENT", "matched")):
             posting = repository.prepare_posting({

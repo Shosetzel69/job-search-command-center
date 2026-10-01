@@ -11,31 +11,28 @@ import {
   withSessionAuthorization,
 } from '../src/session-cookie.js';
 
-function fakeJwt(exp) {
-  const encode = value => Buffer.from(JSON.stringify(value)).toString('base64url');
-  return `${encode({ alg:'none', typ:'JWT' })}.${encode({ sub:'user', exp })}.signature`;
-}
+const opaqueToken = 'a'.repeat(43);
 
 test('cookie parser returns only the named session value', () => {
-  assert.equal(cookieValue(`other=x; ${SESSION_COOKIE_NAME}=abc.def; theme=dark`), 'abc.def');
+  assert.equal(cookieValue(`other=x; ${SESSION_COOKIE_NAME}=${opaqueToken}; theme=dark`), opaqueToken);
   assert.equal(cookieValue('other=x'), null);
 });
 
-test('real bearer token takes precedence over a session cookie', () => {
-  const request = new Request('https://app.example.test/data/jobs.json', {
-    headers: { Authorization:'Bearer direct-token', Cookie:`${SESSION_COOKIE_NAME}=cookie-token` },
+test('real bearer token takes precedence over a session cookie only at explicit caller boundary', () => {
+  const request = new Request('https://app.example.test/auth/session', {
+    headers: { Authorization:'Bearer google-token', Cookie:`${SESSION_COOKIE_NAME}=${opaqueToken}` },
   });
-  assert.equal(sessionTokenFromRequest(request), 'direct-token');
+  assert.equal(sessionTokenFromRequest(request), 'google-token');
   assert.equal(withSessionAuthorization(request), request);
 });
 
-test('cookie session sentinel is replaced by the HttpOnly cookie token', () => {
+test('cookie session sentinel resolves to the HttpOnly opaque cookie token', () => {
   const request = new Request('https://app.example.test/data/jobs.json', {
-    headers: { Authorization:`Bearer ${COOKIE_SESSION_BEARER}`, Cookie:`${SESSION_COOKIE_NAME}=cookie-token` },
+    headers: { Authorization:`Bearer ${COOKIE_SESSION_BEARER}`, Cookie:`${SESSION_COOKIE_NAME}=${opaqueToken}` },
   });
   const authorized = withSessionAuthorization(request);
-  assert.equal(sessionTokenFromRequest(request), 'cookie-token');
-  assert.equal(authorized.headers.get('Authorization'), 'Bearer cookie-token');
+  assert.equal(sessionTokenFromRequest(request), opaqueToken);
+  assert.equal(authorized.headers.get('Authorization'), `Bearer ${opaqueToken}`);
 });
 
 test('missing cookie removes the non-secret cookie-session sentinel', () => {
@@ -45,27 +42,21 @@ test('missing cookie removes the non-secret cookie-session sentinel', () => {
   assert.equal(withSessionAuthorization(request).headers.get('Authorization'), null);
 });
 
-test('session cookie is host-only secure HttpOnly strict and bounded by token expiry', () => {
-  const now = 1_800_000_000;
-  const token = fakeJwt(now + 1800);
-  const value = sessionCookie(token, now);
+test('session cookie is opaque host-only secure HttpOnly strict and fixed to one hour', () => {
+  const value = sessionCookie(opaqueToken);
   assert.match(value, new RegExp(`^${SESSION_COOKIE_NAME}=`));
-  assert.match(value, /Max-Age=1800/);
+  assert.match(value, /Max-Age=3600/);
   assert.match(value, /Path=\//);
   assert.match(value, /Secure/);
   assert.match(value, /HttpOnly/);
   assert.match(value, /SameSite=Strict/);
   assert.doesNotMatch(value, /Domain=/i);
+  assert.doesNotMatch(value, /\./, 'opaque session token is not a JWT');
 });
 
-test('session cookie lifetime never exceeds one hour', () => {
-  const now = 1_800_000_000;
-  assert.match(sessionCookie(fakeJwt(now + 7200), now), /Max-Age=3600/);
-});
-
-test('expired token cannot create a server session cookie', () => {
-  const now = 1_800_000_000;
-  assert.throws(() => sessionCookie(fakeJwt(now), now), /expired/i);
+test('JWT-shaped and malformed values cannot create the new session cookie', () => {
+  assert.throws(() => sessionCookie('a.b.c'), /invalid opaque token/i);
+  assert.throws(() => sessionCookie('short'), /invalid opaque token/i);
 });
 
 test('logout cookie invalidates the host-only session immediately', () => {

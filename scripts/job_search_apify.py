@@ -62,6 +62,9 @@ def _query_specs(config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
     target_limit = max(1, int(round(max_items * 0.4))) if target_countries else 0
     remote_limit = max_items - target_limit
     common = {"searchTerms": titles, "postedWithinDays": posted_days}
+    if config.get("_jscc_shared_collection"):
+        return [("global_scope", {**common, "maxItems": max_items})]
+
     specs: list[tuple[str, dict[str, Any]]] = []
     if target_limit:
         specs.append(("target_geography", {**common, "countries": target_countries, "maxItems": target_limit}))

@@ -12,6 +12,7 @@ import job_search as engine
 import job_search_apify as apify
 import job_search_optimized as optimized
 import source_orchestration as orchestration
+import shared_corpus_repository as shared_corpus
 
 HISTORY_PATH = engine.RUNTIME_DATA / "run-history.json"
 HISTORY_LIMIT = 10
@@ -225,9 +226,11 @@ def main() -> int:
         return 0
 
     now = datetime.now(timezone.utc)
-    config = engine.load_config()
+    config = shared_corpus.apply_collection_policy(engine.load_config())
     code = orchestration.run(config, now)
 
+    status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+    shared_corpus.persist_operational_run(status)
     append_run_history()
     stamp_jobs_provenance()
     if code == 0:

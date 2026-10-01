@@ -1,5 +1,3 @@
-import { decodeJwt } from 'jose';
-
 export const SESSION_COOKIE_NAME = '__Host-jscc_session';
 export const COOKIE_SESSION_BEARER = '__JSCC_COOKIE_SESSION__';
 const MAX_SESSION_SECONDS = 60 * 60;
@@ -26,36 +24,27 @@ export function cookieValue(cookieHeader, name = SESSION_COOKIE_NAME) {
 
 export function sessionTokenFromRequest(request) {
   const bearer = bearerToken(request);
-  if (bearer && bearer !== COOKIE_SESSION_BEARER) return bearer;
   const cookieToken = cookieValue(request.headers.get('Cookie'));
   if (bearer === COOKIE_SESSION_BEARER) return cookieToken;
-  return cookieToken || bearer;
+  return bearer || cookieToken || null;
 }
 
 export function withSessionAuthorization(request) {
   const bearer = bearerToken(request);
   if (bearer && bearer !== COOKIE_SESSION_BEARER) return request;
-
   const headers = new Headers(request.headers);
-  const token = sessionTokenFromRequest(request);
+  const token = cookieValue(request.headers.get('Cookie'));
   if (token) headers.set('Authorization', `Bearer ${token}`);
   else headers.delete('Authorization');
   return new Request(request, { headers });
 }
 
-export function sessionCookie(token, nowSeconds = Math.floor(Date.now() / 1000)) {
-  let payload;
-  try {
-    payload = decodeJwt(token);
-  } catch {
-    throw new Error('Cannot create session cookie from an invalid Google ID token');
+export function sessionCookie(token) {
+  const value = String(token || '');
+  if (!/^[A-Za-z0-9_-]{43,128}$/.test(value)) {
+    throw new Error('Cannot create session cookie from an invalid opaque token');
   }
-  const exp = Number(payload?.exp);
-  if (!Number.isFinite(exp) || exp <= nowSeconds) {
-    throw new Error('Cannot create session cookie from an expired Google ID token');
-  }
-  const maxAge = Math.max(1, Math.min(MAX_SESSION_SECONDS, Math.floor(exp - nowSeconds)));
-  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(token)}; Max-Age=${maxAge}; Path=/; Secure; HttpOnly; SameSite=Strict`;
+  return `${SESSION_COOKIE_NAME}=${encodeURIComponent(value)}; Max-Age=${MAX_SESSION_SECONDS}; Path=/; Secure; HttpOnly; SameSite=Strict`;
 }
 
 export function clearSessionCookie() {

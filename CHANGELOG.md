@@ -12,7 +12,7 @@
 
 ### Functionalitati
 
-- #457 / ATC-275-03: introdus shared canonical job corpus in PostgreSQL (`canonical_jobs` + `source_postings`), identity precedence source/external-id -> canonical URL, cross-source merge conservator, lifecycle `ACTIVE -> UNCONFIRMED -> INACTIVE`, 90-day retention marker, role-family canonica si persistence fail-closed din Cloud Run Job inaintea publicarii JSON tranzitorii.
+- #265 / Multiuser work package: implementat corpusul shared PostgreSQL, identity/profile + FORCE RLS, preferinte/FIT/state/aplicatii per profil, sesiuni JSCC opace Google-first, lifecycle ADMIN, collection/scheduler global, operational history PostgreSQL, separare runtime/migration DB credentials, capacity guard si tooling backup/restore non-PROD; profile changes nu declanseaza provider retrieval.
 
 - #93 / Release 1 Wave 3: materializate campurile canonice de guvernanta pentru toate sursele non-Monster din `data/sources.json`; eliminata dependenta de metadata implicita la citire, cu Monster pastrat explicit ca exceptie legacy in #237.
 - #231 / Release 1 Wave 3: Loguri consuma outcome/error_code/failure_stage structurat, publica agregate in run-status/run-history si separa `success_empty`/starile asteptate de neexecutie de runtime failures.

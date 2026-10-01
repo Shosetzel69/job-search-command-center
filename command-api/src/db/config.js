@@ -9,15 +9,15 @@ export function expectedDatabase(appEnv) {
   return database;
 }
 
-export function databaseConfig(env = process.env) {
+function connectionConfig(env, variableName) {
   const appEnv = String(env.APP_ENV || '').trim().toLowerCase();
   const expected = expectedDatabase(appEnv);
-  const connectionString = String(env.NILE_DATABASE_URL || '').trim();
-  if (!connectionString) throw configError('NILE_DATABASE_URL is required');
+  const connectionString = String(env[variableName] || '').trim();
+  if (!connectionString) throw configError(`${variableName} is required`);
   let parsed;
   try { parsed = new URL(connectionString); }
-  catch { throw configError('NILE_DATABASE_URL is invalid'); }
-  if (!['postgres:','postgresql:'].includes(parsed.protocol)) throw configError('NILE_DATABASE_URL must use PostgreSQL');
+  catch { throw configError(`${variableName} is invalid`); }
+  if (!['postgres:','postgresql:'].includes(parsed.protocol)) throw configError(`${variableName} must use PostgreSQL`);
   const actual = decodeURIComponent(parsed.pathname.replace(/^\//, ''));
   if (actual !== expected) throw configError(`Database binding mismatch: expected ${expected}`);
   return Object.freeze({
@@ -28,4 +28,17 @@ export function databaseConfig(env = process.env) {
     connectionTimeoutMillis:Number(env.DB_CONNECTION_TIMEOUT_MS || 10000),
     idleTimeoutMillis:Number(env.DB_IDLE_TIMEOUT_MS || 30000),
   });
+}
+
+export function databaseConfig(env = process.env) {
+  return connectionConfig(env, 'NILE_DATABASE_URL');
+}
+
+export function migrationDatabaseConfig(env = process.env) {
+  const migration = connectionConfig(env, 'NILE_MIGRATION_DATABASE_URL');
+  const runtime = String(env.NILE_DATABASE_URL || '').trim();
+  if (runtime && runtime === migration.connectionString) {
+    throw configError('Runtime and migration database credentials must be distinct');
+  }
+  return migration;
 }

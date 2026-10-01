@@ -530,15 +530,16 @@ def run(config, now):
     run_id = "github-" + now.strftime("%Y%m%dT%H%M%SZ")
     plan = build_plan(json.loads(SOURCES_PATH.read_text(encoding="utf-8")))
     prepare_source_execution_ids(plan, run_id)
+    collection_config = shared_corpus.shared_collection_config(config)
     diagnostics.emit_event(
         "search.run.started",
         "INFO",
         run_id=run_id,
-        source_strategy=config.get("source_strategy") or "all active sources equally",
+        source_strategy=collection_config.get("source_strategy") or "all active sources equally",
         sources_configured=len(plan),
         sources_active=sum(item["active"] for item in plan),
     )
-    collection, metadata, mode = collect_sources(config, state, now, plan, run_id)
+    collection, metadata, mode = collect_sources(collection_config, state, now, plan, run_id)
     finalize_source_outcomes(plan, run_id)
     successful = any(result.ok for result in collection)
     shared_corpus_result = None
