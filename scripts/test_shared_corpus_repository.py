@@ -99,7 +99,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
             country_codes=("RO",),
             work_mode="hybrid",
             role_family="PROJECT_MANAGEMENT",
-            posted_at=NOW.isoformat(),
+            posted_at=NOW,
             repost_of_external_job_id=None,
             payload={},
         )
@@ -218,6 +218,52 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         result = repository.persist_collection([], [], run_id="run", now=NOW, env={})
         self.assertEqual(result["status"], "local_not_configured")
 
+    def test_persist_collection_preserves_exact_connection_string_and_db_identity(self):
+        seen = {}
+        cursor = FakeCursor([("jobsearch_dev",)])
+
+        class CursorContext:
+            def __enter__(self):
+                return cursor
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        class Connection:
+            def cursor(self):
+                return CursorContext()
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, exc_type, exc, tb):
+                return False
+
+        def connect(connection_string):
+            seen["connection_string"] = connection_string
+            return Connection()
+
+        url = "postgresql://user:p%20x@db.example/jobsearch_dev?sslmode=require"
+        result = repository.persist_collection(
+            [],
+            [],
+            run_id="run-db",
+            now=NOW,
+            env={"APP_ENV": "dev", "NILE_DATABASE_URL": url},
+            connect=connect,
+        )
+        self.assertEqual(result["status"], "persisted")
+        self.assertEqual(seen["connection_string"], url)
+
+    def test_lifecycle_sql_is_two_stage_and_sets_90_day_retention(self):
+        cursor = FakeCursor()
+        repository._advance_lifecycle(cursor, {"src-a"}, "run-life", NOW)
+        sql = "\n".join(query for query, _ in cursor.queries)
+        self.assertIn("WHEN lifecycle_status = 'ACTIVE' THEN 'UNCONFIRMED'", sql)
+        self.assertIn("WHEN lifecycle_status = 'UNCONFIRMED' THEN 'INACTIVE'", sql)
+        self.assertIn("interval '90 days'", sql)
+        self.assertIn("seen_run_id IS DISTINCT FROM", sql)
+
     def test_migration_encodes_identity_lifecycle_and_retention_contracts(self):
         sql = (ROOT / "command-api/migrations/002_shared_job_corpus.sql").read_text(encoding="utf-8")
         self.assertIn("UNIQUE(source_id, identity_kind, identity_value)", sql)
@@ -225,6 +271,9 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertIn("retention_until", sql)
         self.assertIn("repost_of_posting_id", sql)
         self.assertIn("work_mode IN ('remote', 'hybrid', 'onsite', 'unknown')", sql)
+        self.assertIn("identity_value = external_job_id", sql)
+        self.assertIn("identity_value = canonical_url", sql)
+        self.assertIn("ON DELETE RESTRICT", sql)
 
 
 if __name__ == "__main__":
