@@ -6,7 +6,7 @@ from unittest.mock import patch
 import shared_corpus_repository as repository
 
 
-NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone)
+NOW = datetime(2026, 10, 1, 12, 0, tzinfo=timezone.utc)
 ROOT = Path(__file__).resolve().parents[1]
 
 
