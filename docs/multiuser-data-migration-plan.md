@@ -188,7 +188,9 @@ Authority during this slice:
 - PostgreSQL is the target authority for the new shared canonical-job/source-posting domain once the slice is accepted;
 - persistence succeeds before the legacy single-user jobs snapshot may be published;
 - `data/jobs.json` remains the legacy personal/current-user view until MU-S3 and is not treated as a second shared-corpus authority;
-- no profile FIT/status/pros/risks are stored in shared rows.
+- no profile FIT/status/pros/risks are stored in shared rows;
+- current usable jobs may be seeded idempotently with deterministic shared IDs; this is a bounded seed, not a claim of exhaustive historical recovery;
+- `retention_until` is recorded in S2, while physical purge stays disabled until retained personal references can be checked safely.
 
 Does not:
 - expose multiple users yet;
