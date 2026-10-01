@@ -1,8 +1,13 @@
 # Project Sanity
 
 Status: CANONICAL
+Version: v1.1
+Applicability: CURRENT
+Applies to: BOTH
+Effective from: 2026-10-01
 Scope: JSCC chat-resume sanity
-Implements: #211, #222, #227
+Implements: #211, #222, #227, #448
+Last verified: 2026-10-01
 
 ## 1. Goal
 
@@ -109,6 +114,8 @@ Use the latest successful `Project sanity snapshot` and targeted GitHub evidence
 
 Workflow: `.github/workflows/project-sanity.yml`
 Artifact: `current-project-state`
+
+The workflow is manual-only (`workflow_dispatch`) during the GitHub Actions conservation window. Run it explicitly when a fresh snapshot is required; no push, issue, workflow-run or scheduled event should allocate a sanity runner automatically.
 
 If current evidence cannot be established, do not guess. Return only a concise blocked result:
 
