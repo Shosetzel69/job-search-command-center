@@ -1,30 +1,6 @@
 name: Validate Command API
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "command-api/**"
-      - "frontend/**"
-      - "scripts/**"
-      - "shared/**"
-      - "requirements-search.txt"
-      - "data/sources.json"
-      - "data/source-categories.json"
-      - "data/nomenclatures.json"
-      - "data/applications.json"
-      - "data/search-config.json"
-      - "data/run-history.json"
-      - ".github/workflows/command-api-check.yml"
-      - ".github/workflows/job-search-full.yml"
-      - ".github/workflows/deploy-environment.yml"
-      - ".github/workflows/ai-release-dispatch.yml"
-      - ".github/workflows/record-test-pass.yml"
-      - ".github/workflows/prod-cutover.yml"
-      - "config/environments.json"
-      - "config/prod-baseline-migration-332.json"
-      - "config/provenance/prod-baseline-332/**"
-      - "package.json"
   pull_request:
     paths:
       - "command-api/**"

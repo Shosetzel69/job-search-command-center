@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### CI / operare
+
+- #448 / ATC-448-01: redus consumul GitHub Actions la doua gate-uri automate pe PR (`Validate Command API` path-filtered si `Secret scanning`); documentatie, AI bridge, source finalize, JobsPipe si project sanity raman disponibile explicit prin `Run workflow`, fara trigger autonom. Workflow-urile de deploy/search/TEST/PROD raman on-demand/manual si nu se introduce scheduler GitHub pentru runtime.
+
 ### Security
 
 - #250 / R1.5: protected `/data/*` reads now use the current isolated runtime repository instead of the immutable deploy Static Assets snapshot, so Source Registry/config/nomenclature mutations persist visibly across reload.

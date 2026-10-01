@@ -1,11 +1,7 @@
 name: Finalize validated source registry
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/finalize-source-registry.yml"
-      - "scripts/finalize_source_registry.py"
+  workflow_dispatch:
 
 permissions:
   contents: write

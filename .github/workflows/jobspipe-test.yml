@@ -1,10 +1,6 @@
 name: JobsPipe connection test
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/jobspipe-test.yml"
   workflow_dispatch:
 
 permissions:

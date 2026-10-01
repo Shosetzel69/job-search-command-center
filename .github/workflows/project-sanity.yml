@@ -2,18 +2,6 @@ name: Project sanity snapshot
 
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-  issues:
-    types: [opened, closed, reopened, labeled, unlabeled]
-  workflow_run:
-    workflows:
-      - Environment automation
-      - TEST PASS attestation
-      - PROD promotion
-    types: [completed]
-  schedule:
-    - cron: "17 3 * * *"
 
 permissions:
   contents: read

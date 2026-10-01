@@ -1,12 +1,13 @@
 name: Documentation policy
 
 on:
-  pull_request:
-    paths:
-      - "**/*.md"
-      - ".github/ISSUE_TEMPLATE/**"
-      - "scripts/check_documentation_policy.mjs"
-      - ".github/workflows/documentation-policy.yml"
+  workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Base branch or ref used to select changed Markdown
+        required: false
+        default: main
+        type: string
 
 permissions:
   contents: read
@@ -23,17 +24,17 @@ jobs:
       - name: Collect changed Markdown files
         id: changed
         shell: bash
+        env:
+          BASE_REF: ${{ inputs.base_ref || 'main' }}
         run: |
           set -euo pipefail
-          git diff --name-only --diff-filter=ACMRT "$GITHUB_BASE_SHA" "$GITHUB_SHA" -- '*.md' > changed-docs.txt
+          git rev-parse --verify "origin/$BASE_REF^{commit}" >/dev/null
+          git diff --name-only --diff-filter=ACMRT "origin/$BASE_REF...HEAD" -- '*.md' > changed-docs.txt
           {
             echo 'files<<EOF'
             cat changed-docs.txt
             echo EOF
           } >> "$GITHUB_OUTPUT"
-        env:
-          GITHUB_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          GITHUB_SHA: ${{ github.event.pull_request.head.sha }}
 
       - name: Check documentation policy
         if: steps.changed.outputs.files != ''

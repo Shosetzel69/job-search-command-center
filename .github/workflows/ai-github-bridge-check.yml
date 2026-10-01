@@ -1,19 +1,7 @@
 name: AI GitHub bridge check
 
 on:
-  pull_request:
-    paths:
-      - "ai-github-bridge/**"
-      - "docs/adr/ADR-002-ai-github-bridge.md"
-      - "docs/analysis/2026-09-09-ai-github-bridge.md"
-      - "ARCHITECTURE.md"
-      - "CHANGELOG.md"
-      - ".github/workflows/ai-github-bridge-check.yml"
-  push:
-    branches: [main]
-    paths:
-      - "ai-github-bridge/**"
-      - ".github/workflows/ai-github-bridge-check.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
