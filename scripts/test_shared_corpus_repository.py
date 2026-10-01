@@ -46,6 +46,21 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         for field in repository.PERSONAL_FIELDS:
             self.assertNotIn(field, posting.payload)
 
+    def test_work_mode_uses_canonical_nomenclature(self):
+        with patch.object(repository, "_nomenclatures", return_value={
+            "domains": {
+                "work_modes": {
+                    "values": [
+                        {"code": "remote", "label": "Remote", "aliases": [], "active": True},
+                        {"code": "hybrid", "label": "Hibrid", "aliases": ["Hybrid"], "active": True},
+                        {"code": "onsite", "label": "Onsite", "aliases": ["On-site"], "active": True},
+                    ]
+                }
+            }
+        }):
+            self.assertEqual(repository._work_mode({"work_mode": "Hybrid"}), "hybrid")
+            self.assertEqual(repository._work_mode({"work_mode": "provider-special"}), "unknown")
+
     def test_url_is_fallback_identity(self):
         with patch.object(repository, "_role_family", return_value=("UNKNOWN", "unknown")):
             posting = repository.prepare_posting({
@@ -82,7 +97,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
             company="Example",
             location="Bucharest",
             country_codes=("RO",),
-            work_mode="HYBRID",
+            work_mode="hybrid",
             role_family="PROJECT_MANAGEMENT",
             posted_at=NOW.isoformat(),
             repost_of_external_job_id=None,
@@ -191,6 +206,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertIn("'ACTIVE', 'UNCONFIRMED', 'INACTIVE'", sql)
         self.assertIn("retention_until", sql)
         self.assertIn("repost_of_posting_id", sql)
+        self.assertIn("work_mode IN ('remote', 'hybrid', 'onsite', 'unknown')", sql)
 
 
 if __name__ == "__main__":
