@@ -157,7 +157,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertTrue(created)
         insert = next((params for query, params in cursor.queries if "INSERT INTO source_postings" in query), None)
         self.assertIsNotNone(insert)
-        self.assertIsNone(insert[11])
+        self.assertIsNone(insert[12])
 
     def test_ids_are_deterministic_for_same_posting(self):
         posting = self.posting()
