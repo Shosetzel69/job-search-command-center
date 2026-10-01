@@ -211,7 +211,7 @@ If the answer to 2 is yes, update/link the canonical source. Do not create anoth
 During the GitHub Actions conservation window, `.github/workflows/documentation-policy.yml` is an explicit `workflow_dispatch` control and does not allocate a runner automatically for Markdown pull requests.
 
 When run manually, the check:
-- evaluates tracked Markdown files in the current repository state;
+- evaluates Markdown changed between the selected workflow ref and `base_ref` (default `main`);
 - skips `docs/archive/**` and documents marked `SUPERSEDED` or `HISTORICAL`;
 - warns when an active runbook exceeds 150 lines;
 - fails when an active runbook exceeds 200 lines;
