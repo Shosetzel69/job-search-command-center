@@ -185,6 +185,35 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         sql = "\n".join(query for query, _ in cursor.queries)
         self.assertNotIn("INSERT INTO canonical_jobs", sql)
 
+    def test_projection_gap_suppresses_lifecycle_for_affected_source(self):
+        class Result:
+            ok = True
+            connector = "example"
+            records = [{
+                "_jscc_source_id": "src-a",
+                "_jscc_source_name": "Example",
+                "title": "Project Manager",
+                "company": "Example",
+            }]
+
+        postings, skipped, incomplete, global_gap = repository.project_collection([Result()])
+        self.assertEqual(postings, [])
+        self.assertEqual(skipped, 1)
+        self.assertEqual(incomplete, {"src-a"})
+        self.assertFalse(global_gap)
+
+    def test_non_mapping_projection_gap_is_global_fail_safe(self):
+        class Result:
+            ok = True
+            connector = "example"
+            records = ["not-a-record"]
+
+        postings, skipped, incomplete, global_gap = repository.project_collection([Result()])
+        self.assertEqual(postings, [])
+        self.assertEqual(skipped, 1)
+        self.assertEqual(incomplete, set())
+        self.assertTrue(global_gap)
+
     def test_only_complete_sources_advance_lifecycle(self):
         plan = [
             {"source_id": "src-a", "outcome": "success"},
