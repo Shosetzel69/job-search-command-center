@@ -128,7 +128,9 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertEqual(repository._posting_id(posting), repository._posting_id(posting))
         self.assertEqual(repository._job_id(posting), repository._job_id(posting))
         same_url_other_source = self.posting(source_id="src-b", external_id="req-b")
-        self.assertEqual(repository._job_id(posting), repository._job_id(same_url_other_source))
+        same_source_new_req = self.posting(source_id="src-a", external_id="req-2")
+        self.assertNotEqual(repository._job_id(posting), repository._job_id(same_url_other_source))
+        self.assertNotEqual(repository._job_id(posting), repository._job_id(same_source_new_req))
         self.assertNotEqual(repository._posting_id(posting), repository._posting_id(same_url_other_source))
 
     def test_external_id_promotes_existing_same_source_url_identity(self):
