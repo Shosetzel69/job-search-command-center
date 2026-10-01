@@ -149,6 +149,8 @@ test('multiuser migration encodes mandatory direct tenant RLS and account cascad
 
 test('admin deletion contract is narrow account-domain delete and contains no profile impersonation', async () => {
   const source = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
-  assert.match(source, /DELETE FROM app_user WHERE user_id=\$1 RETURNING user_id/);
-  assert.doesNotMatch(source, /set_config\('jscc\.profile_id'.+deleteAccount/is);
+  const block = source.match(/export async function deleteAccount[\s\S]*?^}/m)?.[0] || '';
+  assert.match(block, /DELETE FROM app_user WHERE user_id=\$1 RETURNING user_id/);
+  assert.doesNotMatch(block, /set_config\('jscc\.profile_id'/i);
+  assert.doesNotMatch(block, /withTenantTransaction/i);
 });
