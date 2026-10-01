@@ -163,7 +163,8 @@ test('PROD reconciled deployment refreshes Worker runtime secrets before protect
 });
 
 test('health validates live runtime repository access rather than token presence only', () => {
-  assert.match(commandApi, /github_configured:await canAccessRuntimeRepository\(env, runtime\)/);
+  assert.match(commandApi, /const runtimeConfigured = await canAccessRuntimeRepository\(env, runtime\)/);
+  assert.match(commandApi, /github_configured:runtime\.runtimeBackend === 'github' \? runtimeConfigured : false/);
   assert.doesNotMatch(commandApi, /github_configured:Boolean\(env\.GITHUB_TOKEN\)/);
   assert.match(promotion, /contents\/data\/search-config\.json\?ref=main/);
   assert.match(promotion, /Runtime token cannot read canonical runtime contents/);
