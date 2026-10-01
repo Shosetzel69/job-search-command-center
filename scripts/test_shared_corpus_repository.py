@@ -104,24 +104,17 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
             payload={},
         )
 
-    @patch.object(repository.uuid, "uuid4", side_effect=[
-        "00000000-0000-0000-0000-000000000001",
-        "00000000-0000-0000-0000-000000000002",
-    ])
-    def test_new_source_posting_creates_canonical_job(self, _uuid):
+    def test_new_source_posting_creates_canonical_job(self):
         cursor = FakeCursor([None, None])
-        job_id, created = repository._upsert_posting(cursor, self.posting(), "run-1", NOW)
+        posting = self.posting()
+        job_id, created = repository._upsert_posting(cursor, posting, "run-1", NOW)
         self.assertTrue(created)
-        self.assertEqual(job_id, "00000000-0000-0000-0000-000000000001")
+        self.assertEqual(job_id, repository._job_id(posting))
         sql = "\n".join(query for query, _ in cursor.queries)
         self.assertIn("INSERT INTO canonical_jobs", sql)
         self.assertIn("INSERT INTO source_postings", sql)
 
-    @patch.object(repository.uuid, "uuid4", side_effect=[
-        "00000000-0000-0000-0000-000000000003",
-        "00000000-0000-0000-0000-000000000004",
-    ])
-    def test_new_requisition_id_same_source_is_not_auto_repost(self, _uuid):
+    def test_new_requisition_id_same_source_is_not_auto_repost(self):
         cursor = FakeCursor([None, None])
         posting = self.posting(external_id="req-new")
         _, created = repository._upsert_posting(cursor, posting, "run-2", NOW)
@@ -129,6 +122,14 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         insert = next((params for query, params in cursor.queries if "INSERT INTO source_postings" in query), None)
         self.assertIsNotNone(insert)
         self.assertIsNone(insert[11])
+
+    def test_ids_are_deterministic_for_same_posting(self):
+        posting = self.posting()
+        self.assertEqual(repository._posting_id(posting), repository._posting_id(posting))
+        self.assertEqual(repository._job_id(posting), repository._job_id(posting))
+        same_url_other_source = self.posting(source_id="src-b", external_id="req-b")
+        self.assertEqual(repository._job_id(posting), repository._job_id(same_url_other_source))
+        self.assertNotEqual(repository._posting_id(posting), repository._posting_id(same_url_other_source))
 
     def test_external_id_promotes_existing_same_source_url_identity(self):
         existing_posting = "00000000-0000-0000-0000-000000000070"
@@ -167,8 +168,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertIn("external_job_id = COALESCE", update_sql)
         self.assertFalse(any("INSERT INTO source_postings" in query for query, _ in cursor.queries))
 
-    @patch.object(repository.uuid, "uuid4", return_value="00000000-0000-0000-0000-000000000005")
-    def test_exact_cross_source_url_reuses_canonical_job(self, _uuid):
+    def test_exact_cross_source_url_reuses_canonical_job(self):
         existing_job = "00000000-0000-0000-0000-000000000099"
         cursor = FakeCursor([None, None, (existing_job,)])
         job_id, created = repository._upsert_posting(
