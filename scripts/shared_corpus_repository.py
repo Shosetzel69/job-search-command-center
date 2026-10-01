@@ -247,6 +247,35 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
         (posting.source_id, posting.identity_kind, posting.identity_value),
     )
     existing = cursor.fetchone()
+
+    # If a provider upgrades a posting from URL-only identity to an external ID,
+    # promote the existing same-source row instead of manufacturing a duplicate.
+    # External ID remains the authoritative identity after this transition.
+    if not existing and posting.identity_kind == "EXTERNAL_ID" and posting.canonical_url:
+        cursor.execute(
+            """
+            SELECT posting_id, job_id
+            FROM source_postings
+            WHERE source_id = %s
+              AND identity_kind = 'CANONICAL_URL'
+              AND canonical_url = %s
+            """,
+            (posting.source_id, posting.canonical_url),
+        )
+        url_identity = cursor.fetchone()
+        if url_identity:
+            existing = url_identity
+            cursor.execute(
+                """
+                UPDATE source_postings
+                   SET identity_kind = 'EXTERNAL_ID',
+                       identity_value = %s,
+                       external_job_id = %s
+                 WHERE posting_id = %s
+                """,
+                (posting.external_job_id, posting.external_job_id, str(url_identity[0])),
+            )
+
     repost_of_posting_id = _resolve_repost(cursor, posting)
 
     if existing:
