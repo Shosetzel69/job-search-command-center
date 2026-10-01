@@ -213,21 +213,36 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
     )
 
 
-def project_collection(collection: Sequence[object]) -> tuple[list[SharedPosting], int]:
+def project_collection(
+    collection: Sequence[object],
+) -> tuple[list[SharedPosting], int, set[str], bool]:
     postings: list[SharedPosting] = []
     skipped = 0
+    incomplete_source_ids: set[str] = set()
+    global_projection_gap = False
+
     for result in collection:
         if not bool(getattr(result, "ok", False)):
             continue
         connector = _text(getattr(result, "connector", ""))
         source_hint = "JobsPipe" if connector.casefold().startswith("jobspipe") else connector
         for record in getattr(result, "records", []) or []:
+            if not isinstance(record, Mapping):
+                skipped += 1
+                global_projection_gap = True
+                continue
             posting = prepare_posting(record, source_hint=source_hint)
             if posting is None:
                 skipped += 1
+                source_id = _text(record.get("_jscc_source_id"))
+                if source_id:
+                    incomplete_source_ids.add(source_id)
+                else:
+                    global_projection_gap = True
             else:
                 postings.append(posting)
-    return postings, skipped
+
+    return postings, skipped, incomplete_source_ids, global_projection_gap
 
 
 def expected_database(env: Mapping[str, str]) -> tuple[str, str]:
@@ -591,8 +606,12 @@ def persist_collection(
             raise SharedCorpusError("psycopg is required for shared-corpus persistence") from exc
         connect = psycopg.connect
 
-    postings, skipped = project_collection(collection)
+    postings, skipped, incomplete_source_ids, global_projection_gap = project_collection(collection)
     complete_source_ids = _complete_source_ids(plan)
+    if global_projection_gap:
+        complete_source_ids = set()
+    else:
+        complete_source_ids.difference_update(incomplete_source_ids)
 
     created = 0
     updated = 0
@@ -623,4 +642,6 @@ def persist_collection(
         "postings_updated": updated,
         "lifecycle_advanced": advanced,
         "complete_sources": len(complete_source_ids),
+        "lifecycle_suppressed_sources": sorted(incomplete_source_ids),
+        "global_projection_gap": global_projection_gap,
     }
