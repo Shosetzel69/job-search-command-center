@@ -49,9 +49,17 @@ CREATE TABLE source_postings (
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   UNIQUE(source_id, identity_kind, identity_value),
   CHECK (
-    (identity_kind = 'EXTERNAL_ID' AND external_job_id IS NOT NULL)
+    (
+      identity_kind = 'EXTERNAL_ID'
+      AND external_job_id IS NOT NULL
+      AND identity_value = external_job_id
+    )
     OR
-    (identity_kind = 'CANONICAL_URL' AND canonical_url IS NOT NULL)
+    (
+      identity_kind = 'CANONICAL_URL'
+      AND canonical_url IS NOT NULL
+      AND identity_value = canonical_url
+    )
   )
 );
 
