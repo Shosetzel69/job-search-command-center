@@ -12,7 +12,7 @@ import os
 import re
 import uuid
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from functools import lru_cache
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit
@@ -55,9 +55,9 @@ class SharedPosting:
     company: str
     location: str | None
     country_codes: tuple[str, ...]
-    work_mode: str | None
+    work_mode: str
     role_family: str
-    posted_at: str | None
+    posted_at: datetime | None
     repost_of_external_job_id: str | None
     payload: dict[str, Any]
 
@@ -100,11 +100,49 @@ def _work_mode(record: Mapping[str, Any]) -> str:
 
 
 def _country_codes(record: Mapping[str, Any]) -> tuple[str, ...]:
-    values: list[object] = []
+    codes: set[str] = set()
+    active = canonical_nomenclatures.active_country_codes(_nomenclatures())
+    aliases = canonical_nomenclatures.country_name_to_code(_nomenclatures())
+
+    raw_values: list[object] = []
     if isinstance(record.get("country_codes"), list):
-        values.extend(record["country_codes"])
-    values.extend([record.get("country_code"), record.get("job_country_code")])
-    return tuple(sorted({_text(value).upper() for value in values if _text(value)}))
+        raw_values.extend(record["country_codes"])
+    raw_values.extend([record.get("country_code"), record.get("job_country_code")])
+
+    countries = record.get("countries")
+    if isinstance(countries, list):
+        raw_values.extend(countries)
+    elif countries:
+        raw_values.append(countries)
+
+    for value in raw_values:
+        if isinstance(value, Mapping):
+            value = value.get("code") or value.get("country") or value.get("name")
+        text = _text(value)
+        if not text:
+            continue
+        upper = text.upper()
+        if upper in active:
+            codes.add(upper)
+            continue
+        mapped = aliases.get(text.casefold())
+        if mapped:
+            codes.add(mapped)
+
+    return tuple(sorted(codes))
+
+
+def _posted_at(record: Mapping[str, Any]) -> datetime | None:
+    text = _text(record.get("date_posted") or record.get("posted_at"))
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _external_job_id(record: Mapping[str, Any]) -> str | None:
@@ -169,7 +207,7 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         country_codes=_country_codes(record),
         work_mode=_work_mode(record),
         role_family=family,
-        posted_at=_text(record.get("date_posted") or record.get("posted_at")) or None,
+        posted_at=_posted_at(record),
         repost_of_external_job_id=repost_of,
         payload=_payload(record, classification_status),
     )
@@ -290,6 +328,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                SET source_name = %s,
                    external_job_id = %s,
                    canonical_url = %s,
+                   posted_at = %s,
                    lifecycle_status = 'ACTIVE',
                    last_seen_at = %s,
                    inactive_at = NULL,
@@ -302,6 +341,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 posting.source_name,
                 posting.external_job_id,
                 posting.canonical_url,
+                posting.posted_at,
                 now,
                 run_id,
                 repost_of_posting_id,
@@ -357,11 +397,11 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
             """
             INSERT INTO source_postings(
                 posting_id, job_id, source_id, source_name, external_job_id,
-                canonical_url, identity_kind, identity_value, lifecycle_status,
+                canonical_url, identity_kind, identity_value, posted_at, lifecycle_status,
                 first_seen_at, last_seen_at, seen_run_id, repost_of_posting_id, payload
             )
             VALUES (
-                %s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE',
+                %s, %s, %s, %s, %s, %s, %s, %s, %s, 'ACTIVE',
                 %s, %s, %s, %s, %s::jsonb
             )
             """,
@@ -374,6 +414,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 posting.canonical_url,
                 posting.identity_kind,
                 posting.identity_value,
+                posting.posted_at,
                 now,
                 now,
                 run_id,
