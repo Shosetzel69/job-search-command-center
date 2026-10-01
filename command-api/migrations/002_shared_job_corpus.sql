@@ -37,6 +37,7 @@ CREATE TABLE source_postings (
   canonical_url text,
   identity_kind text NOT NULL CHECK (identity_kind IN ('EXTERNAL_ID', 'CANONICAL_URL')),
   identity_value text NOT NULL CHECK (btrim(identity_value) <> ''),
+  posted_at timestamptz,
   lifecycle_status text NOT NULL DEFAULT 'ACTIVE' CHECK (
     lifecycle_status IN ('ACTIVE', 'UNCONFIRMED', 'INACTIVE')
   ),
