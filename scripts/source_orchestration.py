@@ -23,6 +23,7 @@ import job_search_traefik as traefik
 import job_search_web as web
 import job_search_workday as workday
 import job_search_optimized as optimized
+import shared_corpus_repository as shared_corpus
 import job_search_public_boards as public_boards
 
 REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
@@ -324,6 +325,16 @@ def build_plan(catalog):
     return plan
 
 
+def tag_collection_records(item, results):
+    """Attach stable Source Registry identity before shared persistence."""
+    for result in results:
+        for record in result.records or []:
+            if not isinstance(record, dict):
+                continue
+            record.setdefault("_jscc_source_id", item.get("source_id"))
+            record.setdefault("_jscc_source_name", item.get("source"))
+
+
 def collect_sources(config, state, now, plan, run_id=None):
     run_id = run_id or ("github-" + now.strftime("%Y%m%dT%H%M%SZ"))
     prepare_source_execution_ids(plan, run_id)
@@ -350,6 +361,7 @@ def collect_sources(config, state, now, plan, run_id=None):
                 results = [failure_result("web:" + str(item["source_id"]), "collect", exc)]
                 item["web_outcome"] = "error"
                 item["failure_reason"] = diagnostics.sanitize_text(exc)
+            tag_collection_records(item, results)
             record_results(item, results)
             collection.extend(results)
     return collection, metadata, mode
@@ -505,6 +517,7 @@ def collect_api_sources(config, state, now, plan, run_id=None):
                 )
         except Exception as exc:
             results = [failure_result(connector, "collect", exc)]
+        tag_collection_records(item, results)
         collection.extend(results)
         record_results(item, results)
         if connector == "jobspipe" and mode == "direct" and "Monthly request quota exceeded" in (item["error"] or ""):
@@ -517,18 +530,29 @@ def run(config, now):
     run_id = "github-" + now.strftime("%Y%m%dT%H%M%SZ")
     plan = build_plan(json.loads(SOURCES_PATH.read_text(encoding="utf-8")))
     prepare_source_execution_ids(plan, run_id)
+    collection_config = shared_corpus.shared_collection_config(config)
     diagnostics.emit_event(
         "search.run.started",
         "INFO",
         run_id=run_id,
-        source_strategy=config.get("source_strategy") or "all active sources equally",
+        source_strategy=collection_config.get("source_strategy") or "all active sources equally",
         sources_configured=len(plan),
         sources_active=sum(item["active"] for item in plan),
     )
-    collection, metadata, mode = collect_sources(config, state, now, plan, run_id)
+    collection, metadata, mode = collect_sources(collection_config, state, now, plan, run_id)
+    finalize_source_outcomes(plan, run_id)
     successful = any(result.ok for result in collection)
+    shared_corpus_result = None
     output = None
     if successful:
+        # Shared persistence must succeed before the transitional user-facing JSON
+        # snapshot is updated, preventing a split-authority publication.
+        shared_corpus_result = shared_corpus.persist_collection(
+            collection,
+            plan,
+            run_id=run_id,
+            now=now,
+        )
         output = engine.process_records(config, collection, now)
         output = optimized.merge_with_existing(output, state, config, now)
         output["incremental_sync"] = mode == "direct"
@@ -550,7 +574,14 @@ def run(config, now):
         status["excluded_by_reason"] = {}
         status["excluded_by_category"] = {}
         status["role_filter_audit"] = {}
-    finalize_source_outcomes(plan, status["run_id"])
+    status["shared_corpus"] = shared_corpus_result or {
+        "status": "not_attempted",
+        "records_projected": 0,
+        "records_skipped": 0,
+        "postings_created": 0,
+        "postings_updated": 0,
+        "lifecycle_advanced": 0,
+    }
     status["source_outcome_schema_version"] = "1.0"
     status.update(aggregate_source_results(plan))
     attempted = [item for item in plan if item["status"] in {"completed", "failed"}]

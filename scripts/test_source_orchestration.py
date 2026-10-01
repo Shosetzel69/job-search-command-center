@@ -90,6 +90,32 @@ class OrchestrationTests(unittest.TestCase):
         runner.validate_history()
         engine.validate_output()
 
+    def test_shared_corpus_receives_tagged_records_and_status(self):
+        evidence = {
+            "status": "persisted",
+            "records_projected": 2,
+            "records_skipped": 0,
+            "postings_created": 2,
+            "postings_updated": 0,
+            "lifecycle_advanced": 0,
+            "complete_sources": 2,
+        }
+        with patch.object(orchestration.shared_corpus, "persist_collection", return_value=evidence) as persist:
+            _, status = self.run_search()
+
+        collection, plan = persist.call_args.args[:2]
+        tagged = [
+            record
+            for result in collection
+            if result.ok
+            for record in result.records
+        ]
+        self.assertTrue(tagged)
+        self.assertTrue(all(record.get("_jscc_source_id") for record in tagged))
+        self.assertTrue(all(record.get("_jscc_source_name") for record in tagged))
+        self.assertEqual(status["shared_corpus"], evidence)
+        self.assertTrue(any(item.get("outcome") == "success" for item in plan))
+
     def test_failure_is_isolated(self):
         self.apify.side_effect = RuntimeError("provider unavailable")
         code, status = self.run_search()

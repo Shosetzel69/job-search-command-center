@@ -184,12 +184,21 @@ Rollback:
 
 Creates shared job/source-posting persistence and collection publication boundary.
 
+Authority during this slice:
+- PostgreSQL is the target authority for the new shared canonical-job/source-posting domain once the slice is accepted;
+- persistence succeeds before the legacy single-user jobs snapshot may be published;
+- `data/jobs.json` remains the legacy personal/current-user view until MU-S3 and is not treated as a second shared-corpus authority;
+- no profile FIT/status/pros/risks are stored in shared rows;
+- current usable jobs may be seeded idempotently with deterministic shared IDs; this is a bounded seed, not a claim of exhaustive historical recovery;
+- `retention_until` is recorded in S2, while physical purge stays disabled until retained personal references can be checked safely.
+
 Does not:
 - expose multiple users yet;
 - move personal evaluation into shared rows.
 
 Rollback:
-- old jobs JSON remains read authority during declared window.
+- old jobs JSON remains read authority for the legacy single-user view during the declared rollback window;
+- the additive shared tables may remain unused if S2 is rolled back before downstream profile cutover.
 
 ### MU-S3 — Profile preferences and evaluation
 

@@ -57,6 +57,19 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: jobsearch_dev
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d jobsearch_dev"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -70,7 +83,8 @@ jobs:
 
       - name: Validate Python syntax and search configuration
         run: |
-          python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_apify.py scripts/job_search_runner.py scripts/source_orchestration.py scripts/job_search_public_boards.py scripts/job_search_web.py scripts/web_browser.py scripts/web_transport.py scripts/test_search_logic.py scripts/role_taxonomy.py scripts/test_role_taxonomy.py
+          python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_apify.py scripts/job_search_runner.py scripts/shared_corpus_repository.py scripts/shared_corpus_import.py scripts/source_orchestration.py scripts/job_search_public_boards.py scripts/job_search_web.py scripts/web_browser.py scripts/web_transport.py scripts/test_search_logic.py scripts/test_shared_corpus_repository.py scripts/role_taxonomy.py scripts/test_role_taxonomy.py
+          bash -n scripts/multiuser-db-backup.sh scripts/multiuser-db-restore-verify.sh
           python3 - <<'PY'
           import json
           import sys
@@ -105,6 +119,18 @@ jobs:
 
       - name: Run search logic regression tests
         run: python3 -m unittest discover -s scripts -p "test_*.py"
+
+      - name: Verify backup restore refuses PROD
+        run: |
+          set +e
+          RESTORE_DATABASE_URL="postgresql://runtime:x@localhost/jobsearch_prod" \
+          BACKUP_FILE="/tmp/not-used.dump" \
+          BACKUP_SHA256_FILE="/tmp/not-used.sha256" \
+          bash scripts/multiuser-db-restore-verify.sh > /tmp/restore.out 2>&1
+          code=$?
+          set -e
+          test "$code" -eq 2
+          grep -q "Refusing restore into PROD" /tmp/restore.out
 
       - name: Validate JSON contracts
         run: |
@@ -191,6 +217,37 @@ jobs:
       - name: Install Worker dependencies
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Provision ephemeral PostgreSQL roles
+        working-directory: command-api
+        run: |
+          node --input-type=module - <<'NODE'
+          import pg from 'pg';
+          const { Client } = pg;
+          const client = new Client({ connectionString:'postgresql://postgres:postgres@localhost:5432/jobsearch_dev' });
+          await client.connect();
+          await client.query("CREATE ROLE jscc_migration LOGIN PASSWORD 'migration' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE");
+          await client.query("CREATE ROLE jscc_runtime LOGIN PASSWORD 'runtime' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT");
+          await client.query('ALTER DATABASE jobsearch_dev OWNER TO jscc_migration');
+          await client.query('ALTER SCHEMA public OWNER TO jscc_migration');
+          await client.end();
+          NODE
+
+      - name: Run Multiuser PostgreSQL integration tests
+        working-directory: command-api
+        env:
+          APP_ENV: dev
+          NILE_DATABASE_URL: postgresql://jscc_runtime:runtime@localhost:5432/jobsearch_dev
+          NILE_MIGRATION_DATABASE_URL: postgresql://jscc_migration:migration@localhost:5432/jobsearch_dev
+          JSCC_INTEGRATION_DATABASE_URL: postgresql://jscc_runtime:runtime@localhost:5432/jobsearch_dev
+          JSCC_TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jobsearch_dev
+          JSCC_MAX_USERS: "50"
+          BOOTSTRAP_ADMIN_GOOGLE_SUB: owner-sub
+        run: |
+          npm run db:migrate
+          npm run db:provision-runtime
+          npm run db:privilege-readiness
+          node --test test/multiuser-db.integration.mjs
 
       - name: Run Command API unit tests
         working-directory: command-api

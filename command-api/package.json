@@ -12,7 +12,9 @@
     "deploy": "wrangler deploy",
     "build:identity": "node scripts/write-build-identity.mjs",
     "db:readiness": "node scripts/db-readiness.mjs",
-    "db:migrate": "node scripts/db-migrate.mjs"
+    "db:migrate": "node scripts/db-migrate.mjs",
+    "db:privilege-readiness": "node scripts/db-privilege-readiness.mjs",
+    "db:provision-runtime": "node scripts/db-provision-runtime.mjs"
   },
   "dependencies": {
     "jose": "6.2.11",

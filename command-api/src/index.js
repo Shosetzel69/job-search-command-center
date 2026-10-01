@@ -17,6 +17,7 @@ import {
 } from './source-governance.js';
 import { assertEnvironmentConfig, manualSearchExecutionMode } from './environment-config.js';
 import { BUILD_IDENTITY } from './build-identity.generated.js';
+import { internalAuthContext } from './internal-auth-context.js';
 import { canAccessRuntimeRepository, dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-backend.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
@@ -58,7 +59,7 @@ function assertAllowedOrigin(request, env) {
 }
 
 function googleConfigured(env) {
-  return Boolean(env.GOOGLE_CLIENT_ID && env.ALLOWED_GOOGLE_SUB);
+  return Boolean(env.GOOGLE_CLIENT_ID);
 }
 
 function bearerToken(request, missingMessage = 'Missing ID token') {
@@ -135,6 +136,8 @@ function authorizeGooglePayload(payload, env) {
 }
 
 async function authenticate(request, env, { allowGithubOidc = false, oidcDataFile = null } = {}) {
+  const internal = internalAuthContext(request);
+  if (internal) return internal;
   const token = bearerToken(request);
   if (isGithubActionsOidcToken(token)) {
     if (!allowGithubOidc) {
@@ -430,7 +433,7 @@ async function renameSourceCategoryReferences(env, oldLabel, newLabel) {
   return result?.commit?.sha || null;
 }
 
-export { applyUserConfigPatch, assertGeographyNoConflict, authorizeGooglePayload, protectedRuntimePath, readNomenclatures, readProtectedRuntimeData, validateEffectiveSearchConfig, validateUserConfigPatch };
+export { applyUserConfigPatch, assertGeographyNoConflict, authorizeGooglePayload, protectedRuntimePath, readNomenclatures, readProtectedRuntimeData, validateEffectiveSearchConfig, validateUserConfigPatch, verifyGoogleToken };
 
 export default {
   async fetch(request, env) {
@@ -496,7 +499,7 @@ export default {
           await readSearchConfig(env, nomenclatures);
         }
         await dispatchRun(env, 'manual-ui', false, executionMode);
-        return json({ status:'accepted', requested_by:user.sub, trigger:'manual-ui', execution_mode:executionMode, source_sha:runtime.sourceSha, config_commit:configCommit }, 202, cors);
+        return json({ status:'accepted', requested_by:user.user_id || user.sub, trigger:'manual-ui', execution_mode:executionMode, source_sha:runtime.sourceSha, config_commit:configCommit }, 202, cors);
       }
 
       if (request.method === 'PUT' && url.pathname === '/config') {

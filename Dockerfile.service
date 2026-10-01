@@ -31,6 +31,11 @@ COPY --from=frontend-build /app/frontend/dist ./frontend/dist/
 RUN printf "export const BUILD_IDENTITY = Object.freeze({\\n  sourceSha: '%s',\\n  runtimeDataSha: '%s',\\n});\\n" "${GIT_SHA}" "${GIT_SHA}" > command-api/src/build-identity.generated.js
 
 RUN node --check command-api/src/server.js \
+ && node --check command-api/src/secure-entry.js \
+ && node --check command-api/src/multiuser-api.js \
+ && node --check command-api/src/multiuser-repository.js \
+ && node --check command-api/src/profile-evaluation.js \
+ && node --check command-api/src/internal-auth-context.js \
  && node --check command-api/src/runtime-backend.js \
  && node --check command-api/src/runtime-gcp.js \
  && node --check command-api/src/index.js \
@@ -38,6 +43,8 @@ RUN node --check command-api/src/server.js \
  && node --check command-api/src/db/pool.js \
  && node --check command-api/src/db/readiness.js \
  && node --check command-api/src/db/migrations.js \
+ && node --check command-api/src/db/privilege-readiness.js \
+ && node --check command-api/scripts/db-provision-runtime.mjs \
  && node --check command-api/src/static-frontend.js
 
 EXPOSE 8080

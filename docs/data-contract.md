@@ -502,6 +502,26 @@ Source Posting identity:
 
 Cross-source merge este conservator. Un requisition id nou nu este automat repost.
 
+### Shared corpus PostgreSQL schema — ATC-275-03
+
+Implementarea shared-domain foloseste doua tabele:
+- `canonical_jobs` — identitatea canonica, title/company/location/country codes/work mode, role-family canonica si lifecycle;
+- `source_postings` — posting-ul unei surse, cu `source_id`, `external_job_id`/canonical URL, identity precedence, provenance si relatie optionala de repost.
+
+Invarianti:
+- `source_postings` are unicitate pe `(source_id, identity_kind, identity_value)`;
+- identity precedence este `EXTERNAL_ID` inainte de `CANONICAL_URL`;
+- cross-source canonical merge este permis numai pe canonical URL exact in aceasta etapa; false merge are prioritate de evitare;
+- un requisition id nou din aceeasi sursa creeaza un posting distinct si nu devine automat repost;
+- relatia `repost_of_posting_id` se seteaza numai din predecessor explicit;
+- seed/import foloseste UUID-uri determinate din identitatea stabila a source-posting-ului; cross-source exact-URL reuse este decis separat de repository lookup, astfel incat acelasi input si aceeasi ordine canonica de seed intr-un DB gol produc aceleasi ID-uri;
+- rolul este clasificat numai in familiile canonice ADR-005; conflict/necunoscut cade fail-safe in `UNKNOWN`;
+- campurile personale `fit/status/pros/risks/repost/romania_eligible` nu sunt persistate in shared payload;
+- Cloud Run Job foloseste repository/data-access Python si `NILE_DATABASE_URL` environment-scoped; lipsa DB binding in container/GCP este fail-closed;
+- PostgreSQL persistence se executa inainte de publicarea JSON tranzitorie, astfel incat un esec DB nu publica silent un nou snapshot divergent.
+
+`data/jobs.json` ramane temporar output de compatibilitate pentru fluxul single-user pana la slice-urile de profile/FIT; nu devine o a doua autoritate permanenta pentru shared corpus.
+
 ### Shared lifecycle
 
 `ACTIVE -> UNCONFIRMED -> INACTIVE`
@@ -509,6 +529,8 @@ Cross-source merge este conservator. Un requisition id nou nu este automat repos
 Absenta dintr-un run partial/esuat nu produce automat INACTIVE.
 
 Default retention pentru un shared job INACTIVE este 90 zile, exceptand cazurile in care o referinta personala retinuta necesita jobul.
+
+ATC-275-03 materializeaza `retention_until` ca earliest purge eligibility, dar nu face physical purge in MU-S2. Pana cand ATC-275-06 introduce referintele personale persistente, fail-safe-ul este no-delete; un mecanism viitor de purge poate elimina un canonical job numai dupa expirarea retention si numai daca nu exista referinte retinute.
 
 ### Application
 

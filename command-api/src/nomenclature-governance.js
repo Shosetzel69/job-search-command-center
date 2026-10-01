@@ -60,7 +60,7 @@ function includesCode(values, code) {
   return Array.isArray(values) && values.some(value => normalizedCode(value) === wanted);
 }
 
-export function nomenclatureReferences(domainName, code, { searchConfig = {}, applications = {}, nomenclatures } = {}) {
+export function nomenclatureReferences(domainName, code, { searchConfig = {}, applications = {}, nomenclatures, dbReferenceCount = 0 } = {}) {
   const wanted = normalizedCode(code);
   const references = [];
 
@@ -96,6 +96,7 @@ export function nomenclatureReferences(domainName, code, { searchConfig = {}, ap
     }
   }
 
+  if (Number(dbReferenceCount) > 0) references.push(`database.${domainName}`);
   return [...new Set(references)];
 }
 

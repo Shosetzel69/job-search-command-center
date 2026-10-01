@@ -26,6 +26,8 @@ RUN python3 -m py_compile \
     scripts/job_search_optimized.py \
     scripts/job_search_apify.py \
     scripts/job_search_runner.py \
+    scripts/shared_corpus_repository.py \
+    scripts/shared_corpus_import.py \
     scripts/source_orchestration.py \
     scripts/job_search_public_boards.py \
     scripts/job_search_web.py \

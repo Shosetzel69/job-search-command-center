@@ -1,11 +1,11 @@
 import pg from 'pg';
-import { databaseConfig } from './config.js';
+import { databaseConfig, migrationDatabaseConfig } from './config.js';
 
 const { Pool } = pg;
 let pool;
+let migrationPool;
 
-export function createPool(env = process.env) {
-  const config = databaseConfig(env);
+function poolFromConfig(config) {
   return new Pool({
     connectionString:config.connectionString,
     max:config.poolMax,
@@ -15,15 +15,35 @@ export function createPool(env = process.env) {
   });
 }
 
+export function createPool(env = process.env) {
+  return poolFromConfig(databaseConfig(env));
+}
+
+export function createMigrationPool(env = process.env) {
+  return poolFromConfig(migrationDatabaseConfig(env));
+}
+
 export function getPool(env = process.env) {
   if (!pool) pool = createPool(env);
   return pool;
+}
+
+export function getMigrationPool(env = process.env) {
+  if (!migrationPool) migrationPool = createMigrationPool(env);
+  return migrationPool;
 }
 
 export async function closePool() {
   if (!pool) return;
   const current = pool;
   pool = undefined;
+  await current.end();
+}
+
+export async function closeMigrationPool() {
+  if (!migrationPool) return;
+  const current = migrationPool;
+  migrationPool = undefined;
   await current.end();
 }
 

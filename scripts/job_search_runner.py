@@ -12,6 +12,7 @@ import job_search as engine
 import job_search_apify as apify
 import job_search_optimized as optimized
 import source_orchestration as orchestration
+import shared_corpus_repository as shared_corpus
 
 HISTORY_PATH = engine.RUNTIME_DATA / "run-history.json"
 HISTORY_LIMIT = 10
@@ -145,6 +146,7 @@ def append_run_history() -> None:
         "excluded_by_reason": status.get("excluded_by_reason") or {},
         "excluded_by_category": status.get("excluded_by_category") or {},
         "role_filter_audit": status.get("role_filter_audit") or {},
+        "shared_corpus": status.get("shared_corpus") or {},
         "source_results": status.get("source_results") or [],
         "source_outcome_counts": status.get("source_outcome_counts") or {},
         "source_failure_codes": status.get("source_failure_codes") or {},
@@ -224,9 +226,11 @@ def main() -> int:
         return 0
 
     now = datetime.now(timezone.utc)
-    config = engine.load_config()
+    config = shared_corpus.apply_collection_policy(engine.load_config())
     code = orchestration.run(config, now)
 
+    status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+    shared_corpus.persist_operational_run(status)
     append_run_history()
     stamp_jobs_provenance()
     if code == 0:
