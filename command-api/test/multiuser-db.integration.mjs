@@ -17,6 +17,8 @@ import {
   updateApplication,
 } from '../src/multiuser-repository.js';
 import { runtimePrivilegeReadiness } from '../src/db/privilege-readiness.js';
+import { deleteNomenclatureValue } from '../src/nomenclature-governance.js';
+import { readFile } from 'node:fs/promises';
 
 const { Pool } = pg;
 
@@ -144,7 +146,22 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.ok(await nomenclatureReferenceCount('countries', 'RO', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('work_modes', 'remote', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('contract_types', 'contract', env, { db:runtimeDb }) >= 1);
-    assert.ok(await nomenclatureReferenceCount('application_statuses', 'applied', env, { db:runtimeDb }) >= 2);
+    const appliedReferenceCount = await nomenclatureReferenceCount('application_statuses', 'applied', env, { db:runtimeDb });
+    assert.ok(appliedReferenceCount >= 2);
+
+    const catalog = JSON.parse(
+      await readFile(new URL('../../data/nomenclatures.json', import.meta.url), 'utf8'),
+    );
+    assert.throws(
+      () => deleteNomenclatureValue(
+        structuredClone(catalog),
+        'application_statuses',
+        'applied',
+        { searchConfig:{}, applications:{ applications:[] }, dbReferenceCount:appliedReferenceCount },
+      ),
+      error => error?.status === 409 && error?.references?.includes('database.application_statuses'),
+      'DB-held reference from another profile must block nomenclature delete without exposing personal content',
+    );
 
     const session = await createSession(user, env, { db:runtimeDb });
     const resolved = await resolveSession(session.rawToken, env, { db:runtimeDb });
