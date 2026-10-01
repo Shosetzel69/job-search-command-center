@@ -260,6 +260,19 @@ def _is_cloud_runtime(env: Mapping[str, str]) -> bool:
     )
 
 
+def _posting_id(posting: SharedPosting) -> str:
+    identity = f"{posting.source_id}\0{posting.identity_kind}\0{posting.identity_value}"
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "urn:jscc:source-posting:" + identity))
+
+
+def _job_id(posting: SharedPosting) -> str:
+    if posting.canonical_url:
+        identity = "url:" + posting.canonical_url
+    else:
+        identity = f"source:{posting.source_id}\0{posting.identity_kind}\0{posting.identity_value}"
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, "urn:jscc:canonical-job:" + identity))
+
+
 def _resolve_repost(cursor: Any, posting: SharedPosting) -> str | None:
     if not posting.repost_of_external_job_id:
         return None
@@ -388,7 +401,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 job_id = str(cross_source[0])
 
         if not job_id:
-            job_id = str(uuid.uuid4())
+            job_id = _job_id(posting)
             cursor.execute(
                 """
                 INSERT INTO canonical_jobs(
@@ -411,7 +424,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 ),
             )
 
-        posting_id = str(uuid.uuid4())
+        posting_id = _posting_id(posting)
         cursor.execute(
             """
             INSERT INTO source_postings(
