@@ -115,6 +115,25 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertIsNotNone(insert)
         self.assertIsNone(insert[11])
 
+    def test_external_id_promotes_existing_same_source_url_identity(self):
+        existing_posting = "00000000-0000-0000-0000-000000000070"
+        existing_job = "00000000-0000-0000-0000-000000000071"
+        cursor = FakeCursor([None, (existing_posting, existing_job)])
+        job_id, created = repository._upsert_posting(
+            cursor,
+            self.posting(source_id="src-a", external_id="req-promoted"),
+            "run-promote",
+            NOW,
+        )
+        self.assertFalse(created)
+        self.assertEqual(job_id, existing_job)
+        identity_update = next(
+            (params for query, params in cursor.queries if "SET identity_kind = 'EXTERNAL_ID'" in query),
+            None,
+        )
+        self.assertEqual(identity_update, ("req-promoted", "req-promoted", existing_posting))
+        self.assertFalse(any("INSERT INTO source_postings" in query for query, _ in cursor.queries))
+
     @patch.object(repository.uuid, "uuid4", return_value="00000000-0000-0000-0000-000000000005")
     def test_exact_cross_source_url_reuses_canonical_job(self, _uuid):
         existing_job = "00000000-0000-0000-0000-000000000099"
