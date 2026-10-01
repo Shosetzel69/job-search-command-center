@@ -77,6 +77,29 @@ test('applied application status is protected by application history', () => {
   );
 });
 
+test('database-held reference alone blocks deactivate and delete', () => {
+  assert.throws(
+    () => updateNomenclatureValue(
+      catalog(),
+      'application_statuses',
+      'applied',
+      { active:false },
+      { searchConfig:{}, applications:{ applications:[] }, dbReferenceCount:2 },
+    ),
+    error => error.status === 409 && error.references.includes('database.application_statuses'),
+  );
+
+  assert.throws(
+    () => deleteNomenclatureValue(
+      catalog(),
+      'application_statuses',
+      'applied',
+      { searchConfig:{}, applications:{ applications:[] }, dbReferenceCount:2 },
+    ),
+    error => error.status === 409 && error.references.includes('database.application_statuses'),
+  );
+});
+
 test('extensible application statuses allow add edit deactivate and unreferenced delete', () => {
   const value = catalog();
   addNomenclatureValue(value, 'application_statuses', { code:'interview', label:'Interviu' });
