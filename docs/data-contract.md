@@ -514,7 +514,7 @@ Invarianti:
 - cross-source canonical merge este permis numai pe canonical URL exact in aceasta etapa; false merge are prioritate de evitare;
 - un requisition id nou din aceeasi sursa creeaza un posting distinct si nu devine automat repost;
 - relatia `repost_of_posting_id` se seteaza numai din predecessor explicit;
-- seed/import foloseste UUID-uri determinate din identitatea stabila a posting-ului/canonical URL, astfel incat acelasi input intr-un DB gol produce aceleasi ID-uri;
+- seed/import foloseste UUID-uri determinate din identitatea stabila a source-posting-ului; cross-source exact-URL reuse este decis separat de repository lookup, astfel incat acelasi input si aceeasi ordine canonica de seed intr-un DB gol produc aceleasi ID-uri;
 - rolul este clasificat numai in familiile canonice ADR-005; conflict/necunoscut cade fail-safe in `UNKNOWN`;
 - campurile personale `fit/status/pros/risks/repost/romania_eligible` nu sunt persistate in shared payload;
 - Cloud Run Job foloseste repository/data-access Python si `NILE_DATABASE_URL` environment-scoped; lipsa DB binding in container/GCP este fail-closed;
