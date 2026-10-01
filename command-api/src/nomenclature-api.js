@@ -86,7 +86,7 @@ export default {
         const domain = decodeURIComponent(valueMatch[1]);
         const code = decodeURIComponent(valueMatch[2]);
         const { path, sha, catalog } = await readCatalog(env);
-        const context = await readContext(env);
+        const context = await readContext(env, domain, code);
         deleteNomenclatureValue(catalog, domain, code, context);
         const commit = await writeRepoJson(env, path, sha, catalog, `Delete ${domain}:${code} nomenclature value`);
         return json({ status:'deleted', commit, catalog });
