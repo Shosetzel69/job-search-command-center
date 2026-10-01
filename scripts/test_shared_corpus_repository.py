@@ -59,6 +59,7 @@ class SharedCorpusProjectionTests(unittest.TestCase):
             }
         }):
             self.assertEqual(repository._work_mode({"work_mode": "Hybrid"}), "hybrid")
+            self.assertEqual(repository._work_mode({"mode": "Onsite"}), "onsite")
             self.assertEqual(repository._work_mode({"work_mode": "provider-special"}), "unknown")
 
     def test_url_is_fallback_identity(self):
