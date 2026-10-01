@@ -1,13 +1,13 @@
 # Documentation Policy - Context Budget and Progressive Disclosure
 
 Status: `CANONICAL`
-Version: `v1.0`
+Version: `v1.1`
 Applicability: `CURRENT`
 Applies to: `BOTH`
-Effective from: `2026-09-21`
-Supersedes: unversioned baseline
+Effective from: `2026-10-01`
+Supersedes: `v1.0`
 Scope: project documentation, Issues, runbooks and AI context loading
-Last verified: `2026-09-21`
+Last verified: `2026-10-01`
 
 ## 1. Goal
 
@@ -206,16 +206,18 @@ Before adding documentation, ask:
 If the answer to 2 is yes, update/link the canonical source. Do not create another source of truth.
 
 
-## 10. Automated enforcement
+## 10. On-demand enforcement
 
-Pull requests that change Markdown run `.github/workflows/documentation-policy.yml`.
+During the GitHub Actions conservation window, `.github/workflows/documentation-policy.yml` is an explicit `workflow_dispatch` control and does not allocate a runner automatically for Markdown pull requests.
 
-The check:
-- evaluates only changed Markdown files;
+When run manually, the check:
+- evaluates tracked Markdown files in the current repository state;
 - skips `docs/archive/**` and documents marked `SUPERSEDED` or `HISTORICAL`;
 - warns when an active runbook exceeds 150 lines;
 - fails when an active runbook exceeds 200 lines;
 - warns when a non-runbook document exceeds 300 lines;
 - warns when a runbook omits preferred operational headings.
+
+The underlying policy checker remains unchanged and can be reattached to automatic CI later without changing policy semantics.
 
 Executable Development/QA/operations Issues should start from `.github/ISSUE_TEMPLATE/executable-task.yml`.
