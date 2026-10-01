@@ -91,7 +91,7 @@ def _nomenclatures() -> dict[str, Any]:
 
 
 def _work_mode(record: Mapping[str, Any]) -> str:
-    raw = _text(record.get("work_arrangement") or record.get("work_mode"))
+    raw = _text(record.get("work_arrangement") or record.get("work_mode") or record.get("mode"))
     if bool(record.get("remote")):
         return "remote"
     if bool(record.get("hybrid")):
