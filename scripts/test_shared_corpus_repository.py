@@ -137,7 +137,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
     @patch.object(repository.uuid, "uuid4", return_value="00000000-0000-0000-0000-000000000005")
     def test_exact_cross_source_url_reuses_canonical_job(self, _uuid):
         existing_job = "00000000-0000-0000-0000-000000000099"
-        cursor = FakeCursor([None, (existing_job,)])
+        cursor = FakeCursor([None, None, (existing_job,)])
         job_id, created = repository._upsert_posting(
             cursor,
             self.posting(source_id="src-b", external_id="req-b"),
