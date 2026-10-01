@@ -514,6 +514,7 @@ Invarianti:
 - cross-source canonical merge este permis numai pe canonical URL exact in aceasta etapa; false merge are prioritate de evitare;
 - un requisition id nou din aceeasi sursa creeaza un posting distinct si nu devine automat repost;
 - relatia `repost_of_posting_id` se seteaza numai din predecessor explicit;
+- seed/import foloseste UUID-uri determinate din identitatea stabila a posting-ului/canonical URL, astfel incat acelasi input intr-un DB gol produce aceleasi ID-uri;
 - rolul este clasificat numai in familiile canonice ADR-005; conflict/necunoscut cade fail-safe in `UNKNOWN`;
 - campurile personale `fit/status/pros/risks/repost/romania_eligible` nu sunt persistate in shared payload;
 - Cloud Run Job foloseste repository/data-access Python si `NILE_DATABASE_URL` environment-scoped; lipsa DB binding in container/GCP este fail-closed;
@@ -528,6 +529,8 @@ Invarianti:
 Absenta dintr-un run partial/esuat nu produce automat INACTIVE.
 
 Default retention pentru un shared job INACTIVE este 90 zile, exceptand cazurile in care o referinta personala retinuta necesita jobul.
+
+ATC-275-03 materializeaza `retention_until` ca earliest purge eligibility, dar nu face physical purge in MU-S2. Pana cand ATC-275-06 introduce referintele personale persistente, fail-safe-ul este no-delete; un mecanism viitor de purge poate elimina un canonical job numai dupa expirarea retention si numai daca nu exista referinte retinute.
 
 ### Application
 
