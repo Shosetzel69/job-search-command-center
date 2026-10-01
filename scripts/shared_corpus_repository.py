@@ -318,6 +318,25 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 (posting.external_job_id, posting.external_job_id, str(url_identity[0])),
             )
 
+    if not existing and posting.identity_kind == "CANONICAL_URL" and posting.canonical_url:
+        # External ID remains authoritative when a later provider response omits
+        # it. Reuse a same-source URL only when that URL is unambiguous.
+        cursor.execute(
+            """
+            SELECT posting_id, job_id
+            FROM (
+                SELECT posting_id, job_id, count(*) OVER () AS match_count
+                FROM source_postings
+                WHERE source_id = %s
+                  AND canonical_url = %s
+            ) AS candidate
+            WHERE match_count = 1
+            LIMIT 1
+            """,
+            (posting.source_id, posting.canonical_url),
+        )
+        existing = cursor.fetchone()
+
     repost_of_posting_id = _resolve_repost(cursor, posting)
 
     if existing:
@@ -326,7 +345,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
             """
             UPDATE source_postings
                SET source_name = %s,
-                   external_job_id = %s,
+                   external_job_id = COALESCE(%s, external_job_id),
                    canonical_url = %s,
                    posted_at = %s,
                    lifecycle_status = 'ACTIVE',
