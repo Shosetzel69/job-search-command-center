@@ -4,7 +4,7 @@ CREATE TABLE canonical_jobs (
   company text NOT NULL CHECK (btrim(company) <> ''),
   location text,
   country_codes text[] NOT NULL DEFAULT '{}',
-  work_mode text,
+  work_mode text NOT NULL CHECK (work_mode IN ('remote', 'hybrid', 'onsite', 'unknown')),
   role_family text NOT NULL CHECK (
     role_family IN (
       'PROJECT_MANAGEMENT',
