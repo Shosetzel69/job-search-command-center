@@ -17,6 +17,7 @@ from functools import lru_cache
 from typing import Any, Iterable, Mapping, Sequence
 from urllib.parse import urlsplit
 
+import nomenclatures as canonical_nomenclatures
 import role_taxonomy
 from job_identity import canonical_url
 
@@ -84,15 +85,18 @@ def _role_family(title: str) -> tuple[str, str]:
     return str(family), str(classification.get("classification_status") or "unknown")
 
 
-def _work_mode(record: Mapping[str, Any]) -> str | None:
-    raw = _text(record.get("work_arrangement") or record.get("work_mode")).casefold()
-    if bool(record.get("remote")) or raw == "remote":
-        return "REMOTE"
-    if bool(record.get("hybrid")) or raw == "hybrid":
-        return "HYBRID"
-    if raw in {"onsite", "on-site", "on site"}:
-        return "ONSITE"
-    return raw.upper() if raw else None
+@lru_cache(maxsize=1)
+def _nomenclatures() -> dict[str, Any]:
+    return canonical_nomenclatures.load_nomenclatures()
+
+
+def _work_mode(record: Mapping[str, Any]) -> str:
+    raw = _text(record.get("work_arrangement") or record.get("work_mode"))
+    if bool(record.get("remote")):
+        return "remote"
+    if bool(record.get("hybrid")):
+        return "hybrid"
+    return canonical_nomenclatures.normalize_work_mode(raw, _nomenclatures())
 
 
 def _country_codes(record: Mapping[str, Any]) -> tuple[str, ...]:
@@ -193,7 +197,7 @@ def expected_database(env: Mapping[str, str]) -> tuple[str, str]:
     expected = EXPECTED_DATABASES.get(app_env)
     if not expected:
         raise SharedCorpusError("APP_ENV must be dev, test or prod for shared-corpus persistence")
-    connection_string = _text(env.get("NILE_DATABASE_URL"))
+    connection_string = str(env.get("NILE_DATABASE_URL") or "").strip()
     if not connection_string:
         raise SharedCorpusError("NILE_DATABASE_URL is required for shared-corpus persistence")
     try:
@@ -493,7 +497,7 @@ def persist_collection(
     connect: Any | None = None,
 ) -> dict[str, Any]:
     runtime_env = os.environ if env is None else env
-    connection_string = _text(runtime_env.get("NILE_DATABASE_URL"))
+    connection_string = str(runtime_env.get("NILE_DATABASE_URL") or "").strip()
     if not connection_string:
         if _is_cloud_runtime(runtime_env):
             raise SharedCorpusError("NILE_DATABASE_URL is required in container/GCP runtime")
