@@ -2,6 +2,12 @@ name: Documentation policy
 
 on:
   workflow_dispatch:
+    inputs:
+      base_ref:
+        description: Base branch or ref used to select changed Markdown
+        required: false
+        default: main
+        type: string
 
 permissions:
   contents: read
@@ -15,12 +21,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Collect tracked Markdown files
+      - name: Collect changed Markdown files
         id: changed
         shell: bash
+        env:
+          BASE_REF: ${{ inputs.base_ref || 'main' }}
         run: |
           set -euo pipefail
-          git ls-files '*.md' > changed-docs.txt
+          git rev-parse --verify "origin/$BASE_REF^{commit}" >/dev/null
+          git diff --name-only --diff-filter=ACMRT "origin/$BASE_REF...HEAD" -- '*.md' > changed-docs.txt
           {
             echo 'files<<EOF'
             cat changed-docs.txt
