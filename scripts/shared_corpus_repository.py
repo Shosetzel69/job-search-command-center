@@ -266,10 +266,10 @@ def _posting_id(posting: SharedPosting) -> str:
 
 
 def _job_id(posting: SharedPosting) -> str:
-    if posting.canonical_url:
-        identity = "url:" + posting.canonical_url
-    else:
-        identity = f"source:{posting.source_id}\0{posting.identity_kind}\0{posting.identity_value}"
+    # A new requisition from the same source remains a distinct canonical job.
+    # Cross-source exact-URL reuse is decided by the repository lookup before
+    # this ID is created, avoiding URL-only false merges inside one source.
+    identity = f"{posting.source_id}\0{posting.identity_kind}\0{posting.identity_value}"
     return str(uuid.uuid5(uuid.NAMESPACE_URL, "urn:jscc:canonical-job:" + identity))
 
 
