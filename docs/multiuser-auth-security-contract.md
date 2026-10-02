@@ -87,7 +87,7 @@ If identity exists:
 - ACTIVE -> continue;
 - DEACTIVATED -> deny.
 
-If identity does not exist, one global transaction:
+If identity does not exist, the narrow Account Provisioning Gateway executes one global transaction. It may write only approved account/tenant metadata and has no personal-content SELECT/list/export capability:
 - allocates `user_id` and `profile_id`;
 - creates ACTIVE USER;
 - creates GOOGLE identity;
@@ -357,6 +357,7 @@ The negative suite must prove:
 - missing tenant context is rejected by the Tenant Data Gateway before personal SQL;
 - forged browser `profile_id` / tenant id changes no authority;
 - runtime modules outside the allowlisted Tenant Data Gateway / Account Lifecycle Gateway cannot execute SQL referencing personal tables or obtain a generic raw DB escape path;
+- tenant-management writes for provisioning/bootstrap occur only through the allowlisted Account Provisioning Gateway;
 - collection jobs and shared/system repositories have no dependency path to personal repository modules.
 
 Before PROD Multiuser:
