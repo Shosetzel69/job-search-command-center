@@ -6,7 +6,7 @@ Ultima actualizare: `2026-10-02`
 
 ## 1. Reguli generale
 
-> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005/ADR-008, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, personal/profile-owned si system/operational state in PostgreSQL, domain-by-domain.
+> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005/ADR-008, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, tenant-aware personal content, global account/tenant metadata si system/operational state in PostgreSQL, domain-by-domain. `profile.profile_id == tenants.id`; tenant-aware personal tables use physical `tenant_id = logical profile_id`.
 
 Contractele runtime publicate frontend-ului folosesc `schema_version = "1.0"`.
 
@@ -557,4 +557,4 @@ Reguli suplimentare:
 - permanent dual-write este interzis;
 - compatibility export este derivat one-way si limitat la rollback window;
 - identity/session/account state nu foloseste JSON ca authority dupa multiuser auth cutover;
-- personal data este intotdeauna profile-scoped si protejata prin repository authorization + ADR-008 fail-closed Tenant Data Gateway + Nile-native tenant isolation.
+- personal data este intotdeauna profile-scoped si protejata prin repository authorization + ADR-008 fail-closed Tenant Data Gateway + Nile tenant context; Nile global mode fara tenant context este cross-tenant capable si este tratat ca risc rezidual controlat prin gateway/CI boundaries, nu ca DB-level default-deny.
