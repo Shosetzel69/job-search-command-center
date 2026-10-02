@@ -557,4 +557,4 @@ Reguli suplimentare:
 - permanent dual-write este interzis;
 - compatibility export este derivat one-way si limitat la rollback window;
 - identity/session/account state nu foloseste JSON ca authority dupa multiuser auth cutover;
-- personal data este intotdeauna profile-scoped si protejata prin repository authorization + PostgreSQL RLS.
+- personal data este intotdeauna profile-scoped si protejata prin repository authorization + ADR-008 fail-closed Tenant Data Gateway + Nile-native tenant isolation.
