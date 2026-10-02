@@ -1,7 +1,7 @@
 # Multiuser Agent Task Contracts — Google-first Stage 1
 
 Status: **WORKING**  
-Version: **v1.0**  
+Version: **v1.1**  
 Applicability: **CURRENT**  
 Applies to: **AGENTFLOW**  
 Phase: **TASK_CONTRACT**  
@@ -9,7 +9,7 @@ Workflow status: **TASK_CONTRACT_PROPOSED**
 Parent requirement: #265  
 Development Analysis: #275  
 Architecture tracker: #450  
-Architecture: ADR-005, ADR-006, ADR-007
+Architecture: ADR-005, ADR-006, ADR-007, ADR-008
 
 ## 1. Purpose
 
