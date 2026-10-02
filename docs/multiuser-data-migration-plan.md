@@ -1,13 +1,13 @@
 # Multiuser Data Ownership and Migration Plan
 
 Status: **CANONICAL**  
-Version: **v1.0**  
+Version: **v1.1**  
 Applicability: **CURRENT**  
 Applies to: **AGENTFLOW**  
-Effective from: **2026-09-30**  
+Effective from: **2026-10-02**  
 Parent: #265  
 Development analysis: #275  
-Architecture: ADR-004, ADR-005, ADR-006, ADR-007  
+Architecture: ADR-004, ADR-005, ADR-006, ADR-007, ADR-008  
 Tracker: #450
 
 ## 1. Purpose
