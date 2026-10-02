@@ -321,7 +321,7 @@ Nile global mode itself is not fail-closed: a direct DB connection with no tenan
 
 ## 10. Tenant isolation contract
 
-Nile-native tenant isolation is mandatory for the Stage-1 personal domain.
+Nile tenant-scoped routing/isolation under an established tenant context is mandatory for the Stage-1 personal domain; Nile global mode without context remains cross-tenant capable.
 
 ### 10.1 Profile tenancy
 
@@ -364,7 +364,7 @@ Before PROD Multiuser:
 - CI/static personal-table boundary guards pass;
 - the project owner explicitly accepts the ADR-008 residual risk that bypassing the application gateway with the runtime DB credential can enter Nile global cross-tenant mode.
 
-Nile-native tenant isolation remains defense in depth; repository authorization and server-derived AuthContext are still mandatory.
+Nile tenant-scoped isolation is one layer of defense in depth; the fail-closed Tenant Data Gateway, repository authorization, CI/static boundary guards and server-derived AuthContext are independently mandatory.
 
 ## 11. Personal tables in initial scope
 
