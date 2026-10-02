@@ -421,13 +421,18 @@ Effects:
 
 ### DELETE
 
-Irreversible account-domain delete using the FK cascade contract in §8.1:
-- deleting `app_user` cascades identity/session/profile rows;
-- deleting the profile cascades every personal-content row;
-- shared/canonical/system data is preserved;
-- ADMIN never assumes the target tenant context and never reads target personal content.
+Irreversible account-domain delete using the narrow Account Lifecycle Gateway contract in §8.1:
 
-A later Google sign-in creates a fresh account/profile.
+1. authorize the caller from the ADMIN/self account boundary;
+2. resolve only target account metadata required for deletion (`user_id`, `profile_id`), never target personal content;
+3. delete Nile `tenants.id = profile_id`; verified tenant FK/cascade behavior removes all tenant-aware personal rows and the linked global `profile` mapping;
+4. delete `app_user`; approved account cascades remove `user_identity` and `user_session`;
+5. verify zero tenant/profile/personal/account residue before commit;
+6. preserve shared/canonical/system data.
+
+ADMIN never assumes the target tenant context for personal-content access and never reads target personal content.
+
+A later Google sign-in creates a fresh account, `user_id`, `profile_id` and Nile tenant row.
 
 ## 13. Deletion audit
 
@@ -570,6 +575,7 @@ Implementation stops if it requires:
 - #275
 - #450
 - `docs/command-api.md`
+- PostgreSQL Row Security references from the superseded RLS design are historical only; ADR-008 is authoritative for current tenant isolation.
 - `docs/data-contract.md`
 - PostgreSQL Row Security
 - OWASP Session Management Cheat Sheet
