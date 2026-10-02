@@ -2,11 +2,11 @@
 
 Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-09-30`
+Ultima actualizare: `2026-10-02`
 
 ## 1. Reguli generale
 
-> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, personal/profile-owned si system/operational state in PostgreSQL, domain-by-domain.
+> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005/ADR-008, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, tenant-aware personal content, global account/tenant metadata si system/operational state in PostgreSQL, domain-by-domain. `profile.profile_id == tenants.id`; tenant-aware personal tables use physical `tenant_id = logical profile_id`.
 
 Contractele runtime publicate frontend-ului folosesc `schema_version = "1.0"`.
 
@@ -465,7 +465,7 @@ Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/index
 
 - `app_user` cu internal `user_id`, role si ACTIVE/DEACTIVATED;
 - `user_identity` cu provider + provider subject; Stage 1 provider = GOOGLE;
-- `profile` ramane separat de account, cu exact un profil/user in MVP;
+- `profile` ramane separat de account, cu exact un profil/user in MVP; fizic este global account/tenant metadata, cu `profile_id == tenants.id`, fara personal workspace payload;
 - `user_session` este security state account-owned, cu token opac si numai hash persistat;
 - Google `sub` si email nu devin foreign keys pentru personal-domain data;
 - `DELETED` este operatie de hard-delete, nu status persistent.
@@ -474,7 +474,7 @@ Contractul detaliat este in `docs/multiuser-auth-security-contract.md`.
 
 ### Personal/profile-owned
 
-- Profile;
+- professional profile content (stored in tenant-aware personal tables, not in the global `profile` mapping);
 - profile search preferences;
 - user-job state: `seen_at`, `archived_at` si evaluation validity/version metadata;
 - FIT/evaluation score, pros, risks;
@@ -534,7 +534,7 @@ ATC-275-03 materializeaza `retention_until` ca earliest purge eligibility, dar n
 
 ### Application
 
-Application este profile-owned.
+Application este profile-owned logic; fizic este tenant-aware cu `tenant_id = logical profile_id`.
 
 - `job_id` este optional;
 - aplicatiile externe JSCC sunt permise;
@@ -557,4 +557,4 @@ Reguli suplimentare:
 - permanent dual-write este interzis;
 - compatibility export este derivat one-way si limitat la rollback window;
 - identity/session/account state nu foloseste JSON ca authority dupa multiuser auth cutover;
-- personal data este intotdeauna profile-scoped si protejata prin repository authorization + PostgreSQL RLS.
+- personal data este intotdeauna profile-scoped si protejata prin repository authorization + ADR-008 fail-closed Tenant Data Gateway + Nile tenant context; Nile global mode fara tenant context este cross-tenant capable si este tratat ca risc rezidual controlat prin gateway/CI boundaries, nu ca DB-level default-deny.

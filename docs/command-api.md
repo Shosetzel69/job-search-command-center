@@ -1,7 +1,7 @@
 # Command API
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-30`
+Ultima actualizare: `2026-10-02`
 
 ## Scop
 
@@ -16,7 +16,7 @@ Responsabilitati:
 - Nomenclatoare canonice + integritate referentiala;
 - acces server-side la GitHub Actions/Contents API.
 
-Command API nu este motorul de cautare. In target-ul ADR-005 devine boundary-ul server-side pentru identity/authorization si repository/data-access catre PostgreSQL, fara SQL direct in frontend/business logic.
+Command API nu este motorul de cautare. In target-ul ADR-005/ADR-008 devine boundary-ul server-side pentru identity/authorization si repository/data-access catre PostgreSQL, fara SQL direct in frontend/business logic.
 
 ## Regula Save != Run
 
@@ -385,13 +385,20 @@ Personal repositories primesc profile context derivat server-side din principalu
 
 ### Tenant isolation
 
+ADR-008 is authoritative.
+
 Defense in depth:
 - server-side account/profile resolution;
-- repository scoping;
-- `profile` uses mandatory RLS + `FORCE ROW LEVEL SECURITY` scoped by server-derived `user_id`;
-- every Stage-1 personal-content table stores `profile_id` directly and uses mandatory RLS + `FORCE ROW LEVEL SECURITY`;
-- Stage-1 personal tables do not rely on join-derived tenant scope;
-- ADMIN has no personal-content bypass.
+- `profile.profile_id == tenants.id` is the canonical logical/physical tenant mapping;
+- `profile` is global account/tenant metadata; tenant-aware personal tables use physical `tenant_id`;
+- all normal personal persistence passes through the fail-closed Tenant Data Gateway / profile-scoped repository transaction boundary;
+- `SET LOCAL nile.tenant_id` is established transaction-locally before personal SQL;
+- missing tenant context is rejected by the gateway before personal SQL; Nile global mode itself remains cross-tenant capable;
+- CI/static guard rejects personal-table SQL/raw-query escape outside allowlisted gateway/migration/test modules;
+- shared/system repositories and collection jobs have no dependency path to personal repositories;
+- persistent pooled-connection tenant state is prohibited;
+- browser-supplied profile/tenant identifiers confer no authority;
+- ADMIN has no cross-user personal tenant bypass.
 
 ### Connectivity
 
@@ -412,9 +419,9 @@ Inainte de personal-data/multiuser PROD, runtime CRUD authority trebuie separata
 
 ### Account deletion
 
-DELETE este un account-domain hard delete. After ADMIN authorization on the caller's own AuthContext, AccountRepository deletes only the target `app_user` row; FK `ON DELETE CASCADE` removes `user_identity`, `user_session`, `profile` and all profile-owned rows. Shared jobs/sources/runs/nomenclatures are not owned by the user and are not cascaded.
+DELETE este un account-domain hard delete through the narrow Account Lifecycle Gateway. After caller authorization, it resolves only target `user_id/profile_id`, deletes `tenants.id = profile_id` to remove tenant-aware personal rows + profile mapping through verified cascade behavior, then deletes `app_user` to remove identity/session metadata. Shared jobs/sources/runs/nomenclatures are not owned by the user and are not cascaded.
 
-ADMIN does not assume the target tenant context, does not receive `BYPASSRLS`, and the delete operation does not return target personal content.
+ADMIN does not assume the target user's Nile tenant context for personal-content access, and the delete operation does not return target personal content. It must remove the Nile tenant row and leave zero tenant/profile/personal/account residue.
 
 Se poate pastra maximum 90 zile numai un audit event neidentificabil, fara user/profile identifiers sau date care permit relinkarea.
 

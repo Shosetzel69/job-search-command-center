@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.18`
+Versiune document: `v1.19`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-30`
+Ultima actualizare: `2026-10-02`
 
 ## 1. Rol
 
@@ -21,6 +21,7 @@ Documente complementare:
 - `docs/adr/ADR-005-multiuser-ownership-isolation-shared-collection.md` — ownership multiuser, izolare tenant, shared collection si scheduler global;
 - `docs/adr/ADR-006-google-cloud-runtime.md` — target hosting/runtime GCP, build-once si promovare prin image digest;
 - `docs/adr/ADR-007-google-first-multiuser-identity-session.md` — identity mapping provider-neutral si sesiune JSCC pentru multiuser Google-first;
+- `docs/adr/ADR-008-nile-native-tenant-isolation.md` — tenant isolation nativ Nile prin fail-closed Tenant Data Gateway;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
@@ -390,7 +391,8 @@ Package 2C activeaza surse numai dupa `implementat + testat + validat + aprobat`
 Target-ul persistent separa trei domenii:
 
 - **shared/product** — canonical jobs, source postings, lifecycle, dedup/repost, role-family classification, Source Registry, source categories, nomenclatures;
-- **personal/profile-owned** — profile, search preferences, FIT/evaluations, seen/archive state, applications, notes, UI preferences;
+- **personal/profile-owned** — professional profile content, search preferences, FIT/evaluations, seen/archive state, applications, notes, UI preferences; physical storage is tenant-aware with `tenant_id = logical profile_id`;
+- **global account/tenant metadata** — `app_user`, `user_identity`, `user_session`, Nile `tenants` row si minimal `profile` mapping (`profile_id == tenants.id`), fara personal workspace payload;
 - **system/operational** — collection policy, scheduler config/state, runs, source diagnostics si provider/collector state.
 
 `search-config.json` este un contract tranzitoriu mixt si nu are succesor 1:1: campurile sale vor fi separate intre configuratie system/collection si profil personal.
@@ -488,9 +490,11 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 - business/repository code consuma `AuthContext(user_id, profile_id, role, status)`, nu claims Google;
 - profilul autorizat este rezolvat server-side; un `profile_id` trimis de browser nu confera acces;
 - repository-urile personale necesita profile context autentificat si transaction-local;
-- `profile` si toate Stage-1 personal-content tables folosesc obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY`; personal-content rows stocheaza direct `profile_id`;
-- tenant context pe conexiuni pooled foloseste numai `SET LOCAL`/echivalent transaction-local; context persistent pe conexiune este interzis;
-- ADMIN nu primeste bypass pentru continutul personal al altor utilizatori;
+- ADR-008 este autoritativ pentru izolarea tenant: `profile.profile_id` este canonical Nile tenant id pentru Multiuser MVP;
+- toate operatiile pe date personale trec prin fail-closed Tenant Data Gateway / profile-scoped repository boundary;
+- Nile tenant context este stabilit transaction-local; context persistent pe conexiune pooled este interzis;
+- browser-supplied profile/tenant id nu confera autoritate;
+- ADMIN nu primeste cross-user personal tenant bypass;
 - credentialele/tokens de autentificare nu ajung in `localStorage`, loguri sau date persistente;
 - `/data/*` necesita autentificare;
 - protected data foloseste `no-store`;
@@ -647,16 +651,19 @@ MVP roles:
 
 ADMIN are drepturi USER doar asupra propriului profil si capabilitati administrative asupra account lifecycle, shared/system configuration, scheduler, manual collection si diagnostics. ADMIN nu acceseaza continutul personal al altui user.
 
-Tenant isolation este defense-in-depth:
+Tenant isolation este defense-in-depth, conform ADR-008:
 
 - authenticated identity -> server-side app_user/profile resolution;
 - repository scoping obligatoriu pentru personal data;
-- `profile` foloseste obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY` pe baza server-derived `user_id`;
-- fiecare personal-content table stocheaza direct `profile_id` si foloseste obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY`;
-- Stage 1 nu foloseste personal tables cu tenant scope derivat prin join; o astfel de exceptie necesita Architecture review separat;
-- browser-supplied user/profile id nu confera autoritate;
-- ADMIN nu primeste personal-content RLS bypass;
-- ADMIN delete este account-domain delete prin FK `ON DELETE CASCADE`; ADMIN nu asuma tenant context-ul userului tinta si nu citeste continutul personal pentru a-l sterge.
+- `profile.profile_id == tenants.id` este canonical Nile tenant id pentru Multiuser MVP;
+- `profile` este global account/tenant metadata; personal-content tables folosesc physical `tenant_id` si tenant-qualified keys/FKs;
+- fiecare personal-content table este accesata numai prin Tenant Data Gateway;
+- gateway-ul stabileste `SET LOCAL nile.tenant_id` transaction-local inainte de personal SQL;
+- missing/invalid tenant context produce fail-closed la gateway inainte de personal SQL; Nile global mode fara tenant context ramane cross-tenant capable;
+- pool reuse, rollback si error paths trebuie sa dovedeasca absenta tenant-context leakage;
+- browser-supplied user/profile/tenant id nu confera autoritate;
+- ADMIN nu primeste cross-user personal tenant bypass;
+- ADMIN/self delete foloseste un Account Lifecycle Gateway global, ingust: sterge `tenants.id = profile_id` pentru tenant-aware personal data + profile mapping, apoi `app_user` pentru identity/session; nu citeste continut personal si trebuie sa lase zero tenant/profile/personal/account residue.
 
 ### 16.5 Runtime connectivity si privilege gate
 
@@ -669,7 +676,9 @@ Path target conform ADR-006:
 - DEV/TEST/PROD folosesc binding-uri/secrete statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
 - `NILE_DATABASE_URL` este injectat per environment din Secret Manager si nu este selectabil din request;
 - request-selected DB si cross-environment fallback sunt interzise;
-- runtime CRUD authority trebuie separata demonstrabil de migration/DDL authority inainte de personal-data/multiuser PROD cutover;
+- runtime CRUD authority trebuie separata de migration/DDL authority la nivelul maxim demonstrabil suportat de Nile;
+- CI/static guard interzice personal-table SQL/raw DB escape in afara Tenant Data Gateway, Account Lifecycle Gateway, migrations/tests;
+- global-mode cross-tenant capability a runtime credential este risc rezidual explicit si necesita owner acceptance inainte de Multiuser PROD;
 - broad DDL poate fi tolerat temporar numai in DEV/TEST si migration work controlat;
 - daca providerul nu permite separarea demonstrabila, riscul revine la Architecture pentru owner decision explicit.
 
