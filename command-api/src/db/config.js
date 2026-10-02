@@ -30,6 +30,12 @@ function connectionConfig(env, variableName) {
   });
 }
 
+function sharedMigrationRoleAllowed(env) {
+  const appEnv = String(env.APP_ENV || '').trim().toLowerCase();
+  const flag = String(env.JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE || '').trim().toLowerCase();
+  return (appEnv === 'dev' || appEnv === 'test') && flag === 'true';
+}
+
 export function databaseConfig(env = process.env) {
   return connectionConfig(env, 'NILE_DATABASE_URL');
 }
@@ -45,7 +51,9 @@ export function migrationDatabaseConfig(env = process.env) {
       && migrationUrl.hostname === runtimeUrl.hostname
       && (migrationUrl.port || '5432') === (runtimeUrl.port || '5432')
       && decodeURIComponent(migrationUrl.pathname) === decodeURIComponent(runtimeUrl.pathname);
-    if (samePrincipal) throw configError('Runtime and migration database roles must be distinct');
+    if (samePrincipal && !sharedMigrationRoleAllowed(env)) {
+      throw configError('Runtime and migration database roles must be distinct');
+    }
   }
   return migration;
 }
