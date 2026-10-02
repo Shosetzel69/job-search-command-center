@@ -9,6 +9,7 @@ Decision owner: Project owner
 Architecture tracker: #450  
 Parent requirement: #265  
 Builds on: ADR-005, ADR-006
+Tenant-isolation amendment: ADR-008
 
 ## Context
 
@@ -38,7 +39,7 @@ The solution must preserve ADR-005:
 - exactly one profile per user in MVP;
 - USER and ADMIN roles only;
 - server-derived tenant context;
-- PostgreSQL RLS;
+- Nile-native tenant isolation through the ADR-008 Tenant Data Gateway;
 - no ADMIN bypass of personal content;
 - shared collection and profile-owned evaluation.
 
@@ -132,7 +133,7 @@ profile
 
 Email is account metadata for human identification. It is not the canonical account key and is not required to be globally unique in JSCC.
 
-A future identity method may add another `provider` without changing `app_user`, `profile`, RLS ownership or personal-domain foreign keys.
+A future identity method may add another `provider` without changing `app_user`, `profile`, tenant ownership or personal-domain foreign keys.
 
 ### 2. First-sign-in provisioning
 
@@ -233,7 +234,7 @@ ADMIN:
 - may manage account lifecycle metadata, shared/system configuration, global scheduler, collection and diagnostics;
 - may not read another user's profile preferences, evaluations, applications, notes or personal workspace.
 
-ADMIN receives no RLS bypass.
+ADMIN receives no cross-user personal tenant bypass.
 
 ADMIN-initiated account deletion is a narrow account-domain delete. The AccountRepository deletes the target `app_user`; FK `ON DELETE CASCADE` removes identity, sessions, profile and profile-owned personal rows. ADMIN does not assume the target tenant context and the operation never returns target personal content.
 
@@ -254,7 +255,7 @@ The approved extension point is `user_identity`. A future architecture decision 
 - `profile`;
 - application session;
 - AuthContext;
-- RLS;
+- ADR-008 tenant isolation boundary;
 - account lifecycle.
 
 No password hash, reset token or email-verification implementation is introduced in Stage 1.
@@ -266,10 +267,11 @@ The design follows these principles:
 - application session identifiers are opaque, random and server-controlled;
 - Secure/HttpOnly/SameSite cookies are used;
 - session identifier is regenerated at authentication;
-- personal authorization is server-derived and reinforced by PostgreSQL RLS;
-- `profile` and every Stage-1 personal-content table use mandatory `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`;
-- each Stage-1 personal-content table stores `profile_id` directly; join-derived tenant scope is not used in Stage 1;
-- runtime DB authority must not have `BYPASSRLS` and must be separated from migration/DDL authority before PROD multiuser.
+- personal authorization is server-derived and reinforced by the ADR-008 fail-closed Tenant Data Gateway plus Nile-native tenant isolation;
+- `profile.profile_id` is the canonical Nile tenant identifier for Multiuser MVP;
+- profile-owned persistence is accessed only inside transaction-local tenant context; persistent pooled-connection tenant state is prohibited;
+- each Stage-1 personal-content table remains directly profile-owned and tenant-aware;
+- runtime DB authority must be separated from migration/DDL authority before PROD multiuser where Nile supports a demonstrable mechanism; any material residual privilege risk returns to Architecture.
 
 ## Consequences
 
