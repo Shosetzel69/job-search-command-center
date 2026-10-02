@@ -513,7 +513,7 @@ Invarianti:
 - identity precedence este `EXTERNAL_ID` inainte de `CANONICAL_URL`;
 - cross-source canonical merge este permis numai pe canonical URL exact in aceasta etapa; false merge are prioritate de evitare;
 - un requisition id nou din aceeasi sursa creeaza un posting distinct si nu devine automat repost;
-- relatia `repost_of_posting_id` se seteaza numai din predecessor explicit;
+- relatia `repost_of_posting_id` se seteaza numai din predecessor explicit; repository-ul rezolva ID-ul numai catre un source-posting existent din aceeasi sursa. Nile a respins in DEV atat self-FK inline, cat si `ALTER TABLE ... ADD CONSTRAINT` pentru acest self-reference, astfel incat schema pastreaza UUID-ul nullable plus protectie anti-self-reference, fara FK fizic; aceasta exceptie nu autorizeaza write-uri directe in afara repository-ului si orice viitor physical purge trebuie sa curete/verifice explicit referintele inbound;
 - seed/import foloseste UUID-uri determinate din identitatea stabila a source-posting-ului; cross-source exact-URL reuse este decis separat de repository lookup, astfel incat acelasi input si aceeasi ordine canonica de seed intr-un DB gol produc aceleasi ID-uri;
 - rolul este clasificat numai in familiile canonice ADR-005; conflict/necunoscut cade fail-safe in `UNKNOWN`;
 - campurile personale `fit/status/pros/risks/repost/romania_eligible` nu sunt persistate in shared payload;

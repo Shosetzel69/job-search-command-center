@@ -168,6 +168,20 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertIsNotNone(insert)
         self.assertIsNone(insert[12])
 
+    def test_explicit_repost_resolves_only_existing_same_source_predecessor(self):
+        predecessor_id = "00000000-0000-0000-0000-000000000060"
+        cursor = FakeCursor([(predecessor_id,)])
+        posting = self.posting(source_id="src-a", external_id="req-new")
+        posting = repository.SharedPosting(
+            **{**posting.__dict__, "repost_of_external_job_id": "req-old"}
+        )
+        resolved = repository._resolve_repost(cursor, posting)
+        self.assertEqual(resolved, predecessor_id)
+        query, params = cursor.queries[0]
+        self.assertIn("FROM source_postings", query)
+        self.assertIn("identity_kind = 'EXTERNAL_ID'", query)
+        self.assertEqual(params, ("src-a", "req-old"))
+
     def test_ids_are_deterministic_for_same_posting(self):
         posting = self.posting()
         self.assertEqual(repository._posting_id(posting), repository._posting_id(posting))
@@ -346,11 +360,9 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertIn("'ACTIVE', 'UNCONFIRMED', 'INACTIVE'", sql)
         self.assertIn("retention_until", sql)
         self.assertIn("repost_of_posting_id uuid,", sql)
-        create_start = sql.index("CREATE TABLE source_postings")
-        alter_start = sql.index("ALTER TABLE public.source_postings")
-        self.assertGreater(alter_start, create_start)
-        self.assertIn("ADD CONSTRAINT source_postings_repost_fk", sql)
-        self.assertIn("REFERENCES public.source_postings(posting_id)", sql)
+        self.assertIn("CHECK (repost_of_posting_id IS NULL OR repost_of_posting_id <> posting_id)", sql)
+        self.assertNotIn("ALTER TABLE public.source_postings", sql)
+        self.assertNotIn("source_postings_repost_fk", sql)
         self.assertIn("work_mode IN ('remote', 'hybrid', 'onsite', 'unknown')", sql)
         self.assertIn("identity_value = external_job_id", sql)
         self.assertIn("identity_value = canonical_url", sql)
