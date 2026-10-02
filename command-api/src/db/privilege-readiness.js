@@ -1,3 +1,4 @@
+import { devTestSharedDbRoleAllowed } from './config.js';
 import { getPool } from './pool.js';
 
 export const PROTECTED_RLS_TABLES = Object.freeze([
@@ -49,18 +50,27 @@ export async function runtimePrivilegeReadiness(env = process.env, { db = getPoo
     };
   });
 
-  const tablesSafe = protectedTables.every(item =>
+  const strictTablesSafe = protectedTables.every(item =>
     item.present && item.rls_enabled && item.rls_forced && !item.owned_by_runtime && !item.member_of_owner
   );
-  const safe = row.rolsuper === false
+  const forceRlsSafe = protectedTables.every(item =>
+    item.present && item.rls_enabled && item.rls_forced
+  );
+  const baseRoleSafe = row.rolsuper === false
     && row.rolbypassrls === false
-    && row.rolcreaterole === false
+    && row.rolcreaterole === false;
+  const sharedRoleException = devTestSharedDbRoleAllowed(env);
+  const strictSafe = baseRoleSafe
     && row.schema_create === false
     && row.database_create === false
-    && tablesSafe;
+    && strictTablesSafe;
+  const exceptionSafe = sharedRoleException && baseRoleSafe && forceRlsSafe;
+  const safe = strictSafe || exceptionSafe;
 
   return Object.freeze({
     status:safe ? 'ok' : 'unsafe',
+    mode:strictSafe ? 'strict' : (exceptionSafe ? 'dev_test_shared_role_exception' : 'unsafe'),
+    strict_privilege_separation:strictSafe,
     role:row.role_name,
     superuser:Boolean(row.rolsuper),
     bypass_rls:Boolean(row.rolbypassrls),
