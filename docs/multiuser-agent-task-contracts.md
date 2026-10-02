@@ -31,7 +31,7 @@ All Multiuser ATCs preserve:
 - shared/system-owned external collection;
 - profile-owned preference/FIT/state/application data;
 - server-derived AuthContext;
-- mandatory RLS + FORCE RLS for profile/personal tables;
+- mandatory ADR-008 Nile-native tenant isolation through the fail-closed Tenant Data Gateway for profile/personal tables;
 - no ADMIN personal-content bypass;
 - no permanent JSON/PostgreSQL dual-write;
 - ADR-006 Cloud Run/Nile runtime boundary;
@@ -56,11 +56,12 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - create separate `profile` with opaque UUID `profile_id`;
 - exactly one profile per user MVP;
 - bootstrap current owner as ADMIN + GOOGLE identity + profile;
-- introduce server-derived DB context:
-  - `jscc.user_id`;
-  - `jscc.profile_id`;
-- `profile`: mandatory ENABLE + FORCE RLS scoped by `jscc.user_id`;
-- every Stage-1 personal-content table introduced here/subsequently stores `profile_id` directly and uses mandatory ENABLE + FORCE RLS;
+- introduce server-derived tenant context:
+  - `profile.profile_id` is the canonical Nile tenant id for Multiuser MVP;
+  - tenant authority comes only from authenticated `AuthContext`;
+- introduce the fail-closed Tenant Data Gateway / profile-scoped transaction boundary;
+- establish Nile tenant context transaction-locally before personal SQL;
+- every Stage-1 personal-content table introduced here/subsequently is profile-owned and tenant-aware;
 - negative tenant-isolation tests including pooled-connection reuse.
 
 ## Out of scope
@@ -85,7 +86,7 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - browser user/profile IDs cannot establish tenant authority;
 - Stage-1 personal tables do not use join-derived tenant scope;
 - runtime code receives repository/AuthContext interfaces, not generic SQL;
-- ADMIN receives no RLS bypass.
+- ADMIN receives no cross-user personal tenant bypass.
 
 ## Acceptance criteria
 
@@ -97,7 +98,7 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - profile A cannot read/write profile B;
 - ADMIN test principal cannot read/write B personal rows;
 - pooled connection A -> B carries no A context;
-- runtime identity acting as table owner still cannot cross tenant because FORCE RLS applies;
+- runtime operating under tenant A cannot read/write tenant B personal data through the approved gateway/repository path;
 - no environment fallback.
 
 ## Retry limit
@@ -106,19 +107,19 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 
 ## Stop conditions
 
-- provider cannot support required RLS behavior;
-- implementation requires BYPASSRLS/superuser for normal runtime;
-- tenant context must be browser-selected;
+- Nile cannot provide the required native cross-tenant isolation behavior;
+- implementation requires generic cross-tenant authority or superuser for normal runtime;
+- tenant context must be browser-selected rather than server-derived;
 - new identity provider/service is required.
 
 ## Evidence Bundle
 
 - migration/schema;
 - role/constraint matrix;
-- RLS policies;
+- tenant-aware schema plus Tenant Data Gateway / Nile tenant-context implementation;
 - exact tenant-context implementation;
 - owner bootstrap evidence;
-- negative matrix including table-owner/FORCE-RLS test;
+- negative matrix including A/B cross-tenant denial, missing-context fail-closed, rollback cleanup and pool-reuse tests;
 - pool-reuse isolation proof;
 - exact PR/SHA and tests.
 
@@ -219,7 +220,7 @@ Move application history into the personal tenant domain without coupling it to 
 ## Scope
 
 - `applications` with direct `profile_id`;
-- mandatory ENABLE + FORCE RLS;
+- mandatory ADR-008 tenant-aware persistence through the Tenant Data Gateway;
 - `profile_id -> profile ON DELETE CASCADE`;
 - optional canonical `job_id`;
 - external application with `job_id = NULL`;
@@ -252,7 +253,7 @@ Move application history into the personal tenant domain without coupling it to 
 - A can read/write A application;
 - A using B application UUID receives not-found-equivalent result;
 - ADMIN cannot read B applications;
-- runtime table-owner/FORCE-RLS negative test passes;
+- A/B cross-tenant and pooled-connection tenant-isolation negative tests pass;
 - external application works with NULL `job_id`;
 - snapshot survives shared job changes;
 - profile/account cascade removes application on account hard-delete.
@@ -271,7 +272,7 @@ Move application history into the personal tenant domain without coupling it to 
 
 - schema/migration;
 - import parity;
-- RLS/IDOR tests;
+- tenant-isolation/IDOR tests;
 - lifecycle/cascade tests;
 - exact candidate.
 
@@ -397,8 +398,8 @@ Implement account lifecycle over the approved identity/session foundation withou
 
 ## Constraints
 
-- ADMIN does not set target `jscc.user_id`/`jscc.profile_id`;
-- ADMIN does not get BYPASSRLS;
+- ADMIN does not assume/select the target user's Nile tenant context;
+- ADMIN does not get generic cross-user personal tenant authority;
 - delete does not read/export target personal rows;
 - shared/system tables have no ownership cascade from user/profile.
 
@@ -422,7 +423,7 @@ Implement account lifecycle over the approved identity/session foundation withou
 
 - cascade cannot be proven complete;
 - implementation requires target tenant impersonation;
-- implementation requires RLS bypass;
+- implementation requires cross-user personal tenant bypass;
 - delete requires returning personal payload.
 
 ## Evidence Bundle
@@ -513,14 +514,14 @@ Prove the database privilege boundary required before protected Multiuser PROD c
 - migration identity can apply approved DDL;
 - runtime cannot CREATE/ALTER/DROP protected app schema;
 - runtime is not superuser;
-- runtime has no `BYPASSRLS`;
+- runtime has no generic cross-tenant personal-data authority;
 - DEV first, then TEST proof.
 
 ## Out of scope
 
 - compensating controls as permanent equivalent;
 - PROD cutover without proof;
-- auth/RLS redesign.
+- auth/tenant-isolation redesign.
 
 ## Dependencies
 
@@ -535,9 +536,9 @@ Prove the database privilege boundary required before protected Multiuser PROD c
 
 - runtime CRUD required by application works;
 - runtime DDL negative tests fail as expected;
-- runtime has no superuser/BYPASSRLS;
+- runtime is not superuser and uses the strongest demonstrable runtime-vs-migration privilege separation supported by Nile;
 - migration identity applies migration;
-- FORCE-RLS tenant negative tests pass under runtime identity;
+- Nile-native A/B tenant-isolation negative tests pass under runtime identity;
 - DEV and TEST binding evidence contains no secrets.
 
 ## Retry limit
@@ -553,7 +554,7 @@ Prove the database privilege boundary required before protected Multiuser PROD c
 
 - role/privilege matrix;
 - negative DDL tests;
-- RLS privilege evidence;
+- privilege-separation and tenant-adapter evidence;
 - environment binding evidence;
 - provider limitation evidence if blocked.
 
@@ -615,7 +616,7 @@ No credentials are stored in repository/evidence.
 - deactivation invalidates live session;
 - reactivation requires fresh auth and restores retained data;
 - deletion + re-signup PASS;
-- runtime table-owner cross-tenant denial + FORCE RLS PASS;
+- runtime A/B cross-tenant denial + missing-context/pool-reuse/rollback isolation PASS;
 - pooled A->B connection has no tenant leakage;
 - missing tenant context default-deny;
 - legacy-cookie forced reauthentication PASS;
@@ -642,7 +643,7 @@ No credentials are stored in repository/evidence.
 - exact PR/SHA/image digest;
 - migration versions per environment;
 - authority matrix;
-- RLS/IDOR/concurrency results;
+- tenant-isolation/IDOR/concurrency results;
 - account/session lifecycle results;
 - privilege gate results;
 - provider-call invariance;
@@ -655,7 +656,7 @@ No credentials are stored in repository/evidence.
 ```text
 ATC-275-01
    ├─> ATC-275-03 shared corpus
-   ├─> ATC-275-04 v2 identity/profile/RLS
+   ├─> ATC-275-04 v2 identity/profile/Nile tenant isolation
    ├─> ATC-275-09 v2 privilege gate
    └─> ATC-275-10 backup/capacity
 
