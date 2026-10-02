@@ -105,7 +105,7 @@ Before PROD multiuser enablement, account creation is also subject to the ADR-00
 - no automatic paid capacity;
 - at the approved capacity threshold, creation of new accounts is fail-closed/degraded before paid consumption;
 - existing authenticated users should remain available where the capacity policy permits;
-- account-admission rejection does not create partial user/identity/profile rows.
+- account-admission rejection does not create partial user/identity/tenant/profile rows.
 
 The capacity signal is system-owned and cannot be overridden by browser input.
 
@@ -504,9 +504,9 @@ Mandatory cases:
 - invalid Google signature -> 401;
 - wrong issuer/audience -> 401;
 - expired Google credential -> 401;
-- unknown valid Google subject below capacity gate -> exactly one new USER/profile;
-- unknown valid Google subject when account-admission capacity gate is closed -> no partial account and fail-closed response;
-- concurrent first sign-in -> exactly one USER/profile;
+- unknown valid Google subject below capacity gate -> exactly one new USER + Nile tenant + profile mapping;
+- unknown valid Google subject when account-admission capacity gate is closed -> no partial account/identity/tenant/profile and fail-closed response;
+- concurrent first sign-in -> exactly one USER/tenant/profile;
 - DEACTIVATED -> session establishment denied and an already-issued session is denied even if its row was not yet cleaned up;
 - revoked/expired/unrecognized legacy cookie -> 401 + cookie clear where applicable;
 - Google bearer used directly on ordinary protected endpoint after cutover -> rejected;
