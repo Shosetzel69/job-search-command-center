@@ -70,7 +70,10 @@ Three canonical ownership domains exist.
 - shared nomenclatures.
 
 **Personal user data**
-- account/profile;
+- professional profile content/preferences (tenant-aware personal domain);
+
+**Global account/tenant metadata**
+- `app_user`, identity/session metadata, Nile `tenants` row and minimal `profile` mapping; the physical `profile` mapping contains no personal workspace content;
 - job-search preferences;
 - role-family interests;
 - geographic/work-mode/contract/compensation criteria;
@@ -115,11 +118,11 @@ Personal access uses defense in depth:
 4. `profile.profile_id` is the canonical Nile tenant identifier for Multiuser MVP;
 5. every profile-owned operation passes through the fail-closed Tenant Data Gateway / profile-scoped repository transaction boundary;
 6. the gateway establishes Nile tenant context transaction-locally before personal SQL;
-7. Nile-native tenant isolation is the primary database tenant boundary for personal data.
+7. Nile isolates tenant-aware data after tenant context is established; ADR-008 is explicit that no-context Nile global mode is cross-tenant capable, so JSCC fail-closed enforcement for normal personal access is the Tenant Data Gateway plus mandatory compensating controls.
 
 Browser-supplied profile or tenant identifiers never confer authorization.
 
-Persistent connection-level tenant state is prohibited. Pool reuse and rollback paths must prove that tenant context does not leak across transactions.
+Persistent connection-level tenant state is prohibited. Pool reuse and rollback paths must prove that tenant context does not leak across transactions. Missing tenant context must be rejected by the Tenant Data Gateway before personal SQL; it is not a DB-level deny state in Nile global mode.
 
 ADMIN receives no cross-user personal tenant bypass.
 
@@ -129,7 +132,7 @@ ADR-008 supersedes the former PostgreSQL RLS / FORCE RLS enforcement mechanism o
 
 Broad Nile DDL privilege may be tolerated temporarily in DEV/TEST and controlled migration work.
 
-Before personal-data/multiuser PROD cutover, runtime CRUD authority must be demonstrably separated from migration/DDL authority.
+Before personal-data/multiuser PROD cutover, runtime CRUD authority must be separated from migration/DDL authority to the strongest demonstrable extent supported by Nile, ADR-008 gateway/CI compensating controls must pass, and the owner must explicitly accept the documented global-mode residual risk.
 
 If the current provider cannot support a verified separation mechanism, the residual risk must return to Architecture for explicit owner review. Compensating controls must not be silently described as equivalent to least privilege.
 
