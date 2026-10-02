@@ -114,21 +114,45 @@ test('same shared job can produce different per-profile eligibility without prov
   assert.equal(EVALUATION_VERSION, 'multiuser-v1');
 });
 
-test('migration credential is mandatory and distinct from runtime credential', () => {
-  const base = {
+test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {
+  const dev = {
     APP_ENV:'dev',
     NILE_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_dev',
   };
-  assert.throws(() => migrationDatabaseConfig(base), /NILE_MIGRATION_DATABASE_URL is required/);
+  assert.throws(() => migrationDatabaseConfig(dev), /NILE_MIGRATION_DATABASE_URL is required/);
   assert.throws(
-    () => migrationDatabaseConfig({ ...base, NILE_MIGRATION_DATABASE_URL:base.NILE_DATABASE_URL }),
+    () => migrationDatabaseConfig({ ...dev, NILE_MIGRATION_DATABASE_URL:dev.NILE_DATABASE_URL }),
     /must be distinct/,
   );
-  const config = migrationDatabaseConfig({
-    ...base,
+
+  const devShared = migrationDatabaseConfig({
+    ...dev,
+    NILE_MIGRATION_DATABASE_URL:dev.NILE_DATABASE_URL,
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'true',
+  });
+  assert.equal(devShared.expectedDatabase, 'jobsearch_dev');
+
+  const testEnv = {
+    APP_ENV:'test',
+    NILE_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_test',
+    NILE_MIGRATION_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_test',
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'TRUE',
+  };
+  assert.equal(migrationDatabaseConfig(testEnv).expectedDatabase, 'jobsearch_test');
+
+  const prod = {
+    APP_ENV:'prod',
+    NILE_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_prod',
+    NILE_MIGRATION_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_prod',
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'true',
+  };
+  assert.throws(() => migrationDatabaseConfig(prod), /must be distinct/);
+
+  const distinct = migrationDatabaseConfig({
+    ...dev,
     NILE_MIGRATION_DATABASE_URL:'postgresql://migration:secret@db.example/jobsearch_dev',
   });
-  assert.equal(config.expectedDatabase, 'jobsearch_dev');
+  assert.equal(distinct.expectedDatabase, 'jobsearch_dev');
 });
 
 test('multiuser migration encodes mandatory direct tenant RLS and account cascades', async () => {
