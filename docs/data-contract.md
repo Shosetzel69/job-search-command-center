@@ -2,11 +2,11 @@
 
 Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-09-30`
+Ultima actualizare: `2026-10-02`
 
 ## 1. Reguli generale
 
-> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, personal/profile-owned si system/operational state in PostgreSQL, domain-by-domain.
+> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005/ADR-008, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, personal/profile-owned si system/operational state in PostgreSQL, domain-by-domain.
 
 Contractele runtime publicate frontend-ului folosesc `schema_version = "1.0"`.
 
