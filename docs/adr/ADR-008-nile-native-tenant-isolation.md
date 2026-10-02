@@ -117,7 +117,7 @@ A rollback-only DEV compatibility probe must verify `SET LOCAL nile.tenant_id` a
 
 ### 5. Personal versus shared data
 
-Personal/profile-owned domains remain as defined by ADR-005 and ADR-007. They are tenant-aware.
+Personal-content/profile-owned domains remain as defined by ADR-005 and ADR-007. Their physical storage is tenant-aware. The minimal global `profile` mapping itself is account/tenant metadata, not personal-content storage.
 
 Shared product and approved system/operational domains remain global/non-tenant, including:
 
