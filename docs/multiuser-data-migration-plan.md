@@ -292,14 +292,16 @@ Required result:
 current Google sub
   -> user_identity(GOOGLE)
   -> app_user(role=ADMIN,status=ACTIVE)
-  -> profile
-  -> imported personal state
+  -> allocate profile_id
+  -> Nile tenants(id = profile_id, opaque non-PII name)
+  -> global profile(profile_id = tenants.id, user_id = app_user.user_id)
+  -> imported tenant-aware personal state
 ```
 
 Rules:
 - idempotent;
 - deterministic;
-- no second ADMIN/profile on rerun;
+- no second ADMIN/tenant/profile on rerun;
 - no user data inferred from another environment;
 - no PROD bootstrap from DEV/TEST records.
 
