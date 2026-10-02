@@ -1,6 +1,6 @@
 # ADR-008 — Nile-native tenant isolation for JSCC Multiuser
 
-Status: **Accepted direction; residual-risk acceptance pending owner decision after Independent Review #468**  
+Status: **Accepted — residual risk explicitly accepted by owner on 2026-10-02**  
 Date: 2026-10-02  
 Decision owner: Project owner  
 Architecture amendment: #467  
@@ -220,13 +220,13 @@ Before PROD Multiuser:
 
 ## Residual risk decision
 
-**State: OWNER DECISION REQUIRED.**
+**State: ACCEPTED BY OWNER — 2026-10-02.**
 
 Verified Nile behavior permits cross-tenant queries when no tenant context is set. The compensating controls in this ADR reduce accidental bypass but do not recreate FORCE-RLS-style database default-deny for the runtime credential.
 
-Before PROD Multiuser, the project owner must explicitly accept or reject this residual risk for the exact reviewed architecture candidate. No assistant/agent may infer acceptance from a generic continuation, prior Nile approval, or approval of ADR-008's general direction.
+The project owner explicitly accepted this residual risk for PR #468 candidate lineage on 2026-10-02. This acceptance is architecture-specific and does not waive implementation, TEST, PROD, security-evidence or release gates.
 
-If rejected, Architecture must find an additional Nile-compatible enforcement mechanism without replacing Nile.
+If future implementation evidence materially increases this risk beyond the documented no-tenant/global-mode capability, the matter returns to Architecture for a new owner decision.
 
 ## Consequences
 
