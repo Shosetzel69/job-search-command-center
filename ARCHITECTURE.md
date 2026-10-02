@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.18`
+Versiune document: `v1.19`
 Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-09-30`
+Ultima actualizare: `2026-10-02`
 
 ## 1. Rol
 
@@ -21,6 +21,7 @@ Documente complementare:
 - `docs/adr/ADR-005-multiuser-ownership-isolation-shared-collection.md` — ownership multiuser, izolare tenant, shared collection si scheduler global;
 - `docs/adr/ADR-006-google-cloud-runtime.md` — target hosting/runtime GCP, build-once si promovare prin image digest;
 - `docs/adr/ADR-007-google-first-multiuser-identity-session.md` — identity mapping provider-neutral si sesiune JSCC pentru multiuser Google-first;
+- `docs/adr/ADR-008-nile-native-tenant-isolation.md` — tenant isolation nativ Nile prin fail-closed Tenant Data Gateway;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
