@@ -385,13 +385,17 @@ Personal repositories primesc profile context derivat server-side din principalu
 
 ### Tenant isolation
 
+ADR-008 is authoritative.
+
 Defense in depth:
 - server-side account/profile resolution;
 - repository scoping;
-- `profile` uses mandatory RLS + `FORCE ROW LEVEL SECURITY` scoped by server-derived `user_id`;
-- every Stage-1 personal-content table stores `profile_id` directly and uses mandatory RLS + `FORCE ROW LEVEL SECURITY`;
-- Stage-1 personal tables do not rely on join-derived tenant scope;
-- ADMIN has no personal-content bypass.
+- `profile.profile_id` is the canonical Nile tenant identifier for Multiuser MVP;
+- all personal persistence passes through the fail-closed Tenant Data Gateway / profile-scoped repository transaction boundary;
+- Nile tenant context is established transaction-locally before personal SQL;
+- persistent pooled-connection tenant state is prohibited;
+- browser-supplied profile/tenant identifiers confer no authority;
+- ADMIN has no cross-user personal tenant bypass.
 
 ### Connectivity
 
@@ -414,7 +418,7 @@ Inainte de personal-data/multiuser PROD, runtime CRUD authority trebuie separata
 
 DELETE este un account-domain hard delete. After ADMIN authorization on the caller's own AuthContext, AccountRepository deletes only the target `app_user` row; FK `ON DELETE CASCADE` removes `user_identity`, `user_session`, `profile` and all profile-owned rows. Shared jobs/sources/runs/nomenclatures are not owned by the user and are not cascaded.
 
-ADMIN does not assume the target tenant context, does not receive `BYPASSRLS`, and the delete operation does not return target personal content.
+ADMIN does not assume the target user's Nile tenant context, receives no generic cross-user personal tenant capability, and the delete operation does not return target personal content.
 
 Se poate pastra maximum 90 zile numai un audit event neidentificabil, fara user/profile identifiers sau date care permit relinkarea.
 
