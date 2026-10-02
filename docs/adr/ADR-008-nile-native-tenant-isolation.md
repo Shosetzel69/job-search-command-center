@@ -81,9 +81,9 @@ A generic unscoped personal-table query API is prohibited.
 Because the same managed Nile runtime credential can execute cross-tenant queries when no tenant context is established, the following controls are normative:
 
 1. **Personal-table registry.** The canonical list of tenant-aware personal tables is declared centrally and versioned.
-2. **Gateway-only SQL.** Runtime SQL that references a personal table is permitted only inside the Tenant Data Gateway, except the narrow Account Lifecycle Gateway defined below and migration code.
+2. **Gateway-only SQL.** Runtime SQL that references a personal table is permitted only inside the Tenant Data Gateway, except the narrow Account Lifecycle Gateway defined below and migration code. Global account/tenant metadata writes for first-sign-in/bootstrap are permitted only inside the narrow Account Provisioning Gateway.
 3. **No raw DB escape hatch.** Business/domain modules, HTTP handlers, shared/system repositories and collection jobs must not receive or export a raw `pg` pool/client or generic SQL executor.
-4. **Static/CI guard.** CI must fail if runtime code outside the allowlisted gateway modules references personal-table identifiers, tenant-context primitives or a generic raw-query escape path. Migration/test fixtures are explicitly scoped exceptions.
+4. **Static/CI guard.** CI must fail if runtime code outside the allowlisted Tenant Data Gateway, Account Provisioning Gateway and Account Lifecycle Gateway references tenant-management primitives; runtime code outside Tenant Data Gateway/Account Lifecycle Gateway must not reference personal-table identifiers. Generic raw-query escape paths are prohibited. Migration/test fixtures are explicitly scoped exceptions.
 5. **Shared/system repository boundary.** Global/shared repositories and collection jobs may use global DB context only for tables classified shared/system. They must not import personal repository modules.
 6. **Dedicated account-lifecycle path.** Cross-tenant account deletion is implemented only by a narrow Account Lifecycle Gateway with allowlisted statements and no personal-content SELECT/list/export capability.
 7. **Negative architectural tests.** The suite must prove that normal non-gateway runtime paths cannot obtain a personal repository handle or execute personal-table SQL.
@@ -132,7 +132,9 @@ User count must not multiply provider retrieval.
 
 ### 5.1 Nile tenant lifecycle and provisioning
 
-Self-service provisioning and owner bootstrap create the JSCC account/tenant atomically in one global transaction:
+Self-service provisioning and owner bootstrap run only through the **Account Provisioning Gateway**, the narrowly allowlisted global account/tenant-metadata write path. It has no personal-content SELECT/list/export capability.
+
+The Account Provisioning Gateway creates the JSCC account/tenant atomically in one global transaction:
 
 1. allocate `user_id` and `profile_id`;
 2. create `app_user`;
