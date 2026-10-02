@@ -263,7 +263,7 @@ ADMIN may not read another user's:
 - CV/documents;
 - UI workspace preferences.
 
-ADMIN has no personal-table RLS bypass.
+ADMIN has no cross-user personal tenant bypass.
 
 ## 8.1 ADMIN-initiated account deletion mechanism
 
@@ -281,73 +281,78 @@ Canonical mechanism:
 5. The operation returns lifecycle metadata only (success/not-found); it never selects or returns target personal content.
 
 Explicit prohibitions:
-- ADMIN must not set/assume the target user's `jscc.user_id` or `jscc.profile_id` tenant context;
-- ADMIN receives no `BYPASSRLS`;
+- ADMIN must not set/assume the target user's Nile tenant context;
+- ADMIN receives no generic cross-user personal tenant capability;
 - deletion must not be implemented by reading target personal rows and deleting them one by one through a fabricated tenant session;
 - a privileged generic SQL/admin endpoint is prohibited.
 
 The FK cascade path is part of the schema contract and must be integration-tested. If the selected PostgreSQL/provider behavior cannot demonstrate complete cascaded cleanup while preserving the no-read/no-impersonation boundary, implementation stops and returns to Architecture.
 
-## 9. PostgreSQL tenant context
+## 9. Nile tenant context and Tenant Data Gateway
 
-All personal repository operations run in a DB transaction.
+ADR-008 is authoritative for tenant isolation.
+
+All personal repository operations run inside a profile-scoped DB transaction mediated by the fail-closed Tenant Data Gateway.
 
 Canonical pattern:
 
 ```text
-BEGIN
- -> SET LOCAL jscc.user_id = <authenticated user UUID>
- -> SET LOCAL jscc.profile_id = <authenticated profile UUID>
- -> personal queries
-COMMIT/ROLLBACK
+authenticated JSCC session
+ -> server-derived AuthContext(user_id, profile_id, role, status)
+ -> BEGIN
+ -> establish transaction-local Nile tenant context using profile_id
+ -> personal queries through profile-scoped repositories
+ -> COMMIT / ROLLBACK
 ```
 
-Both values are server-derived from the authenticated session. Browser input never sets either context.
+For Multiuser MVP, `profile.profile_id` is the canonical Nile tenant identifier.
 
-Equivalent transaction-local `set_config(..., true)` is allowed.
+Browser input never establishes tenant authority.
 
-A connection-scoped persistent `SET` is prohibited because pooled connections are reused.
+Persistent connection-level tenant state is prohibited because pooled connections are reused. Commit, rollback and error paths must leave no tenant state that can affect a later borrower of the connection.
 
-Missing tenant context must produce default-deny behavior.
+Missing, invalid or inconsistent tenant context must fail closed before personal data access.
 
-## 10. RLS contract
+## 10. Tenant isolation contract
 
-RLS is mandatory, not optional, for the Stage-1 personal domain.
+Nile-native tenant isolation is mandatory for the Stage-1 personal domain.
 
-### 10.1 Profile tenancy row
+### 10.1 Profile tenancy
 
-The `profile` tenancy table:
-- uses `ENABLE ROW LEVEL SECURITY`;
-- uses `FORCE ROW LEVEL SECURITY`;
-- authorizes the row by server-set `jscc.user_id`;
-- does not accept caller-selected `user_id` or `profile_id` as authority.
+The profile/tenant boundary:
+- maps `profile.profile_id` to the Nile tenant identifier;
+- is resolved only from server-derived AuthContext;
+- does not accept caller-selected `user_id`, `profile_id` or tenant id as authority;
+- is entered only through the Tenant Data Gateway / profile-scoped repository transaction boundary.
 
 ### 10.2 Personal-content tables
 
 Every Stage-1 personal-content table:
-- stores `profile_id UUID NOT NULL` directly;
-- references `profile(profile_id) ON DELETE CASCADE`;
-- uses `ENABLE ROW LEVEL SECURITY`;
-- uses `FORCE ROW LEVEL SECURITY`;
-- SELECT/UPDATE/DELETE policy requires row `profile_id = current_setting('jscc.profile_id', true)::uuid`;
-- INSERT policy uses `WITH CHECK` with the same condition.
+- is profile-owned and tenant-aware;
+- keeps direct `profile_id` ownership where required by the JSCC domain and deletion model;
+- references the owning profile according to the approved schema/lifecycle contract;
+- is accessed only under the authenticated profile's Nile tenant context;
+- rejects cross-tenant object access, including lookup by known UUID.
 
-**Derived tenant scope is not used for Stage 1 personal-content tables.** This deliberately denormalizes the tenant key into each personal row so RLS does not depend on joins or on application code correctly traversing a parent relationship.
+Derived or caller-selected tenant authority is prohibited.
 
-If a future personal table cannot store `profile_id` directly, it requires a separately reviewed RLS design before implementation; it is not covered by an implicit "derived scope" exception.
+If a future personal table cannot fit the approved tenant-aware profile ownership model, it requires separate Architecture review before implementation.
 
-### 10.3 FORCE RLS and runtime role
+### 10.3 Runtime and pooling safety
 
-There is no "where applicable" exception for Stage-1 personal/profile tables: FORCE RLS is mandatory.
-
-This remains required even if the runtime credential is temporarily the table owner in DEV/TEST. The negative test suite must prove that the runtime identity, **including when it is table owner**, cannot read/write another tenant's rows.
+The negative suite must prove:
+- profile A cannot read/write/delete profile B personal data;
+- ADMIN cannot enter B personal tenant context for content access;
+- pooled connection reuse A -> B exposes no A data;
+- rollback/error after A followed by B exposes no A data;
+- missing tenant context fails closed;
+- forged browser `profile_id` / tenant id changes no authority.
 
 Before PROD Multiuser:
-- runtime identity is not superuser;
-- runtime identity has no `BYPASSRLS`;
-- ATC-275-09 proves routine runtime DML authority is distinct from migration/DDL authority.
+- ATC-275-09 proves the strongest demonstrable runtime DML versus migration/DDL privilege separation supported by Nile;
+- any material residual provider privilege risk returns to Architecture for explicit approval.
 
-RLS remains defense in depth; repository authorization and server-derived AuthContext are still mandatory.
+Nile-native tenant isolation remains defense in depth; repository authorization and server-derived AuthContext are still mandatory.
 
 ## 11. Personal tables in initial scope
 
@@ -359,11 +364,11 @@ At minimum:
 - personal notes if/when persisted;
 - server-persisted UI preferences.
 
-Each of these stores `profile_id` directly and uses mandatory ENABLE + FORCE RLS.
+Each is profile-owned, tenant-aware and accessible only through the Tenant Data Gateway under transaction-local Nile tenant context.
 
-`profile` itself is tenancy/account metadata and uses its own mandatory user-scoped ENABLE + FORCE RLS policy as defined above. `user_session` is account-scoped security data, not profile workspace content.
+`profile` is tenancy/account metadata. `user_session` is account-scoped security data, not profile workspace content.
 
-Shared/system tables do not receive profile RLS merely to imitate tenancy.
+Shared/system tables remain global/non-tenant unless a separate architecture decision classifies them otherwise.
 
 ## 12. Account lifecycle
 
@@ -491,9 +496,9 @@ Mandatory cases:
 - forged ADMIN field/header/request payload -> no privilege;
 - application ID belonging to B used by A -> denied;
 - pooled connection reused A -> B -> no tenant leakage;
-- missing DB tenant context -> no personal rows;
-- runtime role attempts DDL/BYPASSRLS path -> denied by privilege contract;
-- runtime role acting as table owner still cannot read/write another profile because FORCE RLS applies;
+- missing Nile tenant context -> personal access fails closed;
+- runtime attempts unauthorized DDL/migration capability -> denied by the strongest demonstrable privilege contract supported by Nile;
+- runtime under tenant A cannot read/write tenant B personal data through the approved gateway/repository path;
 - ADMIN account deletion returns no personal content, requires no target tenant context, and leaves zero target personal rows after cascade;
 - ADMIN cannot use deletion machinery as a read/list/export path.
 
@@ -523,7 +528,7 @@ Implementation stops if it requires:
 - browser-selected tenant authority;
 - direct Google-sub foreign keys in personal domain;
 - persistent connection-level tenant context;
-- runtime DB role with unaccepted RLS/DDL bypass;
+- runtime DB authority with an unaccepted DDL/tenant-isolation bypass risk;
 - silent fallback to `ALLOWED_GOOGLE_SUB`;
 - cross-environment fallback;
 - a new identity provider/service not approved for Stage 1;
@@ -533,6 +538,7 @@ Implementation stops if it requires:
 
 - ADR-005
 - ADR-007
+- ADR-008
 - #265
 - #275
 - #450
