@@ -1,7 +1,7 @@
 # Command API
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-30`
+Ultima actualizare: `2026-10-02`
 
 ## Scop
 
@@ -16,7 +16,7 @@ Responsabilitati:
 - Nomenclatoare canonice + integritate referentiala;
 - acces server-side la GitHub Actions/Contents API.
 
-Command API nu este motorul de cautare. In target-ul ADR-005 devine boundary-ul server-side pentru identity/authorization si repository/data-access catre PostgreSQL, fara SQL direct in frontend/business logic.
+Command API nu este motorul de cautare. In target-ul ADR-005/ADR-008 devine boundary-ul server-side pentru identity/authorization si repository/data-access catre PostgreSQL, fara SQL direct in frontend/business logic.
 
 ## Regula Save != Run
 
