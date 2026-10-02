@@ -465,7 +465,7 @@ Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/index
 
 - `app_user` cu internal `user_id`, role si ACTIVE/DEACTIVATED;
 - `user_identity` cu provider + provider subject; Stage 1 provider = GOOGLE;
-- `profile` ramane separat de account, cu exact un profil/user in MVP;
+- `profile` ramane separat de account, cu exact un profil/user in MVP; fizic este global account/tenant metadata, cu `profile_id == tenants.id`, fara personal workspace payload;
 - `user_session` este security state account-owned, cu token opac si numai hash persistat;
 - Google `sub` si email nu devin foreign keys pentru personal-domain data;
 - `DELETED` este operatie de hard-delete, nu status persistent.
@@ -474,7 +474,7 @@ Contractul detaliat este in `docs/multiuser-auth-security-contract.md`.
 
 ### Personal/profile-owned
 
-- Profile;
+- professional profile content (stored in tenant-aware personal tables, not in the global `profile` mapping);
 - profile search preferences;
 - user-job state: `seen_at`, `archived_at` si evaluation validity/version metadata;
 - FIT/evaluation score, pros, risks;
@@ -534,7 +534,7 @@ ATC-275-03 materializeaza `retention_until` ca earliest purge eligibility, dar n
 
 ### Application
 
-Application este profile-owned.
+Application este profile-owned logic; fizic este tenant-aware cu `tenant_id = logical profile_id`.
 
 - `job_id` este optional;
 - aplicatiile externe JSCC sunt permise;
