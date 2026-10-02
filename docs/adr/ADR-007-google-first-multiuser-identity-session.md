@@ -124,8 +124,8 @@ user_identity
 UNIQUE(provider, provider_subject)
 UNIQUE(user_id, provider)        -- MVP: one identity per provider/user
 
-profile
-- profile_id UUID PK
+profile  -- global account/tenant metadata
+- profile_id UUID PK, also Nile tenant id and FK -> tenants(id)
 - user_id UUID UNIQUE FK
 - created_at
 - updated_at
@@ -141,14 +141,17 @@ After Google token verification:
 
 1. resolve `(provider=GOOGLE, provider_subject=sub)`;
 2. if found, resolve the associated `app_user` and profile;
-3. if not found, create in one database transaction:
+3. if not found, create in one global database transaction:
    - ACTIVE USER;
    - GOOGLE `user_identity`;
-   - exactly one profile;
-4. uniqueness constraints make concurrent first sign-in idempotent;
-5. DEACTIVATED accounts are denied and are not reprovisioned.
+   - opaque `profile_id`;
+   - Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
+   - exactly one global profile mapping referencing that tenant;
+4. any failure rolls back the full user/identity/tenant/profile unit;
+5. uniqueness constraints make concurrent first sign-in idempotent;
+6. DEACTIVATED accounts are denied and are not reprovisioned.
 
-A deleted user has no retained identity mapping. A later sign-in creates a new `user_id` and `profile_id`.
+A deleted user has no retained identity mapping, Nile tenant row or profile mapping. A later sign-in creates a new `user_id`, `profile_id` and Nile tenant.
 
 ### 3. Application-owned session
 
@@ -236,7 +239,7 @@ ADMIN:
 
 ADMIN receives no cross-user personal tenant bypass.
 
-ADMIN-initiated account deletion is a narrow account-domain delete. The AccountRepository deletes the target `app_user`; FK `ON DELETE CASCADE` removes identity, sessions, profile and profile-owned personal rows. ADMIN does not assume the target tenant context and the operation never returns target personal content.
+ADMIN-initiated account deletion uses the narrow ADR-008 Account Lifecycle Gateway. It resolves only target account metadata, deletes the target Nile `tenants` row to remove tenant-aware personal data and the linked profile mapping through verified cascade behavior, then deletes `app_user` to remove identity/session metadata. ADMIN does not assume the target tenant context for personal-content access and the operation never returns target personal content.
 
 ### 9. Environment isolation
 
