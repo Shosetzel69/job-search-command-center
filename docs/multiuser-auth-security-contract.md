@@ -576,7 +576,7 @@ Implementation stops if it requires:
 - #275
 - #450
 - `docs/command-api.md`
-- PostgreSQL Row Security references from the superseded RLS design are historical only; ADR-008 is authoritative for current tenant isolation.
+- Historical PostgreSQL RLS references are superseded; ADR-008 is authoritative for current tenant isolation.
 - `docs/data-contract.md`
 - PostgreSQL Row Security
 - OWASP Session Management Cheat Sheet
