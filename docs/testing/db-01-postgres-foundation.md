@@ -49,6 +49,27 @@ The runner:
 
 The initial migration creates only the technical `schema_migrations` table. It does not migrate JSCC domain data.
 
+### Nile DEV/TEST shared-role exception
+
+The canonical target remains a distinct runtime DML principal and migration/DDL principal. Nile may map multiple credentials for one database to the same effective PostgreSQL role. The approved architecture permits that broad DDL authority temporarily in DEV/TEST controlled migration work, but not as a PROD Multiuser privilege-gate substitute.
+
+For a controlled DEV/TEST migration only, the operator may bind the same environment-scoped URL to both variables and opt in explicitly:
+
+```bash
+export NILE_DATABASE_URL="..."
+export NILE_MIGRATION_DATABASE_URL="$NILE_DATABASE_URL"
+export JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true
+npm --prefix command-api run db:migrate
+unset JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE NILE_MIGRATION_DATABASE_URL NILE_DATABASE_URL
+```
+
+Rules:
+- the override is accepted only for `APP_ENV=dev|test`;
+- `prod` remains fail-closed even if the flag is present;
+- the override is migration-process configuration only and must never be injected into the Cloud Run runtime;
+- FORCE RLS and tenant-isolation negative tests remain mandatory;
+- runtime-vs-migration privilege separation remains a hard gate before Multiuser PROD cutover.
+
 ## Rollback
 
 DB-01 contains no domain tables or migrated records. If the foundation must be removed before later migrations depend on it:
