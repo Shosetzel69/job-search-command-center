@@ -159,7 +159,7 @@ Outputs:
 
 Gate: internal review + independent review.
 
-### MU-S1 — User/profile/identity/RLS foundation
+### MU-S1 — User/profile/identity/Nile tenant-isolation foundation
 
 DEV only after explicit ATC approval.
 
@@ -167,8 +167,8 @@ Creates:
 - app user;
 - external identity;
 - profile;
-- tenant context;
-- RLS policies;
+- transaction-local Nile tenant context;
+- fail-closed Tenant Data Gateway / tenant-aware personal persistence;
 - current owner bootstrap.
 
 Does not:
@@ -223,7 +223,7 @@ Requirements:
 - application belongs to one profile;
 - optional shared job link;
 - application snapshot survives shared-job change;
-- cross-profile RLS tests.
+- cross-profile Nile tenant-isolation tests, including missing-context and pooled-connection reuse.
 
 ### MU-S5 — Google multiuser auth/session/lifecycle
 
@@ -370,8 +370,8 @@ Required foreign keys:
 
 ADMIN performs a narrow AccountRepository delete of the target `app_user` after role/lifecycle authorization. The operation:
 - must not select/export target personal rows;
-- must not set `jscc.user_id` or `jscc.profile_id` to the target;
-- must not use `BYPASSRLS`;
+- must not assume/select the target user's Nile tenant context;
+- must not receive a generic cross-user personal tenant capability;
 - returns only lifecycle result metadata;
 - leaves shared/system data unchanged.
 
@@ -381,15 +381,16 @@ DEV and TEST integration evidence must prove zero personal residue after cascade
 
 Before PROD multiuser:
 - account-admission/capacity guard prevents new self-service accounts from causing automatic paid capacity consumption;
-- `profile` and every personal-content table use mandatory `ENABLE ROW LEVEL SECURITY` + `FORCE ROW LEVEL SECURITY`;
-- every Stage-1 personal-content table stores `profile_id` directly; join-derived tenant scope is not used;
-- routine runtime credential supports only required application DML;
-- migration identity owns approved DDL/migration capability;
-- runtime cannot CREATE/ALTER/DROP protected schema objects;
-- runtime is not superuser and does not have `BYPASSRLS`;
+- account/profile tenant ownership uses ADR-008 Nile-native tenant isolation;
+- `profile.profile_id` is the canonical Nile tenant identifier for Multiuser MVP;
+- every Stage-1 personal-content table is profile-owned and tenant-aware;
+- all personal persistence passes through the fail-closed Tenant Data Gateway with transaction-local Nile tenant context;
+- routine runtime credential supports only required application DML to the strongest demonstrable extent supported by Nile;
+- migration identity owns approved DDL/migration capability where separable;
+- runtime DDL negative evidence is required where the provider exposes separable privileges;
 - environment bindings remain independent.
 
-If the PostgreSQL provider cannot demonstrate this, multiuser PROD is blocked and returns to Architecture.
+If Nile cannot provide the required tenant isolation, or leaves a material runtime privilege risk that cannot be bounded by the approved adapter/credential model, multiuser PROD is blocked and returns to Architecture.
 
 ## 13. Connection-pool safety
 
@@ -398,7 +399,7 @@ Cloud Run may scale horizontally.
 Requirements:
 - use a bounded pool per instance;
 - do not size pools as if only one service instance exists;
-- tenant context is always transaction-local;
+- Nile tenant context is always transaction-local;
 - rollback releases the transaction/connection cleanly;
 - no session/tenant context survives pool reuse;
 - connection limits must be validated against current Nile capacity before TEST/PROD.
@@ -461,7 +462,7 @@ All required:
 - stable GCP DEV -> TEST promotion path;
 - full multiuser TEST PASS;
 - runtime/DDL privilege separation PASS;
-- RLS negative matrix PASS, including runtime-table-owner cross-tenant denial and mandatory FORCE RLS;
+- tenant-isolation negative matrix PASS, including A/B cross-tenant denial, missing-context fail-closed, rollback cleanup and pooled-connection reuse;
 - ADMIN cascade-delete/no-impersonation/no-personal-read PASS;
 - session revocation/deactivation PASS;
 - legacy-cookie cutover / forced reauthentication PASS;
@@ -477,7 +478,7 @@ All required:
 Stage 1 must leave:
 - `app_user`;
 - `profile`;
-- RLS;
+- ADR-008 Nile-native tenant isolation;
 - application session;
 - lifecycle;
 - personal/shared ownership
