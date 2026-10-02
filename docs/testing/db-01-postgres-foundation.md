@@ -49,6 +49,30 @@ The runner:
 
 The initial migration creates only the technical `schema_migrations` table. It does not migrate JSCC domain data.
 
+### Nile DEV/TEST shared-role exception
+
+The canonical target remains a distinct runtime DML principal and migration/DDL principal. Nile may map multiple credentials for one database to the same effective PostgreSQL role. The approved architecture permits that broad DDL authority temporarily in DEV/TEST controlled migration work, but not as a PROD Multiuser privilege-gate substitute.
+
+For a controlled DEV/TEST migration only, the operator may bind the same environment-scoped URL to both variables and opt in explicitly:
+
+```bash
+export NILE_DATABASE_URL="..."
+export NILE_MIGRATION_DATABASE_URL="$NILE_DATABASE_URL"
+export JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true
+npm --prefix command-api run db:migrate
+unset JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE NILE_MIGRATION_DATABASE_URL NILE_DATABASE_URL
+```
+
+Rules:
+- the override is accepted only for `APP_ENV=dev|test`;
+- `prod` remains fail-closed even if the flag is present;
+- the override is operator-side migration/readiness configuration only and must never be injected into the Cloud Run runtime;
+- `db:provision-runtime` reports `skipped` in this mode because revoking DDL from the same effective role would both misrepresent separation and break future controlled migrations;
+- `db:privilege-readiness` may report `status=ok` with `mode=dev_test_shared_role_exception` only when the role is non-superuser, has no `BYPASSRLS`/`CREATEROLE`, and every protected personal table has both RLS and FORCE RLS;
+- this exception is explicitly **not** evidence of strict privilege separation;
+- FORCE RLS and tenant-isolation negative tests remain mandatory;
+- runtime-vs-migration privilege separation remains a hard gate before Multiuser PROD cutover.
+
 ## Rollback
 
 DB-01 contains no domain tables or migrated records. If the foundation must be removed before later migrations depend on it:

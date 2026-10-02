@@ -12,6 +12,8 @@ import {
   splitLegacyConfig,
 } from '../src/multiuser-repository.js';
 import { migrationDatabaseConfig } from '../src/db/config.js';
+import { runtimePrivilegeReadiness, PROTECTED_RLS_TABLES } from '../src/db/privilege-readiness.js';
+import { provisionRuntimeRole } from '../scripts/db-provision-runtime.mjs';
 
 const nomenclatures = JSON.parse(
   await readFile(new URL('../../data/nomenclatures.json', import.meta.url), 'utf8'),
@@ -114,21 +116,127 @@ test('same shared job can produce different per-profile eligibility without prov
   assert.equal(EVALUATION_VERSION, 'multiuser-v1');
 });
 
-test('migration credential is mandatory and distinct from runtime credential', () => {
-  const base = {
+test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {
+  const dev = {
     APP_ENV:'dev',
     NILE_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_dev',
   };
-  assert.throws(() => migrationDatabaseConfig(base), /NILE_MIGRATION_DATABASE_URL is required/);
+  assert.throws(() => migrationDatabaseConfig(dev), /NILE_MIGRATION_DATABASE_URL is required/);
   assert.throws(
-    () => migrationDatabaseConfig({ ...base, NILE_MIGRATION_DATABASE_URL:base.NILE_DATABASE_URL }),
+    () => migrationDatabaseConfig({ ...dev, NILE_MIGRATION_DATABASE_URL:dev.NILE_DATABASE_URL }),
     /must be distinct/,
   );
-  const config = migrationDatabaseConfig({
-    ...base,
+
+  const devShared = migrationDatabaseConfig({
+    ...dev,
+    NILE_MIGRATION_DATABASE_URL:dev.NILE_DATABASE_URL,
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'true',
+  });
+  assert.equal(devShared.expectedDatabase, 'jobsearch_dev');
+
+  const testEnv = {
+    APP_ENV:'test',
+    NILE_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_test',
+    NILE_MIGRATION_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_test',
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'TRUE',
+  };
+  assert.equal(migrationDatabaseConfig(testEnv).expectedDatabase, 'jobsearch_test');
+
+  const prod = {
+    APP_ENV:'prod',
+    NILE_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_prod',
+    NILE_MIGRATION_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_prod',
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'true',
+  };
+  assert.throws(() => migrationDatabaseConfig(prod), /must be distinct/);
+
+  const distinct = migrationDatabaseConfig({
+    ...dev,
     NILE_MIGRATION_DATABASE_URL:'postgresql://migration:secret@db.example/jobsearch_dev',
   });
-  assert.equal(config.expectedDatabase, 'jobsearch_dev');
+  assert.equal(distinct.expectedDatabase, 'jobsearch_dev');
+});
+
+
+test('DEV/TEST shared-role privilege mode requires FORCE RLS but records that strict separation is absent', async () => {
+  const rows = PROTECTED_RLS_TABLES.map(table_name => ({
+    table_name,
+    rls_enabled:true,
+    rls_forced:true,
+    owner_role:'khnum_user',
+    owned_by_runtime:true,
+    member_of_owner:true,
+  }));
+  const db = {
+    calls:0,
+    async query() {
+      this.calls += 1;
+      if (this.calls === 1) {
+        return { rows:[{
+          role_name:'khnum_user',
+          rolsuper:false,
+          rolbypassrls:false,
+          rolcreaterole:false,
+          schema_create:true,
+          database_create:true,
+        }] };
+      }
+      return { rows };
+    },
+  };
+  const result = await runtimePrivilegeReadiness({
+    APP_ENV:'dev',
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'true',
+  }, { db });
+  assert.equal(result.status, 'ok');
+  assert.equal(result.mode, 'dev_test_shared_role_exception');
+  assert.equal(result.strict_privilege_separation, false);
+  assert.equal(result.protected_tables.every(item => item.rls_enabled && item.rls_forced), true);
+});
+
+test('shared-role override never makes PROD privilege readiness pass', async () => {
+  const rows = PROTECTED_RLS_TABLES.map(table_name => ({
+    table_name,
+    rls_enabled:true,
+    rls_forced:true,
+    owner_role:'khnum_user',
+    owned_by_runtime:true,
+    member_of_owner:true,
+  }));
+  const db = {
+    calls:0,
+    async query() {
+      this.calls += 1;
+      if (this.calls === 1) {
+        return { rows:[{
+          role_name:'khnum_user',
+          rolsuper:false,
+          rolbypassrls:false,
+          rolcreaterole:false,
+          schema_create:true,
+          database_create:true,
+        }] };
+      }
+      return { rows };
+    },
+  };
+  const result = await runtimePrivilegeReadiness({
+    APP_ENV:'prod',
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'true',
+  }, { db });
+  assert.equal(result.status, 'unsafe');
+  assert.equal(result.mode, 'unsafe');
+});
+
+test('runtime provisioning is explicitly skipped under DEV/TEST shared-role mode', async () => {
+  const result = await provisionRuntimeRole({
+    APP_ENV:'dev',
+    NILE_DATABASE_URL:'postgresql://khnum_user:secret@db.example/jobsearch_dev',
+    JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE:'true',
+  });
+  assert.equal(result.status, 'skipped');
+  assert.equal(result.mode, 'dev_test_shared_role_exception');
+  assert.equal(result.runtime_role, 'khnum_user');
 });
 
 test('multiuser migration encodes mandatory direct tenant RLS and account cascades', async () => {
