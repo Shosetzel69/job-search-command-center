@@ -59,14 +59,15 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - optional account email/email_verified metadata;
 - allocate separate opaque UUID `profile_id` and create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
 - create global `profile(profile_id -> tenants.id, user_id -> app_user)` mapping with exactly one profile/tenant per user MVP;
-- bootstrap current owner as ADMIN + GOOGLE identity + Nile tenant + profile mapping in one transaction;
+- introduce the narrow Account Provisioning Gateway for self-service/bootstrap global account+tenant metadata writes; it has no personal-content SELECT/list/export capability;
+- bootstrap current owner as ADMIN + GOOGLE identity + Nile tenant + profile mapping through that gateway in one transaction;
 - tenant-aware personal tables use physical `tenant_id = profile_id`, tenant-qualified primary/unique keys and required FK to `tenants(id)`;
 - introduce server-derived tenant context:
   - tenant authority comes only from authenticated `AuthContext.profile_id`;
   - Nile global mode without tenant context is explicitly cross-tenant capable and is not a DB-level deny state;
 - introduce the fail-closed Tenant Data Gateway / profile-scoped transaction boundary;
 - establish `SET LOCAL nile.tenant_id` transaction-locally before personal SQL, subject to rollback-only DEV compatibility proof;
-- add canonical personal-table registry plus CI/static guard preventing personal-table SQL/raw-query escape outside the Tenant Data Gateway, Account Lifecycle Gateway, migrations and scoped tests;
+- add canonical personal-table registry plus CI/static guard preventing personal-table SQL/raw-query escape outside the Tenant Data Gateway, Account Lifecycle Gateway, migrations and scoped tests; tenant-management primitives are additionally allowlisted only for Account Provisioning Gateway / Account Lifecycle Gateway / migrations/tests;
 - ensure shared/system repositories and collection jobs have no dependency path to personal repositories;
 - negative tenant-isolation tests including pooled-connection reuse, rollback, missing-context gateway rejection and non-gateway boundary checks.
 
@@ -106,7 +107,7 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - profile A cannot read/write profile B through the approved gateway/repository path;
 - ADMIN test principal cannot read/write B personal rows;
 - pooled connection A -> B and rollback A -> B carry no A context;
-- CI/static guard rejects personal-table SQL or generic raw DB escape outside allowlisted gateway/migration/test modules;
+- CI/static guard rejects personal-table SQL or generic raw DB escape outside allowlisted gateway/migration/test modules and rejects tenant-management writes outside Account Provisioning/Lifecycle Gateway or migrations/tests;
 - collection/shared-system paths cannot import/use personal repositories;
 - runtime operating under tenant A cannot read/write tenant B personal data through the approved gateway/repository path;
 - no environment fallback.
