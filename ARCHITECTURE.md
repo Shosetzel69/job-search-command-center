@@ -488,9 +488,11 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 - business/repository code consuma `AuthContext(user_id, profile_id, role, status)`, nu claims Google;
 - profilul autorizat este rezolvat server-side; un `profile_id` trimis de browser nu confera acces;
 - repository-urile personale necesita profile context autentificat si transaction-local;
-- `profile` si toate Stage-1 personal-content tables folosesc obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY`; personal-content rows stocheaza direct `profile_id`;
-- tenant context pe conexiuni pooled foloseste numai `SET LOCAL`/echivalent transaction-local; context persistent pe conexiune este interzis;
-- ADMIN nu primeste bypass pentru continutul personal al altor utilizatori;
+- ADR-008 este autoritativ pentru izolarea tenant: `profile.profile_id` este canonical Nile tenant id pentru Multiuser MVP;
+- toate operatiile pe date personale trec prin fail-closed Tenant Data Gateway / profile-scoped repository boundary;
+- Nile tenant context este stabilit transaction-local; context persistent pe conexiune pooled este interzis;
+- browser-supplied profile/tenant id nu confera autoritate;
+- ADMIN nu primeste cross-user personal tenant bypass;
 - credentialele/tokens de autentificare nu ajung in `localStorage`, loguri sau date persistente;
 - `/data/*` necesita autentificare;
 - protected data foloseste `no-store`;
@@ -647,15 +649,17 @@ MVP roles:
 
 ADMIN are drepturi USER doar asupra propriului profil si capabilitati administrative asupra account lifecycle, shared/system configuration, scheduler, manual collection si diagnostics. ADMIN nu acceseaza continutul personal al altui user.
 
-Tenant isolation este defense-in-depth:
+Tenant isolation este defense-in-depth, conform ADR-008:
 
 - authenticated identity -> server-side app_user/profile resolution;
 - repository scoping obligatoriu pentru personal data;
-- `profile` foloseste obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY` pe baza server-derived `user_id`;
-- fiecare personal-content table stocheaza direct `profile_id` si foloseste obligatoriu PostgreSQL RLS + `FORCE ROW LEVEL SECURITY`;
-- Stage 1 nu foloseste personal tables cu tenant scope derivat prin join; o astfel de exceptie necesita Architecture review separat;
-- browser-supplied user/profile id nu confera autoritate;
-- ADMIN nu primeste personal-content RLS bypass;
+- `profile.profile_id` este canonical Nile tenant id pentru Multiuser MVP;
+- fiecare personal-content table este profile-owned/tenant-aware si este accesata numai prin Tenant Data Gateway;
+- gateway-ul stabileste Nile tenant context transaction-local inainte de personal SQL;
+- missing/invalid tenant context produce fail-closed inainte de acces la date personale;
+- pool reuse, rollback si error paths trebuie sa dovedeasca absenta tenant-context leakage;
+- browser-supplied user/profile/tenant id nu confera autoritate;
+- ADMIN nu primeste cross-user personal tenant bypass;
 - ADMIN delete este account-domain delete prin FK `ON DELETE CASCADE`; ADMIN nu asuma tenant context-ul userului tinta si nu citeste continutul personal pentru a-l sterge.
 
 ### 16.5 Runtime connectivity si privilege gate
