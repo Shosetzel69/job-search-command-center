@@ -45,7 +45,7 @@ CREATE TABLE source_postings (
   last_seen_at timestamptz NOT NULL,
   inactive_at timestamptz,
   seen_run_id text NOT NULL,
-  repost_of_posting_id uuid REFERENCES source_postings(posting_id) ON DELETE SET NULL,
+  repost_of_posting_id uuid,
   payload jsonb NOT NULL DEFAULT '{}'::jsonb,
   UNIQUE(source_id, identity_kind, identity_value),
   CHECK (
@@ -62,6 +62,12 @@ CREATE TABLE source_postings (
     )
   )
 );
+
+ALTER TABLE public.source_postings
+  ADD CONSTRAINT source_postings_repost_fk
+  FOREIGN KEY (repost_of_posting_id)
+  REFERENCES public.source_postings(posting_id)
+  ON DELETE SET NULL;
 
 CREATE INDEX source_postings_job_idx ON source_postings(job_id);
 CREATE INDEX source_postings_url_idx ON source_postings(canonical_url) WHERE canonical_url IS NOT NULL;
