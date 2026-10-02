@@ -5,7 +5,7 @@ Date: 2026-09-22
 Decision owner: Project owner  
 Architecture gate: #270  
 Implementation analysis: #275  
-Related: #265, #86, #97-#101, ADR-004
+Related: #265, #86, #97-#101, ADR-004, ADR-008
 
 ## Context
 
@@ -25,7 +25,7 @@ Canonical identity mapping:
 
 `Google sub -> app_user.user_id -> profile.profile_id`
 
-**Refinement:** ADR-007 preserves this semantic mapping while introducing the physical provider-neutral boundary `Google sub -> user_identity -> app_user -> profile` and a JSCC-owned application session. ADR-007 is authoritative for Stage-1 identity/session implementation details.
+**Refinement:** ADR-007 preserves this semantic mapping while introducing the physical provider-neutral boundary `Google sub -> user_identity -> app_user -> profile` and a JSCC-owned application session. ADR-007 is authoritative for Stage-1 identity/session implementation details. ADR-008 is authoritative for the current tenant-isolation enforcement mechanism.
 
 MVP invariant: one user has exactly one job-search profile, while `user_id` and `profile_id` remain separate identifiers.
 
@@ -105,19 +105,25 @@ ADMIN may manage:
 
 ADMIN may not access another user's profile, FIT/evaluation, applications, notes or other personal workspace content.
 
-### Tenant isolation
+### Tenant isolation — amended by ADR-008
 
 Personal access uses defense in depth:
 
 1. authenticated Google identity is resolved server-side;
 2. server resolves `app_user` and `profile_id`;
 3. personal repository operations require authenticated profile context;
-4. PostgreSQL Row Level Security protects personal tables;
-5. ADR-007 refinement: `profile` and every Stage-1 personal-content table use mandatory `FORCE ROW LEVEL SECURITY`; each personal-content table stores `profile_id` directly.
+4. `profile.profile_id` is the canonical Nile tenant identifier for Multiuser MVP;
+5. every profile-owned operation passes through the fail-closed Tenant Data Gateway / profile-scoped repository transaction boundary;
+6. the gateway establishes Nile tenant context transaction-locally before personal SQL;
+7. Nile-native tenant isolation is the primary database tenant boundary for personal data.
 
-Browser-supplied profile identifiers never confer authorization.
+Browser-supplied profile or tenant identifiers never confer authorization.
 
-ADMIN receives no personal-content RLS bypass.
+Persistent connection-level tenant state is prohibited. Pool reuse and rollback paths must prove that tenant context does not leak across transactions.
+
+ADMIN receives no cross-user personal tenant bypass.
+
+ADR-008 supersedes the former PostgreSQL RLS / FORCE RLS enforcement mechanism only; the isolation outcome and ownership model remain unchanged.
 
 ### Runtime database privileges
 
@@ -232,7 +238,7 @@ The original ADR-005 connectivity choice (`Cloudflare Worker -> Hyperdrive -> Ni
 
 `Cloud Run Service/Job -> repository/data-access -> node-postgres (pg) -> Nile PostgreSQL`
 
-ADR-006 is authoritative for runtime hosting, environment secrets, pooling/concurrency and immutable promotion. ADR-005 remains authoritative for PostgreSQL ownership/tenancy semantics. Request-selected database and cross-environment fallback remain prohibited.
+ADR-006 is authoritative for runtime hosting, environment secrets, pooling/concurrency and immutable promotion. ADR-005 remains authoritative for ownership semantics; ADR-008 is authoritative for Nile-native tenant-isolation enforcement. Request-selected database and cross-environment fallback remain prohibited.
 
 ### Cost guardrail
 
@@ -269,7 +275,7 @@ Positive:
 - user growth is decoupled from external retrieval growth;
 - personal data ownership is explicit;
 - ADMIN privileges do not weaken privacy boundaries;
-- PostgreSQL provides transactional persistence and defense-in-depth tenant isolation;
+- PostgreSQL provides transactional persistence while Nile-native tenant isolation enforces the personal tenant boundary;
 - scheduler semantics become simpler and global;
 - persistence remains portable through standard PostgreSQL/repository contracts;
 - cost escalation requires explicit owner action.
@@ -277,7 +283,7 @@ Positive:
 Costs / constraints:
 - current single-user data/config contracts must be split;
 - legacy Package 2B scheduler contracts require rebaseline;
-- RLS and profile context must be implemented and tested;
+- Nile tenant context, the fail-closed Tenant Data Gateway and profile isolation must be implemented and tested;
 - runtime-vs-migration privilege separation is a PROD multiuser gate;
 - migration requires domain-by-domain compatibility and rollback discipline.
 
@@ -308,3 +314,4 @@ It does not authorize implementation by itself.
 - #86 / #97-#101 — Package 2B scheduler work
 - ADR-004 — Nile/PostgreSQL backend target
 - ADR-003 — environment isolation
+- ADR-008 — Nile-native tenant isolation amendment
