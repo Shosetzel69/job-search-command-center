@@ -391,7 +391,8 @@ Package 2C activeaza surse numai dupa `implementat + testat + validat + aprobat`
 Target-ul persistent separa trei domenii:
 
 - **shared/product** — canonical jobs, source postings, lifecycle, dedup/repost, role-family classification, Source Registry, source categories, nomenclatures;
-- **personal/profile-owned** — profile, search preferences, FIT/evaluations, seen/archive state, applications, notes, UI preferences;
+- **personal/profile-owned** — professional profile content, search preferences, FIT/evaluations, seen/archive state, applications, notes, UI preferences; physical storage is tenant-aware with `tenant_id = logical profile_id`;
+- **global account/tenant metadata** — `app_user`, `user_identity`, `user_session`, Nile `tenants` row si minimal `profile` mapping (`profile_id == tenants.id`), fara personal workspace payload;
 - **system/operational** — collection policy, scheduler config/state, runs, source diagnostics si provider/collector state.
 
 `search-config.json` este un contract tranzitoriu mixt si nu are succesor 1:1: campurile sale vor fi separate intre configuratie system/collection si profil personal.
@@ -654,14 +655,15 @@ Tenant isolation este defense-in-depth, conform ADR-008:
 
 - authenticated identity -> server-side app_user/profile resolution;
 - repository scoping obligatoriu pentru personal data;
-- `profile.profile_id` este canonical Nile tenant id pentru Multiuser MVP;
-- fiecare personal-content table este profile-owned/tenant-aware si este accesata numai prin Tenant Data Gateway;
-- gateway-ul stabileste Nile tenant context transaction-local inainte de personal SQL;
-- missing/invalid tenant context produce fail-closed inainte de acces la date personale;
+- `profile.profile_id == tenants.id` este canonical Nile tenant id pentru Multiuser MVP;
+- `profile` este global account/tenant metadata; personal-content tables folosesc physical `tenant_id` si tenant-qualified keys/FKs;
+- fiecare personal-content table este accesata numai prin Tenant Data Gateway;
+- gateway-ul stabileste `SET LOCAL nile.tenant_id` transaction-local inainte de personal SQL;
+- missing/invalid tenant context produce fail-closed la gateway inainte de personal SQL; Nile global mode fara tenant context ramane cross-tenant capable;
 - pool reuse, rollback si error paths trebuie sa dovedeasca absenta tenant-context leakage;
 - browser-supplied user/profile/tenant id nu confera autoritate;
 - ADMIN nu primeste cross-user personal tenant bypass;
-- ADMIN delete este account-domain delete prin FK `ON DELETE CASCADE`; ADMIN nu asuma tenant context-ul userului tinta si nu citeste continutul personal pentru a-l sterge.
+- ADMIN/self delete foloseste un Account Lifecycle Gateway global, ingust: sterge `tenants.id = profile_id` pentru tenant-aware personal data + profile mapping, apoi `app_user` pentru identity/session; nu citeste continut personal si trebuie sa lase zero tenant/profile/personal/account residue.
 
 ### 16.5 Runtime connectivity si privilege gate
 
@@ -674,7 +676,9 @@ Path target conform ADR-006:
 - DEV/TEST/PROD folosesc binding-uri/secrete statice separate catre `jobsearch_dev`, `jobsearch_test`, `jobsearch_prod`;
 - `NILE_DATABASE_URL` este injectat per environment din Secret Manager si nu este selectabil din request;
 - request-selected DB si cross-environment fallback sunt interzise;
-- runtime CRUD authority trebuie separata demonstrabil de migration/DDL authority inainte de personal-data/multiuser PROD cutover;
+- runtime CRUD authority trebuie separata de migration/DDL authority la nivelul maxim demonstrabil suportat de Nile;
+- CI/static guard interzice personal-table SQL/raw DB escape in afara Tenant Data Gateway, Account Lifecycle Gateway, migrations/tests;
+- global-mode cross-tenant capability a runtime credential este risc rezidual explicit si necesita owner acceptance inainte de Multiuser PROD;
 - broad DDL poate fi tolerat temporar numai in DEV/TEST si migration work controlat;
 - daca providerul nu permite separarea demonstrabila, riscul revine la Architecture pentru owner decision explicit.
 
