@@ -318,4 +318,4 @@ It does not authorize coding, schema mutation, environment changes or deployment
 - ADR-006 — GCP runtime
 - OWASP Session Management Cheat Sheet
 - Google Identity Services server-side ID-token verification guidance
-- PostgreSQL Row Security documentation
+- ADR-008 supersedes the historical PostgreSQL RLS enforcement design; current tenant isolation is defined there
