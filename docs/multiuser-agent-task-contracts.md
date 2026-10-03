@@ -345,7 +345,7 @@ Replace the single `ALLOWED_GOOGLE_SUB` authorization boundary with Google-first
 
 ## Acceptance criteria
 
-- valid existing Google identity -> fresh JSCC session only when `profile.provisioned_at` is non-null and `deletion_started_at` is null; incomplete provisioning is resumed instead of issuing a session;
+- valid existing Google identity -> fresh JSCC session only when `profile.provisioned_at` is non-null, `deletion_started_at` is null and the corresponding Nile tenant is provider-safely verified; incomplete/drifted provisioning fails closed and is repaired/resumed instead of issuing a session;
 - valid unknown identity -> exactly one USER + Nile tenant + profile mapping when capacity gate open, with session issued only after required tenant initialization completes;
 - concurrent first sign-in -> one account/tenant/profile;
 - capacity gate closed -> no user/identity/profile/tenant mutation;
