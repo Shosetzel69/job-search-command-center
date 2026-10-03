@@ -23,6 +23,7 @@ This document is a target contract. It does not describe the current single-user
 - `user_id UUID PRIMARY KEY`;
 - `role` constrained to `USER|ADMIN`;
 - `status` constrained to `ACTIVE|DEACTIVATED`;
+- `deletion_started_at TIMESTAMPTZ NULL` internal irreversible-delete progress marker;
 - `created_at`, `updated_at`.
 
 `DELETED` is an irreversible operation, not a retained row state.
@@ -51,6 +52,7 @@ Stage 1 supports only `provider=GOOGLE`.
 `profile` is global account/tenant metadata, not a tenant-aware personal-content table:
 - `profile_id UUID PRIMARY KEY`; it is the intended Nile tenant id but has no physical FK to `tenants(id)` because managed Nile rejects shared->tenant physical foreign keys;
 - `user_id UUID NOT NULL UNIQUE REFERENCES app_user(user_id) ON DELETE CASCADE`;
+- `provisioned_at TIMESTAMPTZ NULL` internal readiness marker; non-null is required before session issuance;
 - timestamps only; no professional profile/preferences/personal workspace payload.
 
 `profile_id` is both the logical JSCC profile identifier and the Nile tenant identifier. Equality with `tenants.id` is enforced by the provisioning contract and evidence, not by a cross-plane FK.
@@ -91,10 +93,10 @@ If identity does not exist, the narrow Account Provisioning Gateway performs one
 - shared-only transaction: admission/concurrency checks, allocate `user_id`/`profile_id`, create ACTIVE USER, GOOGLE identity and exactly one global profile mapping;
 - tenant-control transaction: create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
 - tenant-scoped transaction: initialize required personal defaults/bootstrap data;
-- shared-only transaction: finalize shared bootstrap/system markers where required;
-- session issuance is allowed only after all required initialization succeeds.
+- shared-only transaction: finalize shared bootstrap/system markers where required and set `profile.provisioned_at` only after all prior provisioning steps are verified complete;
+- session issuance is allowed only when `profile.provisioned_at IS NOT NULL`.
 
-Interrupted provisioning is resumed idempotently from the persisted identity/profile mapping; it must not create a second identity/profile or issue a session against an incomplete personal domain. Concurrent first sign-in converges through shared uniqueness/admission serialization plus retry/read-after-conflict behavior.
+Interrupted provisioning is resumed idempotently from the persisted identity/profile mapping whenever `profile.provisioned_at IS NULL`; it must not create a second identity/profile or issue a session against an incomplete personal domain. Concurrent first sign-in converges through shared uniqueness/admission serialization plus retry/read-after-conflict behavior.
 
 ## 3.3 Self-service admission and capacity guard
 
@@ -276,11 +278,11 @@ ADMIN deletion is an **account-domain delete**, not impersonation of the target 
 
 Canonical mechanism:
 1. ADMIN authorization is checked from the caller's own AuthContext and the gateway resolves only target account metadata (`user_id`, `profile_id`), never target personal content.
-2. Shared-only transaction: set the target account DEACTIVATED and revoke all live sessions before destructive tenant work.
+2. Shared-only transaction: set `deletion_started_at = COALESCE(deletion_started_at, now())`, set the target account DEACTIVATED and revoke all live sessions before destructive tenant work.
 3. Tenant-control transaction: delete `tenants.id = profile_id`; verified `ON DELETE CASCADE` removes all tenant-aware personal rows.
 4. Shared-only transaction: delete target `app_user.user_id`; shared account cascades remove `user_identity`, `user_session` and the global `profile` mapping through its `user_id` relationship, and the permitted non-identifying deletion audit is written.
-5. Missing tenant on retry is treated as an already-completed tenant-delete step and never causes tenant recreation.
-6. The operation verifies zero tenant/profile/personal/account residue and returns lifecycle metadata only (success/not-found); it never selects or returns target personal content.
+5. Once `deletion_started_at` is non-null, reactivation and session establishment are prohibited; retry or an internal lifecycle reconciliation path resumes remaining steps. Missing tenant on retry is treated as an already-completed tenant-delete step and never causes tenant recreation.
+6. Final `app_user` deletion removes `deletion_started_at` with the row. The operation verifies zero tenant/profile/personal/account residue and returns lifecycle metadata only (success/not-found); it never selects or returns target personal content.
 
 Explicit prohibitions:
 - ADMIN must not set/assume the target user's Nile tenant context for personal-content access;
@@ -423,6 +425,7 @@ Effects:
 
 ### Reactivation
 
+- allowed only when `deletion_started_at IS NULL` and the profile is fully provisioned;
 - set status ACTIVE;
 - retained personal workspace becomes accessible again;
 - old revoked sessions do not become valid again; user authenticates anew.
@@ -432,10 +435,10 @@ Effects:
 Irreversible account-domain delete using the narrow Account Lifecycle Gateway contract in §8.1:
 
 1. authorize the caller and resolve only target account metadata required for deletion (`user_id`, `profile_id`), never target personal content;
-2. shared-only transaction: set DEACTIVATED and revoke sessions;
+2. shared-only transaction: persist `deletion_started_at`, set DEACTIVATED and revoke sessions;
 3. tenant-control transaction: delete Nile `tenants.id = profile_id`; verified tenant FK/cascade removes all tenant-aware personal rows;
 4. shared-only transaction: delete `app_user`; approved shared account cascades remove `user_identity`, `user_session` and `profile`, then write the allowed non-identifying audit;
-5. treat an already-missing tenant as an idempotently completed tenant-delete step;
+5. while `deletion_started_at` is non-null, prohibit reactivation/session establishment and treat an already-missing tenant as an idempotently completed tenant-delete step;
 6. verify zero tenant/profile/personal/account residue after completion;
 7. preserve shared/canonical/system data.
 
