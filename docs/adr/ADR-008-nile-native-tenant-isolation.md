@@ -143,7 +143,7 @@ Managed Nile rejects writes to tenant-control/tenant-aware and shared tables in 
 3. in a tenant-control transaction, create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
 4. in a tenant-scoped transaction, establish tenant context and create required personal defaults/bootstrap data;
 5. in a shared-only transaction, persist any required shared bootstrap/system markers or collection policy imported from the legacy owner configuration and set `profile.provisioned_at` once every required prior step is verified complete;
-6. only a profile with non-null `provisioned_at` may be returned as a provisioned AuthContext or receive a JSCC session.
+6. only a profile with non-null `provisioned_at`, null `deletion_started_at`, and a provider-safe verification that the corresponding Nile tenant exists may be returned as a provisioned AuthContext or receive a JSCC session. Missing/mismatched tenant state fails closed into provisioning repair or lifecycle reconciliation; it never issues a session.
 
 Each step MUST be idempotent. `profile.provisioned_at` is internal readiness metadata, not a new product lifecycle state. If a process fails after shared account metadata exists but before tenant/personal initialization completes, a later first-sign-in attempt sees `provisioned_at IS NULL`, resumes the missing steps using the persisted `profile_id`, and must not create a second identity/profile or issue a session against an incomplete personal domain. No new user count/provider retrieval is triggered by retry.
 
