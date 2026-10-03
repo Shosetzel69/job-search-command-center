@@ -24,6 +24,7 @@ This document is a target contract. It does not describe the current single-user
 - `role` constrained to `USER|ADMIN`;
 - `status` constrained to `ACTIVE|DEACTIVATED`;
 - `deletion_started_at TIMESTAMPTZ NULL` internal irreversible-delete progress marker;
+- `deletion_initiated_by TEXT NULL` constrained to `SELF|ADMIN`, preserving the original initiator only until final deletion;
 - `created_at`, `updated_at`.
 
 `DELETED` is an irreversible operation, not a retained row state.
@@ -59,7 +60,7 @@ Stage 1 supports only `provider=GOOGLE`.
 
 Tenant-aware personal-content tables store physical `tenant_id UUID NOT NULL`, where `tenant_id = AuthContext.profile_id`, and use tenant-qualified keys/foreign keys.
 
-MVP invariant: exactly one profile/tenant per account.
+MVP steady-state invariant: exactly one profile/tenant per fully provisioned account. A temporary profile without a tenant row is allowed only while `profile.provisioned_at IS NULL` during provisioning or while `app_user.deletion_started_at IS NOT NULL` during irreversible deletion.
 
 ## 3. Authentication flow
 
@@ -280,9 +281,9 @@ ADMIN deletion is an **account-domain delete**, not impersonation of the target 
 
 Canonical mechanism:
 1. ADMIN authorization is checked from the caller's own AuthContext and the gateway resolves only target account metadata (`user_id`, `profile_id`), never target personal content.
-2. Shared-only transaction: set `deletion_started_at = COALESCE(deletion_started_at, now())`, set the target account DEACTIVATED and revoke all live sessions before destructive tenant work.
+2. Shared-only transaction: set `deletion_started_at = COALESCE(deletion_started_at, now())`, persist the original `deletion_initiated_by = SELF|ADMIN` if absent, set the target account DEACTIVATED and revoke all live sessions before destructive tenant work.
 3. Tenant-control transaction: delete `tenants.id = profile_id`; verified `ON DELETE CASCADE` removes all tenant-aware personal rows.
-4. Shared-only transaction: delete target `app_user.user_id`; shared account cascades remove `user_identity`, `user_session` and the global `profile` mapping through its `user_id` relationship, and the permitted non-identifying deletion audit is written.
+4. Shared-only transaction: delete target `app_user.user_id`; shared account cascades remove `user_identity`, `user_session` and the global `profile` mapping through its `user_id` relationship, and the permitted non-identifying deletion audit is written using the original persisted `deletion_initiated_by`.
 5. Once `deletion_started_at` is non-null, reactivation and session establishment are prohibited; retry or an internal lifecycle reconciliation path resumes remaining steps. Missing tenant on retry is treated as an already-completed tenant-delete step and never causes tenant recreation.
 6. Final `app_user` deletion removes `deletion_started_at` with the row. The operation verifies zero tenant/profile/personal/account residue and returns lifecycle metadata only (success/not-found); it never selects or returns target personal content.
 
@@ -437,7 +438,7 @@ Effects:
 Irreversible account-domain delete using the narrow Account Lifecycle Gateway contract in §8.1:
 
 1. authorize the caller and resolve only target account metadata required for deletion (`user_id`, `profile_id`), never target personal content;
-2. shared-only transaction: persist `deletion_started_at`, set DEACTIVATED and revoke sessions;
+2. shared-only transaction: persist `deletion_started_at` and the original `deletion_initiated_by`, set DEACTIVATED and revoke sessions;
 3. tenant-control transaction: delete Nile `tenants.id = profile_id`; verified tenant FK/cascade removes all tenant-aware personal rows;
 4. shared-only transaction: delete `app_user`; approved shared account cascades remove `user_identity`, `user_session` and `profile`, then write the allowed non-identifying audit;
 5. while `deletion_started_at` is non-null, prohibit reactivation/session establishment and treat an already-missing tenant as an idempotently completed tenant-delete step;
