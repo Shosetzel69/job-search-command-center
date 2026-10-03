@@ -86,7 +86,9 @@ GOOGLE/sub
 ```
 
 If identity exists:
-- ACTIVE -> continue;
+- if `deletion_started_at` is non-null -> do not issue a session or reactivate; the internal lifecycle path resumes/finalizes deletion;
+- ACTIVE + `profile.provisioned_at IS NOT NULL` -> continue;
+- ACTIVE + `profile.provisioned_at IS NULL` -> resume the missing idempotent provisioning steps and continue only after `provisioned_at` becomes non-null;
 - DEACTIVATED -> deny.
 
 If identity does not exist, the narrow Account Provisioning Gateway performs one logical provisioning operation across provider-compatible idempotent transaction boundaries. It has no personal-content SELECT/list/export capability:
