@@ -465,9 +465,9 @@ Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/index
 
 ### Account/security
 
-- `app_user` cu internal `user_id`, role si ACTIVE/DEACTIVATED; `deletion_started_at` nullable este metadata interna de progres pentru hard-delete si nu introduce un status business nou;
+- `app_user` cu internal `user_id`, role si ACTIVE/DEACTIVATED; `deletion_started_at` nullable si `deletion_initiated_by=SELF|ADMIN` sunt metadata interna de progres pentru hard-delete, nu introduc un status business nou si sunt eliminate odata cu randul account;
 - `user_identity` cu provider + provider subject; Stage 1 provider = GOOGLE;
-- `profile` ramane separat de account, cu exact un profil/user in MVP; fizic este global account/tenant metadata, cu `profile_id == tenants.id` ca invariant logic de provisioning fara FK fizic shared->tenant, fara personal workspace payload; `provisioned_at` nullable devine non-null numai dupa finalizarea tuturor pasilor de provisioning necesari pentru emiterea sesiunii;
+- `profile` ramane separat de account, cu exact un profil/user in MVP; fizic este global account/tenant metadata, cu `profile_id == tenants.id` ca invariant logic steady-state fara FK fizic shared->tenant, fara personal workspace payload; absenta temporara a tenantului este valida numai in provisioning incomplet sau hard-delete in curs; `provisioned_at` nullable devine non-null numai dupa finalizarea tuturor pasilor de provisioning necesari pentru emiterea sesiunii;
 - `user_session` este security state account-owned, cu token opac si numai hash persistat;
 - Google `sub` si email nu devin foreign keys pentru personal-domain data;
 - `DELETED` este operatie de hard-delete, nu status persistent.
