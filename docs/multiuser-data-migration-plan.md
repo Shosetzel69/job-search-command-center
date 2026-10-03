@@ -305,7 +305,7 @@ Rules:
 - idempotent across every provider-required transaction boundary;
 - deterministic;
 - `profile.profile_id == tenants.id` is verified as a steady-state logical invariant, not enforced by a physical shared->tenant FK; a temporary missing tenant is allowed only for incomplete provisioning or irreversible deletion;
-- no authentication/session cutover may treat bootstrap as complete until required tenant and personal initialization has succeeded and `profile.provisioned_at` is non-null;
+- no authentication/session cutover may treat bootstrap as complete until required tenant and personal initialization has succeeded, `profile.provisioned_at` is non-null and the `profile_id -> tenant` mapping is provider-safely verified;
 - no second ADMIN/tenant/profile on rerun;
 - no user data inferred from another environment;
 - no PROD bootstrap from DEV/TEST records.
