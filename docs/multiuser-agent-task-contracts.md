@@ -53,13 +53,13 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 
 - create `app_user` with opaque UUID `user_id`;
 - role constraint `USER|ADMIN`;
-- lifecycle state `ACTIVE|DEACTIVATED`;
+- lifecycle state `ACTIVE|DEACTIVATED`; nullable internal `deletion_started_at` is permitted solely as irreversible-delete progress metadata and is not a third business status;
 - create `user_identity`;
 - Stage-1 provider `GOOGLE`;
 - store Google `sub` only as `provider_subject`;
 - optional account email/email_verified metadata;
 - allocate separate opaque UUID `profile_id` and create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
-- create global `profile(profile_id, user_id -> app_user)` mapping with exactly one profile/tenant per user MVP; `profile_id == tenants.id` is a logical provisioning invariant and no physical shared->tenant FK is used;
+- create global `profile(profile_id, user_id -> app_user, provisioned_at NULL)` mapping with exactly one profile/tenant per user MVP; `profile_id == tenants.id` is a logical provisioning invariant and no physical shared->tenant FK is used; `provisioned_at` becomes non-null only after required tenant/personal initialization succeeds;
 - introduce the narrow Account Provisioning Gateway for self-service/bootstrap global account+tenant metadata writes; it has no personal-content SELECT/list/export capability;
 - bootstrap current owner as ADMIN + GOOGLE identity + Nile tenant + profile mapping through provider-compatible idempotent shared / tenant-control / tenant-data transaction boundaries;
 - tenant-aware personal tables use physical `tenant_id = profile_id`, tenant-qualified primary/unique keys and required FK to `tenants(id)`;
@@ -102,7 +102,7 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - `UNIQUE(user_identity.user_id, user_identity.provider)`;
 - `UNIQUE(profile.user_id)`;
 - `profile.profile_id = tenants.id` and the tenant row has no PII name/content;
-- owner bootstrap converges deterministically/idempotently across provider-compatible transaction boundaries, produces one user/identity/profile/tenant, and is not considered complete until required tenant-aware initialization succeeds;
+- owner bootstrap converges deterministically/idempotently across provider-compatible transaction boundaries, produces one user/identity/profile/tenant, and is not considered complete until required tenant-aware initialization succeeds and `profile.provisioned_at` is non-null;
 - official Nile testing-container evidence proves tenant isolation, shared-read + tenant-write, rejection of mixed shared-write + tenant-write, required tenant cascade behavior and all provider-sensitive schema constraints before managed DEV;
 - missing tenant context is rejected by the Tenant Data Gateway before personal SQL; direct Nile global mode is explicitly cross-tenant capable;
 - profile A cannot read/write profile B through the approved gateway/repository path;
@@ -345,7 +345,7 @@ Replace the single `ALLOWED_GOOGLE_SUB` authorization boundary with Google-first
 
 ## Acceptance criteria
 
-- valid existing Google identity -> fresh JSCC session;
+- valid existing Google identity -> fresh JSCC session only when `profile.provisioned_at` is non-null and `deletion_started_at` is null; incomplete provisioning is resumed instead of issuing a session;
 - valid unknown identity -> exactly one USER + Nile tenant + profile mapping when capacity gate open, with session issued only after required tenant initialization completes;
 - concurrent first sign-in -> one account/tenant/profile;
 - capacity gate closed -> no user/identity/profile/tenant mutation;
@@ -387,12 +387,12 @@ Implement account lifecycle over the approved identity/session foundation withou
 ## Scope
 
 - ACTIVE <-> DEACTIVATED;
-- deactivation revokes all live sessions;
+- deactivation revokes all live sessions; reactivation is prohibited when `deletion_started_at` is non-null;
 - reactivation restores retained data but not old sessions;
 - ADMIN lifecycle endpoints;
 - ADMIN remains USER for own profile only;
 - hard-delete through the narrow Account Lifecycle Gateway using provider-compatible idempotent transaction boundaries;
-- shared-only phase deactivates the account and revokes sessions;
+- shared-only phase persists `deletion_started_at`, deactivates the account and revokes sessions;
 - tenant-control phase deletes `tenants.id = profile_id` and removes tenant-aware personal rows through verified cascade;
 - shared-only final phase deletes `app_user`, removing identity/session/profile metadata through shared-account cascades and writing the allowed non-identifying audit;
 - preserve shared/system data;
@@ -424,8 +424,8 @@ Implement account lifecycle over the approved identity/session foundation withou
 ## Acceptance criteria
 
 - ACTIVE -> DEACTIVATED immediately denies current sessions;
-- reactivation requires fresh auth and restores retained workspace;
-- ADMIN delete returns lifecycle metadata only;
+- reactivation requires fresh auth and restores retained workspace only when `deletion_started_at` is null;
+- ADMIN delete returns lifecycle metadata only; crash/retry after deletion starts cannot reactivate the account and resumes from persisted `deletion_started_at`;
 - deleting account leaves zero Nile tenant/profile/personal/identity/session rows after all idempotent phases complete;
 - shared canonical jobs/sources/system state remain;
 - ADMIN cannot read B personal data before/during/after deletion;
