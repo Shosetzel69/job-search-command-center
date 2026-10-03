@@ -1,7 +1,7 @@
 # Multiuser Agent Task Contracts — Google-first Stage 1
 
 Status: **WORKING**  
-Version: **v1.2**  
+Version: **v1.3**  
 Applicability: **CURRENT**  
 Applies to: **AGENTFLOW**  
 Phase: **TASK_CONTRACT**  
@@ -40,7 +40,8 @@ All Multiuser ATCs preserve:
 - no permanent JSON/PostgreSQL dual-write;
 - ADR-006 Cloud Run/Nile runtime boundary;
 - no cross-environment fallback;
-- no PROD execution without canonical release gates.
+- no PROD execution without canonical release gates;
+- provider-sensitive schema/transaction behavior requires current Nile documentation review + official Nile testing-container PASS before managed DEV mutation; generic PostgreSQL CI is portability evidence only.
 
 # ATC-275-04 v2 — User / external identity / profile core + tenant isolation
 
@@ -58,15 +59,15 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - store Google `sub` only as `provider_subject`;
 - optional account email/email_verified metadata;
 - allocate separate opaque UUID `profile_id` and create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
-- create global `profile(profile_id -> tenants.id, user_id -> app_user)` mapping with exactly one profile/tenant per user MVP;
+- create global `profile(profile_id, user_id -> app_user)` mapping with exactly one profile/tenant per user MVP; `profile_id == tenants.id` is a logical provisioning invariant and no physical shared->tenant FK is used;
 - introduce the narrow Account Provisioning Gateway for self-service/bootstrap global account+tenant metadata writes; it has no personal-content SELECT/list/export capability;
-- bootstrap current owner as ADMIN + GOOGLE identity + Nile tenant + profile mapping through that gateway in one transaction;
+- bootstrap current owner as ADMIN + GOOGLE identity + Nile tenant + profile mapping through provider-compatible idempotent shared / tenant-control / tenant-data transaction boundaries;
 - tenant-aware personal tables use physical `tenant_id = profile_id`, tenant-qualified primary/unique keys and required FK to `tenants(id)`;
 - introduce server-derived tenant context:
   - tenant authority comes only from authenticated `AuthContext.profile_id`;
   - Nile global mode without tenant context is explicitly cross-tenant capable and is not a DB-level deny state;
 - introduce the fail-closed Tenant Data Gateway / profile-scoped transaction boundary;
-- establish `SET LOCAL nile.tenant_id` transaction-locally before personal SQL, subject to rollback-only DEV compatibility proof;
+- establish `SET LOCAL nile.tenant_id` transaction-locally before personal SQL; provider-sensitive schema/transaction contracts must pass the official Nile testing container before managed DEV execution;
 - add canonical personal-table registry plus CI/static guard preventing personal-table SQL/raw-query escape outside the Tenant Data Gateway, Account Lifecycle Gateway, migrations and scoped tests; tenant-management primitives are additionally allowlisted only for Account Provisioning Gateway / Account Lifecycle Gateway / migrations/tests;
 - ensure shared/system repositories and collection jobs have no dependency path to personal repositories;
 - negative tenant-isolation tests including pooled-connection reuse, rollback, missing-context gateway rejection and non-gateway boundary checks.
@@ -101,8 +102,8 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - `UNIQUE(user_identity.user_id, user_identity.provider)`;
 - `UNIQUE(profile.user_id)`;
 - `profile.profile_id = tenants.id` and the tenant row has no PII name/content;
-- owner bootstrap creates app user + identity + tenant + profile atomically and is deterministic/idempotent;
-- rollback-only DEV probe proves `SET LOCAL nile.tenant_id` and required shared-table visibility inside tenant context;
+- owner bootstrap converges deterministically/idempotently across provider-compatible transaction boundaries, produces one user/identity/profile/tenant, and is not considered complete until required tenant-aware initialization succeeds;
+- official Nile testing-container evidence proves tenant isolation, shared-read + tenant-write, rejection of mixed shared-write + tenant-write, required tenant cascade behavior and all provider-sensitive schema constraints before managed DEV;
 - missing tenant context is rejected by the Tenant Data Gateway before personal SQL; direct Nile global mode is explicitly cross-tenant capable;
 - profile A cannot read/write profile B through the approved gateway/repository path;
 - ADMIN test principal cannot read/write B personal rows;
@@ -119,8 +120,8 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 ## Stop conditions
 
 - Nile cannot provide tenant-scoped isolation once tenant context is set;
-- atomic tenant/profile provisioning cannot be demonstrated;
-- `SET LOCAL nile.tenant_id` or required mixed shared+personal transaction behavior is unsupported on the current backend;
+- provider-compatible idempotent account/profile/tenant provisioning cannot converge fail-closed without duplicate identity/profile/tenant state;
+- tenant context, required shared-read + tenant-write behavior, or required tenant-delete cascade is unsupported on the current backend;
 - normal personal operations require bypass of the Tenant Data Gateway;
 - tenant context must be browser-selected rather than server-derived;
 - new identity provider/service is required.
@@ -134,7 +135,8 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 - owner bootstrap evidence;
 - negative matrix including A/B cross-tenant denial, gateway missing-context rejection before SQL, rollback cleanup, pool-reuse and non-gateway CI/static boundary tests;
 - pool-reuse isolation proof;
-- exact PR/SHA and tests.
+- exact PR/SHA and tests;
+- official Nile testing-container run/result for provider-sensitive contracts.
 
 # ATC-275-05 v2 — Profile preferences, personal job state and FIT
 
@@ -191,11 +193,13 @@ Also:
 - profile target geography and remote-eligibility geography remain distinct;
 - preference save never triggers provider retrieval;
 - no mixed global singleton target;
-- no permanent dual-write.
+- no permanent dual-write;
+- shared reads may occur in the tenant-scoped transaction, but shared writes must not be mixed transactionally with tenant-aware writes;
+- personal `job_id` references to shared canonical jobs are logical references without a physical cross-plane FK.
 
 ## Acceptance criteria
 
-- mixed shared-job read + personal FIT/evaluation write uses one Tenant Data Gateway transaction with tenant context established first; DEV probe proves required shared-table visibility under tenant context;
+- mixed shared-job read + personal FIT/evaluation write uses one Tenant Data Gateway transaction with tenant context established first; official Nile-container evidence proves shared-read + tenant-write is supported while shared-write + tenant-write is rejected;
 - every current top-level `search-config.json` key has exactly one disposition: profile/system/derived/retired;
 - mapping is identical to canonical data/migration docs;
 - two profiles may hold contradictory preferences without overwrite;
@@ -236,7 +240,7 @@ Move application history into the personal tenant domain without coupling it to 
 - `applications` with physical `tenant_id = logical profile_id`;
 - mandatory ADR-008 tenant-aware persistence through the Tenant Data Gateway;
 - `tenant_id -> tenants(id)` with tenant-qualified application key;
-- optional canonical `job_id`;
+- optional canonical `job_id` stored as a logical shared reference without a physical tenant-aware->shared FK;
 - external application with `job_id = NULL`;
 - application-time snapshot fields;
 - canonical application-status validation;
@@ -259,6 +263,7 @@ Move application history into the personal tenant domain without coupling it to 
 
 - application belongs to exactly one profile;
 - shared job deletion/inactivation cannot erase application history;
+- non-null `job_id` supplied by a user write is validated through a shared canonical-job read under the authenticated tenant transaction;
 - cross-tenant object probing must not disclose ownership.
 
 ## Acceptance criteria
@@ -270,6 +275,7 @@ Move application history into the personal tenant domain without coupling it to 
 - A/B cross-tenant and pooled-connection tenant-isolation negative tests pass;
 - external application works with NULL `job_id`;
 - snapshot survives shared job changes;
+- invalid/nonexistent non-null shared `job_id` is rejected before tenant application persistence;
 - deleting the Nile tenant removes the application through verified tenant FK/cascade behavior.
 
 ## Retry limit
@@ -300,7 +306,7 @@ Replace the single `ALLOWED_GOOGLE_SUB` authorization boundary with Google-first
 
 - Google token verification server-side;
 - resolve `GOOGLE/sub -> user_identity -> app_user -> profile`;
-- first valid unknown Google identity provisions ACTIVE USER + GOOGLE identity + Nile tenant + global profile mapping transactionally;
+- first valid unknown Google identity provisions ACTIVE USER + GOOGLE identity + global profile mapping, Nile tenant and required tenant initialization through the ADR-008 idempotent provider-compatible transaction sequence;
 - capacity/admission guard applies before provisioning;
 - 256-bit CSPRNG opaque session token;
 - persist SHA-256 token hash only;
@@ -335,14 +341,14 @@ Replace the single `ALLOWED_GOOGLE_SUB` authorization boundary with Google-first
 - no raw session token or Google ID token in DB/logs;
 - no Google-bearer fallback for protected resources;
 - no legacy allowlist fallback;
-- invalid capacity admission leaves no partial account/tenant/profile rows.
+- invalid capacity admission is rejected before provisioning mutation; an interrupted admitted provisioning sequence is not session-usable and must resume idempotently without duplicate account/profile/tenant state.
 
 ## Acceptance criteria
 
 - valid existing Google identity -> fresh JSCC session;
-- valid unknown identity -> exactly one USER + Nile tenant + profile mapping when capacity gate open;
+- valid unknown identity -> exactly one USER + Nile tenant + profile mapping when capacity gate open, with session issued only after required tenant initialization completes;
 - concurrent first sign-in -> one account/tenant/profile;
-- capacity gate closed -> no partial user/identity/tenant/profile;
+- capacity gate closed -> no user/identity/profile/tenant mutation;
 - bad signature/issuer/audience/expiry -> 401;
 - revoked/expired session -> 401;
 - DEACTIVATED account is denied even if stale session row remains;
@@ -365,7 +371,7 @@ Replace the single `ALLOWED_GOOGLE_SUB` authorization boundary with Google-first
 ## Evidence Bundle
 
 - auth flow tests;
-- first-sign-in race test including tenant-row uniqueness/rollback;
+- first-sign-in race/retry test including convergence of separated shared/tenant transaction boundaries;
 - session persistence/revocation tests;
 - legacy-cookie cutover proof;
 - origin/CORS evidence;
@@ -385,9 +391,10 @@ Implement account lifecycle over the approved identity/session foundation withou
 - reactivation restores retained data but not old sessions;
 - ADMIN lifecycle endpoints;
 - ADMIN remains USER for own profile only;
-- hard-delete through narrow Account Lifecycle Gateway global transaction;
-- delete `tenants.id = profile_id` first to remove tenant-aware personal rows and linked global profile through verified cascade;
-- delete `app_user` to remove identity/session account metadata;
+- hard-delete through the narrow Account Lifecycle Gateway using provider-compatible idempotent transaction boundaries;
+- shared-only phase deactivates the account and revokes sessions;
+- tenant-control phase deletes `tenants.id = profile_id` and removes tenant-aware personal rows through verified cascade;
+- shared-only final phase deletes `app_user`, removing identity/session/profile metadata through shared-account cascades and writing the allowed non-identifying audit;
 - preserve shared/system data;
 - optional 90-day non-identifying deletion event;
 - re-signup after delete creates new account/profile.
@@ -412,14 +419,14 @@ Implement account lifecycle over the approved identity/session foundation withou
 - ADMIN does not assume/select the target user's Nile tenant context;
 - ADMIN does not get generic cross-user personal tenant authority;
 - delete does not read/export target personal rows;
-- shared/system tables have no ownership cascade from user/profile/tenant.
+- shared/system product tables have no ownership cascade from user/profile/tenant; the global `profile` mapping is account metadata and is removed through `app_user` cascade, not tenant cascade.
 
 ## Acceptance criteria
 
 - ACTIVE -> DEACTIVATED immediately denies current sessions;
 - reactivation requires fresh auth and restores retained workspace;
 - ADMIN delete returns lifecycle metadata only;
-- deleting account leaves zero Nile tenant/profile/personal/identity/session rows;
+- deleting account leaves zero Nile tenant/profile/personal/identity/session rows after all idempotent phases complete;
 - shared canonical jobs/sources/system state remain;
 - ADMIN cannot read B personal data before/during/after deletion;
 - deletion mechanism cannot be reused as list/export path;
@@ -439,7 +446,7 @@ Implement account lifecycle over the approved identity/session foundation withou
 
 ## Evidence Bundle
 
-- tenant/profile/account FK/cascade schema and `tenants` deletion proof;
+- tenant/account schema, tenant-aware cascade proof and staged deletion/retry proof;
 - deactivation/session proof;
 - ADMIN negative privacy matrix;
 - deletion before/after counts without personal payload;
@@ -526,7 +533,7 @@ Prove the strongest database privilege separation Nile supports and the mandator
 - runtime DDL negative evidence is collected where the provider exposes separable privileges;
 - runtime is not superuser where this is inspectable;
 - explicitly record that no-tenant Nile global mode remains cross-tenant capable under the runtime DB credential;
-- implement/verify personal-table registry, gateway-only SQL guard, no raw DB escape, shared/system-to-personal dependency prohibition and narrow Account Lifecycle Gateway;
+- implement/verify personal-table registry, gateway-only SQL guard, no raw DB escape, shared/system-to-personal dependency prohibition, narrow Account Lifecycle Gateway and aggregate-only Cross-Tenant Reference Guard;
 - DEV first, then TEST proof;
 - explicit owner acceptance of the documented global-mode residual risk is required before PROD Multiuser.
 
@@ -552,8 +559,8 @@ Prove the strongest database privilege separation Nile supports and the mandator
 - migration identity applies migration where separately supported;
 - Nile-native A/B tenant-isolation negative tests pass when tenant context is set;
 - gateway rejects missing context before personal SQL;
-- CI/static guard rejects non-gateway personal-table SQL/raw DB escape and collection/shared-system dependency on personal repositories;
-- Account Lifecycle Gateway is the only allowlisted normal-runtime global personal-domain mutation path and exposes no personal read/list/export;
+- CI/static guard rejects non-gateway personal-table SQL/raw DB escape and collection/shared-system dependency on personal repositories, except the separately allowlisted aggregate-only Cross-Tenant Reference Guard;
+- Account Lifecycle Gateway is the only allowlisted normal-runtime global personal-domain mutation path and exposes no personal read/list/export; Cross-Tenant Reference Guard is read-only aggregate evidence only;
 - explicit owner residual-risk acceptance is recorded for the exact reviewed architecture candidate;
 - DEV and TEST binding evidence contains no secrets.
 
@@ -639,7 +646,7 @@ No credentials are stored in repository/evidence.
 - legacy-cookie forced reauthentication PASS;
 - account-admission capacity guard PASS;
 - user count does not multiply provider calls;
-- full relevant CI green;
+- full relevant CI green, including official Nile testing-container compatibility for provider-sensitive contracts;
 - full DEV functional acceptance suite passes before candidate freeze;
 - exact SHA/image digest preserved into TEST contract.
 
