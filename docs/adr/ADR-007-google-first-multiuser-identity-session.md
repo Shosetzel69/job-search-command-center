@@ -109,6 +109,7 @@ app_user
 - user_id UUID PK
 - role USER|ADMIN
 - status ACTIVE|DEACTIVATED
+- deletion_started_at NULL  -- internal irreversible-delete progress marker
 - created_at
 - updated_at
 
@@ -127,6 +128,7 @@ UNIQUE(user_id, provider)        -- MVP: one identity per provider/user
 profile  -- global account/tenant metadata
 - profile_id UUID PK, also the logical Nile tenant id; equality to tenants.id is a provisioning invariant, not a physical shared->tenant FK
 - user_id UUID UNIQUE FK
+- provisioned_at NULL  -- internal readiness marker; session issuance requires non-null
 - created_at
 - updated_at
 ```
@@ -145,8 +147,8 @@ After Google token verification:
    - shared-only transaction: create ACTIVE USER, GOOGLE `user_identity`, opaque `profile_id` and exactly one global profile mapping;
    - tenant-control transaction: create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
    - tenant-scoped transaction: initialize required personal defaults/bootstrap state;
-   - shared-only transaction: finalize any shared bootstrap/system markers;
-4. no JSCC session is issued until all required initialization succeeds; an interrupted first sign-in resumes missing idempotent steps using the persisted `profile_id` and never creates a second identity/profile;
+   - shared-only transaction: finalize any shared bootstrap/system markers and set `profile.provisioned_at` after all prior steps are verified complete;
+4. no JSCC session is issued while `profile.provisioned_at` is null; an interrupted first sign-in resumes missing idempotent steps using the persisted `profile_id` and never creates a second identity/profile;
 5. uniqueness constraints plus retry/read-after-conflict behavior make concurrent first sign-in converge to one account;
 6. DEACTIVATED accounts are denied and are not reprovisioned.
 
@@ -199,7 +201,8 @@ Session identifiers are not stored in `localStorage` or `sessionStorage`.
 - session fixation is not permitted;
 - logout revokes the server-side session and clears the cookie;
 - account deactivation revokes all live sessions for that user;
-- account deletion revokes/deletes all sessions as part of personal/account deletion;
+- reactivation is prohibited when `app_user.deletion_started_at` is non-null;
+- account deletion sets `deletion_started_at` before destructive tenant work and revokes/deletes all sessions as part of personal/account deletion;
 - expired/revoked sessions fail closed;
 - protected application requests do not accept caller-selected user/profile authority.
 
@@ -238,7 +241,7 @@ ADMIN:
 
 ADMIN receives no cross-user personal tenant bypass.
 
-ADMIN-initiated account deletion uses the narrow ADR-008 Account Lifecycle Gateway. It resolves only target account metadata, first deactivates the account and revokes sessions in shared state, then deletes the target Nile `tenants` row in a separate tenant-control transaction so verified cascade removes tenant-aware personal data, and finally deletes shared `app_user` metadata so identity/session/profile rows are removed through shared-account cascades. ADMIN does not assume the target tenant context for personal-content access and the operation never returns target personal content.
+ADMIN-initiated account deletion uses the narrow ADR-008 Account Lifecycle Gateway. It resolves only target account metadata, first persists `deletion_started_at`, deactivates the account and revokes sessions in shared state, then deletes the target Nile `tenants` row in a separate tenant-control transaction so verified cascade removes tenant-aware personal data, and finally deletes shared `app_user` metadata so identity/session/profile rows are removed through shared-account cascades. Once deletion has started, reactivation/session establishment is prohibited; retry or internal reconciliation resumes the remaining idempotent steps. ADMIN does not assume the target tenant context for personal-content access and the operation never returns target personal content.
 
 ### 9. Environment isolation
 
