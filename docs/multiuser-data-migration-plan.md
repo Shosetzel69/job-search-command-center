@@ -58,8 +58,8 @@ Physical note: these domains are stored in Nile tenant-aware tables keyed by `te
 - `user_identity`;
 - `user_session`;
 - Nile built-in `tenants` row;
-- `profile` mapping (`profile_id == tenants.id`, one per user) as a logical provisioning invariant without a physical shared->tenant FK, containing no professional/profile workspace payload;
-- roles and account lifecycle state.
+- `profile` mapping (`profile_id == tenants.id`, one per user) as a logical provisioning invariant without a physical shared->tenant FK, containing no professional/profile workspace payload; `profile.provisioned_at` is internal readiness metadata for the multi-step provider-compatible provisioning sequence;
+- roles and account lifecycle state, including nullable internal `app_user.deletion_started_at` used only to make irreversible delete retry-safe.
 
 ### Account / security
 
@@ -298,14 +298,14 @@ current Google sub
                          + allocate profile_id + global profile(profile_id, user_id)
   -> tenant-control transaction: Nile tenants(id = profile_id, opaque non-PII name)
   -> tenant transaction: imported tenant-aware personal state
-  -> shared transaction: required bootstrap/system markers
+  -> shared transaction: required bootstrap/system markers + profile.provisioned_at
 ```
 
 Rules:
 - idempotent across every provider-required transaction boundary;
 - deterministic;
 - `profile.profile_id == tenants.id` is verified as a logical invariant, not enforced by a physical shared->tenant FK;
-- no authentication/session cutover may treat bootstrap as complete until required tenant and personal initialization has succeeded;
+- no authentication/session cutover may treat bootstrap as complete until required tenant and personal initialization has succeeded and `profile.provisioned_at` is non-null;
 - no second ADMIN/tenant/profile on rerun;
 - no user data inferred from another environment;
 - no PROD bootstrap from DEV/TEST records.
@@ -387,10 +387,10 @@ Required relationships:
 
 ADMIN/self deletion runs only through the dedicated Account Lifecycle Gateway using provider-compatible idempotent transaction boundaries. The operation:
 - resolves only target account metadata (`user_id`, `profile_id`), never personal content;
-- in a shared-only transaction, sets the account DEACTIVATED and revokes live sessions;
+- in a shared-only transaction, persists `deletion_started_at`, sets the account DEACTIVATED and revokes live sessions;
 - in a tenant-control transaction, deletes `tenants.id = profile_id` and relies only on verified Nile cascade behavior to remove tenant-aware personal rows;
 - in a shared-only transaction, deletes `app_user` to remove identity/session/profile metadata through shared-account cascades and writes the allowed non-identifying audit;
-- treats an already-missing tenant on retry as an already-completed tenant-delete step and never recreates it;
+- while `deletion_started_at` is non-null, prohibits reactivation/session issuance, treats an already-missing tenant on retry as an already-completed tenant-delete step and never recreates it;
 - must not assume/select the target user's Nile tenant context for personal-content access;
 - returns only lifecycle result metadata;
 - leaves shared product/system data unchanged;
