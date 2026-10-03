@@ -149,7 +149,7 @@ After Google token verification:
    - tenant-control transaction: create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
    - tenant-scoped transaction: initialize required personal defaults/bootstrap state;
    - shared-only transaction: finalize any shared bootstrap/system markers and set `profile.provisioned_at` after all prior steps are verified complete;
-4. no JSCC session is issued while `profile.provisioned_at` is null; an interrupted first sign-in resumes missing idempotent steps using the persisted `profile_id` and never creates a second identity/profile;
+4. no JSCC session is issued while `profile.provisioned_at` is null or the corresponding Nile tenant cannot be provider-safely verified; an interrupted/drifted first sign-in resumes or fails closed through the provisioning/lifecycle boundary using the persisted `profile_id` and never creates a second identity/profile;
 5. uniqueness constraints plus retry/read-after-conflict behavior make concurrent first sign-in converge to one account;
 6. DEACTIVATED accounts are denied and are not reprovisioned.
 
