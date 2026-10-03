@@ -53,7 +53,7 @@ Establish the multiuser tenancy foundation without opening public multiuser acce
 
 - create `app_user` with opaque UUID `user_id`;
 - role constraint `USER|ADMIN`;
-- lifecycle state `ACTIVE|DEACTIVATED`; nullable internal `deletion_started_at` is permitted solely as irreversible-delete progress metadata and is not a third business status;
+- lifecycle state `ACTIVE|DEACTIVATED`; nullable internal `deletion_started_at` plus `deletion_initiated_by=SELF|ADMIN` are permitted solely as irreversible-delete progress metadata and are not a third business status;
 - create `user_identity`;
 - Stage-1 provider `GOOGLE`;
 - store Google `sub` only as `provider_subject`;
@@ -392,7 +392,7 @@ Implement account lifecycle over the approved identity/session foundation withou
 - ADMIN lifecycle endpoints;
 - ADMIN remains USER for own profile only;
 - hard-delete through the narrow Account Lifecycle Gateway using provider-compatible idempotent transaction boundaries;
-- shared-only phase persists `deletion_started_at`, deactivates the account and revokes sessions;
+- shared-only phase persists `deletion_started_at` plus the original `deletion_initiated_by`, deactivates the account and revokes sessions;
 - tenant-control phase deletes `tenants.id = profile_id` and removes tenant-aware personal rows through verified cascade;
 - shared-only final phase deletes `app_user`, removing identity/session/profile metadata through shared-account cascades and writing the allowed non-identifying audit;
 - preserve shared/system data;
@@ -425,7 +425,7 @@ Implement account lifecycle over the approved identity/session foundation withou
 
 - ACTIVE -> DEACTIVATED immediately denies current sessions;
 - reactivation requires fresh auth and restores retained workspace only when `deletion_started_at` is null;
-- ADMIN delete returns lifecycle metadata only; crash/retry after deletion starts cannot reactivate the account and resumes from persisted `deletion_started_at`;
+- ADMIN delete returns lifecycle metadata only; crash/retry after deletion starts cannot reactivate the account and resumes from persisted `deletion_started_at`, preserving the original `deletion_initiated_by` for the final non-identifying audit;
 - deleting account leaves zero Nile tenant/profile/personal/identity/session rows after all idempotent phases complete;
 - shared canonical jobs/sources/system state remain;
 - ADMIN cannot read B personal data before/during/after deletion;
