@@ -142,7 +142,7 @@ A future identity method may add another `provider` without changing `app_user`,
 After Google token verification:
 
 1. resolve `(provider=GOOGLE, provider_subject=sub)`;
-2. if found, resolve the associated `app_user` and profile;
+2. if found, resolve the associated `app_user` and profile; if `deletion_started_at` is non-null, deny session/reactivation and resume deletion internally; if `profile.provisioned_at` is null, resume the missing provisioning steps before any session can be issued;
 3. if not found, provision through the ADR-008 Account Provisioning Gateway using provider-compatible, idempotent transaction boundaries:
    - shared-only transaction: create ACTIVE USER, GOOGLE `user_identity`, opaque `profile_id` and exactly one global profile mapping;
    - tenant-control transaction: create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
