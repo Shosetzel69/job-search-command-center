@@ -25,7 +25,7 @@ The security outcome remains unchanged: personal data of one JSCC profile must n
 
 ### 1. Canonical tenant mapping
 
-For Multiuser MVP:
+For Multiuser MVP steady state:
 
 `profile.profile_id == tenants.id == physical tenant_id`
 
@@ -36,7 +36,7 @@ No additional JSCC tenant identifier is introduced.
 Physical schema rule:
 - Nile built-in `tenants` contains one row per JSCC profile, with `tenants.id = profile.profile_id` and a non-identifying opaque `name` that never contains email, Google subject, person name or other personal content;
 - `profile` is **global account/tenant metadata**, not a tenant-aware personal-content table; it stores only the 1:1 account-to-tenant mapping and timestamps;
-- `profile.profile_id` is the logical JSCC profile identifier exposed by `AuthContext` and MUST equal the corresponding Nile `tenants.id`; because managed Nile rejects a physical foreign key from the shared/global `profile` table to the built-in tenant table, this equality is an application/provisioning invariant rather than a physical cross-plane FK;
+- `profile.profile_id` is the logical JSCC profile identifier exposed by `AuthContext` and, for a fully provisioned account that is not being deleted, MUST equal the corresponding Nile `tenants.id`; because managed Nile rejects a physical foreign key from the shared/global `profile` table to the built-in tenant table, this equality is an application/provisioning invariant rather than a physical cross-plane FK. A temporary global profile without a tenant row is permitted only while `profile.provisioned_at IS NULL` during provisioning or while `app_user.deletion_started_at IS NOT NULL` during irreversible deletion;
 - tenant-aware personal-content tables use a physical `tenant_id UUID NOT NULL` column equal to the logical `profile_id`; they do not duplicate a second `profile_id` ownership column;
 - tenant-aware entity tables use tenant-qualified keys such as `PRIMARY KEY (tenant_id, entity_id)` and tenant-qualified foreign keys where relationships are tenant-local.
 
@@ -165,12 +165,12 @@ The global `profile` table is not a personal-content store. Professional profile
 Managed Nile rejects tenant deletion and shared account deletion in the same transaction. The Account Lifecycle Gateway preserves the existing irreversible hard-delete outcome through fail-closed, idempotent transaction boundaries:
 
 1. authorize the caller from the ADMIN/self account boundary and resolve only target account metadata needed for deletion (`user_id`, `profile_id`), never target personal content;
-2. in a shared-only transaction, set `app_user.deletion_started_at = COALESCE(deletion_started_at, now())`, set the account to `DEACTIVATED`, and revoke all live sessions before destructive tenant work;
+2. in a shared-only transaction, set `app_user.deletion_started_at = COALESCE(deletion_started_at, now())`, persist the original `deletion_initiated_by = SELF|ADMIN` if not already present, set the account to `DEACTIVATED`, and revoke all live sessions before destructive tenant work;
 3. in a tenant-control transaction, delete `tenants.id = profile_id`; verified `ON DELETE CASCADE` from tenant-aware personal tables removes the personal domain;
-4. in a shared-only transaction, delete `app_user`; approved shared-account cascades remove `user_identity`, `user_session` and the global `profile` mapping through its `user_id` relationship, then persist the allowed non-identifying deletion audit;
+4. in a shared-only transaction, delete `app_user`; approved shared-account cascades remove `user_identity`, `user_session` and the global `profile` mapping through its `user_id` relationship, then persist the allowed non-identifying deletion audit using the original persisted `deletion_initiated_by`;
 5. verify zero tenant/profile/personal/account residue.
 
-Each step MUST be retry-safe. `deletion_started_at` is internal lifecycle-progress metadata, not a retained `DELETED` product status. Once non-null, reactivation is prohibited and authentication/session establishment must fail closed; the Account Lifecycle Gateway or an internal reconciliation path may resume the remaining delete steps without impersonating the target tenant. A missing tenant during retry is treated as an already-completed tenant-delete step, not as permission to recreate the tenant. Final shared account deletion removes the marker with the account row.
+Each step MUST be retry-safe. `deletion_started_at` and `deletion_initiated_by` are internal lifecycle-progress metadata, not a retained `DELETED` product status. Once non-null, reactivation is prohibited and authentication/session establishment must fail closed; the Account Lifecycle Gateway or an internal reconciliation path may resume the remaining delete steps without impersonating the target tenant. A missing tenant during retry is treated as an already-completed tenant-delete step, not as permission to recreate the tenant. Final shared account deletion removes the marker with the account row.
 
 Deletion must remove the Nile `tenants` row itself. A successfully deleted account leaves no tenant row, profile row, personal row, identity/session row, email, Google subject or relinkable tombstone. A later signup creates a new `user_id`, `profile_id` and tenant row.
 
