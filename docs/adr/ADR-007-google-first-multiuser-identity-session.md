@@ -110,6 +110,7 @@ app_user
 - role USER|ADMIN
 - status ACTIVE|DEACTIVATED
 - deletion_started_at NULL  -- internal irreversible-delete progress marker
+- deletion_initiated_by NULL  -- SELF|ADMIN, preserved only until final deletion
 - created_at
 - updated_at
 
@@ -241,7 +242,7 @@ ADMIN:
 
 ADMIN receives no cross-user personal tenant bypass.
 
-ADMIN-initiated account deletion uses the narrow ADR-008 Account Lifecycle Gateway. It resolves only target account metadata, first persists `deletion_started_at`, deactivates the account and revokes sessions in shared state, then deletes the target Nile `tenants` row in a separate tenant-control transaction so verified cascade removes tenant-aware personal data, and finally deletes shared `app_user` metadata so identity/session/profile rows are removed through shared-account cascades. Once deletion has started, reactivation/session establishment is prohibited; retry or internal reconciliation resumes the remaining idempotent steps. ADMIN does not assume the target tenant context for personal-content access and the operation never returns target personal content.
+ADMIN-initiated account deletion uses the narrow ADR-008 Account Lifecycle Gateway. It resolves only target account metadata, first persists `deletion_started_at` plus the original `deletion_initiated_by`, deactivates the account and revokes sessions in shared state, then deletes the target Nile `tenants` row in a separate tenant-control transaction so verified cascade removes tenant-aware personal data, and finally deletes shared `app_user` metadata so identity/session/profile rows are removed through shared-account cascades. Once deletion has started, reactivation/session establishment is prohibited; retry or internal reconciliation resumes the remaining idempotent steps. ADMIN does not assume the target tenant context for personal-content access and the operation never returns target personal content.
 
 ### 9. Environment isolation
 
