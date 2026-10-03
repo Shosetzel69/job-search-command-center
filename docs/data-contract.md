@@ -2,11 +2,11 @@
 
 Versiune aplicatie: `0.06-dev`
 Schema principala: `1.0`
-Ultima actualizare: `2026-10-02`
+Ultima actualizare: `2026-10-04`
 
 ## 1. Reguli generale
 
-> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005/ADR-008, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, tenant-aware personal content, global account/tenant metadata si system/operational state in PostgreSQL, domain-by-domain. `profile.profile_id == tenants.id`; tenant-aware personal tables use physical `tenant_id = logical profile_id`.
+> **AS-IS vs target:** acest document descrie in principal contractele JSON curente. Conform ADR-004/ADR-005/ADR-008, JSON-urile runtime sunt compatibilitate tranzitorie pentru domeniile nemigrate. Target-ul separa shared/product, tenant-aware personal content, global account/tenant metadata si system/operational state in PostgreSQL, domain-by-domain. `profile.profile_id == tenants.id` ramane invariant logic de provisioning fara FK fizic shared->tenant; tenant-aware personal tables use physical `tenant_id = logical profile_id`.
 
 Contractele runtime publicate frontend-ului folosesc `schema_version = "1.0"`.
 
@@ -355,6 +355,8 @@ Referinte verificate:
 - contract types -> `search-config.contract_types`;
 - application statuses -> `applications.status`.
 
+In target-ul multiuser Nile, verificarea referintelor personale cross-profile nu foloseste UDF PostgreSQL. ADR-008 defineste un Cross-Tenant Reference Guard application-level, allowlisted separat, care ruleaza numai query-uri aggregate/exists predefinite in global mode si returneaza numai count/boolean, fara tenant/profile IDs sau payload personal.
+
 Exemplu:
 
 ```json
@@ -463,9 +465,9 @@ Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/index
 
 ### Account/security
 
-- `app_user` cu internal `user_id`, role si ACTIVE/DEACTIVATED;
+- `app_user` cu internal `user_id`, role si ACTIVE/DEACTIVATED; `deletion_started_at` nullable si `deletion_initiated_by=SELF|ADMIN` sunt metadata interna de progres pentru hard-delete, nu introduc un status business nou si sunt eliminate odata cu randul account;
 - `user_identity` cu provider + provider subject; Stage 1 provider = GOOGLE;
-- `profile` ramane separat de account, cu exact un profil/user in MVP; fizic este global account/tenant metadata, cu `profile_id == tenants.id`, fara personal workspace payload;
+- `profile` ramane separat de account, cu exact un profil/user in MVP; fizic este global account/tenant metadata, cu `profile_id == tenants.id` ca invariant logic steady-state fara FK fizic shared->tenant, fara personal workspace payload; absenta temporara a tenantului este valida numai in provisioning incomplet sau hard-delete in curs; `provisioned_at` nullable devine non-null numai dupa finalizarea tuturor pasilor de provisioning necesari; emiterea sesiunii necesita in plus verificarea provider-safe a tenantului corespunzator `profile_id`;
 - `user_session` este security state account-owned, cu token opac si numai hash persistat;
 - Google `sub` si email nu devin foreign keys pentru personal-domain data;
 - `DELETED` este operatie de hard-delete, nu status persistent.
@@ -478,7 +480,7 @@ Contractul detaliat este in `docs/multiuser-auth-security-contract.md`.
 - profile search preferences;
 - user-job state: `seen_at`, `archived_at` si evaluation validity/version metadata;
 - FIT/evaluation score, pros, risks;
-- Applications cu `job_id` optional si snapshot minim;
+- Applications cu `job_id` optional ca referinta logica la shared `canonical_jobs` (fara FK fizic tenant-aware->shared), validata de repository, si snapshot minim;
 - personal notes;
 - UI preferences.
 
@@ -536,7 +538,8 @@ ATC-275-03 materializeaza `retention_until` ca earliest purge eligibility, dar n
 
 Application este profile-owned logic; fizic este tenant-aware cu `tenant_id = logical profile_id`.
 
-- `job_id` este optional;
+- `job_id` este optional si, cand este non-null, este o referinta logica la shared `canonical_jobs.job_id` fara FK fizic cross-plane;
+- write-urile user-originated cu `job_id` non-null valideaza existenta canonical job prin shared read sub tenant context inainte de persistenta personala;
 - aplicatiile externe JSCC sunt permise;
 - daca exista job link, snapshot-ul minim pastreaza company/title/location/reference/source URL;
 - application lifecycle este independent de shared job lifecycle.
@@ -545,7 +548,7 @@ Application este profile-owned logic; fizic este tenant-aware cu `tenant_id = lo
 
 `User Profile + Shared Job -> User-Job Evaluation`
 
-FIT este personal si incremental. Hard eligibility exclude numai pe contradictie explicita. Missing/unknown nu inseamna incompatibilitate.
+FIT este personal si incremental. `profile_job_state.job_id` si `profile_job_evaluation.job_id` sunt referinte logice la shared canonical jobs, fara FK fizic cross-plane; evaluation/state derivata dintr-un shared canonical row satisface validarea referintei. Hard eligibility exclude numai pe contradictie explicita. Missing/unknown nu inseamna incompatibilitate.
 
 
 ## 14. Multiuser migration authority
@@ -557,4 +560,5 @@ Reguli suplimentare:
 - permanent dual-write este interzis;
 - compatibility export este derivat one-way si limitat la rollback window;
 - identity/session/account state nu foloseste JSON ca authority dupa multiuser auth cutover;
-- personal data este intotdeauna profile-scoped si protejata prin repository authorization + ADR-008 fail-closed Tenant Data Gateway + Nile tenant context; Nile global mode fara tenant context este cross-tenant capable si este tratat ca risc rezidual controlat prin gateway/CI boundaries, nu ca DB-level default-deny.
+- personal data este intotdeauna profile-scoped si protejata prin repository authorization + ADR-008 fail-closed Tenant Data Gateway + Nile tenant context; Nile global mode fara tenant context este cross-tenant capable si este tratat ca risc rezidual controlat prin gateway/CI boundaries, nu ca DB-level default-deny;
+- provider-sensitive schema/transaction changes require official Nile testing-container PASS before managed DEV mutation; generic PostgreSQL CI is portability evidence only.

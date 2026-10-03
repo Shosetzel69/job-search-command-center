@@ -1,10 +1,10 @@
 # Multiuser Data Ownership and Migration Plan
 
 Status: **CANONICAL**  
-Version: **v1.2**  
+Version: **v1.3**  
 Applicability: **CURRENT**  
 Applies to: **AGENTFLOW**  
-Effective from: **2026-10-02**  
+Effective from: **2026-10-04**  
 Parent: #265  
 Development analysis: #275  
 Architecture: ADR-004, ADR-005, ADR-006, ADR-007, ADR-008  
@@ -25,7 +25,9 @@ This plan is documentation only until the relevant Agent Task Contracts are expl
 - no cross-environment data copy is implied by promotion;
 - DEV, TEST and PROD migrations are independently applied to their own databases;
 - schema/data migration is separated from immutable application promotion evidence;
-- PROD remains untouched until full TEST acceptance and explicit PROD gate.
+- PROD remains untouched until full TEST acceptance and explicit PROD gate;
+- provider-sensitive schema/transaction changes require current Nile documentation review and official Nile testing-container PASS before managed DEV mutation;
+- shared reads may occur in a tenant transaction, but shared writes must not be combined transactionally with tenant-aware/tenant-control writes.
 
 ## 3. Canonical ownership domains
 
@@ -56,8 +58,8 @@ Physical note: these domains are stored in Nile tenant-aware tables keyed by `te
 - `user_identity`;
 - `user_session`;
 - Nile built-in `tenants` row;
-- `profile` mapping (`profile_id == tenants.id`, one per user), containing no professional/profile workspace payload;
-- roles and account lifecycle state.
+- `profile` mapping (`profile_id == tenants.id`, one per user) as a logical provisioning invariant without a physical shared->tenant FK, containing no professional/profile workspace payload; `profile.provisioned_at` is internal readiness metadata for the multi-step provider-compatible provisioning sequence;
+- roles and account lifecycle state, including nullable internal `app_user.deletion_started_at` plus `deletion_initiated_by=SELF|ADMIN`, used only to make irreversible delete retry-safe and preserve the original audit initiator.
 
 ### Account / security
 
@@ -78,7 +80,7 @@ Account/security semantics are represented by the global account/tenant metadata
 |---|---|---|---|---|
 | account authorization | `ALLOWED_GOOGLE_SUB` | PostgreSQL `app_user + user_identity` | account | bootstrap then auth cutover |
 | browser session | Google ID token/current cookie | PostgreSQL-backed JSCC session | account/security | cut over with multiuser auth |
-| profile mapping | implicit singleton | global PostgreSQL `profile` + Nile `tenants` row | account/tenant metadata | create bootstrap tenant/profile atomically |
+| profile mapping | implicit singleton | global PostgreSQL `profile` + Nile `tenants` row | account/tenant metadata | create/resume provider-compatible idempotent tenant/profile provisioning |
 | search preferences | `search-config.json` | PostgreSQL profile preferences | personal | field-level split/import |
 | applications | `applications.json` | PostgreSQL applications | personal | deterministic import |
 | archive/seen state | browser/local state where applicable | PostgreSQL profile job state | personal | explicit import only where preservation is required |
@@ -173,12 +175,13 @@ Creates:
 - app user;
 - external identity;
 - Nile `tenants` row with `id = profile_id` and opaque non-PII name;
-- global profile mapping referencing `tenants(id)`;
+- global profile mapping whose `profile_id` equals the intended `tenants.id` as a logical invariant; no physical shared->tenant FK;
 - tenant-aware personal schema using physical `tenant_id` and tenant-qualified keys;
 - transaction-local Nile tenant context;
 - fail-closed Tenant Data Gateway plus CI/static personal-table boundary guard;
 - dedicated Account Lifecycle Gateway;
-- current owner bootstrap.
+- current owner bootstrap across provider-compatible idempotent shared / tenant-control / tenant-data transaction boundaries;
+- official Nile testing-container evidence before any managed DEV mutation that depends on provider-specific schema/transaction semantics.
 
 Does not:
 - enable public multiuser;
@@ -230,7 +233,7 @@ Imports `applications.json` to the bootstrap profile.
 Requirements:
 - deterministic/idempotent import;
 - application belongs to one profile;
-- optional shared job link;
+- optional shared job link stored as a logical `job_id` reference without a physical tenant-aware->shared FK and validated through repository shared reads under tenant context;
 - application snapshot survives shared-job change;
 - cross-profile Nile tenant-isolation tests, including missing-context and pooled-connection reuse.
 
@@ -258,6 +261,7 @@ Rebaseline scheduler to ADR-005:
 ### MU-S7 — Integrated evidence / TEST candidate
 
 Freeze exact candidate only after:
+- official Nile testing-container compatibility passes for the exact provider-sensitive schema/transaction contract;
 - tenant isolation passes;
 - owner bootstrap parity passes;
 - personal-domain authorities are explicit;
@@ -290,17 +294,18 @@ Required result:
 
 ```text
 current Google sub
-  -> user_identity(GOOGLE)
-  -> app_user(role=ADMIN,status=ACTIVE)
-  -> allocate profile_id
-  -> Nile tenants(id = profile_id, opaque non-PII name)
-  -> global profile(profile_id = tenants.id, user_id = app_user.user_id)
-  -> imported tenant-aware personal state
+  -> shared transaction: user_identity(GOOGLE) + app_user(role=ADMIN,status=ACTIVE)
+                         + allocate profile_id + global profile(profile_id, user_id)
+  -> tenant-control transaction: Nile tenants(id = profile_id, opaque non-PII name)
+  -> tenant transaction: imported tenant-aware personal state
+  -> shared transaction: required bootstrap/system markers + profile.provisioned_at
 ```
 
 Rules:
-- idempotent;
+- idempotent across every provider-required transaction boundary;
 - deterministic;
+- `profile.profile_id == tenants.id` is verified as a steady-state logical invariant, not enforced by a physical shared->tenant FK; a temporary missing tenant is allowed only for incomplete provisioning or irreversible deletion;
+- no authentication/session cutover may treat bootstrap as complete until required tenant and personal initialization has succeeded, `profile.provisioned_at` is non-null and the `profile_id -> tenant` mapping is provider-safely verified;
 - no second ADMIN/tenant/profile on rerun;
 - no user data inferred from another environment;
 - no PROD bootstrap from DEV/TEST records.
@@ -377,19 +382,21 @@ Required relationships:
 - `user_identity.user_id -> app_user(user_id) ON DELETE CASCADE`;
 - `user_session.user_id -> app_user(user_id) ON DELETE CASCADE`;
 - `profile.user_id -> app_user(user_id) ON DELETE CASCADE`;
-- `profile.profile_id -> tenants(id) ON DELETE CASCADE`;
-- every tenant-aware personal-content row has `tenant_id -> tenants(id)` and tenant-qualified keys/foreign keys.
+- `profile.profile_id == tenants.id` is a logical lifecycle invariant without a physical shared->tenant FK;
+- every tenant-aware personal-content row has `tenant_id -> tenants(id) ON DELETE CASCADE` and tenant-qualified keys/foreign keys.
 
-ADMIN/self deletion runs only through the dedicated Account Lifecycle Gateway in one global transaction. The operation:
+ADMIN/self deletion runs only through the dedicated Account Lifecycle Gateway using provider-compatible idempotent transaction boundaries. The operation:
 - resolves only target account metadata (`user_id`, `profile_id`), never personal content;
-- deletes `tenants.id = profile_id` first and relies only on verified Nile cascade behavior to remove tenant-aware personal rows and the profile mapping;
-- deletes `app_user` to remove identity/session metadata;
+- in a shared-only transaction, persists `deletion_started_at` plus the original `deletion_initiated_by`, sets the account DEACTIVATED and revokes live sessions;
+- in a tenant-control transaction, deletes `tenants.id = profile_id` and relies only on verified Nile cascade behavior to remove tenant-aware personal rows;
+- in a shared-only transaction, deletes `app_user` to remove identity/session/profile metadata through shared-account cascades and writes the allowed non-identifying audit;
+- while `deletion_started_at` is non-null, prohibits reactivation/session issuance, treats an already-missing tenant on retry as an already-completed tenant-delete step and never recreates it;
 - must not assume/select the target user's Nile tenant context for personal-content access;
 - returns only lifecycle result metadata;
-- leaves shared/system data unchanged;
-- leaves no Nile tenant row or other identifiable/relinkable tombstone.
+- leaves shared product/system data unchanged;
+- leaves no Nile tenant row or other identifiable/relinkable tombstone after successful completion.
 
-DEV and TEST integration evidence must prove zero tenant/profile/personal/account residue after commit and no personal-content exposure during the operation. If Nile cannot demonstrate the required cascade behavior, implementation stops and returns to Architecture.
+Official Nile testing-container evidence, then DEV and TEST integration evidence, must prove tenant cascade, retry safety, zero tenant/profile/personal/account residue after successful completion and no personal-content exposure during the operation. If Nile cannot demonstrate the required cascade behavior, implementation stops and returns to Architecture.
 
 ## 12. Database privilege gate
 
@@ -398,7 +405,7 @@ Before PROD multiuser:
 - `profile.profile_id == tenants.id` is the canonical logical/physical tenant mapping;
 - every Stage-1 personal-content table is tenant-aware with physical `tenant_id`, tenant-qualified keys and required FK to `tenants(id)`;
 - all normal personal persistence passes through the fail-closed Tenant Data Gateway with transaction-local Nile tenant context;
-- static/CI guard prevents personal-table SQL, tenant primitives and generic raw-query escape paths outside the allowlisted Tenant Data Gateway, Account Lifecycle Gateway, migrations and scoped tests;
+- static/CI guard prevents personal-table SQL, tenant primitives and generic raw-query escape paths outside the allowlisted Tenant Data Gateway, Account Lifecycle Gateway, aggregate-only Cross-Tenant Reference Guard, migrations and scoped tests;
 - shared/system repositories and collection jobs have no dependency path to personal repositories;
 - the runtime credential's Nile global-mode cross-tenant capability is documented as residual risk rather than described as default-deny;
 - routine runtime credential supports only required application DML to the strongest demonstrable extent supported by Nile;
@@ -420,7 +427,7 @@ Requirements:
 - rollback releases the transaction/connection cleanly;
 - no session/tenant context survives pool reuse;
 - missing context is rejected by the Tenant Data Gateway before personal SQL; a raw/global Nile connection is explicitly cross-tenant capable and is not a deny state;
-- a rollback-only DEV probe verifies `SET LOCAL nile.tenant_id` and shared-table visibility inside tenant context before ATC-275-04 implementation;
+- provider-sensitive tenant-context/schema behavior passes current Nile documentation review and the official Nile testing container before managed DEV; managed DEV then verifies the exact environment binding/runtime behavior;
 - connection limits must be validated against current Nile capacity before TEST/PROD.
 
 Exact pool numbers are implementation configuration, validated from provider limits and runtime load; they are not embedded as business constants.

@@ -1,10 +1,10 @@
 # Multiuser Authentication and Tenant Security Contract
 
 Status: **CANONICAL**  
-Version: **v1.2**  
+Version: **v1.3**  
 Applicability: **CURRENT**  
 Applies to: **AGENTFLOW**  
-Effective from: **2026-10-02**  
+Effective from: **2026-10-04**  
 Parent: #265  
 Architecture: ADR-005, ADR-007, ADR-008  
 Tracker: #450
@@ -23,6 +23,8 @@ This document is a target contract. It does not describe the current single-user
 - `user_id UUID PRIMARY KEY`;
 - `role` constrained to `USER|ADMIN`;
 - `status` constrained to `ACTIVE|DEACTIVATED`;
+- `deletion_started_at TIMESTAMPTZ NULL` internal irreversible-delete progress marker;
+- `deletion_initiated_by TEXT NULL` constrained to `SELF|ADMIN`, preserving the original initiator only until final deletion;
 - `created_at`, `updated_at`.
 
 `DELETED` is an irreversible operation, not a retained row state.
@@ -49,15 +51,16 @@ Stage 1 supports only `provider=GOOGLE`.
 ### 2.3 Profile
 
 `profile` is global account/tenant metadata, not a tenant-aware personal-content table:
-- `profile_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE`;
+- `profile_id UUID PRIMARY KEY`; it is the intended Nile tenant id but has no physical FK to `tenants(id)` because managed Nile rejects shared->tenant physical foreign keys;
 - `user_id UUID NOT NULL UNIQUE REFERENCES app_user(user_id) ON DELETE CASCADE`;
+- `provisioned_at TIMESTAMPTZ NULL` internal readiness marker; non-null is required before session issuance;
 - timestamps only; no professional profile/preferences/personal workspace payload.
 
-`profile_id` is both the logical JSCC profile identifier and the Nile tenant identifier.
+`profile_id` is both the logical JSCC profile identifier and the Nile tenant identifier. Equality with `tenants.id` is enforced by the provisioning contract and evidence, not by a cross-plane FK.
 
 Tenant-aware personal-content tables store physical `tenant_id UUID NOT NULL`, where `tenant_id = AuthContext.profile_id`, and use tenant-qualified keys/foreign keys.
 
-MVP invariant: exactly one profile/tenant per account.
+MVP steady-state invariant: exactly one profile/tenant per fully provisioned account. A temporary profile without a tenant row is allowed only while `profile.provisioned_at IS NULL` during provisioning or while `app_user.deletion_started_at IS NOT NULL` during irreversible deletion.
 
 ## 3. Authentication flow
 
@@ -84,18 +87,19 @@ GOOGLE/sub
 ```
 
 If identity exists:
-- ACTIVE -> continue;
+- if `deletion_started_at` is non-null -> do not issue a session or reactivate; the internal lifecycle path resumes/finalizes deletion;
+- ACTIVE + `profile.provisioned_at IS NOT NULL` -> continue only after a provider-safe check confirms the corresponding Nile tenant exists and matches the persisted `profile_id`; otherwise fail closed into provisioning repair/lifecycle reconciliation;
+- ACTIVE + `profile.provisioned_at IS NULL` -> resume the missing idempotent provisioning steps and continue only after `provisioned_at` becomes non-null;
 - DEACTIVATED -> deny.
 
-If identity does not exist, the narrow Account Provisioning Gateway executes one global transaction. It may write only approved account/tenant metadata and has no personal-content SELECT/list/export capability:
-- allocates `user_id` and `profile_id`;
-- creates ACTIVE USER;
-- creates GOOGLE identity;
-- creates Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
-- creates exactly one global profile mapping with `profile.profile_id = tenants.id`;
-- commits only if the full account/tenant unit succeeds.
+If identity does not exist, the narrow Account Provisioning Gateway performs one logical provisioning operation across provider-compatible idempotent transaction boundaries. It has no personal-content SELECT/list/export capability:
+- shared-only transaction: admission/concurrency checks, allocate `user_id`/`profile_id`, create ACTIVE USER, GOOGLE identity and exactly one global profile mapping;
+- tenant-control transaction: create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
+- tenant-scoped transaction: initialize required personal defaults/bootstrap data;
+- shared-only transaction: finalize shared bootstrap/system markers where required and set `profile.provisioned_at` only after all prior provisioning steps are verified complete;
+- session issuance is allowed only when `profile.provisioned_at IS NOT NULL`, `deletion_started_at IS NULL`, and the corresponding Nile tenant is provider-safely verified.
 
-Concurrent first sign-in must converge to one account through uniqueness constraints and transactional retry/read-after-conflict behavior.
+Interrupted provisioning is resumed idempotently from the persisted identity/profile mapping whenever `profile.provisioned_at IS NULL`; it must not create a second identity/profile or issue a session against an incomplete personal domain. Concurrent first sign-in converges through shared uniqueness/admission serialization plus retry/read-after-conflict behavior.
 
 ## 3.3 Self-service admission and capacity guard
 
@@ -105,7 +109,7 @@ Before PROD multiuser enablement, account creation is also subject to the ADR-00
 - no automatic paid capacity;
 - at the approved capacity threshold, creation of new accounts is fail-closed/degraded before paid consumption;
 - existing authenticated users should remain available where the capacity policy permits;
-- account-admission rejection does not create partial user/identity/tenant/profile rows.
+- account-admission rejection occurs before provisioning mutations. After admission succeeds, an interrupted provider-compatible provisioning sequence may leave internal incomplete metadata temporarily, but it is not session-usable and must be resumed idempotently before authentication completes.
 
 The capacity signal is system-owned and cannot be overridden by browser input.
 
@@ -276,12 +280,12 @@ ADMIN has no cross-user personal tenant bypass.
 ADMIN deletion is an **account-domain delete**, not impersonation of the target profile.
 
 Canonical mechanism:
-1. ADMIN authorization is checked from the caller's own AuthContext.
-2. The dedicated Account Lifecycle Gateway resolves only target account metadata (`user_id`, `profile_id`), never target personal content.
-3. In one global transaction it deletes `tenants.id = profile_id`; verified Nile FK/cascade behavior removes all tenant-aware personal rows and the linked global `profile` mapping.
-4. It then deletes target `app_user.user_id`; `user_identity` and `user_session` are removed by account cascades.
-5. Shared/system rows have no ownership FK that cascades from `app_user`, `profile` or `tenants`.
-6. The operation verifies zero tenant/profile/personal/account residue and returns lifecycle metadata only (success/not-found); it never selects or returns target personal content.
+1. ADMIN authorization is checked from the caller's own AuthContext and the gateway resolves only target account metadata (`user_id`, `profile_id`), never target personal content.
+2. Shared-only transaction: set `deletion_started_at = COALESCE(deletion_started_at, now())`, persist the original `deletion_initiated_by = SELF|ADMIN` if absent, set the target account DEACTIVATED and revoke all live sessions before destructive tenant work.
+3. Tenant-control transaction: delete `tenants.id = profile_id`; verified `ON DELETE CASCADE` removes all tenant-aware personal rows.
+4. Shared-only transaction: delete target `app_user.user_id`; shared account cascades remove `user_identity`, `user_session` and the global `profile` mapping through its `user_id` relationship, and the permitted non-identifying deletion audit is written using the original persisted `deletion_initiated_by`.
+5. Once `deletion_started_at` is non-null, reactivation and session establishment are prohibited; retry or an internal lifecycle reconciliation path resumes remaining steps. Missing tenant on retry is treated as an already-completed tenant-delete step and never causes tenant recreation.
+6. Final `app_user` deletion removes `deletion_started_at` with the row. The operation verifies zero tenant/profile/personal/account residue and returns lifecycle metadata only (success/not-found); it never selects or returns target personal content.
 
 Explicit prohibitions:
 - ADMIN must not set/assume the target user's Nile tenant context for personal-content access;
@@ -290,7 +294,7 @@ Explicit prohibitions:
 - a privileged generic SQL/admin endpoint is prohibited;
 - the deleted Nile `tenants` row must not remain as an identifiable tombstone.
 
-The FK cascade path is part of the schema contract and must be integration-tested. If the selected PostgreSQL/provider behavior cannot demonstrate complete cascaded cleanup while preserving the no-read/no-impersonation boundary, implementation stops and returns to Architecture.
+The tenant-aware `tenant_id -> tenants(id) ON DELETE CASCADE` path is part of the schema contract and must be Nile-provider integration-tested. Shared profile/account cleanup is performed separately through `app_user` cascades. If the provider cannot demonstrate complete tenant cascade cleanup while preserving the no-read/no-impersonation boundary, implementation stops and returns to Architecture.
 
 ## 9. Nile tenant context and Tenant Data Gateway
 
@@ -338,6 +342,7 @@ Every Stage-1 personal-content table:
 - references Nile `tenants(id)`;
 - uses tenant-qualified primary/unique keys where entity identity is tenant-local;
 - uses tenant-qualified foreign keys for tenant-local relationships;
+- does not use physical foreign keys from tenant-aware `job_id` columns to shared `canonical_jobs`; those are logical shared references validated by repository reads under tenant context;
 - is accessed only under the authenticated profile's Nile tenant context through the Tenant Data Gateway;
 - rejects cross-tenant object access, including lookup by known UUID.
 
@@ -356,7 +361,7 @@ The negative suite must prove:
 - rollback/error after A followed by B exposes no A data;
 - missing tenant context is rejected by the Tenant Data Gateway before personal SQL;
 - forged browser `profile_id` / tenant id changes no authority;
-- runtime modules outside the allowlisted Tenant Data Gateway / Account Lifecycle Gateway cannot execute SQL referencing personal tables or obtain a generic raw DB escape path;
+- runtime modules outside the allowlisted Tenant Data Gateway / Account Lifecycle Gateway / aggregate-only Cross-Tenant Reference Guard cannot execute SQL referencing personal tables or obtain a generic raw DB escape path;
 - tenant-management writes for provisioning/bootstrap occur only through the allowlisted Account Provisioning Gateway;
 - collection jobs and shared/system repositories have no dependency path to personal repository modules.
 
@@ -388,11 +393,18 @@ Shared/system tables remain global/non-tenant unless a separate architecture dec
 Operations such as shared canonical job -> profile-owned FIT/evaluation start through the Tenant Data Gateway and establish tenant context first.
 
 Rules:
-- shared/global reads are permitted inside the tenant-scoped transaction only if the current Nile backend supports them under tenant context;
+- shared/global reads are permitted inside the tenant-scoped transaction;
+- shared/global writes are prohibited in any transaction that also writes tenant-aware data;
 - personal reads/writes remain tenant-scoped;
 - code must never clear tenant context to switch into global mode within the transaction;
 - cross-tenant iteration is prohibited;
-- a rollback-only DEV probe must verify `SET LOCAL nile.tenant_id` and the required shared-table visibility before ATC-275-04 implementation.
+- the exact contract must pass against the official Nile testing container before managed DEV mutation; stock PostgreSQL tests are portability evidence only.
+
+## 11.2 Cross-Tenant Reference Guard
+
+Shared nomenclature integrity checks that must know whether a value is referenced across profiles use an application-level aggregate-only Cross-Tenant Reference Guard in intentional Nile global mode. Nile user-defined functions are not used.
+
+The guard is separately allowlisted and may execute only predefined count/exists queries. It returns integer/boolean evidence only and must never expose tenant/profile identifiers, identity metadata or personal rows/payloads. It is not a generic cross-tenant repository.
 
 ## 12. Account lifecycle
 
@@ -416,6 +428,7 @@ Effects:
 
 ### Reactivation
 
+- allowed only when `deletion_started_at IS NULL` and the profile is fully provisioned;
 - set status ACTIVE;
 - retained personal workspace becomes accessible again;
 - old revoked sessions do not become valid again; user authenticates anew.
@@ -424,12 +437,13 @@ Effects:
 
 Irreversible account-domain delete using the narrow Account Lifecycle Gateway contract in §8.1:
 
-1. authorize the caller from the ADMIN/self account boundary;
-2. resolve only target account metadata required for deletion (`user_id`, `profile_id`), never target personal content;
-3. delete Nile `tenants.id = profile_id`; verified tenant FK/cascade behavior removes all tenant-aware personal rows and the linked global `profile` mapping;
-4. delete `app_user`; approved account cascades remove `user_identity` and `user_session`;
-5. verify zero tenant/profile/personal/account residue before commit;
-6. preserve shared/canonical/system data.
+1. authorize the caller and resolve only target account metadata required for deletion (`user_id`, `profile_id`), never target personal content;
+2. shared-only transaction: persist `deletion_started_at` and the original `deletion_initiated_by`, set DEACTIVATED and revoke sessions;
+3. tenant-control transaction: delete Nile `tenants.id = profile_id`; verified tenant FK/cascade removes all tenant-aware personal rows;
+4. shared-only transaction: delete `app_user`; approved shared account cascades remove `user_identity`, `user_session` and `profile`, then write the allowed non-identifying audit;
+5. while `deletion_started_at` is non-null, prohibit reactivation/session establishment and treat an already-missing tenant as an idempotently completed tenant-delete step;
+6. verify zero tenant/profile/personal/account residue after completion;
+7. preserve shared/canonical/system data.
 
 ADMIN never assumes the target tenant context for personal-content access and never reads target personal content.
 
