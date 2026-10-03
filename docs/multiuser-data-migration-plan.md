@@ -382,19 +382,21 @@ Required relationships:
 - `user_identity.user_id -> app_user(user_id) ON DELETE CASCADE`;
 - `user_session.user_id -> app_user(user_id) ON DELETE CASCADE`;
 - `profile.user_id -> app_user(user_id) ON DELETE CASCADE`;
-- `profile.profile_id -> tenants(id) ON DELETE CASCADE`;
-- every tenant-aware personal-content row has `tenant_id -> tenants(id)` and tenant-qualified keys/foreign keys.
+- `profile.profile_id == tenants.id` is a logical lifecycle invariant without a physical shared->tenant FK;
+- every tenant-aware personal-content row has `tenant_id -> tenants(id) ON DELETE CASCADE` and tenant-qualified keys/foreign keys.
 
-ADMIN/self deletion runs only through the dedicated Account Lifecycle Gateway in one global transaction. The operation:
+ADMIN/self deletion runs only through the dedicated Account Lifecycle Gateway using provider-compatible idempotent transaction boundaries. The operation:
 - resolves only target account metadata (`user_id`, `profile_id`), never personal content;
-- deletes `tenants.id = profile_id` first and relies only on verified Nile cascade behavior to remove tenant-aware personal rows and the profile mapping;
-- deletes `app_user` to remove identity/session metadata;
+- in a shared-only transaction, sets the account DEACTIVATED and revokes live sessions;
+- in a tenant-control transaction, deletes `tenants.id = profile_id` and relies only on verified Nile cascade behavior to remove tenant-aware personal rows;
+- in a shared-only transaction, deletes `app_user` to remove identity/session/profile metadata through shared-account cascades and writes the allowed non-identifying audit;
+- treats an already-missing tenant on retry as an already-completed tenant-delete step and never recreates it;
 - must not assume/select the target user's Nile tenant context for personal-content access;
 - returns only lifecycle result metadata;
-- leaves shared/system data unchanged;
-- leaves no Nile tenant row or other identifiable/relinkable tombstone.
+- leaves shared product/system data unchanged;
+- leaves no Nile tenant row or other identifiable/relinkable tombstone after successful completion.
 
-DEV and TEST integration evidence must prove zero tenant/profile/personal/account residue after commit and no personal-content exposure during the operation. If Nile cannot demonstrate the required cascade behavior, implementation stops and returns to Architecture.
+Official Nile testing-container evidence, then DEV and TEST integration evidence, must prove tenant cascade, retry safety, zero tenant/profile/personal/account residue after successful completion and no personal-content exposure during the operation. If Nile cannot demonstrate the required cascade behavior, implementation stops and returns to Architecture.
 
 ## 12. Database privilege gate
 
@@ -403,7 +405,7 @@ Before PROD multiuser:
 - `profile.profile_id == tenants.id` is the canonical logical/physical tenant mapping;
 - every Stage-1 personal-content table is tenant-aware with physical `tenant_id`, tenant-qualified keys and required FK to `tenants(id)`;
 - all normal personal persistence passes through the fail-closed Tenant Data Gateway with transaction-local Nile tenant context;
-- static/CI guard prevents personal-table SQL, tenant primitives and generic raw-query escape paths outside the allowlisted Tenant Data Gateway, Account Lifecycle Gateway, migrations and scoped tests;
+- static/CI guard prevents personal-table SQL, tenant primitives and generic raw-query escape paths outside the allowlisted Tenant Data Gateway, Account Lifecycle Gateway, aggregate-only Cross-Tenant Reference Guard, migrations and scoped tests;
 - shared/system repositories and collection jobs have no dependency path to personal repositories;
 - the runtime credential's Nile global-mode cross-tenant capability is documented as residual risk rather than described as default-deny;
 - routine runtime credential supports only required application DML to the strongest demonstrable extent supported by Nile;
