@@ -88,7 +88,7 @@ GOOGLE/sub
 
 If identity exists:
 - if `deletion_started_at` is non-null -> do not issue a session or reactivate; the internal lifecycle path resumes/finalizes deletion;
-- ACTIVE + `profile.provisioned_at IS NOT NULL` -> continue;
+- ACTIVE + `profile.provisioned_at IS NOT NULL` -> continue only after a provider-safe check confirms the corresponding Nile tenant exists and matches the persisted `profile_id`; otherwise fail closed into provisioning repair/lifecycle reconciliation;
 - ACTIVE + `profile.provisioned_at IS NULL` -> resume the missing idempotent provisioning steps and continue only after `provisioned_at` becomes non-null;
 - DEACTIVATED -> deny.
 
@@ -97,7 +97,7 @@ If identity does not exist, the narrow Account Provisioning Gateway performs one
 - tenant-control transaction: create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
 - tenant-scoped transaction: initialize required personal defaults/bootstrap data;
 - shared-only transaction: finalize shared bootstrap/system markers where required and set `profile.provisioned_at` only after all prior provisioning steps are verified complete;
-- session issuance is allowed only when `profile.provisioned_at IS NOT NULL`.
+- session issuance is allowed only when `profile.provisioned_at IS NOT NULL`, `deletion_started_at IS NULL`, and the corresponding Nile tenant is provider-safely verified.
 
 Interrupted provisioning is resumed idempotently from the persisted identity/profile mapping whenever `profile.provisioned_at IS NULL`; it must not create a second identity/profile or issue a session against an incomplete personal domain. Concurrent first sign-in converges through shared uniqueness/admission serialization plus retry/read-after-conflict behavior.
 
