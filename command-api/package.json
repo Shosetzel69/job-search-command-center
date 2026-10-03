@@ -14,7 +14,11 @@
     "db:readiness": "node scripts/db-readiness.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
     "db:privilege-readiness": "node scripts/db-privilege-readiness.mjs",
-    "db:provision-runtime": "node scripts/db-provision-runtime.mjs"
+    "db:provision-runtime": "node scripts/db-provision-runtime.mjs",
+    "db:nile-tenant-probe": "node scripts/db-nile-tenant-probe.mjs",
+    "db:nile-contract-evidence": "node scripts/db-nile-contract-evidence.mjs",
+    "check:tenant-boundary": "node scripts/check-tenant-boundary.mjs",
+    "db:nile-dev-evidence": "node scripts/db-nile-dev-evidence.mjs"
   },
   "dependencies": {
     "jose": "6.2.11",

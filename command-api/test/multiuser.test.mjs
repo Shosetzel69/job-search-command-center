@@ -12,7 +12,8 @@ import {
   splitLegacyConfig,
 } from '../src/multiuser-repository.js';
 import { migrationDatabaseConfig } from '../src/db/config.js';
-import { runtimePrivilegeReadiness, PROTECTED_RLS_TABLES } from '../src/db/privilege-readiness.js';
+import { runtimePrivilegeReadiness, TENANT_AWARE_TABLES } from '../src/db/privilege-readiness.js';
+import { deleteTenantFirst, resolveAccountDeletionTarget } from '../src/db/tenant-gateway.js';
 import { provisionRuntimeRole } from '../scripts/db-provision-runtime.mjs';
 
 const nomenclatures = JSON.parse(
@@ -158,11 +159,10 @@ test('migration credential remains fail-closed except for explicit DEV/TEST shar
 });
 
 
-test('DEV/TEST shared-role privilege mode requires FORCE RLS but records that strict separation is absent', async () => {
-  const rows = PROTECTED_RLS_TABLES.map(table_name => ({
+test('DEV/TEST shared-role privilege mode accepts tenant-aware schema but records residual risk', async () => {
+  const rows = TENANT_AWARE_TABLES.map(table_name => ({
     table_name,
-    rls_enabled:true,
-    rls_forced:true,
+    tenant_id_ready:true,
     owner_role:'khnum_user',
     owned_by_runtime:true,
     member_of_owner:true,
@@ -191,14 +191,14 @@ test('DEV/TEST shared-role privilege mode requires FORCE RLS but records that st
   assert.equal(result.status, 'ok');
   assert.equal(result.mode, 'dev_test_shared_role_exception');
   assert.equal(result.strict_privilege_separation, false);
-  assert.equal(result.protected_tables.every(item => item.rls_enabled && item.rls_forced), true);
+  assert.equal(result.residual_global_mode_cross_tenant, true);
+  assert.equal(result.tenant_tables.every(item => item.present && item.tenant_id_ready), true);
 });
 
 test('shared-role override never makes PROD privilege readiness pass', async () => {
-  const rows = PROTECTED_RLS_TABLES.map(table_name => ({
+  const rows = TENANT_AWARE_TABLES.map(table_name => ({
     table_name,
-    rls_enabled:true,
-    rls_forced:true,
+    tenant_id_ready:true,
     owner_role:'khnum_user',
     owned_by_runtime:true,
     member_of_owner:true,
@@ -239,29 +239,82 @@ test('runtime provisioning is explicitly skipped under DEV/TEST shared-role mode
   assert.equal(result.runtime_role, 'khnum_user');
 });
 
-test('multiuser migration encodes mandatory direct tenant RLS and account cascades', async () => {
+test('multiuser migration encodes Nile tenant-aware ownership and contains no RLS DDL', async () => {
   const sql = await readFile(new URL('../migrations/003_multiuser_core.sql', import.meta.url), 'utf8');
-  for (const table of ['profile','profile_preferences','profile_job_state','profile_job_evaluation','applications','profile_notes','profile_ui_preferences']) {
-    assert.match(sql, new RegExp(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`));
-    assert.match(sql, new RegExp(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`));
-  }
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS tenants/);
+  assert.match(sql, /profile_id uuid PRIMARY KEY,/);
+  assert.doesNotMatch(sql, /profile_id uuid PRIMARY KEY REFERENCES tenants\(id\)/);
+  assert.match(sql, /provisioned_at timestamptz/);
+  assert.match(sql, /deletion_started_at timestamptz/);
+  assert.match(sql, /deletion_initiated_by text/);
   for (const table of ['profile_preferences','profile_job_state','profile_job_evaluation','applications','profile_notes','profile_ui_preferences']) {
-    const block = sql.match(new RegExp(`CREATE TABLE ${table} \\([\\s\\S]*?\\n\\);`))?.[0] || '';
-    assert.ok(block, `missing CREATE TABLE block for ${table}`);
-    assert.match(block, /profile_id uuid[^,\n]*REFERENCES profile\(profile_id\) ON DELETE CASCADE/);
+    const marker = `CREATE TABLE ${table} (`;
+    const start = sql.indexOf(marker);
+    assert.ok(start >= 0, `missing CREATE TABLE block for ${table}`);
+    const end = sql.indexOf('\n);', start);
+    assert.ok(end > start, `unterminated CREATE TABLE block for ${table}`);
+    const block = sql.slice(start, end + 3);
+    assert.match(block, /tenant_id uuid[^,\n]*REFERENCES tenants\(id\) ON DELETE CASCADE/);
+    assert.doesNotMatch(block, /profile_id uuid/);
   }
-  assert.match(sql, /user_id uuid NOT NULL REFERENCES app_user\(user_id\) ON DELETE CASCADE/);
-  assert.match(sql, /current_setting\('jscc\.profile_id', true\)/);
-  assert.match(sql, /current_setting\('jscc\.user_id', true\)/);
+  assert.match(sql, /PRIMARY KEY\(tenant_id, application_id\)/);
+  assert.doesNotMatch(sql, /job_id uuid(?: NOT NULL)? REFERENCES canonical_jobs/);
+  assert.match(sql, /user_id uuid NOT NULL UNIQUE REFERENCES app_user\(user_id\) ON DELETE CASCADE/);
+  assert.doesNotMatch(sql, /ENABLE ROW LEVEL SECURITY|FORCE ROW LEVEL SECURITY|CREATE POLICY/i);
+  assert.doesNotMatch(sql, /jscc\.(?:user_id|profile_id)/i);
   assert.match(sql, /CREATE TABLE system_bootstrap/);
   assert.doesNotMatch(sql, /owner_profile_id/);
-  assert.doesNotMatch(sql, /BYPASSRLS/i);
 });
 
-test('admin deletion contract is narrow account-domain delete and contains no profile impersonation', async () => {
-  const source = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
-  const block = source.match(/export async function deleteAccount[\s\S]*?^}/m)?.[0] || '';
-  assert.match(block, /DELETE FROM app_user WHERE user_id=\$1 RETURNING user_id/);
-  assert.doesNotMatch(block, /set_config\('jscc\.profile_id'/i);
-  assert.doesNotMatch(block, /withTenantTransaction/i);
+test('account delete target resolution fails closed when user exists without tenant/profile mapping', async () => {
+  const db = {
+    async query(sql) {
+      assert.match(sql, /LEFT JOIN profile/);
+      return {
+        rows:[{
+          user_id:'11111111-1111-4111-8111-111111111111',
+          profile_id:null,
+        }],
+      };
+    },
+  };
+  await assert.rejects(
+    resolveAccountDeletionTarget(db, '11111111-1111-4111-8111-111111111111'),
+    error => error?.status === 503 && /mapping is unavailable/.test(error.message),
+  );
 });
+
+test('tenant lifecycle delete starts with tenant DML and is independently idempotent', async () => {
+  const calls = [];
+  const tx = {
+    async query(sql) {
+      calls.push(sql);
+      assert.equal(calls.length, 1);
+      assert.match(sql, /^DELETE FROM tenants/);
+      return { rows:[{ id:'22222222-2222-4222-8222-222222222222' }] };
+    },
+  };
+
+  const result = await deleteTenantFirst(tx, '22222222-2222-4222-8222-222222222222');
+  assert.equal(result.deleted, true);
+  assert.match(calls[0], /^DELETE FROM tenants/);
+});
+
+test('admin deletion contract uses staged shared and tenant lifecycle boundaries', async () => {
+  const repository = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
+  const gateway = await readFile(new URL('../src/db/tenant-gateway.js', import.meta.url), 'utf8');
+  const block = repository.match(/export async function deleteAccount[\s\S]*?^}/m)?.[0] || '';
+  assert.match(block, /startAccountDeletion/);
+  assert.match(block, /deleteTenantDomain/);
+  assert.match(block, /verifyTenantPersonalResidue/);
+  assert.match(block, /finalizeAccountDeletion/);
+  assert.doesNotMatch(block, /withTenantTransaction/i);
+  assert.match(repository, /deletion_started_at/);
+  assert.match(repository, /deletion_initiated_by/);
+  assert.match(repository, /DELETE FROM app_user WHERE user_id=\$1 RETURNING user_id/);
+  assert.match(gateway, /DELETE FROM tenants WHERE id=\$1 RETURNING id/);
+  assert.match(gateway, /Tenant deletion left personal residue/);
+  assert.doesNotMatch(gateway, /DELETE FROM app_user/);
+  assert.doesNotMatch(gateway, /jscc\.(?:user_id|profile_id)/i);
+});
+

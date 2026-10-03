@@ -1,5 +1,14 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getPool, withTransaction } from './db/pool.js';
+import {
+  deleteTenantDomain,
+  ensureTenant,
+  resolveAccountDeletionTarget,
+  verifyTenantMapping,
+  verifyTenantPersonalResidue,
+  withTenantTransaction,
+} from './db/tenant-gateway.js';
+import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
 import { EVALUATION_VERSION, evaluateSharedJob } from './profile-evaluation.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
@@ -100,49 +109,69 @@ function accountLimitFromEnv(env) {
   return value;
 }
 
-async function setTenantContext(tx, authContext) {
-  if (!authContext?.user_id || !authContext?.profile_id) throw httpError('Authenticated tenant context is required', 401);
-  await tx.query(
-    `SELECT set_config('jscc.user_id', $1, true), set_config('jscc.profile_id', $2, true)`,
-    [authContext.user_id, authContext.profile_id],
-  );
-}
-
-export async function withTenantTransaction(authContext, fn, { env = process.env, db = getPool(env) } = {}) {
-  return withTransaction(async tx => {
-    await setTenantContext(tx, authContext);
-    return fn(tx);
-  }, { env, db });
-}
-
-async function profileForUser(tx, userId) {
-  await tx.query(`SELECT set_config('jscc.user_id', $1, true)`, [userId]);
-  const result = await tx.query('SELECT profile_id FROM profile WHERE user_id = $1', [userId]);
-  const profileId = result.rows?.[0]?.profile_id;
-  if (!profileId) throw httpError('Account profile is unavailable', 503);
-  return String(profileId);
-}
-
-async function contextForIdentity(tx, subject) {
-  const result = await tx.query(
-    `SELECT a.user_id, a.role, a.status, i.email, i.email_verified
+async function accountStateForIdentity(db, subject) {
+  const result = await db.query(
+    `SELECT a.user_id, a.role, a.status, a.deletion_started_at, a.deletion_initiated_by,
+            i.email, i.email_verified,
+            p.profile_id, p.provisioned_at
        FROM user_identity i
        JOIN app_user a ON a.user_id = i.user_id
+       LEFT JOIN profile p ON p.user_id = a.user_id
       WHERE i.provider = 'GOOGLE' AND i.provider_subject = $1`,
     [subject],
   );
-  const row = result.rows?.[0];
-  if (!row) return null;
-  if (row.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
-  const profileId = await profileForUser(tx, String(row.user_id));
+  return result.rows?.[0] || null;
+}
+
+async function accountStateForUser(db, userId) {
+  const result = await db.query(
+    `SELECT a.user_id, a.role, a.status, a.deletion_started_at, a.deletion_initiated_by,
+            p.profile_id, p.provisioned_at
+       FROM app_user a
+       LEFT JOIN profile p ON p.user_id = a.user_id
+      WHERE a.user_id=$1`,
+    [userId],
+  );
+  return result.rows?.[0] || null;
+}
+
+function accountContext(row) {
+  if (!row?.user_id || !row?.profile_id) throw httpError('Account profile is unavailable', 503);
   return Object.freeze({
     user_id:String(row.user_id),
-    profile_id:profileId,
+    profile_id:String(row.profile_id),
     role:String(row.role),
     status:String(row.status),
     email:row.email || null,
     email_verified:Boolean(row.email_verified),
   });
+}
+
+function assertSharedAccountReady(row) {
+  if (!row) throw httpError('Account is unavailable', 401);
+  if (row.deletion_started_at) throw httpError('Account deletion is in progress', 403);
+  if (row.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
+  if (!row.profile_id) throw httpError('Account profile is unavailable', 503);
+  if (!row.provisioned_at) throw httpError('Account provisioning is incomplete', 503);
+}
+
+async function readyContextForIdentity(db, subject) {
+  const row = await accountStateForIdentity(db, subject);
+  if (!row) return null;
+  assertSharedAccountReady(row);
+  await verifyTenantMapping(String(row.profile_id), { db });
+  return accountContext(row);
+}
+
+async function verifyAccountReadyForSession(db, userId) {
+  const row = await accountStateForUser(db, userId);
+  assertSharedAccountReady(row);
+  await verifyTenantMapping(String(row.profile_id), { db });
+  return row;
+}
+
+function lifecycleLockKey(userId) {
+  return `jscc-account-lifecycle:${String(userId)}`;
 }
 
 function legacyApplicationId(item) {
@@ -158,37 +187,31 @@ function legacyApplicationId(item) {
   ].join('-');
 }
 
-async function importBootstrapData(tx, profileId, bootstrapSeed) {
+async function importBootstrapPersonalData(tx, profileId, bootstrapSeed) {
   const config = jsonObject(bootstrapSeed?.config);
   const applicationsPayload = jsonObject(bootstrapSeed?.applications);
-  const { personal, system } = splitLegacyConfig(config);
+  const { personal } = splitLegacyConfig(config);
 
   await tx.query(
-    `INSERT INTO profile_preferences(profile_id, preferences, updated_at)
+    `INSERT INTO profile_preferences(tenant_id, preferences, updated_at)
      VALUES ($1, $2::jsonb, now())
-     ON CONFLICT(profile_id)
+     ON CONFLICT(tenant_id)
      DO UPDATE SET preferences=EXCLUDED.preferences, updated_at=now()`,
     [profileId, JSON.stringify(personal)],
-  );
-  await tx.query(
-    `UPDATE collection_policy
-        SET policy=$1::jsonb, updated_at=now()
-      WHERE singleton=true`,
-    [JSON.stringify(system)],
   );
 
   for (const item of applicationsPayload.applications || []) {
     const id = legacyApplicationId(item);
     await tx.query(
       `INSERT INTO applications(
-          application_id, profile_id, company, title, location, countries,
+          tenant_id, application_id, company, title, location, countries,
           reference, status, applied_at, next_status_check, source_url, snapshot
         )
         VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10, $11, $12::jsonb)
-        ON CONFLICT(application_id) DO NOTHING`,
+        ON CONFLICT(tenant_id, application_id) DO NOTHING`,
       [
-        id,
         profileId,
+        id,
         String(item.company || 'Unknown'),
         String(item.title || 'Unknown'),
         item.location || null,
@@ -202,6 +225,10 @@ async function importBootstrapData(tx, profileId, bootstrapSeed) {
       ],
     );
   }
+}
+
+function bootstrapSystemConfig(bootstrapSeed) {
+  return splitLegacyConfig(jsonObject(bootstrapSeed?.config)).system;
 }
 
 export async function ownerBootstrapPending(subject, env = process.env, { db = getPool(env) } = {}) {
@@ -235,77 +262,125 @@ async function assertAdmissionAllowed(tx, env) {
   if (count >= limit) throw httpError('Account capacity limit reached', 503);
 }
 
-export async function resolveOrProvisionGoogleIdentity(payload, env = process.env, { db = getPool(env), bootstrapSeed = null } = {}) {
-  const subject = String(payload?.sub || '').trim();
-  if (!subject) throw httpError('Google subject is required', 401);
+async function refreshGoogleIdentityMetadata(db, subject, payload) {
+  await db.query(
+    `UPDATE user_identity
+        SET email = $1, email_verified = $2
+      WHERE provider = 'GOOGLE' AND provider_subject = $3`,
+    [payload?.email || null, Boolean(payload?.email_verified), subject],
+  );
+}
+
+async function createOrLoadSharedAccount(subject, payload, env, db) {
+  const bootstrapAdmin = String(env.BOOTSTRAP_ADMIN_GOOGLE_SUB || env.ALLOWED_GOOGLE_SUB || '').trim();
+  const bootstrapCandidate = Boolean(bootstrapAdmin && subject === bootstrapAdmin);
+  const appEnv = String(env.APP_ENV || '').trim().toLowerCase();
 
   return withTransaction(async tx => {
     await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-provision'))`);
-    const existing = await contextForIdentity(tx, subject);
+
+    const existing = await accountStateForIdentity(tx, subject);
     if (existing) {
-      await tx.query(
-        `UPDATE user_identity
-            SET email = $1, email_verified = $2
-          WHERE provider = 'GOOGLE' AND provider_subject = $3`,
-        [payload?.email || null, Boolean(payload?.email_verified), subject],
+      const bootstrapState = await tx.query(
+        'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton=true',
       );
-      return existing;
+      return {
+        row:existing,
+        bootstrapPending:Boolean(bootstrapCandidate && !bootstrapState.rows?.[0]?.owner_bootstrapped_at),
+      };
     }
 
-    const bootstrapAdmin = String(env.BOOTSTRAP_ADMIN_GOOGLE_SUB || env.ALLOWED_GOOGLE_SUB || '').trim();
     const bootstrapState = await tx.query(
-      'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton = true',
+      'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton=true',
     );
     const bootstrapPending = Boolean(
-      bootstrapAdmin
-      && subject === bootstrapAdmin
-      && !bootstrapState.rows?.[0]?.owner_bootstrapped_at
+      bootstrapCandidate && !bootstrapState.rows?.[0]?.owner_bootstrapped_at
     );
-
-    // The one-time owner bootstrap is migration/bootstrap work, not public
-    // self-service admission. All later unknown identities use the capacity gate.
     if (!bootstrapPending) await assertAdmissionAllowed(tx, env);
 
-    const appEnv = String(env.APP_ENV || '').trim().toLowerCase();
-    const userId = bootstrapPending ? deterministicBootstrapUuid('user', appEnv, subject) : randomUUID();
-    const profileId = bootstrapPending ? deterministicBootstrapUuid('profile', appEnv, subject) : randomUUID();
-    const identityId = bootstrapPending ? deterministicBootstrapUuid('identity', appEnv, subject) : randomUUID();
+    const userId = bootstrapPending
+      ? deterministicBootstrapUuid('user', appEnv, subject)
+      : randomUUID();
+    const profileId = bootstrapPending
+      ? deterministicBootstrapUuid('profile', appEnv, subject)
+      : randomUUID();
+    const identityId = bootstrapPending
+      ? deterministicBootstrapUuid('identity', appEnv, subject)
+      : randomUUID();
     const role = bootstrapPending ? 'ADMIN' : 'USER';
 
     await tx.query(
-      'INSERT INTO app_user(user_id, role, status) VALUES ($1, $2, \'ACTIVE\')',
+      `INSERT INTO app_user(user_id, role, status)
+       VALUES ($1, $2, 'ACTIVE')`,
       [userId, role],
     );
-    const identity = await tx.query(
+    await tx.query(
       `INSERT INTO user_identity(
           identity_id, user_id, provider, provider_subject, email, email_verified
         )
-        VALUES ($1, $2, 'GOOGLE', $3, $4, $5)
-        ON CONFLICT(provider, provider_subject) DO NOTHING
-        RETURNING user_id`,
+        VALUES ($1, $2, 'GOOGLE', $3, $4, $5)`,
       [identityId, userId, subject, payload?.email || null, Boolean(payload?.email_verified)],
     );
-
-    if (!identity.rows?.length) {
-      await tx.query('DELETE FROM app_user WHERE user_id = $1', [userId]);
-      const raced = await contextForIdentity(tx, subject);
-      if (!raced) throw httpError('Concurrent account provisioning did not converge', 409);
-      return raced;
-    }
-
-    await tx.query(`SELECT set_config('jscc.user_id', $1, true)`, [userId]);
-    await tx.query('INSERT INTO profile(profile_id, user_id) VALUES ($1, $2)', [profileId, userId]);
-    await tx.query(`SELECT set_config('jscc.profile_id', $1, true)`, [profileId]);
     await tx.query(
-      `INSERT INTO profile_preferences(profile_id, preferences)
+      `INSERT INTO profile(profile_id, user_id, provisioned_at)
+       VALUES ($1, $2, NULL)`,
+      [profileId, userId],
+    );
+
+    return {
+      row:{
+        user_id:userId,
+        profile_id:profileId,
+        role,
+        status:'ACTIVE',
+        deletion_started_at:null,
+        deletion_initiated_by:null,
+        provisioned_at:null,
+        email:payload?.email || null,
+        email_verified:Boolean(payload?.email_verified),
+      },
+      bootstrapPending,
+    };
+  }, { env, db });
+}
+
+async function initializePersonalDomain(row, bootstrapPending, bootstrapSeed, env, db) {
+  const authContext = accountContext(row);
+  await withTenantTransaction(authContext, async tx => {
+    await tx.query(
+      `INSERT INTO profile_preferences(tenant_id, preferences)
        VALUES ($1, '{}'::jsonb)
-       ON CONFLICT(profile_id) DO NOTHING`,
-      [profileId],
+       ON CONFLICT(tenant_id) DO NOTHING`,
+      [authContext.profile_id],
     );
 
     if (bootstrapPending) {
       if (!bootstrapSeed) throw httpError('Bootstrap seed is required for initial owner provisioning', 503);
-      await importBootstrapData(tx, profileId, bootstrapSeed);
+      await importBootstrapPersonalData(tx, authContext.profile_id, bootstrapSeed);
+    }
+  }, { env, db });
+}
+
+async function finalizeSharedProvisioning(row, bootstrapPending, bootstrapSeed, env, db) {
+  if (bootstrapPending && !bootstrapSeed) {
+    throw httpError('Bootstrap seed is required for initial owner provisioning', 503);
+  }
+  const system = bootstrapPending ? bootstrapSystemConfig(bootstrapSeed) : null;
+
+  return withTransaction(async tx => {
+    await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-provision'))`);
+    const state = await accountStateForUser(tx, String(row.user_id));
+    if (!state) throw httpError('Provisioning account disappeared', 409);
+    if (state.deletion_started_at) throw httpError('Account deletion is in progress', 403);
+    if (state.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
+
+    if (bootstrapPending) {
+      await tx.query(
+        `UPDATE collection_policy
+            SET policy=$1::jsonb, updated_at=now()
+          WHERE singleton=true`,
+        [JSON.stringify(system)],
+      );
       await tx.query(
         `UPDATE system_bootstrap
             SET owner_preferences_imported_at=COALESCE(owner_preferences_imported_at, now()),
@@ -316,24 +391,68 @@ export async function resolveOrProvisionGoogleIdentity(payload, env = process.en
       );
     }
 
-    return Object.freeze({
-      user_id:userId,
-      profile_id:profileId,
-      role,
-      status:'ACTIVE',
-      email:payload?.email || null,
-      email_verified:Boolean(payload?.email_verified),
-    });
+    const profile = await tx.query(
+      `UPDATE profile
+          SET provisioned_at=COALESCE(provisioned_at, now()), updated_at=now()
+        WHERE profile_id=$1 AND user_id=$2
+        RETURNING provisioned_at`,
+      [row.profile_id, row.user_id],
+    );
+    if (!profile.rows?.[0]?.provisioned_at) throw httpError('Profile readiness could not be finalized', 503);
   }, { env, db });
+}
+
+export async function resolveOrProvisionGoogleIdentity(payload, env = process.env, { db = getPool(env), bootstrapSeed = null } = {}) {
+  const subject = String(payload?.sub || '').trim();
+  if (!subject) throw httpError('Google subject is required', 401);
+
+  const ready = await readyContextForIdentity(db, subject).catch(error => {
+    if (error?.message === 'Account provisioning is incomplete') return null;
+    throw error;
+  });
+  if (ready) {
+    await refreshGoogleIdentityMetadata(db, subject, payload);
+    return ready;
+  }
+
+  const current = await accountStateForIdentity(db, subject);
+  if (current?.deletion_started_at) throw httpError('Account deletion is in progress', 403);
+  if (current && current.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
+
+  const provision = current
+    ? {
+        row:current,
+        bootstrapPending:await ownerBootstrapPending(subject, env, { db }),
+      }
+    : await createOrLoadSharedAccount(subject, payload, env, db);
+
+  if (provision.row.deletion_started_at) throw httpError('Account deletion is in progress', 403);
+  if (provision.row.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
+  if (!provision.row.profile_id) throw httpError('Account profile is unavailable', 503);
+
+  await ensureTenant(String(provision.row.profile_id), { env, db });
+  await initializePersonalDomain(provision.row, provision.bootstrapPending, bootstrapSeed, env, db);
+  await verifyTenantMapping(String(provision.row.profile_id), { env, db });
+  await finalizeSharedProvisioning(provision.row, provision.bootstrapPending, bootstrapSeed, env, db);
+  await refreshGoogleIdentityMetadata(db, subject, payload);
+
+  const context = await readyContextForIdentity(db, subject);
+  if (!context) throw httpError('Provisioned identity could not be resolved', 503);
+  return context;
 }
 
 export async function createSession(authContext, env = process.env, { db = getPool(env), now = new Date() } = {}) {
   if (!authContext?.user_id) throw httpError('Authenticated user is required', 401);
+  await verifyAccountReadyForSession(db, authContext.user_id);
+
   const rawToken = randomBytes(32).toString('base64url');
   const hash = sessionHash(rawToken);
   const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
 
   await withTransaction(async tx => {
+    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lifecycleLockKey(authContext.user_id)]);
+    const row = await accountStateForUser(tx, authContext.user_id);
+    assertSharedAccountReady(row);
     await tx.query('DELETE FROM user_session WHERE expires_at <= now() OR revoked_at IS NOT NULL AND revoked_at < now() - interval \'1 day\'');
     await tx.query(
       `INSERT INTO user_session(session_id_hash, user_id, created_at, expires_at)
@@ -351,33 +470,29 @@ export async function resolveSession(rawToken, env = process.env, options = {}) 
   const now = options.now || new Date();
   const hash = sessionHash(rawToken);
 
-  return withTransaction(async tx => {
-    const result = await tx.query(
-      `SELECT s.user_id, s.expires_at, a.role, a.status,
-              i.email, i.email_verified
-         FROM user_session s
-         JOIN app_user a ON a.user_id = s.user_id
-         LEFT JOIN user_identity i ON i.user_id = a.user_id AND i.provider = 'GOOGLE'
-        WHERE s.session_id_hash = $1
-          AND s.revoked_at IS NULL
-          AND s.expires_at > $2`,
-      [hash, now],
-    );
-    const row = result.rows?.[0];
-    if (!row) throw httpError('Invalid or expired JSCC session', 401);
-    if (row.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
-    const profileId = await profileForUser(tx, String(row.user_id));
-    return Object.freeze({
-      user_id:String(row.user_id),
-      profile_id:profileId,
-      role:String(row.role),
-      status:String(row.status),
-      email:row.email || null,
-      email_verified:Boolean(row.email_verified),
-      session_id_hash:hash,
-      expires_at:row.expires_at,
-    });
-  }, { env, db });
+  const result = await db.query(
+    `SELECT s.user_id, s.expires_at, a.role, a.status, a.deletion_started_at,
+            p.profile_id, p.provisioned_at,
+            i.email, i.email_verified
+       FROM user_session s
+       JOIN app_user a ON a.user_id = s.user_id
+       LEFT JOIN profile p ON p.user_id = a.user_id
+       LEFT JOIN user_identity i ON i.user_id = a.user_id AND i.provider = 'GOOGLE'
+      WHERE s.session_id_hash = $1
+        AND s.revoked_at IS NULL
+        AND s.expires_at > $2`,
+    [hash, now],
+  );
+  const row = result.rows?.[0];
+  if (!row) throw httpError('Invalid or expired JSCC session', 401);
+  assertSharedAccountReady(row);
+  await verifyTenantMapping(String(row.profile_id), { env, db });
+
+  return Object.freeze({
+    ...accountContext(row),
+    session_id_hash:hash,
+    expires_at:row.expires_at,
+  });
 }
 
 export async function revokeSession(rawToken, env = process.env, options = {}) {
@@ -393,7 +508,7 @@ export async function revokeSession(rawToken, env = process.env, options = {}) {
 export async function effectiveConfig(authContext, env = process.env, { db = getPool(env) } = {}) {
   return withTenantTransaction(authContext, async tx => {
     const [personalResult, systemResult] = await Promise.all([
-      tx.query('SELECT preferences FROM profile_preferences WHERE profile_id = $1', [authContext.profile_id]),
+      tx.query('SELECT preferences FROM profile_preferences WHERE tenant_id = $1', [authContext.profile_id]),
       tx.query('SELECT policy FROM collection_policy WHERE singleton = true'),
     ]);
     return mergeEffectiveConfig(
@@ -407,9 +522,9 @@ export async function savePreferences(authContext, effective, env = process.env,
   const { personal } = splitLegacyConfig(effective);
   return withTenantTransaction(authContext, async tx => {
     await tx.query(
-      `INSERT INTO profile_preferences(profile_id, preferences, updated_at)
+      `INSERT INTO profile_preferences(tenant_id, preferences, updated_at)
        VALUES ($1, $2::jsonb, now())
-       ON CONFLICT(profile_id)
+       ON CONFLICT(tenant_id)
        DO UPDATE SET preferences = EXCLUDED.preferences, updated_at = now()`,
       [authContext.profile_id, JSON.stringify(personal)],
     );
@@ -453,7 +568,7 @@ export async function evaluateProfileJobs(authContext, preferences, nomenclature
             LIMIT 1
          ) sp ON true
          LEFT JOIN profile_job_state state
-           ON state.profile_id = $1 AND state.job_id = j.job_id
+           ON state.tenant_id = $1 AND state.job_id = j.job_id
         WHERE j.lifecycle_status <> 'INACTIVE'
            OR j.retention_until IS NULL
            OR j.retention_until > $2
@@ -467,11 +582,11 @@ export async function evaluateProfileJobs(authContext, preferences, nomenclature
       const evaluation = evaluateSharedJob(row, preferences, nomenclatures, now);
       await tx.query(
         `INSERT INTO profile_job_evaluation(
-            profile_id, job_id, eligible, score, pros, risks,
+            tenant_id, job_id, eligible, score, pros, risks,
             exclusion_reason, evaluation_version, evaluated_at
           )
           VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9)
-          ON CONFLICT(profile_id, job_id)
+          ON CONFLICT(tenant_id, job_id)
           DO UPDATE SET eligible = EXCLUDED.eligible,
                         score = EXCLUDED.score,
                         pros = EXCLUDED.pros,
@@ -514,11 +629,7 @@ export async function evaluateProfileJobs(authContext, preferences, nomenclature
 }
 
 export async function nomenclatureReferenceCount(domain, code, env = process.env, { db = getPool(env) } = {}) {
-  const result = await db.query(
-    'SELECT public.jscc_nomenclature_reference_count($1, $2)::integer AS count',
-    [String(domain || ''), String(code || '')],
-  );
-  return Number(result.rows?.[0]?.count || 0);
+  return crossTenantNomenclatureReferenceCount(domain, code, env, { db });
 }
 
 export async function operationalHistory(authContext, env = process.env, { db = getPool(env) } = {}) {
@@ -545,12 +656,12 @@ export async function setJobState(authContext, jobId, patch, env = process.env, 
     const exists = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id = $1', [jobId]);
     if (!exists.rows?.length) throw httpError('Job not found', 404);
     const result = await tx.query(
-      `INSERT INTO profile_job_state(profile_id, job_id, seen_at, archived_at, updated_at)
+      `INSERT INTO profile_job_state(tenant_id, job_id, seen_at, archived_at, updated_at)
        VALUES ($1, $2,
                CASE WHEN $3::boolean THEN now() ELSE NULL END,
                CASE WHEN $4::boolean THEN now() ELSE NULL END,
                now())
-       ON CONFLICT(profile_id, job_id)
+       ON CONFLICT(tenant_id, job_id)
        DO UPDATE SET
          seen_at = CASE WHEN $3::boolean THEN COALESCE(profile_job_state.seen_at, now())
                         WHEN $3::boolean = false THEN NULL ELSE profile_job_state.seen_at END,
@@ -570,7 +681,7 @@ export async function listApplications(authContext, env = process.env, { db = ge
       `SELECT application_id AS id, job_id, company, title, location, countries,
               reference, status, applied_at, next_status_check, source_url AS url
          FROM applications
-        WHERE profile_id = $1
+        WHERE tenant_id = $1
         ORDER BY applied_at DESC NULLS LAST, created_at DESC`,
       [authContext.profile_id],
     );
@@ -594,20 +705,27 @@ function applicationInput(input, { partial = false } = {}) {
   return output;
 }
 
+async function validateSharedJobReference(tx, jobId) {
+  if (!jobId) return;
+  const result = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id=$1', [jobId]);
+  if (!result.rows?.length) throw httpError('Job not found', 404);
+}
+
 export async function createApplication(authContext, input, env = process.env, { db = getPool(env) } = {}) {
   const value = applicationInput(input);
   const id = randomUUID();
   return withTenantTransaction(authContext, async tx => {
+    await validateSharedJobReference(tx, value.job_id || null);
     const result = await tx.query(
       `INSERT INTO applications(
-          application_id, profile_id, job_id, company, title, location, countries,
+          tenant_id, application_id, job_id, company, title, location, countries,
           reference, status, applied_at, next_status_check, source_url, snapshot
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13::jsonb)
         RETURNING application_id AS id, job_id, company, title, location, countries,
                   reference, status, applied_at, next_status_check, source_url AS url`,
       [
-        id, authContext.profile_id, value.job_id || null, value.company, value.title,
+        authContext.profile_id, id, value.job_id || null, value.company, value.title,
         value.location || null, JSON.stringify(value.countries || []), value.reference || null,
         value.status, value.applied_at || null, value.next_status_check || null, value.url || null,
         JSON.stringify(value),
@@ -621,7 +739,7 @@ export async function updateApplication(authContext, applicationId, input, env =
   const value = applicationInput(input, { partial:true });
   return withTenantTransaction(authContext, async tx => {
     const current = await tx.query(
-      'SELECT * FROM applications WHERE profile_id = $1 AND application_id = $2',
+      'SELECT * FROM applications WHERE tenant_id = $1 AND application_id = $2',
       [authContext.profile_id, applicationId],
     );
     const row = current.rows?.[0];
@@ -638,12 +756,13 @@ export async function updateApplication(authContext, applicationId, input, env =
       next_status_check:Object.hasOwn(value,'next_status_check') ? value.next_status_check : row.next_status_check,
       url:Object.hasOwn(value,'url') ? value.url : row.source_url,
     };
+    await validateSharedJobReference(tx, next.job_id || null);
     const result = await tx.query(
       `UPDATE applications
           SET job_id=$1, company=$2, title=$3, location=$4, countries=$5::jsonb,
               reference=$6, status=$7, applied_at=$8, next_status_check=$9,
               source_url=$10, updated_at=now()
-        WHERE profile_id=$11 AND application_id=$12
+        WHERE tenant_id=$11 AND application_id=$12
         RETURNING application_id AS id, job_id, company, title, location, countries,
                   reference, status, applied_at, next_status_check, source_url AS url`,
       [
@@ -660,7 +779,7 @@ export async function updateApplication(authContext, applicationId, input, env =
 export async function deleteApplication(authContext, applicationId, env = process.env, { db = getPool(env) } = {}) {
   return withTenantTransaction(authContext, async tx => {
     const result = await tx.query(
-      'DELETE FROM applications WHERE profile_id = $1 AND application_id = $2 RETURNING application_id',
+      'DELETE FROM applications WHERE tenant_id = $1 AND application_id = $2 RETURNING application_id',
       [authContext.profile_id, applicationId],
     );
     if (!result.rows?.length) throw httpError('Application not found', 404);
@@ -687,12 +806,26 @@ export async function listAccounts(authContext, env = process.env, { db = getPoo
 export async function setAccountStatus(authContext, userId, status, env = process.env, { db = getPool(env) } = {}) {
   requireAdmin(authContext);
   if (!['ACTIVE','DEACTIVATED'].includes(status)) throw httpError('Invalid account status', 400);
+
+  if (status === 'ACTIVE') {
+    const state = await accountStateForUser(db, userId);
+    if (!state) throw httpError('Account not found', 404);
+    if (state.deletion_started_at) throw httpError('Account deletion is irreversible and already in progress', 409);
+    assertSharedAccountReady({ ...state, status:'ACTIVE' });
+    await verifyTenantMapping(String(state.profile_id), { env, db });
+  }
+
   return withTransaction(async tx => {
+    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lifecycleLockKey(userId)]);
+    const current = await accountStateForUser(tx, userId);
+    if (!current) throw httpError('Account not found', 404);
+    if (status === 'ACTIVE' && current.deletion_started_at) {
+      throw httpError('Account deletion is irreversible and already in progress', 409);
+    }
     const result = await tx.query(
       'UPDATE app_user SET status=$1, updated_at=now() WHERE user_id=$2 RETURNING user_id, role, status',
       [status, userId],
     );
-    if (!result.rows?.length) throw httpError('Account not found', 404);
     if (status === 'DEACTIVATED') {
       await tx.query('UPDATE user_session SET revoked_at=COALESCE(revoked_at, now()) WHERE user_id=$1', [userId]);
     }
@@ -700,18 +833,87 @@ export async function setAccountStatus(authContext, userId, status, env = proces
   }, { env, db });
 }
 
-export async function deleteAccount(authContext, userId, env = process.env, { db = getPool(env) } = {}) {
-  requireAdmin(authContext);
+async function startAccountDeletion(userId, actorKind, env, db) {
   return withTransaction(async tx => {
-    const result = await tx.query('DELETE FROM app_user WHERE user_id=$1 RETURNING user_id', [userId]);
-    const outcome = result.rows?.length ? 'DELETED' : 'NOT_FOUND';
+    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lifecycleLockKey(userId)]);
+    const target = await resolveAccountDeletionTarget(tx, userId);
+    if (target.result === 'NOT_FOUND') return target;
+
+    const started = await tx.query(
+      `UPDATE app_user
+          SET deletion_started_at=COALESCE(deletion_started_at, now()),
+              deletion_initiated_by=COALESCE(deletion_initiated_by, $2),
+              status='DEACTIVATED',
+              updated_at=now()
+        WHERE user_id=$1
+        RETURNING deletion_started_at, deletion_initiated_by`,
+      [userId, actorKind],
+    );
+    await tx.query(
+      'UPDATE user_session SET revoked_at=COALESCE(revoked_at, now()) WHERE user_id=$1',
+      [userId],
+    );
+    return Object.freeze({
+      ...target,
+      deletion_started_at:started.rows?.[0]?.deletion_started_at || target.deletion_started_at,
+      deletion_initiated_by:started.rows?.[0]?.deletion_initiated_by || target.deletion_initiated_by || actorKind,
+    });
+  }, { env, db });
+}
+
+async function finalizeAccountDeletion(target, env, db) {
+  return withTransaction(async tx => {
+    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lifecycleLockKey(target.user_id)]);
+    const current = await resolveAccountDeletionTarget(tx, target.user_id);
+    if (current.result === 'NOT_FOUND') return { result:'DELETED' };
+    if (!current.deletion_started_at) throw httpError('Account deletion progress marker is missing', 409);
+
+    const deleted = await tx.query(
+      'DELETE FROM app_user WHERE user_id=$1 RETURNING user_id',
+      [target.user_id],
+    );
+    if (!deleted.rows?.length) throw httpError('Account lifecycle delete lost target account', 409);
+
     await tx.query(
       `INSERT INTO account_deletion_audit(audit_id, event_type, actor_kind, result)
-       VALUES ($1, 'ACCOUNT_DELETE', 'ADMIN', $2)`,
-      [randomUUID(), outcome],
+       VALUES ($1, 'ACCOUNT_DELETE', $2, 'DELETED')`,
+      [randomUUID(), current.deletion_initiated_by || target.deletion_initiated_by || 'ADMIN'],
     );
-    return { result:outcome };
+    return { result:'DELETED' };
   }, { env, db });
+}
+
+async function verifySharedAccountResidue(target, db) {
+  const result = await db.query(
+    `SELECT
+       (SELECT count(*)::integer FROM profile WHERE profile_id=$1) AS profiles,
+       (SELECT count(*)::integer FROM app_user WHERE user_id=$2) AS users,
+       (SELECT count(*)::integer FROM user_identity WHERE user_id=$2) AS identities,
+       (SELECT count(*)::integer FROM user_session WHERE user_id=$2) AS sessions`,
+    [target.profile_id, target.user_id],
+  );
+  if (Object.values(result.rows?.[0] || {}).some(value => Number(value) !== 0)) {
+    throw httpError('Account lifecycle delete left shared account residue', 503);
+  }
+}
+
+export async function deleteAccount(authContext, userId, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const target = await startAccountDeletion(userId, 'ADMIN', env, db);
+  if (target.result === 'NOT_FOUND') {
+    await db.query(
+      `INSERT INTO account_deletion_audit(audit_id, event_type, actor_kind, result)
+       VALUES ($1, 'ACCOUNT_DELETE', 'ADMIN', 'NOT_FOUND')`,
+      [randomUUID()],
+    );
+    return { result:'NOT_FOUND' };
+  }
+
+  await deleteTenantDomain(target.profile_id, { env, db });
+  await verifyTenantPersonalResidue(target.profile_id, { env, db });
+  const deletion = await finalizeAccountDeletion(target, env, db);
+  await verifySharedAccountResidue(target, db);
+  return deletion;
 }
 
 export async function saveCapacityPolicy(authContext, input, env = process.env, { db = getPool(env) } = {}) {

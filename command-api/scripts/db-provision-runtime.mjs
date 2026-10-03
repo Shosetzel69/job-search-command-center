@@ -2,7 +2,7 @@ import { getMigrationPool, closeMigrationPool } from '../src/db/pool.js';
 import { databaseConfig, devTestSharedDbRoleAllowed } from '../src/db/config.js';
 
 const TABLES = Object.freeze([
-  'app_user','user_identity','profile','user_session','profile_preferences',
+  'tenants','app_user','user_identity','profile','user_session','profile_preferences',
   'profile_job_state','profile_job_evaluation','applications','profile_notes',
   'profile_ui_preferences','collection_policy','system_bootstrap',
   'account_capacity_policy','account_deletion_audit','canonical_jobs',
@@ -48,7 +48,6 @@ export async function provisionRuntimeRole(env = process.env, { db } = {}) {
 
   const tables = TABLES.map(name => `public."${name}"`).join(', ');
   await migrationDb.query(`GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${tables} TO ${roleIdent}`);
-  await migrationDb.query(`GRANT EXECUTE ON FUNCTION public.jscc_nomenclature_reference_count(text, text) TO ${roleIdent}`);
 
   return { status:'ok', mode:'strict', runtime_role:runtimeRole, tables:TABLES.length };
 }
