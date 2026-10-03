@@ -427,7 +427,7 @@ Requirements:
 - rollback releases the transaction/connection cleanly;
 - no session/tenant context survives pool reuse;
 - missing context is rejected by the Tenant Data Gateway before personal SQL; a raw/global Nile connection is explicitly cross-tenant capable and is not a deny state;
-- a rollback-only DEV probe verifies `SET LOCAL nile.tenant_id` and shared-table visibility inside tenant context before ATC-275-04 implementation;
+- provider-sensitive tenant-context/schema behavior passes current Nile documentation review and the official Nile testing container before managed DEV; managed DEV then verifies the exact environment binding/runtime behavior;
 - connection limits must be validated against current Nile capacity before TEST/PROD.
 
 Exact pool numbers are implementation configuration, validated from provider limits and runtime load; they are not embedded as business constants.
