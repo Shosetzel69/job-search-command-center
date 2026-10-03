@@ -139,13 +139,13 @@ Self-service provisioning and owner bootstrap run only through the **Account Pro
 Managed Nile rejects writes to tenant-control/tenant-aware and shared tables in the same transaction. Provisioning therefore remains one logical Account Provisioning Gateway operation but uses idempotent, fail-closed transaction boundaries:
 
 1. allocate `user_id` and `profile_id`;
-2. in a shared-only transaction, perform admission/concurrency checks and create `app_user`, `user_identity` and global `profile(profile_id, user_id)`; `profile_id` is the intended tenant id but has no physical FK to `tenants`;
+2. in a shared-only transaction, perform admission/concurrency checks and create `app_user`, `user_identity` and global `profile(profile_id, user_id, provisioned_at=NULL)`; `profile_id` is the intended tenant id but has no physical FK to `tenants`;
 3. in a tenant-control transaction, create Nile `tenants(id = profile_id, name = <opaque non-PII label>)`;
 4. in a tenant-scoped transaction, establish tenant context and create required personal defaults/bootstrap data;
-5. in a shared-only transaction, persist any required shared bootstrap/system markers or collection policy imported from the legacy owner configuration;
-6. only after all required initialization succeeds may the authentication boundary return a provisioned AuthContext and issue a JSCC session.
+5. in a shared-only transaction, persist any required shared bootstrap/system markers or collection policy imported from the legacy owner configuration and set `profile.provisioned_at` once every required prior step is verified complete;
+6. only a profile with non-null `provisioned_at` may be returned as a provisioned AuthContext or receive a JSCC session.
 
-Each step MUST be idempotent. If a process fails after shared account metadata exists but before tenant/personal initialization completes, a later first-sign-in attempt resumes the missing steps using the persisted `profile_id`; it must not create a second identity/profile or issue a session against an incomplete personal domain. No new user count/provider retrieval is triggered by retry.
+Each step MUST be idempotent. `profile.provisioned_at` is internal readiness metadata, not a new product lifecycle state. If a process fails after shared account metadata exists but before tenant/personal initialization completes, a later first-sign-in attempt sees `provisioned_at IS NULL`, resumes the missing steps using the persisted `profile_id`, and must not create a second identity/profile or issue a session against an incomplete personal domain. No new user count/provider retrieval is triggered by retry.
 
 ### 5.2 Tenant-aware personal schema
 
@@ -165,12 +165,12 @@ The global `profile` table is not a personal-content store. Professional profile
 Managed Nile rejects tenant deletion and shared account deletion in the same transaction. The Account Lifecycle Gateway preserves the existing irreversible hard-delete outcome through fail-closed, idempotent transaction boundaries:
 
 1. authorize the caller from the ADMIN/self account boundary and resolve only target account metadata needed for deletion (`user_id`, `profile_id`), never target personal content;
-2. in a shared-only transaction, set the account to `DEACTIVATED` and revoke all live sessions before destructive tenant work;
+2. in a shared-only transaction, set `app_user.deletion_started_at = COALESCE(deletion_started_at, now())`, set the account to `DEACTIVATED`, and revoke all live sessions before destructive tenant work;
 3. in a tenant-control transaction, delete `tenants.id = profile_id`; verified `ON DELETE CASCADE` from tenant-aware personal tables removes the personal domain;
 4. in a shared-only transaction, delete `app_user`; approved shared-account cascades remove `user_identity`, `user_session` and the global `profile` mapping through its `user_id` relationship, then persist the allowed non-identifying deletion audit;
 5. verify zero tenant/profile/personal/account residue.
 
-Each step MUST be retry-safe. A missing tenant during retry is treated as an already-completed tenant-delete step, not as permission to recreate the tenant. If a failure occurs after step 2, the account remains deactivated and cannot regain a session while deletion is incomplete.
+Each step MUST be retry-safe. `deletion_started_at` is internal lifecycle-progress metadata, not a retained `DELETED` product status. Once non-null, reactivation is prohibited and authentication/session establishment must fail closed; the Account Lifecycle Gateway or an internal reconciliation path may resume the remaining delete steps without impersonating the target tenant. A missing tenant during retry is treated as an already-completed tenant-delete step, not as permission to recreate the tenant. Final shared account deletion removes the marker with the account row.
 
 Deletion must remove the Nile `tenants` row itself. A successfully deleted account leaves no tenant row, profile row, personal row, identity/session row, email, Google subject or relinkable tombstone. A later signup creates a new `user_id`, `profile_id` and tenant row.
 
