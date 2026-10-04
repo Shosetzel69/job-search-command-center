@@ -16,15 +16,13 @@ Final Phase 7 QA: #188
 
 Acest document este contractul operational pentru cele trei medii izolate si pentru resursele lor. Regulile permanente de promovare software sunt definite in `docs/software-delivery-lifecycle.md`; sectiunile Phase 7 din acest document descriu executia istorica a cutover-ului initial si nu inlocuiesc lifecycle-ul permanent pentru release-urile viitoare.
 
-**Override operational 2026-10-04:** deployment-ul JSCC Command API catre Cloudflare este retras si fail-closed pentru DEV/TEST/PROD. Tintele Worker de mai jos sunt pastrate numai ca istoric/retirement inventory; nu sunt release targets. DEV/TEST folosesc promovarea GCP prin `cloudbuild.promotion.yaml`; PROD nu poate reveni la Cloudflare ca fallback. `ai-github-bridge` este in afara acestui retirement.
-
-Starea istorica Phase 7 este:
+Starea curenta este:
 
 | Mediu | Runtime repo | Cloudflare target | URL | Search mode | Stare |
 | --- | --- | --- | --- | --- | --- |
-| DEV | `Shosetzel69/job-search-runtime-dev` | `Job Search DEV` | `https://job-search-command-api.job-search-dev.workers.dev` | `disabled` | retired deploy target |
-| TEST | `Shosetzel69/job-search-runtime-test` | `Job Search TEST` | `https://job-search-command-api.job-search-test.workers.dev` | `smoke` | retired deploy target |
-| PROD | `Shosetzel69/job-search-prod` | `Job Search PROD` | `https://job-search-command-api.job-search-prod.workers.dev` | `live` | retired deploy target; no fallback |
+| DEV | `Shosetzel69/job-search-runtime-dev` | `Job Search DEV` | `https://job-search-command-api.job-search-dev.workers.dev` | `disabled` | operational |
+| TEST | `Shosetzel69/job-search-runtime-test` | `Job Search TEST` | `https://job-search-command-api.job-search-test.workers.dev` | `smoke` | operational |
+| PROD | `Shosetzel69/job-search-prod` | `Job Search PROD` | `https://job-search-command-api.job-search-prod.workers.dev` | `live` | dedicated stack operational |
 | LEGACY | legacy stack | legacy Cloudflare account | `https://job-search-command-api.myeboda.workers.dev` | legacy | rollback/fallback only; outside normal promotion chain |
 
 Approved application source used by the initial Phase 7 cutover:
