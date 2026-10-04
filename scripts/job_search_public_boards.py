@@ -7,9 +7,10 @@ canonical filtering/FIT engine. It never bypasses login, CAPTCHA, robots or payw
 import json
 import re
 import xml.etree.ElementTree as ET
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from html import unescape
+from html.entities import html5
 from html.parser import HTMLParser
 from urllib.parse import urljoin
 from urllib.request import Request, urlopen
@@ -28,14 +29,15 @@ PUBLIC_BOARD_SOURCES = {
     "Landing.Jobs": {"kind": "landingjobs", "url": "https://landing.jobs/api/v1/jobs?limit=50&offset=0"},
     "We Work Remotely": {"kind": "rss", "url": "https://weworkremotely.com/remote-jobs.rss"},
     "NoDesk": {"kind": "rss", "url": "https://nodesk.co/remote-jobs/index.xml"},
-    "EU Remote Jobs": {"kind": "rss", "url": "https://euremotejobs.com/feed/"},
+    "EU Remote Jobs": {"kind": "eu_remote", "url": "https://euremotejobs.com/", "feed_url": "https://euremotejobs.com/feed/"},
     "Remote in Europe": {"kind": "rss", "url": "https://remoteineurope.com/feed/"},
+    "EU Careers / EPSO": {"kind": "eu_careers", "url": "https://eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast"},
+    "Remote.co": {"kind": "remote_co", "url": "https://remote.co/remote-jobs"},
     "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/go/Jobs-in-Romania/3686501/"},
     "UpcoMinds": {"kind": "jobs4it", "url": "https://jobs4it.gr/"},
+    "Worldline": {"kind": "worldline", "url": "https://jobs.worldline.com/viewalljobs/"},
     "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en", "portal": "101430233", "section": "2"},
-    "Orange Romania": {"kind": "json_job_feed", "url": "https://cariere.orange.ro/jobs.feed.json"},
-    "Computacenter": {"kind": "rmk_search", "url": "https://jobs.computacenter.com/search/?q=&searchby=location&sortColumn=referencedate&sortDirection=desc", "page_size": 25},
 }
 
 
@@ -86,7 +88,6 @@ def _post_json(url, payload):
         raise RuntimeError(f"Public board endpoint HTTP {status}")
     return json.loads(body.decode("utf-8",errors="replace"))
 
-
 def _eures(payload):
     if not isinstance(payload,dict) or not isinstance(payload.get("jvs"),list):
         raise ValueError("EURES response must contain jvs[]")
@@ -111,7 +112,6 @@ def _eures(payload):
             employment_statuses=item.get("positionScheduleCodes") or [],
         ))
     return records
-
 
 def _country_names_from_text(value):
     text = str(value or "")
@@ -282,33 +282,376 @@ def _rss_text(element, names):
     return None
 
 
+def _sanitize_xml_entities(payload):
+    text = payload.decode("utf-8", errors="replace") if isinstance(payload, (bytes, bytearray)) else str(payload)
+    allowed = {"amp", "lt", "gt", "quot", "apos"}
+    def replace(match):
+        name = match.group(1)
+        if name in allowed:
+            return match.group(0)
+        value = html5.get(name + ";")
+        if value is None:
+            return " "
+        return value.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+    return re.sub(r"&([A-Za-z][A-Za-z0-9]+);", replace, text)
+
+
 def _rss(payload, provider, feed_url):
     try:
-        root = ET.fromstring(payload)
+        root = ET.fromstring(_sanitize_xml_entities(payload))
     except ET.ParseError as exc:
         raise ValueError(f"{provider} RSS/XML parse error: {exc}") from exc
     entries = [x for x in root.iter() if x.tag.rsplit("}", 1)[-1] in {"item", "entry"}]
     records = []
     for index, item in enumerate(entries):
-        title = _rss_text(item, ["title"])
-        link = _rss_text(item, ["link"])
+        title = (_rss_text(item, ["title"]) or "").strip()
+        link = (_rss_text(item, ["link"]) or "").strip()
         if not link:
             for child in list(item):
                 if child.tag.rsplit("}", 1)[-1] == "link" and child.attrib.get("href"):
-                    link = child.attrib["href"]
+                    link = str(child.attrib["href"]).strip()
                     break
         if not title or not link:
             continue
         description = _rss_text(item, ["description", "summary", "content"]) or title
         company = _rss_text(item, ["company", "companyName", "author"]) or provider
-        location = _rss_text(item, ["location", "locationRestriction"]) or "Remote"
+        location = _rss_text(item, ["location", "locationRestriction", "city", "country"]) or "Remote"
         date = _rss_text(item, ["pubDate", "published", "updated"])
         identity = _rss_text(item, ["guid", "id"]) or link or str(index)
+        try:
+            records.append(_record(
+                provider, identity, title, company, description, urljoin(feed_url, link),
+                date_posted=_rss_date(date), location=location,
+                countries=_country_names_from_text(location), remote=True,
+            ))
+        except ValueError:
+            # One malformed feed item must not invalidate an otherwise usable public feed.
+            continue
+    return records
+
+
+class _EuCareersTable(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows = []
+        self.in_row = False
+        self.in_cell = False
+        self.cell_parts = []
+        self.cell_link = None
+        self.cells = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "tr":
+            self.in_row = True
+            self.cells = []
+        elif self.in_row and tag == "td":
+            self.in_cell = True
+            self.cell_parts = []
+            self.cell_link = None
+        elif self.in_cell and tag == "a" and attrs.get("href") and self.cell_link is None:
+            self.cell_link = attrs["href"]
+
+    def handle_data(self, data):
+        if self.in_cell:
+            self.cell_parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "td" and self.in_cell:
+            self.cells.append((" ".join(" ".join(self.cell_parts).split()), self.cell_link))
+            self.in_cell = False
+        elif tag == "tr" and self.in_row:
+            if len(self.cells) >= 7:
+                self.rows.append(self.cells)
+            self.in_row = False
+
+
+def _eu_date(value):
+    value = str(value or "").strip().split(" - ", 1)[0]
+    try:
+        return datetime.strptime(value, "%d/%m/%Y").replace(tzinfo=timezone.utc).isoformat()
+    except ValueError:
+        return None
+
+
+def _eu_careers(base_url):
+    records = {}
+    for page in range(10):
+        sep = "&" if "?" in base_url else "?"
+        url = f"{base_url}{sep}order=created&sort=desc&page={page}"
+        status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+        if status != 200:
+            raise RuntimeError(f"EU Careers public vacancy page HTTP {status}")
+        parser = _EuCareersTable()
+        parser.feed(body.decode("utf-8", errors="replace"))
+        if not parser.rows:
+            break
+        added = 0
+        for cells in parser.rows:
+            title, href = cells[0]
+            if not title or not href:
+                continue
+            domains = cells[1][0]
+            grade = cells[2][0]
+            institution = cells[3][0] or "EU Careers / EPSO"
+            location = cells[4][0]
+            published = cells[5][0]
+            deadline = cells[6][0]
+            link = urljoin(base_url, href)
+            identity = link.rsplit("/", 1)[-1] or link
+            record = _record(
+                "EU Careers / EPSO", identity, title, institution,
+                f"Domains: {domains}. Grade: {grade}. Deadline: {deadline}.",
+                link, date_posted=_eu_date(published), location=location,
+                countries=_country_names_from_text(location), remote=False,
+                employment_statuses=[grade] if grade else [],
+            )
+            records[record["id"]] = record
+            added += 1
+        if added == 0:
+            break
+    return list(records.values())
+
+
+class _RemoteCoList(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.anchor = None
+        self.anchor_parts = []
+        self.heading = None
+        self.heading_parts = []
+        self.last_job = None
+        self.recent = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href")
+        if tag == "a" and href and "/job-details/" in href:
+            self.anchor = href
+            self.anchor_parts = []
+        if tag in {"h4", "h5"}:
+            self.heading = tag
+            self.heading_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        self.recent.append(text)
+        self.recent = self.recent[-12:]
+        if self.anchor is not None:
+            self.anchor_parts.append(text)
+        if self.heading is not None:
+            self.heading_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None:
+            title = " ".join(self.anchor_parts).strip()
+            if title:
+                context = " ".join(self.recent[-8:])
+                self.jobs.setdefault(self.anchor, {"title": title, "company": None, "context": context})
+                self.last_job = self.anchor
+            self.anchor = None
+            self.anchor_parts = []
+        if tag == self.heading:
+            value = " ".join(self.heading_parts).strip()
+            if self.last_job and value and not self.jobs[self.last_job]["company"]:
+                self.jobs[self.last_job]["company"] = value
+            self.heading = None
+            self.heading_parts = []
+
+
+def _relative_date(text):
+    now = datetime.now(timezone.utc)
+    value = str(text or "")
+    if re.search(r"\bToday\b", value, re.I):
+        return now.isoformat()
+    if re.search(r"\bYesterday\b", value, re.I):
+        return (now.replace(hour=12, minute=0, second=0, microsecond=0) - timedelta(days=1)).isoformat()
+    match = re.search(r"\b(\d+)\s+hours?\s+ago\b", value, re.I)
+    if match:
+        return (now - timedelta(hours=int(match.group(1)))).isoformat()
+    match = re.search(r"\b(\d+)\s+days?\s+ago\b", value, re.I)
+    if match:
+        return (now - timedelta(days=int(match.group(1)))).isoformat()
+    match = re.search(r"\b(\d+)\s+weeks?\s+ago\b", value, re.I)
+    if match:
+        return (now - timedelta(weeks=int(match.group(1)))).isoformat()
+    return None
+
+
+def _remote_co(url):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Remote.co public jobs page HTTP {status}")
+    parser = _RemoteCoList()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    records = []
+    for href, item in parser.jobs.items():
+        title = item.get("title")
+        if not title:
+            continue
+        link = urljoin(url, href)
+        identity = href.rstrip("/").rsplit("/", 1)[-1]
         records.append(_record(
-            provider, identity, title, company, description, urljoin(feed_url, link),
-            date_posted=_rss_date(date), location=location,
-            countries=_country_names_from_text(location), remote=True,
+            "Remote.co", identity, title, item.get("company") or "Remote.co",
+            item.get("context") or title, link,
+            date_posted=_relative_date(item.get("context")), location="Remote",
+            remote=True,
         ))
+    return records
+
+
+def _remotive(payload):
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+        raise ValueError("Remotive response must contain jobs[]")
+    records = []
+    for item in payload["jobs"]:
+        if not isinstance(item, dict):
+            continue
+        location = item.get("candidate_required_location") or "Remote"
+        identity = item.get("id") or item.get("url")
+        if not identity or not item.get("title") or not item.get("url"):
+            continue
+        records.append(_record(
+            "Remotive", identity, item.get("title"),
+            item.get("company_name") or "Remotive",
+            item.get("description") or item.get("title"), item.get("url"),
+            date_posted=item.get("publication_date"), location=location,
+            countries=_country_names_from_text(location), remote=True,
+            employment_statuses=item.get("job_type"),
+        ))
+    return records
+
+
+
+def _landing_jobs_api(base_url):
+    records = {}
+    roots = [str(base_url or "").rstrip("/")]
+    if not roots[0].endswith(".json"):
+        roots.append(roots[0] + ".json")
+    selected_root = None
+
+    for offset in range(0, 201, 50):
+        body = None
+        last_error = None
+        candidates = [selected_root] if selected_root else roots
+        for root in candidates:
+            if not root:
+                continue
+            sep = "&" if "?" in root else "?"
+            try:
+                status, _kind, candidate_body = _fetch(
+                    f"{root}{sep}limit=50&offset={offset}",
+                    "application/json",
+                )
+            except Exception as exc:
+                last_error = exc
+                continue
+            if status == 200:
+                selected_root = root
+                body = candidate_body
+                break
+            last_error = RuntimeError(f"Landing.Jobs public API HTTP {status}")
+        if body is None:
+            if last_error:
+                raise last_error
+            raise RuntimeError("Landing.Jobs public API unavailable")
+
+        payload = json.loads(body.decode("utf-8", errors="replace"))
+        page = _landingjobs(payload)
+        for record in page:
+            records[record["id"]] = record
+        if not isinstance(payload, list) or len(payload) < 50:
+            break
+    return list(records.values())
+
+
+class _EuRemoteJobsList(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.anchor = None
+        self.anchor_parts = []
+        self.current_href = None
+        self.context_parts = []
+
+    def _flush_context(self):
+        if self.current_href and self.current_href in self.jobs:
+            self.jobs[self.current_href]["context"] = " ".join(self.context_parts[-24:])
+        self.context_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href")
+        if tag == "a" and href and re.search(r"/job/[^/?#]+", href):
+            self._flush_context()
+            self.anchor = href
+            self.current_href = href
+            self.anchor_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        if self.anchor is not None:
+            self.anchor_parts.append(text)
+        if self.current_href:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None:
+            title = " ".join(self.anchor_parts).strip()
+            if title and title.casefold() not in {"apply", "read more", "view job"}:
+                self.jobs.setdefault(self.anchor, {"title": title, "context": ""})
+            self.anchor = None
+            self.anchor_parts = []
+
+    def close(self):
+        super().close()
+        self._flush_context()
+
+
+def _eu_remote_jobs(base_url, feed_url):
+    # Prefer the site's feed when it contains usable items. Some edge/CDN paths
+    # return 202 while still carrying a feed body, so status alone is not failure.
+    try:
+        status, _kind, body = _fetch(
+            feed_url,
+            "application/rss+xml, application/atom+xml, application/xml, text/xml, */*",
+        )
+        if status in {200, 202}:
+            try:
+                records = _rss(body, "EU Remote Jobs", feed_url)
+            except ValueError:
+                records = []
+            if records:
+                return records
+    except Exception:
+        pass
+
+    status, _kind, body = _fetch(base_url, "text/html,application/xhtml+xml")
+    if status not in {200, 202}:
+        raise RuntimeError(f"EU Remote Jobs public page HTTP {status}")
+    parser = _EuRemoteJobsList()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = []
+    for href, item in parser.jobs.items():
+        title = item.get("title")
+        if not title:
+            continue
+        context = item.get("context") or title
+        link = urljoin(base_url, href)
+        identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+        records.append(_record(
+            "EU Remote Jobs", identity, title, "EU Remote Jobs", context, link,
+            date_posted=_relative_date(context),
+            location="Europe", countries=[], remote=True,
+        ))
+    if not records:
+        raise ValueError("EU Remote Jobs page contained no extractable job links")
     return records
 
 
@@ -346,6 +689,16 @@ class _AtosJobsTable(HTMLParser):
             if self.job_href and self.cells:
                 self.rows.append((self.job_href, list(self.cells)))
             self.in_row = False
+
+
+def _atos_date(value):
+    text = " ".join(str(value or "").split())
+    for fmt in ("%b %d, %Y", "%d %b %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).isoformat()
+        except ValueError:
+            continue
+    return None
 
 
 class _RmkJobLinks(HTMLParser):
@@ -391,83 +744,6 @@ class _RmkJobLinks(HTMLParser):
     def close(self):
         super().close()
         self._flush_context()
-
-
-class _Jobs4ItHome(HTMLParser):
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.jobs = {}
-        self.anchor = None
-        self.anchor_parts = []
-        self.current_href = None
-        self.context_parts = []
-
-    def _flush_context(self):
-        if self.current_href and self.current_href in self.jobs:
-            self.jobs[self.current_href]["context"] = " ".join(self.context_parts[-24:])
-        self.context_parts = []
-
-    def handle_starttag(self, tag, attrs):
-        attrs = dict(attrs)
-        href = attrs.get("href")
-        if tag == "a" and href and re.search(r"/job/[^/?#]+/?(?:[?#].*)?$", href):
-            self._flush_context()
-            self.anchor = href
-            self.current_href = href
-            self.anchor_parts = []
-
-    def handle_data(self, data):
-        text = " ".join(str(data or "").split())
-        if not text:
-            return
-        if self.anchor is not None:
-            self.anchor_parts.append(text)
-        if self.current_href:
-            self.context_parts.append(text)
-
-    def handle_endtag(self, tag):
-        if tag == "a" and self.anchor is not None:
-            title = " ".join(self.anchor_parts).strip()
-            if title and title.casefold() not in {"apply now", "bookmark it", "see all recent jobs"}:
-                self.jobs.setdefault(self.anchor, {"title": title, "context": ""})
-            self.anchor = None
-            self.anchor_parts = []
-
-    def close(self):
-        super().close()
-        self._flush_context()
-
-
-def _remotive(payload):
-    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
-        raise ValueError("Remotive response must contain jobs[]")
-    records = []
-    for item in payload["jobs"]:
-        if not isinstance(item, dict):
-            continue
-        location = item.get("candidate_required_location") or "Remote"
-        identity = item.get("id") or item.get("url")
-        if not identity or not item.get("title") or not item.get("url"):
-            continue
-        records.append(_record(
-            "Remotive", identity, item.get("title"),
-            item.get("company_name") or "Remotive",
-            item.get("description") or item.get("title"), item.get("url"),
-            date_posted=item.get("publication_date"), location=location,
-            countries=_country_names_from_text(location), remote=True,
-            employment_statuses=item.get("job_type"),
-        ))
-    return records
-
-
-def _atos_date(value):
-    text = " ".join(str(value or "").split())
-    for fmt in ("%b %d, %Y", "%d %b %Y", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).isoformat()
-        except ValueError:
-            continue
-    return None
 
 
 def _rmk_page_url(base_url, startrow):
@@ -543,7 +819,56 @@ def _rmk_jobs(base_url, provider, company):
     return list(records.values())
 
 
+def _atos(base_url):
+    return _rmk_jobs(base_url, "Atos", "Atos")
 
+
+def _worldline(base_url):
+    return _rmk_jobs(base_url, "Worldline", "Worldline")
+
+class _Jobs4ItHome(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.anchor = None
+        self.anchor_parts = []
+        self.current_href = None
+        self.context_parts = []
+
+    def _flush_context(self):
+        if self.current_href and self.current_href in self.jobs:
+            self.jobs[self.current_href]["context"] = " ".join(self.context_parts[-24:])
+        self.context_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href")
+        if tag == "a" and href and re.search(r"/job/[^/?#]+/?(?:[?#].*)?$", href):
+            self._flush_context()
+            self.anchor = href
+            self.current_href = href
+            self.anchor_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        if self.anchor is not None:
+            self.anchor_parts.append(text)
+        if self.current_href:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None:
+            title = " ".join(self.anchor_parts).strip()
+            if title and title.casefold() not in {"apply now", "bookmark it", "see all recent jobs"}:
+                self.jobs.setdefault(self.anchor, {"title": title, "context": ""})
+            self.anchor = None
+            self.anchor_parts = []
+
+    def close(self):
+        super().close()
+        self._flush_context()
 
 
 def _jobs4it_date(value):
@@ -559,13 +884,6 @@ def _jobs4it_date(value):
         return datetime.strptime(match.group(0), "%B %d, %Y").replace(tzinfo=timezone.utc).isoformat()
     except ValueError:
         return None
-
-
-
-
-
-def _atos(base_url):
-    return _rmk_jobs(base_url, "Atos", "Atos")
 
 
 def _jobs4it(base_url):
@@ -598,134 +916,6 @@ def _jobs4it(base_url):
         records[record["id"]] = record
     if not records:
         raise ValueError("Jobs4IT page contained no extractable job links")
-    return list(records.values())
-
-
-def _localized_country(value):
-    text = plain_text(value)
-    aliases = {
-        "rumunia": "Romania",
-        "polska": "Polonia",
-        "belgia": "Belgia",
-        "mołdawia": "Moldova",
-        "moldawia": "Moldova",
-    }
-    return aliases.get(text.casefold(), text)
-
-
-def _json_job_feed(payload, provider):
-    entries = payload.get("dataFeedElement") if isinstance(payload, dict) else None
-    if entries is None and isinstance(payload, dict):
-        entries = payload.get("itemListElement")
-    if entries is None and isinstance(payload, list):
-        entries = payload
-    if not isinstance(entries, list):
-        raise ValueError(f"{provider} JSON feed must contain dataFeedElement[]")
-
-    records = []
-    for entry in entries:
-        item = entry.get("item") if isinstance(entry, dict) else None
-        if not isinstance(item, dict):
-            item = entry if isinstance(entry, dict) else None
-        if not isinstance(item, dict) or not item.get("title") or not item.get("url"):
-            continue
-
-        identifier = item.get("identifier")
-        if isinstance(identifier, dict):
-            identity = identifier.get("value") or identifier.get("name")
-        else:
-            identity = identifier
-        identity = identity or item.get("url")
-
-        organization = item.get("hiringOrganization")
-        company = organization.get("name") if isinstance(organization, dict) else None
-
-        place = item.get("jobLocation")
-        address = place.get("address") if isinstance(place, dict) else None
-        if not isinstance(address, dict):
-            address = {}
-        country = _localized_country(address.get("addressCountry"))
-        locality = plain_text(address.get("addressLocality"))
-        region = plain_text(address.get("addressRegion"))
-        location = ", ".join(x for x in (locality, region, country) if x and x not in {"_", "-"})
-        countries = _country_names_from_text(country)
-        if not countries and country and country not in {"_", "-"}:
-            countries = [country]
-
-        remote = bool(re.search(r"\b(remote|telework|telemunca)\b", " ".join([
-            plain_text(item.get("title")), location, plain_text(item.get("jobLocationType"))
-        ]), re.I))
-        records.append(_record(
-            provider, identity, item.get("title"), company or provider,
-            item.get("description") or item.get("title"), item.get("url"),
-            date_posted=item.get("datePosted") or entry.get("dateModified"),
-            location=location, countries=countries, remote=remote,
-            employment_statuses=item.get("employmentType"),
-        ))
-    if not records:
-        raise ValueError(f"{provider} JSON feed contained no extractable jobs")
-    return records
-
-
-def _rmk_search_jobs(base_url, provider, company, page_size=25):
-    records = {}
-    for startrow in range(0, 2000, page_size):
-        sep = "&" if "?" in base_url else "?"
-        url = f"{base_url}{sep}startrow={startrow}"
-        status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
-        if status != 200:
-            raise RuntimeError(f"{provider} jobs page HTTP {status}")
-        html = body.decode("utf-8", errors="replace")
-        table = _AtosJobsTable()
-        table.feed(html)
-        links = _RmkJobLinks()
-        links.feed(html)
-        links.close()
-
-        candidates = []
-        for href, cells in table.rows:
-            candidates.append((
-                href,
-                cells[0] if cells else "",
-                cells[1] if len(cells) > 1 else "",
-                cells[2] if len(cells) > 2 else "",
-            ))
-        if not candidates:
-            for href, item in links.jobs.items():
-                context = item.get("context") or ""
-                date_match = re.search(
-                    r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\b",
-                    context, re.I,
-                )
-                candidates.append((
-                    href,
-                    item.get("title") or "",
-                    context,
-                    date_match.group(0) if date_match else "",
-                ))
-
-        added = 0
-        for href, title, location, published in candidates:
-            if not href or not title:
-                continue
-            link = urljoin(base_url, href)
-            identity = link.rstrip("/").rsplit("/", 1)[-1] or link
-            record = _record(
-                provider, identity, title, company, title, link,
-                date_posted=_atos_date(published), location=location,
-                countries=_country_names_from_text(location),
-                remote=bool(re.search(r"\b(remote|telecommuter)\b", f"{title} {location}", re.I)),
-            )
-            if record["id"] not in records:
-                records[record["id"]] = record
-                added += 1
-
-        if not candidates or added == 0:
-            break
-        if len(candidates) < page_size:
-            break
-    if not records:
-        raise ValueError(f"{provider} RMK search returned no extractable jobs")
     return list(records.values())
 
 
@@ -847,26 +1037,34 @@ def collect(source, config=None):
         raise ValueError(f"Unsupported public-board source: {name}")
     kind, url = spec["kind"], spec["url"]
     if kind == "eures":
-        payload=_post_json(url,{
-            "resultsPerPage":100,"page":1,"sortSearch":"MOST_RECENT","keywords":[],
-            "publicationPeriod":None,"occupationUris":[],"skillUris":[],
-            "requiredExperienceCodes":[],"positionScheduleCodes":[],"sectorCodes":[],
-            "educationAndQualificationLevelCodes":[],"positionOfferingCodes":[],
-            "locationCodes":[],"euresFlagCodes":[],"otherBenefitsCodes":[],
-            "requiredLanguages":[],"minNumberPost":None,
-            "sessionId":"jscc-global-collection","requestLanguage":"en",
+        payload = _post_json(url, {
+            "resultsPerPage": 100, "page": 1, "sortSearch": "MOST_RECENT", "keywords": [],
+            "publicationPeriod": None, "occupationUris": [], "skillUris": [],
+            "requiredExperienceCodes": [], "positionScheduleCodes": [], "sectorCodes": [],
+            "educationAndQualificationLevelCodes": [], "positionOfferingCodes": [],
+            "locationCodes": [], "euresFlagCodes": [], "otherBenefitsCodes": [],
+            "requiredLanguages": [], "minNumberPost": None,
+            "sessionId": "jscc-global-collection", "requestLanguage": "en",
         })
-        records=_eures(payload)
+        records = _eures(payload)
+    elif kind == "eu_careers":
+        records = _eu_careers(url)
+    elif kind == "remote_co":
+        records = _remote_co(url)
     elif kind == "atos":
         records = _atos(url)
+    elif kind == "worldline":
+        records = _worldline(url)
     elif kind == "jobs4it":
         records = _jobs4it(url)
+    elif kind == "landingjobs":
+        records = _landing_jobs_api(url)
+    elif kind == "eu_remote":
+        records = _eu_remote_jobs(url, spec["feed_url"])
     elif kind == "nato_taleo":
         records = _nato_taleo(url, spec.get("portal", "101430233"), spec.get("section", "2"))
-    elif kind == "rmk_search":
-        records = _rmk_search_jobs(url, name, name, spec.get("page_size", 25))
     else:
-        accept = "application/json" if kind != "rss" else "application/rss+xml, application/xml, text/xml, */*"
+        accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
         if status != 200:
             raise RuntimeError(f"{name} public endpoint HTTP {status}")
@@ -881,7 +1079,6 @@ def collect(source, config=None):
                 "jobgether": _jobgether,
                 "landingjobs": _landingjobs,
                 "remotive": _remotive,
-                "json_job_feed": lambda value: _json_job_feed(value, name),
             }[kind]
             records = parser(payload)
     return [engine.CollectionResult("public_board", kind, True, records, len(records))]
