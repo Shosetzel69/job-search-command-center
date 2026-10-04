@@ -145,6 +145,20 @@ function configureRuntimeVariables(runtime) {
   run('gh', ['variable', 'set', 'SOURCE_REPOSITORY', '--repo', runtime.runtimeRepository, '--body', runtime.sourceRepository], { env: ghEnv });
 }
 
+function configureDatabaseRuntimeSecret(runtime) {
+  const cloudflareEnv = safeChildEnv({
+    CLOUDFLARE_ACCOUNT_ID: runtime.cloudflareAccountId,
+    CLOUDFLARE_API_TOKEN: runtime.cloudflareToken,
+    WRANGLER_SEND_METRICS: 'false',
+  });
+  const cwd = resolve(sourceWorkspace(), 'command-api');
+  run('npx', ['wrangler', 'secret', 'put', 'NILE_DATABASE_URL', '--name', runtime.workerName], {
+    cwd,
+    env: cloudflareEnv,
+    input: runtime.nileDatabaseUrl,
+  });
+}
+
 function configureBootstrapRuntimeSecrets(runtime) {
   if (runtime.githubBootstrapToken === runtime.githubRuntimeToken) {
     throw new Error('GitHub bootstrap and runtime credentials must be distinct');
@@ -270,7 +284,20 @@ async function probeHealthOnce(runtime, expectedRuntimeDataSha = null) {
     if (payload[key] !== value) throw new Error(`${label} health mismatch for ${key}: expected ${value}, got ${payload[key]}`);
   }
   if (!SHA_RE.test(String(payload.runtime_data_sha || ''))) throw new Error(`${label} /health runtime_data_sha is invalid`);
-  return payload;
+
+  const dbResponse = await fetch(new URL('/health/db', runtime.frontendOrigin), { headers: { accept: 'application/json' } });
+  if (!dbResponse.ok) throw new Error(`${label} /health/db failed (${dbResponse.status})`);
+  const db = await dbResponse.json();
+  const expectedDatabase = `jobsearch_${runtime.environment}`;
+  if (db.status !== 'ok') throw new Error(`${label} /health/db status must be ok`);
+  if (db.environment !== runtime.environment) {
+    throw new Error(`${label} /health/db environment mismatch: expected ${runtime.environment}, got ${db.environment}`);
+  }
+  if (db.database !== expectedDatabase) {
+    throw new Error(`${label} /health/db database mismatch: expected ${expectedDatabase}, got ${db.database}`);
+  }
+
+  return { ...payload, database:db.database, server_version:db.server_version };
 }
 
 async function probeHealth(runtime, { attempts = 1, delayMs = 0, expectedRuntimeDataSha = null } = {}) {
@@ -345,6 +372,7 @@ export async function deployCandidateWithReconciliation(runtime, {
     if (runtimeDataSha !== reconciliation.promotion_runtime_sha) {
       throw new Error(`Runtime snapshot identity mismatch: expected ${reconciliation.promotion_runtime_sha}, got ${runtimeDataSha}`);
     }
+    configureDatabaseRuntimeSecret(runtime);
     if (configureBootstrapSecrets) configureBootstrapRuntimeSecrets(runtime);
     health = await probeDeployedHealth(runtime, runtimeDataSha);
     try {
