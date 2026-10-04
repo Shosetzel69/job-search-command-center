@@ -99,7 +99,15 @@ Administrare
 `- Loguri
 ```
 
-### 5.1 Surse
+### 5.1 Status migrare/promovare
+
+- ADMIN vede checklist-ul ultimei promovari DEV/TEST din `promotion-status.json`;
+- starea este actualizata prin polling la fiecare 5 secunde cat timp interfata este deschisa;
+- pasii afiseaza explicit PENDING / IN_PROGRESS / PASS / FAIL;
+- FAIL pastreaza motivul sanitizat fara secrete;
+- statusul operational de promovare este separat de statusul rularii de cautare si nu foloseste `run-status.json`.
+
+### 5.2 Surse
 
 - registru persistent `data/sources.json`;
 - cautare si sortare;
@@ -114,7 +122,7 @@ Administrare
 
 Issue #93 ramane cleanup semantic de registry si nu este blocker pentru baseline-ul stabilizat.
 
-### 5.2 Nomenclatoare
+### 5.3 Nomenclatoare
 
 Sursa canonica: `data/nomenclatures.json`, schema 1.0.
 
