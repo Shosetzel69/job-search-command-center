@@ -253,10 +253,25 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Grecia",by_title["IT Project Manager"]["countries"])
         self.assertTrue(by_title["IT Project Manager"]["source_url"].endswith("/job/it-project-manager-26/"))
 
+    def test_eurobrussels_extracts_public_job_list(self):
+        html='''<section>
+          <h3><a href="/job_display/297045/Bid_Manager_M_F_Suez_Consulting_Brussels_Belgium">Bid Manager (M/F)</a></h3>
+          <div>Suez Consulting</div><div>Brussels, Belgium</div>
+          <p>Manage international tenders and project delivery.</p>
+          <div>Posted 5 days ago</div>
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._eurobrussels("https://www.eurobrussels.com/job_search")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Bid Manager (M/F)")
+        self.assertEqual(rows[0]["company"],"Suez Consulting")
+        self.assertIn("Belgia",rows[0]["countries"])
+        self.assertIn("/job_display/297045/",rows[0]["source_url"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
-                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds"]:
+                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds","EuroBrussels"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
