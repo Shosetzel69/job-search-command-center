@@ -1,5 +1,10 @@
 # Phase 7 targeted DEV retest — #193 / #194
 
+Status: HISTORICAL
+Applicability: HISTORICAL_ONLY
+
+> Retained only as Phase 7 / Cloudflare-era evidence. It is not an authorized current Command API deployment or QA procedure. Current deployment authority is `cloudbuild.promotion.yaml` and `docs/environment-provisioning-runbook.md`.
+
 Status: executable after the fix candidate is deployed to DEV.
 Accountable DEV executor: **ChatGPT / Development**.
 Browser execution surface: a browser-capable ChatGPT DEV surface (preferred: ChatGPT Work Cloud Browser) or an owner-controlled browser session used only to provide the required interactive browser capability. Owner action may be required for the Google account selection/sign-in step.
