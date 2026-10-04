@@ -42,20 +42,25 @@ candidate SHA
 
 No rebuild occurs between DEV and TEST.
 
+Standalone TEST promotion is also supported for a candidate already deployed in DEV. In that path DEV is not redeployed: Cloud Build performs a read-only live attestation of the DEV Job, Service, health endpoints, database binding and runtime seed, writes DEV evidence for the exact candidate SHA, then promotes TEST using the same immutable image digests.
+
 ## 3. Canonical entry point
 
 `cloudbuild.promotion.yaml`
 
 Inputs:
 - `_GIT_SHA`: exact 40-character lowercase candidate SHA.
-- `_TARGET`: `dev` or `dev-test`.
+- `_TARGET`: `dev`, `test` or `dev-test`.
 
-Normal full promotion:
+Targets:
 
+```text
+_TARGET=dev       -> deploy DEV only
+_TARGET=test      -> attest current DEV read-only for exact SHA -> deploy TEST only
+_TARGET=dev-test  -> deploy DEV -> deploy TEST in the same build
 ```
-_TARGET=dev-test
-_GIT_SHA=<frozen candidate>
-```
+
+For `_TARGET=test`, a mismatch between the live DEV candidate and `_GIT_SHA` fails closed before any TEST mutation.
 
 The Cloud Build execution is the operator. Individual gcloud commands are not part of the normal release procedure.
 
@@ -117,6 +122,8 @@ Evidence includes:
 
 TEST promotion fails unless DEV evidence exists and verifies for the exact same candidate SHA.
 
+For `_TARGET=dev-test`, DEV evidence is produced by the DEV promotion earlier in the same build. For `_TARGET=test`, `scripts/gcp/capture_live_promotion_evidence.sh` creates equivalent evidence from read-only checks against the already deployed DEV environment; it does not deploy, update IAM, create buckets or write runtime seed objects.
+
 ## 7. One-time control-plane prerequisites
 
 These are infrastructure prerequisites, not per-release operator steps.
@@ -169,7 +176,8 @@ Promotion fails immediately if:
 - /health does not report the exact candidate;
 - /health runtime backend is not GCP;
 - /health/db does not bind to the correct environment/database;
-- TEST evidence does not match the DEV candidate.
+- TEST evidence does not match the DEV candidate;
+- standalone TEST is requested while live DEV is not already on the exact candidate SHA or its deployed Job/Service images do not match the immutable candidate digests.
 
 ## 9. Browser acceptance
 
