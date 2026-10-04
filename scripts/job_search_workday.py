@@ -5,6 +5,7 @@ deduplication and scoring remain in the canonical search engine.
 """
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 import re
 from html.parser import HTMLParser
 from urllib.parse import quote, urlsplit
@@ -173,12 +174,14 @@ def normalize(detail, summary, board, company_name):
     }
 
 
-def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen):
+def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1):
     company_name = str(company_name or "").strip()
     if not company_name:
         raise ValueError("Workday company_name is required")
     if not isinstance(max_postings, int) or max_postings < 1 or max_postings > MAX_POSTINGS:
         raise ValueError(f"max_postings must be between 1 and {MAX_POSTINGS}")
+    if not isinstance(detail_workers, int) or detail_workers < 1 or detail_workers > 8:
+        raise ValueError("detail_workers must be between 1 and 8")
 
     board = parse_career_url(career_url)
     summaries = []
@@ -198,12 +201,20 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen)
         if isinstance(total, int) and offset >= total:
             break
 
-    records = []
-    for summary in summaries[:max_postings]:
+    selected = summaries[:max_postings]
+    for summary in selected:
         if not isinstance(summary, dict):
             raise ValueError("Malformed Workday posting summary")
+
+    def load_record(summary):
         detail = _get_detail(board, summary.get("externalPath"), opener=opener)
-        records.append(normalize(detail, summary, board, company_name))
+        return normalize(detail, summary, board, company_name)
+
+    if detail_workers == 1 or len(selected) < 2:
+        records = [load_record(summary) for summary in selected]
+    else:
+        with ThreadPoolExecutor(max_workers=detail_workers) as pool:
+            records = list(pool.map(load_record, selected))
 
     connector = f"workday:{board['tenant']}:{board['site']}"
     return [engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
