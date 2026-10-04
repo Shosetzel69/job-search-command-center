@@ -1,5 +1,10 @@
 # Claude Production E2E Runbook — historical pre-Phase-7 baseline
 
+Status: HISTORICAL
+Applicability: HISTORICAL_ONLY
+
+> Retained only as Phase 7 / Cloudflare-era evidence. It is not an authorized current Command API deployment or QA procedure. Current deployment authority is `cloudbuild.promotion.yaml` and `docs/environment-provisioning-runbook.md`.
+
 Status: **SUPERSEDED for current Phase 7 final QA**  
 Original date: 2026-09-11
 
