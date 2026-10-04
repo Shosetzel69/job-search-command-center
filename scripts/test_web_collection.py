@@ -200,6 +200,21 @@ class WebTests(unittest.TestCase):
             self.assertIsNone(web.candidate({"url": path, "text": "jobs and careers"}, SOURCE["url"], roots), path)
         self.assertIsNotNone(web.candidate({"url": "/careers/project-manager", "text": "Project Manager"}, SOURCE["url"], roots))
 
+    def test_block_reason_propagates_to_source_execution(self):
+        catalog = {"sources": [{"name": "Blocked source", "url": "https://example.com/jobs", "id": "blocked"}]}
+        plan = orchestration.build_plan(catalog)
+        failed = engine.CollectionResult("web:blocked", "blocked", False, [], 0, "HTTP 403")
+
+        with patch.object(
+            orchestration.web,
+            "collect",
+            return_value=([failed], {"web_outcome": "blocked", "block_reason": "HTTP_ACCESS_DENIED"}),
+        ):
+            orchestration.collect_sources({"jobspipe_mode": "disabled"}, {}, NOW, plan)
+
+        self.assertEqual(plan[0]["outcome"], "blocked")
+        self.assertEqual(plan[0]["block_reason"], "HTTP_ACCESS_DENIED")
+
     def test_all_web_sources_are_scheduled_individually(self):
         catalog = {"sources": [{"name": f"Source {i}", "url": f"https://site{i}.example/jobs"} for i in range(6)]}
         plan = orchestration.build_plan(catalog)
