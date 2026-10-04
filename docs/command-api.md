@@ -1,6 +1,6 @@
 # Command API
 
-Versiune aplicatie: `0.06-dev`
+Versiune aplicatie: `0.07-dev`
 Ultima actualizare: `2026-10-02`
 
 ## Scop
@@ -150,6 +150,7 @@ Protected assets includ:
 - `jobs.json`;
 - `run-status.json`;
 - `run-history.json`;
+- `promotion-status.json`;
 - `search-config.json`;
 - `sources.json`;
 - `source-categories.json`;
@@ -163,7 +164,7 @@ Reguli:
 - `cache-control: no-store`;
 - `x-content-type-options: nosniff`.
 
-`search-state.json` ramane intern.
+`promotion-status.json` este operational, ADMIN-only si citit din runtime-ul environment-ului; nu este release authority si nu contine secrete.\n\n`search-state.json` ramane intern.
 
 ## Configuratie
 
