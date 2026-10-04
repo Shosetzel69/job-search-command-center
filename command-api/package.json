@@ -17,6 +17,7 @@
     "db:provision-runtime": "node scripts/db-provision-runtime.mjs",
     "db:nile-tenant-probe": "node scripts/db-nile-tenant-probe.mjs",
     "db:nile-contract-evidence": "node scripts/db-nile-contract-evidence.mjs",
+    "db:nile-migrate-evidence": "node scripts/db-nile-migrate-evidence.mjs",
     "check:tenant-boundary": "node scripts/check-tenant-boundary.mjs",
     "db:nile-dev-evidence": "node scripts/db-nile-dev-evidence.mjs"
   },
