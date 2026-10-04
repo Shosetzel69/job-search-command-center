@@ -9,7 +9,7 @@
     "dev": "wrangler dev",
     "test": "node --test test/*.test.mjs",
     "check": "wrangler deploy --dry-run --outdir dist",
-    "deploy": "wrangler deploy",
+    "deploy": "node scripts/retired-cloudflare-deploy.mjs",
     "build:identity": "node scripts/write-build-identity.mjs",
     "db:readiness": "node scripts/db-readiness.mjs",
     "db:migrate": "node scripts/db-migrate.mjs",
