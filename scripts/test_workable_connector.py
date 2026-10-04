@@ -67,6 +67,28 @@ class WorkableTests(unittest.TestCase):
             self.assertEqual(orchestration.collect_ats(item), expected)
             collect.assert_called_once_with("qualcogroup", "Qualco Group / Quento")
 
+    def test_workable_executes_through_source_orchestration(self):
+        source = {
+            "id": "qualco",
+            "name": "Qualco Group / Quento",
+            "url": "https://apply.workable.com/qualcogroup/",
+            "active": True,
+        }
+        plan = orchestration.build_plan({"sources": [source]})
+        expected = [engine.CollectionResult(
+            "workable:qualcogroup", "public_account", True,
+            [{"id": "job-1", "job_title": "Project Manager"}], 1
+        )]
+        with patch.object(orchestration.workable, "collect", return_value=expected):
+            results, _, _ = orchestration.collect_sources(
+                {"jobspipe_mode": "disabled"}, {}, __import__("datetime").datetime(
+                    2026, 10, 4, tzinfo=__import__("datetime").timezone.utc
+                ), plan, run_id="test-workable"
+            )
+        self.assertEqual(len(results), 1)
+        self.assertEqual(plan[0]["outcome"], "success")
+        self.assertEqual(plan[0]["records"], 1)
+
     def test_invalid_slug_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "subdomain"):
             workable.collect("../bad", "Example", opener=Mock())
