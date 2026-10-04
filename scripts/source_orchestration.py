@@ -439,7 +439,10 @@ def collect_ats(item):
     if connector == "smartrecruiters":
         return smartrecruiters.collect(route["company_identifier"])
     if connector == "workday":
-        return workday.collect(route["career_url"], company)
+        return workday.collect(
+            route["career_url"], company,
+            detail_workers=route.get("detail_workers", 4),
+        )
     if connector == "greenhouse":
         return greenhouse.collect(route["board_token"], company)
     if connector == "ashby":
