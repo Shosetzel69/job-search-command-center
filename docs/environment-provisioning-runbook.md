@@ -48,10 +48,12 @@ The promotion pipeline:
 
 1. receives the exact Git SHA;
 2. resolves/promotes immutable Service and Job artifacts;
-3. deploys the target Cloud Run Service/Job;
-4. verifies `/health`;
-5. verifies `/health/db`;
-6. emits promotion evidence tied to the exact candidate.
+3. provisions/verifies runtime seed;
+4. deploys and executes the environment DB migration Job from the exact candidate Service digest;
+5. verifies candidate migration versions/checksums, required schema and DB privilege readiness;
+6. deploys the target Cloud Run application Job/Service;
+7. verifies IAM, traffic, `/health`, `/health/db` and auth readiness;
+8. emits promotion evidence and a terminal machine-readable checklist tied to the exact candidate.
 
 Repository-controlled Cloudflare Command API mutation paths are fail-closed.
 
@@ -93,6 +95,8 @@ For every supported GCP promotion verify at minimum:
 - `/health.environment` matches the target;
 - `/health.source_sha` equals the requested immutable candidate;
 - `/health/db` reports the expected environment database;
+- candidate DB migration/schema readiness is PASS;
+- `promotion-status.json` is terminal PASS with no incomplete step;
 - functional acceptance required by `docs/software-delivery-lifecycle.md` is completed.
 
 A successful legacy Cloudflare request is not evidence for the migrated Command API environment.
@@ -112,6 +116,10 @@ DEV/TEST rollback uses the GCP/Cloud Run artifact and revision model defined by 
 Cloudflare is not an authorized Command API rollback target.
 
 PROD rollback/deployment remains blocked until the approved GCP PROD procedure defines its immutable rollback anchors and owner gate.
+
+## Executable checklist
+
+The complete ordered component plan is `docs/testing/gcp-promotion-checklist.md`. The UI-visible runtime checklist is updated by the same promotion path and is ADMIN-only. `/health/db` alone is never DB release readiness.
 
 ## Historical reference
 
