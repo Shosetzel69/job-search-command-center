@@ -65,10 +65,11 @@ jobs:
           PROD_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
           PROD_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           PROD_FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          PROD_NILE_DATABASE_URL: ${{ secrets.NILE_DATABASE_URL }}
         shell: bash
         run: |
           set -euo pipefail
-          for name in PROD_CLOUDFLARE_ACCOUNT_ID PROD_CLOUDFLARE_TOKEN PROD_GITHUB_BOOTSTRAP_TOKEN PROD_GITHUB_RUNTIME_TOKEN PROD_SOURCE_READ_TOKEN PROD_ALLOWED_GOOGLE_SUB PROD_GOOGLE_CLIENT_ID PROD_FRONTEND_ORIGIN; do
+          for name in PROD_CLOUDFLARE_ACCOUNT_ID PROD_CLOUDFLARE_TOKEN PROD_GITHUB_BOOTSTRAP_TOKEN PROD_GITHUB_RUNTIME_TOKEN PROD_SOURCE_READ_TOKEN PROD_ALLOWED_GOOGLE_SUB PROD_GOOGLE_CLIENT_ID PROD_FRONTEND_ORIGIN PROD_NILE_DATABASE_URL; do
             test -n "${!name:-}" || { echo "$name is missing from GitHub Environment prod" >&2; exit 1; }
           done
           test "$PROD_FRONTEND_ORIGIN" = "https://job-search-command-api.job-search-prod.workers.dev" || {

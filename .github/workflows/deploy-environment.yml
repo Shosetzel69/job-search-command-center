@@ -118,6 +118,9 @@ jobs:
           DEV_FRONTEND_ORIGIN: https://dev.example.invalid
           TEST_FRONTEND_ORIGIN: https://test.example.invalid
           PROD_FRONTEND_ORIGIN: https://prod.example.invalid
+          DEV_NILE_DATABASE_URL: postgresql://dev:password@db.example.invalid/jobsearch_dev
+          TEST_NILE_DATABASE_URL: postgresql://test:password@db.example.invalid/jobsearch_test
+          PROD_NILE_DATABASE_URL: postgresql://prod:password@db.example.invalid/jobsearch_prod
         shell: bash
         run: |
           set -euo pipefail
@@ -177,6 +180,8 @@ jobs:
           TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
           DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
           TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
+          DEV_NILE_DATABASE_URL: ${{ inputs.environment == 'dev' && secrets.NILE_DATABASE_URL || '' }}
+          TEST_NILE_DATABASE_URL: ${{ inputs.environment == 'test' && secrets.NILE_DATABASE_URL || '' }}
         shell: bash
         run: |
           set -euo pipefail
@@ -324,6 +329,8 @@ jobs:
           TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
           DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
           TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
+          DEV_NILE_DATABASE_URL: ${{ inputs.environment == 'dev' && secrets.NILE_DATABASE_URL || '' }}
+          TEST_NILE_DATABASE_URL: ${{ inputs.environment == 'test' && secrets.NILE_DATABASE_URL || '' }}
           OIDC_AUDIENCE: jscc-functional-verification
         shell: bash
         run: |
@@ -371,14 +378,23 @@ jobs:
           frontend_origin="$(node -e 'process.stdout.write(String(process.env.FRONTEND_ORIGIN || "").trim().replace(/\/+$/, ""))')"
           test -n "$frontend_origin" || { echo "FRONTEND_ORIGIN is empty after normalization" >&2; exit 1; }
           rm -f promotion-output/health.json
+          expected_database="jobsearch_${{ inputs.environment }}"
           for attempt in 1 2 3 4 5 6 7 8 9 10; do
-            if curl --fail --silent --show-error "$frontend_origin/health" > promotion-output/health-candidate.json; then
-              if jq -e --arg source "$CANDIDATE_SHA" --arg environment "${{ inputs.environment }}"                 '.status == "ok" and .source_sha == $source and .environment == $environment'                 promotion-output/health-candidate.json >/dev/null; then
-                mv promotion-output/health-candidate.json promotion-output/health.json
+            if curl --fail --silent --show-error "$frontend_origin/health" > promotion-output/health-candidate.json \
+              && curl --fail --silent --show-error "$frontend_origin/health/db" > promotion-output/db-health-candidate.json; then
+              if jq -e --arg source "$CANDIDATE_SHA" --arg environment "${{ inputs.environment }}" \
+                    '.status == "ok" and .source_sha == $source and .environment == $environment' \
+                    promotion-output/health-candidate.json >/dev/null \
+                && jq -e --arg environment "${{ inputs.environment }}" --arg database "$expected_database" \
+                    '.status == "ok" and .environment == $environment and .database == $database' \
+                    promotion-output/db-health-candidate.json >/dev/null; then
+                jq -s '.[0] + {database:.[1].database, server_version:.[1].server_version}' \
+                  promotion-output/health-candidate.json promotion-output/db-health-candidate.json \
+                  > promotion-output/health.json
                 break
               fi
             fi
-            echo "Waiting for ${{ inputs.environment }} health propagation to exact candidate (attempt $attempt/10)"
+            echo "Waiting for ${{ inputs.environment }} health + DB propagation to exact candidate (attempt $attempt/10)"
             sleep 3
           done
           test -f promotion-output/health.json || {
@@ -448,6 +464,8 @@ jobs:
           TEST_GOOGLE_CLIENT_ID: ${{ inputs.environment == 'test' && vars.GOOGLE_CLIENT_ID || '' }}
           DEV_FRONTEND_ORIGIN: ${{ inputs.environment == 'dev' && vars.FRONTEND_ORIGIN || '' }}
           TEST_FRONTEND_ORIGIN: ${{ inputs.environment == 'test' && vars.FRONTEND_ORIGIN || '' }}
+          DEV_NILE_DATABASE_URL: ${{ inputs.environment == 'dev' && secrets.NILE_DATABASE_URL || '' }}
+          TEST_NILE_DATABASE_URL: ${{ inputs.environment == 'test' && secrets.NILE_DATABASE_URL || '' }}
         shell: bash
         run: |
           set -euo pipefail

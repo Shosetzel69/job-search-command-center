@@ -47,6 +47,12 @@ function normalizeHealth(health, environment, candidateSha) {
     throw new Error(`${environment.toUpperCase()} health source_sha does not match CANDIDATE_SHA`);
   }
 
+  const expectedDatabase = `jobsearch_${environment}`;
+  const database = requireText(health.database, `${environment}.health.database`);
+  if (database !== expectedDatabase) {
+    throw new Error(`${environment.toUpperCase()} health database must be ${expectedDatabase}`);
+  }
+
   return {
     environment,
     source_sha: sourceSha,
@@ -54,6 +60,8 @@ function normalizeHealth(health, environment, candidateSha) {
     runtime_ref: requireText(health.runtime_ref, `${environment}.health.runtime_ref`),
     runtime_data_sha: requireSha(health.runtime_data_sha, `${environment}.health.runtime_data_sha`),
     search_mode: requireText(health.search_mode, `${environment}.health.search_mode`),
+    database,
+    server_version: requireText(health.server_version, `${environment}.health.server_version`),
   };
 }
 

@@ -30,6 +30,7 @@ async function main() {
 
   const results = {
     status:'EVIDENCE_COLLECTED',
+    advisory_lock_plus_shared_write_tx:null,
     shared_profile_fk_to_tenants:null,
     tenant_control_plus_shared_write_tx:null,
     tenant_init_separate_tx:null,
@@ -51,6 +52,24 @@ async function main() {
         status text NOT NULL
       )
     `);
+
+    // P0. Exact first shared provisioning shape: advisory xact lock followed by
+    // a write to a shared table, with no tenant context.
+    try {
+      const advisoryUser = randomUUID();
+      await client.query('BEGIN');
+      await client.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-provision'))`);
+      await client.query(
+        'INSERT INTO __jscc_user_probe(user_id, status) VALUES ($1, $2)',
+        [advisoryUser, 'ACTIVE'],
+      );
+      await client.query('COMMIT');
+      results.advisory_lock_plus_shared_write_tx = true;
+    } catch (error) {
+      await safeRollback(client);
+      results.advisory_lock_plus_shared_write_tx = false;
+      results.details.advisory_lock_plus_shared_write_tx = compactError(error);
+    }
 
     // A. Can a shared profile physically reference built-in tenants?
     try {

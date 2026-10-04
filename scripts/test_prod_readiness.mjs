@@ -20,6 +20,7 @@ test('PROD readiness uses environment-scoped credential names', () => {
     'secrets.GH_RUNTIME_TOKEN',
     'secrets.SOURCE_READ_TOKEN',
     'secrets.ALLOWED_GOOGLE_SUB',
+    'secrets.NILE_DATABASE_URL',
     'vars.CLOUDFLARE_ACCOUNT_ID',
     'vars.GOOGLE_CLIENT_ID',
     'vars.FRONTEND_ORIGIN',

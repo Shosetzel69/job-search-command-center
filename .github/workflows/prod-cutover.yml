@@ -96,7 +96,12 @@ jobs:
             echo "verify-deployed-status is post-deploy verification only: requested source/runtime is not currently deployed. Use PROD Readiness (Non-Mutating) before cutover." >&2
             exit 1
           fi
-          echo "Already-deployed PROD identity verified for $SOURCE_SHA."
+          db_health="$(curl --fail --silent --show-error "$FRONTEND_ORIGIN/health/db")"
+          jq -e '.status == "ok" and .environment == "prod" and .database == "jobsearch_prod"' <<<"$db_health" >/dev/null || {
+            echo "verify-deployed-status database binding is not jobsearch_prod" >&2
+            exit 1
+          }
+          echo "Already-deployed PROD identity and database binding verified for $SOURCE_SHA."
 
   prod-promotion:
     if: ${{ inputs.action != 'verify-deployed-status' }}
@@ -417,6 +422,7 @@ jobs:
           PROD_ALLOWED_GOOGLE_SUB: ${{ secrets.ALLOWED_GOOGLE_SUB }}
           PROD_GOOGLE_CLIENT_ID: ${{ vars.GOOGLE_CLIENT_ID }}
           PROD_FRONTEND_ORIGIN: ${{ vars.FRONTEND_ORIGIN }}
+          PROD_NILE_DATABASE_URL: ${{ secrets.NILE_DATABASE_URL }}
           OIDC_AUDIENCE: jscc-functional-verification
         shell: bash
         run: |
