@@ -72,7 +72,11 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         expected = [engine.CollectionResult("workday:thales:Careers", "public_cxs", True, [], 0)]
         with patch.object(orchestration.workday, "collect", return_value=expected) as collect:
             self.assertEqual(orchestration.collect_ats(item), expected)
-            collect.assert_called_once_with("https://thales.wd3.myworkdayjobs.com/Careers", "Thales")
+            collect.assert_called_once_with(
+            "https://thales.wd3.myworkdayjobs.com/Careers",
+            "Thales",
+            detail_workers=4,
+        )
 
 
 if __name__ == "__main__":
