@@ -22,6 +22,7 @@ import job_search_smartrecruiters as smartrecruiters
 import job_search_traefik as traefik
 import job_search_web as web
 import job_search_workday as workday
+import job_search_workable as workable
 import job_search_optimized as optimized
 import shared_corpus_repository as shared_corpus
 import job_search_public_boards as public_boards
@@ -453,6 +454,8 @@ def collect_ats(item):
         return breezyhr.collect(route["tenant"], company)
     if connector == "pinpoint":
         return pinpoint.collect(route["subdomain"], company)
+    if connector == "workable":
+        return workable.collect(route["subdomain"], company)
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
