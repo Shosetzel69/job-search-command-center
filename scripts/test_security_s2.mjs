@@ -32,9 +32,11 @@ test('fine-grained PAT verification uses repository boundaries instead of accoun
 
 test('bootstrap Worker credentials are configured before deployed protected-data verification', () => {
   const deployAt = provision.indexOf('const runtimeDataSha = deployWorker(runtime)');
+  const dbConfigureAt = provision.indexOf('configureDatabaseRuntimeSecret(runtime)');
   const configureAt = provision.indexOf('if (configureBootstrapSecrets) configureBootstrapRuntimeSecrets(runtime)');
   const functionalAt = provision.indexOf('verifyProtectedFunctionalVisibility(runtime, reconciliation');
-  assert.ok(deployAt > -1 && configureAt > deployAt && functionalAt > configureAt);
+  assert.ok(deployAt > -1 && dbConfigureAt > deployAt && configureAt > dbConfigureAt && functionalAt > configureAt);
   assert.match(provision, /wrangler', 'secret', 'put', 'GITHUB_TOKEN'/);
   assert.match(provision, /wrangler', 'secret', 'put', 'ALLOWED_GOOGLE_SUB'/);
+  assert.match(provision, /wrangler', 'secret', 'put', 'NILE_DATABASE_URL'/);
 });
