@@ -170,6 +170,29 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["company"],"Worldline")
         self.assertIn("Franta",rows[0]["countries"])
 
+    def test_worldline_falls_back_to_rendered_rmk_and_paginates(self):
+        static_html=b"<html><body><div>Results 1 - 50 of 51</div></body></html>"
+        first_page="<table>" + "".join(
+            f'<tr><td><a href="/job/City-Role-{i}/{300000+i}/">Role {i}</a></td>'
+            f'<td>Bucharest, RO</td><td>Oct 04, 2026</td></tr>'
+            for i in range(50)
+        ) + "</table>"
+        second_page='''<table><tr>
+          <td><a href="/job/Paris-Delivery-Manager/399999/">Delivery Manager</a></td>
+          <td>Paris, FR</td><td>Oct 04, 2026</td>
+        </tr></table>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",static_html)), \
+             patch.object(boards.browser,"render",side_effect=[
+                 ("https://jobs.worldline.com/viewalljobs/",first_page,{"browser_status":"rendered"}),
+                 ("https://jobs.worldline.com/viewalljobs/50/",second_page,{"browser_status":"rendered"}),
+             ]) as render:
+            rows=boards._worldline("https://jobs.worldline.com/viewalljobs/")
+        self.assertEqual(len(rows),51)
+        self.assertEqual(render.call_count,2)
+        self.assertTrue(any(row["job_title"]=="Delivery Manager" for row in rows))
+        self.assertTrue(any("Romania" in row["countries"] for row in rows))
+        self.assertTrue(any("Franta" in row["countries"] for row in rows))
+
     def test_nato_taleo_parser_extracts_public_vacancy_rows(self):
         payload={
             "requisitionList":[{
