@@ -11,6 +11,9 @@ const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'
 const commandPackage = JSON.parse(readFileSync(resolve(ROOT, 'command-api/package.json'), 'utf8'));
 const runtimeTemplate = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
 const bridgePackage = JSON.parse(readFileSync(resolve(ROOT, 'ai-github-bridge/package.json'), 'utf8'));
+const buildTrigger = readFileSync(resolve(ROOT, 'command-api/BUILD_TRIGGER.md'), 'utf8');
+const environmentRunbook = readFileSync(resolve(ROOT, 'docs/environment-provisioning-runbook.md'), 'utf8');
+const deliveryLifecycle = readFileSync(resolve(ROOT, 'docs/software-delivery-lifecycle.md'), 'utf8');
 
 test('legacy environment workflow cannot dispatch Command API bootstrap/deploy', () => {
   assert.match(environmentWorkflow, /options: \[validate, status, isolation-test, prod-preflight\]/);
@@ -44,4 +47,16 @@ test('Command API local deploy and legacy PROD runtime redeploy are retired', ()
 
 test('Cloudflare retirement is scoped to Command API and does not disable ai-github-bridge', () => {
   assert.equal(bridgePackage.scripts.deploy, 'wrangler deploy');
+});
+
+
+test('current Command API deployment documentation is GCP-only and legacy Cloudflare is retired', () => {
+  for (const doc of [buildTrigger, environmentRunbook, deliveryLifecycle]) {
+    assert.match(doc, /cloudbuild\.promotion\.yaml/);
+    assert.match(doc, /Cloudflare deployment (?:of the \*\*JSCC Command API\*\* is retired|prohibited)|Cloudflare Command API.*retired|Cloudflare.*not an authorized/i);
+    assert.match(doc, /ai-github-bridge/);
+  }
+  assert.doesNotMatch(buildTrigger, /Deploy command:\s*`npx wrangler versions upload`/);
+  assert.match(environmentRunbook, /Command API PROD[\s\S]*blocked until an approved GCP PROD promotion path exists/);
+  assert.match(deliveryLifecycle, /GCP PROD promotion[\s\S]*blocked until implemented\/approved/);
 });
