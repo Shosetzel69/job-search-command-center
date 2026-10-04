@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 
-import { CANDIDATE_MANAGED_DATA_FILES, INTERNAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
+import { CANDIDATE_MANAGED_DATA_FILES, INTERNAL_DATA_FILES, OPERATIONAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import commandApi, { authorizeGithubOidcPayload, authorizeGooglePayload, protectedRuntimePath, readProtectedRuntimeData, validateUserConfigPatch, verifyGithubActionsOidcToken } from '../src/index.js';
 import secureEntry, { fullSearchAllowed } from '../src/secure-entry.js';
 import { readFileSync } from 'node:fs';
@@ -22,7 +22,7 @@ const env = {
   ALLOWED_GOOGLE_SUB: 'allowed-test-user',
 };
 
-const protectedDataPaths = PROTECTED_DATA_FILES.map(file => `/data/${file}`);
+const protectedDataPaths = [...PROTECTED_DATA_FILES, ...OPERATIONAL_DATA_FILES].map(file => `/data/${file}`);
 const nomenclatures = JSON.parse(readFileSync(resolve(process.cwd(), '../data/nomenclatures.json'), 'utf8'));
 
 
