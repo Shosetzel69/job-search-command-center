@@ -9,6 +9,7 @@ test('promotion checklist is ADMIN-visible and polls the protected status artifa
   assert.match(main, /\/data\/promotion-status\.json/);
   assert.match(main, /auth\.role==='ADMIN'&&<PromotionStatusPanel/);
   assert.match(main, /setInterval\(poll,5000\)/);
+  assert.match(main, /payload\\?\\.status==='QUEUED'\\|\\|payload\\?\\.status==='IN_PROGRESS'/);
   assert.match(panel, /data-testid="promotion-status"/);
   assert.match(panel, /Checklist promovare/);
   assert.match(panel, /step\.description/);
