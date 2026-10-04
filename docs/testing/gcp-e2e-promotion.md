@@ -137,7 +137,7 @@ Evidence includes:
 - DB health PASS;
 - seed manifest PASS.
 
-TEST promotion fails unless DEV evidence exists and verifies for the exact same candidate SHA.
+TEST promotion fails unless DEV evidence exists and verifies the exact same candidate SHA **and the exact same Job/Service image digests** that TEST is about to deploy.
 
 For `_TARGET=dev-test`, DEV evidence is produced by the DEV promotion earlier in the same build. For `_TARGET=test`, `scripts/gcp/capture_live_promotion_evidence.sh` creates equivalent evidence from read-only checks against the already deployed DEV environment; it does not deploy, update IAM, create buckets or write runtime seed objects. TEST itself uses verify-only seed mode so no candidate-adjacent data is synthesized from a newer control-plane checkout.
 
