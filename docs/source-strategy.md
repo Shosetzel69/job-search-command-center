@@ -1,7 +1,7 @@
 # Strategia surselor
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-27`
+Ultima actualizare: `2026-10-04`
 
 ## 1. Principiu
 
@@ -212,6 +212,8 @@ Nu este folosit pentru bypass robots, HTTP 401/403/429, login obligatoriu sau CA
 - `error`.
 
 `coverage_complete=false` inseamna ca collectorul generic nu garanteaza acoperire exhaustiva.
+
+Atingerea limitei intentionate de pagini/timp nu transforma singura o extractie valida in `partial`; acoperirea neexhaustiva ramane vizibila prin `coverage_complete=false` si `discovered_pages_complete=false`. `partial` ramane rezervat unei colectari cu rezultate valide dar si cu erori reale de fetch/parse/browser sau payload malformed.
 
 Lipsa rezultatelor nu demonstreaza lipsa joburilor.
 
