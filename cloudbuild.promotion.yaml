@@ -10,7 +10,7 @@ steps:
       - -ceu
       - |
         [[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "_GIT_SHA must be a full lowercase SHA" >&2; exit 2; }
-        [[ "${_TARGET}" == "dev" || "${_TARGET}" == "dev-test" ]] || { echo "_TARGET must be dev or dev-test" >&2; exit 2; }
+        [[ "${_TARGET}" == "dev" || "${_TARGET}" == "test" || "${_TARGET}" == "dev-test" ]] || { echo "_TARGET must be dev, test or dev-test" >&2; exit 2; }
         if [[ -n "${COMMIT_SHA:-}" ]]; then
           [[ "${COMMIT_SHA}" == "${_GIT_SHA}" ]] || { echo "Cloud Build commit identity mismatch" >&2; exit 2; }
         fi
@@ -73,7 +73,11 @@ steps:
     args:
       - -ceu
       - |
-        bash scripts/gcp/promote.sh dev "${_GIT_SHA}"
+        if [[ "${_TARGET}" == "dev" || "${_TARGET}" == "dev-test" ]]; then
+          bash scripts/gcp/promote.sh dev "${_GIT_SHA}"
+        else
+          echo "DEV promotion not requested"
+        fi
 
   - id: promote-test
     name: gcr.io/cloud-builders/gcloud
@@ -81,7 +85,10 @@ steps:
     args:
       - -ceu
       - |
-        if [[ "${_TARGET}" == "dev-test" ]]; then
+        if [[ "${_TARGET}" == "test" ]]; then
+          bash scripts/gcp/capture_live_promotion_evidence.sh dev "${_GIT_SHA}"
+          bash scripts/gcp/promote.sh test "${_GIT_SHA}" "artifacts/gcp-promotion/dev-${_GIT_SHA}.json"
+        elif [[ "${_TARGET}" == "dev-test" ]]; then
           bash scripts/gcp/promote.sh test "${_GIT_SHA}" "artifacts/gcp-promotion/dev-${_GIT_SHA}.json"
         else
           echo "TEST promotion not requested"
