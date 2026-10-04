@@ -291,6 +291,23 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Belgia",rows[0]["countries"])
         self.assertIn("/job_display/297045/",rows[0]["source_url"])
 
+    def test_societe_generale_extracts_complete_public_job_links(self):
+        html='''<section>
+          <a href="/en/job-offers/project-manager-with-french-26000CM7-en">Project Manager with French</a>
+          <div>Bucuresti, Romania Permanent contract Innovation / Project / Organization Hybrid</div>
+          <a href="/en/job-offers/data-engineer-26000IP3-en">Data Engineer</a>
+          <div>Bucuresti, Romania Permanent contract IT (Information Technology)</div>
+        </section>'''
+        fake_client=__import__("unittest").mock.Mock()
+        fake_client.get.return_value=("https://careers.societegenerale.com/en/Technical/all-job-offers",html)
+        with patch.object(boards,"PublicClient",return_value=fake_client):
+            rows=boards._socgen("https://careers.societegenerale.com/en/Technical/all-job-offers")
+        self.assertEqual(len(rows),2)
+        by_title={row["job_title"]:row for row in rows}
+        self.assertIn("Romania",by_title["Project Manager with French"]["countries"])
+        self.assertTrue(by_title["Project Manager with French"]["remote"])
+        self.assertIn("26000CM7",by_title["Project Manager with French"]["source_url"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
