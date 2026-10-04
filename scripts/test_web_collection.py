@@ -165,10 +165,28 @@ class WebTests(unittest.TestCase):
         self.assertFalse(engine.normalize_job_geography(record, True)[3])
 
     def test_captcha_and_robots_are_blocked_without_bypass(self):
-        for page in [transport.FetchError("Disallowed by robots.txt", "blocked"), "<title>Just a moment...</title>"]:
+        cases = [
+            (transport.FetchError("Disallowed by robots.txt", "blocked", block_reason="ROBOTS_DISALLOWED"),
+             "ROBOTS_DISALLOWED"),
+            ("<title>Just a moment...</title>", "BOT_CHALLENGE"),
+        ]
+        for page, expected_reason in cases:
             results, details = web.collect(SOURCE, {}, NOW, FakeClient({SOURCE["url"]: page}))
             self.assertEqual(details["web_outcome"], "blocked")
+            self.assertEqual(details["block_reason"], expected_reason)
             self.assertFalse(any(result.ok for result in results))
+
+    def test_authentication_page_has_structured_block_reason(self):
+        login_source = {**SOURCE, "url": "https://example.com/login"}
+        results, details = web.collect(
+            login_source,
+            {},
+            NOW,
+            FakeClient({login_source["url"]: '<input type="password"><h1>Sign in</h1>'}),
+        )
+        self.assertEqual(details["web_outcome"], "blocked")
+        self.assertEqual(details["block_reason"], "AUTHENTICATION_PAGE")
+        self.assertFalse(any(result.ok for result in results))
 
     def test_links_remain_in_scope_and_ats_links_can_be_followed(self):
         roots = {"example.com"}
@@ -217,12 +235,14 @@ class TransportTests(unittest.TestCase):
 
     def test_unsafe_url_and_dns_addresses_are_rejected(self):
         for url in ("http://127.0.0.1/", "http://169.254.169.254/latest", "https://localhost/", "http://[::1]/", "https://user:pass@example.com/", "file:///etc/passwd", "https://example.com:8080/"):
-            with self.assertRaises(transport.FetchError):
+            with self.assertRaises(transport.FetchError) as caught:
                 transport.public_url(url)
+            self.assertEqual(caught.exception.block_reason, "UNSAFE_URL")
         for address in ("10.1.2.3", "127.0.0.1", "169.254.169.254", "::1"):
             with patch.object(socket, "getaddrinfo", return_value=[(socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 443))]):
-                with self.assertRaises(transport.FetchError):
+                with self.assertRaises(transport.FetchError) as caught:
                     transport.public_addresses("example.com", 443)
+            self.assertEqual(caught.exception.block_reason, "UNSAFE_DNS")
 
     def test_redirect_to_private_address_is_never_requested(self):
         client = transport.PublicClient(time.monotonic() + 30)
@@ -234,8 +254,9 @@ class TransportTests(unittest.TestCase):
     def test_robots_disallow_prevents_page_request(self):
         client = transport.PublicClient(time.monotonic() + 30)
         with patch.object(transport, "request_once", return_value=(200, {}, b"User-agent: *\nDisallow: /private\n")) as request:
-            with self.assertRaises(transport.FetchError):
+            with self.assertRaises(transport.FetchError) as caught:
                 client.get("https://example.com/private/jobs")
+            self.assertEqual(caught.exception.block_reason, "ROBOTS_DISALLOWED")
             self.assertEqual(request.call_count, 1)
             self.assertTrue(request.call_args[0][0].endswith("robots.txt"))
 
@@ -257,7 +278,24 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(caught.exception.status_code, 403)
         self.assertEqual(caught.exception.requested_url, "https://example.com/jobs")
         self.assertEqual(caught.exception.final_url, "https://example.com/jobs")
+        self.assertEqual(caught.exception.block_reason, "HTTP_ACCESS_DENIED")
         self.assertEqual(client.last_status, 403)
+
+    def test_http_block_reasons_are_structured(self):
+        reasons = {
+            401: "HTTP_AUTH_REQUIRED",
+            403: "HTTP_ACCESS_DENIED",
+            429: "HTTP_RATE_LIMITED",
+        }
+        for status, expected_reason in reasons.items():
+            client = transport.PublicClient(time.monotonic() + 30)
+            with patch.object(client, "policy", return_value=0.5), patch.object(
+                transport, "request_once", return_value=(status, {}, b"")
+            ):
+                with self.assertRaises(transport.FetchError) as caught:
+                    client.get("https://example.com/jobs")
+            self.assertEqual(caught.exception.kind, "blocked")
+            self.assertEqual(caught.exception.block_reason, expected_reason)
 
     def test_tcp_uses_validated_ip_and_tls_uses_original_hostname(self):
         sock, context = MagicMock(), MagicMock()
