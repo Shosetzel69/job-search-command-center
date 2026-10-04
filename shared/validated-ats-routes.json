@@ -198,6 +198,63 @@
       "connector": "pinpoint",
       "subdomain": "safetywing",
       "enabled": true
+    },
+    "ING Careers": {
+      "connector": "workday",
+      "career_url": "https://ing.wd3.myworkdayjobs.com/ICSGBLCOR",
+      "enabled": true
+    },
+    "Deutsche Bank": {
+      "connector": "workday",
+      "career_url": "https://db.wd3.myworkdayjobs.com/DBWebsite",
+      "enabled": true
+    },
+    "DXC Technology": {
+      "connector": "workday",
+      "career_url": "https://dxctechnology.wd1.myworkdayjobs.com/DXCJobs",
+      "enabled": true
+    },
+    "NTT DATA Romania": {
+      "connector": "workday",
+      "career_url": "https://nttlimited.wd3.myworkdayjobs.com/NTT_Careers",
+      "enabled": true
+    },
+    "Storyblok": {
+      "connector": "greenhouse",
+      "board_token": "storyblok2",
+      "enabled": true
+    },
+    "Kong": {
+      "connector": "ashby",
+      "board_name": "kong",
+      "enabled": true
+    },
+    "LocalStack": {
+      "connector": "ashby",
+      "board_name": "localstack",
+      "enabled": true
+    },
+    "Contentsquare": {
+      "connector": "lever",
+      "site": "contentsquare",
+      "region": "global",
+      "enabled": true
+    },
+    "Talan Belgium / Luxembourg": {
+      "connector": "smartrecruiters",
+      "company_identifier": "talan",
+      "enabled": true
+    },
+    "Toptal": {
+      "connector": "lever",
+      "site": "toptal",
+      "region": "global",
+      "enabled": true
+    },
+    "GlobalLogic": {
+      "connector": "smartrecruiters",
+      "company_identifier": "GlobalLogic4",
+      "enabled": true
     }
   }
 }
