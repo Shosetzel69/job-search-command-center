@@ -11,6 +11,7 @@ STEPS = [
     ("migration-job", "DB migration Job", "cloud-run"),
     ("db-migrations", "Candidate DB migrations", "postgresql"),
     ("schema-readiness", "Schema/checksum readiness", "postgresql"),
+    ("db-privileges", "Runtime DB privilege readiness", "postgresql"),
     ("application-job", "Application search Job", "cloud-run"),
     ("job-iam", "Service -> Job IAM", "iam"),
     ("service", "Command API Service", "cloud-run"),
@@ -135,6 +136,10 @@ elif args.action == "mark":
     save(path, payload, args.project, args.bucket)
 else:
     payload = load(path)
+    if args.status == "PASS":
+        incomplete = [step["id"] for step in payload["steps"] if step["state"] not in ("PASS", "N/A", "SKIPPED")]
+        if incomplete:
+            raise SystemExit(f"Cannot mark promotion PASS with incomplete steps: {' '.join(incomplete)}")
     payload["status"] = args.status
     payload["completed_at"] = now()
     payload["error"] = sanitize(args.error) if args.error else None
