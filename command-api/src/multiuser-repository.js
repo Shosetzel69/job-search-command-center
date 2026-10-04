@@ -234,10 +234,14 @@ function bootstrapSystemConfig(bootstrapSeed) {
 export async function ownerBootstrapPending(subject, env = process.env, { db = getPool(env) } = {}) {
   const bootstrapAdmin = String(env.BOOTSTRAP_ADMIN_GOOGLE_SUB || env.ALLOWED_GOOGLE_SUB || '').trim();
   if (!bootstrapAdmin || String(subject || '').trim() !== bootstrapAdmin) return false;
-  const result = await db.query(
-    'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton=true',
-  );
-  return !result.rows?.[0]?.owner_bootstrapped_at;
+  try {
+    const result = await db.query(
+      'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton=true',
+    );
+    return !result.rows?.[0]?.owner_bootstrapped_at;
+  } catch (error) {
+    throw devProvisioningStageError(error, 'owner-bootstrap-read', env);
+  }
 }
 
 async function assertAdmissionAllowed(tx, env) {
@@ -273,6 +277,7 @@ async function refreshGoogleIdentityMetadata(db, subject, payload) {
 
 function devProvisioningStageError(error, stage, env) {
   if (String(env.APP_ENV || '').trim().toLowerCase() !== 'dev') return error;
+  if (/^\[provision-stage:[^\]]+\]/.test(String(error?.message || ''))) return error;
   return Object.assign(
     new Error(`[provision-stage:${stage}] ${error?.message || 'Account provisioning failed'}`),
     {
@@ -436,40 +441,62 @@ async function finalizeSharedProvisioning(row, bootstrapPending, bootstrapSeed, 
 export async function resolveOrProvisionGoogleIdentity(payload, env = process.env, { db = getPool(env), bootstrapSeed = null } = {}) {
   const subject = String(payload?.sub || '').trim();
   if (!subject) throw httpError('Google subject is required', 401);
+  let stage = 'ready-context-read';
 
-  const ready = await readyContextForIdentity(db, subject).catch(error => {
-    if (error?.message === 'Account provisioning is incomplete') return null;
-    throw error;
-  });
-  if (ready) {
-    await refreshGoogleIdentityMetadata(db, subject, payload);
-    return ready;
-  }
+  try {
+    const ready = await readyContextForIdentity(db, subject).catch(error => {
+      if (error?.message === 'Account provisioning is incomplete') return null;
+      throw error;
+    });
+    if (ready) {
+      stage = 'refresh-ready-identity';
+      await refreshGoogleIdentityMetadata(db, subject, payload);
+      return ready;
+    }
 
-  const current = await accountStateForIdentity(db, subject);
-  if (current?.deletion_started_at) throw httpError('Account deletion is in progress', 403);
-  if (current && current.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
+    stage = 'account-state-read';
+    const current = await accountStateForIdentity(db, subject);
+    if (current?.deletion_started_at) throw httpError('Account deletion is in progress', 403);
+    if (current && current.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
 
-  const provision = current
-    ? {
+    let provision;
+    if (current) {
+      stage = 'owner-bootstrap-read';
+      provision = {
         row:current,
         bootstrapPending:await ownerBootstrapPending(subject, env, { db }),
-      }
-    : await createOrLoadSharedAccount(subject, payload, env, db);
+      };
+    } else {
+      stage = 'shared-account-create';
+      provision = await createOrLoadSharedAccount(subject, payload, env, db);
+    }
 
-  if (provision.row.deletion_started_at) throw httpError('Account deletion is in progress', 403);
-  if (provision.row.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
-  if (!provision.row.profile_id) throw httpError('Account profile is unavailable', 503);
+    if (provision.row.deletion_started_at) throw httpError('Account deletion is in progress', 403);
+    if (provision.row.status !== 'ACTIVE') throw httpError('Account is deactivated', 403);
+    if (!provision.row.profile_id) throw httpError('Account profile is unavailable', 503);
 
-  await ensureTenant(String(provision.row.profile_id), { env, db });
-  await initializePersonalDomain(provision.row, provision.bootstrapPending, bootstrapSeed, env, db);
-  await verifyTenantMapping(String(provision.row.profile_id), { env, db });
-  await finalizeSharedProvisioning(provision.row, provision.bootstrapPending, bootstrapSeed, env, db);
-  await refreshGoogleIdentityMetadata(db, subject, payload);
+    stage = 'ensure-tenant';
+    await ensureTenant(String(provision.row.profile_id), { env, db });
 
-  const context = await readyContextForIdentity(db, subject);
-  if (!context) throw httpError('Provisioned identity could not be resolved', 503);
-  return context;
+    stage = 'initialize-personal-domain';
+    await initializePersonalDomain(provision.row, provision.bootstrapPending, bootstrapSeed, env, db);
+
+    stage = 'verify-tenant-mapping';
+    await verifyTenantMapping(String(provision.row.profile_id), { env, db });
+
+    stage = 'finalize-shared-provisioning';
+    await finalizeSharedProvisioning(provision.row, provision.bootstrapPending, bootstrapSeed, env, db);
+
+    stage = 'refresh-identity';
+    await refreshGoogleIdentityMetadata(db, subject, payload);
+
+    stage = 'ready-context-final';
+    const context = await readyContextForIdentity(db, subject);
+    if (!context) throw httpError('Provisioned identity could not be resolved', 503);
+    return context;
+  } catch (error) {
+    throw devProvisioningStageError(error, stage, env);
+  }
 }
 
 export async function createSession(authContext, env = process.env, { db = getPool(env), now = new Date() } = {}) {
