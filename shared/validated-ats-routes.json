@@ -270,6 +270,11 @@
       "connector": "workday",
       "career_url": "https://ag.wd3.myworkdayjobs.com/Airbus",
       "enabled": true
+    },
+    "Sopra Steria": {
+      "connector": "smartrecruiters",
+      "company_identifier": "SopraSteria1",
+      "enabled": true
     }
   }
 }
