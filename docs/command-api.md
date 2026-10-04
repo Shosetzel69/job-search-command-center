@@ -164,7 +164,9 @@ Reguli:
 - `cache-control: no-store`;
 - `x-content-type-options: nosniff`.
 
-`promotion-status.json` este operational, ADMIN-only si citit din runtime-ul environment-ului; nu este release authority si nu contine secrete.\n\n`search-state.json` ramane intern.
+`promotion-status.json` este operational, ADMIN-only si citit din runtime-ul environment-ului; nu este release authority si nu contine secrete.
+
+`search-state.json` ramane intern.
 
 ## Configuratie
 
