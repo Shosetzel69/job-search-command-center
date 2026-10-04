@@ -15,6 +15,12 @@ function requireDryRun(args, action) {
   if (args.dry_run !== true) throw new Error(`${action} remains dry-run only before Phase 7 cutover`);
 }
 
+function blockLegacyCloudflareCommandApiMutation(action) {
+  throw new Error(
+    `CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED: ${action} is disabled for DEV/TEST/PROD; use cloudbuild.promotion.yaml for GCP promotion`,
+  );
+}
+
 async function main() {
   const args = parseArgs(process.argv.slice(2));
   const command = args._[0];
@@ -41,9 +47,7 @@ async function main() {
     const runtime = resolveEnvironment(manifest, requireEnvironment(args.env), sourceSha);
     assertProdGate(runtime.environment, args.owner_gate);
     if (args.dry_run === true) return printPlan('bootstrap', runtime, bootstrapPlan(runtime));
-    assertPreCutoverLiveGate(runtime.environment, false);
-    await verifyCloudflareCredential(runtime);
-    console.log(JSON.stringify(await provisionEnvironment(runtime), null, 2));
+    blockLegacyCloudflareCommandApiMutation('bootstrap');
     return;
   }
 
@@ -60,9 +64,7 @@ async function main() {
     const runtime = resolveEnvironment(manifest, requireEnvironment(args.env), sourceSha);
     assertProdGate(runtime.environment, args.owner_gate);
     if (args.dry_run === true) return printPlan('deploy', runtime, deployPlan(runtime));
-    assertPreCutoverLiveGate(runtime.environment, false);
-    await verifyCloudflareCredential(runtime);
-    console.log(JSON.stringify(await deployEnvironment(runtime), null, 2));
+    blockLegacyCloudflareCommandApiMutation('deploy');
     return;
   }
 

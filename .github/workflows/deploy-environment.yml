@@ -7,7 +7,7 @@ on:
         description: Environment automation action
         required: true
         type: choice
-        options: [validate, bootstrap, deploy, status, isolation-test, prod-preflight]
+        options: [validate, status, isolation-test, prod-preflight]
       environment:
         description: Explicit target environment
         required: true
@@ -60,6 +60,10 @@ jobs:
         run: |
           set -euo pipefail
           [[ "${{ inputs.source_sha }}" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
+          if [ "${{ inputs.action }}" = "bootstrap" ] || [ "${{ inputs.action }}" = "deploy" ]; then
+            echo "CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED: use cloudbuild.promotion.yaml for GCP promotion" >&2
+            exit 1
+          fi
           if [ "${{ inputs.dry_run }}" != "true" ] && [ "${{ inputs.environment }}" = "prod" ]; then
             echo "Live PROD uses the dedicated permanent promotion workflow" >&2
             exit 1

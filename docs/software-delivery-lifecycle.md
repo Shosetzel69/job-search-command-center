@@ -22,8 +22,28 @@ Deployment functional verification is machine-to-machine and must not depend on 
 - browser/user authentication remains Google Identity Services;
 - DEV/TEST/PROD deployment workflows request a short-lived GitHub Actions OIDC token at run time;
 - the OIDC audience is `jscc-functional-verification`;
-- Worker authorization is restricted to the read-only evidence surface limitata la `GET /data/sources.json`, `GET /data/source-categories.json` si `GET /data/nomenclatures.json` and exact repository/environment/workflow claims;
+- Command API functional-verification authorization is restricted to the read-only evidence surface limitata la `GET /data/sources.json`, `GET /data/source-categories.json` si `GET /data/nomenclatures.json` and exact repository/environment/workflow claims;
 - no GitHub Environment secret containing a Google user ID token is required for release progression.
+
+## 1.2 Command API deployment authority
+
+Current deployment authority is provider-specific and fail-closed:
+
+```text
+Command API DEV / TEST
+  -> cloudbuild.promotion.yaml
+  -> GCP Cloud Run
+
+Command API PROD
+  -> Cloudflare deployment prohibited
+  -> blocked until approved GCP PROD promotion exists
+
+ai-github-bridge
+  -> Cloudflare
+  -> intentionally unchanged
+```
+
+Legacy Cloudflare Command API workflows, Workers Builds, `wrangler deploy` and `wrangler versions upload` are not authorized release paths. Historical Cloudflare procedures are evidence only.
 
 ## 2. Canonical flow
 
@@ -51,7 +71,7 @@ TEST FAIL
   -> TEST retest
 ```
 
-LEGACY stays outside this chain and remains rollback/fallback only until separately retired.
+Retired Cloudflare Command API infrastructure stays outside this chain and is not an authorized deploy or rollback target.
 
 ### 2.1 Multi-wave releases: validation checkpoints and Final Release Candidate
 
@@ -411,36 +431,36 @@ hotfix Issue
 
 Any reduced test scope is explicitly accepted by the owner.
 
-### 10.1 PROD workflow selection
+### 10.1 Current deployment workflow selection
 
-Operational workflow ownership is explicit:
-
-| Intent | Workflow | Action |
+| Intent | Authority | Current state |
 |---|---|---|
-| Pre-cutover, non-mutating PROD readiness | `PROD Readiness (Non-Mutating)` | workflow itself |
-| Deploy reviewed TEST-passed candidate | `PROD promotion` | `deploy` or `bootstrap-deploy` |
-| Verify a candidate/runtime already deployed in PROD | `PROD promotion` | `verify-deployed-status` |
+| Deploy reviewed candidate to DEV | `cloudbuild.promotion.yaml` | enabled |
+| Deploy exact DEV-accepted candidate to TEST | `cloudbuild.promotion.yaml` | enabled |
+| Deploy Command API to PROD | GCP PROD promotion | **blocked until implemented/approved** |
+| Verify an already deployed legacy PROD identity | legacy `PROD promotion` / `verify-deployed-status` | read-only verification only |
 
-`verify-deployed-status` is not a readiness/preflight action. It fails early with guidance when the requested candidate/runtime is not already deployed.
+The legacy PROD workflow no longer authorizes `deploy` or `bootstrap-deploy`. Cloudflare is not a fallback for Command API PROD.
 
-DEV/TEST post-deploy evidence uses a bounded propagation retry and accepts health only when environment and exact `CANDIDATE_SHA` match. Timeout fails closed.
+DEV/TEST post-deploy evidence accepts health only when environment and exact `CANDIDATE_SHA` match. Timeout fails closed.
 
 ## 11. Automation enforcement
 
-The permanent artifact chain is:
+The permanent artifact chain remains candidate-centric, while deployment authority is GCP:
 
 ```text
-DEV deploy
-  -> promotion-dev-pass
-  -> TEST deploy of the same CANDIDATE_SHA
-  -> promotion-test-deployed
+DEV GCP promotion
+  -> DEV PASS evidence
+  -> TEST GCP promotion of the same CANDIDATE_SHA
   -> independent TEST QA
-  -> TEST PASS attestation
-  -> promotion-test-pass
+  -> TEST PASS evidence
   -> integrate candidate into main without identity rewrite
-  -> PROD promotion + owner GO + rollback preflight
+  -> GCP PROD promotion only after that path is implemented/approved
+  -> owner GO + rollback preflight
   -> release-record
 ```
+
+Until GCP PROD promotion exists, the chain stops fail-closed after the pre-PROD gates; it must not fall back to Cloudflare.
 
 Enforced controls:
 - one deployment at a time per environment: `deploy-dev`, `deploy-test`, `deploy-prod`;

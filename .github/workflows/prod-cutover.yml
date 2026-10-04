@@ -7,7 +7,7 @@ on:
         description: PROD action. verify-deployed-status is post-deploy verification only; use PROD Readiness for pre-cutover checks
         required: true
         type: choice
-        options: [bootstrap-deploy, deploy, verify-deployed-status]
+        options: [verify-deployed-status]
       source_sha:
         description: Exact TEST-passed CANDIDATE_SHA
         required: true
@@ -116,6 +116,12 @@ jobs:
       group: deploy-prod
       cancel-in-progress: false
     steps:
+      - name: Block retired Cloudflare Command API promotion
+        shell: bash
+        run: |
+          echo "CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED: PROD Command API deployment is GCP-only; use the canonical GCP promotion path." >&2
+          exit 1
+
       - name: Guard immutable candidate, TEST gate and rollback readiness
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}

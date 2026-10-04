@@ -1,5 +1,10 @@
 # Phase 7 Final Environment QA — DEV / TEST / PROD
 
+Status: HISTORICAL
+Applicability: HISTORICAL_ONLY
+
+> Retained only as Phase 7 / Cloudflare-era evidence. It is not an authorized current Command API deployment or QA procedure. Current deployment authority is `cloudbuild.promotion.yaml` and `docs/environment-provisioning-runbook.md`.
+
 Status: **canonical execution contract for #188**  
 Date: 2026-09-17  
 Parent orchestration: #186  

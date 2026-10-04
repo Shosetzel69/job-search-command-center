@@ -303,35 +303,12 @@ jobs:
         if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
         run: npm --prefix deployment-source/command-api install --ignore-scripts --no-audit --no-fund
 
-      - name: Redeploy PROD with published runtime snapshot
+      - name: Block retired Cloudflare PROD deployment
         if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}
-        working-directory: deployment-source/command-api
-        env:
-          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_TOKEN }}
-          WRANGLER_SEND_METRICS: 'false'
-          SOURCE_SHA: ${{ inputs.source_sha }}
-          APP_ENV: prod
-          TRUSTED_PAYLOAD_BUILD: '1'
-          RUNTIME_DATA_DIR: ${{ github.workspace }}/runtime/data
         shell: bash
         run: |
-          set -euo pipefail
-          runtime_repo_name="${GITHUB_REPOSITORY#*/}"
-          npx wrangler deploy --name "${{ vars.WORKER_NAME || 'job-search-command-api' }}" \
-            --var "APP_ENV:prod" \
-            --var "FRONTEND_ORIGIN:${{ vars.FRONTEND_ORIGIN }}" \
-            --var "GOOGLE_CLIENT_ID:${{ vars.GOOGLE_CLIENT_ID }}" \
-            --var "GITHUB_RUNTIME_OWNER:${GITHUB_REPOSITORY_OWNER}" \
-            --var "GITHUB_RUNTIME_REPO:${runtime_repo_name}" \
-            --var "GITHUB_RUNTIME_REF:main" \
-            --var "GITHUB_WORKFLOW:runtime.yml" \
-            --var "SEARCH_MODE:live" \
-            --var "SEARCH_CONFIG_PATH:data/search-config.json" \
-            --var "SOURCES_PATH:data/sources.json" \
-            --var "SOURCE_CATEGORIES_PATH:data/source-categories.json" \
-            --var "NOMENCLATURES_PATH:data/nomenclatures.json" \
-            --var "APPLICATIONS_PATH:data/applications.json"
+          echo "CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED: JSCC Command API deployment is GCP-only; use cloudbuild.promotion.yaml." >&2
+          exit 1
 
       - name: Verify PROD health after runtime redeploy
         if: ${{ always() && vars.APP_ENV == 'prod' && vars.SEARCH_MODE == 'live' }}

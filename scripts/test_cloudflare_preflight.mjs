@@ -75,15 +75,16 @@ test('Cloudflare preflight uses Worker deployments endpoint and no account-wide 
   assert.doesNotMatch(source, /workers\/scripts\/.*\/settings/);
 });
 
-test('bootstrap and deploy invoke Cloudflare preflight before mutating operations', () => {
+test('legacy bootstrap and deploy fail closed before Cloudflare preflight or mutation', () => {
   const source = readFileSync(resolve(import.meta.dirname, 'environment.mjs'), 'utf8');
-  const bootstrap = source.indexOf("if (command === 'bootstrap')");
-  const bootstrapPreflight = source.indexOf('await verifyCloudflareCredential(runtime);', bootstrap);
-  const bootstrapProvision = source.indexOf('await provisionEnvironment(runtime)', bootstrap);
-  assert.ok(bootstrapPreflight > bootstrap && bootstrapPreflight < bootstrapProvision);
 
-  const deploy = source.indexOf("if (command === 'deploy')");
-  const deployPreflight = source.indexOf('await verifyCloudflareCredential(runtime);', deploy);
-  const deployMutation = source.indexOf('await deployEnvironment(runtime)', deploy);
-  assert.ok(deployPreflight > deploy && deployPreflight < deployMutation);
+  const bootstrap = source.match(/if \(command === 'bootstrap'\) \{[\s\S]*?(?=\n  if \(command === 'bootstrap-all'\))/)?.[0] || '';
+  assert.match(bootstrap, /blockLegacyCloudflareCommandApiMutation\('bootstrap'\)/);
+  assert.doesNotMatch(bootstrap, /verifyCloudflareCredential/);
+  assert.doesNotMatch(bootstrap, /provisionEnvironment/);
+
+  const deploy = source.match(/if \(command === 'deploy'\) \{[\s\S]*?(?=\n  if \(command === 'status'\))/)?.[0] || '';
+  assert.match(deploy, /blockLegacyCloudflareCommandApiMutation\('deploy'\)/);
+  assert.doesNotMatch(deploy, /verifyCloudflareCredential/);
+  assert.doesNotMatch(deploy, /deployEnvironment/);
 });

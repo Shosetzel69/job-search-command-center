@@ -451,14 +451,13 @@ test('DEV/TEST promotion evidence retries bounded propagation and requires exact
   assert.match(workflow, /sleep 3/);
 });
 
-test('PROD workflow distinguishes readiness from post-deploy status verification', () => {
+test('legacy PROD workflow is verify-only after GCP retirement', () => {
   const cutover = readFileSync(resolve(ROOT, '.github/workflows/prod-cutover.yml'), 'utf8');
   const readiness = readFileSync(resolve(ROOT, '.github/workflows/prod-readiness.yml'), 'utf8');
-  assert.match(cutover, /options: \[bootstrap-deploy, deploy, verify-deployed-status\]/);
-  assert.doesNotMatch(cutover, /options: \[bootstrap-deploy, deploy, status\]/);
+  assert.match(cutover, /options: \[verify-deployed-status\]/);
+  assert.doesNotMatch(cutover, /options: \[bootstrap-deploy, deploy,/);
+  assert.match(cutover, /CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED/);
   assert.match(cutover, /post-deploy verification only/);
-  assert.match(cutover, /Use PROD Readiness \(Non-Mutating\) before cutover/);
   assert.match(cutover, /inputs\.action == 'verify-deployed-status'/);
   assert.match(readiness, /name: PROD Readiness \(Non-Mutating\)/);
-  assert.match(readiness, /Phase 6 readiness only/);
 });

@@ -1,5 +1,10 @@
 # PROD Cutover and Rollback Runbook
 
+Status: HISTORICAL
+Applicability: HISTORICAL_ONLY
+
+> Retained only as Phase 7 / Cloudflare-era evidence. It is not an authorized current Command API deployment or QA procedure. Current deployment authority is `cloudbuild.promotion.yaml` and `docs/environment-provisioning-runbook.md`.
+
 Status: Phase 7-specific cutover/rollback record for the initial isolated PROD migration. It is not the generic release lifecycle for future changes.
 
 Permanent delivery process: `docs/software-delivery-lifecycle.md`  
