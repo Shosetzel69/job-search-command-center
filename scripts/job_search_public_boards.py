@@ -541,44 +541,62 @@ def _rmk_jobs(base_url, provider, company):
     return list(records.values())
 
 
-def _atos_date(value):
+
+
+
+def _jobs4it_date(value):
     text = " ".join(str(value or "").split())
-    for fmt in ("%b %d, %Y", "%d %b %Y", "%Y-%m-%d"):
-        try:
-            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).isoformat()
-        except ValueError:
+    match = re.search(
+        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
+        text,
+        re.I,
+    )
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(0), "%B %d, %Y").replace(tzinfo=timezone.utc).isoformat()
+    except ValueError:
+        return None
+
+
+
+
+
+def _atos(base_url):
+    return _rmk_jobs(base_url, "Atos", "Atos")
+
+
+def _jobs4it(base_url):
+    status, _kind, body = _fetch(base_url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Jobs4IT public jobs page HTTP {status}")
+    parser = _Jobs4ItHome()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = {}
+    for href, item in parser.jobs.items():
+        title = item.get("title")
+        if not title:
             continue
-    return None
-
-
-def _jobs4it_date(value):
-    text = " ".join(str(value or "").split())
-    match = re.search(
-        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
-        text,
-        re.I,
-    )
-    if not match:
-        return None
-    try:
-        return datetime.strptime(match.group(0), "%B %d, %Y").replace(tzinfo=timezone.utc).isoformat()
-    except ValueError:
-        return None
-
-
-def _jobs4it_date(value):
-    text = " ".join(str(value or "").split())
-    match = re.search(
-        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
-        text,
-        re.I,
-    )
-    if not match:
-        return None
-    try:
-        return datetime.strptime(match.group(0), "%B %d, %Y").replace(tzinfo=timezone.utc).isoformat()
-    except ValueError:
-        return None
+        context = item.get("context") or title
+        link = urljoin(base_url, href)
+        identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+        countries = _country_names_from_text(context)
+        remote = bool(re.search(r"\bremote\b", context, re.I))
+        location = ", ".join(countries) or ("Remote" if remote else "")
+        employment = []
+        for label in ("Freelance", "Full Time", "Part Time", "Contract", "Permanent", "Temporary", "Internship"):
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I):
+                employment.append(label)
+        record = _record(
+            "UpcoMinds", identity, title, "UpcoMinds", context, link,
+            date_posted=_jobs4it_date(context), location=location,
+            countries=countries, remote=remote, employment_statuses=employment,
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError("Jobs4IT page contained no extractable job links")
+    return list(records.values())
 
 
 def _taleo_post_json(url, payload):
