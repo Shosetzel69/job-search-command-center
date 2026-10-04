@@ -25,6 +25,12 @@ function envLabel(runtime) {
   return String(runtime.environment || 'unknown').toUpperCase();
 }
 
+function blockLegacyCloudflareCommandApiMutation(action) {
+  throw new Error(
+    `CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED: ${action} is disabled for DEV/TEST/PROD; use cloudbuild.promotion.yaml for GCP promotion`,
+  );
+}
+
 function sourceWorkspace() {
   return resolve(String(process.env.SOURCE_WORKSPACE || process.cwd()));
 }
@@ -342,6 +348,7 @@ export async function deployCandidateWithReconciliation(runtime, {
   expectedRuntimeHead = null,
   reconciliationPlanner = null,
 } = {}) {
+  blockLegacyCloudflareCommandApiMutation('deployCandidateWithReconciliation');
   const inputs = requiredLiveReconciliationInputs();
   const gitEnv = githubRuntimeEnv(runtime);
   let reconciliation;
@@ -431,6 +438,7 @@ export async function deployCandidateWithReconciliation(runtime, {
 }
 
 export async function provisionEnvironment(runtime) {
+  blockLegacyCloudflareCommandApiMutation('provisionEnvironment');
   assertPreCutoverLiveGate(runtime.environment, false);
   const created = ensureRuntimeRepository(runtime);
   syncRuntimeFiles(runtime);
@@ -452,6 +460,7 @@ export async function provisionEnvironment(runtime) {
 }
 
 export async function deployEnvironment(runtime) {
+  blockLegacyCloudflareCommandApiMutation('deployEnvironment');
   assertPreCutoverLiveGate(runtime.environment, false);
   const deployment = await deployCandidateWithReconciliation(runtime);
   return {
