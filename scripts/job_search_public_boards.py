@@ -47,6 +47,7 @@ PUBLIC_BOARD_SOURCES = {
     "Societe Generale": {"kind": "socgen", "url": "https://careers.societegenerale.com/en/Technical/all-job-offers"},
     "SoftServe": {"kind": "softserve", "url": "https://career.softserveinc.com/en-us/vacancies/country-romania"},
     "EPAM": {"kind": "epam", "url": "https://careers.epam.com/en/jobs/romania"},
+    "Orange Romania": {"kind": "softgarden_feed", "url": "https://cariere.orange.ro/jobs.feed.json"},
 }
 
 
@@ -100,6 +101,72 @@ def _post_json(url, payload):
     if status!=200:
         raise RuntimeError(f"Public board endpoint HTTP {status}")
     return json.loads(body.decode("utf-8",errors="replace"))
+
+def _softgarden_feed(payload, provider, feed_url):
+    if not isinstance(payload, dict):
+        raise ValueError("Softgarden feed must be a JSON object")
+    elements = payload.get("dataFeedElement") or payload.get("itemListElement") or payload.get("jobs")
+    if not isinstance(elements, list):
+        raise ValueError("Softgarden feed must contain dataFeedElement[]")
+    records = []
+    for index, raw in enumerate(elements):
+        item = raw.get("item") if isinstance(raw, dict) and isinstance(raw.get("item"), dict) else raw
+        if not isinstance(item, dict):
+            continue
+        title = item.get("title") or item.get("name")
+        url = item.get("url") or item.get("sameAs")
+        identifier = item.get("identifier")
+        if isinstance(identifier, dict):
+            identity = identifier.get("value") or identifier.get("name")
+        else:
+            identity = identifier
+        identity = str(identity or url or index)
+        if not title or not url:
+            continue
+
+        company = provider
+        hiring = item.get("hiringOrganization")
+        if isinstance(hiring, dict) and hiring.get("name"):
+            company = str(hiring.get("name"))
+
+        locations = item.get("jobLocation")
+        if isinstance(locations, dict):
+            locations = [locations]
+        locations = locations if isinstance(locations, list) else []
+        location_parts = []
+        countries = []
+        for loc in locations:
+            if not isinstance(loc, dict):
+                continue
+            address = loc.get("address") if isinstance(loc.get("address"), dict) else {}
+            city = str(address.get("addressLocality") or "").strip()
+            region = str(address.get("addressRegion") or "").strip()
+            country_raw = str(address.get("addressCountry") or "").strip()
+            country = None
+            if country_raw:
+                code = engine.COUNTRY_NAME_TO_CODE.get(country_raw.lower()) or (country_raw.upper() if len(country_raw)==2 else None)
+                country = engine.COUNTRY_NAMES.get(code, country_raw) if code else country_raw
+                if country not in countries:
+                    countries.append(country)
+            label = ", ".join(x for x in (city, region, country) if x)
+            if label and label not in location_parts:
+                location_parts.append(label)
+
+        description = plain_text(item.get("description") or item.get("descriptionHtml") or "")
+        job_location_type = str(item.get("jobLocationType") or "").upper()
+        remote = "TELECOMMUTE" in job_location_type or bool(re.search(r"\bremote\b", " ".join(location_parts), re.I))
+        records.append(_record(
+            provider, identity, str(title), company, description or str(title), str(url),
+            date_posted=item.get("datePosted"),
+            location="; ".join(location_parts),
+            countries=countries,
+            remote=remote,
+            employment_statuses=engine.list_values(item.get("employmentType")),
+        ))
+    if not records:
+        raise ValueError(f"{provider} Softgarden feed contained no extractable jobs")
+    return records
+
 
 def _eures(payload):
     if not isinstance(payload,dict) or not isinstance(payload.get("jvs"),list):
@@ -1418,7 +1485,12 @@ def collect(source, config=None):
     if not spec:
         raise ValueError(f"Unsupported public-board source: {name}")
     kind, url = spec["kind"], spec["url"]
-    if kind == "eures":
+    if kind == "softgarden_feed":
+        status, _content_type, body = _fetch(url, "application/json")
+        if status != 200:
+            raise RuntimeError(f"{name} public feed HTTP {status}")
+        records = _softgarden_feed(json.loads(body.decode("utf-8", errors="replace")), name, url)
+    elif kind == "eures":
         payload = _post_json(url, {
             "resultsPerPage": 100, "page": 1, "sortSearch": "MOST_RECENT", "keywords": [],
             "publicationPeriod": None, "occupationUris": [], "skillUris": [],
