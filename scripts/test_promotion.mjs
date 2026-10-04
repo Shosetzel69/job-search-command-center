@@ -44,6 +44,8 @@ function health(environment, sourceSha, runtimeSha) {
     runtime_ref: 'main',
     runtime_data_sha: runtimeSha,
     search_mode: searchMode,
+    database: `jobsearch_${environment}`,
+    server_version: '15.19',
   };
 }
 
@@ -172,6 +174,30 @@ test('DEV PASS freezes exact immutable candidate and Issue/PR evidence', () => {
   assert.equal(record.dev_pass.source_sha, SHA);
   assert.equal(record.dev_pass.environment, 'dev');
   assert.doesNotThrow(() => assertDevPassRecord(record, SHA));
+});
+
+test('promotion evidence fails closed on missing or wrong database binding', () => {
+  const missing = health('dev', SHA, DEV_RUNTIME_SHA);
+  delete missing.database;
+  assert.throws(() => createDevPassRecord({
+    candidateSha: SHA,
+    issuePr: '#473',
+    runId: '1001',
+    runUrl: 'https://github.com/example/repo/actions/runs/1001',
+    health: missing,
+    reconciliation: reconciliation('dev', SHA, DEV_RUNTIME_SHA),
+  }), /dev\.health\.database is required/);
+
+  const wrong = health('dev', SHA, DEV_RUNTIME_SHA);
+  wrong.database = 'jobsearch_test';
+  assert.throws(() => createDevPassRecord({
+    candidateSha: SHA,
+    issuePr: '#473',
+    runId: '1001',
+    runUrl: 'https://github.com/example/repo/actions/runs/1001',
+    health: wrong,
+    reconciliation: reconciliation('dev', SHA, DEV_RUNTIME_SHA),
+  }), /DEV health database must be jobsearch_dev/);
 });
 
 test('DEV PASS cannot be created from health evidence alone', () => {
