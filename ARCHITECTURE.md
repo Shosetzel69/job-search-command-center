@@ -522,24 +522,15 @@ Pentru `ai-github-bridge`:
 
 Cloudflare Workers Builds are configuratie operationala cu working directory diferit pe trigger.
 
-Production Command API:
+JSCC Command API:
 
-- Root directory: `command-api`;
-- Deploy command:
+- deployment-ul Cloudflare este **retired / fail-closed** pentru DEV, TEST si PROD;
+- DEV/TEST folosesc lifecycle-ul canonic GCP definit de `cloudbuild.promotion.yaml`;
+- orice release identity ramane un SHA Git immutable;
+- PROD nu are voie sa foloseasca fallback Cloudflare; pana la aprobarea unui path GCP PROD, deploy-ul Command API PROD ramane blocat;
+- `wrangler deploy` / `wrangler versions upload` pentru Command API nu sunt cai autorizate de release.
 
-```bash
-npm install --ignore-scripts --no-audit --no-fund && npx wrangler deploy
-```
-
-Preview/version, conform configuratiei validate existente:
-
-```bash
-cd command-api && npm install --ignore-scripts --no-audit --no-fund && npx wrangler versions upload
-```
-
-Asimetria este intentional documentata deoarece trigger-ele Cloudflare au working directory diferit in configuratia curenta.
-
-Build-ul Worker executa build-ul Vite si copiaza numai runtime assets aprobate.
+Validarea locala poate folosi in continuare Wrangler **dry-run** pentru compatibilitatea build-ului, fara provider mutation.
 
 `ai-github-bridge` are lifecycle separat si nu foloseste build-ul frontend.
 
