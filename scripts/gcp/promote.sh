@@ -20,15 +20,20 @@ EVIDENCE_DIR="${ROOT}/artifacts/gcp-promotion"
 mkdir -p "${EVIDENCE_DIR}"
 EVIDENCE_FILE="${EVIDENCE_DIR}/${ENVIRONMENT}-${CANDIDATE_SHA}.json"
 
-if [[ "${ENVIRONMENT}" == "test" ]]; then
-  test -n "${DEV_EVIDENCE_FILE}" || { echo "TEST promotion requires DEV evidence file" >&2; exit 7; }
-  python3 "${ROOT}/scripts/gcp/verify_promotion_evidence.py"     --file "${DEV_EVIDENCE_FILE}"     --environment dev     --candidate-sha "${CANDIDATE_SHA}"
-fi
-
 job_digest="$(gcloud artifacts docker images describe "${JOB_IMAGE_REPO}:${CANDIDATE_SHA}"   --project=jscc-shared --format='value(image_summary.digest)')"
 service_digest="$(gcloud artifacts docker images describe "${SERVICE_IMAGE_REPO}:${CANDIDATE_SHA}"   --project=jscc-shared --format='value(image_summary.digest)')"
 [[ "${job_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Missing immutable Job artifact for candidate" >&2; exit 8; }
 [[ "${service_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Missing immutable Service artifact for candidate" >&2; exit 9; }
+
+if [[ "${ENVIRONMENT}" == "test" ]]; then
+  test -n "${DEV_EVIDENCE_FILE}" || { echo "TEST promotion requires DEV evidence file" >&2; exit 7; }
+  python3 "${ROOT}/scripts/gcp/verify_promotion_evidence.py" \
+    --file "${DEV_EVIDENCE_FILE}" \
+    --environment dev \
+    --candidate-sha "${CANDIDATE_SHA}" \
+    --job-digest "${job_digest}" \
+    --service-digest "${service_digest}"
+fi
 
 if [[ "${SEED_MODE}" == "verify-existing" ]]; then
   bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"
