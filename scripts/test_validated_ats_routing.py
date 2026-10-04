@@ -30,6 +30,32 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         self.assertEqual(plan[0]["outcome"], "validation_pending")
         self.assertEqual(plan[0]["failure_reason"], "live_api_route_not_validated")
 
+    def test_previously_live_validated_recovery_routes_remain_enabled(self):
+        cases = {
+            "ING Careers": ("workday", "https://ing.wd3.myworkdayjobs.com/ICSGBLCOR"),
+            "Deutsche Bank": ("workday", "https://db.wd3.myworkdayjobs.com/DBWebsite"),
+            "DXC Technology": ("workday", "https://dxctechnology.wd1.myworkdayjobs.com/DXCJobs"),
+            "NTT DATA Romania": ("workday", "https://nttlimited.wd3.myworkdayjobs.com/NTT_Careers"),
+            "Storyblok": ("greenhouse", "storyblok2"),
+            "Kong": ("ashby", "kong"),
+            "LocalStack": ("ashby", "localstack"),
+            "Contentsquare": ("lever", "contentsquare"),
+            "Talan Belgium / Luxembourg": ("smartrecruiters", "talan"),
+            "Toptal": ("lever", "toptal"),
+            "GlobalLogic": ("smartrecruiters", "GlobalLogic4"),
+        }
+        for name, (connector, identity) in cases.items():
+            source = {"id": name, "name": name, "url": "https://example.com/careers", "active": True}
+            item = orchestration.build_plan({"sources": [source]})[0]
+            self.assertEqual(item["connector"], connector, name)
+            self.assertEqual(item["status"], "pending", name)
+            route = item["connector_config"]
+            route_identity = (
+                route.get("career_url") or route.get("board_token") or route.get("board_name")
+                or route.get("site") or route.get("company_identifier")
+            )
+            self.assertEqual(route_identity, identity, name)
+
     def test_smartrecruiters_dispatch_uses_route_configuration(self):
         item = {"source": "Endava", "connector": "smartrecruiters",
                 "connector_config": {"company_identifier": "Endava"}}
