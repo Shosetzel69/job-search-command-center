@@ -12,6 +12,7 @@ IAM=(ROOT/"scripts/gcp/reconcile_job_invocation_iam.sh").read_text()
 RUNTIME=(ROOT/"command-api/src/runtime-gcp.js").read_text()
 LIVE=(ROOT/"scripts/gcp/capture_live_promotion_evidence.sh").read_text()
 VERIFY_SEED=(ROOT/"scripts/gcp/verify_runtime_seed.sh").read_text()
+VERIFY_EVIDENCE=(ROOT/"scripts/gcp/verify_promotion_evidence.py").read_text()
 
 class GcpPromotionContractTests(unittest.TestCase):
     def test_supported_environments_are_bounded(self):
@@ -19,7 +20,7 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertNotIn("prod)", ENV)
 
     def test_no_historical_sha_or_digest_is_hard_coded(self):
-        for text in (PROMOTE,ENV,SEED,LEGACY,BUILD,LIVE,VERIFY_SEED):
+        for text in (PROMOTE,ENV,SEED,LEGACY,BUILD,LIVE,VERIFY_SEED,VERIFY_EVIDENCE):
             self.assertNotIn("4a8671f60b263a062002e9b3b619170dcc6644cc", text)
             self.assertNotIn("69a486fe75cf082715023e03aa9725358d67b5efb3cc5b8d2e7200c26f96292f", text)
 
@@ -28,10 +29,14 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn("SERVICE_IMAGE_REPO", PROMOTE)
         self.assertGreaterEqual(PROMOTE.count("image_summary.digest"),2)
 
-    def test_test_requires_dev_evidence_for_same_candidate(self):
+    def test_test_requires_dev_evidence_for_same_candidate_and_digests(self):
         self.assertIn("TEST promotion requires DEV evidence file", PROMOTE)
         self.assertIn("--candidate-sha", PROMOTE)
         self.assertIn("--environment dev", PROMOTE)
+        self.assertIn("--job-digest", PROMOTE)
+        self.assertIn("--service-digest", PROMOTE)
+        self.assertIn('data.get("job_digest")==args.job_digest', VERIFY_EVIDENCE)
+        self.assertIn('data.get("service_digest")==args.service_digest', VERIFY_EVIDENCE)
 
     def test_health_and_db_are_both_gated(self):
         self.assertIn('/health")', PROMOTE)
