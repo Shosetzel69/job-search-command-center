@@ -15,7 +15,8 @@
       "source_read_token_env": "DEV_SOURCE_READ_TOKEN",
       "allowed_google_sub_env": "DEV_ALLOWED_GOOGLE_SUB",
       "google_client_id_env": "DEV_GOOGLE_CLIENT_ID",
-      "frontend_origin_env": "DEV_FRONTEND_ORIGIN"
+      "frontend_origin_env": "DEV_FRONTEND_ORIGIN",
+      "nile_database_url_env": "DEV_NILE_DATABASE_URL"
     },
     "test": {
       "runtime_repository": "Shosetzel69/job-search-runtime-test",
@@ -30,7 +31,8 @@
       "source_read_token_env": "TEST_SOURCE_READ_TOKEN",
       "allowed_google_sub_env": "TEST_ALLOWED_GOOGLE_SUB",
       "google_client_id_env": "TEST_GOOGLE_CLIENT_ID",
-      "frontend_origin_env": "TEST_FRONTEND_ORIGIN"
+      "frontend_origin_env": "TEST_FRONTEND_ORIGIN",
+      "nile_database_url_env": "TEST_NILE_DATABASE_URL"
     },
     "prod": {
       "runtime_repository": "Shosetzel69/job-search-prod",
@@ -45,7 +47,8 @@
       "source_read_token_env": "PROD_SOURCE_READ_TOKEN",
       "allowed_google_sub_env": "PROD_ALLOWED_GOOGLE_SUB",
       "google_client_id_env": "PROD_GOOGLE_CLIENT_ID",
-      "frontend_origin_env": "PROD_FRONTEND_ORIGIN"
+      "frontend_origin_env": "PROD_FRONTEND_ORIGIN",
+      "nile_database_url_env": "PROD_NILE_DATABASE_URL"
     }
   }
 }
