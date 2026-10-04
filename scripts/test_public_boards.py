@@ -342,6 +342,31 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Romania",rows[0]["countries"])
         self.assertTrue(any(row["remote"] for row in rows))
 
+    def test_orange_softgarden_feed_normalizes_jobs(self):
+        payload={
+            "@type":"DataFeed",
+            "dataFeedElement":[{
+                "@type":"JobPosting",
+                "identifier":{"value":"orange-1"},
+                "title":"IT Project Manager",
+                "description":"Lead delivery",
+                "datePosted":"2026-10-04",
+                "employmentType":"FULL_TIME",
+                "url":"https://cariere.orange.ro/job/it-project-manager",
+                "hiringOrganization":{"name":"Orange Romania"},
+                "jobLocation":{"address":{
+                    "addressLocality":"Bucharest",
+                    "addressCountry":"RO",
+                }},
+            }],
+        }
+        rows=boards._softgarden_feed(payload,"Orange Romania","https://cariere.orange.ro/jobs.feed.json")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"IT Project Manager")
+        self.assertEqual(rows[0]["company"],"Orange Romania")
+        self.assertIn("Romania",rows[0]["countries"])
+        self.assertEqual(rows[0]["date_posted"],"2026-10-04")
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
