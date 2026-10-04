@@ -255,6 +255,11 @@
       "connector": "smartrecruiters",
       "company_identifier": "GlobalLogic4",
       "enabled": true
+    },
+    "Xebia CEE": {
+      "connector": "greenhouse",
+      "board_token": "xebiacee",
+      "enabled": true
     }
   }
 }
