@@ -98,8 +98,9 @@ Required:
 - search-config.json
 - search-state.json
 
-`seed_runtime.sh`:
-- creates the environment bucket only when absent;
+`seed_runtime.sh` can create a bucket during one-time infrastructure bootstrap, but normal promotion requires the environment runtime bucket to exist before the live promotion checklist is published.
+
+During normal promotion it:
 - uploads only missing seed objects;
 - never overwrites existing environment runtime state during a normal promotion;
 - verifies every mandatory seed object after provisioning.
@@ -139,6 +140,7 @@ For `_TARGET=dev-test`, DEV evidence is produced by the DEV promotion earlier in
 
 These are environment prerequisites, not per-release operator steps:
 
+- The environment runtime bucket already exists; bucket creation is infrastructure bootstrap, not release promotion.
 - Cloud Build can read/write shared Artifact Registry, deploy DEV/TEST Cloud Run resources, act as the runtime service accounts, access runtime buckets and read Secret Manager metadata.
 - Each environment contains enabled `NILE_DATABASE_URL`, `ALLOWED_GOOGLE_SUB` and `GOOGLE_CLIENT_ID` secrets.
 - Runtime service accounts can read their runtime bucket and required secrets.
