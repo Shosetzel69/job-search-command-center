@@ -14,6 +14,8 @@
 
 ### Functionalitati
 
+- #486: outcome-ul web `blocked` expune acum un motiv structurat stabil pentru robots, HTTP 401/403/429, bot challenge, pagina de autentificare, URL/DNS nesigur si redirect blocat; toate guardrail-urile fail-closed raman neschimbate si nu se activeaza rute noi.
+
 - #484: collectorul web nu mai marcheaza `partial` doar pentru atingerea guardrail-ului intentionat de pagini/timp; acoperirea neexhaustiva ramane explicita separat, iar erorile reale continua sa produca `partial`. Linkurile de tracking `/job/track_click` nu mai sunt crawl-uite ca pagini de discovery.
 - #265 / Multiuser work package: implementat corpusul shared PostgreSQL, identity/profile + FORCE RLS, preferinte/FIT/state/aplicatii per profil, sesiuni JSCC opace Google-first, lifecycle ADMIN, collection/scheduler global, operational history PostgreSQL, separare runtime/migration DB credentials, capacity guard si tooling backup/restore non-PROD; profile changes nu declanseaza provider retrieval.
 
