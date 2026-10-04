@@ -1,17 +1,42 @@
-# Cloudflare Build Trigger
+# Command API Build / Deployment Authority
 
-Cloudflare Workers Builds must use `command-api` as the project root directory.
+Status: CURRENT
+Scope: JSCC Command API only
 
-Required Cloudflare build settings:
-- Root directory: `command-api`
-- Deploy command: `npx wrangler versions upload`
+## Purpose
 
-Reason: `wrangler.jsonc`, `package.json` and the Worker entry point `src/secure-entry.js` are all under `command-api/`. Running Wrangler from the repository root without `--config command-api/wrangler.jsonc` fails with `Missing entry-point to Worker script or to assets directory`.
+Define the only authorized deployment path for the JSCC Command API after the GCP migration.
 
-Equivalent explicit deploy command from repository root:
+## Current rule
 
-```bash
-npx wrangler versions upload --config command-api/wrangler.jsonc
+Cloudflare Workers Builds for the **JSCC Command API are retired** for DEV, TEST and PROD.
+
+The following are **not authorized deployment paths** for the Command API:
+
+- `wrangler deploy`;
+- `wrangler versions upload`;
+- Cloudflare Workers Builds;
+- any legacy workflow or script that mutates a Command API Worker.
+
+Local/CI Wrangler dry-run checks may still be used to validate build compatibility, provided they do not mutate a Cloudflare account.
+
+## Canonical deployment authority
+
+Command API deployment authority is:
+
+```text
+DEV / TEST
+  -> cloudbuild.promotion.yaml
+  -> scripts/gcp/promote.sh
+  -> Google Cloud Run
 ```
 
-The preferred Cloudflare configuration remains Root directory = `command-api`, because the package/build scripts are defined there and the frontend build references `../frontend`.
+Promotion uses an exact immutable Git SHA and verifies the deployed Cloud Run Service/Job and health evidence.
+
+PROD Command API deployment to Cloudflare is prohibited. Until an approved GCP PROD promotion path exists, PROD deployment remains fail-closed.
+
+## Explicit exclusion
+
+`ai-github-bridge` is a separate engineering/governance component. Its Cloudflare deployment lifecycle is intentionally unchanged by #478.
+
+Refs: #425 #478
