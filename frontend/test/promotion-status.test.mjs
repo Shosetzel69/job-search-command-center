@@ -5,11 +5,12 @@ import { readFileSync } from 'node:fs';
 const panel = readFileSync(new URL('../src/promotion-status.jsx', import.meta.url), 'utf8');
 const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 
-test('promotion checklist is ADMIN-visible and polls the protected status artifact', () => {
+test('promotion checklist is ADMIN-visible and polls only while active', () => {
   assert.match(main, /\/data\/promotion-status\.json/);
   assert.match(main, /auth\.role==='ADMIN'&&<PromotionStatusPanel/);
-  assert.match(main, /setInterval\(poll,5000\)/);
-  assert.match(main, /payload\\?\\.status==='QUEUED'\\|\\|payload\\?\\.status==='IN_PROGRESS'/);
+  assert.match(main, /setTimeout\(poll,5000\)/);
+  assert.match(main, /payload\?\.status==='QUEUED'\|\|payload\?\.status==='IN_PROGRESS'/);
+  assert.match(main, /clearTimeout\(timer\)/);
   assert.match(panel, /data-testid="promotion-status"/);
   assert.match(panel, /Checklist promovare/);
   assert.match(panel, /step\.description/);
