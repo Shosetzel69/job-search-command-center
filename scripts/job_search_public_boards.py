@@ -38,6 +38,7 @@ PUBLIC_BOARD_SOURCES = {
     "UpcoMinds": {"kind": "jobs4it", "url": "https://jobs4it.gr/"},
     "Worldline": {"kind": "worldline", "url": "https://jobs.worldline.com/viewalljobs/"},
     "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en", "portal": "101430233", "section": "2"},
+    "EuroBrussels": {"kind": "eurobrussels", "url": "https://www.eurobrussels.com/job_search"},
 }
 
 
@@ -655,6 +656,85 @@ def _eu_remote_jobs(base_url, feed_url):
     return records
 
 
+class _EuroBrusselsList(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.current_href = None
+        self.current_title = []
+        self.current_parts = []
+        self.in_job_anchor = False
+
+    def _flush(self):
+        if self.current_href:
+            title = " ".join(self.current_title).strip()
+            parts = [" ".join(str(x).split()) for x in self.current_parts if " ".join(str(x).split())]
+            if title:
+                self.jobs[self.current_href] = {"title": title, "parts": parts}
+        self.current_href = None
+        self.current_title = []
+        self.current_parts = []
+        self.in_job_anchor = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href")
+        if tag == "a" and href and re.search(r"/job_display/\d+/", href):
+            self._flush()
+            self.current_href = href
+            self.current_title = []
+            self.current_parts = []
+            self.in_job_anchor = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text or not self.current_href:
+            return
+        if self.in_job_anchor:
+            self.current_title.append(text)
+        else:
+            self.current_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.in_job_anchor:
+            self.in_job_anchor = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def _eurobrussels(url):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"EuroBrussels jobs page HTTP {status}")
+    parser = _EuroBrusselsList()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = []
+    for href, item in parser.jobs.items():
+        title = item.get("title") or ""
+        parts = item.get("parts") or []
+        if not title:
+            continue
+        context = " ".join(parts[:24])
+        company = parts[0] if parts else "EuroBrussels"
+        location = parts[1] if len(parts) > 1 else ""
+        link = urljoin(url, href)
+        identity_match = re.search(r"/job_display/(\d+)/", link)
+        identity = identity_match.group(1) if identity_match else link.rstrip("/").rsplit("/", 1)[-1]
+        records.append(_record(
+            "EuroBrussels", identity, title, company, context or title, link,
+            date_posted=_relative_date(context),
+            location=location,
+            countries=_country_names_from_text(location),
+            remote=bool(re.search(r"\bremote\b", context, re.I)),
+        ))
+    if not records:
+        raise ValueError("EuroBrussels page contained no extractable job listings")
+    return records
+
+
 class _AtosJobsTable(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -1063,6 +1143,8 @@ def collect(source, config=None):
         records = _eu_remote_jobs(url, spec["feed_url"])
     elif kind == "nato_taleo":
         records = _nato_taleo(url, spec.get("portal", "101430233"), spec.get("section", "2"))
+    elif kind == "eurobrussels":
+        records = _eurobrussels(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
