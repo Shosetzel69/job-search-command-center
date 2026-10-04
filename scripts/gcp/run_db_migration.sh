@@ -73,9 +73,7 @@ if [[ "${ACTION}" == "deploy" ]]; then
     --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true" \
     --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest,NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:latest" \
     --command="/bin/bash" \
-    --args="-ceu,echo ${payload} | base64 -d | bash" \
-  
-  
+    --args="-ceu,echo ${payload} | base64 -d | bash"
 else
   gcloud run jobs execute "${MIGRATION_JOB_NAME}" \
     --project="${PROJECT_ID}" \
