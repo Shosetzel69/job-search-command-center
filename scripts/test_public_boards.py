@@ -145,10 +145,54 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(by_title["IT Project Manager"]["countries"])
         self.assertTrue(by_title["IT Project Manager"]["source_url"].endswith("/job/it-project-manager-26/"))
 
+    def test_orange_json_feed_normalizes_jobposting_items(self):
+        payload = {"dataFeedElement": [{
+            "@type": "DataFeedItem",
+            "dateModified": "2026-10-04T08:00:00Z",
+            "item": {
+                "@type": "JobPosting",
+                "title": "Service Delivery Manager",
+                "url": "https://example.com/jobs/67500402",
+                "datePosted": "2026-10-04T07:00:00Z",
+                "identifier": {"value": 67500402},
+                "jobLocation": {"address": {
+                    "addressCountry": "Rumunia",
+                    "addressLocality": "Bucharest",
+                    "addressRegion": "_",
+                }},
+            },
+        }]}
+        rows = boards._json_job_feed(payload, "Orange Romania")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_title"], "Service Delivery Manager")
+        self.assertEqual(rows[0]["countries"], ["Romania"])
+        self.assertIn("Bucharest", rows[0]["location"])
+
+    def test_computacenter_rmk_search_paginates_query_startrow(self):
+        page1 = '''<table><tr>
+          <td><a href="/job/Remote-Senior-Project-Manager/1434135433/">Senior Project Manager</a></td>
+          <td>Remote, US, Remote</td><td>Oct 4, 2026</td>
+        </tr></table>'''
+        page2 = "<html><body>No more jobs</body></html>"
+        with patch.object(boards, "_fetch", side_effect=[
+            (200, "text/html", page1.encode()),
+            (200, "text/html", page2.encode()),
+        ]) as fetch:
+            rows = boards._rmk_search_jobs(
+                "https://jobs.computacenter.com/search/?q=&sortColumn=referencedate&sortDirection=desc",
+                "Computacenter", "Computacenter", 25,
+            )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_title"], "Senior Project Manager")
+        self.assertTrue(rows[0]["remote"])
+        self.assertIn("startrow=0", fetch.call_args_list[0].args[0])
+        self.assertIn("startrow=25", fetch.call_args_list[1].args[0])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk",
-                     "EU Remote Jobs","Remote in Europe","Remotive","Atos","UpcoMinds","NATO Careers"]:
+                     "EU Remote Jobs","Remote in Europe","Remotive","Atos","UpcoMinds","NATO Careers",
+                     "Orange Romania","Computacenter"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
