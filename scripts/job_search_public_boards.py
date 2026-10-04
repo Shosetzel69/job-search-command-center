@@ -23,7 +23,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"Worldline"}
+BROWSER_REQUIRED_SOURCES = {"Worldline", "EPAM"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -45,6 +45,8 @@ PUBLIC_BOARD_SOURCES = {
     "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en", "portal": "101430233", "section": "2"},
     "EuroBrussels": {"kind": "eurobrussels", "url": "https://www.eurobrussels.com/job_search"},
     "Societe Generale": {"kind": "socgen", "url": "https://careers.societegenerale.com/en/Technical/all-job-offers"},
+    "SoftServe": {"kind": "softserve", "url": "https://career.softserveinc.com/en-us/vacancies/country-romania"},
+    "EPAM": {"kind": "epam", "url": "https://careers.epam.com/en/jobs/romania"},
 }
 
 
@@ -666,6 +668,161 @@ def _eu_remote_jobs(base_url, feed_url):
     return records
 
 
+class _SoftServeJobs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.current_href = None
+        self.title_parts = []
+        self.context_parts = []
+        self.in_anchor = False
+
+    def _flush(self):
+        if self.current_href:
+            title = " ".join(self.title_parts).strip()
+            context = " ".join(self.context_parts[-16:]).strip()
+            if title:
+                self.jobs[self.current_href] = {"title": title, "context": context}
+        self.current_href = None
+        self.title_parts = []
+        self.context_parts = []
+        self.in_anchor = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href") or ""
+        if tag == "a" and re.search(r"/en-us/vacancies/[^/?#]+-\d+/?(?:[?#].*)?$", href):
+            self._flush()
+            self.current_href = href
+            self.in_anchor = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text or not self.current_href:
+            return
+        if self.in_anchor:
+            self.title_parts.append(text)
+        else:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.in_anchor:
+            self.in_anchor = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def _softserve_page_url(base_url, page):
+    base = str(base_url or "").rstrip("/")
+    return base if page == 1 else f"{base}/page-{page}"
+
+
+def _softserve(base_url, max_pages=10, max_seconds=30):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    records = {}
+    for page_no in range(1, max_pages + 1):
+        final_url, html = client.get(_softserve_page_url(base_url, page_no))
+        parser = _SoftServeJobs()
+        parser.feed(html)
+        parser.close()
+        added = 0
+        for href, item in parser.jobs.items():
+            title = item.get("title") or ""
+            context = item.get("context") or ""
+            if not title:
+                continue
+            link = urljoin(final_url, href)
+            identity = link.rstrip("/").rsplit("/", 1)[-1]
+            record = _record(
+                "SoftServe", identity, title, "SoftServe", context or title, link,
+                location=context, countries=_country_names_from_text(context),
+                remote=bool(re.search(r"\bremote\b", context, re.I)),
+            )
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+        if added == 0:
+            break
+    if not records:
+        raise ValueError("SoftServe Romania page contained no extractable job links")
+    return list(records.values())
+
+
+class _EpamJobs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.current_href = None
+        self.title_parts = []
+        self.context_parts = []
+        self.in_anchor = False
+
+    def _flush(self):
+        if self.current_href:
+            title = " ".join(self.title_parts).strip()
+            context = " ".join(self.context_parts[-20:]).strip()
+            if title:
+                self.jobs[self.current_href] = {"title": title, "context": context}
+        self.current_href = None
+        self.title_parts = []
+        self.context_parts = []
+        self.in_anchor = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href") or ""
+        if tag == "a" and re.search(r"/en/vacancy/[^?#]+", href):
+            self._flush()
+            self.current_href = href
+            self.in_anchor = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text or not self.current_href:
+            return
+        if self.in_anchor:
+            self.title_parts.append(text)
+        else:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.in_anchor:
+            self.in_anchor = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def _epam(url, max_seconds=20):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    final_url, rendered_html, _meta = browser.render(url, deadline, client)
+    parser = _EpamJobs()
+    parser.feed(rendered_html)
+    parser.close()
+    records = {}
+    for href, item in parser.jobs.items():
+        title = item.get("title") or ""
+        context = item.get("context") or ""
+        if not title:
+            continue
+        link = urljoin(final_url, href)
+        identity = link.rstrip("/").rsplit("/", 1)[-1]
+        record = _record(
+            "EPAM", identity, title, "EPAM", context or title, link,
+            location=context, countries=_country_names_from_text(context),
+            remote=bool(re.search(r"\bremote\b", context, re.I)),
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError("EPAM rendered Romania page contained no extractable job links")
+    return list(records.values())
+
+
 class _SocGenJobs(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -1266,6 +1423,10 @@ def collect(source, config=None):
         records = _eurobrussels(url)
     elif kind == "socgen":
         records = _socgen(url)
+    elif kind == "softserve":
+        records = _softserve(url)
+    elif kind == "epam":
+        records = _epam(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
