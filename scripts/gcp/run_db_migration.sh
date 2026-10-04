@@ -1,9 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ENVIRONMENT="${1:-}"
-CANDIDATE_SHA="${2:-}"
-SERVICE_DIGEST="${3:-}"
+ACTION="${1:-}"
+ENVIRONMENT="${2:-}"
+CANDIDATE_SHA="${3:-}"
+SERVICE_DIGEST="${4:-}"
+
+[[ "${ACTION}" == "deploy" || "${ACTION}" == "execute" ]] || { echo "action must be deploy or execute" >&2; exit 2; }
 
 [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate SHA must be a full lowercase 40-character SHA" >&2; exit 2; }
 [[ "${SERVICE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "service digest must be immutable sha256" >&2; exit 2; }
@@ -57,17 +60,25 @@ EOS
 )"
 payload="$(printf '%s' "${migration_script}" | base64 | tr -d '\n')"
 
-gcloud run jobs deploy "${MIGRATION_JOB_NAME}" \
-  --project="${PROJECT_ID}" \
-  --region="${REGION}" \
-  --image="${SERVICE_IMAGE_REPO}@${SERVICE_DIGEST}" \
-  --service-account="${RUNTIME_SA}" \
-  --tasks=1 \
-  --parallelism=1 \
-  --max-retries=0 \
-  --task-timeout=10m \
-  --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true" \
-  --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest,NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:latest" \
-  --command="/bin/bash" \
-  --args="-ceu,echo ${payload} | base64 -d | bash" \
-  --wait
+if [[ "${ACTION}" == "deploy" ]]; then
+  gcloud run jobs deploy "${MIGRATION_JOB_NAME}" \
+    --project="${PROJECT_ID}" \
+    --region="${REGION}" \
+    --image="${SERVICE_IMAGE_REPO}@${SERVICE_DIGEST}" \
+    --service-account="${RUNTIME_SA}" \
+    --tasks=1 \
+    --parallelism=1 \
+    --max-retries=0 \
+    --task-timeout=10m \
+    --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true" \
+    --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest,NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:latest" \
+    --command="/bin/bash" \
+    --args="-ceu,echo ${payload} | base64 -d | bash" \
+  
+  
+else
+  gcloud run jobs execute "${MIGRATION_JOB_NAME}" \
+    --project="${PROJECT_ID}" \
+    --region="${REGION}" \
+    --wait
+fi
