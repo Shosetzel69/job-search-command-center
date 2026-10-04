@@ -30,6 +30,7 @@ function envInputs() {
     values[cfg.allowed_google_sub_env] = `${name}-google-sub`;
     values[cfg.google_client_id_env] = `${name}-google-client-id.apps.googleusercontent.com`;
     values[cfg.frontend_origin_env] = `https://${name}.example.test`;
+    values[cfg.nile_database_url_env] = `postgresql://${name}:password@db.example.test/jobsearch_${name}`;
   }
   return values;
 }
@@ -68,6 +69,13 @@ test('Google client ID is an explicit environment input', () => {
   delete values.TEST_GOOGLE_CLIENT_ID;
   assert.throws(() => resolveEnvironment(manifest, 'test', SHA, values), /Google OAuth client ID is missing/);
 });
+
+test('Nile database URL is an explicit environment input', () => {
+  const values = envInputs();
+  delete values.DEV_NILE_DATABASE_URL;
+  assert.throws(() => resolveEnvironment(manifest, 'dev', SHA, values), /Nile database URL is missing/);
+});
+
 
 test('DEV and TEST can never resolve live search mode', () => {
   const values = envInputs();
@@ -219,6 +227,7 @@ test('live deployment is GitHub-Environment scoped and does not multiplex reposi
   assert.match(workflow, /secrets\.GH_BOOTSTRAP_TOKEN/);
   assert.match(workflow, /secrets\.GH_RUNTIME_TOKEN/);
   assert.match(workflow, /secrets\.SOURCE_READ_TOKEN/);
+  assert.match(workflow, /secrets\.NILE_DATABASE_URL/);
   assert.doesNotMatch(workflow, /secrets\.DEV_/);
   assert.doesNotMatch(workflow, /secrets\.TEST_/);
   assert.doesNotMatch(workflow, /secrets\.PROD_/);
@@ -242,6 +251,8 @@ test('promotion evidence normalizes FRONTEND_ORIGIN before curl', () => {
   assert.match(workflow, /String\(process\.env\.FRONTEND_ORIGIN \|\| ""\)\.trim\(\)\.replace/);
   assert.match(workflow, /FRONTEND_ORIGIN is empty after normalization/);
   assert.match(workflow, /curl --fail --silent --show-error "\$frontend_origin\/health"/);
+  assert.match(workflow, /curl --fail --silent --show-error "\$frontend_origin\/health\/db"/);
+  assert.match(workflow, /jobsearch_\$\{\{ inputs\.environment \}\}/);
   assert.doesNotMatch(workflow, /curl --fail --silent --show-error "\$FRONTEND_ORIGIN\/health"/);
 });
 
@@ -286,6 +297,9 @@ test('environment deploy health verification retries propagation and pins runtim
   assert.match(provision, /HEALTH_PROPAGATION_DELAY_MS/);
   assert.match(provision, /expectedRuntimeDataSha/);
   assert.match(provision, /probeDeployedHealth/);
+  assert.match(provision, /new URL\('\/health\/db'/);
+  assert.match(provision, /jobsearch_\$\{runtime\.environment\}/);
+  assert.match(provision, /configureDatabaseRuntimeSecret\(runtime\)/);
   assert.match(provision, /provisionEnvironment/);
   assert.match(provision, /deployEnvironment/);
   assert.match(provision, /environment: runtime\.environment/);
