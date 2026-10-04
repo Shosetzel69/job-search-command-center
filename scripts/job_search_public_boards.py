@@ -23,7 +23,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"Worldline", "EPAM"}
+BROWSER_REQUIRED_SOURCES = {"EPAM"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -1149,6 +1149,32 @@ def _rmk_jobs(base_url, provider, company):
     return list(records.values())
 
 
+def _rmk_tile_jobs(base_url, provider, company, max_rows=500):
+    origin = str(base_url or "").split("/viewalljobs", 1)[0].rstrip("/")
+    records = {}
+    for startrow in range(0, max_rows, 10):
+        url = (
+            f"{origin}/tile-search-results/?"
+            f"q=&sortColumn=referencedate&sortDirection=desc&startrow={startrow}"
+        )
+        status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+        if status != 200:
+            raise RuntimeError(f"{provider} RMK tile endpoint HTTP {status}")
+        page_records = _rmk_records_from_html(
+            body.decode("utf-8", errors="replace"), origin + "/", provider, company
+        )
+        added = 0
+        for record in page_records:
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+        if added == 0:
+            break
+        if len(page_records) < 10:
+            break
+    return list(records.values())
+
+
 def _rmk_browser_jobs(base_url, provider, company, max_seconds=22):
     deadline = time.monotonic() + max_seconds
     client = PublicClient(deadline)
@@ -1174,13 +1200,13 @@ def _atos(base_url):
 
 
 def _worldline(base_url):
+    records = _rmk_tile_jobs(base_url, "Worldline", "Worldline")
+    if records:
+        return records
     records = _rmk_jobs(base_url, "Worldline", "Worldline")
     if records:
         return records
-    records = _rmk_browser_jobs(base_url, "Worldline", "Worldline")
-    if not records:
-        raise ValueError("Worldline public board reported vacancies but rendered no extractable jobs")
-    return records
+    raise ValueError("Worldline public RMK endpoints reported vacancies but exposed no extractable jobs")
 
 class _Jobs4ItHome(HTMLParser):
     def __init__(self):
