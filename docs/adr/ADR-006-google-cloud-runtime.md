@@ -1,10 +1,11 @@
 # ADR-006 — Google Cloud runtime and immutable container promotion
 
 Status: `ACCEPTED`  
-Version: `v1.0`  
+Version: `v1.1`  
 Applicability: `CURRENT`  
 Applies to: `AGENTFLOW`  
 Effective from: `2026-09-27`  
+Amended: `2026-10-04` — #483 DB migration promotion gate  
 Supersedes: current GitHub-Actions-as-runtime hosting model after approved cutover
 
 ## Context
@@ -29,8 +30,11 @@ GitHub
 Cloud Run Service
   -> UI/API
 
-Cloud Run Job
+Cloud Run Search Job
   -> Python search engine + Playwright/Chromium
+
+Cloud Run DB Migration Job
+  -> candidate-owned Nile/PostgreSQL schema migration/readiness
 
 Cloud Scheduler
   -> scheduled PROD search
@@ -80,6 +84,15 @@ Release evidence must record at minimum:
 
 This extends, rather than replaces, the immutable-candidate principle in the existing delivery lifecycle.
 
+Database compatibility is part of the same candidate promotion contract. Before application rollout in an environment:
+- a dedicated environment-scoped Cloud Run DB Migration Job runs from the exact immutable candidate Service digest;
+- the Job executes the candidate migration runner against only that environment database;
+- applied migration version/name/checksum and required relations are verified;
+- runtime privilege readiness is verified separately;
+- any migration/schema/readiness failure stops promotion before application Service deployment;
+- Cloud Build orchestrates the Job but does not receive the database credential value directly;
+- DEV/TEST may use the approved shared-role exception; this does not weaken the separate PROD privilege gate in ADR-008.
+
 ### Artifact Registry
 
 Use one Docker repository in `jscc-shared`:
@@ -96,7 +109,7 @@ Cloud Run Service hosts the application/API target.
 
 Authentication/authorization remains explicit and fail-closed. Migration must define the replacement for the current Cloudflare Worker boundary before cutover. CORS, public ingress, IAM and end-user authentication must be documented and tested; no implicit public API exposure is accepted.
 
-### Cloud Run Job
+### Cloud Run Search Job
 
 Heavy search is asynchronous and must not execute inside an HTTP request.
 
@@ -243,3 +256,8 @@ Costs/risks:
 - ADR-003 — environment isolation
 - ADR-004 — Nile/PostgreSQL backend
 - ADR-005 — multiuser ownership/isolation/shared collection
+
+
+### #483 promotion observability amendment
+
+Promotion state is environment-owned operational evidence in the existing Cloud Storage runtime boundary. It is not candidate-managed product data and is not a second release authority. The control plane publishes a sanitized step checklist before the first normal promotion mutation; ADMIN UI may read it through the protected Command API boundary. Search run state and promotion state remain separate contracts.
