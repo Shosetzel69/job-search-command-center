@@ -11,6 +11,7 @@ BUILD=(ROOT/"cloudbuild.promotion.yaml").read_text()
 IAM=(ROOT/"scripts/gcp/reconcile_job_invocation_iam.sh").read_text()
 RUNTIME=(ROOT/"command-api/src/runtime-gcp.js").read_text()
 LIVE=(ROOT/"scripts/gcp/capture_live_promotion_evidence.sh").read_text()
+VERIFY_SEED=(ROOT/"scripts/gcp/verify_runtime_seed.sh").read_text()
 
 class GcpPromotionContractTests(unittest.TestCase):
     def test_supported_environments_are_bounded(self):
@@ -18,7 +19,7 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertNotIn("prod)", ENV)
 
     def test_no_historical_sha_or_digest_is_hard_coded(self):
-        for text in (PROMOTE,ENV,SEED,LEGACY,BUILD,LIVE):
+        for text in (PROMOTE,ENV,SEED,LEGACY,BUILD,LIVE,VERIFY_SEED):
             self.assertNotIn("4a8671f60b263a062002e9b3b619170dcc6644cc", text)
             self.assertNotIn("69a486fe75cf082715023e03aa9725358d67b5efb3cc5b8d2e7200c26f96292f", text)
 
@@ -51,8 +52,11 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('gcloud run jobs add-iam-policy-binding', IAM)
         self.assertIn('gcloud run jobs get-iam-policy', IAM)
 
-    def test_seed_runtime_is_invoked_through_bash(self):
+    def test_seed_runtime_modes_are_explicit(self):
+        self.assertIn('SEED_MODE="${4:-provision}"', PROMOTE)
         self.assertIn('bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"', PROMOTE)
+        self.assertIn('bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"', PROMOTE)
+        self.assertIn('verify-existing seed mode is only supported for TEST promotion', PROMOTE)
 
     def test_cloud_run_service_uses_supported_deploy_command(self):
         self.assertIn('gcloud run deploy "${SERVICE_NAME}"', PROMOTE)
@@ -95,10 +99,26 @@ class GcpPromotionContractTests(unittest.TestCase):
     def test_standalone_test_attests_live_dev_before_test_promotion(self):
         promote_test = BUILD[BUILD.index("- id: promote-test"):BUILD.index("- id: summarize")]
         self.assertIn('capture_live_promotion_evidence.sh dev', promote_test)
+        self.assertIn('promote.sh test "${_GIT_SHA}" "artifacts/gcp-promotion/dev-${_GIT_SHA}.json" verify-existing', promote_test)
         self.assertLess(
             promote_test.index("capture_live_promotion_evidence.sh dev"),
             promote_test.index('promote.sh test'),
         )
+
+    def test_test_only_allows_control_plane_sha_to_differ_but_dev_does_not(self):
+        validation = BUILD[BUILD.index("- id: validate-input"):BUILD.index("- id: regression")]
+        self.assertIn('"${_TARGET}" != "test"', validation)
+        self.assertIn('"${COMMIT_SHA}" == "${_GIT_SHA}"', validation)
+        self.assertIn('TEST_ONLY_CONTROL_PLANE_SHA=', validation)
+        self.assertIn('TEST_ONLY_CANDIDATE_SHA=', validation)
+
+    def test_test_only_never_builds_missing_candidate_artifacts(self):
+        job = BUILD[BUILD.index("- id: build-job-if-missing"):BUILD.index("- id: build-service-if-missing")]
+        service = BUILD[BUILD.index("- id: build-service-if-missing"):BUILD.index("- id: promote-dev")]
+        self.assertIn('elif [[ "${_TARGET}" == "test" ]]', job)
+        self.assertIn('requires pre-existing immutable Job artifact', job)
+        self.assertIn('elif [[ "${_TARGET}" == "test" ]]', service)
+        self.assertIn('requires pre-existing immutable Service artifact', service)
 
     def test_live_dev_attestation_is_read_only_and_exact_sha_gated(self):
         self.assertIn('live promotion evidence is only supported for DEV', LIVE)
@@ -107,7 +127,8 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('contains_exact_image', LIVE)
         self.assertIn('gcloud run jobs describe', LIVE)
         self.assertIn('gcloud run services describe', LIVE)
-        self.assertIn('gcloud storage objects describe', LIVE)
+        self.assertIn('verify_runtime_seed.sh', LIVE)
+        self.assertIn('gcloud storage objects describe', VERIFY_SEED)
         for forbidden in (
             'gcloud run deploy',
             'gcloud run jobs deploy',
@@ -117,6 +138,7 @@ class GcpPromotionContractTests(unittest.TestCase):
             'add-iam-policy-binding',
         ):
             self.assertNotIn(forbidden, LIVE)
+            self.assertNotIn(forbidden, VERIFY_SEED)
 
     def test_deprecated_wrapper_has_no_deploy_implementation(self):
         self.assertIn("DEPRECATED", LEGACY)
