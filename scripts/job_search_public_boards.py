@@ -34,6 +34,8 @@ PUBLIC_BOARD_SOURCES = {
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/go/Jobs-in-Romania/3686501/"},
     "UpcoMinds": {"kind": "jobs4it", "url": "https://jobs4it.gr/"},
     "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en", "portal": "101430233", "section": "2"},
+    "Orange Romania": {"kind": "json_job_feed", "url": "https://cariere.orange.ro/jobs.feed.json"},
+    "Computacenter": {"kind": "rmk_search", "url": "https://jobs.computacenter.com/search/?q=&searchby=location&sortColumn=referencedate&sortDirection=desc", "page_size": 25},
 }
 
 
@@ -599,6 +601,134 @@ def _jobs4it(base_url):
     return list(records.values())
 
 
+def _localized_country(value):
+    text = plain_text(value)
+    aliases = {
+        "rumunia": "Romania",
+        "polska": "Polonia",
+        "belgia": "Belgia",
+        "mołdawia": "Moldova",
+        "moldawia": "Moldova",
+    }
+    return aliases.get(text.casefold(), text)
+
+
+def _json_job_feed(payload, provider):
+    entries = payload.get("dataFeedElement") if isinstance(payload, dict) else None
+    if entries is None and isinstance(payload, dict):
+        entries = payload.get("itemListElement")
+    if entries is None and isinstance(payload, list):
+        entries = payload
+    if not isinstance(entries, list):
+        raise ValueError(f"{provider} JSON feed must contain dataFeedElement[]")
+
+    records = []
+    for entry in entries:
+        item = entry.get("item") if isinstance(entry, dict) else None
+        if not isinstance(item, dict):
+            item = entry if isinstance(entry, dict) else None
+        if not isinstance(item, dict) or not item.get("title") or not item.get("url"):
+            continue
+
+        identifier = item.get("identifier")
+        if isinstance(identifier, dict):
+            identity = identifier.get("value") or identifier.get("name")
+        else:
+            identity = identifier
+        identity = identity or item.get("url")
+
+        organization = item.get("hiringOrganization")
+        company = organization.get("name") if isinstance(organization, dict) else None
+
+        place = item.get("jobLocation")
+        address = place.get("address") if isinstance(place, dict) else None
+        if not isinstance(address, dict):
+            address = {}
+        country = _localized_country(address.get("addressCountry"))
+        locality = plain_text(address.get("addressLocality"))
+        region = plain_text(address.get("addressRegion"))
+        location = ", ".join(x for x in (locality, region, country) if x and x not in {"_", "-"})
+        countries = _country_names_from_text(country)
+        if not countries and country and country not in {"_", "-"}:
+            countries = [country]
+
+        remote = bool(re.search(r"\b(remote|telework|telemunca)\b", " ".join([
+            plain_text(item.get("title")), location, plain_text(item.get("jobLocationType"))
+        ]), re.I))
+        records.append(_record(
+            provider, identity, item.get("title"), company or provider,
+            item.get("description") or item.get("title"), item.get("url"),
+            date_posted=item.get("datePosted") or entry.get("dateModified"),
+            location=location, countries=countries, remote=remote,
+            employment_statuses=item.get("employmentType"),
+        ))
+    if not records:
+        raise ValueError(f"{provider} JSON feed contained no extractable jobs")
+    return records
+
+
+def _rmk_search_jobs(base_url, provider, company, page_size=25):
+    records = {}
+    for startrow in range(0, 2000, page_size):
+        sep = "&" if "?" in base_url else "?"
+        url = f"{base_url}{sep}startrow={startrow}"
+        status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+        if status != 200:
+            raise RuntimeError(f"{provider} jobs page HTTP {status}")
+        html = body.decode("utf-8", errors="replace")
+        table = _AtosJobsTable()
+        table.feed(html)
+        links = _RmkJobLinks()
+        links.feed(html)
+        links.close()
+
+        candidates = []
+        for href, cells in table.rows:
+            candidates.append((
+                href,
+                cells[0] if cells else "",
+                cells[1] if len(cells) > 1 else "",
+                cells[2] if len(cells) > 2 else "",
+            ))
+        if not candidates:
+            for href, item in links.jobs.items():
+                context = item.get("context") or ""
+                date_match = re.search(
+                    r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\b",
+                    context, re.I,
+                )
+                candidates.append((
+                    href,
+                    item.get("title") or "",
+                    context,
+                    date_match.group(0) if date_match else "",
+                ))
+
+        added = 0
+        for href, title, location, published in candidates:
+            if not href or not title:
+                continue
+            link = urljoin(base_url, href)
+            identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+            record = _record(
+                provider, identity, title, company, title, link,
+                date_posted=_atos_date(published), location=location,
+                countries=_country_names_from_text(location),
+                remote=bool(re.search(r"\b(remote|telecommuter)\b", f"{title} {location}", re.I)),
+            )
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+
+        if not candidates or added == 0:
+            break
+        if len(candidates) < page_size:
+            break
+    if not records:
+        raise ValueError(f"{provider} RMK search returned no extractable jobs")
+    return list(records.values())
+
+
 def _taleo_post_json(url, payload):
     body = json.dumps(payload).encode("utf-8")
     request = Request(
@@ -733,6 +863,8 @@ def collect(source, config=None):
         records = _jobs4it(url)
     elif kind == "nato_taleo":
         records = _nato_taleo(url, spec.get("portal", "101430233"), spec.get("section", "2"))
+    elif kind == "rmk_search":
+        records = _rmk_search_jobs(url, name, name, spec.get("page_size", 25))
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
@@ -749,6 +881,7 @@ def collect(source, config=None):
                 "jobgether": _jobgether,
                 "landingjobs": _landingjobs,
                 "remotive": _remotive,
+                "json_job_feed": lambda value: _json_job_feed(value, name),
             }[kind]
             records = parser(payload)
     return [engine.CollectionResult("public_board", kind, True, records, len(records))]
