@@ -60,7 +60,9 @@ _TARGET=test      -> attest current DEV read-only for exact SHA -> deploy TEST o
 _TARGET=dev-test  -> deploy DEV -> deploy TEST in the same build
 ```
 
-For `_TARGET=test`, a mismatch between the live DEV candidate and `_GIT_SHA` fails closed before any TEST mutation.
+For `_TARGET=test`, the Cloud Build control-plane source revision and release candidate are intentionally separate identities. The build may execute from a newer approved pipeline SHA while `_GIT_SHA` remains the frozen candidate already validated in DEV. In this mode the pipeline must not build missing candidate artifacts; both immutable candidate images must already exist. A mismatch between live DEV and `_GIT_SHA` fails closed before any TEST mutation.
+
+For `dev` and `dev-test`, the original invariant remains: Cloud Build `COMMIT_SHA == _GIT_SHA`.
 
 The Cloud Build execution is the operator. Individual gcloud commands are not part of the normal release procedure.
 
@@ -97,6 +99,8 @@ Required:
 - never overwrites existing environment runtime state during a normal promotion;
 - verifies every mandatory seed object after provisioning.
 
+Standalone `_TARGET=test` does not seed from the control-plane checkout. It uses `verify_runtime_seed.sh` to require the existing TEST runtime bucket and mandatory seed objects read-only before deployment.
+
 Candidate-managed assets remain in the immutable image:
 - sources.json
 - source-categories.json
@@ -122,7 +126,7 @@ Evidence includes:
 
 TEST promotion fails unless DEV evidence exists and verifies for the exact same candidate SHA.
 
-For `_TARGET=dev-test`, DEV evidence is produced by the DEV promotion earlier in the same build. For `_TARGET=test`, `scripts/gcp/capture_live_promotion_evidence.sh` creates equivalent evidence from read-only checks against the already deployed DEV environment; it does not deploy, update IAM, create buckets or write runtime seed objects.
+For `_TARGET=dev-test`, DEV evidence is produced by the DEV promotion earlier in the same build. For `_TARGET=test`, `scripts/gcp/capture_live_promotion_evidence.sh` creates equivalent evidence from read-only checks against the already deployed DEV environment; it does not deploy, update IAM, create buckets or write runtime seed objects. TEST itself uses verify-only seed mode so no candidate-adjacent data is synthesized from a newer control-plane checkout.
 
 ## 7. One-time control-plane prerequisites
 
@@ -166,7 +170,8 @@ No cross-environment fallback is permitted.
 
 Promotion fails immediately if:
 - candidate SHA is not exact;
-- immutable Job or Service image cannot be resolved/built;
+- immutable Job or Service image cannot be resolved/built for DEV or DEV-TEST;
+- standalone TEST is requested and either immutable candidate image is missing;
 - a mandatory runtime seed is missing after provisioning;
 - a required environment secret is missing;
 - the environment runtime service account does not have the verified override-capable Job execution binding;
