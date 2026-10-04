@@ -6,6 +6,7 @@ import { internalAuthContext, withInternalAuthContext } from '../src/internal-au
 import { EVALUATION_VERSION, evaluateSharedJob } from '../src/profile-evaluation.js';
 import {
   mergeEffectiveConfig,
+  ownerBootstrapPending,
   resolveOrProvisionGoogleIdentity,
   resolveSession,
   revokeSession,
@@ -71,6 +72,36 @@ test('DEV provisioning errors expose the failing shared-transaction stage withou
       && error.message === '[provision-stage:app-user-insert] No tenant ID specified in write query',
   );
   assert.ok(queries.includes('ROLLBACK'));
+});
+
+test('DEV provisioning diagnostics cover pre-transaction identity reads', async () => {
+  const db = {
+    query:async () => { throw new Error('No tenant ID specified in write query'); },
+  };
+
+  await assert.rejects(
+    () => resolveOrProvisionGoogleIdentity(
+      { sub:'owner-sub' },
+      { APP_ENV:'dev', ALLOWED_GOOGLE_SUB:'owner-sub' },
+      { db },
+    ),
+    error => error?.message === '[provision-stage:ready-context-read] No tenant ID specified in write query',
+  );
+});
+
+test('DEV owner bootstrap preflight exposes its database stage', async () => {
+  const db = {
+    query:async () => { throw new Error('No tenant ID specified in write query'); },
+  };
+
+  await assert.rejects(
+    () => ownerBootstrapPending(
+      'owner-sub',
+      { APP_ENV:'dev', ALLOWED_GOOGLE_SUB:'owner-sub' },
+      { db },
+    ),
+    error => error?.message === '[provision-stage:owner-bootstrap-read] No tenant ID specified in write query',
+  );
 });
 
 test('non-DEV provisioning errors keep their original message', async () => {
