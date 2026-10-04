@@ -19,6 +19,7 @@ import job_search_lever as lever
 import job_search_pinpoint as pinpoint
 import job_search_recruitee as recruitee
 import job_search_smartrecruiters as smartrecruiters
+import job_search_softgarden as softgarden
 import job_search_traefik as traefik
 import job_search_web as web
 import job_search_workday as workday
@@ -459,6 +460,8 @@ def collect_ats(item):
         return pinpoint.collect(route["subdomain"], company)
     if connector == "workable":
         return workable.collect(route["subdomain"], company)
+    if connector == "softgarden":
+        return softgarden.collect(route["feed_url"], company)
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
@@ -466,7 +469,7 @@ def collect_api_sources(config, state, now, plan, run_id=None):
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
-    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable"}
+    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable", "softgarden"}
     for item in plan:
         if item["status"] != "pending" or item["connector"] == "web":
             continue
