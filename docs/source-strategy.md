@@ -34,6 +34,24 @@ Stare curenta:
 - collector web comun pentru sursele HTTP(S) active, eligibile si nerutate/amanate explicit;
 - suportul se deriva din cod/registru, nu dintr-un flag trimis de client.
 
+### 2.1 Surse `blocked` — dispozitie fail-closed
+
+`blocked` este un outcome de executie per-run, nu o stare de guvernanta si nu inseamna automat defect de connector. Collectorul web pastreaza un motiv structurat separat de mesajul uman.
+
+Motivele stabile includ:
+- `ROBOTS_DISALLOWED` / `ROBOTS_UNAVAILABLE`;
+- `HTTP_AUTH_REQUIRED` / `HTTP_ACCESS_DENIED` / `HTTP_RATE_LIMITED`;
+- `BOT_CHALLENGE` / `AUTHENTICATION_PAGE`;
+- `UNSAFE_URL` / `UNSAFE_DNS` / `REDIRECT_BLOCKED`;
+- `UNKNOWN_BLOCK` doar ca fallback fail-closed.
+
+Reguli:
+- aplicatia nu parseaza textul `failure_reason` pentru clasificare;
+- robots, 401/403/429, login si CAPTCHA/challenge nu sunt ocolite;
+- browser fallback nu ruleaza dupa un access block;
+- un blocaj care necesita ruta ATS/connector dedicat ramane blocat pana la validarea si activarea explicita a acelei rute;
+- outcome-ul canonic ramane `blocked`; motivul structurat exista pentru triere si remediere, nu pentru cosmetizarea ratei de succes.
+
 ## 3. Administrarea registrului - Package 2A
 
 Zona `Administrare -> Surse` separa catalogul de guvernanta operationala.
