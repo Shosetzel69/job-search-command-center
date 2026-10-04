@@ -308,10 +308,44 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(by_title["Project Manager with French"]["remote"])
         self.assertIn("26000CM7",by_title["Project Manager with French"]["source_url"])
 
+    def test_softserve_paginates_public_romania_jobs(self):
+        page1='''<div><a href="/en-us/vacancies/nvidia-program-manager-90001">NVIDIA Program Manager</a>
+          Project Management Director Romania</div>'''
+        page2='''<div><a href="/en-us/vacancies/cloud-delivery-manager-90002">Cloud Delivery Manager</a>
+          Project Management Manager Romania Remote</div>'''
+        fake_client=Mock()
+        fake_client.get.side_effect=[
+            ("https://career.softserveinc.com/en-us/vacancies/country-romania",page1),
+            ("https://career.softserveinc.com/en-us/vacancies/country-romania/page-2",page2),
+            ("https://career.softserveinc.com/en-us/vacancies/country-romania/page-3","<html></html>"),
+        ]
+        with patch.object(boards,"PublicClient",return_value=fake_client):
+            rows=boards._softserve("https://career.softserveinc.com/en-us/vacancies/country-romania")
+        self.assertEqual(len(rows),2)
+        self.assertTrue(any(row["job_title"]=="NVIDIA Program Manager" for row in rows))
+        self.assertTrue(any(row["remote"] for row in rows))
+
+    def test_epam_uses_rendered_public_romania_page(self):
+        html='''<section>
+          <a href="/en/vacancy/ai-delivery-manager-blt123_en">AI Delivery Manager</a>
+          <div>Remote in Romania Delivery Management.AI</div>
+          <a href="/en/vacancy/data-delivery-manager-blt456_en">Data Delivery Manager</a>
+          <div>Hybrid in Romania Data Delivery Management</div>
+        </section>'''
+        fake_client=Mock()
+        with patch.object(boards,"PublicClient",return_value=fake_client), \
+             patch.object(boards.browser,"render",return_value=(
+                 "https://careers.epam.com/en/jobs/romania",html,{"browser_status":"rendered"}
+             )):
+            rows=boards._epam("https://careers.epam.com/en/jobs/romania")
+        self.assertEqual(len(rows),2)
+        self.assertIn("Romania",rows[0]["countries"])
+        self.assertTrue(any(row["remote"] for row in rows))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
-                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds","EuroBrussels","Societe Generale"]:
+                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds","EuroBrussels","Societe Generale","SoftServe","EPAM"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
