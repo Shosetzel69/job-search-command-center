@@ -221,11 +221,10 @@ function App(){
 
   useEffect(()=>{
     if(auth.status!=='authenticated'||auth.role!=='ADMIN')return undefined;
-    let active=true;
-    const poll=async()=>{try{const payload=await fetchJson('/data/promotion-status.json',auth.token);if(active){validateContract(payload,'promotion-status.json');setPromotionStatus(payload);}}catch(error){if(active&&error?.status!==404)console.warn('promotion status poll failed');}};
+    let active=true,timer=null;
+    const poll=async()=>{try{const payload=await fetchJson('/data/promotion-status.json',auth.token);if(!active)return;validateContract(payload,'promotion-status.json');setPromotionStatus(payload);if(payload?.status==='QUEUED'||payload?.status==='IN_PROGRESS')timer=setTimeout(poll,5000);}catch(error){if(active&&error?.status!==404)console.warn('promotion status poll failed');}};
     poll();
-    const timer=setInterval(poll,5000);
-    return()=>{active=false;clearInterval(timer);};
+    return()=>{active=false;if(timer)clearTimeout(timer);};
   },[auth.status,auth.role,auth.token]);
 
   const clearData=useCallback(()=>{setJobs([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);},[]);
