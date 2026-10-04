@@ -169,10 +169,14 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Bucharest", rows[0]["location"])
 
     def test_computacenter_rmk_search_paginates_query_startrow(self):
-        page1 = '''<table><tr>
-          <td><a href="/job/Remote-Senior-Project-Manager/1434135433/">Senior Project Manager</a></td>
-          <td>Remote, US, Remote</td><td>Oct 4, 2026</td>
-        </tr></table>'''
+        rows_html = "".join(
+            f'''<tr>
+              <td><a href="/job/Remote-Senior-Project-Manager-{i}/{1434135400 + i}/">Senior Project Manager {i}</a></td>
+              <td>Remote, US, Remote</td><td>Oct 4, 2026</td>
+            </tr>'''
+            for i in range(25)
+        )
+        page1 = f"<table>{rows_html}</table>"
         page2 = "<html><body>No more jobs</body></html>"
         with patch.object(boards, "_fetch", side_effect=[
             (200, "text/html", page1.encode()),
@@ -182,8 +186,8 @@ class PublicBoardAdapterTests(unittest.TestCase):
                 "https://jobs.computacenter.com/search/?q=&sortColumn=referencedate&sortDirection=desc",
                 "Computacenter", "Computacenter", 25,
             )
-        self.assertEqual(len(rows), 1)
-        self.assertEqual(rows[0]["job_title"], "Senior Project Manager")
+        self.assertEqual(len(rows), 25)
+        self.assertEqual(rows[0]["job_title"], "Senior Project Manager 0")
         self.assertTrue(rows[0]["remote"])
         self.assertIn("startrow=0", fetch.call_args_list[0].args[0])
         self.assertIn("startrow=25", fetch.call_args_list[1].args[0])
