@@ -304,10 +304,8 @@ jobs:
       - name: Apply migrations on official Nile testing container
         working-directory: command-api
         env:
-          APP_ENV: dev
-          NILE_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
-          NILE_MIGRATION_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
-        run: npm run db:migrate
+          NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
+        run: npm run db:nile-migrate-evidence
 
       - name: Collect Nile provider contract evidence
         working-directory: command-api
