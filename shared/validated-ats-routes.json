@@ -285,6 +285,16 @@
       "connector": "ashby",
       "board_name": "snyk",
       "enabled": true
+    },
+    "European Dynamics": {
+      "connector": "workable",
+      "subdomain": "european-dynamics",
+      "enabled": true
+    },
+    "Orange Romania": {
+      "connector": "softgarden",
+      "feed_url": "https://cariere.orange.ro/jobs.feed.json",
+      "enabled": true
     }
   }
 }
