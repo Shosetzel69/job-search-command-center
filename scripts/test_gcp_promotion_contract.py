@@ -149,6 +149,12 @@ class GcpPromotionContractTests(unittest.TestCase):
             self.assertNotIn(forbidden, LIVE)
             self.assertNotIn(forbidden, VERIFY_SEED)
 
+    def test_live_checklist_is_published_before_runtime_seed_mutation(self):
+        init = PROMOTE.index('promotion_status.py" init')
+        seed = PROMOTE.index('status_step runtime-seed')
+        self.assertLess(init, seed)
+        self.assertIn('Runtime bucket must exist before promotion status can be published', PROMOTE)
+
     def test_db_migration_is_fail_closed_before_application_deploy(self):
         migration_job = PROMOTE.index('status_step migration-job')
         application_job = PROMOTE.index('status_step application-job')
