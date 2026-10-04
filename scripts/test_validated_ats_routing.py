@@ -48,6 +48,8 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             "Sopra Steria": ("smartrecruiters", "SopraSteria1"),
             "Accenture": ("workday", "https://accenture.wd103.myworkdayjobs.com/AccentureCareers"),
             "Snyk": ("ashby", "snyk"),
+            "European Dynamics": ("workable", "european-dynamics"),
+            "Orange Romania": ("softgarden", "https://cariere.orange.ro/jobs.feed.json"),
         }
         for name, (connector, identity) in cases.items():
             source = {"id": name, "name": name, "url": "https://example.com/careers", "active": True}
@@ -57,7 +59,8 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             route = item["connector_config"]
             route_identity = (
                 route.get("career_url") or route.get("board_token") or route.get("board_name")
-                or route.get("site") or route.get("company_identifier")
+                or route.get("site") or route.get("company_identifier") or route.get("subdomain")
+                or route.get("feed_url")
             )
             self.assertEqual(route_identity, identity, name)
 
@@ -80,6 +83,17 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             "Thales",
             detail_workers=4,
         )
+
+
+    def test_softgarden_dispatch_uses_public_feed(self):
+        item = {"source": "Orange Romania", "connector": "softgarden",
+                "connector_config": {"feed_url": "https://cariere.orange.ro/jobs.feed.json"}}
+        expected = [engine.CollectionResult("softgarden", "schema_org_datafeed", True, [], 0)]
+        with patch.object(orchestration.softgarden, "collect", return_value=expected) as collect:
+            self.assertEqual(orchestration.collect_ats(item), expected)
+            collect.assert_called_once_with(
+                "https://cariere.orange.ro/jobs.feed.json", "Orange Romania"
+            )
 
 
 if __name__ == "__main__":
