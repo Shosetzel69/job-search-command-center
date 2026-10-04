@@ -64,6 +64,19 @@ For `_TARGET=test`, the Cloud Build control-plane source revision and release ca
 
 For `dev` and `dev-test`, the original invariant remains: Cloud Build `COMMIT_SHA == _GIT_SHA`.
 
+Standalone TEST invocation therefore carries two explicit identities:
+
+```bash
+PIPELINE_SHA=<approved SHA containing the TEST-only orchestration>
+CANDIDATE_SHA=<exact candidate already validated in DEV>
+
+gcloud builds triggers run jscc-command-api-promote \
+  --project=jscc-shared \
+  --region=europe-west1 \
+  --sha="${PIPELINE_SHA}" \
+  --substitutions=_GIT_SHA="${CANDIDATE_SHA}",_TARGET=test
+```
+
 The Cloud Build execution is the operator. Individual gcloud commands are not part of the normal release procedure.
 
 ## 4. Environment mapping
