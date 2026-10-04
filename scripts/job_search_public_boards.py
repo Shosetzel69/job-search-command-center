@@ -6,6 +6,7 @@ canonical filtering/FIT engine. It never bypasses login, CAPTCHA, robots or payw
 
 import json
 import re
+import time
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -16,6 +17,8 @@ from urllib.parse import urljoin
 from urllib.request import Request, urlopen
 
 import job_search as engine
+import web_browser as browser
+from web_transport import PublicClient
 
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
@@ -834,6 +837,57 @@ def _rmk_page_url(base_url, startrow):
     return f"{base}{sep}q=&sortColumn=referencedate&sortDirection=desc"
 
 
+def _rmk_records_from_html(html, base_url, provider, company):
+    parser = _AtosJobsTable()
+    parser.feed(html)
+    link_parser = _RmkJobLinks()
+    link_parser.feed(html)
+    link_parser.close()
+
+    candidates = []
+    for href, cells in parser.rows:
+        candidates.append((
+            href,
+            cells[0] if cells else "",
+            cells[1] if len(cells) > 1 else "",
+            cells[2] if len(cells) > 2 else "",
+        ))
+    if not candidates:
+        for href, item in link_parser.jobs.items():
+            context = item.get("context") or ""
+            date_match = re.search(
+                r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\b",
+                context,
+                re.I,
+            )
+            candidates.append((
+                href,
+                item.get("title") or "",
+                context,
+                date_match.group(0) if date_match else "",
+            ))
+
+    records = {}
+    for href, title, location, published in candidates:
+        if not title or not href:
+            continue
+        link = urljoin(base_url, href)
+        identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+        countries = _country_names_from_text(location)
+        if not countries:
+            match = re.search(r"(?:,|\s)\s*([A-Z]{2})(?:\b|$)", location)
+            if match and match.group(1) in engine.COUNTRY_NAMES:
+                countries = [engine.COUNTRY_NAMES[match.group(1)]]
+        record = _record(
+            provider, identity, title, company, title, link,
+            date_posted=_atos_date(published), location=location,
+            countries=countries,
+            remote=bool(re.search(r"\bremote\b", f"{title} {location}", re.I)),
+        )
+        records[record["id"]] = record
+    return list(records.values())
+
+
 def _rmk_jobs(base_url, provider, company):
     records = {}
     for startrow in range(0, 251, 50):
@@ -841,60 +895,37 @@ def _rmk_jobs(base_url, provider, company):
         status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
         if status != 200:
             raise RuntimeError(f"{provider} jobs page HTTP {status}")
-        html = body.decode("utf-8", errors="replace")
-        parser = _AtosJobsTable()
-        parser.feed(html)
-        link_parser = _RmkJobLinks()
-        link_parser.feed(html)
-        link_parser.close()
+        page_records = _rmk_records_from_html(
+            body.decode("utf-8", errors="replace"), base_url, provider, company
+        )
         added = 0
-
-        candidates = []
-        for href, cells in parser.rows:
-            candidates.append((
-                href,
-                cells[0] if cells else "",
-                cells[1] if len(cells) > 1 else "",
-                cells[2] if len(cells) > 2 else "",
-            ))
-        if not candidates:
-            for href, item in link_parser.jobs.items():
-                context = item.get("context") or ""
-                date_match = re.search(
-                    r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\b",
-                    context,
-                    re.I,
-                )
-                candidates.append((
-                    href,
-                    item.get("title") or "",
-                    context,
-                    date_match.group(0) if date_match else "",
-                ))
-
-        for href, title, location, published in candidates:
-            if not title or not href:
-                continue
-            link = urljoin(base_url, href)
-            identity = link.rstrip("/").rsplit("/", 1)[-1] or link
-            countries = _country_names_from_text(location)
-            if not countries:
-                match = re.search(r"(?:,|\s)\s*([A-Z]{2})(?:\b|$)", location)
-                if match and match.group(1) in engine.COUNTRY_NAMES:
-                    countries = [engine.COUNTRY_NAMES[match.group(1)]]
-            record = _record(
-                provider, identity, title, company, title, link,
-                date_posted=_atos_date(published), location=location,
-                countries=countries,
-                remote=bool(re.search(r"\bremote\b", f"{title} {location}", re.I)),
-            )
+        for record in page_records:
             if record["id"] not in records:
                 records[record["id"]] = record
                 added += 1
-
         if added == 0:
             break
-        if len(candidates) < 50:
+        if len(page_records) < 50:
+            break
+    return list(records.values())
+
+
+def _rmk_browser_jobs(base_url, provider, company, max_seconds=22):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    records = {}
+    for startrow in range(0, 251, 50):
+        url = _rmk_page_url(base_url, startrow)
+        _final_url, rendered_html, _meta = browser.render(url, deadline, client)
+        page_records = _rmk_records_from_html(rendered_html, base_url, provider, company)
+        added = 0
+        for record in page_records:
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+        if added == 0:
+            break
+        if len(page_records) < 50:
             break
     return list(records.values())
 
@@ -904,7 +935,13 @@ def _atos(base_url):
 
 
 def _worldline(base_url):
-    return _rmk_jobs(base_url, "Worldline", "Worldline")
+    records = _rmk_jobs(base_url, "Worldline", "Worldline")
+    if records:
+        return records
+    records = _rmk_browser_jobs(base_url, "Worldline", "Worldline")
+    if not records:
+        raise ValueError("Worldline public board reported vacancies but rendered no extractable jobs")
+    return records
 
 class _Jobs4ItHome(HTMLParser):
     def __init__(self):
