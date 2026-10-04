@@ -17,6 +17,7 @@ import {
   updateApplication,
 } from '../src/multiuser-repository.js';
 import { runtimePrivilegeReadiness } from '../src/db/privilege-readiness.js';
+import { withTenantTransaction } from '../src/db/tenant-gateway.js';
 import { deleteNomenclatureValue } from '../src/nomenclature-governance.js';
 import { readFile } from 'node:fs/promises';
 
@@ -31,6 +32,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
   const runtimeDb = new Pool({ connectionString:runtimeUrl, max:6 });
   const migrationDb = new Pool({ connectionString:migrationUrl, max:2 });
   const adminDb = new Pool({ connectionString:adminUrl, max:1 });
+  const tenantProbeDb = new Pool({ connectionString:runtimeUrl, max:1 });
   const env = {
     APP_ENV:'dev',
     NILE_DATABASE_URL:runtimeUrl,
@@ -43,11 +45,11 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     const privilege = await runtimePrivilegeReadiness(env, { db:runtimeDb });
     assert.equal(privilege.status, 'ok');
     assert.equal(privilege.superuser, false);
-    assert.equal(privilege.bypass_rls, false);
     assert.equal(privilege.schema_create, false);
     assert.equal(privilege.database_create, false);
-    assert.equal(privilege.protected_tables.every(item =>
-      item.present && item.rls_enabled && item.rls_forced && !item.owned_by_runtime && !item.member_of_owner
+    assert.equal(privilege.residual_global_mode_cross_tenant, true);
+    assert.equal(privilege.tenant_tables.every(item =>
+      item.present && item.tenant_id_ready && !item.owned_by_runtime && !item.member_of_owner
     ), true);
 
     await assert.rejects(
@@ -55,7 +57,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       /permission denied/i,
     );
     await assert.rejects(
-      runtimeDb.query('ALTER TABLE profile DISABLE ROW LEVEL SECURITY'),
+      runtimeDb.query('ALTER TABLE profile ADD COLUMN runtime_must_not_add integer'),
       /must be owner|permission denied/i,
     );
 
@@ -111,13 +113,40 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal('target_regions' in userConfig, false);
 
     const storedUserPrefs = await adminDb.query(
-      'SELECT preferences FROM profile_preferences WHERE profile_id=$1',
+      'SELECT preferences FROM profile_preferences WHERE tenant_id=$1',
       [user.profile_id],
     );
     assert.deepEqual(storedUserPrefs.rows[0].preferences, {});
 
     const noContext = await runtimeDb.query('SELECT count(*)::integer AS count FROM profile_preferences');
-    assert.equal(noContext.rows[0].count, 0);
+    assert.ok(
+      Number(noContext.rows[0].count) >= 2,
+      'ADR-008 residual risk must stay explicit: no-context/global mode can see multiple tenants',
+    );
+
+    const scopedTenant = await withTenantTransaction(user, async tx => {
+      const context = await tx.query("SELECT current_setting('nile.tenant_id', true) AS tenant_id");
+      return String(context.rows[0].tenant_id);
+    }, { env, db:tenantProbeDb });
+    assert.equal(scopedTenant, user.profile_id);
+
+    const afterCommit = await tenantProbeDb.query(
+      "SELECT current_setting('nile.tenant_id', true) AS tenant_id",
+    );
+    assert.equal(String(afterCommit.rows[0].tenant_id || '').trim(), '');
+
+    await assert.rejects(
+      withTenantTransaction(user, async tx => {
+        const context = await tx.query("SELECT current_setting('nile.tenant_id', true) AS tenant_id");
+        assert.equal(String(context.rows[0].tenant_id), user.profile_id);
+        throw new Error('forced rollback');
+      }, { env, db:tenantProbeDb }),
+      /forced rollback/,
+    );
+    const afterRollback = await tenantProbeDb.query(
+      "SELECT current_setting('nile.tenant_id', true) AS tenant_id",
+    );
+    assert.equal(String(afterRollback.rows[0].tenant_id || '').trim(), '');
 
     const ownerApplication = await createApplication(ownerA, {
       company:'Tenant A',
@@ -187,16 +216,17 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
 
     const residue = await adminDb.query(
       `SELECT
+         (SELECT count(*)::integer FROM tenants WHERE name=$3) AS tenants,
          (SELECT count(*)::integer FROM app_user WHERE user_id=$1) AS users,
          (SELECT count(*)::integer FROM user_identity WHERE user_id=$1) AS identities,
          (SELECT count(*)::integer FROM profile WHERE profile_id=$2) AS profiles,
-         (SELECT count(*)::integer FROM profile_preferences WHERE profile_id=$2) AS preferences,
-         (SELECT count(*)::integer FROM applications WHERE profile_id=$2) AS applications,
+         (SELECT count(*)::integer FROM profile_preferences WHERE tenant_id=$2) AS preferences,
+         (SELECT count(*)::integer FROM applications WHERE tenant_id=$2) AS applications,
          (SELECT count(*)::integer FROM user_session WHERE user_id=$1) AS sessions`,
-      [originalOwnerUserId, originalOwnerProfileId],
+      [originalOwnerUserId, originalOwnerProfileId, `jscc-${originalOwnerProfileId}`],
     );
     assert.deepEqual(residue.rows[0], {
-      users:0, identities:0, profiles:0, preferences:0, applications:0, sessions:0,
+      tenants:0, users:0, identities:0, profiles:0, preferences:0, applications:0, sessions:0,
     });
 
     const bootstrapMarker = await adminDb.query(
@@ -221,5 +251,6 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     await runtimeDb.end();
     await migrationDb.end();
     await adminDb.end();
+    await tenantProbeDb.end();
   }
 });

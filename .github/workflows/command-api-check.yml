@@ -233,6 +233,10 @@ jobs:
           await client.end();
           NODE
 
+      - name: Validate ADR-008 tenant boundary
+        working-directory: command-api
+        run: npm run check:tenant-boundary
+
       - name: Run Multiuser PostgreSQL integration tests
         working-directory: command-api
         env:
@@ -245,6 +249,7 @@ jobs:
           BOOTSTRAP_ADMIN_GOOGLE_SUB: owner-sub
         run: |
           npm run db:migrate
+          npm run db:nile-tenant-probe
           npm run db:provision-runtime
           npm run db:privilege-readiness
           node --test test/multiuser-db.integration.mjs
@@ -256,3 +261,62 @@ jobs:
       - name: Validate React frontend and Worker build
         working-directory: command-api
         run: npm run check
+
+
+  nile-contract-evidence:
+    name: Nile provider contract evidence
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install Command API dependencies
+        working-directory: command-api
+        run: npm install --ignore-scripts --no-audit --no-fund
+
+      - name: Start official Nile testing container
+        run: |
+          docker pull ghcr.io/niledatabase/testingcontainer:latest
+          docker run --rm -d \
+            --name jscc-nile-test \
+            -p 55432:5432 \
+            ghcr.io/niledatabase/testingcontainer:latest
+
+          ready=0
+          for i in $(seq 1 90); do
+            if docker logs jscc-nile-test 2>&1 | grep -q "Database has been created and is ready"; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          if [ "$ready" -ne 1 ]; then
+            docker logs jscc-nile-test
+            exit 1
+          fi
+
+      - name: Apply migrations on official Nile testing container
+        working-directory: command-api
+        env:
+          NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
+        run: npm run db:nile-migrate-evidence
+
+      - name: Collect Nile provider contract evidence
+        working-directory: command-api
+        env:
+          NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
+        run: npm run db:nile-contract-evidence
+
+      - name: Show Nile container logs
+        if: always()
+        run: docker logs jscc-nile-test || true
+
+      - name: Stop Nile testing container
+        if: always()
+        run: docker stop jscc-nile-test || true
