@@ -163,7 +163,9 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertLess(migration_job, service)
         self.assertIn('run_db_migration.sh" deploy', PROMOTE)
         self.assertIn('run_db_migration.sh" execute', PROMOTE)
+        self.assertIn('status_step schema-readiness', PROMOTE)
         self.assertIn('status_pass schema-readiness', PROMOTE)
+        self.assertIn('status_step db-privileges', PROMOTE)
         self.assertIn('status_pass db-privileges', PROMOTE)
 
     def test_migration_job_uses_exact_candidate_service_digest_and_environment_secret(self):
@@ -173,6 +175,7 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:latest', MIGRATE)
         self.assertIn('JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true', MIGRATE)
         self.assertIn('gcloud run jobs execute "${MIGRATION_JOB_NAME}"', MIGRATE)
+        self.assertIn('--update-env-vars="DB_MIGRATION_MODE=${MODE}"', MIGRATE)
         self.assertIn('--wait', MIGRATE)
 
     def test_migration_execution_verifies_candidate_manifest_and_required_schema(self):
