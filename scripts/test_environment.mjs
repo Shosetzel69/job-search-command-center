@@ -134,6 +134,7 @@ test('bootstrap-all scope is structurally DEV + TEST only', () => {
 test('runtime seed derives files from the shared runtime-data contract', () => {
   assert.ok(runtimeDataFiles().includes('data/jobs.json'));
   assert.ok(runtimeDataFiles().includes('data/search-state.json'));
+  assert.ok(!runtimeDataFiles().includes('data/promotion-status.json'));
   assert.equal(new Set(runtimeDataFiles()).size, runtimeDataFiles().length);
   for (const path of runtimeDataFiles()) {
     const payload = runtimeSeedPayload(path.replace('data/', ''), { sourceSha: SHA, generatedAt: '2026-09-13T00:00:00.000Z' });
