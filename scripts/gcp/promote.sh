@@ -4,9 +4,16 @@ set -euo pipefail
 ENVIRONMENT="${1:-}"
 CANDIDATE_SHA="${2:-}"
 DEV_EVIDENCE_FILE="${3:-}"
+SEED_MODE="${4:-provision}"
 
 [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate SHA must be a full lowercase 40-character SHA" >&2; exit 2; }
 source "$(dirname "$0")/environment.sh" "${ENVIRONMENT}"
+
+[[ "${SEED_MODE}" == "provision" || "${SEED_MODE}" == "verify-existing" ]] || { echo "seed mode must be provision or verify-existing" >&2; exit 2; }
+if [[ "${SEED_MODE}" == "verify-existing" && "${ENVIRONMENT}" != "test" ]]; then
+  echo "verify-existing seed mode is only supported for TEST promotion" >&2
+  exit 2
+fi
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 EVIDENCE_DIR="${ROOT}/artifacts/gcp-promotion"
@@ -23,7 +30,11 @@ service_digest="$(gcloud artifacts docker images describe "${SERVICE_IMAGE_REPO}
 [[ "${job_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Missing immutable Job artifact for candidate" >&2; exit 8; }
 [[ "${service_digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "Missing immutable Service artifact for candidate" >&2; exit 9; }
 
-bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"
+if [[ "${SEED_MODE}" == "verify-existing" ]]; then
+  bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"
+else
+  bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"
+fi
 
 for secret in NILE_DATABASE_URL ALLOWED_GOOGLE_SUB GOOGLE_CLIENT_ID; do
   gcloud secrets describe "${secret}" --project="${PROJECT_ID}" >/dev/null     || { echo "Required secret is missing in ${PROJECT_ID}: ${secret}" >&2; exit 10; }
