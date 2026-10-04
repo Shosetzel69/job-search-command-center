@@ -16,6 +16,8 @@ This is the canonical component checklist for a GCP promotion. The runtime copy 
 - [ ] Immutable Service image resolved or built according to target mode.
 - [ ] Job and Service digests recorded.
 - [ ] Environment/project mapping resolved explicitly.
+- [ ] Environment runtime bucket already exists.
+- [ ] Live promotion checklist published before the first target mutation.
 - [ ] Runtime seed provisioned/verified according to target mode.
 - [ ] Required Secret Manager secrets exist and have an ENABLED version.
 - [ ] Environment-scoped DB migration Job deployed from the exact candidate Service digest.
