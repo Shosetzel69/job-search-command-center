@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+> App version: `0.6.0` — minor increment for the new Multiuser feature set and the current GCP-only runtime line.
+
 ### Security
 
 - #250 / R1.5: protected `/data/*` reads now use the current isolated runtime repository instead of the immutable deploy Static Assets snapshot, so Source Registry/config/nomenclature mutations persist visibly across reload.
