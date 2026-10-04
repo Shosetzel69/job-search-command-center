@@ -44,6 +44,7 @@ PUBLIC_BOARD_SOURCES = {
     "Worldline": {"kind": "worldline", "url": "https://jobs.worldline.com/viewalljobs/"},
     "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en", "portal": "101430233", "section": "2"},
     "EuroBrussels": {"kind": "eurobrussels", "url": "https://www.eurobrussels.com/job_search"},
+    "Societe Generale": {"kind": "socgen", "url": "https://careers.societegenerale.com/en/Technical/all-job-offers"},
 }
 
 
@@ -665,6 +666,81 @@ def _eu_remote_jobs(base_url, feed_url):
     return records
 
 
+class _SocGenJobs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.current_href = None
+        self.anchor_parts = []
+        self.context_parts = []
+        self.in_anchor = False
+
+    def _flush(self):
+        if self.current_href:
+            title = " ".join(self.anchor_parts).strip()
+            context = " ".join(self.context_parts[-20:]).strip()
+            if title:
+                self.jobs[self.current_href] = {"title": title, "context": context}
+        self.current_href = None
+        self.anchor_parts = []
+        self.context_parts = []
+        self.in_anchor = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href") or ""
+        if tag == "a" and re.search(r"/en/job-offers/[^?#]+", href):
+            self._flush()
+            self.current_href = href
+            self.in_anchor = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text or not self.current_href:
+            return
+        if self.in_anchor:
+            self.anchor_parts.append(text)
+        else:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.in_anchor:
+            self.in_anchor = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def _socgen(url, max_seconds=30):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    final_url, html = client.get(url)
+    parser = _SocGenJobs()
+    parser.feed(html)
+    parser.close()
+    records = {}
+    for href, item in parser.jobs.items():
+        title = item.get("title") or ""
+        context = item.get("context") or ""
+        if not title:
+            continue
+        link = urljoin(final_url, href)
+        identity = link.rstrip("/").rsplit("/", 1)[-1]
+        countries = _country_names_from_text(context)
+        location = context
+        record = _record(
+            "Societe Generale", identity, title, "Societe Generale",
+            context or title, link,
+            location=location, countries=countries,
+            remote=bool(re.search(r"\b(remote|hybrid|telework)\b", context, re.I)),
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError("Societe Generale all-jobs page contained no extractable job links")
+    return list(records.values())
+
+
 class _EuroBrusselsList(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -1188,6 +1264,8 @@ def collect(source, config=None):
         records = _nato_taleo(url, spec.get("portal", "101430233"), spec.get("section", "2"))
     elif kind == "eurobrussels":
         records = _eurobrussels(url)
+    elif kind == "socgen":
+        records = _socgen(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
