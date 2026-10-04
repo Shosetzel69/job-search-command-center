@@ -2,6 +2,7 @@ export const PROTECTED_DATA_FILES = Object.freeze([
   'jobs.json',
   'run-status.json',
   'run-history.json',
+  'promotion-status.json',
   'search-config.json',
   'sources.json',
   'source-categories.json',
