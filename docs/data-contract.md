@@ -1,6 +1,6 @@
 # Contracte date JSON
 
-Versiune aplicatie: `0.06-dev`
+Versiune aplicatie: `0.07-dev`
 Schema principala: `1.0`
 Ultima actualizare: `2026-10-04`
 
@@ -14,6 +14,7 @@ Protected runtime contracts:
 - `jobs.json`;
 - `run-status.json`;
 - `run-history.json`;
+- `promotion-status.json`;
 - `search-config.json`;
 - `sources.json`;
 - `source-categories.json`;
@@ -149,6 +150,22 @@ Severity este independenta de outcome:
 - run-level failure care impiedica rezultatul asteptat -> `ERROR`.
 
 Sanitizarea este centrala in `scripts/diagnostics.py`. Credentialele, Authorization/Cookie, PAT/JWT, API keys, secret query parameters si userinfo din URL nu se emit in diagnostic events. Upstream exception text este sanitizat si in mesajele persistate in run-status/run-history.
+
+## 3.3 `data/promotion-status.json`
+
+Operational ADMIN-only contract for DEV/TEST promotion observability. It is environment-owned state stored under the GCP runtime seed namespace and is not candidate-managed product data.
+
+Required fields:
+- `schema_version=1.0`;
+- `environment`, `operation_id`, `operation_type`;
+- `pipeline_sha`, `candidate_sha`, `job_digest`, `service_digest`;
+- `started_at`, `updated_at`, nullable `completed_at`;
+- `status`, nullable `current_step`;
+- ordered `steps[]` with `id`, `description`, `component`, `state`, timestamps and sanitized `error`.
+
+Operation states: `IN_PROGRESS | PASS | FAIL`. Step states: `PENDING | IN_PROGRESS | PASS | FAIL | SKIPPED | N/A`.
+
+The artifact must never contain DB URLs, passwords, tokens or secret values.
 
 ## 4. `data/run-history.json`
 
