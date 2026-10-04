@@ -51,12 +51,33 @@ test('Cloudflare retirement is scoped to Command API and does not disable ai-git
 
 
 test('current Command API deployment documentation is GCP-only and legacy Cloudflare is retired', () => {
-  for (const doc of [buildTrigger, environmentRunbook, deliveryLifecycle]) {
-    assert.match(doc, /cloudbuild\.promotion\.yaml/);
-    assert.match(doc, /Cloudflare deployment (?:of the \*\*JSCC Command API\*\* is retired|prohibited)|Cloudflare Command API.*retired|Cloudflare.*not an authorized/i);
-    assert.match(doc, /ai-github-bridge/);
+  const normalize = value => value
+    .replace(/[\`*_]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+
+  const build = normalize(buildTrigger);
+  const runbook = normalize(environmentRunbook);
+  const lifecycle = normalize(deliveryLifecycle);
+
+  for (const doc of [build, runbook, lifecycle]) {
+    assert.ok(doc.includes('cloudbuild.promotion.yaml'));
+    assert.ok(doc.includes('ai-github-bridge'));
   }
+
+  assert.ok(build.includes('cloudflare workers builds'));
+  assert.ok(build.includes('retired'));
+  assert.ok(build.includes('not authorized deployment paths'));
+  assert.ok(build.includes('wrangler deploy'));
+  assert.ok(build.includes('wrangler versions upload'));
   assert.doesNotMatch(buildTrigger, /Deploy command:\s*`npx wrangler versions upload`/);
-  assert.match(environmentRunbook, /Command API PROD[\s\S]*blocked until an approved GCP PROD promotion path exists/);
-  assert.match(deliveryLifecycle, /GCP PROD promotion[\s\S]*blocked until implemented\/approved/);
+
+  assert.ok(runbook.includes('command api prod'));
+  assert.ok(runbook.includes('cloudflare deployment prohibited'));
+  assert.ok(runbook.includes('blocked until an approved gcp prod promotion path exists'));
+
+  assert.ok(lifecycle.includes('command api prod'));
+  assert.ok(lifecycle.includes('cloudflare deployment prohibited'));
+  assert.ok(lifecycle.includes('blocked until implemented/approved'));
 });
