@@ -10,7 +10,7 @@ import { databaseReadiness } from './db/readiness.js';
 
 const GITHUB_ACTIONS_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
 const PROTECTED_DATA = protectedDataPaths();
-const ADMIN_DATA = new Set(['/data/run-status.json','/data/run-history.json','/data/sources.json','/data/source-categories.json','/data/nomenclatures.json']);
+const ADMIN_DATA = new Set(['/data/run-status.json','/data/run-history.json','/data/promotion-status.json','/data/sources.json','/data/source-categories.json','/data/nomenclatures.json']);
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
