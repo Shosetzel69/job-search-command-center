@@ -14,6 +14,7 @@
 
 ### Functionalitati
 
+- #484: collectorul web nu mai marcheaza `partial` doar pentru atingerea guardrail-ului intentionat de pagini/timp; acoperirea neexhaustiva ramane explicita separat, iar erorile reale continua sa produca `partial`. Linkurile de tracking `/job/track_click` nu mai sunt crawl-uite ca pagini de discovery.
 - #265 / Multiuser work package: implementat corpusul shared PostgreSQL, identity/profile + FORCE RLS, preferinte/FIT/state/aplicatii per profil, sesiuni JSCC opace Google-first, lifecycle ADMIN, collection/scheduler global, operational history PostgreSQL, separare runtime/migration DB credentials, capacity guard si tooling backup/restore non-PROD; profile changes nu declanseaza provider retrieval.
 
 - #93 / Release 1 Wave 3: materializate campurile canonice de guvernanta pentru toate sursele non-Monster din `data/sources.json`; eliminata dependenta de metadata implicita la citire, cu Monster pastrat explicit ca exceptie legacy in #237.
