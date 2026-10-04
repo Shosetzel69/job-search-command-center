@@ -23,6 +23,8 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
+BROWSER_REQUIRED_SOURCES = {"Worldline"}
+
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
     "Remote OK": {"kind": "remoteok", "url": "https://remoteok.com/api"},
@@ -62,6 +64,10 @@ def plain_text(value):
 
 def source_supported(name):
     return str(name or "") in PUBLIC_BOARD_SOURCES
+
+
+def browser_required(name):
+    return str(name or "") in BROWSER_REQUIRED_SOURCES
 
 
 def _fetch(url, accept):
