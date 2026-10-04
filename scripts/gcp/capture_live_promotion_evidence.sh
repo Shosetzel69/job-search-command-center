@@ -12,7 +12,6 @@ source "$(dirname "$0")/environment.sh" "${ENVIRONMENT}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 EVIDENCE_DIR="${ROOT}/artifacts/gcp-promotion"
 EVIDENCE_FILE="${EVIDENCE_DIR}/${ENVIRONMENT}-${CANDIDATE_SHA}.json"
-MANIFEST="${ROOT}/scripts/gcp/runtime_seed_files.txt"
 mkdir -p "${EVIDENCE_DIR}"
 
 job_digest="$(gcloud artifacts docker images describe "${JOB_IMAGE_REPO}:${CANDIDATE_SHA}" \
@@ -92,13 +91,7 @@ assert db.get("environment") == "dev", db
 assert db.get("database") == expected_db, db
 PY
 
-test -f "${MANIFEST}" || { echo "Missing runtime seed manifest" >&2; exit 13; }
-while IFS= read -r file; do
-  [[ -n "${file}" ]] || continue
-  gcloud storage objects describe "gs://${RUNTIME_BUCKET}/seed/${file}" \
-    --project="${PROJECT_ID}" >/dev/null \
-    || { echo "DEV runtime seed verification failed: ${file}" >&2; exit 14; }
-done < "${MANIFEST}"
+bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"
 
 python3 - "${EVIDENCE_FILE}" "${CANDIDATE_SHA}" "${job_digest}" "${service_digest}" "${latest_ready}" "${frontend_origin}" "${reported_service_url}" "${EXPECTED_DATABASE}" <<'PY'
 import datetime, json, sys
