@@ -10,9 +10,12 @@ steps:
       - -ceu
       - |
         [[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "_GIT_SHA must be a full lowercase SHA" >&2; exit 2; }
-        [[ "${_TARGET}" == "dev" || "${_TARGET}" == "dev-test" ]] || { echo "_TARGET must be dev or dev-test" >&2; exit 2; }
-        if [[ -n "${COMMIT_SHA:-}" ]]; then
+        [[ "${_TARGET}" == "dev" || "${_TARGET}" == "test" || "${_TARGET}" == "dev-test" ]] || { echo "_TARGET must be dev, test or dev-test" >&2; exit 2; }
+        if [[ "${_TARGET}" != "test" && -n "${COMMIT_SHA:-}" ]]; then
           [[ "${COMMIT_SHA}" == "${_GIT_SHA}" ]] || { echo "Cloud Build commit identity mismatch" >&2; exit 2; }
+        elif [[ "${_TARGET}" == "test" ]]; then
+          echo "TEST_ONLY_CONTROL_PLANE_SHA=${COMMIT_SHA:-unknown}"
+          echo "TEST_ONLY_CANDIDATE_SHA=${_GIT_SHA}"
         fi
 
   - id: regression
@@ -48,6 +51,9 @@ steps:
         image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}"
         if docker manifest inspect "${image}" >/dev/null 2>&1; then
           echo "REUSE_JOB_ARTIFACT=${image}"
+        elif [[ "${_TARGET}" == "test" ]]; then
+          echo "TEST-only promotion requires pre-existing immutable Job artifact: ${image}" >&2
+          exit 8
         else
           docker build --pull --build-arg "GIT_SHA=${_GIT_SHA}" -t "${image}" .
           docker push "${image}"
@@ -62,6 +68,9 @@ steps:
         image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}"
         if docker manifest inspect "${image}" >/dev/null 2>&1; then
           echo "REUSE_SERVICE_ARTIFACT=${image}"
+        elif [[ "${_TARGET}" == "test" ]]; then
+          echo "TEST-only promotion requires pre-existing immutable Service artifact: ${image}" >&2
+          exit 9
         else
           docker build --pull --file Dockerfile.service --build-arg "GIT_SHA=${_GIT_SHA}" -t "${image}" .
           docker push "${image}"
@@ -73,7 +82,11 @@ steps:
     args:
       - -ceu
       - |
-        bash scripts/gcp/promote.sh dev "${_GIT_SHA}"
+        if [[ "${_TARGET}" == "dev" || "${_TARGET}" == "dev-test" ]]; then
+          bash scripts/gcp/promote.sh dev "${_GIT_SHA}"
+        else
+          echo "DEV promotion not requested"
+        fi
 
   - id: promote-test
     name: gcr.io/cloud-builders/gcloud
@@ -81,7 +94,10 @@ steps:
     args:
       - -ceu
       - |
-        if [[ "${_TARGET}" == "dev-test" ]]; then
+        if [[ "${_TARGET}" == "test" ]]; then
+          bash scripts/gcp/capture_live_promotion_evidence.sh dev "${_GIT_SHA}"
+          bash scripts/gcp/promote.sh test "${_GIT_SHA}" "artifacts/gcp-promotion/dev-${_GIT_SHA}.json" verify-existing
+        elif [[ "${_TARGET}" == "dev-test" ]]; then
           bash scripts/gcp/promote.sh test "${_GIT_SHA}" "artifacts/gcp-promotion/dev-${_GIT_SHA}.json"
         else
           echo "TEST promotion not requested"

@@ -42,19 +42,39 @@ candidate SHA
 
 No rebuild occurs between DEV and TEST.
 
+Standalone TEST promotion is also supported for a candidate already deployed in DEV. In that path DEV is not redeployed: Cloud Build performs a read-only live attestation of the DEV Job, Service, health endpoints, database binding and runtime seed, writes DEV evidence for the exact candidate SHA, then promotes TEST using the same immutable image digests.
+
 ## 3. Canonical entry point
 
 `cloudbuild.promotion.yaml`
 
 Inputs:
 - `_GIT_SHA`: exact 40-character lowercase candidate SHA.
-- `_TARGET`: `dev` or `dev-test`.
+- `_TARGET`: `dev`, `test` or `dev-test`.
 
-Normal full promotion:
+Targets:
 
+```text
+_TARGET=dev       -> deploy DEV only
+_TARGET=test      -> attest current DEV read-only for exact SHA -> deploy TEST only
+_TARGET=dev-test  -> deploy DEV -> deploy TEST in the same build
 ```
-_TARGET=dev-test
-_GIT_SHA=<frozen candidate>
+
+For `_TARGET=test`, the Cloud Build control-plane source revision and release candidate are intentionally separate identities. The build may execute from a newer approved pipeline SHA while `_GIT_SHA` remains the frozen candidate already validated in DEV. In this mode the pipeline must not build missing candidate artifacts; both immutable candidate images must already exist. A mismatch between live DEV and `_GIT_SHA` fails closed before any TEST mutation.
+
+For `dev` and `dev-test`, the original invariant remains: Cloud Build `COMMIT_SHA == _GIT_SHA`.
+
+Standalone TEST invocation therefore carries two explicit identities:
+
+```bash
+PIPELINE_SHA=<approved SHA containing the TEST-only orchestration>
+CANDIDATE_SHA=<exact candidate already validated in DEV>
+
+gcloud builds triggers run jscc-command-api-promote \
+  --project=jscc-shared \
+  --region=europe-west1 \
+  --sha="${PIPELINE_SHA}" \
+  --substitutions=_GIT_SHA="${CANDIDATE_SHA}",_TARGET=test
 ```
 
 The Cloud Build execution is the operator. Individual gcloud commands are not part of the normal release procedure.
@@ -92,6 +112,8 @@ Required:
 - never overwrites existing environment runtime state during a normal promotion;
 - verifies every mandatory seed object after provisioning.
 
+Standalone `_TARGET=test` does not seed from the control-plane checkout. It uses `verify_runtime_seed.sh` to require the existing TEST runtime bucket and mandatory seed objects read-only before deployment.
+
 Candidate-managed assets remain in the immutable image:
 - sources.json
 - source-categories.json
@@ -115,7 +137,9 @@ Evidence includes:
 - DB health PASS;
 - seed manifest PASS.
 
-TEST promotion fails unless DEV evidence exists and verifies for the exact same candidate SHA.
+TEST promotion fails unless DEV evidence exists and verifies the exact same candidate SHA **and the exact same Job/Service image digests** that TEST is about to deploy.
+
+For `_TARGET=dev-test`, DEV evidence is produced by the DEV promotion earlier in the same build. For `_TARGET=test`, `scripts/gcp/capture_live_promotion_evidence.sh` creates equivalent evidence from read-only checks against the already deployed DEV environment; it does not deploy, update IAM, create buckets or write runtime seed objects. TEST itself uses verify-only seed mode so no candidate-adjacent data is synthesized from a newer control-plane checkout.
 
 ## 7. One-time control-plane prerequisites
 
@@ -159,7 +183,8 @@ No cross-environment fallback is permitted.
 
 Promotion fails immediately if:
 - candidate SHA is not exact;
-- immutable Job or Service image cannot be resolved/built;
+- immutable Job or Service image cannot be resolved/built for DEV or DEV-TEST;
+- standalone TEST is requested and either immutable candidate image is missing;
 - a mandatory runtime seed is missing after provisioning;
 - a required environment secret is missing;
 - the environment runtime service account does not have the verified override-capable Job execution binding;
@@ -169,7 +194,8 @@ Promotion fails immediately if:
 - /health does not report the exact candidate;
 - /health runtime backend is not GCP;
 - /health/db does not bind to the correct environment/database;
-- TEST evidence does not match the DEV candidate.
+- TEST evidence does not match the DEV candidate;
+- standalone TEST is requested while live DEV is not already on the exact candidate SHA or its deployed Job/Service images do not match the immutable candidate digests.
 
 ## 9. Browser acceptance
 
