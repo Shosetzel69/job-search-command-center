@@ -1,5 +1,5 @@
 import unittest
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import job_search_public_boards as boards
 
@@ -298,7 +298,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
           <a href="/en/job-offers/data-engineer-26000IP3-en">Data Engineer</a>
           <div>Bucuresti, Romania Permanent contract IT (Information Technology)</div>
         </section>'''
-        fake_client=__import__("unittest").mock.Mock()
+        fake_client=Mock()
         fake_client.get.return_value=("https://careers.societegenerale.com/en/Technical/all-job-offers",html)
         with patch.object(boards,"PublicClient",return_value=fake_client):
             rows=boards._socgen("https://careers.societegenerale.com/en/Technical/all-job-offers")
@@ -311,7 +311,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
-                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds","EuroBrussels"]:
+                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds","EuroBrussels","Societe Generale"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
