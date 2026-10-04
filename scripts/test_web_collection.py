@@ -124,8 +124,20 @@ class WebTests(unittest.TestCase):
         client = FakeClient({SOURCE["url"]: html(JOB)})
         with patch.object(web, "MAX_PAGES", 1):
             results, details = web.collect(SOURCE, {}, NOW, client)
-        self.assertEqual(details["web_outcome"], "partial")
+        self.assertEqual(details["web_outcome"], "extracted")
+        self.assertTrue(any(result.ok and result.records for result in results))
+        self.assertFalse(details["coverage_complete"])
         self.assertFalse(details["discovered_pages_complete"])
+        self.assertIsNone(details["failure_reason"])
+        self.assertIn("bounded crawl limit reached", details["limitations"][0])
+
+    def test_tracking_handoff_links_are_not_crawled(self):
+        roots = {"eurobrussels.com"}
+        self.assertIsNone(web.candidate(
+            {"url": "/job/track_click?job_id=296271&url_count=1", "text": "Apply now"},
+            "https://www.eurobrussels.com/job/296271",
+            roots,
+        ))
 
     def test_expired_missing_and_malformed_records(self):
         expired = {**JOB, "validThrough": "2020-01-01"}
