@@ -120,9 +120,15 @@ bash "${ROOT}/scripts/gcp/run_db_migration.sh" deploy "${ENVIRONMENT}" "${CANDID
 status_pass migration-job
 
 status_step db-migrations
-bash "${ROOT}/scripts/gcp/run_db_migration.sh" execute "${ENVIRONMENT}" "${CANDIDATE_SHA}" "${service_digest}"
+bash "${ROOT}/scripts/gcp/run_db_migration.sh" execute "${ENVIRONMENT}" "${CANDIDATE_SHA}" "${service_digest}" migrate
 status_pass db-migrations
+
+status_step schema-readiness
+bash "${ROOT}/scripts/gcp/run_db_migration.sh" execute "${ENVIRONMENT}" "${CANDIDATE_SHA}" "${service_digest}" schema
 status_pass schema-readiness
+
+status_step db-privileges
+bash "${ROOT}/scripts/gcp/run_db_migration.sh" execute "${ENVIRONMENT}" "${CANDIDATE_SHA}" "${service_digest}" privilege
 status_pass db-privileges
 
 frontend_origin="https://${SERVICE_NAME}-${PROJECT_NUMBER}.${REGION}.run.app"
