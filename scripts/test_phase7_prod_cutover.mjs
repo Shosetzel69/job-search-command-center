@@ -157,9 +157,16 @@ test('PROD reconciliation artifact is mandatory evidence', () => {
 
 test('PROD reconciled deployment refreshes Worker runtime secrets before protected verification', () => {
   assert.match(prodExecutor, /configureBootstrapSecrets: true/);
+  assert.match(promotion, /PROD_NILE_DATABASE_URL: \$\{\{ secrets\.NILE_DATABASE_URL \}\}/);
+  assert.match(provision, /'secret', 'put', 'NILE_DATABASE_URL'/);
   assert.match(provision, /'secret', 'put', 'GITHUB_TOKEN'/);
   assert.match(provision, /'secret', 'put', 'ALLOWED_GOOGLE_SUB'/);
   assert.match(provision, /verifyProtectedFunctionalVisibility/);
+});
+
+test('PROD deployed status verifies database binding as well as source/runtime identity', () => {
+  assert.match(promotion, /\/health\/db/);
+  assert.match(promotion, /jobsearch_prod/);
 });
 
 test('health validates live runtime repository access rather than token presence only', () => {
