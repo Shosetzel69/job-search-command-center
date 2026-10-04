@@ -53,7 +53,7 @@ export function validateManifest(manifest) {
       'runtime_repository', 'runtime_ref', 'workflow', 'worker_name', 'search_mode',
       'cloudflare_account_id_env', 'cloudflare_token_env', 'github_bootstrap_token_env',
       'github_runtime_token_env', 'source_read_token_env', 'allowed_google_sub_env',
-      'google_client_id_env', 'frontend_origin_env',
+      'google_client_id_env', 'frontend_origin_env', 'nile_database_url_env',
     ];
     for (const field of required) {
       const value = String(cfg?.[field] || '').trim();
@@ -114,6 +114,7 @@ export function resolveEnvironment(manifest, name, sourceSha, processEnv = proce
     allowedGoogleSub: null,
     googleClientId: null,
     frontendOrigin: null,
+    nileDatabaseUrl: null,
   };
 
   if (requireRuntimeInputs) {
@@ -126,6 +127,7 @@ export function resolveEnvironment(manifest, name, sourceSha, processEnv = proce
     resolved.allowedGoogleSub = requiredRuntimeValue(processEnv, cfg.allowed_google_sub_env, 'Allowed Google subject');
     resolved.googleClientId = requiredRuntimeValue(processEnv, cfg.google_client_id_env, 'Google OAuth client ID');
     resolved.frontendOrigin = requiredRuntimeValue(processEnv, cfg.frontend_origin_env, 'Frontend origin');
+    resolved.nileDatabaseUrl = requiredRuntimeValue(processEnv, cfg.nile_database_url_env, 'Nile database URL');
     let origin;
     try { origin = new URL(resolved.frontendOrigin); } catch { throw new Error(`Frontend origin must be a valid URL (${cfg.frontend_origin_env})`); }
     if (origin.protocol !== 'https:') throw new Error(`Frontend origin must use HTTPS (${cfg.frontend_origin_env})`);
