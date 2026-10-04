@@ -265,6 +265,11 @@
       "connector": "workable",
       "subdomain": "qualcogroup",
       "enabled": true
+    },
+    "Airbus": {
+      "connector": "workday",
+      "career_url": "https://ag.wd3.myworkdayjobs.com/Airbus",
+      "enabled": true
     }
   }
 }
