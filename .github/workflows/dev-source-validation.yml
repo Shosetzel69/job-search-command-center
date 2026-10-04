@@ -76,10 +76,15 @@ jobs:
           import sys
           sys.path.insert(0, "scripts")
           import source_validation
+          import job_search_public_boards as public_boards
 
           source_ids = source_validation.parse_source_ids(os.environ["SOURCE_IDS"])
           items = source_validation.prepare_validation_items(source_validation.load_catalog(), source_ids)
-          needs_browser = any(item.get("connector") == "web" for item in items)
+          needs_browser = any(
+              item.get("connector") == "web"
+              or (item.get("connector") == "public_board" and public_boards.browser_required(item.get("source")))
+              for item in items
+          )
           with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as handle:
               handle.write(f"needs_browser={'true' if needs_browser else 'false'}\n")
           print(f"Validated {len(items)} source IDs; browser fallback required: {needs_browser}")
