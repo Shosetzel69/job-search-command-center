@@ -260,6 +260,11 @@
       "connector": "greenhouse",
       "board_token": "xebiacee",
       "enabled": true
+    },
+    "Qualco Group / Quento": {
+      "connector": "workable",
+      "subdomain": "qualcogroup",
+      "enabled": true
     }
   }
 }
