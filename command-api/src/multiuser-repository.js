@@ -271,77 +271,108 @@ async function refreshGoogleIdentityMetadata(db, subject, payload) {
   );
 }
 
+function devProvisioningStageError(error, stage, env) {
+  if (String(env.APP_ENV || '').trim().toLowerCase() !== 'dev') return error;
+  return Object.assign(
+    new Error(`[provision-stage:${stage}] ${error?.message || 'Account provisioning failed'}`),
+    {
+      status:Number(error?.status) || 500,
+      code:error?.code,
+      cause:error,
+    },
+  );
+}
+
 async function createOrLoadSharedAccount(subject, payload, env, db) {
   const bootstrapAdmin = String(env.BOOTSTRAP_ADMIN_GOOGLE_SUB || env.ALLOWED_GOOGLE_SUB || '').trim();
   const bootstrapCandidate = Boolean(bootstrapAdmin && subject === bootstrapAdmin);
   const appEnv = String(env.APP_ENV || '').trim().toLowerCase();
+  let stage = 'begin';
 
-  return withTransaction(async tx => {
-    await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-provision'))`);
+  try {
+    return await withTransaction(async tx => {
+      stage = 'advisory-lock';
+      await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-provision'))`);
 
-    const existing = await accountStateForIdentity(tx, subject);
-    if (existing) {
+      stage = 'identity-read';
+      const existing = await accountStateForIdentity(tx, subject);
+      if (existing) {
+        stage = 'bootstrap-read';
+        const bootstrapState = await tx.query(
+          'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton=true',
+        );
+        stage = 'commit';
+        return {
+          row:existing,
+          bootstrapPending:Boolean(bootstrapCandidate && !bootstrapState.rows?.[0]?.owner_bootstrapped_at),
+        };
+      }
+
+      stage = 'bootstrap-read';
       const bootstrapState = await tx.query(
         'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton=true',
       );
+      const bootstrapPending = Boolean(
+        bootstrapCandidate && !bootstrapState.rows?.[0]?.owner_bootstrapped_at
+      );
+      if (!bootstrapPending) {
+        stage = 'admission-check';
+        await assertAdmissionAllowed(tx, env);
+      }
+
+      const userId = bootstrapPending
+        ? deterministicBootstrapUuid('user', appEnv, subject)
+        : randomUUID();
+      const profileId = bootstrapPending
+        ? deterministicBootstrapUuid('profile', appEnv, subject)
+        : randomUUID();
+      const identityId = bootstrapPending
+        ? deterministicBootstrapUuid('identity', appEnv, subject)
+        : randomUUID();
+      const role = bootstrapPending ? 'ADMIN' : 'USER';
+
+      stage = 'app-user-insert';
+      await tx.query(
+        `INSERT INTO app_user(user_id, role, status)
+         VALUES ($1, $2, 'ACTIVE')`,
+        [userId, role],
+      );
+
+      stage = 'user-identity-insert';
+      await tx.query(
+        `INSERT INTO user_identity(
+            identity_id, user_id, provider, provider_subject, email, email_verified
+          )
+          VALUES ($1, $2, 'GOOGLE', $3, $4, $5)`,
+        [identityId, userId, subject, payload?.email || null, Boolean(payload?.email_verified)],
+      );
+
+      stage = 'profile-insert';
+      await tx.query(
+        `INSERT INTO profile(profile_id, user_id, provisioned_at)
+         VALUES ($1, $2, NULL)`,
+        [profileId, userId],
+      );
+
+      stage = 'commit';
       return {
-        row:existing,
-        bootstrapPending:Boolean(bootstrapCandidate && !bootstrapState.rows?.[0]?.owner_bootstrapped_at),
+        row:{
+          user_id:userId,
+          profile_id:profileId,
+          role,
+          status:'ACTIVE',
+          deletion_started_at:null,
+          deletion_initiated_by:null,
+          provisioned_at:null,
+          email:payload?.email || null,
+          email_verified:Boolean(payload?.email_verified),
+        },
+        bootstrapPending,
       };
-    }
-
-    const bootstrapState = await tx.query(
-      'SELECT owner_bootstrapped_at FROM system_bootstrap WHERE singleton=true',
-    );
-    const bootstrapPending = Boolean(
-      bootstrapCandidate && !bootstrapState.rows?.[0]?.owner_bootstrapped_at
-    );
-    if (!bootstrapPending) await assertAdmissionAllowed(tx, env);
-
-    const userId = bootstrapPending
-      ? deterministicBootstrapUuid('user', appEnv, subject)
-      : randomUUID();
-    const profileId = bootstrapPending
-      ? deterministicBootstrapUuid('profile', appEnv, subject)
-      : randomUUID();
-    const identityId = bootstrapPending
-      ? deterministicBootstrapUuid('identity', appEnv, subject)
-      : randomUUID();
-    const role = bootstrapPending ? 'ADMIN' : 'USER';
-
-    await tx.query(
-      `INSERT INTO app_user(user_id, role, status)
-       VALUES ($1, $2, 'ACTIVE')`,
-      [userId, role],
-    );
-    await tx.query(
-      `INSERT INTO user_identity(
-          identity_id, user_id, provider, provider_subject, email, email_verified
-        )
-        VALUES ($1, $2, 'GOOGLE', $3, $4, $5)`,
-      [identityId, userId, subject, payload?.email || null, Boolean(payload?.email_verified)],
-    );
-    await tx.query(
-      `INSERT INTO profile(profile_id, user_id, provisioned_at)
-       VALUES ($1, $2, NULL)`,
-      [profileId, userId],
-    );
-
-    return {
-      row:{
-        user_id:userId,
-        profile_id:profileId,
-        role,
-        status:'ACTIVE',
-        deletion_started_at:null,
-        deletion_initiated_by:null,
-        provisioned_at:null,
-        email:payload?.email || null,
-        email_verified:Boolean(payload?.email_verified),
-      },
-      bootstrapPending,
-    };
-  }, { env, db });
+    }, { env, db });
+  } catch (error) {
+    throw devProvisioningStageError(error, stage, env);
+  }
 }
 
 async function initializePersonalDomain(row, bootstrapPending, bootstrapSeed, env, db) {

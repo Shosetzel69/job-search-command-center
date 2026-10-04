@@ -6,6 +6,7 @@ import { internalAuthContext, withInternalAuthContext } from '../src/internal-au
 import { EVALUATION_VERSION, evaluateSharedJob } from '../src/profile-evaluation.js';
 import {
   mergeEffectiveConfig,
+  resolveOrProvisionGoogleIdentity,
   resolveSession,
   revokeSession,
   sessionHash,
@@ -40,6 +41,60 @@ test('session hash is deterministic SHA-256 and raw token is never the persisted
 test('missing session and idempotent logout do not require a database binding', async () => {
   await assert.rejects(() => resolveSession(null, {}), error => error?.status === 401);
   assert.equal(await revokeSession(null, {}), false);
+});
+
+test('DEV provisioning errors expose the failing shared-transaction stage without changing the database flow', async () => {
+  const queries = [];
+  const query = async text => {
+    queries.push(text);
+    if (text === 'BEGIN' || text === 'ROLLBACK') return { rows:[] };
+    if (text.includes("pg_advisory_xact_lock(hashtext('jscc-account-provision'))")) return { rows:[{}] };
+    if (text.includes('FROM user_identity i')) return { rows:[] };
+    if (text.includes('FROM system_bootstrap')) return { rows:[{ owner_bootstrapped_at:null }] };
+    if (text.includes('INSERT INTO app_user')) {
+      throw new Error('No tenant ID specified in write query');
+    }
+    throw new Error(`Unexpected diagnostic-test query: ${text}`);
+  };
+  const db = {
+    query,
+    connect:async () => ({ query, release() {} }),
+  };
+
+  await assert.rejects(
+    () => resolveOrProvisionGoogleIdentity(
+      { sub:'owner-sub', email:'owner@example.test', email_verified:true },
+      { APP_ENV:'dev', ALLOWED_GOOGLE_SUB:'owner-sub' },
+      { db },
+    ),
+    error => error?.status === 500
+      && error.message === '[provision-stage:app-user-insert] No tenant ID specified in write query',
+  );
+  assert.ok(queries.includes('ROLLBACK'));
+});
+
+test('non-DEV provisioning errors keep their original message', async () => {
+  const query = async text => {
+    if (text === 'BEGIN' || text === 'ROLLBACK') return { rows:[] };
+    if (text.includes("pg_advisory_xact_lock(hashtext('jscc-account-provision'))")) return { rows:[{}] };
+    if (text.includes('FROM user_identity i')) return { rows:[] };
+    if (text.includes('FROM system_bootstrap')) return { rows:[{ owner_bootstrapped_at:null }] };
+    if (text.includes('INSERT INTO app_user')) throw new Error('provider write failed');
+    throw new Error(`Unexpected diagnostic-test query: ${text}`);
+  };
+  const db = {
+    query,
+    connect:async () => ({ query, release() {} }),
+  };
+
+  await assert.rejects(
+    () => resolveOrProvisionGoogleIdentity(
+      { sub:'owner-sub' },
+      { APP_ENV:'test', ALLOWED_GOOGLE_SUB:'owner-sub' },
+      { db },
+    ),
+    error => error?.message === 'provider write failed',
+  );
 });
 
 test('legacy configuration splits profile preferences from system collection policy', () => {
