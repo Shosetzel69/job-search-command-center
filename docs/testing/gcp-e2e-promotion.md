@@ -19,6 +19,9 @@ The initial DEV migration proved the architecture but exposed operational defect
 11. GitHub Actions jobs may currently fail before steps execute, so GCP promotion must not rely on GitHub-hosted runners as its only executor.
 12. DEV -> TEST promotion initially reproduced artifacts but not the effective Service -> Job override IAM contract; control-plane parity is therefore an explicit promotion responsibility.
 13. The first GCP promotion also omitted canonical Command API data-path variables that existed in the prior environment contract; TEST manual run then failed before dispatch because `SEARCH_CONFIG_PATH` was undefined.
+14. `/health/db` proved only connectivity/database binding; it did not prove candidate schema compatibility.
+15. Standalone TEST v0.6.0 reached Cloud Build SUCCESS while `jobsearch_test` had no `schema_migrations` table, and first login failed on missing `system_bootstrap`.
+16. Deployment SUCCESS and functional DEV/TEST PASS are separate gates.
 
 ## 2. Canonical model
 
@@ -31,10 +34,14 @@ candidate SHA
   -> build Service image once (or reuse exact existing artifact)
   -> resolve immutable digests
   -> DEV seed verification
+  -> DEV DB migration Job from exact Service digest
+  -> candidate migration + schema/checksum readiness
   -> DEV Job + Service deploy by digest
   -> DEV /health + /health/db
   -> DEV evidence
   -> TEST seed verification
+  -> TEST DB migration Job from exact Service digest
+  -> candidate migration + schema/checksum readiness
   -> TEST Job + Service deploy using the SAME digests
   -> TEST /health + /health/db
   -> TEST evidence
@@ -135,6 +142,8 @@ Evidence includes:
 - expected DB;
 - health PASS;
 - DB health PASS;
+- DB migrations PASS;
+- DB schema readiness PASS;
 - seed manifest PASS.
 
 TEST promotion fails unless DEV evidence exists and verifies the exact same candidate SHA **and the exact same Job/Service image digests** that TEST is about to deploy.
@@ -194,6 +203,10 @@ Promotion fails immediately if:
 - /health does not report the exact candidate;
 - /health runtime backend is not GCP;
 - /health/db does not bind to the correct environment/database;
+- the environment DB migration Job fails;
+- applied migration version/name/checksum does not equal the candidate manifest;
+- a required schema relation is missing;
+- runtime DB privilege readiness fails;
 - TEST evidence does not match the DEV candidate;
 - standalone TEST is requested while live DEV is not already on the exact candidate SHA or its deployed Job/Service images do not match the immutable candidate digests.
 
@@ -213,3 +226,6 @@ Do not use as normal procedure:
 - historical hard-coded `deploy_dev_job.sh` behavior.
 
 `deploy_dev_job.sh` now only delegates to the generic promotion orchestrator.
+
+
+The exact machine-executed component checklist is `docs/testing/gcp-promotion-checklist.md`. Consolidated migration lessons and permanent controls are in `docs/testing/gcp-migration-lessons-learned.md`.
