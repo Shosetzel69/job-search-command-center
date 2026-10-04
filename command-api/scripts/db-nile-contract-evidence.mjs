@@ -37,6 +37,7 @@ async function main() {
     mixed_shared_plus_tenant_write_rejected:null,
     hard_delete_tenant_plus_shared_tx:null,
     tenant_delete_cascade:null,
+    tenant_delete_retry_idempotent:null,
     details:{},
   };
 
@@ -254,6 +255,22 @@ async function main() {
       await safeRollback(client);
       results.tenant_delete_cascade = false;
       results.details.tenant_delete_cascade = compactError(error);
+    }
+
+    // H. Retry semantics: deleting an already-absent tenant must be classifiable
+    // as an already-completed step rather than a destructive failure.
+    try {
+      await client.query('BEGIN');
+      const retry = await client.query(
+        'DELETE FROM tenants WHERE id=$1 RETURNING id',
+        [tenantCascade],
+      );
+      await client.query('COMMIT');
+      results.tenant_delete_retry_idempotent = retry.rows.length === 0;
+    } catch (error) {
+      await safeRollback(client);
+      results.tenant_delete_retry_idempotent = false;
+      results.details.tenant_delete_retry_idempotent = compactError(error);
     }
 
     process.stdout.write(`${JSON.stringify(results)}\n`);
