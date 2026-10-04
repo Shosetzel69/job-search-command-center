@@ -5,19 +5,23 @@ ACTION="${1:-}"
 ENVIRONMENT="${2:-}"
 CANDIDATE_SHA="${3:-}"
 SERVICE_DIGEST="${4:-}"
+MODE="${5:-migrate}"
 
 [[ "${ACTION}" == "deploy" || "${ACTION}" == "execute" ]] || { echo "action must be deploy or execute" >&2; exit 2; }
-
+[[ "${MODE}" == "migrate" || "${MODE}" == "schema" || "${MODE}" == "privilege" ]] || { echo "mode must be migrate, schema or privilege" >&2; exit 2; }
 [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate SHA must be a full lowercase 40-character SHA" >&2; exit 2; }
 [[ "${SERVICE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "service digest must be immutable sha256" >&2; exit 2; }
 
 source "$(dirname "$0")/environment.sh" "${ENVIRONMENT}"
 
 migration_script="$(cat <<'EOS'
-npm --prefix command-api run db:migrate
-npm --prefix command-api run db:readiness
-npm --prefix command-api run db:privilege-readiness
-node --input-type=module <<'NODE'
+case "${DB_MIGRATION_MODE:-migrate}" in
+  migrate)
+    npm --prefix command-api run db:migrate
+    ;;
+  schema)
+    npm --prefix command-api run db:readiness
+    node --input-type=module <<'NODE'
 import { loadMigrations } from './command-api/src/db/migrations.js';
 import { closeMigrationPool, getMigrationPool } from './command-api/src/db/pool.js';
 
@@ -58,6 +62,15 @@ try {
   await closeMigrationPool();
 }
 NODE
+    ;;
+  privilege)
+    npm --prefix command-api run db:privilege-readiness
+    ;;
+  *)
+    echo "Unsupported DB_MIGRATION_MODE" >&2
+    exit 2
+    ;;
+esac
 EOS
 )"
 payload="$(printf '%s' "${migration_script}" | base64 | tr -d '\n')"
@@ -72,7 +85,7 @@ if [[ "${ACTION}" == "deploy" ]]; then
     --parallelism=1 \
     --max-retries=0 \
     --task-timeout=10m \
-    --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true" \
+    --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true,DB_MIGRATION_MODE=migrate" \
     --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest,NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:latest" \
     --command="/bin/bash" \
     --args="-ceu,echo ${payload} | base64 -d | bash"
@@ -80,5 +93,6 @@ else
   gcloud run jobs execute "${MIGRATION_JOB_NAME}" \
     --project="${PROJECT_ID}" \
     --region="${REGION}" \
+    --update-env-vars="DB_MIGRATION_MODE=${MODE}" \
     --wait
 fi
