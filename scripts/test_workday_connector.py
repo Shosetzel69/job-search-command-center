@@ -125,6 +125,49 @@ class WorkdayConnectorTests(unittest.TestCase):
         second_request = opener.call_args_list[1].args[0]
         self.assertEqual(json.loads(second_request.data)["offset"], 20)
 
+    def test_parallel_detail_workers_preserve_all_records(self):
+        summaries = [
+            {"title": f"Role {i}", "externalPath": f"/job/X/Role_{i}"}
+            for i in range(4)
+        ]
+        list_response = FakeResponse({"total": 4, "jobPostings": summaries})
+
+        def opener(request, timeout=30):
+            if request.get_method() == "POST":
+                return list_response
+            path = request.full_url.rsplit("_", 1)[-1]
+            i = int(path)
+            return FakeResponse({
+                "jobPostingInfo": {
+                    "jobReqId": f"R-{i}",
+                    "title": f"Role {i}",
+                    "jobDescription": "<p>Delivery</p>",
+                    "location": "Romania",
+                    "country": "RO",
+                }
+            })
+
+        results = workday.collect(
+            "https://example.wd3.myworkdayjobs.com/External",
+            "Example Co",
+            max_postings=10,
+            opener=opener,
+            detail_workers=4,
+        )
+        self.assertEqual(len(results[0].records), 4)
+        self.assertEqual(
+            {record["id"] for record in results[0].records},
+            {f"workday:example:External:R-{i}" for i in range(4)},
+        )
+
+    def test_invalid_detail_worker_count_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "detail_workers"):
+            workday.collect(
+                "https://example.wd3.myworkdayjobs.com/External",
+                "Example Co",
+                detail_workers=9,
+            )
+
     def test_invalid_host_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "myworkdayjobs"):
             workday.collect("https://example.com/External", "Example Co")
