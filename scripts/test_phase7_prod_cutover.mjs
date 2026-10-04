@@ -86,12 +86,13 @@ test('PROD deployment keeps trusted control-plane separate from candidate payloa
   assert.match(provision, /export async function deployCandidateWithReconciliation/);
 });
 
-test('PROD runtime executes search from immutable source then publishes and redeploys exact runtime snapshot', () => {
+test('legacy PROD runtime cannot redeploy Command API to Cloudflare', () => {
   assert.match(runtime, /Collect normalize filter and score in PROD/);
   assert.match(runtime, /Publish PROD runtime results safely/);
   assert.match(runtime, /RUNTIME_DATA_SHA/);
-  assert.match(runtime, /Redeploy PROD with published runtime snapshot/);
-  assert.match(runtime, /Verify PROD health after runtime redeploy/);
+  assert.match(runtime, /Block retired Cloudflare PROD deployment/);
+  assert.match(runtime, /CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED/);
+  assert.doesNotMatch(runtime, /\bnpx\s+wrangler\s+deploy\b/);
   assert.match(runtime, /TEST smoke policy verified immutable source checkout only/);
 });
 
