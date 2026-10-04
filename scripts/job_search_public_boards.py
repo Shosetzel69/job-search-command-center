@@ -30,6 +30,10 @@ PUBLIC_BOARD_SOURCES = {
     "NoDesk": {"kind": "rss", "url": "https://nodesk.co/remote-jobs/index.xml"},
     "EU Remote Jobs": {"kind": "rss", "url": "https://euremotejobs.com/feed/"},
     "Remote in Europe": {"kind": "rss", "url": "https://remoteineurope.com/feed/"},
+    "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
+    "Atos": {"kind": "atos", "url": "https://jobs.atos.net/go/Jobs-in-Romania/3686501/"},
+    "UpcoMinds": {"kind": "jobs4it", "url": "https://jobs4it.gr/"},
+    "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en", "portal": "101430233", "section": "2"},
 }
 
 
@@ -306,6 +310,388 @@ def _rss(payload, provider, feed_url):
     return records
 
 
+class _AtosJobsTable(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.rows = []
+        self.in_row = False
+        self.in_cell = False
+        self.cells = []
+        self.parts = []
+        self.job_href = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "tr":
+            self.in_row = True
+            self.cells = []
+            self.job_href = None
+        elif self.in_row and tag == "td":
+            self.in_cell = True
+            self.parts = []
+        elif self.in_row and tag == "a" and attrs.get("href") and "/job/" in attrs["href"] and self.job_href is None:
+            self.job_href = attrs["href"]
+
+    def handle_data(self, data):
+        if self.in_cell:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "td" and self.in_cell:
+            self.cells.append(" ".join(" ".join(self.parts).split()))
+            self.in_cell = False
+        elif tag == "tr" and self.in_row:
+            if self.job_href and self.cells:
+                self.rows.append((self.job_href, list(self.cells)))
+            self.in_row = False
+
+
+class _RmkJobLinks(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.anchor = None
+        self.anchor_parts = []
+        self.current_href = None
+        self.context_parts = []
+
+    def _flush_context(self):
+        if self.current_href and self.current_href in self.jobs:
+            self.jobs[self.current_href]["context"] = " ".join(self.context_parts[-24:])
+        self.context_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href")
+        if tag == "a" and href and "/job/" in href:
+            self._flush_context()
+            self.anchor = href
+            self.current_href = href
+            self.anchor_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        if self.anchor is not None:
+            self.anchor_parts.append(text)
+        if self.current_href:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None:
+            title = " ".join(self.anchor_parts).strip()
+            if title:
+                self.jobs.setdefault(self.anchor, {"title": title, "context": ""})
+            self.anchor = None
+            self.anchor_parts = []
+
+    def close(self):
+        super().close()
+        self._flush_context()
+
+
+class _Jobs4ItHome(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = {}
+        self.anchor = None
+        self.anchor_parts = []
+        self.current_href = None
+        self.context_parts = []
+
+    def _flush_context(self):
+        if self.current_href and self.current_href in self.jobs:
+            self.jobs[self.current_href]["context"] = " ".join(self.context_parts[-24:])
+        self.context_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = attrs.get("href")
+        if tag == "a" and href and re.search(r"/job/[^/?#]+/?(?:[?#].*)?$", href):
+            self._flush_context()
+            self.anchor = href
+            self.current_href = href
+            self.anchor_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        if self.anchor is not None:
+            self.anchor_parts.append(text)
+        if self.current_href:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.anchor is not None:
+            title = " ".join(self.anchor_parts).strip()
+            if title and title.casefold() not in {"apply now", "bookmark it", "see all recent jobs"}:
+                self.jobs.setdefault(self.anchor, {"title": title, "context": ""})
+            self.anchor = None
+            self.anchor_parts = []
+
+    def close(self):
+        super().close()
+        self._flush_context()
+
+
+def _remotive(payload):
+    if not isinstance(payload, dict) or not isinstance(payload.get("jobs"), list):
+        raise ValueError("Remotive response must contain jobs[]")
+    records = []
+    for item in payload["jobs"]:
+        if not isinstance(item, dict):
+            continue
+        location = item.get("candidate_required_location") or "Remote"
+        identity = item.get("id") or item.get("url")
+        if not identity or not item.get("title") or not item.get("url"):
+            continue
+        records.append(_record(
+            "Remotive", identity, item.get("title"),
+            item.get("company_name") or "Remotive",
+            item.get("description") or item.get("title"), item.get("url"),
+            date_posted=item.get("publication_date"), location=location,
+            countries=_country_names_from_text(location), remote=True,
+            employment_statuses=item.get("job_type"),
+        ))
+    return records
+
+
+def _atos_date(value):
+    text = " ".join(str(value or "").split())
+    for fmt in ("%b %d, %Y", "%d %b %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _rmk_page_url(base_url, startrow):
+    base = str(base_url or "").split("?", 1)[0]
+    if startrow:
+        base = base.rstrip("/") + f"/{startrow}/"
+    sep = "&" if "?" in base else "?"
+    return f"{base}{sep}q=&sortColumn=referencedate&sortDirection=desc"
+
+
+def _rmk_jobs(base_url, provider, company):
+    records = {}
+    for startrow in range(0, 251, 50):
+        url = _rmk_page_url(base_url, startrow)
+        status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+        if status != 200:
+            raise RuntimeError(f"{provider} jobs page HTTP {status}")
+        html = body.decode("utf-8", errors="replace")
+        parser = _AtosJobsTable()
+        parser.feed(html)
+        link_parser = _RmkJobLinks()
+        link_parser.feed(html)
+        link_parser.close()
+        added = 0
+
+        candidates = []
+        for href, cells in parser.rows:
+            candidates.append((
+                href,
+                cells[0] if cells else "",
+                cells[1] if len(cells) > 1 else "",
+                cells[2] if len(cells) > 2 else "",
+            ))
+        if not candidates:
+            for href, item in link_parser.jobs.items():
+                context = item.get("context") or ""
+                date_match = re.search(
+                    r"\b(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4}\b",
+                    context,
+                    re.I,
+                )
+                candidates.append((
+                    href,
+                    item.get("title") or "",
+                    context,
+                    date_match.group(0) if date_match else "",
+                ))
+
+        for href, title, location, published in candidates:
+            if not title or not href:
+                continue
+            link = urljoin(base_url, href)
+            identity = link.rstrip("/").rsplit("/", 1)[-1] or link
+            countries = _country_names_from_text(location)
+            if not countries:
+                match = re.search(r"(?:,|\s)\s*([A-Z]{2})(?:\b|$)", location)
+                if match and match.group(1) in engine.COUNTRY_NAMES:
+                    countries = [engine.COUNTRY_NAMES[match.group(1)]]
+            record = _record(
+                provider, identity, title, company, title, link,
+                date_posted=_atos_date(published), location=location,
+                countries=countries,
+                remote=bool(re.search(r"\bremote\b", f"{title} {location}", re.I)),
+            )
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+
+        if added == 0:
+            break
+        if len(candidates) < 50:
+            break
+    return list(records.values())
+
+
+def _atos_date(value):
+    text = " ".join(str(value or "").split())
+    for fmt in ("%b %d, %Y", "%d %b %Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(text, fmt).replace(tzinfo=timezone.utc).isoformat()
+        except ValueError:
+            continue
+    return None
+
+
+def _jobs4it_date(value):
+    text = " ".join(str(value or "").split())
+    match = re.search(
+        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
+        text,
+        re.I,
+    )
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(0), "%B %d, %Y").replace(tzinfo=timezone.utc).isoformat()
+    except ValueError:
+        return None
+
+
+def _jobs4it_date(value):
+    text = " ".join(str(value or "").split())
+    match = re.search(
+        r"\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},\s+\d{4}\b",
+        text,
+        re.I,
+    )
+    if not match:
+        return None
+    try:
+        return datetime.strptime(match.group(0), "%B %d, %Y").replace(tzinfo=timezone.utc).isoformat()
+    except ValueError:
+        return None
+
+
+def _taleo_post_json(url, payload):
+    body = json.dumps(payload).encode("utf-8")
+    request = Request(
+        url,
+        data=body,
+        headers={
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+            "X-Requested-With": "XMLHttpRequest",
+            "tz": "GMT+00:00",
+            "User-Agent": USER_AGENT,
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=30) as response:
+        raw = response.read(MAX_BYTES + 1)
+        status = getattr(response, "status", 200)
+    if len(raw) > MAX_BYTES:
+        raise ValueError("Taleo response exceeds 12 MiB limit")
+    if status != 200:
+        raise RuntimeError(f"Taleo job-board endpoint HTTP {status}")
+    return json.loads(raw.decode("utf-8", errors="replace"))
+
+
+def _taleo_location(value):
+    text = str(value or "").strip()
+    if text.startswith("["):
+        try:
+            parsed = json.loads(text)
+            if isinstance(parsed, list):
+                text = "; ".join(str(item) for item in parsed if str(item).strip())
+        except json.JSONDecodeError:
+            pass
+    return text
+
+
+def _nato_taleo(url, portal="101430233", section="2"):
+    endpoint = (
+        "https://nato.taleo.net/careersection/rest/jobboard/searchjobs"
+        f"?lang=en&portal={portal}"
+    )
+    records = {}
+    page = 1
+    while page <= 20:
+        payload = {
+            "multilineEnabled": False,
+            "sortingSelection": {
+                "sortBySelectionParam": "3",
+                "ascendingSortingOrder": "false",
+            },
+            "fieldData": {
+                "fields": {"KEYWORD": "", "JOB_TITLE": "", "JOB_NUMBER": ""},
+                "valid": True,
+            },
+            "filterSelectionParam": {
+                "searchFilterSelections": [
+                    {"id": "POSTING_DATE", "selectedValues": []},
+                    {"id": "LOCATION", "selectedValues": []},
+                    {"id": "JOB_FIELD", "selectedValues": []},
+                    {"id": "JOB_SCHEDULE", "selectedValues": []},
+                ]
+            },
+            "advancedSearchFiltersSelectionParam": {
+                "searchFilterSelections": [
+                    {"id": "ORGANIZATION", "selectedValues": []},
+                    {"id": "LOCATION", "selectedValues": []},
+                    {"id": "JOB_FIELD", "selectedValues": []},
+                    {"id": "URGENT_JOB", "selectedValues": []},
+                    {"id": "EMPLOYEE_STATUS", "selectedValues": []},
+                ]
+            },
+            "pageNo": page,
+        }
+        data = _taleo_post_json(endpoint, payload)
+        rows = data.get("requisitionList")
+        if not isinstance(rows, list):
+            raise ValueError("NATO Taleo response missing requisitionList[]")
+        for item in rows:
+            if not isinstance(item, dict):
+                continue
+            job_number = str(item.get("jobId") or item.get("contestNo") or "").strip()
+            columns = item.get("column") or []
+            if not job_number or not isinstance(columns, list) or not columns:
+                continue
+            title = plain_text(columns[0])
+            location = _taleo_location(columns[1] if len(columns) > 1 else "")
+            published = plain_text(columns[2] if len(columns) > 2 else "")
+            link = (
+                f"https://nato.taleo.net/careersection/{section}/jobdetail.ftl"
+                f"?job={job_number}&lang=en"
+            )
+            record = _record(
+                "NATO Careers", job_number, title, "NATO", title, link,
+                date_posted=_atos_date(published), location=location,
+                countries=_country_names_from_text(location.replace("-", " ")),
+                remote=bool(re.search(r"\bremote\b", location, re.I)),
+            )
+            records[record["id"]] = record
+
+        paging = data.get("pagingData") or {}
+        total = int(paging.get("totalCount") or len(records))
+        page_size = int(paging.get("pageSize") or max(1, len(rows)))
+        if not rows or page * page_size >= total:
+            break
+        page += 1
+
+    if not records:
+        raise ValueError("NATO Taleo API returned no extractable job rows")
+    return list(records.values())
+
+
 def collect(source, config=None):
     name = str(source.get("name") or "")
     spec = PUBLIC_BOARD_SOURCES.get(name)
@@ -323,6 +709,12 @@ def collect(source, config=None):
             "sessionId":"jscc-global-collection","requestLanguage":"en",
         })
         records=_eures(payload)
+    elif kind == "atos":
+        records = _atos(url)
+    elif kind == "jobs4it":
+        records = _jobs4it(url)
+    elif kind == "nato_taleo":
+        records = _nato_taleo(url, spec.get("portal", "101430233"), spec.get("section", "2"))
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
@@ -338,6 +730,7 @@ def collect(source, config=None):
                 "workingnomads": _workingnomads,
                 "jobgether": _jobgether,
                 "landingjobs": _landingjobs,
+                "remotive": _remotive,
             }[kind]
             records = parser(payload)
     return [engine.CollectionResult("public_board", kind, True, records, len(records))]
