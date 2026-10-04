@@ -6,6 +6,7 @@ import { manualSearchExecutionMode } from './environment-config.js';
 import { withInternalAuthContext } from './internal-auth-context.js';
 import { handleAuthRoute, handleAuthenticatedRoute, sessionContext } from './multiuser-api.js';
 import { clearSessionCookie } from './session-cookie.js';
+import { databaseReadiness } from './db/readiness.js';
 
 const GITHUB_ACTIONS_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
 const PROTECTED_DATA = protectedDataPaths();
@@ -72,6 +73,9 @@ export default {
       const url = new URL(request.url);
 
       if (url.pathname === '/health') return noStoreResponse(await commandApi.fetch(request, env));
+      if (request.method === 'GET' && url.pathname === '/health/db') {
+        return noStoreResponse(json(await databaseReadiness(env)));
+      }
 
       const authRoute = await handleAuthRoute(request, env);
       if (authRoute) return noStoreResponse(authRoute);
