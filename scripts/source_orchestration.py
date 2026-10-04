@@ -13,6 +13,7 @@ import job_search_apify as apify
 import job_search_ashby as ashby
 import job_search_bamboohr as bamboohr
 import job_search_breezyhr as breezyhr
+import job_search_eightfold_public as eightfold_public
 import job_search_greenhouse as greenhouse
 import job_search_jobicy as jobicy
 import job_search_lever as lever
@@ -462,6 +463,8 @@ def collect_ats(item):
         return workable.collect(route["subdomain"], company)
     if connector == "softgarden":
         return softgarden.collect(route["feed_url"], company)
+    if connector == "eightfold_public":
+        return eightfold_public.collect(route["base_url"], route["domain"], company)
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
@@ -469,7 +472,7 @@ def collect_api_sources(config, state, now, plan, run_id=None):
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
-    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable", "softgarden"}
+    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable", "softgarden", "eightfold_public"}
     for item in plan:
         if item["status"] != "pending" or item["connector"] == "web":
             continue
