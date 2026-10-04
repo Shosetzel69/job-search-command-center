@@ -275,6 +275,16 @@
       "connector": "smartrecruiters",
       "company_identifier": "SopraSteria1",
       "enabled": true
+    },
+    "Accenture": {
+      "connector": "workday",
+      "career_url": "https://accenture.wd103.myworkdayjobs.com/AccentureCareers",
+      "enabled": true
+    },
+    "Snyk": {
+      "connector": "ashby",
+      "board_name": "snyk",
+      "enabled": true
     }
   }
 }
