@@ -75,11 +75,8 @@ if [[ "${ENVIRONMENT}" == "test" ]]; then
   dev_attestation="PASS"
 fi
 
-if [[ "${SEED_MODE}" == "verify-existing" ]]; then
-  bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"
-else
-  bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"
-fi
+gcloud storage buckets describe "gs://${RUNTIME_BUCKET}" --project="${PROJECT_ID}" >/dev/null \
+  || { echo "Runtime bucket must exist before promotion status can be published: ${RUNTIME_BUCKET}" >&2; exit 5; }
 
 pipeline_sha="${COMMIT_SHA:-${CANDIDATE_SHA}}"
 operation_id="${BUILD_ID:-manual}-${ENVIRONMENT}-${CANDIDATE_SHA:0:12}"
@@ -96,9 +93,17 @@ python3 "${ROOT}/scripts/gcp/promotion_status.py" init \
   --service-digest "${service_digest}" --dev-attestation "${dev_attestation}"
 STATUS_ACTIVE=true
 
-for step in candidate-identity immutable-artifacts environment runtime-seed; do
+for step in candidate-identity immutable-artifacts environment; do
   status_pass "${step}"
 done
+
+status_step runtime-seed
+if [[ "${SEED_MODE}" == "verify-existing" ]]; then
+  bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"
+else
+  bash "${ROOT}/scripts/gcp/seed_runtime.sh" "${ENVIRONMENT}"
+fi
+status_pass runtime-seed
 
 status_step secrets
 for secret in NILE_DATABASE_URL ALLOWED_GOOGLE_SUB GOOGLE_CLIENT_ID; do
