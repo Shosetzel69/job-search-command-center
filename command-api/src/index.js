@@ -1,6 +1,6 @@
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { activeCodes, assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
-import { CANDIDATE_MANAGED_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
+import { CANDIDATE_MANAGED_DATA_FILES, OPERATIONAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import {
   applySourceAction,
   assertUniqueCategoryLabel,
@@ -21,6 +21,7 @@ import { internalAuthContext } from './internal-auth-context.js';
 import { canAccessRuntimeRepository, dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-backend.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
+const RUNTIME_PROTECTED_DATA_FILES = new Set([...PROTECTED_DATA_FILES, ...OPERATIONAL_DATA_FILES]);
 const GITHUB_ACTIONS_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
 const GITHUB_ACTIONS_OIDC_JWKS = createRemoteJWKSet(new URL('https://token.actions.githubusercontent.com/.well-known/jwks'));
 const GITHUB_FUNCTIONAL_OIDC_AUDIENCE = 'jscc-functional-verification';
@@ -184,7 +185,7 @@ function protectedRuntimePath(env, file) {
 }
 
 async function readProtectedRuntimeData(env, file) {
-  if (!PROTECTED_DATA_FILES.includes(file)) {
+  if (!RUNTIME_PROTECTED_DATA_FILES.has(file)) {
     throw Object.assign(new Error('Not found'), { status:404 });
   }
   const { payload } = await readRepoJson(env, protectedRuntimePath(env, file));
@@ -475,7 +476,7 @@ export default {
 
       if (request.method === 'GET' && url.pathname.startsWith('/data/')) {
         const file = decodeURIComponent(url.pathname.slice('/data/'.length));
-        if (!file || file.includes('/') || !PROTECTED_DATA_FILES.includes(file)) {
+        if (!file || file.includes('/') || !RUNTIME_PROTECTED_DATA_FILES.has(file)) {
           return json({ error:'Not found' }, 404, cors);
         }
         await authenticate(request, env, { allowGithubOidc:true, oidcDataFile:file });
