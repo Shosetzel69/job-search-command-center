@@ -295,6 +295,12 @@
       "connector": "softgarden",
       "feed_url": "https://cariere.orange.ro/jobs.feed.json",
       "enabled": true
+    },
+    "Vodafone / VOIS": {
+      "connector": "eightfold_public",
+      "base_url": "https://jobs.vodafone.com",
+      "domain": "vodafone.com",
+      "enabled": true
     }
   }
 }
