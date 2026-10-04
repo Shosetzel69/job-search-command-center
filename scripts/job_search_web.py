@@ -25,7 +25,7 @@ CAREER = re.compile(r"job|career|vacanc|recruit|cariere|posturi|stellen|emploi|o
 ROLE = re.compile(r"project|program|programme|delivery|service.manager|scrum|pmo", re.I)
 SKIP = re.compile(
     r"/(login|signin|sign-in|sign_in|register|privacy|terms|blog|news|press|events|about|pricing|"
-    r"products?|solutions?|resources?|webinars?|status|history|demo|contact|faq|support|help|career-advice)(/|$)",
+    r"products?|solutions?|resources?|webinars?|status|history|demo|contact|faq|support|help|career-advice|job/track_click)(/|$)",
     re.I,
 )
 DYNAMIC = re.compile(r"<script[^>]+src=|__NEXT_DATA__|webpack|data-reactroot|id=[\"'](?:root|app|__next)[\"']", re.I)
@@ -322,8 +322,10 @@ def collect(source, config, now=None, client=None):
 
     errors = [item for item in diagnostics if item["status"] != "fetched" or item.get("error")]
     limited = bool(queue)
+    # Reaching the intentional crawl budget is not itself a source failure. Successful
+    # bounded extraction remains explicit through coverage/discovery completeness fields.
     if records:
-        outcome = "partial" if errors or limited or malformed else "extracted"
+        outcome = "partial" if errors or malformed else "extracted"
     elif diagnostics and all(item["status"] == "blocked" for item in diagnostics):
         outcome = "blocked"
     elif diagnostics and not any(item["status"] == "fetched" for item in diagnostics):
@@ -337,7 +339,7 @@ def collect(source, config, now=None, client=None):
     if browser_attempted:
         note += f"; browser fallback {browser_status}"
     if limited:
-        note += "; page/time/link budget reached; coverage is partial"
+        note += "; bounded crawl limit reached; discovery coverage is incomplete"
     if outcome == "no_extractable_jobs":
         note += "; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
     results = [engine.CollectionResult(connector, "web_pages", True, list(records.values()), len(records))] if records or outcome == "no_active_jobs" else []
