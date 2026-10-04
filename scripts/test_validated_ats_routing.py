@@ -50,6 +50,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             "Snyk": ("ashby", "snyk"),
             "European Dynamics": ("workable", "european-dynamics"),
             "Orange Romania": ("softgarden", "https://cariere.orange.ro/jobs.feed.json"),
+            "Vodafone / VOIS": ("eightfold_public", "https://jobs.vodafone.com"),
         }
         for name, (connector, identity) in cases.items():
             source = {"id": name, "name": name, "url": "https://example.com/careers", "active": True}
@@ -60,7 +61,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             route_identity = (
                 route.get("career_url") or route.get("board_token") or route.get("board_name")
                 or route.get("site") or route.get("company_identifier") or route.get("subdomain")
-                or route.get("feed_url")
+                or route.get("feed_url") or route.get("base_url")
             )
             self.assertEqual(route_identity, identity, name)
 
@@ -93,6 +94,17 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             self.assertEqual(orchestration.collect_ats(item), expected)
             collect.assert_called_once_with(
                 "https://cariere.orange.ro/jobs.feed.json", "Orange Romania"
+            )
+
+
+    def test_eightfold_public_dispatch_uses_pcsx_route(self):
+        item = {"source": "Vodafone / VOIS", "connector": "eightfold_public",
+                "connector_config": {"base_url": "https://jobs.vodafone.com", "domain": "vodafone.com"}}
+        expected = [engine.CollectionResult("eightfold-public:vodafone.com", "pcsx_public_search", True, [], 0)]
+        with patch.object(orchestration.eightfold_public, "collect", return_value=expected) as collect:
+            self.assertEqual(orchestration.collect_ats(item), expected)
+            collect.assert_called_once_with(
+                "https://jobs.vodafone.com", "vodafone.com", "Vodafone / VOIS"
             )
 
 
