@@ -43,6 +43,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             "Talan Belgium / Luxembourg": ("smartrecruiters", "talan"),
             "Toptal": ("lever", "toptal"),
             "GlobalLogic": ("smartrecruiters", "GlobalLogic4"),
+            "Xebia CEE": ("greenhouse", "xebiacee"),
         }
         for name, (connector, identity) in cases.items():
             source = {"id": name, "name": name, "url": "https://example.com/careers", "active": True}
