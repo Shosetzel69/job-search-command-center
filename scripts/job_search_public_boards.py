@@ -66,6 +66,7 @@ PUBLIC_BOARD_SOURCES = {
     "Trasys International": {"kind": "trasys_keyes", "url": "https://keyescareers.eu/find-my-job"},
     "DailyRemote": {"kind": "dailyremote", "url": "https://dailyremote.com/remote-project-management-jobs"},
     "Jobspresso": {"kind": "rss", "url": "https://jobspresso.co/?feed=job_feed"},
+    "awork.ro": {"kind": "awork", "url": "https://www.awork.ro/"},
 }
 
 
@@ -608,6 +609,75 @@ def _dailyremote(base_url, max_pages=3):
             break
     if not records:
         raise ValueError("DailyRemote project-management page contained no extractable jobs")
+    return list(records.values())
+
+
+_AWORK_TARGET_ROLE = re.compile(
+    r"\b(project manager|program manager|programme manager|delivery manager|"
+    r"technical project manager|it project manager|scrum master|service manager)\b",
+    re.I,
+)
+
+
+def _awork_page_url(base_url, page):
+    base = str(base_url or "").rstrip("/")
+    return base if page <= 1 else f"{base}/page-{page}"
+
+
+def _awork_date(context):
+    text = str(context or "")
+    month_map = {
+        "jan":1,"feb":2,"mar":3,"apr":4,"may":5,"mai":5,"jun":6,"iun":6,
+        "jul":7,"iul":7,"aug":8,"sep":9,"sept":9,"oct":10,"nov":11,"dec":12,
+    }
+    match = re.search(
+        r"\b(\d{1,2})\s+(Jan|Feb|Mar|Apr|May|Mai|Jun|Iun|Jul|Iul|Aug|Sep|Sept|Oct|Nov|Dec)\.?\s+(\d{4})\b",
+        text, re.I,
+    )
+    if not match:
+        return None
+    month = month_map.get(match.group(2).casefold())
+    try:
+        return datetime(int(match.group(3)), month, int(match.group(1)), tzinfo=timezone.utc).isoformat()
+    except (TypeError, ValueError):
+        return None
+
+
+def _awork(base_url, max_pages=3):
+    records = {}
+    for page in range(1, max_pages + 1):
+        page_url = _awork_page_url(base_url, page)
+        status, _kind, body = _fetch(page_url, "text/html,application/xhtml+xml")
+        if status != 200:
+            raise RuntimeError(f"awork.ro page HTTP {status}")
+        parser = _RenderedCareerJobs(r"/[^/?#]+/id-\d+")
+        parser.feed(body.decode("utf-8", errors="replace"))
+        parser.close()
+        added = 0
+        for href, item in parser.jobs.items():
+            title = item.get("title") or ""
+            context = item.get("context") or ""
+            if not title or not _AWORK_TARGET_ROLE.search(title):
+                continue
+            link = urljoin(page_url, href)
+            id_match = re.search(r"/id-(\d+)(?:[/?#]|$)", link)
+            identity = id_match.group(1) if id_match else link.rstrip("/").rsplit("/",1)[-1]
+            company_match = re.search(r"postat\s+de\s+(.+?)\s+în\s+\d{1,2}\s+[A-Za-z]+\s+\d{4}", context, re.I)
+            company = company_match.group(1).strip() if company_match else "awork.ro"
+            record = _record(
+                "awork.ro", identity, title, company, context or title, link,
+                date_posted=_awork_date(context),
+                location=context,
+                countries=_country_names_from_text(context) or ["Romania"],
+                remote=bool(re.search(r"\b(remote|hibrid|hybrid)\b", context, re.I)),
+            )
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+        if added == 0 and page >= 2:
+            break
+    if not records:
+        raise ValueError("awork.ro bounded pages contained no target-role jobs")
     return list(records.values())
 
 
@@ -2250,6 +2320,8 @@ def collect(source, config=None):
         records = _trasys_keyes(url)
     elif kind == "dailyremote":
         records = _dailyremote(url)
+    elif kind == "awork":
+        records = _awork(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
