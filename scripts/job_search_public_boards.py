@@ -73,6 +73,9 @@ PUBLIC_BOARD_SOURCES = {
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
     "Cegeka": {"kind": "linked_jobs", "url": "https://www.cegeka.com/en/ro/jobs/all-jobs", "job_path": r"/en/ro/jobs/all-jobs/[^/?#]+-\d+"},
     "Computacenter": {"kind": "linked_jobs", "url": "https://careers.computacenter.com/ro/search", "job_path": r"/ro/offer/[^/?#]+/[0-9a-f-]+"},
+    "RED Global": {"kind": "linked_jobs", "url": "https://redglobal.com/jobs", "job_path": r"/jobs/job/[^/?#]+/[A-Za-z0-9]+"},
+    "Salt": {"kind": "linked_jobs", "url": "https://welovesalt.com/jobs", "job_path": r"/jobs/[^/?#]+-\d+"},
+    "Lawrence Harvey": {"kind": "linked_jobs", "url": "https://www.lawrenceharvey.com/jobs", "job_path": r"/jobs/\d+[A-Za-z0-9-]+"},
 }
 
 
