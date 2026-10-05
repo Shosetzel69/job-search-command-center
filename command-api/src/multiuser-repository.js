@@ -875,7 +875,7 @@ function evaluationCacheValid(row, foundation) {
 
 async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
   await tx.query(
-    \`INSERT INTO profile_job_evaluation(
+    `INSERT INTO profile_job_evaluation(
         tenant_id, search_profile_id, job_id,
         eligibility_state, eligibility_reason_code, eligible,
         score, pros, risks, exclusion_reason,
@@ -894,7 +894,7 @@ async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
         profile_version=EXCLUDED.profile_version,
         job_version=EXCLUDED.job_version,
         fit_algorithm_version=EXCLUDED.fit_algorithm_version,
-        evaluated_at=EXCLUDED.evaluated_at\`,
+        evaluated_at=EXCLUDED.evaluated_at`,
     [
       tx.tenantId,
       foundation.search_profile_id,
@@ -940,7 +940,7 @@ export async function listProfileJobs(
     const foundation = await resolveActiveSearchProfileTx(tx);
     const params = [tx.tenantId, now, foundation.search_profile_id];
     const where = [
-      \`(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)\`,
+      `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`,
     ];
     const add = value => {
       params.push(value);
@@ -951,7 +951,7 @@ export async function listProfileJobs(
     const targetFamilies = listValues(preferences.target_role_families).map(x => x.toUpperCase());
     if (targetFamilies.length) {
       const p = add(targetFamilies);
-      where.push(\`(j.role_family = ANY(\${p}::text[]) OR j.role_family = 'UNKNOWN')\`);
+      where.push(`(j.role_family = ANY(${p}::text[]) OR j.role_family = 'UNKNOWN')`);
     }
 
     const disabledModes = Object.entries(jsonObject(preferences.work_modes))
@@ -959,48 +959,48 @@ export async function listProfileJobs(
       .map(([mode]) => String(mode).toLowerCase());
     if (disabledModes.length) {
       const p = add(disabledModes);
-      where.push(\`lower(COALESCE(j.work_mode, 'unknown')) <> ALL(\${p}::text[])\`);
+      where.push(`lower(COALESCE(j.work_mode, 'unknown')) <> ALL(${p}::text[])`);
     }
 
     const allowedContracts = listValues(preferences.contract_types).map(x => x.toLowerCase());
     if (allowedContracts.length) {
       const p = add(allowedContracts);
-      where.push(\`(lower(COALESCE(j.contract_type, 'unknown')) = ANY(\${p}::text[])
-        OR lower(COALESCE(j.contract_type, 'unknown')) = 'unknown')\`);
+      where.push(`(lower(COALESCE(j.contract_type, 'unknown')) = ANY(${p}::text[])
+        OR lower(COALESCE(j.contract_type, 'unknown')) = 'unknown')`);
     }
 
     // Temporary view filters. These do not mutate Selection Criteria or evaluation versions.
     if (!spec.include_archived) where.push('state.archived_at IS NULL');
     if (spec.role_family.length) {
       const p = add(spec.role_family);
-      where.push(\`j.role_family = ANY(\${p}::text[])\`);
+      where.push(`j.role_family = ANY(${p}::text[])`);
     }
     if (spec.work_mode.length) {
       const p = add(spec.work_mode);
-      where.push(\`lower(COALESCE(j.work_mode, 'unknown')) = ANY(\${p}::text[])\`);
+      where.push(`lower(COALESCE(j.work_mode, 'unknown')) = ANY(${p}::text[])`);
     }
     if (spec.contract_type.length) {
       const p = add(spec.contract_type);
-      where.push(\`lower(COALESCE(j.contract_type, 'unknown')) = ANY(\${p}::text[])\`);
+      where.push(`lower(COALESCE(j.contract_type, 'unknown')) = ANY(${p}::text[])`);
     }
     if (spec.q) {
       const p = add('%' + spec.q + '%');
-      where.push(\`concat_ws(' ', j.title, j.company, j.location) ILIKE \${p}\`);
+      where.push(`concat_ws(' ', j.title, j.company, j.location) ILIKE ${p}`);
     }
     if (spec.freshness_hours != null) {
       const p = add(spec.freshness_hours);
-      where.push(\`COALESCE(sp.posted_at, j.last_seen_at) >= $2 - (\${p}::integer * interval '1 hour')\`);
+      where.push(`COALESCE(sp.posted_at, j.last_seen_at) >= $2 - (${p}::integer * interval '1 hour')`);
     }
     if (spec.cursor) {
       const at = add(spec.cursor.sort_at);
       const id = add(spec.cursor.job_id);
-      where.push(\`(
-        COALESCE(sp.posted_at, j.last_seen_at) < \${at}::timestamptz
+      where.push(`(
+        COALESCE(sp.posted_at, j.last_seen_at) < ${at}::timestamptz
         OR (
-          COALESCE(sp.posted_at, j.last_seen_at) = \${at}::timestamptz
-          AND j.job_id > \${id}::uuid
+          COALESCE(sp.posted_at, j.last_seen_at) = ${at}::timestamptz
+          AND j.job_id > ${id}::uuid
         )
-      )\`);
+      )`);
     }
 
     const candidateLimit = Math.min(
@@ -1010,7 +1010,7 @@ export async function listProfileJobs(
     const limitParam = add(candidateLimit);
 
     const rowsResult = await tx.query(
-      \`SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
+      `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
               j.role_family, j.role_subfamily, j.seniority, j.contract_type,
               j.remote_scope, j.job_version, j.classification_status,
               j.classification_confidence, j.classification_version,
@@ -1044,9 +1044,9 @@ export async function listProfileJobs(
            ON eval.tenant_id = $1
           AND eval.search_profile_id = $3
           AND eval.job_id = j.job_id
-        WHERE \${where.join('\n          AND ')}
+        WHERE ${where.join('\n          AND ')}
         ORDER BY COALESCE(sp.posted_at, j.last_seen_at) DESC, j.job_id ASC
-        LIMIT \${limitParam}::integer\`,
+        LIMIT ${limitParam}::integer`,
       params,
     );
 
