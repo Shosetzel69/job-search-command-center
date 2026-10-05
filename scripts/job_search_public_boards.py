@@ -71,6 +71,8 @@ PUBLIC_BOARD_SOURCES = {
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
+    "Cegeka": {"kind": "linked_jobs", "url": "https://www.cegeka.com/en/ro/jobs/all-jobs", "job_path": r"/en/ro/jobs/all-jobs/[^/?#]+-\d+"},
+    "Computacenter": {"kind": "linked_jobs", "url": "https://careers.computacenter.com/ro/search", "job_path": r"/ro/offer/[^/?#]+/[0-9a-f-]+"},
 }
 
 
