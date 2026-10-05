@@ -306,6 +306,11 @@
       "connector": "breezyhr",
       "tenant": "cronoseuropa",
       "enabled": true
+    },
+    "ARHS / Accenture": {
+      "connector": "smartrecruiters",
+      "company_identifier": "ARHS",
+      "enabled": true
     }
   }
 }
