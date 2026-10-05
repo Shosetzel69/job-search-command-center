@@ -23,7 +23,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -74,6 +74,8 @@ PUBLIC_BOARD_SOURCES = {
     "Flexa": {"kind": "linked_jobs", "url": "https://flexa.careers/jobs", "job_path": r"/jobs/[^/?#]+-[0-9a-f]{16,}"},
     "Freelancermap": {"kind": "linked_jobs", "url": "https://www.freelancermap.com/projects", "job_path": r"/project/[^/?#]+"},
     "Dynamite Jobs": {"kind": "rendered_links", "url": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager", "job_path": r"/company/[^/?#]+/remote-job/[^/?#]+"},
+    "Just Join IT": {"kind": "linked_jobs", "url": "https://justjoin.it/job-offers/all-locations/pm?from=0", "job_path": r"/job-offer/[^/?#]+"},
+    "Crossover": {"kind": "rendered_links", "url": "https://www.crossover.com/jobs", "job_path": r"/jobs/\d+/[^/?#]+/[^/?#]+"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
