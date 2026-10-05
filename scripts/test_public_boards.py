@@ -1011,6 +1011,23 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
         self.assertTrue(rows[0]["remote"])
 
+    def test_eviden_first_party_list(self):
+        html='''<div class="job-result">
+          Senior IBM HPSS &amp; Tape Storage Systems Engineer H/F
+          Oct 2, 2026 Toulouse, France Experienced
+        </div>
+        <div class="job-result">
+          Lead Software Developer (m/f/d)
+          May 21, 2026 Wien, Austria Experienced
+        </div>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._eviden("https://eviden.com/careers/")
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[0]["company"],"Eviden")
+        self.assertIn("Franta",rows[0]["countries"])
+        self.assertEqual(rows[0]["date_posted"],"2026-10-02T00:00:00+00:00")
+        self.assertIn("Austria",rows[1]["countries"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
