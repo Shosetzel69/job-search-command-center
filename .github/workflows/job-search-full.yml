@@ -10,6 +10,7 @@ on:
         type: choice
         options:
           - manual-ui
+          - admin-ui
           - scheduled
           - system
       source_sha:

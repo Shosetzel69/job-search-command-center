@@ -109,7 +109,7 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
   if (checkActive && await hasActiveWorkflowRun(env, runtime)) {
     throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
   }
-  if (!['manual-ui', 'scheduled', 'system'].includes(runTrigger)) {
+  if (!['manual-ui', 'admin-ui', 'scheduled', 'system'].includes(runTrigger)) {
     throw Object.assign(new Error('Invalid run trigger'), { status: 400 });
   }
   if (!['policy', 'manual-full'].includes(executionMode)) {

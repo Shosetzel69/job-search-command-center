@@ -153,7 +153,7 @@ function fullRunArgs() {
 }
 
 export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', checkActive = true, executionMode = 'policy') {
-  if (!['manual-ui','scheduled','system'].includes(runTrigger)) throw runtimeError('Invalid run trigger', 400);
+  if (!['manual-ui','admin-ui','scheduled','system'].includes(runTrigger)) throw runtimeError('Invalid run trigger', 400);
   if (!['policy','manual-full'].includes(executionMode)) throw runtimeError('Invalid execution mode', 400);
   if (checkActive && await hasActiveWorkflowRun(env)) throw runtimeError('A search run is already queued or running', 409);
   const lock = await createLock(env);
