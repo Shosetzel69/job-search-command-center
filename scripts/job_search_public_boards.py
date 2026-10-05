@@ -23,7 +23,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -48,7 +48,87 @@ PUBLIC_BOARD_SOURCES = {
     "SoftServe": {"kind": "softserve", "url": "https://career.softserveinc.com/en-us/vacancies/country-romania"},
     "EPAM": {"kind": "epam", "url": "https://careers.epam.com/en/jobs/romania"},
     "Orange Romania": {"kind": "softgarden_feed", "url": "https://cariere.orange.ro/jobs.feed.json"},
+    "Mantu": {"kind": "rendered_links", "url": "https://careers.mantu.com/jobs", "job_path": r"/brands/[^/?#]+/jobs/\\d+"},
+    "Serco Europe": {"kind": "rendered_links", "url": "https://careers.serco.com/eu/en/search-results", "job_path": r"/eu/en/job/\\d+/[^/?#]+"},
 }
+
+
+class _RenderedCareerJobs(HTMLParser):
+    def __init__(self, job_path):
+        super().__init__(convert_charrefs=True)
+        self.job_path = re.compile(job_path, re.I)
+        self.jobs = {}
+        self.current_href = None
+        self.title_parts = []
+        self.context_parts = []
+        self.in_anchor = False
+
+    def _flush(self):
+        if self.current_href:
+            title = " ".join(self.title_parts).strip()
+            context = " ".join(self.context_parts[-30:]).strip()
+            if title and title.casefold() not in {"apply", "apply now", "view job", "learn more"}:
+                self.jobs.setdefault(self.current_href, {"title": title, "context": context})
+        self.current_href = None
+        self.title_parts = []
+        self.context_parts = []
+        self.in_anchor = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = str(attrs.get("href") or "")
+        if tag == "a" and href and self.job_path.search(href):
+            self._flush()
+            self.current_href = href
+            self.title_parts = []
+            self.context_parts = []
+            self.in_anchor = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text or not self.current_href:
+            return
+        if self.in_anchor:
+            self.title_parts.append(text)
+        else:
+            self.context_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.in_anchor:
+            self.in_anchor = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def _rendered_career_board(url, provider, job_path, company=None, max_seconds=20):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    final_url, rendered_html, _meta = browser.render(url, deadline, client)
+    parser = _RenderedCareerJobs(job_path)
+    parser.feed(rendered_html)
+    parser.close()
+    records = {}
+    for href, item in parser.jobs.items():
+        title = item.get("title") or ""
+        context = item.get("context") or ""
+        if not title:
+            continue
+        link = urljoin(final_url, href)
+        id_match = re.search(r"/(?:jobs?|job)/(?:[^/]+/)?(\d+)(?:/|$)", link, re.I)
+        identity = id_match.group(1) if id_match else link.rstrip("/").rsplit("/", 1)[-1]
+        countries = _country_names_from_text(context)
+        record = _record(
+            provider, identity, title, company or provider, context or title, link,
+            location=context,
+            countries=countries,
+            remote=bool(re.search(r"\b(remote|hybrid|telework)\b", context, re.I)),
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError(f"{provider} rendered careers page contained no extractable job links")
+    return list(records.values())
 
 
 class PlainText(HTMLParser):
@@ -1525,6 +1605,8 @@ def collect(source, config=None):
         records = _softserve(url)
     elif kind == "epam":
         records = _epam(url)
+    elif kind == "rendered_links":
+        records = _rendered_career_board(url, name, spec["job_path"])
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
