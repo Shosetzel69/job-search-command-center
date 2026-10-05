@@ -30,6 +30,21 @@ function compileRegex(items) {
   }
 }
 
+function normalizeRemoteScope(value) {
+  const normalized = String(value ?? '')
+    .normalize('NFKC')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!normalized) return 'unknown';
+  if (['worldwide','global','global remote','anywhere','work from anywhere','anywhere in the world'].includes(normalized)) return 'Worldwide';
+  if (normalized === 'emea') return 'EMEA';
+  if (['eu','europe','european union','eu only','europe only','within europe','across europe'].includes(normalized)) return 'EU';
+  if (['country','country only','national','specific country'].includes(normalized)) return 'Country';
+  return 'unknown';
+}
+
 function targetCountries(preferences, nomenclatures) {
   const { membership } = geographyIndex(nomenclatures);
   const result = new Set(values(preferences.target_country_codes).map(x => x.toUpperCase()));
@@ -67,7 +82,7 @@ function roleRestricted(preferences) {
 
 function geographicDecision(row, preferences, nomenclatures) {
   const countries = values(row.country_codes).map(x => x.toUpperCase());
-  const remoteScope = String(row.remote_scope || '').trim();
+  const remoteScope = normalizeRemoteScope(row.remote_scope);
   const workMode = String(row.work_mode || 'unknown').toLowerCase();
   const targets = targetCountries(preferences, nomenclatures);
   const excluded = excludedCountries(preferences, nomenclatures);
@@ -81,14 +96,29 @@ function geographicDecision(row, preferences, nomenclatures) {
 
   if (workMode === 'remote' && remoteScope === 'Worldwide') return null;
 
-  if (workMode === 'remote' && ['EU','EMEA'].includes(remoteScope)) {
-    if (excludedRegions.has(remoteScope) || (remoteScope === 'EMEA' && excludedRegions.has('EU'))) {
+  if (workMode === 'remote' && remoteScope === 'EU') {
+    if (excludedRegions.has('EU')) {
       return { state:'INELIGIBLE', code:'REMOTE_SCOPE_EXCLUDED' };
     }
     const { membership } = geographyIndex(nomenclatures);
     const eu = membership.get('EU') || new Set();
     if (targetRegions.has('EU') || [...targets].some(code => eu.has(code) && !excluded.has(code))) return null;
     if (targets.size || targetRegions.size) return { state:'INELIGIBLE', code:'OUTSIDE_TARGET_GEOGRAPHY' };
+    if (excluded.size) return { state:'UNKNOWN', code:'GEOGRAPHY_SCOPE_PARTIAL_UNKNOWN' };
+    return null;
+  }
+
+  if (workMode === 'remote' && remoteScope === 'EMEA') {
+    if (excludedRegions.has('EMEA')) {
+      return { state:'INELIGIBLE', code:'REMOTE_SCOPE_EXCLUDED' };
+    }
+    const { membership } = geographyIndex(nomenclatures);
+    const eu = membership.get('EU') || new Set();
+    if (targetRegions.has('EMEA') || targetRegions.has('EU') || [...targets].some(code => eu.has(code) && !excluded.has(code))) return null;
+    if (targets.size || targetRegions.size || excluded.size || excludedRegions.has('EU')) {
+      return { state:'UNKNOWN', code:'GEOGRAPHY_SCOPE_PARTIAL_UNKNOWN' };
+    }
+    return null;
   }
 
   if (countries.length) {
@@ -107,15 +137,21 @@ function remoteAuthorizationDecision(row, preferences, nomenclatures) {
   if (String(row.work_mode || '').toLowerCase() !== 'remote') return null;
   const allowed = new Set(values(preferences.remote_eligible_country_codes).map(x => x.toUpperCase()));
   if (!allowed.size) return null;
-  const scope = String(row.remote_scope || '').trim();
+  const scope = normalizeRemoteScope(row.remote_scope);
   const countries = values(row.country_codes).map(x => x.toUpperCase());
   if (scope === 'Worldwide') return null;
-  if (['EU','EMEA'].includes(scope)) {
+  if (scope === 'EU') {
     const { membership } = geographyIndex(nomenclatures);
     const eu = membership.get('EU') || new Set();
     return [...allowed].some(code => eu.has(code))
       ? null
       : { state:'INELIGIBLE', code:'REMOTE_AUTHORIZATION_INCOMPATIBLE' };
+  }
+  if (scope === 'EMEA') {
+    const { membership } = geographyIndex(nomenclatures);
+    const eu = membership.get('EU') || new Set();
+    if ([...allowed].some(code => eu.has(code))) return null;
+    return { state:'UNKNOWN', code:'REMOTE_AUTHORIZATION_SCOPE_UNKNOWN' };
   }
   if (countries.length) {
     return countries.some(code => allowed.has(code))
