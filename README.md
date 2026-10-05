@@ -9,7 +9,7 @@ Versiune curenta: `0.06-dev`
 - roluri PM / IT PM / Delivery / Service / Scrum / Program;
 - Remote prioritar, apoi Hybrid/Onsite conform criteriilor;
 - selectie geografica pe regiuni si tari canonice;
-- B2B tinta 250-650 EUR/zi;
+- criterii de compensatie configurabile per profil;
 - FIT, riscuri, descriere, tara/tari si link de job;
 - repostari marcate;
 - full search manual controlat; scheduler separat planificat;
@@ -44,7 +44,7 @@ Engineering/governance AI separat:
 
 `AI client -> ai-github-bridge -> GitHub App dedicat -> GitHub API`
 
-Repository privat. Fara GitHub Pages si fara baza de date activa pentru aplicatia functionala.
+Repository-ul sursa nu contine date runtime personale; configuratia si starea utilizatorilor apartin runtime-ului persistent.
 
 Documentul canonic de arhitectura este `ARCHITECTURE.md` din radacina repository-ului.
 
