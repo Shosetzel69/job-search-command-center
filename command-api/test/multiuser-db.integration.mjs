@@ -10,6 +10,7 @@ import {
   effectiveConfig,
   ensureSearchProfileFoundation,
   listApplications,
+  listProfileJobs,
   nomenclatureReferenceCount,
   resolveActiveSearchProfile,
   resolveOrProvisionGoogleIdentity,
@@ -241,6 +242,94 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       title:'Delivery Manager',
       status:'applied',
     }, env, { db:runtimeDb });
+
+    const lazyJobId = '33333333-3333-4333-8333-333333333333';
+    const lazyPostingId = '44444444-4444-4444-8444-444444444444';
+    await adminDb.query(
+      `INSERT INTO canonical_jobs(
+          job_id, title, company, location, country_codes, work_mode, role_family,
+          lifecycle_status, first_seen_at, last_seen_at, payload,
+          job_version, role_subfamily, seniority, contract_type, remote_scope,
+          classification_status, classification_confidence, classification_version,
+          evaluation_basis_hash
+        )
+        VALUES (
+          $1, 'ATC48903CACHE Technical Project Manager', 'Cache Example', 'Bucharest',
+          ARRAY['RO']::text[], 'remote', 'PROJECT_MANAGEMENT',
+          'ACTIVE', $2, $2, '{"description":"Bank governance contract role"}'::jsonb,
+          1, ARRAY['technical_project_manager']::text[], 'mid', 'contract', 'Country',
+          'matched', 1, '2026.09.25-1', repeat('a', 64)
+        )
+        ON CONFLICT(job_id) DO UPDATE SET
+          title=EXCLUDED.title,
+          last_seen_at=EXCLUDED.last_seen_at,
+          job_version=EXCLUDED.job_version`,
+      [lazyJobId, new Date('2026-10-05T10:00:00Z')],
+    );
+    await adminDb.query(
+      `INSERT INTO source_postings(
+          posting_id, job_id, source_id, source_name, external_job_id,
+          canonical_url, identity_kind, identity_value, posted_at,
+          lifecycle_status, first_seen_at, last_seen_at, seen_run_id, payload
+        )
+        VALUES (
+          $1, $2, 'integration-atc-489-03', 'Integration',
+          'atc-489-03-cache-job', 'https://example.test/atc-489-03-cache-job',
+          'EXTERNAL_ID', 'atc-489-03-cache-job', $3,
+          'ACTIVE', $3, $3, 'integration-atc-489-03', '{}'::jsonb
+        )
+        ON CONFLICT(source_id, identity_kind, identity_value)
+        DO UPDATE SET job_id=EXCLUDED.job_id, last_seen_at=EXCLUDED.last_seen_at`,
+      [lazyPostingId, lazyJobId, new Date('2026-10-05T10:00:00Z')],
+    );
+
+    const jobNomenclatures = JSON.parse(
+      await readFile(new URL('../../data/nomenclatures.json', import.meta.url), 'utf8'),
+    );
+    const cacheQuery = { limit:1, prefetch:0, q:'ATC48903CACHE' };
+    const cacheConfigA = await effectiveConfig(user, env, { db:runtimeDb });
+    const firstLazy = await listProfileJobs(
+      user, cacheConfigA, jobNomenclatures, cacheQuery, env,
+      { db:runtimeDb, now:new Date('2026-10-05T12:00:00Z') },
+    );
+    assert.equal(firstLazy.results, 1);
+    assert.equal(firstLazy.evaluations_computed, 1);
+    assert.equal(firstLazy.cache_hits, 0);
+    assert.equal(firstLazy.bounded, true);
+
+    const secondLazy = await listProfileJobs(
+      user, cacheConfigA, jobNomenclatures, cacheQuery, env,
+      { db:runtimeDb, now:new Date('2026-10-05T12:01:00Z') },
+    );
+    assert.equal(secondLazy.results, 1);
+    assert.equal(secondLazy.evaluations_computed, 0);
+    assert.equal(secondLazy.cache_hits, 1);
+
+    await savePreferences(user, {
+      ...cacheConfigA,
+      fit_threshold:Number(cacheConfigA.fit_threshold || 80) + 1,
+    }, env, { db:runtimeDb });
+    const cacheConfigB = await effectiveConfig(user, env, { db:runtimeDb });
+    const thirdLazy = await listProfileJobs(
+      user, cacheConfigB, jobNomenclatures, cacheQuery, env,
+      { db:runtimeDb, now:new Date('2026-10-05T12:02:00Z') },
+    );
+    assert.equal(thirdLazy.results, 1);
+    assert.equal(thirdLazy.evaluations_computed, 1, 'profile_version change invalidates only the bounded cache row');
+
+    const cacheRow = await adminDb.query(
+      `SELECT search_profile_id, profile_version, job_version, fit_algorithm_version, eligibility_state
+         FROM profile_job_evaluation
+        WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=$3`,
+      [user.profile_id, restoredFoundation.search_profile_id, lazyJobId],
+    );
+    assert.equal(cacheRow.rows.length, 1);
+    assert.equal(String(cacheRow.rows[0].search_profile_id), restoredFoundation.search_profile_id);
+    assert.equal(Number(cacheRow.rows[0].profile_version),
+      (await resolveActiveSearchProfile(user, env, { db:runtimeDb })).profile_version);
+    assert.equal(Number(cacheRow.rows[0].job_version), 1);
+    assert.equal(cacheRow.rows[0].fit_algorithm_version, 'fit-v1');
+    assert.equal(cacheRow.rows[0].eligibility_state, 'ELIGIBLE');
 
     assert.ok(await nomenclatureReferenceCount('regions', 'EU', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('countries', 'RO', env, { db:runtimeDb }) >= 1);

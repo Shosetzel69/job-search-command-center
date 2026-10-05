@@ -3,12 +3,15 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 import { internalAuthContext, withInternalAuthContext } from '../src/internal-auth-context.js';
-import { EVALUATION_VERSION, evaluateSharedJob } from '../src/profile-evaluation.js';
+import { EVALUATION_VERSION, FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from '../src/profile-evaluation.js';
 import { evaluateEligibility } from '../src/eligibility.js';
 import { classifyCanonicalJob } from '../../shared/job-classification.mjs';
 import {
+  decodeJobCursor,
   deterministicTenantEntityUuid,
+  encodeJobCursor,
   mergeEffectiveConfig,
+  normalizeJobSearchQuery,
   ownerBootstrapPending,
   resolveOrProvisionGoogleIdentity,
   resolveSession,
@@ -278,6 +281,123 @@ test('ATC-489-02 migration encodes Search Profile criteria and shared classifica
   assert.ok(TENANT_AWARE_TABLES.includes('search_profile_preferences'));
 });
 
+
+test('ATC-489-03 migration rebuilds derived evaluation cache with Search Profile/version identity', async () => {
+  const sql = await readFile(new URL('../migrations/008_bounded_search_lazy_fit.sql', import.meta.url), 'utf8');
+  assert.match(sql, /TRUNCATE TABLE profile_job_evaluation/);
+  assert.match(sql, /ALTER TABLE profile_job_evaluation/);
+  assert.match(sql, /search_profile_id uuid NOT NULL/);
+  assert.match(sql, /eligibility_state text NOT NULL/);
+  assert.match(sql, /profile_version integer NOT NULL/);
+  assert.match(sql, /job_version integer NOT NULL/);
+  assert.match(sql, /fit_algorithm_version text NOT NULL/);
+  assert.match(sql, /PRIMARY KEY\(tenant_id, search_profile_id, job_id\)/);
+  assert.doesNotMatch(sql, /DROP TABLE profile_job_evaluation/);
+  assert.doesNotMatch(sql, /FOREIGN KEY[\s\S]*search_profile/i);
+  assert.doesNotMatch(sql, /FOREIGN KEY[\s\S]*canonical_jobs/i);
+});
+
+test('bounded jobs cursor is opaque, deterministic and rejects malformed input', () => {
+  const row = {
+    sort_at:new Date('2026-10-05T10:00:00Z'),
+    job_id:'11111111-1111-4111-8111-111111111111',
+  };
+  const encoded = encodeJobCursor(row);
+  assert.equal(encoded.includes('2026-10-05'), false);
+  assert.deepEqual(decodeJobCursor(encoded), {
+    sort_at:'2026-10-05T10:00:00.000Z',
+    job_id:row.job_id,
+  });
+  assert.throws(() => decodeJobCursor('not-a-valid-cursor'), /Invalid jobs cursor/);
+  const malformedUuidCursor = Buffer.from(JSON.stringify({
+    v:1,
+    sort_at:'2026-10-05T10:00:00.000Z',
+    job_id:'------------------------------------',
+  }), 'utf8').toString('base64url');
+  assert.throws(() => decodeJobCursor(malformedUuidCursor), /Invalid jobs cursor/);
+});
+
+test('bounded jobs query caps page/prefetch and keeps temporary filters view-only', () => {
+  const query = normalizeJobSearchQuery({
+    limit:'40',
+    prefetch:'12',
+    role_family:['PROJECT_MANAGEMENT,DELIVERY'],
+    work_mode:['remote'],
+    contract_type:['contract'],
+    freshness_hours:'48',
+    min_fit:'70',
+    include_archived:'true',
+    q:'technical project',
+  });
+  assert.equal(query.limit, 40);
+  assert.equal(query.prefetch, 12);
+  assert.deepEqual(query.role_family, ['PROJECT_MANAGEMENT','DELIVERY']);
+  assert.deepEqual(query.work_mode, ['remote']);
+  assert.deepEqual(query.contract_type, ['contract']);
+  assert.equal(query.freshness_hours, 48);
+  assert.equal(query.min_fit, 70);
+  assert.equal(query.include_archived, true);
+  assert.equal(query.q, 'technical project');
+  assert.throws(() => normalizeJobSearchQuery({ limit:'101' }), /limit must be an integer/);
+  assert.throws(() => normalizeJobSearchQuery({ prefetch:'51' }), /prefetch must be an integer/);
+});
+
+test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the same path', async () => {
+  const repository = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
+  const boundedStart = repository.indexOf('export async function listProfileJobs(');
+  const legacyStart = repository.indexOf('export async function evaluateProfileJobs(');
+  const nextExport = repository.indexOf('\nexport async function nomenclatureReferenceCount', legacyStart);
+  const boundedBlock = repository.slice(boundedStart, legacyStart);
+  const legacyBlock = repository.slice(legacyStart, nextExport);
+  assert.match(boundedBlock, /JOB_CANDIDATE_WINDOW_MAX/);
+  assert.ok(boundedBlock.includes("LIMIT ${limitParam}::integer"));
+  assert.match(boundedBlock, /profile_version/);
+  assert.match(boundedBlock, /job_version/);
+  assert.match(boundedBlock, /FIT_ALGORITHM_VERSION/);
+  assert.match(boundedBlock, /evaluationCacheValid/);
+  assert.match(boundedBlock, /spec\.prefetch/);
+  assert.match(legacyBlock, /await listProfileJobs/);
+  assert.match(legacyBlock, /LEGACY_JOB_PAGE_LIMIT/);
+  assert.ok(legacyBlock.includes("schema_version:'1.0'"));
+  assert.doesNotMatch(legacyBlock, /FROM canonical_jobs/);
+});
+
+test('lazy FIT cache-hit materialization is stable with freshly evaluated job output', () => {
+  const row = {
+    job_id:'55555555-5555-4555-8555-555555555555',
+    title:'Technical Project Manager',
+    company:'Example Bank',
+    location:'Bucharest',
+    country_codes:['RO'],
+    work_mode:'remote',
+    role_family:'PROJECT_MANAGEMENT',
+    role_subfamily:['technical_project_manager'],
+    contract_type:'contract',
+    remote_scope:'Country',
+    source_name:'Example',
+    canonical_url:'https://example.test/cache-stability',
+    posted_at:'2026-10-05T10:00:00Z',
+    payload:{ description:'Bank governance B2B project', contract_type:'contract', remote_scope:'Country' },
+    posting_payload:{},
+  };
+  const preferences = {
+    role_groups:{ pm:{ enabled:true }, delivery:{ enabled:true }, service:{ enabled:true }, scrum:{ enabled:true }, program:{ enabled:true } },
+    work_modes:{ remote:true, hybrid:true, onsite:false },
+    contract_types:['contract'],
+    target_country_codes:['RO'],
+    target_regions:[],
+    excluded_country_codes:[],
+    excluded_regions:[],
+    remote_eligible_country_codes:['RO'],
+    fit_threshold:80,
+    keep_reposts:true,
+  };
+  const evaluated = evaluateSharedJob(row, preferences, nomenclatures, new Date('2026-10-05T12:00:00Z'));
+  assert.equal(evaluated.eligible, true);
+  const cached = materializeCachedJob(row, evaluated, preferences, new Date('2026-10-05T12:00:00Z'));
+  assert.deepEqual(cached, evaluated.job);
+});
+
 test('Selection Criteria authority uses Search Profile preferences and semantic profile versioning', async () => {
   const repository = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
   const saveStart = repository.indexOf('export async function savePreferences(');
@@ -337,7 +457,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(incompatibleRemote.eligible, false);
   assert.equal(incompatibleRemote.exclusionReason, 'remote eligibility geography incompatible');
-  assert.equal(EVALUATION_VERSION, 'multiuser-v1');
+  assert.equal(EVALUATION_VERSION, 'fit-v1');
+  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1');
 });
 
 test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {

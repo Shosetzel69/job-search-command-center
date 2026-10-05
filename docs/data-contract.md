@@ -567,6 +567,19 @@ Application este profile-owned logic; fizic este tenant-aware cu `tenant_id = lo
 
 FIT este personal si incremental. `profile_job_state.job_id` si `profile_job_evaluation.job_id` sunt referinte logice la shared canonical jobs, fara FK fizic cross-plane; evaluation/state derivata dintr-un shared canonical row satisface validarea referintei. Hard eligibility exclude numai pe contradictie explicita. Missing/unknown nu inseamna incompatibilitate.
 
+ATC-489-03 face evaluarea Search-Profile-scoped si bounded:
+- authority de listare target: `GET /me/jobs`;
+- paginare keyset cu cursor opac; `limit` este bounded;
+- query-ul citeste numai un candidate window bounded din shared corpus;
+- filtrele temporare de view nu modifica Selection Criteria si nu cresc `profile_version`;
+- Eligibility pastreaza `ELIGIBLE | INELIGIBLE | UNKNOWN`; numai `INELIGIBLE` este exclus;
+- cache identity/validity: `tenant_id + search_profile_id + job_id + profile_version + job_version + fit_algorithm_version`;
+- cache hit reutilizeaza FIT; cache miss/stale calculeaza numai randurile bounded necesare paginii curente plus prefetch bounded;
+- `/data/jobs.json` este doar adapter temporar peste aceeasi cale bounded; full-corpus evaluate-on-GET este interzis;
+- `GET /me/jobs` si adapterul legacy nu apeleaza provider Retrieve si nu modifica shared corpus.
+
+`profile_job_evaluation` este cache derivat, nu workflow durable. Migration 008 il reconstruieste cu cheia `(tenant_id, search_profile_id, job_id)`; nu sterge Applications, state, Candidate Profile sau Selection Criteria.
+
 
 ## 14. Multiuser migration authority
 

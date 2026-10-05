@@ -82,6 +82,26 @@ try {
     throw new Error('Search Profile preference backfill is incomplete');
   }
 
+  const evaluationCacheColumns = await db.query(
+    `SELECT column_name
+       FROM information_schema.columns
+      WHERE table_schema='public'
+        AND table_name='profile_job_evaluation'`,
+  );
+  const evaluationCacheReady = new Set(
+    (evaluationCacheColumns.rows || []).map(row => String(row.column_name)),
+  );
+  for (const column of [
+    'tenant_id','search_profile_id','job_id',
+    'eligibility_state','eligibility_reason_code','eligible',
+    'score','pros','risks','exclusion_reason',
+    'profile_version','job_version','fit_algorithm_version','evaluated_at',
+  ]) {
+    if (!evaluationCacheReady.has(column)) {
+      throw new Error(`profile_job_evaluation cache schema is missing ${column}`);
+    }
+  }
+
   process.stdout.write(JSON.stringify({
     status:'ok',
     current:migrations.at(-1).version,
