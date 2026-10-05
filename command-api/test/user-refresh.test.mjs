@@ -54,6 +54,7 @@ test('fresh shared corpus is reused with zero dispatch', async () => {
     readState:async () => state(),
     isActive:async () => false,
     dispatch:async () => { dispatches += 1; },
+    buildIdentity:{},
   });
   assert.equal(result.outcome, 'REUSED_CORPUS');
   assert.equal(dispatches, 0);
@@ -65,6 +66,7 @@ test('active global Retrieve coalesces USER refresh with zero second dispatch', 
     readState:async () => state({ corpus_fresh:false }),
     isActive:async () => true,
     dispatch:async () => { dispatches += 1; },
+    buildIdentity:{},
   });
   assert.equal(result.outcome, 'JOINED_EXISTING_RUN');
   assert.equal(dispatches, 0);
@@ -79,6 +81,7 @@ test('stale shared corpus starts exactly one existing global Retrieve', async ()
       calls.push(args);
       return { name:'projects/jscc-dev/locations/europe-west1/operations/op-1' };
     },
+    buildIdentity:{},
   });
   assert.equal(result.outcome, 'STARTED_RUN');
   assert.equal(result.operation_name, 'projects/jscc-dev/locations/europe-west1/operations/op-1');
@@ -93,6 +96,7 @@ test('dispatch race 409 becomes JOINED_EXISTING_RUN', async () => {
     readState:async () => state({ corpus_fresh:false }),
     isActive:async () => false,
     dispatch:async () => { throw Object.assign(new Error('active'), { status:409 }); },
+    buildIdentity:{},
   });
   assert.equal(result.outcome, 'JOINED_EXISTING_RUN');
   assert.equal(result.reason, 'COALESCED_AFTER_RACE');
@@ -105,6 +109,7 @@ test('USER refresh policy disables before lock or dispatch interaction', async (
     readState:async () => state({ user_refresh_enabled:false }),
     isActive:async () => { activeReads += 1; return false; },
     dispatch:async () => { dispatches += 1; },
+    buildIdentity:{},
   });
   assert.equal(result.outcome, 'BLOCKED_BY_POLICY');
   assert.equal(result.reason, 'USER_REFRESH_DISABLED');
@@ -117,6 +122,7 @@ test('PROD USER refresh is blocked even when general search mode is live', async
     readState:async () => state({ corpus_fresh:false }),
     isActive:async () => false,
     dispatch:async () => { throw new Error('must not dispatch'); },
+    buildIdentity:{},
   });
   assert.equal(result.outcome, 'BLOCKED_BY_POLICY');
   assert.equal(result.reason, 'PROD_NOT_AUTHORIZED');
