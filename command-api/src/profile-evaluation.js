@@ -247,3 +247,57 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     },
   };
 }
+
+
+export function materializeCachedJob(row, cached, preferences, now = new Date()) {
+  const payload = { ...(row.payload || {}), ...(row.posting_payload || {}) };
+  const title = String(row.title || payload.job_title || payload.title || '').trim();
+  const company = String(row.company || payload.company || payload.company_name || '').trim();
+  const workMode = mode(row, payload);
+  const remote = workMode === 'remote';
+  const countries = values(payload.countries);
+  const countryCodes = [...new Set([...(row.country_codes || []), ...values(payload.country_codes), payload.country_code, payload.job_country_code]
+    .map(x => String(x || '').trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x)))];
+  const remoteScope = row.remote_scope || countryScope(payload, countryCodes, remote);
+  const type = row.contract_type && row.contract_type !== 'unknown'
+    ? String(row.contract_type).toLowerCase()
+    : contractType(payload);
+  const repost = Boolean(row.repost_of_posting_id || payload.reposted || payload.repost);
+  const posted = row.posted_at || payload.date_posted || payload.posted_at || null;
+  const age = posted ? Math.max(0, Math.floor((now.getTime() - new Date(posted).getTime()) / 3600000)) : 0;
+  const score = cached.score == null ? null : Number(cached.score);
+  const threshold = Number(preferences.fit_threshold ?? 80);
+  const url = row.canonical_url || payload.final_url || payload.source_url || payload.url || null;
+  const modeLabel = workMode === 'remote' ? 'Remote' : workMode === 'hybrid' ? 'Hybrid' : workMode === 'onsite' ? 'Onsite' : 'N/A';
+  const pros = Array.isArray(cached.pros) ? cached.pros : [];
+  const risks = Array.isArray(cached.risks) ? cached.risks : [];
+
+  return {
+    id:String(row.job_id),
+    title,
+    company,
+    initial:company.split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase() || '?',
+    fit:score,
+    location:row.location || payload.location || payload.short_location || 'Nespecificat',
+    countries,
+    country_codes:countryCodes,
+    remote_scope:remoteScope,
+    mode:modeLabel,
+    type:type === 'unknown' ? 'Nespecificat' : type,
+    contract_type:type,
+    employment_type_raw:values(payload.employment_statuses || payload.employment_type).join(', ') || null,
+    age,
+    remote,
+    b2b:['contract','freelance'].includes(type) || /contract|freelance|b2b/i.test(String(payload.description || '')),
+    repost,
+    status:score != null && score >= threshold ? 'new' : 'review',
+    pros:pros.slice(0,2),
+    risks:risks.slice(0,2),
+    url,
+    description:String(payload.description || ''),
+    date_posted:posted,
+    source:row.source_name || payload.source || 'Nespecificata',
+    verified_at:payload.verified_at || null,
+    archived_at:row.archived_at || null,
+  };
+}
