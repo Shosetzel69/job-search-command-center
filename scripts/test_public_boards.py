@@ -529,7 +529,10 @@ class PublicBoardAdapterTests(unittest.TestCase):
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
-                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds","EuroBrussels","Societe Generale","SoftServe","EPAM"]:
+                     "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
+                     "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
+                     "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
+                     "SkipTheDrive","Prohuman"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
