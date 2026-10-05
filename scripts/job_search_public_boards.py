@@ -64,6 +64,8 @@ PUBLIC_BOARD_SOURCES = {
     "Montreal Associates": {"kind": "montreal_associates", "url": "https://www.montrealassociates.com/uk/candidates/job-search/"},
     "eJobs": {"kind": "ejobs", "url": "https://www.ejobs.ro/locuri-de-munca/bucuresti/it-project-manager"},
     "Trasys International": {"kind": "trasys_keyes", "url": "https://keyescareers.eu/find-my-job"},
+    "DailyRemote": {"kind": "dailyremote", "url": "https://dailyremote.com/remote-project-management-jobs"},
+    "Jobspresso": {"kind": "rss", "url": "https://jobspresso.co/?feed=job_feed"},
 }
 
 
@@ -492,6 +494,106 @@ def _trasys_keyes(url):
         records[record["id"]] = record
     if not records:
         raise ValueError("KEYES careers page contained no Trasys International jobs")
+    return list(records.values())
+
+
+class _DailyRemoteList(HTMLParser):
+    JOB_PATH = re.compile(r"/remote-job/[^/?#]+-(\d+)", re.I)
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = []
+        self.current = None
+        self.in_anchor = False
+
+    def _flush(self):
+        if self.current:
+            title = " ".join(self.current["title_parts"]).strip()
+            if title:
+                self.current["title"] = title
+                self.jobs.append(self.current)
+        self.current = None
+        self.in_anchor = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = str(attrs.get("href") or "")
+        match = self.JOB_PATH.search(href)
+        if tag == "a" and match:
+            self._flush()
+            self.current = {
+                "href": href,
+                "id": match.group(1),
+                "title_parts": [],
+                "after_parts": [],
+            }
+            self.in_anchor = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text or not self.current:
+            return
+        if self.in_anchor:
+            self.current["title_parts"].append(text)
+        else:
+            self.current["after_parts"].append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.in_anchor:
+            self.in_anchor = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def _dailyremote_page_url(base_url, page):
+    if page <= 1:
+        return base_url
+    sep = "&" if "?" in base_url else "?"
+    return f"{base_url}{sep}page={page}"
+
+
+def _dailyremote(base_url, max_pages=3):
+    records = {}
+    for page in range(1, max_pages + 1):
+        page_url = _dailyremote_page_url(base_url, page)
+        status, _kind, body = _fetch(page_url, "text/html,application/xhtml+xml")
+        if status != 200:
+            raise RuntimeError(f"DailyRemote jobs page HTTP {status}")
+        parser = _DailyRemoteList()
+        parser.feed(body.decode("utf-8", errors="replace"))
+        parser.close()
+        added = 0
+        for item in parser.jobs:
+            title = item.get("title") or ""
+            href = item.get("href") or ""
+            after = [x for x in item.get("after_parts") or [] if x]
+            if not title or not href:
+                continue
+            link = urljoin(page_url, href)
+            context = " ".join(after[:24])
+            company = after[0] if after else "DailyRemote"
+            employment = [
+                label for label in ("Full Time", "Part Time", "Contract", "Freelance", "Internship")
+                if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I)
+            ]
+            countries = _country_names_from_text(context)
+            record = _record(
+                "DailyRemote", item["id"], title, company, context or title, link,
+                date_posted=_relative_date(context),
+                location=context,
+                countries=countries,
+                remote=True,
+                employment_statuses=employment,
+            )
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+        if added == 0:
+            break
+    if not records:
+        raise ValueError("DailyRemote project-management page contained no extractable jobs")
     return list(records.values())
 
 
@@ -2132,6 +2234,8 @@ def collect(source, config=None):
         records = _ejobs(url)
     elif kind == "trasys_keyes":
         records = _trasys_keyes(url)
+    elif kind == "dailyremote":
+        records = _dailyremote(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
