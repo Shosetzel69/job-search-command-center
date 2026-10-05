@@ -222,51 +222,44 @@ test('deploy workflow never defaults environment to PROD', () => {
   assert.doesNotMatch(workflow, /default:\s*prod/);
 });
 
-test('live deployment is GitHub-Environment scoped and does not multiplex repository-scoped environment secrets', () => {
+test('legacy environment workflow is read-only and exposes no deployment or OIDC path', () => {
   const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /live-environment:[\s\S]*environment: \$\{\{ inputs\.environment \}\}/);
-  assert.match(workflow, /secrets\.GH_BOOTSTRAP_TOKEN/);
-  assert.match(workflow, /secrets\.GH_RUNTIME_TOKEN/);
-  assert.match(workflow, /secrets\.SOURCE_READ_TOKEN/);
-  assert.match(workflow, /secrets\.NILE_DATABASE_URL/);
-  assert.doesNotMatch(workflow, /secrets\.DEV_/);
-  assert.doesNotMatch(workflow, /secrets\.TEST_/);
-  assert.doesNotMatch(workflow, /secrets\.PROD_/);
+  assert.match(workflow, /options: \[validate, status, isolation-test, prod-preflight\]/);
+  assert.match(workflow, /live-readonly:[\s\S]*environment: \$\{\{ inputs\.environment \}\}/);
+  assert.doesNotMatch(workflow, /live-environment:/);
+  assert.doesNotMatch(workflow, /id-token:\s*write/);
+  assert.doesNotMatch(workflow, /issue_pr|dev_evidence_run_id/);
+  assert.doesNotMatch(workflow, /npm run env:deploy|npm run env:bootstrap/);
+  assert.match(workflow, /canonical GCP promotion path/);
 });
 
-test('live DEV and TEST deployment uses trusted main control-plane and exact pre-merge candidate payload', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /Checkout trusted control-plane from main/);
-  assert.match(workflow, /ref: main/);
-  assert.match(workflow, /path: control-plane/);
-  assert.match(workflow, /Checkout immutable candidate source/);
-  assert.match(workflow, /ref: \$\{\{ inputs\.source_sha \}\}/);
-  assert.match(workflow, /path: candidate-source/);
-  assert.match(workflow, /candidate checkout does not match source_sha/);
-  assert.match(workflow, /SOURCE_WORKSPACE/);
-  assert.doesNotMatch(workflow, /Live deployment source_sha must already be reachable from trusted main/);
+test('legacy PROD workflow is verify-only and contains no mutation credentials', () => {
+  const cutover = readFileSync(resolve(ROOT, '.github/workflows/prod-cutover.yml'), 'utf8');
+  assert.match(cutover, /options: \[verify-deployed-status\]/);
+  assert.match(cutover, /inputs\.action == 'verify-deployed-status'/);
+  assert.doesNotMatch(cutover, /prod-promotion:/);
+  assert.doesNotMatch(cutover, /id-token:\s*write/);
+  assert.doesNotMatch(cutover, /secrets\./);
+  assert.doesNotMatch(cutover, /bootstrap-deploy|PROD_GO|test_pass_run_id/);
+  assert.match(cutover, /canonical GCP promotion path/);
 });
 
-test('promotion evidence normalizes FRONTEND_ORIGIN before curl', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /String\(process\.env\.FRONTEND_ORIGIN \|\| ""\)\.trim\(\)\.replace/);
-  assert.match(workflow, /FRONTEND_ORIGIN is empty after normalization/);
-  assert.match(workflow, /curl --fail --silent --show-error "\$frontend_origin\/health"/);
-  assert.match(workflow, /curl --fail --silent --show-error "\$frontend_origin\/health\/db"/);
-  assert.match(workflow, /jobsearch_\$\{\{ inputs\.environment \}\}/);
-  assert.doesNotMatch(workflow, /curl --fail --silent --show-error "\$FRONTEND_ORIGIN\/health"/);
+test('source-repository full search workflow is a fail-closed tombstone', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/job-search-full.yml'), 'utf8');
+  assert.match(workflow, /Full job search \(retired source-repository runtime\)/);
+  assert.match(workflow, /contents:\s*read/);
+  assert.doesNotMatch(workflow, /contents:\s*write/);
+  assert.doesNotMatch(workflow, /secrets\./);
+  assert.doesNotMatch(workflow, /actions\/checkout/);
+  assert.match(workflow, /GITHUB_SOURCE_REPO_SEARCH_RETIRED/);
 });
 
-test('DEV freezes candidate evidence and TEST requires the same DEV-passed candidate', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /issue_pr/);
-  assert.match(workflow, /dev_evidence_run_id/);
-  assert.match(workflow, /promotion-dev-pass/);
-  assert.match(workflow, /verify-dev/);
-  assert.match(workflow, /create-test-deployed/);
-  assert.match(workflow, /promotion-test-deployed/);
-  assert.match(workflow, /group: deploy-\$\{\{ inputs\.environment \}\}/);
-  assert.match(workflow, /cancel-in-progress: false/);
+test('source registry finalization is validation-only and cannot push main', () => {
+  const workflow = readFileSync(resolve(ROOT, '.github/workflows/finalize-source-registry.yml'), 'utf8');
+  assert.match(workflow, /contents:\s*read/);
+  assert.doesNotMatch(workflow, /contents:\s*write/);
+  assert.doesNotMatch(workflow, /git push/);
+  assert.match(workflow, /protected pull request/);
 });
 
 test('independent TEST PASS attestation is main-controlled and candidate-bound', () => {
@@ -282,14 +275,6 @@ test('independent TEST PASS attestation is main-controlled and candidate-bound',
   assert.match(workflow, /create-test-pass/);
   assert.match(workflow, /promotion-test-pass/);
   assert.doesNotMatch(workflow, /push:/);
-});
-
-test('environment automation blocks live PROD and delegates mutation to permanent PROD promotion', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /prod-preflight/);
-  assert.match(workflow, /Live PROD uses the dedicated permanent promotion workflow/);
-  assert.match(workflow, /prod-preflight requires environment=prod/);
-  assert.match(workflow, /inputs\.environment == 'dev' \|\| inputs\.environment == 'test'/);
 });
 
 test('environment deploy health verification retries propagation and pins runtime snapshot identity', () => {
@@ -319,17 +304,6 @@ test('trusted control-plane uses bootstrap role and does not inherit all secrets
 });
 
 
-test('candidate-managed data stays inert and explicitly allowlisted in live deployment', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /Prepare inert candidate-managed data/);
-  assert.match(workflow, /data\/sources\.json data\/source-categories\.json data\/nomenclatures\.json/);
-  assert.match(workflow, /test ! -L "candidate-source\/\$path"/);
-  assert.match(workflow, /CANDIDATE_DATA_WORKSPACE/);
-  assert.match(workflow, /CONTROL_PLANE_SHA/);
-  assert.match(workflow, /RECONCILIATION_EVIDENCE_PATH/);
-  assert.doesNotMatch(workflow, /cp -a candidate-source\/data/);
-});
-
 test('runtime reconciliation and deployed protected functional verification precede baseline acceptance', () => {
   const provision = readFileSync(resolve(ROOT, 'scripts/environment/provision.mjs'), 'utf8');
   const reconcileAt = provision.indexOf('reconcileRuntimeRepository(runtime');
@@ -356,24 +330,6 @@ test('reconciliation write path uses expected-head checks and forbids force/rese
   assert.match(reconciliation, /\.release-control\/candidate-managed\.json/);
 });
 
-test('DEV and TEST promotion records require reconciliation evidence', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /--reconciliation-file promotion-output\/reconciliation\.json/);
-  const promotion = readFileSync(resolve(ROOT, 'scripts/environment/promotion.mjs'), 'utf8');
-  assert.match(promotion, /reconciliation evidence is missing/);
-  assert.match(promotion, /runtime snapshot verification must PASS/);
-});
-
-
-test('fail-closed reconciliation evidence is retained even when live action fails', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /Upload reconciliation trace on success or fail-closed exit/);
-  assert.match(workflow, /always\(\) && \(inputs\.action == 'bootstrap' \|\| inputs\.action == 'deploy'\) && steps\.live-action\.outcome != 'skipped'/);
-  assert.match(workflow, /id: live-action/);
-  assert.match(workflow, /path: promotion-output\/reconciliation\.json/);
-  assert.match(workflow, /if-no-files-found: error/);
-});
-
 test('DEV/TEST evidence contract requires protected functional visibility PASS', () => {
   const promotion = readFileSync(resolve(ROOT, 'scripts/environment/promotion.mjs'), 'utf8');
   assert.match(promotion, /protected functional visibility must PASS/);
@@ -389,33 +345,6 @@ test('functional visibility uses deployed protected data rather than direct cont
   assert.match(reconciliation, /Authorization/);
   assert.doesNotMatch(reconciliation, /readRuntimeJson/);
 });
-
-test('DEV/TEST OIDC capability is limited to bootstrap/deploy and token stays inside execution step', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  const readonly = workflow.match(/  live-readonly:[\s\S]*?(?=\n  live-environment:)/)?.[0] || '';
-  const oidcJob = workflow.match(/  live-environment:[\s\S]*$/)?.[0] || '';
-  const execute = oidcJob.match(/- name: Execute selected live environment action[\s\S]*?- name: Upload reconciliation trace/)?.[0] || '';
-
-  assert.match(readonly, /inputs\.action == 'validate' \|\| inputs\.action == 'status'/);
-  assert.doesNotMatch(readonly, /id-token: write/);
-  assert.doesNotMatch(readonly, /ACTIONS_ID_TOKEN_REQUEST_/);
-
-  assert.match(oidcJob, /inputs\.action == 'bootstrap' \|\| inputs\.action == 'deploy'/);
-  assert.match(oidcJob, /id-token: write/);
-  assert.match(execute, /jscc-functional-verification/);
-  assert.match(execute, /ACTIONS_ID_TOKEN_REQUEST_URL/);
-  assert.match(execute, /ACTIONS_ID_TOKEN_REQUEST_TOKEN/);
-  assert.match(execute, /FUNCTIONAL_GITHUB_OIDC_TOKEN/);
-  assert.match(execute, /export FUNCTIONAL_GITHUB_OIDC_TOKEN/);
-  assert.doesNotMatch(workflow, /FUNCTIONAL_GITHUB_OIDC_TOKEN[^\n]*GITHUB_ENV|GITHUB_ENV[^\n]*FUNCTIONAL_GITHUB_OIDC_TOKEN/);
-  assert.doesNotMatch(workflow, /Acquire short-lived functional verification OIDC token/);
-  assert.equal((workflow.match(/id-token: write/g) || []).length, 1);
-
-  assert.doesNotMatch(workflow, /FUNCTIONAL_GOOGLE_ID_TOKEN/);
-  assert.doesNotMatch(workflow, /secrets\.FUNCTIONAL_GOOGLE_ID_TOKEN/);
-  assert.doesNotMatch(workflow, /- name: Configure runtime and Worker secrets with separated roles/);
-});
-
 
 test('controlled non-PROD Full Search supports UI manual-full and TEST compatibility', () => {
   const runtime = readFileSync(resolve(ROOT, 'config/runtime-template/runtime.yml'), 'utf8');
@@ -445,21 +374,3 @@ test('controlled non-PROD Full Search supports UI manual-full and TEST compatibi
 });
 
 
-test('DEV/TEST promotion evidence retries bounded propagation and requires exact candidate identity', () => {
-  const workflow = readFileSync(resolve(ROOT, '.github/workflows/deploy-environment.yml'), 'utf8');
-  assert.match(workflow, /for attempt in 1 2 3 4 5 6 7 8 9 10/);
-  assert.match(workflow, /\.source_sha == \$source and \.environment == \$environment/);
-  assert.match(workflow, /health did not converge to exact candidate/);
-  assert.match(workflow, /sleep 3/);
-});
-
-test('legacy PROD workflow is verify-only after GCP retirement', () => {
-  const cutover = readFileSync(resolve(ROOT, '.github/workflows/prod-cutover.yml'), 'utf8');
-  const readiness = readFileSync(resolve(ROOT, '.github/workflows/prod-readiness.yml'), 'utf8');
-  assert.match(cutover, /options: \[verify-deployed-status\]/);
-  assert.doesNotMatch(cutover, /options: \[bootstrap-deploy, deploy,/);
-  assert.match(cutover, /CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED/);
-  assert.match(cutover, /post-deploy verification only/);
-  assert.match(cutover, /inputs\.action == 'verify-deployed-status'/);
-  assert.match(readiness, /name: PROD Readiness \(Non-Mutating\)/);
-});
