@@ -107,9 +107,19 @@ export function normalizedCountryCodes(row = {}, payload = {}) {
   return [...result].sort();
 }
 
+export function normalizeRemoteScopeValue(value) {
+  const normalized = normalizeText(value);
+  if (!normalized) return 'unknown';
+  if (/^(worldwide|global|global remote|anywhere|work from anywhere|anywhere in the world)$/.test(normalized)) return 'Worldwide';
+  if (normalized === 'emea') return 'EMEA';
+  if (/^(eu|europe|european union|eu only|europe only|within europe|across europe)$/.test(normalized)) return 'EU';
+  if (/^(country|country only|national|specific country)$/.test(normalized)) return 'Country';
+  return 'unknown';
+}
+
 export function normalizedRemoteScope(row = {}, payload = {}, workMode = normalizedWorkMode(row, payload), countryCodes = normalizedCountryCodes(row, payload)) {
   const explicit = String(payload.remote_scope ?? row.remote_scope ?? '').trim();
-  if (explicit) return explicit;
+  if (explicit) return normalizeRemoteScopeValue(explicit);
   if (workMode !== 'remote') return 'unknown';
   if (countryCodes.length) return 'Country';
   const text = [
