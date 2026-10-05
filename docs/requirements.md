@@ -22,7 +22,7 @@ Daca nu exista informatie pentru un camp sau o sectiune obligatorie, se folosest
 
 **Proiect:** Job Search Command Center  
 **Versiune aplicatie:** 0.06-dev  
-**Scop:** monitorizarea, filtrarea, evaluarea si prioritizarea rolurilor de Project Management pe baza criteriilor definite de utilizator.
+**Scop:** monitorizarea, filtrarea, evaluarea si prioritizarea joburilor pe baza criteriilor definite de utilizator.
 
 Aplicatia nu este un motor de cautare generic. Sistemul colecteaza joburi din sursele operationale, le normalizeaza, aplica eligibilitatea geografica, deduplicarea/repostarea, filtrarea si scoring-ul FIT, apoi publica rezultatele pentru evaluare.
 
@@ -33,8 +33,8 @@ Baseline-ul stabilizat foloseste Full Search manual-only. Salvarea configuratiei
 ### 2.1 Obiective
 
 - colectarea controlata a joburilor relevante;
-- prioritizarea rolurilor PM / IT PM / Delivery / Service / Scrum / Program;
-- Remote prioritar, apoi Hybrid;
+- prioritizarea familiilor de roluri configurate per profil;
+- mod de lucru configurabil per profil;
 - selectie geografica pe regiuni si tari;
 - evaluare FIT, argumente pro si riscuri;
 - pastrarea descrierii si a linkului de job cand sursa le furnizeaza;
