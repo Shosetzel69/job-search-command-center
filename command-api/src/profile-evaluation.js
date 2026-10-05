@@ -1,4 +1,5 @@
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
+import { evaluateEligibility } from './eligibility.js';
 
 export const EVALUATION_VERSION = 'multiuser-v1';
 
@@ -137,23 +138,40 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   const type = contractType(payload);
   const repost = Boolean(row.repost_of_posting_id || payload.reposted || payload.repost);
 
-  let exclusion = null;
-  if (!roleEnabled(row, preferences)) exclusion = 'role family disabled';
-  const excludedCompany = regexList(preferences.excluded_company_patterns);
-  const excludedRole = regexList(preferences.excluded_role_keywords);
-  const deepErp = regexList(preferences.deep_erp_terms);
-  if (!exclusion && excludedCompany?.test(company)) exclusion = 'excluded company';
-  if (!exclusion && excludedRole?.test(title)) exclusion = 'excluded role';
-  if (!exclusion && deepErp?.test(text) && /implement|consultant|specialist|functional/i.test(text)) exclusion = 'deep ERP implementation';
-  if (!exclusion && preferences.work_modes?.[workMode] === false) exclusion = workMode + ' disabled';
-  const selectedTypes = new Set(values(preferences.contract_types).map(x => x.toLowerCase()));
-  if (!exclusion && type !== 'unknown' && selectedTypes.size && !selectedTypes.has(type)) exclusion = 'contract type disabled';
-  if (!exclusion && !geographicEligibility({ countryCodes, remoteScope, remote }, preferences, nomenclatures)) exclusion = 'outside target geography';
-  if (!exclusion && !remoteEligibilityMatches({ countryCodes, remoteScope, remote }, preferences, nomenclatures)) exclusion = 'remote eligibility geography incompatible';
-  if (!exclusion && preferences.keep_reposts === false && repost) exclusion = 'repost disabled';
+  const eligibility = evaluateEligibility({
+    ...row,
+    country_codes:countryCodes,
+    work_mode:workMode,
+    contract_type:row.contract_type || type,
+    remote_scope:row.remote_scope || remoteScope,
+    repost_of_posting_id:row.repost_of_posting_id,
+    payload,
+  }, preferences, nomenclatures);
 
-  if (exclusion) {
-    return { eligible:false, score:null, pros:[], risks:[], exclusionReason:exclusion, job:null };
+  if (eligibility.state === 'INELIGIBLE') {
+    const compatibilityReasons = {
+      ROLE_FAMILY_EXCLUDED:'role family disabled',
+      COMPANY_EXCLUDED:'excluded company',
+      ROLE_EXCLUDED:'excluded role',
+      HARD_EXCLUSION_MATCH:'deep ERP implementation',
+      WORK_MODE_EXCLUDED:workMode + ' disabled',
+      CONTRACT_TYPE_EXCLUDED:'contract type disabled',
+      GEOGRAPHY_EXCLUDED:'outside target geography',
+      REMOTE_SCOPE_EXCLUDED:'outside target geography',
+      OUTSIDE_TARGET_GEOGRAPHY:'outside target geography',
+      REMOTE_AUTHORIZATION_INCOMPATIBLE:'remote eligibility geography incompatible',
+      REPOST_EXCLUDED:'repost disabled',
+    };
+    return {
+      eligible:false,
+      eligibilityState:eligibility.state,
+      eligibilityReasonCode:eligibility.reason_code,
+      score:null,
+      pros:[],
+      risks:[],
+      exclusionReason:compatibilityReasons[eligibility.reason_code] || eligibility.reason_code,
+      job:null,
+    };
   }
 
   let score = 68;
@@ -192,6 +210,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
 
   return {
     eligible:true,
+    eligibilityState:eligibility.state,
+    eligibilityReasonCode:eligibility.reason_code,
     score,
     pros:pros.slice(0, 2),
     risks:risks.slice(0, 2),
