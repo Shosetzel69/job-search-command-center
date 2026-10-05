@@ -400,6 +400,21 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Belgia",rows[0]["countries"])
         self.assertTrue(rows[0]["remote"])
 
+    def test_nextventures_extracts_ref_listings(self):
+        html='''<section>
+          <div>Ref: #75221</div><h4>Technical Product Owner</h4>
+          <div>Amsterdam, Netherlands</div><div>Cloud & Infrastructure</div><div>Contract</div>
+          <div>Ref: #75220</div><h4>SailPoint Developer</h4>
+          <div>Amsterdam, Netherlands</div><div>Cyber Security</div><div>Contract</div>
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._nextventures("https://next-ventures.com/jobs/")
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[0]["job_title"],"Technical Product Owner")
+        self.assertIn("Olanda",rows[0]["countries"])
+        self.assertIn("Contract",rows[0]["employment_statuses"])
+        self.assertTrue(rows[0]["source_url"].endswith("#ref-75221"))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
