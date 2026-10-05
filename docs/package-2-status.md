@@ -120,4 +120,4 @@ Status: `PLANNED / DEPENDENCY GATE`
 
 ## Stabilization gate
 
-Package 1 + Package 2A/2A8 sunt declarate stabile la 2026-09-13. Detalii: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
+Package 1 + Package 2A/2A8 sunt declarate stabile la 2026-09-13. Evidence-ul detaliat este retinut numai in repository-ul privat de arhiva.
