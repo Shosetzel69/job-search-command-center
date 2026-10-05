@@ -63,6 +63,7 @@ PUBLIC_BOARD_SOURCES = {
     "Brains Consulting": {"kind": "brains", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
     "Montreal Associates": {"kind": "montreal_associates", "url": "https://www.montrealassociates.com/uk/candidates/job-search/"},
     "eJobs": {"kind": "ejobs", "url": "https://www.ejobs.ro/locuri-de-munca/bucuresti/it-project-manager"},
+    "Trasys International": {"kind": "trasys_keyes", "url": "https://keyescareers.eu/find-my-job"},
 }
 
 
@@ -463,6 +464,34 @@ def _ejobs(base_url, max_pages=3):
             break
     if not records:
         raise ValueError("eJobs public results contained no extractable jobs")
+    return list(records.values())
+
+
+def _trasys_keyes(url):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"KEYES careers page HTTP {status}")
+    parser = _RenderedCareerJobs(r"/o/[^/?#]+")
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = {}
+    for href, item in parser.jobs.items():
+        title = item.get("title") or ""
+        context = item.get("context") or ""
+        if not title or not re.search(r"\bTrasys International\b", context, re.I):
+            continue
+        link = urljoin(url, href)
+        identity = link.rstrip("/").rsplit("/", 1)[-1]
+        record = _record(
+            "Trasys International", identity, title, "Trasys International",
+            context or title, link,
+            location=context,
+            countries=_country_names_from_text(context),
+            remote=bool(re.search(r"\b(remote|hybrid)\b", context, re.I)),
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError("KEYES careers page contained no Trasys International jobs")
     return list(records.values())
 
 
@@ -2101,6 +2130,8 @@ def collect(source, config=None):
         records = _montreal_associates(url)
     elif kind == "ejobs":
         records = _ejobs(url)
+    elif kind == "trasys_keyes":
+        records = _trasys_keyes(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
