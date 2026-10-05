@@ -200,6 +200,8 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn("search_profile_preferences", MIGRATE)
         self.assertIn("canonical job classification backfill is incomplete", MIGRATE)
         self.assertIn("Search Profile preference backfill is incomplete", MIGRATE)
+        self.assertIn("information_schema.columns", MIGRATE)
+        self.assertIn("profile_job_evaluation cache schema is missing", MIGRATE)
 
     def test_canonical_db_migration_runs_idempotent_search_profile_backfills(self):
         self.assertIn("backfillSearchProfileFoundations", DB_MIGRATE)
