@@ -64,6 +64,7 @@ PUBLIC_BOARD_SOURCES = {
     "Montreal Associates": {"kind": "montreal_associates", "url": "https://www.montrealassociates.com/uk/candidates/job-search/"},
     "eJobs": {"kind": "ejobs", "url": "https://www.ejobs.ro/locuri-de-munca/bucuresti/it-project-manager"},
     "Trasys International": {"kind": "trasys_keyes", "url": "https://keyescareers.eu/find-my-job"},
+    "KEYES / NRB": {"kind": "linked_jobs", "url": "https://keyescareers.eu/find-my-job", "job_path": r"/o/[^/?#]+"},
     "DailyRemote": {"kind": "dailyremote", "url": "https://dailyremote.com/remote-project-management-jobs"},
     "Jobspresso": {"kind": "rss", "url": "https://jobspresso.co/?feed=job_feed"},
     "awork.ro": {"kind": "awork", "url": "https://www.awork.ro/"},
