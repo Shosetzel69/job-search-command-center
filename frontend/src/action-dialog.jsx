@@ -35,7 +35,7 @@ export default function ActionDialog({
       role="dialog"
       aria-modal="true"
       aria-labelledby="action-dialog-title"
-      className="fixed left-1/2 top-1/2 z-[90] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl"
+      className="safe-top safe-bottom fixed inset-0 z-[90] overflow-y-auto bg-white p-4 shadow-2xl sm:left-1/2 sm:top-1/2 sm:inset-auto sm:w-[calc(100%-2rem)] sm:max-w-md sm:-translate-x-1/2 sm:-translate-y-1/2 sm:rounded-2xl sm:border sm:border-slate-200 sm:p-5"
     >
       <h2 id="action-dialog-title" className="font-display text-lg font-bold text-slate-900">{title}</h2>
       {description && <p className="mt-2 text-sm text-slate-600">{description}</p>}
@@ -48,13 +48,13 @@ export default function ActionDialog({
             value={values[field.name] ?? ''}
             placeholder={field.placeholder || ''}
             onChange={event => onChange(field.name, event.target.value)}
-            className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-3"
+            className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3"
           />
         </label>)}
       </div>}
-      <div className="mt-5 flex justify-end gap-2">
-        <button type="button" onClick={onCancel} disabled={locked} className="h-9 rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-600 disabled:opacity-50">Renunta</button>
-        <button type="button" onClick={handleConfirm} disabled={locked || confirmDisabled} className={`h-9 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 ${danger ? 'bg-red-600' : 'bg-blue-600'}`}>{locked ? 'Se salveaza...' : confirmLabel}</button>
+      <div className="mt-5 flex gap-2 sm:justify-end">
+        <button type="button" onClick={onCancel} disabled={locked} className="min-h-11 flex-1 rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-600 disabled:opacity-50 sm:flex-none">Renunta</button>
+        <button type="button" onClick={handleConfirm} disabled={locked || confirmDisabled} className={`min-h-11 flex-1 rounded-xl px-4 text-sm font-semibold text-white disabled:opacity-50 sm:flex-none ${danger ? 'bg-red-600' : 'bg-blue-600'}`}>{locked ? 'Se salveaza...' : confirmLabel}</button>
       </div>
     </section>
   </>;
