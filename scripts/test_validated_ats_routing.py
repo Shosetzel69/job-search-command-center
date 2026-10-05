@@ -52,6 +52,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             "ARHS / Accenture": ("smartrecruiters", "ARHS"),
             "Avance Consulting": ("smartrecruiters", "AvanceConsultingServices2"),
             "Infoplus Technologies UK": ("smartrecruiters", "infoplustechnologies1"),
+            "Infinity Quest": ("smartrecruiters", "InfinityQuest"),
             "Cronos Europa": ("breezyhr", "cronoseuropa"),
             "Orange Romania": ("softgarden", "https://cariere.orange.ro/jobs.feed.json"),
             "Vodafone / VOIS": ("eightfold_public", "https://jobs.vodafone.com"),
