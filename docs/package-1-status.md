@@ -44,4 +44,4 @@ Acest gap este acceptat ca verificare live reziduala si nu blocheaza closeout-ul
 
 Package 1 indeplineste criteriile de stabilizare si poate fi inchis administrativ.
 
-Raportul operational istoric este retinut numai in repository-ul privat de arhiva.
+Raportul operational istoric este disponibil numai in istoricul Git.
