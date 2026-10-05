@@ -1028,6 +1028,46 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["date_posted"],"2026-10-02T00:00:00+00:00")
         self.assertIn("Austria",rows[1]["countries"])
 
+    def test_harman_and_vector_synergy_rendered_routes(self):
+        harman_html='''<div>
+          <a href="/job/bucharest/technical-program-manager/23226/12345678">
+            Technical Program Manager
+          </a>
+          Bucharest Romania Hybrid
+        </div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://jobs.harman.com/search-jobs/?orgIds=23226",
+            harman_html,
+            {"browser_status":"rendered"},
+        )):
+            rows=boards._rendered_career_board(
+                "https://jobs.harman.com/search-jobs/?orgIds=23226",
+                "HARMAN",
+                r"/job/[^/?#]+/[^/?#]+/23226/\d+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["company"],"HARMAN")
+        self.assertEqual(rows[0]["job_title"],"Technical Program Manager")
+        self.assertIn("Romania",rows[0]["countries"])
+
+        vector_html='''<h3>Project Support Officer</h3>
+        <div>Brussels Belgium NATO Secret Contract</div>
+        <h3>Service Delivery Manager</h3>
+        <div>The Hague Netherlands Hybrid Contract</div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://www.vectorsynergy.com/job-board",
+            vector_html,
+            {"browser_status":"rendered"},
+        )):
+            rows=boards._rendered_heading_list_board(
+                "https://www.vectorsynergy.com/job-board",
+                "Vector Synergy",
+            )
+        self.assertEqual(len(rows),2)
+        self.assertTrue(all(row["company"]=="Vector Synergy" for row in rows))
+        self.assertTrue(any("Belgia" in row["countries"] for row in rows))
+        self.assertTrue(any("Tarile de Jos" in row["countries"] for row in rows))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
