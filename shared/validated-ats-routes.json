@@ -301,6 +301,11 @@
       "base_url": "https://jobs.vodafone.com",
       "domain": "vodafone.com",
       "enabled": true
+    },
+    "Cronos Europa": {
+      "connector": "breezyhr",
+      "tenant": "cronoseuropa",
+      "enabled": true
     }
   }
 }
