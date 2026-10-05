@@ -541,13 +541,44 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Elvetia",rows[0]["countries"])
         self.assertTrue(rows[0]["source_url"].endswith("31844995/"))
 
+    def test_github_careers_rendered_jobs(self):
+        html='''<section>
+          <a href="/careers-home/jobs/5773">Staff Software Engineer, Git Systems</a>
+          United Kingdom Engineering Experienced Professional Full Time Remote
+        </section>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://www.github.careers/careers-home/jobs",html,{"browser_status":"rendered"}
+        )):
+            rows=boards._rendered_career_board(
+                "https://www.github.careers/careers-home/jobs",
+                "GitHub",r"/careers-home/jobs/\d+"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Staff Software Engineer, Git Systems")
+        self.assertIn("Regatul Unit",rows[0]["countries"])
+
+    def test_brains_consulting_skips_filled_jobs(self):
+        listing='''<article><h2><a href="/active-job/">Active Job</a></h2></article>
+                   <article><h2><a href="/filled-job/">Filled Job</a></h2></article>'''
+        active='''<html><h1>Medici Stomatologi - OLANDA</h1><div>Olanda post disponibil</div></html>'''
+        filled='''<html><h1>Sofer camion</h1><div>TOATE LOCURILE DE MUNCA VACANTE AU FOST OCUPATE</div></html>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (200,"text/html",listing.encode()),
+            (200,"text/html",active.encode()),
+            (200,"text/html",filled.encode()),
+        ]):
+            rows=boards._brains("https://www.brainsconsulting.ro/category/locuri-de-munca/")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Medici Stomatologi - OLANDA")
+        self.assertIn("Tarile de Jos",rows[0]["countries"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
                      "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
                      "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
                      "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
-                     "SkipTheDrive","Prohuman","Source Group International"]:
+                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
