@@ -923,6 +923,33 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["company"],"KEYES / NRB")
         self.assertIn("Belgia",rows[0]["countries"])
 
+    def test_justjoinit_and_crossover_routes(self):
+        html='<a href="/job-offer/intent-senior-project-manager-iot-projects--warszawa-pm-1206bee1">Senior Project Manager (IoT projects)</a> Warszawa Remote B2B'
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+            rows=boards._linked_job_board(
+                "https://justjoin.it/job-offers/all-locations/pm?from=0",
+                "Just Join IT",
+                r"/job-offer/[^/?#]+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Senior Project Manager (IoT projects)")
+        self.assertTrue(rows[0]["remote"])
+
+        rendered='<a href="/jobs/5669/2-hour-learning/vp-of-program-management-office">VP of Program Management Office</a> Remote full-time'
+        with patch.object(boards.browser,"render",return_value=(
+            "https://www.crossover.com/jobs",
+            rendered,
+            {"browser_status":"rendered"},
+        )):
+            rows=boards._rendered_career_board(
+                "https://www.crossover.com/jobs",
+                "Crossover",
+                r"/jobs/\d+/[^/?#]+/[^/?#]+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"VP of Program Management Office")
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
