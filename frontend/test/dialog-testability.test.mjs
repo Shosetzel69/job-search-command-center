@@ -69,3 +69,25 @@ test('cancel path performs zero mutations', () => {
   assert.equal(mutations, 0);
   assert.equal(guard.isActive(), false);
 });
+
+test('source dialog exposes required category validation before mutation', () => {
+  assert.match(admin, /Categoria este obligatorie inainte de salvarea sursei/);
+  assert.match(admin, /aria-invalid=/);
+  assert.match(admin, /source-category-error/);
+  assert.match(admin, /role="alert"/);
+  assert.match(admin, /categoryMissing \|\| newCategoryInvalid/);
+});
+
+test('inline category plus source save is guarded as one single-fire sequence', () => {
+  assert.match(admin, /createSingleFireGuard/);
+  assert.match(admin, /submitGuard\.current\.tryStart\(\)/);
+  assert.match(admin, /await onCreateCategory\(label\)/);
+  assert.match(admin, /await onSave\(\{ \.\.\.form, category \}\)/);
+  assert.match(admin, /submitGuard\.current\.finish\(\)/);
+});
+
+test('dialogs become compact full-screen and wide centered modals without native dialogs', () => {
+  assert.match(dialog, /fixed inset-0/);
+  assert.match(dialog, /sm:left-1\/2/);
+  assert.match(admin, /md:left-1\/2/);
+});
