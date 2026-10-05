@@ -134,6 +134,31 @@ async function assertCandidateProfileReferenceTx(tx, tenantId, candidateProfileI
   return candidateId;
 }
 
+async function resolveActiveSearchProfileTx(tx) {
+  const result = await tx.query(
+    `SELECT search_profile_id, candidate_profile_id, status,
+            profile_version, onboarding_state, created_at, updated_at
+       FROM search_profile
+      WHERE tenant_id=$1 AND status='ACTIVE'
+      ORDER BY created_at, search_profile_id`,
+    [tx.tenantId],
+  );
+  if (result.rows.length !== 1) {
+    throw httpError('Exactly one active Search Profile is required in the current release', 503);
+  }
+  const row = result.rows[0];
+  await assertCandidateProfileReferenceTx(tx, tx.tenantId, row.candidate_profile_id);
+  return Object.freeze({
+    search_profile_id:String(row.search_profile_id),
+    candidate_profile_id:String(row.candidate_profile_id),
+    status:String(row.status),
+    profile_version:Number(row.profile_version),
+    onboarding_state:String(row.onboarding_state),
+    created_at:row.created_at,
+    updated_at:row.updated_at,
+  });
+}
+
 async function ensureSearchProfileFoundationTx(tx, tenantId) {
   const tenant = requireUuid(tenantId, 'tenant_id');
   const candidateProfileId = deterministicTenantEntityUuid('candidate-profile', tenant);
@@ -203,30 +228,11 @@ export async function resolveActiveSearchProfile(
   env = process.env,
   { db = getPool(env) } = {},
 ) {
-  return withTenantTransaction(authContext, async tx => {
-    const result = await tx.query(
-      `SELECT search_profile_id, candidate_profile_id, status,
-              profile_version, onboarding_state, created_at, updated_at
-         FROM search_profile
-        WHERE tenant_id=$1 AND status='ACTIVE'
-        ORDER BY created_at, search_profile_id`,
-      [tx.tenantId],
-    );
-    if (result.rows.length !== 1) {
-      throw httpError('Exactly one active Search Profile is required in the current release', 503);
-    }
-    const row = result.rows[0];
-    await assertCandidateProfileReferenceTx(tx, tx.tenantId, row.candidate_profile_id);
-    return Object.freeze({
-      search_profile_id:String(row.search_profile_id),
-      candidate_profile_id:String(row.candidate_profile_id),
-      status:String(row.status),
-      profile_version:Number(row.profile_version),
-      onboarding_state:String(row.onboarding_state),
-      created_at:row.created_at,
-      updated_at:row.updated_at,
-    });
-  }, { env, db });
+  return withTenantTransaction(
+    authContext,
+    tx => resolveActiveSearchProfileTx(tx),
+    { env, db },
+  );
 }
 
 function accountLimitFromEnv(env) {
