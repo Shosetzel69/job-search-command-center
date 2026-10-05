@@ -82,7 +82,7 @@ export async function userRefresh(
         outcome:'JOINED_EXISTING_RUN',
         reason:'COALESCED_AFTER_RACE',
         execution_mode:decision.execution_mode,
-        ...metadata(state),
+        ...metadata(currentState),
       };
     }
     throw error;
