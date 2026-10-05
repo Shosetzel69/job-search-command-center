@@ -53,14 +53,21 @@ export async function userRefresh(
   }
 
   const runtime = assertEnvironmentConfig(env, buildIdentity);
-  const state = await readState(env);
+  const initialState = await readState(env);
 
   // Policy is evaluated before any runtime lock/dispatch interaction.
-  let decision = decideUserRefresh({ state, runtime, activeRun:false });
+  let decision = decideUserRefresh({ state:initialState, runtime, activeRun:false });
   if (decision.outcome === 'BLOCKED_BY_POLICY') return decision;
 
   const activeRun = await isActive(env, runtime);
-  decision = decideUserRefresh({ state, runtime, activeRun });
+  if (activeRun) {
+    return decideUserRefresh({ state:initialState, runtime, activeRun:true });
+  }
+
+  // A global run may have completed between the first DB read and the lock read.
+  // Re-read freshness before attempting a new dispatch to avoid redundant Retrieve.
+  const currentState = await readState(env);
+  decision = decideUserRefresh({ state:currentState, runtime, activeRun:false });
   if (decision.outcome !== 'STARTED_RUN') return decision;
 
   try {
