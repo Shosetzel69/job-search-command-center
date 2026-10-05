@@ -311,6 +311,11 @@
       "connector": "smartrecruiters",
       "company_identifier": "ARHS",
       "enabled": true
+    },
+    "Avance Consulting": {
+      "connector": "smartrecruiters",
+      "company_identifier": "AvanceConsultingServices2",
+      "enabled": true
     }
   }
 }
