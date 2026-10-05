@@ -54,6 +54,7 @@ PUBLIC_BOARD_SOURCES = {
     "Hays Romania": {"kind": "linked_jobs", "url": "https://www.hays.ro/en/job-search", "job_path": r"/en/job-detail/[^?#]+"},
     "Square One Resources": {"kind": "squareone", "url": "https://www.squareoneresources.com/jobs"},
     "Proactive.IT": {"kind": "rendered_links", "url": "https://www.proactive.it/job-vacancies/", "job_path": r"/job/[^/?#]+/?$"},
+    "PowerToFly": {"kind": "linked_jobs", "url": "https://powertofly.com/jobs/?only_html=True", "job_path": r"/jobs/detail/\\d+"},
 }
 
 
