@@ -88,6 +88,7 @@ PUBLIC_BOARD_SOURCES = {
     "PeoplePerHour": {"kind": "linked_jobs", "url": "https://www.peopleperhour.com/freelance-jobs?keyword=project%20manager", "job_path": r"/freelance-jobs/(?:[^/?#]+/)*[^/?#]+-\d+"},
     "Arc.dev": {"kind": "arc", "url": "https://arc.dev/remote-jobs?jobRoles=project_manager"},
     "eFinancialCareers": {"kind": "linked_jobs", "url": "https://www.efinancialcareers.com/jobs/project-manager/in-europe", "job_path": r"/jobs-[^?#]+\.id\d+"},
+    "Upwork": {"kind": "linked_jobs", "url": "https://www.upwork.com/freelance-jobs/project-management/", "job_path": r"/freelance-jobs/apply/[^/?#]+_~\d+/"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
