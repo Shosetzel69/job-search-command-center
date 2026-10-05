@@ -42,6 +42,13 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('data.get("job_digest")==args.job_digest', VERIFY_EVIDENCE)
         self.assertIn('data.get("service_digest")==args.service_digest', VERIFY_EVIDENCE)
 
+    def test_promotion_evidence_schema_is_consistent_and_db_ready(self):
+        self.assertIn('"schema_version":"1.1"', PROMOTE)
+        self.assertIn('"schema_version": "1.1"', LIVE)
+        self.assertIn('data.get("schema_version")=="1.1"', VERIFY_EVIDENCE)
+        self.assertIn('data.get("db_migrations")=="PASS"', VERIFY_EVIDENCE)
+        self.assertIn('data.get("db_schema_readiness")=="PASS"', VERIFY_EVIDENCE)
+
     def test_health_and_db_are_both_gated(self):
         self.assertIn('/health")', PROMOTE)
         self.assertIn('/health/db")', PROMOTE)
@@ -137,6 +144,8 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('gcloud run jobs describe', LIVE)
         self.assertIn('gcloud run services describe', LIVE)
         self.assertIn('verify_runtime_seed.sh', LIVE)
+        self.assertIn('gcloud storage cat "gs://${RUNTIME_BUCKET}/seed/promotion-status.json"', LIVE)
+        self.assertIn('("db-migrations", "schema-readiness", "db-privileges")', LIVE)
         self.assertIn('gcloud storage objects describe', VERIFY_SEED)
         for forbidden in (
             'gcloud run deploy',
