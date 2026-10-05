@@ -36,6 +36,7 @@ COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "source
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
 POLICY_EXCLUDED_SOURCE_NAMES = {"monster"}
+PROVIDER_ALIASES = {"RemoteHunt": "We Work Remotely"}
 
 DEFERRED_PROVIDER_ROOTS = {
     "linkedin.com": ("LinkedIn", "jobs"),
@@ -271,8 +272,10 @@ def build_plan(catalog):
         raise ValueError("Source catalog must contain a sources array")
     plan = []
     seen = set()
+    catalog_names = {str(source.get("name") or "") for source in catalog["sources"]}
     for source in catalog["sources"]:
         route = ATS_ROUTES.get(source.get("name"))
+        alias_target = PROVIDER_ALIASES.get(source.get("name"))
         connector = connector_for(source)
         deferred = None if connector else deferred_provider(source)
         if not connector and not deferred:
@@ -300,6 +303,10 @@ def build_plan(catalog):
         if excluded_by_policy:
             reason = "Excluded operationally by project source policy"
             item.update(status="inactive", outcome="excluded_policy", error=reason, failure_reason=reason)
+        elif alias_target and alias_target in catalog_names:
+            reason = f"Provider alias of {alias_target}; canonical provider already planned"
+            item.update(status="skipped", outcome="provider_alias", error=reason,
+                        failure_reason=reason, provider_alias=alias_target)
         if route:
             item["connector_config"] = route
             if route.get("enabled") is False:
