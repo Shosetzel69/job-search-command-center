@@ -1147,6 +1147,25 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Project Manager")
         self.assertTrue(rows[0]["remote"])
 
+    def test_hubstaff_talent_rendered_route(self):
+        html='''<div>
+          <a href="/jobs/technical-project-manager">Technical Project Manager</a>
+          Remote Hourly contract Expert
+        </div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://hubstafftalent.net/search/jobs?search%5Bkeywords%5D=project%20manager",
+            html,
+            {"browser_status":"rendered"},
+        )):
+            rows=boards._rendered_career_board(
+                "https://hubstafftalent.net/search/jobs?search%5Bkeywords%5D=project%20manager",
+                "Hubstaff Talent",
+                r"/jobs/[^/?#]+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
