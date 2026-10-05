@@ -4,6 +4,8 @@ import { readFile } from 'node:fs/promises';
 
 import { internalAuthContext, withInternalAuthContext } from '../src/internal-auth-context.js';
 import { EVALUATION_VERSION, evaluateSharedJob } from '../src/profile-evaluation.js';
+import { evaluateEligibility } from '../src/eligibility.js';
+import { classifyCanonicalJob } from '../../shared/job-classification.mjs';
 import {
   deterministicTenantEntityUuid,
   mergeEffectiveConfig,
@@ -162,6 +164,107 @@ test('legacy configuration splits profile preferences from system collection pol
   assert.equal(system.jobspipe_mode, 'disabled');
   const merged = mergeEffectiveConfig(personal, system);
   assert.deepEqual(merged.search_country_codes, ['RO']);
+});
+
+test('shared classification reuses canonical role taxonomy and is deterministic', () => {
+  const row = {
+    title:'Technical Project Manager',
+    company:'Example',
+    location:'Bucharest',
+    country_codes:['RO'],
+    work_mode:'remote',
+    payload:{
+      contract_type:'contract',
+      remote_scope:'EU',
+      description:'Bank governance delivery',
+    },
+  };
+  const first = classifyCanonicalJob(row);
+  const second = classifyCanonicalJob(row);
+  assert.equal(first.role_family, 'PROJECT_MANAGEMENT');
+  assert.deepEqual(first.role_subfamily, ['project_manager','technical_project_manager']);
+  assert.equal(first.contract_type, 'contract');
+  assert.equal(first.remote_scope, 'EU');
+  assert.equal(first.classification_status, 'matched');
+  assert.equal(first.classification_confidence, 1);
+  assert.equal(first.classification_version, '2026.09.25-1');
+  assert.equal(first.evaluation_basis_hash.length, 64);
+  assert.equal(first.evaluation_basis_hash, second.evaluation_basis_hash);
+});
+
+test('Eligibility v1 is tri-state and only explicit contradiction excludes', () => {
+  const row = {
+    title:'Technical Project Manager',
+    company:'Example',
+    country_codes:['RO'],
+    work_mode:'remote',
+    role_family:'PROJECT_MANAGEMENT',
+    role_subfamily:['technical_project_manager'],
+    contract_type:'contract',
+    remote_scope:'Country',
+    payload:{ description:'Bank governance project' },
+  };
+  const criteria = {
+    target_role_families:['PROJECT_MANAGEMENT'],
+    target_country_codes:['RO'],
+    target_regions:[],
+    excluded_country_codes:[],
+    excluded_regions:[],
+    remote_eligible_country_codes:['RO'],
+    work_modes:{ remote:true, hybrid:true, onsite:false },
+    contract_types:['contract'],
+    keep_reposts:true,
+  };
+
+  assert.equal(evaluateEligibility(row, criteria, nomenclatures).state, 'ELIGIBLE');
+  assert.deepEqual(
+    evaluateEligibility({ ...row, work_mode:'onsite' }, criteria, nomenclatures),
+    { state:'INELIGIBLE', reason_code:'WORK_MODE_EXCLUDED', reasons:['WORK_MODE_EXCLUDED'] },
+  );
+  assert.deepEqual(
+    evaluateEligibility({ ...row, contract_type:'unknown' }, criteria, nomenclatures),
+    { state:'UNKNOWN', reason_code:'CONTRACT_TYPE_UNKNOWN', reasons:['CONTRACT_TYPE_UNKNOWN'] },
+  );
+  assert.deepEqual(
+    evaluateEligibility({ ...row, role_family:'UNKNOWN' }, criteria, nomenclatures),
+    { state:'UNKNOWN', reason_code:'ROLE_FAMILY_UNKNOWN', reasons:['ROLE_FAMILY_UNKNOWN'] },
+  );
+  assert.equal(
+    evaluateEligibility(
+      { ...row, country_codes:[], remote_scope:'unknown' },
+      criteria,
+      nomenclatures,
+    ).state,
+    'UNKNOWN',
+  );
+  assert.equal(
+    evaluateEligibility(row, { ...criteria, rate_min_eur_day:999, fit_threshold:95 }, nomenclatures).state,
+    'ELIGIBLE',
+    'soft preferences must not affect Eligibility',
+  );
+});
+
+test('ATC-489-02 migration encodes Search Profile criteria and shared classification versioning', async () => {
+  const sql = await readFile(new URL('../migrations/007_shared_classification_eligibility.sql', import.meta.url), 'utf8');
+  assert.match(sql, /CREATE TABLE search_profile_preferences/);
+  assert.match(sql, /PRIMARY KEY \(tenant_id, search_profile_id\)/);
+  assert.match(sql, /ADD COLUMN job_version integer NOT NULL DEFAULT 1/);
+  assert.match(sql, /ADD COLUMN role_subfamily text\[\]/);
+  assert.match(sql, /ADD COLUMN contract_type text NOT NULL DEFAULT 'unknown'/);
+  assert.match(sql, /ADD COLUMN classification_version text NOT NULL DEFAULT 'legacy'/);
+  assert.match(sql, /ADD COLUMN evaluation_basis_hash text NOT NULL DEFAULT ''/);
+  assert.ok(TENANT_AWARE_TABLES.includes('search_profile_preferences'));
+});
+
+test('Selection Criteria authority uses Search Profile preferences and semantic profile versioning', async () => {
+  const repository = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
+  const saveStart = repository.indexOf('export async function savePreferences(');
+  const saveEnd = repository.indexOf('\nexport async function ', saveStart + 1);
+  const block = repository.slice(saveStart, saveEnd);
+  assert.match(block, /search_profile_preferences/);
+  assert.match(block, /preferences IS DISTINCT FROM/);
+  assert.match(block, /profile_version=profile_version\+1/);
+  assert.doesNotMatch(block, /INSERT INTO profile_preferences/);
 });
 
 test('same shared job can produce different per-profile eligibility without provider retrieval', () => {
