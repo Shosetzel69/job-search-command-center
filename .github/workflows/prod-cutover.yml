@@ -4,59 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       action:
-        description: PROD action. verify-deployed-status is post-deploy verification only; use PROD Readiness for pre-cutover checks
+        description: Verify the already-deployed PROD identity only; PROD mutation is GCP-only
         required: true
         type: choice
         options: [verify-deployed-status]
       source_sha:
-        description: Exact TEST-passed CANDIDATE_SHA
+        description: Exact deployed source SHA
         required: true
-        type: string
-      test_pass_run_id:
-        description: Successful TEST PASS attestation run id; required for mutation
-        required: false
         type: string
       expected_runtime_sha:
-        description: Expected previous deployed PROD runtime_data_sha (prior promotion_runtime_sha)
+        description: Expected deployed PROD runtime_data_sha
         required: true
-        type: string
-      expected_runtime_head:
-        description: Expected current job-search-prod main SHA (prior acceptance_runtime_head)
-        required: true
-        type: string
-      rollback_reference:
-        description: Release-specific rollback action/reference; required for mutation
-        required: false
-        type: string
-      config_rollback_reference:
-        description: Configuration rollback reference; required only for bootstrap-deploy
-        required: false
-        type: string
-      database_change:
-        description: Database/schema change classification for this release
-        required: true
-        default: none
-        type: choice
-        options: [none, reversible, destructive]
-      migration_version:
-        description: Migration/schema version; required when database_change is not none
-        required: false
-        type: string
-      db_backup_reference:
-        description: Immutable backup reference; required only for destructive DB changes
-        required: false
-        type: string
-      db_backup_checksum_verified:
-        description: Enter YES after SHA-256 checksum verification; destructive DB changes only
-        required: false
-        type: string
-      db_restore_evidence:
-        description: Non-PROD restore evidence reference; destructive DB changes only
-        required: false
-        type: string
-      owner_gate:
-        description: Explicit owner GO; enter PROD_GO for mutation
-        required: false
         type: string
 
 permissions:
@@ -87,13 +45,13 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "source_sha must be a full immutable commit SHA" >&2; exit 1; }
           [[ "$EXPECTED_RUNTIME_SHA" =~ ^[0-9a-fA-F]{40}$ ]] || { echo "expected_runtime_sha must be a full immutable commit SHA" >&2; exit 1; }
           if ! health="$(curl --fail --silent --show-error "$FRONTEND_ORIGIN/health")"; then
-            echo "verify-deployed-status requires an already deployed PROD instance. For pre-cutover checks use the separate PROD Readiness (Non-Mutating) workflow." >&2
+            echo "verify-deployed-status requires an already deployed PROD instance. Use the canonical GCP promotion path for deployment." >&2
             exit 1
           fi
           if ! jq -e --arg source "$SOURCE_SHA" --arg runtime "$EXPECTED_RUNTIME_SHA" \
-            '.status == "ok" and .environment == "prod" and .source_sha == $source and .runtime_data_sha == $runtime and .runtime_repo == "Shosetzel69/job-search-prod" and .search_mode == "live"' \
+            '.status == "ok" and .environment == "prod" and .source_sha == $source and .runtime_data_sha == $runtime and .search_mode == "live"' \
             <<<"$health" >/dev/null; then
-            echo "verify-deployed-status is post-deploy verification only: requested source/runtime is not currently deployed. Use PROD Readiness (Non-Mutating) before cutover." >&2
+            echo "Requested source/runtime is not the currently deployed PROD identity." >&2
             exit 1
           fi
           db_health="$(curl --fail --silent --show-error "$FRONTEND_ORIGIN/health/db")"
