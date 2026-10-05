@@ -313,7 +313,7 @@ GitHub Actions ramane folosit pentru:
 
 Mutatiile de deployment Cloudflare din `deploy-environment.yml` si `prod-cutover.yml` sunt retrase. Promovarea aplicatiei urmeaza control-plane-ul GCP aprobat (`cloudbuild.promotion.yaml`, Artifact Registry, Cloud Run si DB Migration Job).
 
-`finalize-source-registry.yml` este validation-only si nu poate face push direct in `main`; orice corectie a registrului intra prin PR protejat.
+`finalize-source-registry.yml` este un tombstone fail-closed fara trigger automat si fara write; orice corectie a registrului intra prin PR protejat.
 
 Schedulerul retrieval ramane global/system-owned si configurabil numai de ADMIN; profilurile nu declanseaza provider retrieval separat.
 
