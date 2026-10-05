@@ -627,13 +627,28 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(fetch.call_count,2)
         self.assertIn("/pagina2",fetch.call_args.args[0])
 
+    def test_trasys_filters_keyes_group_jobs(self):
+        html='''<section>
+          <a href="/o/application-cloud-architect-eu-institution">Application Cloud Architect</a>
+          Hybrid Brussels Belgium Trasys International
+          <a href="/o/project-manager-mes">Project Manager MES</a>
+          Hybrid Herstal Belgium Local managed staffing
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._trasys_keyes("https://keyescareers.eu/find-my-job")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Application Cloud Architect")
+        self.assertEqual(rows[0]["company"],"Trasys International")
+        self.assertIn("Belgia",rows[0]["countries"])
+        self.assertTrue(rows[0]["source_url"].endswith("/o/application-cloud-architect-eu-institution"))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
                      "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
                      "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
                      "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
-                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs"]:
+                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs","Trasys International"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
