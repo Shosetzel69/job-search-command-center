@@ -56,4 +56,4 @@ A candidate public snapshot must pass:
 4. verification that runtime JSON is empty/neutral/synthetic;
 5. verification that user-specific defaults are absent from code and product documentation.
 
-The private historical repository may retain development evidence and exact-SHA history. The public repository starts from a sanitized source snapshot with fresh Git history.
+The existing repository is sanitized in its current source tree and then changes visibility from PRIVATE to PUBLIC. Existing Git history is not rewritten solely to remove non-sensitive historical runtime/profile data. History rewrite is reserved for a confirmed credential/secret exposure that requires purge after revocation/rotation.
