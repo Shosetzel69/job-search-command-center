@@ -20,17 +20,46 @@ export function sourcePolicyExcluded(source = {}) {
   return source.policyExcluded === true || source.policy_excluded === true || POLICY_EXCLUDED_SOURCE_NAMES.has(String(source.name || '').trim().toLocaleLowerCase('ro-RO'));
 }
 
+export const SOURCE_QUICK_FILTERS = Object.freeze([
+  'total',
+  'active',
+  'inactive',
+  'pendingApproval',
+  'validated',
+  'problems',
+]);
+
+export function sourceMatchesQuickFilter(source = {}, filter = 'total') {
+  switch (filter) {
+    case 'total': return true;
+    case 'active': return source.active === true && !sourcePolicyExcluded(source);
+    case 'inactive': return source.active !== true || sourcePolicyExcluded(source);
+    case 'pendingApproval': return source.approvalStatus === 'pending' && !sourcePolicyExcluded(source);
+    case 'validated': return source.validationStatus === 'validated';
+    case 'problems': return ['requires_connector','rejected'].includes(source.validationStatus);
+    default: return true;
+  }
+}
+
+export function sourceQuickFilterRows(sources = [], { filter='total', query='' } = {}) {
+  const q = String(query || '').trim().toLocaleLowerCase('ro-RO');
+  return sortSources(sources).filter(source => {
+    if (!sourceMatchesQuickFilter(source, filter)) return false;
+    return !q || `${source.name || ''} ${source.category || ''} ${source.url || ''}`.toLocaleLowerCase('ro-RO').includes(q);
+  });
+}
+
 export function adminSourceSummary(sources = []) {
-  const active = sources.filter(source => source.active && !sourcePolicyExcluded(source)).length;
+  const count = filter => sources.filter(source => sourceMatchesQuickFilter(source, filter)).length;
   return {
-    total:sources.length,
-    active,
-    inactive:sources.length - active,
-    pendingApproval:sources.filter(source => source.approvalStatus === 'pending' && !sourcePolicyExcluded(source)).length,
-    validated:sources.filter(source => source.validationStatus === 'validated').length,
+    total:count('total'),
+    active:count('active'),
+    inactive:count('inactive'),
+    pendingApproval:count('pendingApproval'),
+    validated:count('validated'),
     validating:sources.filter(source => ['pending','validating'].includes(source.validationStatus)).length,
-    problems:sources.filter(source => ['requires_connector','rejected'].includes(source.validationStatus)).length,
-    approvedInactive:sources.filter(source => source.approvalStatus === 'approved' && (!source.active || sourcePolicyExcluded(source))).length,
+    problems:count('problems'),
+    approvedInactive:sources.filter(source => source.approvalStatus === 'approved' && sourceMatchesQuickFilter(source, 'inactive')).length,
     policyExcluded:sources.filter(sourcePolicyExcluded).length,
   };
 }
