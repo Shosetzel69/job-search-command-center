@@ -811,6 +811,20 @@ class PublicBoardAdapterTests(unittest.TestCase):
             self.assertEqual(rows[0]["company"], provider)
             self.assertTrue(rows[0]["source_url"].startswith("https://"), provider)
 
+    def test_w_talent_public_route(self):
+        html='''<a href="/job/construction-project-manager-client-side/">
+          Construction Project Manager (Client-Side)
+        </a> England Permanent Remote Regional Role'''
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+            rows = boards._linked_job_board(
+                "https://www.wtalent.com/uk/job-search/",
+                "W Talent",
+                r"/job/[^/?#]+/?$",
+            )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["company"], "W Talent")
+        self.assertEqual(rows[0]["job_title"], "Construction Project Manager (Client-Side)")
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
