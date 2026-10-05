@@ -1,4 +1,4 @@
-name: Finalize validated source registry
+name: Validate finalized source registry
 
 on:
   push:
@@ -6,31 +6,38 @@ on:
     paths:
       - ".github/workflows/finalize-source-registry.yml"
       - "scripts/finalize_source_registry.py"
+      - "data/sources.json"
+  pull_request:
+    paths:
+      - ".github/workflows/finalize-source-registry.yml"
+      - "scripts/finalize_source_registry.py"
+      - "data/sources.json"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  finalize:
+  validate:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
+          persist-credentials: false
 
-      - name: Apply validated source states
+      - name: Compute canonical finalized source registry
         run: python3 scripts/finalize_source_registry.py
 
-      - name: Commit source registry if changed
+      - name: Fail closed if committed registry is not finalized
+        shell: bash
         run: |
           set -euo pipefail
           if git diff --quiet -- data/sources.json; then
-            echo "Source Registry already up to date"
+            echo "Source Registry finalization is already committed."
             exit 0
           fi
-          git config user.name "job-search-automation"
-          git config user.email "actions@users.noreply.github.com"
-          git add data/sources.json
-          git commit -m "Update Source Registry after ATS validation"
-          git push origin HEAD:main
+          echo "data/sources.json is not finalized. Update it through a protected pull request; direct workflow pushes to main are forbidden." >&2
+          git --no-pager diff -- data/sources.json
+          exit 1
