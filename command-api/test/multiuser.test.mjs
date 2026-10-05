@@ -284,14 +284,15 @@ test('ATC-489-02 migration encodes Search Profile criteria and shared classifica
 
 test('ATC-489-03 migration rebuilds derived evaluation cache with Search Profile/version identity', async () => {
   const sql = await readFile(new URL('../migrations/008_bounded_search_lazy_fit.sql', import.meta.url), 'utf8');
-  assert.match(sql, /DROP TABLE profile_job_evaluation/);
-  assert.match(sql, /CREATE TABLE profile_job_evaluation/);
+  assert.match(sql, /TRUNCATE TABLE profile_job_evaluation/);
+  assert.match(sql, /ALTER TABLE profile_job_evaluation/);
   assert.match(sql, /search_profile_id uuid NOT NULL/);
   assert.match(sql, /eligibility_state text NOT NULL/);
   assert.match(sql, /profile_version integer NOT NULL/);
   assert.match(sql, /job_version integer NOT NULL/);
   assert.match(sql, /fit_algorithm_version text NOT NULL/);
   assert.match(sql, /PRIMARY KEY\(tenant_id, search_profile_id, job_id\)/);
+  assert.doesNotMatch(sql, /DROP TABLE profile_job_evaluation/);
   assert.doesNotMatch(sql, /FOREIGN KEY[\s\S]*search_profile/i);
   assert.doesNotMatch(sql, /FOREIGN KEY[\s\S]*canonical_jobs/i);
 });
