@@ -560,7 +560,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
     def test_brains_consulting_skips_filled_jobs(self):
         listing='''<article><h2><a href="/active-job/">Active Job</a></h2></article>
                    <article><h2><a href="/filled-job/">Filled Job</a></h2></article>'''
-        active='''<html><h1>Medici Stomatologi - OLANDA</h1><div>Olanda post disponibil</div></html>'''
+        active='''<html><h1>Medici Stomatologi - NETHERLANDS</h1><div>Netherlands post disponibil</div></html>'''
         filled='''<html><h1>Sofer camion</h1><div>TOATE LOCURILE DE MUNCA VACANTE AU FOST OCUPATE</div></html>'''
         with patch.object(boards,"_fetch",side_effect=[
             (200,"text/html",listing.encode()),
@@ -569,7 +569,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
         ]):
             rows=boards._brains("https://www.brainsconsulting.ro/category/locuri-de-munca/")
         self.assertEqual(len(rows),1)
-        self.assertEqual(rows[0]["job_title"],"Medici Stomatologi - OLANDA")
+        self.assertEqual(rows[0]["job_title"],"Medici Stomatologi - NETHERLANDS")
         self.assertIn("Tarile de Jos",rows[0]["countries"])
 
     def test_supported_sources_are_explicit(self):
