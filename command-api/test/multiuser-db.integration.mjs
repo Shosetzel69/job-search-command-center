@@ -167,12 +167,14 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal('target_regions' in userConfig, false);
 
     const storedUserPrefs = await adminDb.query(
-      'SELECT preferences FROM profile_preferences WHERE tenant_id=$1',
-      [user.profile_id],
+      `SELECT preferences
+         FROM search_profile_preferences
+        WHERE tenant_id=$1 AND search_profile_id=$2`,
+      [user.profile_id, userFoundation.search_profile_id],
     );
     assert.deepEqual(storedUserPrefs.rows[0].preferences, {});
 
-    const noContext = await runtimeDb.query('SELECT count(*)::integer AS count FROM profile_preferences');
+    const noContext = await runtimeDb.query('SELECT count(*)::integer AS count FROM search_profile_preferences');
     assert.ok(
       Number(noContext.rows[0].count) >= 2,
       'ADR-008 residual risk must stay explicit: no-context/global mode can see multiple tenants',
@@ -213,12 +215,27 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       error => error?.status === 404,
     );
 
-    await savePreferences(user, {
+    const versionBeforePreferences = (await resolveActiveSearchProfile(user, env, { db:runtimeDb })).profile_version;
+    const criteria = {
       target_regions:['EU'],
       remote_eligible_country_codes:['RO'],
       work_modes:{ remote:true },
       contract_types:['contract'],
+    };
+    await savePreferences(user, criteria, env, { db:runtimeDb });
+    const versionAfterChange = (await resolveActiveSearchProfile(user, env, { db:runtimeDb })).profile_version;
+    assert.equal(versionAfterChange, versionBeforePreferences + 1);
+
+    await savePreferences(user, criteria, env, { db:runtimeDb });
+    const versionAfterNoop = (await resolveActiveSearchProfile(user, env, { db:runtimeDb })).profile_version;
+    assert.equal(versionAfterNoop, versionAfterChange);
+
+    await savePreferences(user, {
+      ...criteria,
+      work_modes:{ remote:true, hybrid:true },
     }, env, { db:runtimeDb });
+    const versionAfterSecondChange = (await resolveActiveSearchProfile(user, env, { db:runtimeDb })).profile_version;
+    assert.equal(versionAfterSecondChange, versionAfterChange + 1);
     await createApplication(user, {
       company:'Tenant B',
       title:'Delivery Manager',
@@ -276,6 +293,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
          (SELECT count(*)::integer FROM profile WHERE profile_id=$2) AS profiles,
          (SELECT count(*)::integer FROM candidate_profile WHERE tenant_id=$2) AS candidate_profiles,
          (SELECT count(*)::integer FROM search_profile WHERE tenant_id=$2) AS search_profiles,
+         (SELECT count(*)::integer FROM search_profile_preferences WHERE tenant_id=$2) AS search_profile_preferences,
          (SELECT count(*)::integer FROM profile_preferences WHERE tenant_id=$2) AS preferences,
          (SELECT count(*)::integer FROM applications WHERE tenant_id=$2) AS applications,
          (SELECT count(*)::integer FROM user_session WHERE user_id=$1) AS sessions`,
@@ -283,7 +301,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     );
     assert.deepEqual(residue.rows[0], {
       tenants:0, users:0, identities:0, profiles:0,
-      candidate_profiles:0, search_profiles:0, preferences:0, applications:0, sessions:0,
+      candidate_profiles:0, search_profiles:0, search_profile_preferences:0,
+      preferences:0, applications:0, sessions:0,
     });
 
     const bootstrapMarker = await adminDb.query(
