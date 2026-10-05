@@ -453,7 +453,7 @@ def _ejobs(base_url, max_pages=3):
                 "eJobs", identity, title, company, context or title, link,
                 date_posted=_ejobs_date(context),
                 location=context,
-                countries=_country_names_from_text(context),
+                countries=_country_names_from_text(context) or ["Romania"],
                 remote=bool(re.search(r"\b(remote|de acasa|hibrid|hybrid)\b", context, re.I)),
             )
             if record["id"] not in records:
