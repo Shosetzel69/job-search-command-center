@@ -880,6 +880,35 @@ class PublicBoardAdapterTests(unittest.TestCase):
             self.assertEqual(len(rows), 1, provider)
             self.assertEqual(rows[0]["company"], provider)
 
+    def test_freelancermap_and_dynamite_routes(self):
+        with patch.object(
+            boards, "_fetch",
+            return_value=(200, "text/html", b'<a href="/project/project-manager-m-w-d-anue-bonn-remote">Project Manager</a> Bonn Germany Remote Freelance')
+        ):
+            rows=boards._linked_job_board(
+                "https://www.freelancermap.com/projects",
+                "Freelancermap",
+                r"/project/[^/?#]+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["company"],"Freelancermap")
+        self.assertTrue(rows[0]["remote"])
+
+        html='<a href="/company/weka/remote-job/technical-project-manager">Technical Project Manager</a> Europe Remote'
+        with patch.object(boards.browser,"render",return_value=(
+            "https://dynamitejobs.com/remote-jobs/management-operations/project-manager",
+            html,
+            {"browser_status":"rendered"},
+        )):
+            rows=boards._rendered_career_board(
+                "https://dynamitejobs.com/remote-jobs/management-operations/project-manager",
+                "Dynamite Jobs",
+                r"/company/[^/?#]+/remote-job/[^/?#]+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
