@@ -156,18 +156,10 @@ def _heading_list_board(url, provider, *, default_remote=False, default_country=
         # Require some job-like context to avoid page-section headings.
         if provider == "JustRemote":
             company_match = re.match(r"^(.+?)\s+(?:permanent|contract|freelance|full[- ]time|part[- ]time)\b", context, re.I)
-            company = company_match.group(1).strip() if company_match else ""
-            if not company:
-                continue
+            company = company_match.group(1).strip() if company_match else provider
         else:
             parts = [part.strip() for part in re.split(r"\s{2,}|\u00a0+", context) if part.strip()]
-            company = parts[0] if parts else ""
-            if not company:
-                # Techjobs context is often "skills ... Company location".
-                tokens = context.split()
-                company = tokens[-3] if len(tokens) >= 3 else ""
-            if not company:
-                continue
+            company = parts[0] if parts else provider
 
         countries = _country_names_from_text(context)
         if default_country and not countries:
@@ -177,7 +169,7 @@ def _heading_list_board(url, provider, *, default_remote=False, default_country=
             label for label in ("Permanent","Contract","Freelance","Full Time","Part Time")
             if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I)
         ]
-        identity_basis = "|".join([provider.casefold(), title.casefold(), company.casefold(), context.casefold()])
+        identity_basis = "|".join([provider.casefold(), title.casefold(), company.casefold()])
         identity = hashlib.sha1(identity_basis.encode("utf-8")).hexdigest()[:20]
         record = _record(
             provider, identity, title, company, context or title, url,
