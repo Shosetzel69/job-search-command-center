@@ -10,7 +10,7 @@ import {
   withTenantTransaction,
 } from './db/tenant-gateway.js';
 import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
-import { EVALUATION_VERSION, evaluateSharedJob } from './profile-evaluation.js';
+import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from './profile-evaluation.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
   'role_groups',
@@ -789,17 +789,246 @@ export async function saveCollectionPolicy(authContext, policy, env = process.en
   return system;
 }
 
-export async function evaluateProfileJobs(authContext, preferences, nomenclatures, env = process.env, { db = getPool(env), now = new Date() } = {}) {
+
+const JOB_PAGE_DEFAULT = 25;
+const JOB_PAGE_MAX = 100;
+const JOB_CANDIDATE_WINDOW_MAX = 400;
+const JOB_PREFETCH_MAX = 50;
+const LEGACY_JOB_PAGE_LIMIT = 100;
+
+function listValues(input) {
+  const raw = Array.isArray(input) ? input : input == null ? [] : [input];
+  return [...new Set(raw
+    .flatMap(value => String(value || '').split(','))
+    .map(value => value.trim())
+    .filter(Boolean))];
+}
+
+function boundedInteger(input, fallback, min, max, name) {
+  if (input == null || input === '') return fallback;
+  const value = Number(input);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    throw httpError(name + ' must be an integer between ' + min + ' and ' + max, 400);
+  }
+  return value;
+}
+
+export function encodeJobCursor(row) {
+  const sortAt = row?.sort_at instanceof Date
+    ? row.sort_at.toISOString()
+    : new Date(row?.sort_at || 0).toISOString();
+  const jobId = String(row?.job_id || '');
+  if (!jobId) throw httpError('Cannot encode job cursor without job_id', 500);
+  return Buffer.from(JSON.stringify({ v:1, sort_at:sortAt, job_id:jobId }), 'utf8').toString('base64url');
+}
+
+export function decodeJobCursor(raw) {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(Buffer.from(String(raw), 'base64url').toString('utf8'));
+    const date = new Date(parsed?.sort_at);
+    const jobId = String(parsed?.job_id || '');
+    if (parsed?.v !== 1 || Number.isNaN(date.getTime()) || !/^[0-9a-f-]{36}$/i.test(jobId)) throw new Error('invalid');
+    return Object.freeze({ sort_at:date.toISOString(), job_id:jobId });
+  } catch {
+    throw httpError('Invalid jobs cursor', 400);
+  }
+}
+
+export function normalizeJobSearchQuery(input = {}) {
+  const source = jsonObject(input);
+  const limit = boundedInteger(source.limit, JOB_PAGE_DEFAULT, 1, JOB_PAGE_MAX, 'limit');
+  const freshnessHours = source.freshness_hours == null || source.freshness_hours === ''
+    ? null
+    : boundedInteger(source.freshness_hours, null, 1, 8760, 'freshness_hours');
+  const minFit = source.min_fit == null || source.min_fit === ''
+    ? null
+    : boundedInteger(source.min_fit, null, 0, 100, 'min_fit');
+  const includeArchived = source.include_archived === true || String(source.include_archived || '').toLowerCase() === 'true';
+  const prefetch = boundedInteger(
+    source.prefetch,
+    Math.min(limit, 25),
+    0,
+    JOB_PREFETCH_MAX,
+    'prefetch',
+  );
+  return Object.freeze({
+    limit,
+    cursor:decodeJobCursor(source.cursor),
+    q:String(source.q || '').trim().slice(0, 200),
+    role_family:listValues(source.role_family).map(x => x.toUpperCase()),
+    work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
+    contract_type:listValues(source.contract_type).map(x => x.toLowerCase()),
+    freshness_hours:freshnessHours,
+    min_fit:minFit,
+    include_archived:includeArchived,
+    prefetch,
+  });
+}
+
+function evaluationCacheValid(row, foundation) {
+  return row.cached_profile_version != null
+    && Number(row.cached_profile_version) === Number(foundation.profile_version)
+    && Number(row.cached_job_version) === Number(row.job_version)
+    && String(row.cached_fit_algorithm_version || '') === FIT_ALGORITHM_VERSION;
+}
+
+async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
+  await tx.query(
+    \`INSERT INTO profile_job_evaluation(
+        tenant_id, search_profile_id, job_id,
+        eligibility_state, eligibility_reason_code, eligible,
+        score, pros, risks, exclusion_reason,
+        profile_version, job_version, fit_algorithm_version, evaluated_at
+      )
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14)
+      ON CONFLICT(tenant_id, search_profile_id, job_id)
+      DO UPDATE SET
+        eligibility_state=EXCLUDED.eligibility_state,
+        eligibility_reason_code=EXCLUDED.eligibility_reason_code,
+        eligible=EXCLUDED.eligible,
+        score=EXCLUDED.score,
+        pros=EXCLUDED.pros,
+        risks=EXCLUDED.risks,
+        exclusion_reason=EXCLUDED.exclusion_reason,
+        profile_version=EXCLUDED.profile_version,
+        job_version=EXCLUDED.job_version,
+        fit_algorithm_version=EXCLUDED.fit_algorithm_version,
+        evaluated_at=EXCLUDED.evaluated_at\`,
+    [
+      tx.tenantId,
+      foundation.search_profile_id,
+      String(row.job_id),
+      evaluation.eligibilityState,
+      evaluation.eligibilityReasonCode || null,
+      evaluation.eligible,
+      evaluation.score,
+      JSON.stringify(evaluation.pros || []),
+      JSON.stringify(evaluation.risks || []),
+      evaluation.exclusionReason || null,
+      foundation.profile_version,
+      Number(row.job_version),
+      FIT_ALGORITHM_VERSION,
+      now,
+    ],
+  );
+}
+
+function cachedEvaluation(row) {
+  return Object.freeze({
+    eligible:Boolean(row.cached_eligible),
+    eligibilityState:String(row.cached_eligibility_state),
+    eligibilityReasonCode:row.cached_eligibility_reason_code || null,
+    score:row.cached_score == null ? null : Number(row.cached_score),
+    pros:Array.isArray(row.cached_pros) ? row.cached_pros : [],
+    risks:Array.isArray(row.cached_risks) ? row.cached_risks : [],
+    exclusionReason:row.cached_exclusion_reason || null,
+  });
+}
+
+export async function listProfileJobs(
+  authContext,
+  preferences,
+  nomenclatures,
+  query = {},
+  env = process.env,
+  { db = getPool(env), now = new Date() } = {},
+) {
+  const spec = normalizeJobSearchQuery(query);
+
   return withTenantTransaction(authContext, async tx => {
+    const foundation = await resolveActiveSearchProfileTx(tx);
+    const params = [tx.tenantId, now, foundation.search_profile_id];
+    const where = [
+      \`(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)\`,
+    ];
+    const add = value => {
+      params.push(value);
+      return '$' + params.length;
+    };
+
+    // Cheap hard-prefilter: remove only normalized explicit contradictions.
+    const targetFamilies = listValues(preferences.target_role_families).map(x => x.toUpperCase());
+    if (targetFamilies.length) {
+      const p = add(targetFamilies);
+      where.push(\`(j.role_family = ANY(\${p}::text[]) OR j.role_family = 'UNKNOWN')\`);
+    }
+
+    const disabledModes = Object.entries(jsonObject(preferences.work_modes))
+      .filter(([, enabled]) => enabled === false)
+      .map(([mode]) => String(mode).toLowerCase());
+    if (disabledModes.length) {
+      const p = add(disabledModes);
+      where.push(\`lower(COALESCE(j.work_mode, 'unknown')) <> ALL(\${p}::text[])\`);
+    }
+
+    const allowedContracts = listValues(preferences.contract_types).map(x => x.toLowerCase());
+    if (allowedContracts.length) {
+      const p = add(allowedContracts);
+      where.push(\`(lower(COALESCE(j.contract_type, 'unknown')) = ANY(\${p}::text[])
+        OR lower(COALESCE(j.contract_type, 'unknown')) = 'unknown')\`);
+    }
+
+    // Temporary view filters. These do not mutate Selection Criteria or evaluation versions.
+    if (!spec.include_archived) where.push('state.archived_at IS NULL');
+    if (spec.role_family.length) {
+      const p = add(spec.role_family);
+      where.push(\`j.role_family = ANY(\${p}::text[])\`);
+    }
+    if (spec.work_mode.length) {
+      const p = add(spec.work_mode);
+      where.push(\`lower(COALESCE(j.work_mode, 'unknown')) = ANY(\${p}::text[])\`);
+    }
+    if (spec.contract_type.length) {
+      const p = add(spec.contract_type);
+      where.push(\`lower(COALESCE(j.contract_type, 'unknown')) = ANY(\${p}::text[])\`);
+    }
+    if (spec.q) {
+      const p = add('%' + spec.q + '%');
+      where.push(\`concat_ws(' ', j.title, j.company, j.location) ILIKE \${p}\`);
+    }
+    if (spec.freshness_hours != null) {
+      const p = add(spec.freshness_hours);
+      where.push(\`COALESCE(sp.posted_at, j.last_seen_at) >= $2 - (\${p}::integer * interval '1 hour')\`);
+    }
+    if (spec.cursor) {
+      const at = add(spec.cursor.sort_at);
+      const id = add(spec.cursor.job_id);
+      where.push(\`(
+        COALESCE(sp.posted_at, j.last_seen_at) < \${at}::timestamptz
+        OR (
+          COALESCE(sp.posted_at, j.last_seen_at) = \${at}::timestamptz
+          AND j.job_id > \${id}::uuid
+        )
+      )\`);
+    }
+
+    const candidateLimit = Math.min(
+      Math.max(spec.limit * 8, spec.limit + spec.prefetch, 100),
+      JOB_CANDIDATE_WINDOW_MAX,
+    );
+    const limitParam = add(candidateLimit);
+
     const rowsResult = await tx.query(
-      `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
+      \`SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
               j.role_family, j.role_subfamily, j.seniority, j.contract_type,
               j.remote_scope, j.job_version, j.classification_status,
               j.classification_confidence, j.classification_version,
-              j.lifecycle_status, j.payload,
+              j.lifecycle_status, j.payload, j.last_seen_at,
               sp.source_name, sp.canonical_url, sp.posted_at,
               sp.repost_of_posting_id, sp.payload AS posting_payload,
-              state.seen_at, state.archived_at
+              state.seen_at, state.archived_at,
+              COALESCE(sp.posted_at, j.last_seen_at) AS sort_at,
+              eval.eligibility_state AS cached_eligibility_state,
+              eval.eligibility_reason_code AS cached_eligibility_reason_code,
+              eval.eligible AS cached_eligible,
+              eval.score AS cached_score,
+              eval.pros AS cached_pros,
+              eval.risks AS cached_risks,
+              eval.exclusion_reason AS cached_exclusion_reason,
+              eval.profile_version AS cached_profile_version,
+              eval.job_version AS cached_job_version,
+              eval.fit_algorithm_version AS cached_fit_algorithm_version
          FROM canonical_jobs j
          JOIN LATERAL (
            SELECT source_name, canonical_url, posted_at, repost_of_posting_id, payload
@@ -811,63 +1040,106 @@ export async function evaluateProfileJobs(authContext, preferences, nomenclature
          ) sp ON true
          LEFT JOIN profile_job_state state
            ON state.tenant_id = $1 AND state.job_id = j.job_id
-        WHERE j.lifecycle_status <> 'INACTIVE'
-           OR j.retention_until IS NULL
-           OR j.retention_until > $2
-        ORDER BY j.last_seen_at DESC, j.job_id ASC`,
-      [authContext.profile_id, now],
+         LEFT JOIN profile_job_evaluation eval
+           ON eval.tenant_id = $1
+          AND eval.search_profile_id = $3
+          AND eval.job_id = j.job_id
+        WHERE \${where.join('\n          AND ')}
+        ORDER BY COALESCE(sp.posted_at, j.last_seen_at) DESC, j.job_id ASC
+        LIMIT \${limitParam}::integer\`,
+      params,
     );
 
+    const rows = rowsResult.rows || [];
     const jobs = [];
     let excluded = 0;
-    for (const row of rowsResult.rows || []) {
+    let inspected = 0;
+    let cacheHits = 0;
+    let evaluationsComputed = 0;
+    let pageEndIndex = -1;
+
+    const resolveRow = async row => {
+      if (evaluationCacheValid(row, foundation)) {
+        cacheHits += 1;
+        const evaluation = cachedEvaluation(row);
+        return {
+          evaluation,
+          job:evaluation.eligible ? materializeCachedJob(row, evaluation, preferences, now) : null,
+        };
+      }
+      evaluationsComputed += 1;
       const evaluation = evaluateSharedJob(row, preferences, nomenclatures, now);
-      await tx.query(
-        `INSERT INTO profile_job_evaluation(
-            tenant_id, job_id, eligible, score, pros, risks,
-            exclusion_reason, evaluation_version, evaluated_at
-          )
-          VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8, $9)
-          ON CONFLICT(tenant_id, job_id)
-          DO UPDATE SET eligible = EXCLUDED.eligible,
-                        score = EXCLUDED.score,
-                        pros = EXCLUDED.pros,
-                        risks = EXCLUDED.risks,
-                        exclusion_reason = EXCLUDED.exclusion_reason,
-                        evaluation_version = EXCLUDED.evaluation_version,
-                        evaluated_at = EXCLUDED.evaluated_at`,
-        [
-          authContext.profile_id,
-          String(row.job_id),
-          evaluation.eligible,
-          evaluation.score,
-          JSON.stringify(evaluation.pros),
-          JSON.stringify(evaluation.risks),
-          evaluation.exclusionReason,
-          EVALUATION_VERSION,
-          now,
-        ],
-      );
-      if (!evaluation.eligible) {
+      await persistEvaluationTx(tx, foundation, row, evaluation, now);
+      return { evaluation, job:evaluation.job };
+    };
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const resolved = await resolveRow(rows[index]);
+      inspected += 1;
+      pageEndIndex = index;
+      if (!resolved.evaluation.eligible) {
         excluded += 1;
         continue;
       }
-      jobs.push(evaluation.job);
+      if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
+      jobs.push(resolved.job);
+      if (jobs.length >= spec.limit) break;
     }
 
-    jobs.sort((a, b) => (b.fit ?? -1) - (a.fit ?? -1) || Number(a.age || 0) - Number(b.age || 0));
+    let prefetched = 0;
+    if (pageEndIndex >= 0 && spec.prefetch > 0) {
+      for (let index = pageEndIndex + 1; index < rows.length && prefetched < spec.prefetch; index += 1) {
+        await resolveRow(rows[index]);
+        prefetched += 1;
+      }
+    }
+
+    const exhaustedWindow = rows.length < candidateLimit;
+    const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
+    const hasMore = Boolean(cursorRow)
+      && (!exhaustedWindow || pageEndIndex < rows.length - 1);
+    const nextCursor = hasMore ? encodeJobCursor(cursorRow) : null;
+
     return {
-      schema_version:'1.0',
+      schema_version:'2.0',
       generated_at:now.toISOString(),
+      search_profile_id:foundation.search_profile_id,
+      profile_version:foundation.profile_version,
+      fit_algorithm_version:FIT_ALGORITHM_VERSION,
+      bounded:true,
+      limit:spec.limit,
+      next_cursor:nextCursor,
       freshness_hours:Number(preferences.freshness_hours ?? 24),
       collection_freshness_hours:Number(preferences.collection_freshness_hours ?? preferences.freshness_hours ?? 24),
       criteria:{ fit_threshold:Number(preferences.fit_threshold ?? 80) },
-      records_inspected:(rowsResult.rows || []).length,
-      results:jobs.length,
+      records_inspected:inspected,
+      candidate_window:rows.length,
       excluded_count:excluded,
+      cache_hits:cacheHits,
+      evaluations_computed:evaluationsComputed,
+      prefetched,
+      results:jobs.length,
       jobs,
     };
   }, { env, db });
+}
+
+export async function evaluateProfileJobs(
+  authContext,
+  preferences,
+  nomenclatures,
+  env = process.env,
+  { db = getPool(env), now = new Date() } = {},
+) {
+  // Compatibility adapter only. It deliberately returns a bounded first page.
+  return listProfileJobs(
+    authContext,
+    preferences,
+    nomenclatures,
+    { limit:LEGACY_JOB_PAGE_LIMIT },
+    env,
+    { db, now },
+  );
 }
 
 export async function nomenclatureReferenceCount(domain, code, env = process.env, { db = getPool(env) } = {}) {
