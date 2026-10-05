@@ -7,6 +7,7 @@ or user inputs.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -60,6 +61,14 @@ class SharedPosting:
     posted_at: datetime | None
     repost_of_external_job_id: str | None
     payload: dict[str, Any]
+    role_subfamily: tuple[str, ...] = ()
+    seniority: str = "unknown"
+    contract_type: str = "unknown"
+    remote_scope: str = "unknown"
+    classification_status: str = "unknown"
+    classification_confidence: float = 0.0
+    classification_version: str = "legacy"
+    evaluation_basis_hash: str = ""
 
 
 def _text(value: object) -> str:
@@ -77,12 +86,109 @@ def _taxonomy() -> dict[str, Any]:
     return payload
 
 
-def _role_family(title: str) -> tuple[str, str]:
+def _role_classification(title: str) -> dict[str, Any]:
     classification = role_taxonomy.classify_title(title, _taxonomy())
     family = classification.get("role_family")
     if family not in role_taxonomy.CANONICAL_FAMILIES:
         family = "UNKNOWN"
-    return str(family), str(classification.get("classification_status") or "unknown")
+    return {
+        "role_family": str(family or "UNKNOWN"),
+        "role_subfamily": tuple(sorted(str(x) for x in classification.get("role_member", []) if x)),
+        "classification_status": str(classification.get("classification_status") or "unknown"),
+    }
+
+
+def _role_family(title: str) -> tuple[str, str]:
+    classification = _role_classification(title)
+    return classification["role_family"], classification["classification_status"]
+
+
+def _contract_type(record: Mapping[str, Any]) -> str:
+    explicit = _text(record.get("contract_type")).casefold()
+    if explicit in {"permanent", "temporary", "contract", "freelance"}:
+        return explicit
+    raw_value = (
+        record.get("employment_statuses")
+        or record.get("employment_type")
+        or record.get("employment_status")
+        or record.get("job_type")
+        or ""
+    )
+    values = raw_value if isinstance(raw_value, list) else [raw_value]
+    raw = " ".join(_text(value) for value in values).casefold()
+    if "freelance" in raw:
+        return "freelance"
+    if re.search(r"contract|contractor|b2b", raw):
+        return "contract"
+    if re.search(r"temporary|fixed[- ]term", raw):
+        return "temporary"
+    if re.search(r"permanent|full[- ]time", raw):
+        return "permanent"
+    return "unknown"
+
+
+def _remote_scope(record: Mapping[str, Any], work_mode: str, country_codes: tuple[str, ...]) -> str:
+    explicit = _text(record.get("remote_scope"))
+    if explicit:
+        return explicit
+    if work_mode != "remote":
+        return "unknown"
+    if country_codes:
+        return "Country"
+    countries = record.get("countries") if isinstance(record.get("countries"), list) else []
+    remote_locations = record.get("remote_locations") if isinstance(record.get("remote_locations"), list) else []
+    text = " ".join([
+        _text(record.get("location")),
+        *(_text(value) for value in countries),
+        *(_text(value) for value in remote_locations),
+        _text(record.get("description"))[:5000],
+    ])
+    if re.search(r"worldwide|work from anywhere|anywhere in the world|global remote", text, re.I):
+        return "Worldwide"
+    if re.search(r"\bEMEA\b", text, re.I):
+        return "EMEA"
+    if re.search(r"\b(EU|European Union|Europe only|within Europe|across Europe|Europe)\b", text, re.I):
+        return "EU"
+    return "unknown"
+
+
+def _seniority(record: Mapping[str, Any]) -> str:
+    raw = _text(record.get("seniority") or record.get("seniority_level") or record.get("experience_level"))
+    if not raw:
+        return "unknown"
+    normalized = role_taxonomy.normalize_title(raw).replace(" ", "_")
+    return normalized or "unknown"
+
+
+def _evaluation_basis_hash(
+    *,
+    title: str,
+    company: str,
+    location: str | None,
+    country_codes: tuple[str, ...],
+    work_mode: str,
+    role_family: str,
+    role_subfamily: tuple[str, ...],
+    seniority: str,
+    contract_type: str,
+    remote_scope: str,
+    description: object,
+) -> str:
+    basis = {
+        "title": _text(title),
+        "company": _text(company),
+        "location": _text(location),
+        "country_codes": sorted(country_codes),
+        "work_mode": work_mode,
+        "role_family": role_family,
+        "role_subfamily": sorted(role_subfamily),
+        "seniority": seniority,
+        "contract_type": contract_type,
+        "remote_scope": remote_scope,
+        "description": _text(description),
+    }
+    encoded = json.dumps(basis, ensure_ascii=False, separators=(",", ":"))
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
 @lru_cache(maxsize=1)
@@ -192,6 +298,35 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         return None
 
     family, classification_status = _role_family(title)
+    role_details = _role_classification(title)
+    if role_details["role_family"] != family:
+        role_details = {
+            **role_details,
+            "role_family": family,
+            "role_subfamily": (),
+            "classification_status": classification_status,
+        }
+    country_codes = _country_codes(record)
+    work_mode = _work_mode(record)
+    contract_type = _contract_type(record)
+    remote_scope = _remote_scope(record, work_mode, country_codes)
+    seniority = _seniority(record)
+    role_subfamily = tuple(role_details["role_subfamily"])
+    confidence = 1.0 if classification_status == "matched" else 0.0
+    classification_version = str(_taxonomy()["taxonomy_version"])
+    basis_hash = _evaluation_basis_hash(
+        title=title,
+        company=company,
+        location=_text(record.get("location") or record.get("short_location")) or None,
+        country_codes=country_codes,
+        work_mode=work_mode,
+        role_family=family,
+        role_subfamily=role_subfamily,
+        seniority=seniority,
+        contract_type=contract_type,
+        remote_scope=remote_scope,
+        description=record.get("description"),
+    )
     repost_of = _text(record.get("repost_of_external_job_id") or record.get("repost_of_id")) or None
 
     return SharedPosting(
@@ -204,12 +339,20 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         title=title,
         company=company,
         location=_text(record.get("location") or record.get("short_location")) or None,
-        country_codes=_country_codes(record),
-        work_mode=_work_mode(record),
+        country_codes=country_codes,
+        work_mode=work_mode,
         role_family=family,
         posted_at=_posted_at(record),
         repost_of_external_job_id=repost_of,
         payload=_payload(record, classification_status),
+        role_subfamily=role_subfamily,
+        seniority=seniority,
+        contract_type=contract_type,
+        remote_scope=remote_scope,
+        classification_status=classification_status,
+        classification_confidence=confidence,
+        classification_version=classification_version,
+        evaluation_basis_hash=basis_hash,
     )
 
 
@@ -421,9 +564,16 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 """
                 INSERT INTO canonical_jobs(
                     job_id, title, company, location, country_codes, work_mode,
-                    role_family, lifecycle_status, first_seen_at, last_seen_at, payload
+                    role_family, role_subfamily, seniority, contract_type, remote_scope,
+                    classification_status, classification_confidence, classification_version,
+                    evaluation_basis_hash, lifecycle_status, first_seen_at, last_seen_at, payload
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s, 'ACTIVE', %s, %s, %s::jsonb)
+                VALUES (
+                    %s, %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s, %s,
+                    %s, %s, %s, %s,
+                    'ACTIVE', %s, %s, %s::jsonb
+                )
                 """,
                 (
                     job_id,
@@ -433,6 +583,14 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                     list(posting.country_codes),
                     posting.work_mode,
                     posting.role_family,
+                    list(posting.role_subfamily),
+                    posting.seniority,
+                    posting.contract_type,
+                    posting.remote_scope,
+                    posting.classification_status,
+                    posting.classification_confidence,
+                    posting.classification_version,
+                    posting.evaluation_basis_hash,
                     now,
                     now,
                     json.dumps(posting.payload, ensure_ascii=False),
@@ -474,12 +632,24 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
     cursor.execute(
         """
         UPDATE canonical_jobs
-           SET title = %s,
+           SET job_version = CASE
+                 WHEN evaluation_basis_hash IS DISTINCT FROM %s THEN job_version + 1
+                 ELSE job_version
+               END,
+               title = %s,
                company = %s,
                location = %s,
                country_codes = %s,
                work_mode = %s,
                role_family = %s,
+               role_subfamily = %s,
+               seniority = %s,
+               contract_type = %s,
+               remote_scope = %s,
+               classification_status = %s,
+               classification_confidence = %s,
+               classification_version = %s,
+               evaluation_basis_hash = %s,
                lifecycle_status = 'ACTIVE',
                last_seen_at = %s,
                inactive_at = NULL,
@@ -488,12 +658,21 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
          WHERE job_id = %s
         """,
         (
+            posting.evaluation_basis_hash,
             posting.title,
             posting.company,
             posting.location,
             list(posting.country_codes),
             posting.work_mode,
             posting.role_family,
+            list(posting.role_subfamily),
+            posting.seniority,
+            posting.contract_type,
+            posting.remote_scope,
+            posting.classification_status,
+            posting.classification_confidence,
+            posting.classification_version,
+            posting.evaluation_basis_hash,
             now,
             json.dumps(posting.payload, ensure_ascii=False),
             job_id,
