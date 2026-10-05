@@ -599,13 +599,41 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Italia",rows[0]["countries"])
         self.assertTrue(rows[0]["remote"])
 
+    def test_ejobs_bounded_pagination_extracts_public_jobs(self):
+        page1='''<section>
+          <div>5 Oct. 2026</div>
+          <h2><a href="/user/locuri-de-munca/it-project-manager/99247317">IT Project Manager</a></h2>
+          <h3>Example SA</h3><div>Bucuresti</div><div>Hibrid</div>
+        </section>'''
+        page2='''<section>
+          <div>4 Oct. 2026</div>
+          <h2><a href="/user/locuri-de-munca/project-management-officer/99247318">Project Management Officer</a></h2>
+          <h3>Another SA</h3><div>Bucuresti</div>
+        </section>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (200,"text/html",page1.encode()),
+            (200,"text/html",page2.encode()),
+        ]) as fetch:
+            rows=boards._ejobs(
+                "https://www.ejobs.ro/locuri-de-munca/bucuresti/it-project-manager",
+                max_pages=2,
+            )
+        self.assertEqual(len(rows),2)
+        by_title={row["job_title"]:row for row in rows}
+        self.assertEqual(by_title["IT Project Manager"]["company"],"Example SA")
+        self.assertEqual(by_title["IT Project Manager"]["date_posted"],"2026-10-05T00:00:00+00:00")
+        self.assertIn("Romania",by_title["IT Project Manager"]["countries"])
+        self.assertTrue(by_title["IT Project Manager"]["remote"])
+        self.assertEqual(fetch.call_count,2)
+        self.assertIn("/pagina2",fetch.call_args.args[0])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
                      "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
                      "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
                      "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
-                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates"]:
+                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
