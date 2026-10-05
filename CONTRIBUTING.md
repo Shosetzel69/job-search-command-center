@@ -55,9 +55,9 @@ Remote MCP Claude este operational:
 
 `Claude Web -> OAuth 2.1 -> ai-github-bridge /mcp -> jobsearch-claude-agent[bot] -> GitHub API`
 
-Tools curente: `read_file`, `get_issue`, `create_issue`, `update_issue`, `dispatch_environment_deploy`.
+Tools curente: `read_file`, `get_issue`, `create_issue`, `update_issue`.
 
-Nu exista write pe files/branches/PR prin Remote MCP in scope-ul curent. Dispatch-ul de release este limitat la `deploy-environment.yml` pentru DEV/TEST, cu `main` si inputurile de baza #198 fixate server-side; PROD nu este permis prin acest tool. Pentru detalii tehnice: `ARCHITECTURE.md` si `docs/ai-github-bridge.md`.
+Nu exista write pe files/branches/PR sau deployment dispatch prin Remote MCP in scope-ul curent. Promovarea environment-urilor foloseste control-plane-ul GCP aprobat, separat de bridge. Pentru detalii tehnice: `ARCHITECTURE.md` si `docs/ai-github-bridge.md`.
 
 ## 5. Documentatie
 
