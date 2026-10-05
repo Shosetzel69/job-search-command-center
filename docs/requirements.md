@@ -199,26 +199,15 @@ Nota: Remote MCP / `ai-github-bridge` este infrastructura operationala de engine
 
 ## 6. Restrictii, Ipoteze si Dependinte
 
-### 6.1 Configuratie / politica baseline stabilizata
+### 6.1 Configuratie / politica baseline
 
-- roluri: PM, IT PM, Technical/Agile PM, Delivery, Service, Scrum, Program/PMO;
-- Remote prioritar, apoi Hybrid;
-- FIT ridicat: 80;
-- B2B: 250-650 EUR/zi;
-- freshness UI: 24h;
-- colectare maxima: 120h;
-- repostari: pastrate si marcate;
-- JobsPipe: `jobspipe_mode=disabled`;
-- scheduler Full Search: OFF / neimplementat in baseline;
-- istoric loguri: maximum 10 rulari.
+Repository-ul sursa nu defineste preferinte personale implicite. Rolurile, geografia, modurile de lucru, pragurile FIT, compensatia, disponibilitatea si excluderile sunt configuratie profile-owned si se stabilesc in runtime.
 
-Selectiile concrete curente din `data/search-config.json` sunt runtime data si pot fi modificate din UI; acest document defineste contractul, nu snapshot-ul exact al fiecarei selectii.
+Valorile versionate in repository sunt exclusiv seed-uri neutre / contracte de schema. Providerii cu cost raman dezactivati implicit, iar Full Search nu porneste automat.
 
-### 6.2 Excluderi de business curente
+### 6.2 Excluderi de business
 
-- Star Storage si companiile grupului;
-- implementari ERP care cer experienta specializata ampla;
-- roluri non-IT.
+Repository-ul public nu contine excluderi personale sau company-specific. Excluderile sunt configurate per profil in runtime.
 
 ### 6.3 Restrictii
 
@@ -241,7 +230,7 @@ Selectiile concrete curente din `data/search-config.json` sunt runtime data si p
 - Cloudflare Worker / Static Assets;
 - GitHub Actions si GitHub Contents API;
 - Google Identity Services;
-- repository GitHub privat pentru configuratie, runtime data si istoric;
+- repository GitHub pentru cod, contracte si seed-uri neutre; runtime data si istoricul operational sunt externalizate;
 - providerii/connectorii aprobati individual conform Source Registry.
 
 ## 7. Clarificare #49
