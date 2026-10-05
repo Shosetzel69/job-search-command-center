@@ -411,7 +411,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
             rows=boards._nextventures("https://next-ventures.com/jobs/")
         self.assertEqual(len(rows),2)
         self.assertEqual(rows[0]["job_title"],"Technical Product Owner")
-        self.assertIn("Olanda",rows[0]["countries"])
+        self.assertIn("Tarile de Jos",rows[0]["countries"])
         self.assertIn("Contract",rows[0]["employment_statuses"])
         self.assertTrue(rows[0]["source_url"].endswith("#ref-75221"))
 
