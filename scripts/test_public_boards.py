@@ -859,6 +859,27 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Senior Project Manager")
         self.assertIn("Belgia",rows[0]["countries"])
 
+    def test_no_fluff_jobs_and_flexa_public_routes(self):
+        cases = [
+            (
+                "No Fluff Jobs",
+                "https://nofluffjobs.com/remote/project-manager",
+                r"/job/[^/?#]+",
+                '<a href="/job/project-manager-link-group-remote-11">Project Manager</a> Remote Link Group',
+            ),
+            (
+                "Flexa",
+                "https://flexa.careers/jobs",
+                r"/jobs/[^/?#]+-[0-9a-f]{16,}",
+                '<a href="/jobs/vodafone-project-manager-6a21fc13c705238de69852ac">Project Manager</a> Bucuresti Romania',
+            ),
+        ]
+        for provider, url, pattern, html in cases:
+            with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+                rows = boards._linked_job_board(url, provider, pattern)
+            self.assertEqual(len(rows), 1, provider)
+            self.assertEqual(rows[0]["company"], provider)
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
