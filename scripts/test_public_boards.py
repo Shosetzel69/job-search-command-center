@@ -1166,6 +1166,20 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
         self.assertTrue(rows[0]["remote"])
 
+    def test_flexjobs_public_project_manager_list(self):
+        html='''<h3>Senior IT Consultant Project Manager</h3>
+        <div>2 weeks ago 100% Remote Full-Time Employee Athens Greece</div>
+        <h3>Project Manager</h3>
+        <div>3 days ago Hybrid Full-Time Employee New York NY</div>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._heading_list_board(
+                "https://www.flexjobs.com/remote-jobs/project-manager",
+                "FlexJobs",
+            )
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[0]["job_title"],"Senior IT Consultant Project Manager")
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
