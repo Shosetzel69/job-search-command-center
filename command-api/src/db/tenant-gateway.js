@@ -1,6 +1,8 @@
 import { getPool, withTransaction } from './pool.js';
 
 export const PERSONAL_TABLES = Object.freeze([
+  'candidate_profile',
+  'search_profile',
   'profile_preferences',
   'profile_job_state',
   'profile_job_evaluation',
@@ -147,6 +149,8 @@ export async function verifyTenantPersonalResidue(
   const result = await db.query(
     `SELECT
        (SELECT count(*)::integer FROM tenants WHERE id=$1) AS tenants,
+       (SELECT count(*)::integer FROM candidate_profile WHERE tenant_id=$1) AS candidate_profiles,
+       (SELECT count(*)::integer FROM search_profile WHERE tenant_id=$1) AS search_profiles,
        (SELECT count(*)::integer FROM profile_preferences WHERE tenant_id=$1) AS preferences,
        (SELECT count(*)::integer FROM profile_job_state WHERE tenant_id=$1) AS job_state,
        (SELECT count(*)::integer FROM profile_job_evaluation WHERE tenant_id=$1) AS evaluations,

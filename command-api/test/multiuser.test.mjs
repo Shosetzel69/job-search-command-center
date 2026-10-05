@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import { internalAuthContext, withInternalAuthContext } from '../src/internal-auth-context.js';
 import { EVALUATION_VERSION, evaluateSharedJob } from '../src/profile-evaluation.js';
 import {
+  deterministicTenantEntityUuid,
   mergeEffectiveConfig,
   ownerBootstrapPending,
   resolveOrProvisionGoogleIdentity,
@@ -37,6 +38,17 @@ test('session hash is deterministic SHA-256 and raw token is never the persisted
   assert.equal(hash.length, 64);
   assert.equal(hash, sessionHash(raw));
   assert.notEqual(hash, raw);
+});
+
+test('tenant-local Search/Candidate Profile ids are stable, distinct and not the tenant id', () => {
+  const tenantId = '11111111-1111-4111-8111-111111111111';
+  const searchA = deterministicTenantEntityUuid('search-profile', tenantId);
+  const searchB = deterministicTenantEntityUuid('search-profile', tenantId);
+  const candidate = deterministicTenantEntityUuid('candidate-profile', tenantId);
+  assert.equal(searchA, searchB);
+  assert.notEqual(searchA, tenantId);
+  assert.notEqual(candidate, tenantId);
+  assert.notEqual(searchA, candidate);
 });
 
 test('missing session and idempotent logout do not require a database binding', async () => {
@@ -350,6 +362,28 @@ test('multiuser migration encodes Nile tenant-aware ownership and contains no RL
   assert.doesNotMatch(sql, /jscc\.(?:user_id|profile_id)/i);
   assert.match(sql, /CREATE TABLE system_bootstrap/);
   assert.doesNotMatch(sql, /owner_profile_id/);
+});
+
+test('search profile foundation migration keeps tenant/workspace separate and uses a logical Candidate Profile reference', async () => {
+  const sql = await readFile(new URL('../migrations/006_search_profile_foundation.sql', import.meta.url), 'utf8');
+  for (const table of ['candidate_profile','search_profile']) {
+    const marker = `CREATE TABLE ${table} (`;
+    const start = sql.indexOf(marker);
+    assert.ok(start >= 0, `missing CREATE TABLE block for ${table}`);
+    const end = sql.indexOf('\n);', start);
+    assert.ok(end > start, `unterminated CREATE TABLE block for ${table}`);
+    const block = sql.slice(start, end + 3);
+    assert.match(block, /tenant_id uuid[^,\n]*REFERENCES tenants\(id\) ON DELETE CASCADE/);
+  }
+  assert.match(sql, /PRIMARY KEY \(tenant_id, candidate_profile_id\)/);
+  assert.match(sql, /PRIMARY KEY \(tenant_id, search_profile_id\)/);
+  assert.doesNotMatch(
+    sql,
+    /FOREIGN KEY \(tenant_id, candidate_profile_id\)[\s\S]*REFERENCES candidate_profile\(tenant_id, candidate_profile_id\)/,
+  );
+  assert.doesNotMatch(sql, /UNIQUE\s*\(tenant_id\)/i);
+  assert.ok(TENANT_AWARE_TABLES.includes('candidate_profile'));
+  assert.ok(TENANT_AWARE_TABLES.includes('search_profile'));
 });
 
 test('account delete target resolution fails closed when user exists without tenant/profile mapping', async () => {

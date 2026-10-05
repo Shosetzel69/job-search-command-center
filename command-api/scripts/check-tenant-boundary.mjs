@@ -4,6 +4,8 @@ import { fileURLToPath } from 'node:url';
 
 const SRC_ROOT = fileURLToPath(new URL('../src/', import.meta.url));
 const PERSONAL_TABLES = [
+  'candidate_profile',
+  'search_profile',
   'profile_preferences',
   'profile_job_state',
   'profile_job_evaluation',

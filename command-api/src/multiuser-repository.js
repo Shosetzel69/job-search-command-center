@@ -4,6 +4,7 @@ import {
   deleteTenantDomain,
   ensureTenant,
   resolveAccountDeletionTarget,
+  requireUuid,
   verifyTenantMapping,
   verifyTenantPersonalResidue,
   withTenantTransaction,
@@ -99,6 +100,131 @@ function deterministicBootstrapUuid(kind, appEnv, subject) {
   hex[16] = ['8','9','a','b'][parseInt(hex[16], 16) % 4];
   const value = hex.join('');
   return [value.slice(0,8), value.slice(8,12), value.slice(12,16), value.slice(16,20), value.slice(20)].join('-');
+}
+
+export function deterministicTenantEntityUuid(kind, tenantId) {
+  const tenant = requireUuid(tenantId, 'tenant_id');
+  const label = String(kind || '').trim();
+  if (!label) throw httpError('tenant entity kind is required', 500);
+  const hex = createHash('sha256')
+    .update(['jscc-tenant-entity-v1', label, tenant].join('\0'))
+    .digest('hex')
+    .slice(0, 32)
+    .split('');
+  hex[12] = '5';
+  hex[16] = ['8','9','a','b'][parseInt(hex[16], 16) % 4];
+  const value = hex.join('');
+  return [value.slice(0,8), value.slice(8,12), value.slice(12,16), value.slice(16,20), value.slice(20)].join('-');
+}
+
+async function assertCandidateProfileReferenceTx(tx, tenantId, candidateProfileId) {
+  const tenant = requireUuid(tenantId, 'tenant_id');
+  const candidateId = requireUuid(candidateProfileId, 'candidate_profile_id');
+  const result = await tx.query(
+    `SELECT candidate_profile_id
+       FROM candidate_profile
+      WHERE tenant_id=$1 AND candidate_profile_id=$2`,
+    [tenant, candidateId],
+  );
+  if (result.rows.length !== 1) {
+    throw httpError('Search Profile Candidate Profile reference is unavailable in this tenant', 503);
+  }
+  return candidateId;
+}
+
+async function ensureSearchProfileFoundationTx(tx, tenantId) {
+  const tenant = requireUuid(tenantId, 'tenant_id');
+  const candidateProfileId = deterministicTenantEntityUuid('candidate-profile', tenant);
+  const searchProfileId = deterministicTenantEntityUuid('search-profile', tenant);
+
+  await tx.query(
+    `INSERT INTO candidate_profile(
+        tenant_id, candidate_profile_id, candidate_version, structured_evidence
+      )
+      VALUES ($1, $2, 1, '{}'::jsonb)
+      ON CONFLICT(tenant_id, candidate_profile_id) DO NOTHING`,
+    [tenant, candidateProfileId],
+  );
+
+  await assertCandidateProfileReferenceTx(tx, tenant, candidateProfileId);
+  await tx.query(
+    `INSERT INTO search_profile(
+        tenant_id, search_profile_id, candidate_profile_id,
+        name, status, profile_version, onboarding_state
+      )
+      VALUES ($1, $2, $3, 'Default', 'ACTIVE', 1, 'NOT_CONFIGURED')
+      ON CONFLICT(tenant_id, search_profile_id) DO NOTHING`,
+    [tenant, searchProfileId, candidateProfileId],
+  );
+
+  const active = await tx.query(
+    `SELECT search_profile_id, candidate_profile_id, status,
+            profile_version, onboarding_state, created_at, updated_at
+       FROM search_profile
+      WHERE tenant_id=$1 AND status='ACTIVE'
+      ORDER BY created_at, search_profile_id`,
+    [tenant],
+  );
+  if (active.rows.length !== 1) {
+    throw httpError('Exactly one active Search Profile is required in the current release', 503);
+  }
+  const row = active.rows[0];
+  if (String(row.search_profile_id) !== searchProfileId
+      || String(row.candidate_profile_id) !== candidateProfileId) {
+    throw httpError('Active Search Profile foundation is inconsistent', 503);
+  }
+  return Object.freeze({
+    search_profile_id:String(row.search_profile_id),
+    candidate_profile_id:String(row.candidate_profile_id),
+    status:String(row.status),
+    profile_version:Number(row.profile_version),
+    onboarding_state:String(row.onboarding_state),
+    created_at:row.created_at,
+    updated_at:row.updated_at,
+  });
+}
+
+export async function ensureSearchProfileFoundation(
+  authContext,
+  env = process.env,
+  { db = getPool(env) } = {},
+) {
+  return withTenantTransaction(
+    authContext,
+    tx => ensureSearchProfileFoundationTx(tx, tx.tenantId),
+    { env, db },
+  );
+}
+
+export async function resolveActiveSearchProfile(
+  authContext,
+  env = process.env,
+  { db = getPool(env) } = {},
+) {
+  return withTenantTransaction(authContext, async tx => {
+    const result = await tx.query(
+      `SELECT search_profile_id, candidate_profile_id, status,
+              profile_version, onboarding_state, created_at, updated_at
+         FROM search_profile
+        WHERE tenant_id=$1 AND status='ACTIVE'
+        ORDER BY created_at, search_profile_id`,
+      [tx.tenantId],
+    );
+    if (result.rows.length !== 1) {
+      throw httpError('Exactly one active Search Profile is required in the current release', 503);
+    }
+    const row = result.rows[0];
+    await assertCandidateProfileReferenceTx(tx, tx.tenantId, row.candidate_profile_id);
+    return Object.freeze({
+      search_profile_id:String(row.search_profile_id),
+      candidate_profile_id:String(row.candidate_profile_id),
+      status:String(row.status),
+      profile_version:Number(row.profile_version),
+      onboarding_state:String(row.onboarding_state),
+      created_at:row.created_at,
+      updated_at:row.updated_at,
+    });
+  }, { env, db });
 }
 
 function accountLimitFromEnv(env) {
@@ -389,6 +515,7 @@ async function initializePersonalDomain(row, bootstrapPending, bootstrapSeed, en
        ON CONFLICT(tenant_id) DO NOTHING`,
       [authContext.profile_id],
     );
+    await ensureSearchProfileFoundationTx(tx, authContext.profile_id);
 
     if (bootstrapPending) {
       if (!bootstrapSeed) throw httpError('Bootstrap seed is required for initial owner provisioning', 503);
@@ -449,6 +576,8 @@ export async function resolveOrProvisionGoogleIdentity(payload, env = process.en
       throw error;
     });
     if (ready) {
+      stage = 'ensure-search-profile-foundation';
+      await ensureSearchProfileFoundation(ready, env, { db });
       stage = 'refresh-ready-identity';
       await refreshGoogleIdentityMetadata(db, subject, payload);
       return ready;
