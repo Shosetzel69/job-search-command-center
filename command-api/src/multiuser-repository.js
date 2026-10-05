@@ -828,7 +828,7 @@ export function decodeJobCursor(raw) {
     const parsed = JSON.parse(Buffer.from(String(raw), 'base64url').toString('utf8'));
     const date = new Date(parsed?.sort_at);
     const jobId = String(parsed?.job_id || '');
-    if (parsed?.v !== 1 || Number.isNaN(date.getTime()) || !/^[0-9a-f-]{36}$/i.test(jobId)) throw new Error('invalid');
+    if (parsed?.v !== 1 || Number.isNaN(date.getTime()) || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(jobId)) throw new Error('invalid');
     return Object.freeze({ sort_at:date.toISOString(), job_id:jobId });
   } catch {
     throw httpError('Invalid jobs cursor', 400);
