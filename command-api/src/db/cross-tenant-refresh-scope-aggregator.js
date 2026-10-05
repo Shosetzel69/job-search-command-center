@@ -75,7 +75,8 @@ export async function aggregateAdminRefreshScopes(
         AND pref.search_profile_id = sp.search_profile_id
       WHERE sp.status = 'ACTIVE'
         AND account.status = 'ACTIVE'
-        AND account.deletion_started_at IS NULL`,
+        AND account.deletion_started_at IS NULL
+        AND COALESCE(pref.preferences, '{}'::jsonb) <> '{}'::jsonb`,
   );
 
   const aggregate = new Map();
