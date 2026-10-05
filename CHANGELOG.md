@@ -14,6 +14,7 @@
 
 ### Functionalitati
 
+- #489 / ATC-489-01: adaugata fundatia persistenta tenant-aware pentru Search Profile si Candidate Profile, cu ID-uri distincte de Nile tenant/workspace, provisioning/backfill idempotent si referinta logica fail-closed Search Profile -> Candidate Profile compatibila cu tenant hard-delete Nile; comportamentul UI/API existent ramane neschimbat in acest slice.
 - #483: promovarea GCP DEV/TEST include DB migration Job environment-scoped din exact Service digest-ul candidatului, verifica manifestul/checksum-urile/schema inainte de rollout, mentine checklist operational `promotion-status.json` si il afiseaza ADMIN-only in UI.
 
 

@@ -8,8 +8,10 @@ import {
   deleteAccount,
   deleteApplication,
   effectiveConfig,
+  ensureSearchProfileFoundation,
   listApplications,
   nomenclatureReferenceCount,
+  resolveActiveSearchProfile,
   resolveOrProvisionGoogleIdentity,
   resolveSession,
   savePreferences,
@@ -17,6 +19,7 @@ import {
   updateApplication,
 } from '../src/multiuser-repository.js';
 import { runtimePrivilegeReadiness } from '../src/db/privilege-readiness.js';
+import { backfillSearchProfileFoundations } from '../src/db/search-profile-backfill.js';
 import { withTenantTransaction } from '../src/db/tenant-gateway.js';
 import { deleteNomenclatureValue } from '../src/nomenclature-governance.js';
 import { readFile } from 'node:fs/promises';
@@ -95,6 +98,14 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal(ownerA.role, 'ADMIN');
     assert.equal(ownerB.role, 'ADMIN');
 
+    const ownerFoundationA = await resolveActiveSearchProfile(ownerA, env, { db:runtimeDb });
+    const ownerFoundationB = await ensureSearchProfileFoundation(ownerB, env, { db:runtimeDb });
+    assert.equal(ownerFoundationA.search_profile_id, ownerFoundationB.search_profile_id);
+    assert.equal(ownerFoundationA.candidate_profile_id, ownerFoundationB.candidate_profile_id);
+    assert.notEqual(ownerFoundationA.search_profile_id, ownerA.profile_id);
+    assert.notEqual(ownerFoundationA.candidate_profile_id, ownerA.profile_id);
+    assert.notEqual(ownerFoundationA.search_profile_id, ownerFoundationA.candidate_profile_id);
+
     const ownerConfig = await effectiveConfig(ownerA, env, { db:runtimeDb });
     assert.equal(ownerConfig.rate_min_eur_day, 999);
     assert.deepEqual(ownerConfig.excluded_company_patterns, ['owner-secret-company']);
@@ -106,6 +117,49 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       { db:runtimeDb },
     );
     assert.equal(user.role, 'USER');
+
+    const userFoundation = await resolveActiveSearchProfile(user, env, { db:runtimeDb });
+    assert.notEqual(userFoundation.search_profile_id, user.profile_id);
+    assert.notEqual(userFoundation.candidate_profile_id, user.profile_id);
+    assert.notEqual(userFoundation.search_profile_id, ownerFoundationA.search_profile_id);
+
+    const ownerProfileProbe = await withTenantTransaction(user, async tx => {
+      const result = await tx.query(
+        'SELECT search_profile_id FROM search_profile WHERE tenant_id=$1 AND search_profile_id=$2',
+        [user.profile_id, ownerFoundationA.search_profile_id],
+      );
+      return result.rows;
+    }, { env, db:runtimeDb });
+    assert.equal(ownerProfileProbe.length, 0);
+
+    await withTenantTransaction(user, async tx => {
+      await tx.query(
+        'DELETE FROM candidate_profile WHERE tenant_id=$1 AND candidate_profile_id=$2',
+        [user.profile_id, userFoundation.candidate_profile_id],
+      );
+    }, { env, db:runtimeDb });
+    await assert.rejects(
+      resolveActiveSearchProfile(user, env, { db:runtimeDb }),
+      error => error?.status === 503
+        && /Candidate Profile reference is unavailable/.test(error.message),
+    );
+    const repairedFoundation = await ensureSearchProfileFoundation(user, env, { db:runtimeDb });
+    assert.equal(repairedFoundation.search_profile_id, userFoundation.search_profile_id);
+    assert.equal(repairedFoundation.candidate_profile_id, userFoundation.candidate_profile_id);
+
+    await withTenantTransaction(user, async tx => {
+      await tx.query('DELETE FROM search_profile WHERE tenant_id=$1', [user.profile_id]);
+      await tx.query('DELETE FROM candidate_profile WHERE tenant_id=$1', [user.profile_id]);
+    }, { env, db:runtimeDb });
+    await assert.rejects(
+      resolveActiveSearchProfile(user, env, { db:runtimeDb }),
+      error => error?.status === 503,
+    );
+    const backfill = await backfillSearchProfileFoundations(env, { db:runtimeDb });
+    assert.ok(backfill.processed >= 2);
+    const restoredFoundation = await resolveActiveSearchProfile(user, env, { db:runtimeDb });
+    assert.equal(restoredFoundation.search_profile_id, userFoundation.search_profile_id);
+    assert.equal(restoredFoundation.candidate_profile_id, userFoundation.candidate_profile_id);
 
     const userConfig = await effectiveConfig(user, env, { db:runtimeDb });
     assert.equal('rate_min_eur_day' in userConfig, false);
@@ -220,13 +274,16 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
          (SELECT count(*)::integer FROM app_user WHERE user_id=$1) AS users,
          (SELECT count(*)::integer FROM user_identity WHERE user_id=$1) AS identities,
          (SELECT count(*)::integer FROM profile WHERE profile_id=$2) AS profiles,
+         (SELECT count(*)::integer FROM candidate_profile WHERE tenant_id=$2) AS candidate_profiles,
+         (SELECT count(*)::integer FROM search_profile WHERE tenant_id=$2) AS search_profiles,
          (SELECT count(*)::integer FROM profile_preferences WHERE tenant_id=$2) AS preferences,
          (SELECT count(*)::integer FROM applications WHERE tenant_id=$2) AS applications,
          (SELECT count(*)::integer FROM user_session WHERE user_id=$1) AS sessions`,
       [originalOwnerUserId, originalOwnerProfileId, `jscc-${originalOwnerProfileId}`],
     );
     assert.deepEqual(residue.rows[0], {
-      tenants:0, users:0, identities:0, profiles:0, preferences:0, applications:0, sessions:0,
+      tenants:0, users:0, identities:0, profiles:0,
+      candidate_profiles:0, search_profiles:0, preferences:0, applications:0, sessions:0,
     });
 
     const bootstrapMarker = await adminDb.query(

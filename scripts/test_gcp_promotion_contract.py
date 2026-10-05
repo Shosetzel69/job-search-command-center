@@ -14,6 +14,7 @@ LIVE=(ROOT/"scripts/gcp/capture_live_promotion_evidence.sh").read_text()
 VERIFY_SEED=(ROOT/"scripts/gcp/verify_runtime_seed.sh").read_text()
 VERIFY_EVIDENCE=(ROOT/"scripts/gcp/verify_promotion_evidence.py").read_text()
 MIGRATE=(ROOT/"scripts/gcp/run_db_migration.sh").read_text()
+DB_MIGRATE=(ROOT/"command-api/scripts/db-migrate.mjs").read_text()
 PROMOTION_STATUS=(ROOT/"scripts/gcp/promotion_status.py").read_text()
 PROTECTED=(ROOT/"shared/runtime-data.mjs").read_text()
 SECURE=(ROOT/"command-api/src/secure-entry.js").read_text()
@@ -194,6 +195,13 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn("SELECT version, name, checksum FROM schema_migrations ORDER BY version", MIGRATE)
         self.assertIn("SELECT to_regclass($1) AS relation", MIGRATE)
         self.assertIn("system_bootstrap", MIGRATE)
+        self.assertIn("candidate_profile", MIGRATE)
+        self.assertIn("search_profile", MIGRATE)
+
+    def test_canonical_db_migration_runs_idempotent_search_profile_backfill(self):
+        self.assertIn("backfillSearchProfileFoundations", DB_MIGRATE)
+        self.assertIn("search_profile_backfill", DB_MIGRATE)
+        self.assertIn("getMigrationPool", DB_MIGRATE)
 
     def test_promotion_checklist_is_machine_readable_and_fail_closed(self):
         self.assertIn('promotion-status.json', PROMOTION_STATUS)

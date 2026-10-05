@@ -29,6 +29,7 @@ const migrations = await loadMigrations();
 const db = getMigrationPool(process.env);
 const required = [
   'schema_migrations','tenants','app_user','user_identity','profile','user_session',
+  'candidate_profile','search_profile',
   'profile_preferences','profile_job_state','profile_job_evaluation','applications',
   'profile_notes','profile_ui_preferences','collection_policy','system_bootstrap',
   'account_capacity_policy','account_deletion_audit','canonical_jobs','source_postings',

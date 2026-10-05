@@ -39,6 +39,9 @@ async function main() {
     hard_delete_tenant_plus_shared_tx:null,
     tenant_delete_cascade:null,
     tenant_delete_retry_idempotent:null,
+    search_profile_logical_reference_write:null,
+    search_profile_cross_tenant_isolation:null,
+    search_profile_delete_cascade:null,
     details:{},
   };
 
@@ -198,6 +201,74 @@ async function main() {
       results.details.mixed_shared_plus_tenant_write_rejected = compactError(error);
     }
 
+    // E2. #489 foundation: tenant-local logical Candidate/Search Profile relationship and isolation.
+    // No physical FK is used because Nile tenant deletion tears down tenant-aware
+    // partitions independently and a cross-table FK blocks that lifecycle.
+    const tenantProfileA = randomUUID();
+    const tenantProfileB = randomUUID();
+    const candidateProfileA = randomUUID();
+    const searchProfileA = randomUUID();
+    await createTenant(client, tenantProfileA, `jscc-profile-a-${tenantProfileA}`);
+    await createTenant(client, tenantProfileB, `jscc-profile-b-${tenantProfileB}`);
+
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL nile.tenant_id = '${tenantProfileA}'`);
+      await client.query(
+        `INSERT INTO candidate_profile(tenant_id, candidate_profile_id)
+         VALUES ($1, $2)`,
+        [tenantProfileA, candidateProfileA],
+      );
+      await client.query(
+        `INSERT INTO search_profile(
+            tenant_id, search_profile_id, candidate_profile_id,
+            name, status, profile_version, onboarding_state
+          )
+          VALUES ($1, $2, $3, 'Default', 'ACTIVE', 1, 'NOT_CONFIGURED')`,
+        [tenantProfileA, searchProfileA, candidateProfileA],
+      );
+      await client.query('COMMIT');
+      results.search_profile_logical_reference_write = true;
+    } catch (error) {
+      await safeRollback(client);
+      results.search_profile_logical_reference_write = false;
+      results.details.search_profile_logical_reference_write = compactError(error);
+    }
+
+    try {
+      await client.query('BEGIN');
+      await client.query(`SET LOCAL nile.tenant_id = '${tenantProfileB}'`);
+      const invisible = await client.query(
+        'SELECT search_profile_id FROM search_profile WHERE search_profile_id=$1',
+        [searchProfileA],
+      );
+      await client.query('COMMIT');
+      results.search_profile_cross_tenant_isolation = invisible.rows.length === 0;
+    } catch (error) {
+      await safeRollback(client);
+      results.search_profile_cross_tenant_isolation = false;
+      results.details.search_profile_cross_tenant_isolation = compactError(error);
+    }
+
+    try {
+      await client.query('BEGIN');
+      await client.query('DELETE FROM tenants WHERE id=$1 RETURNING id', [tenantProfileA]);
+      await client.query('COMMIT');
+      const residue = await client.query(
+        `SELECT
+           (SELECT count(*)::integer FROM candidate_profile WHERE tenant_id=$1) AS candidate_profiles,
+           (SELECT count(*)::integer FROM search_profile WHERE tenant_id=$1) AS search_profiles`,
+        [tenantProfileA],
+      );
+      results.search_profile_delete_cascade =
+        Number(residue.rows?.[0]?.candidate_profiles) === 0
+        && Number(residue.rows?.[0]?.search_profiles) === 0;
+    } catch (error) {
+      await safeRollback(client);
+      results.search_profile_delete_cascade = false;
+      results.details.search_profile_delete_cascade = compactError(error);
+    }
+
     // F/G. Is the current one-transaction hard-delete shape possible?
     // Use a shared profile without the already-proven-invalid FK to tenants, so
     // this test isolates DELETE tenants + DELETE shared account in one tx.
@@ -292,7 +363,16 @@ async function main() {
       results.details.tenant_delete_retry_idempotent = compactError(error);
     }
 
+    const required489 = [
+      'search_profile_logical_reference_write',
+      'search_profile_cross_tenant_isolation',
+      'search_profile_delete_cascade',
+    ];
+    const failed489 = required489.filter(key => results[key] !== true);
     process.stdout.write(`${JSON.stringify(results)}\n`);
+    if (failed489.length) {
+      throw new Error(`#489 Nile Search Profile contract failed: ${failed489.join(', ')}`);
+    }
   } finally {
     await client.end();
   }

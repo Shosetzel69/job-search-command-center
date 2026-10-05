@@ -2,6 +2,8 @@ import { devTestSharedDbRoleAllowed } from './config.js';
 import { getPool } from './pool.js';
 
 export const TENANT_AWARE_TABLES = Object.freeze([
+  'candidate_profile',
+  'search_profile',
   'profile_preferences',
   'profile_job_state',
   'profile_job_evaluation',
