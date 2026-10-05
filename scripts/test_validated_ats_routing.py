@@ -50,6 +50,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             "Snyk": ("ashby", "snyk"),
             "European Dynamics": ("workable", "european-dynamics"),
             "ARHS / Accenture": ("smartrecruiters", "ARHS"),
+            "Avance Consulting": ("smartrecruiters", "AvanceConsultingServices2"),
             "Cronos Europa": ("breezyhr", "cronoseuropa"),
             "Orange Romania": ("softgarden", "https://cariere.orange.ro/jobs.feed.json"),
             "Vodafone / VOIS": ("eightfold_public", "https://jobs.vodafone.com"),
