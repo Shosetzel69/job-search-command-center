@@ -45,6 +45,7 @@ const SYSTEM_CONFIG_KEYS = Object.freeze([
   'jobspipe_incremental_overlap_minutes',
   'jobspipe_mode',
   'jobspipe_apify_max_items_per_run',
+  'user_refresh_enabled',
 ]);
 
 function httpError(message, status) {
@@ -787,6 +788,45 @@ export async function saveCollectionPolicy(authContext, policy, env = process.en
     [JSON.stringify(system)],
   );
   return system;
+}
+
+export async function sharedCorpusRefreshState(
+  env = process.env,
+  { db = getPool(env), now = new Date() } = {},
+) {
+  const [policyResult, runResult] = await Promise.all([
+    db.query('SELECT policy FROM collection_policy WHERE singleton=true'),
+    db.query(
+      `SELECT run_id, status, completed_at
+         FROM search_runs
+        WHERE status IN ('completed','completed_with_errors')
+          AND completed_at IS NOT NULL
+        ORDER BY completed_at DESC, run_id DESC
+        LIMIT 1`,
+    ),
+  ]);
+  const policy = jsonObject(policyResult.rows?.[0]?.policy);
+  const freshnessHours = Number(policy.collection_freshness_hours ?? 24);
+  const safeFreshnessHours = Number.isFinite(freshnessHours) && freshnessHours > 0
+    ? Math.min(freshnessHours, 24 * 365)
+    : 24;
+  const run = runResult.rows?.[0] || null;
+  const completedAt = run?.completed_at ? new Date(run.completed_at) : null;
+  const ageHours = completedAt && !Number.isNaN(completedAt.getTime())
+    ? Math.max(0, (now.getTime() - completedAt.getTime()) / 3600000)
+    : null;
+  return Object.freeze({
+    policy,
+    user_refresh_enabled:policy.user_refresh_enabled !== false,
+    collection_freshness_hours:safeFreshnessHours,
+    latest_usable_run:run ? {
+      run_id:String(run.run_id),
+      status:String(run.status),
+      completed_at:completedAt?.toISOString() || null,
+    } : null,
+    corpus_age_hours:ageHours,
+    corpus_fresh:ageHours != null && ageHours <= safeFreshnessHours,
+  });
 }
 
 
