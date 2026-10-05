@@ -33,6 +33,7 @@ import {
   setJobState,
 } from './multiuser-repository.js';
 import { clearSessionCookie, cookieValue, sessionCookie } from './session-cookie.js';
+import { userRefresh } from './user-refresh.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const COOKIE_SENTINEL = '__JSCC_COOKIE_SESSION__';
@@ -240,6 +241,13 @@ export async function handleAuthenticatedRoute(request, env, context) {
     );
     await savePreferences(context, next, env);
     return json({ status:'saved', changed:true, preferences:next });
+  }
+
+  if (request.method === 'POST' && url.pathname === '/me/refresh') {
+    requireSameOrigin(request, env);
+    const result = await userRefresh(context, env);
+    const status = ['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome) ? 202 : 200;
+    return json(result, status);
   }
 
   if (request.method === 'GET' && url.pathname === '/me/jobs') {
