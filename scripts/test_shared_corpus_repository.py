@@ -90,6 +90,45 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         for field in repository.PERSONAL_FIELDS:
             self.assertNotIn(field, posting.payload)
 
+    def test_shared_projection_persists_versioned_classification_basis(self):
+        posting = repository.prepare_posting({
+            "_jscc_source_id": "src-1",
+            "_jscc_source_name": "Example",
+            "id": "external-77",
+            "title": "Technical Project Manager",
+            "company": "Example",
+            "country_codes": ["RO"],
+            "work_mode": "remote",
+            "contract_type": "contract",
+            "remote_scope": "EU",
+            "description": "Bank governance delivery",
+        })
+        self.assertEqual(posting.role_family, "PROJECT_MANAGEMENT")
+        self.assertEqual(
+            posting.role_subfamily,
+            ("project_manager", "technical_project_manager"),
+        )
+        self.assertEqual(posting.contract_type, "contract")
+        self.assertEqual(posting.remote_scope, "EU")
+        self.assertEqual(posting.classification_status, "matched")
+        self.assertEqual(posting.classification_confidence, 1.0)
+        self.assertEqual(posting.classification_version, repository._taxonomy()["taxonomy_version"])
+        self.assertEqual(len(posting.evaluation_basis_hash), 64)
+
+        repeated = repository.prepare_posting({
+            "_jscc_source_id": "src-1",
+            "_jscc_source_name": "Example",
+            "id": "external-77",
+            "title": "Technical Project Manager",
+            "company": "Example",
+            "country_codes": ["RO"],
+            "work_mode": "remote",
+            "contract_type": "contract",
+            "remote_scope": "EU",
+            "description": "Bank governance delivery",
+        })
+        self.assertEqual(posting.evaluation_basis_hash, repeated.evaluation_basis_hash)
+
     def test_work_mode_uses_canonical_nomenclature(self):
         with patch.object(repository, "_nomenclatures", return_value={
             "domains": {
@@ -344,6 +383,32 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "persisted")
         self.assertEqual(seen["connection_string"], url)
+
+    def test_canonical_upsert_versions_only_on_semantic_basis_change(self):
+        cursor = FakeCursor([("post-1", "job-1")])
+        posting = self.posting()
+        posting = repository.SharedPosting(
+            **{
+                **posting.__dict__,
+                "classification_version": "2026.09.25-1",
+                "evaluation_basis_hash": "a" * 64,
+            }
+        )
+        repository._upsert_posting(cursor, posting, "run-version", NOW)
+        update_sql = next(
+            query for query, _ in cursor.queries
+            if "UPDATE canonical_jobs" in query
+        )
+        self.assertIn(
+            "WHEN evaluation_basis_hash IS DISTINCT FROM %s THEN job_version + 1",
+            update_sql,
+        )
+        params = next(
+            params for query, params in cursor.queries
+            if "UPDATE canonical_jobs" in query
+        )
+        self.assertEqual(params[0], "a" * 64)
+        self.assertEqual(params[14], "a" * 64)
 
     def test_lifecycle_sql_is_two_stage_and_sets_90_day_retention(self):
         cursor = FakeCursor()
