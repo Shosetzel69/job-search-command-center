@@ -127,10 +127,25 @@ def _contract_type(record: Mapping[str, Any]) -> str:
     return "unknown"
 
 
+def _normalize_remote_scope(value: object) -> str:
+    normalized = role_taxonomy.normalize_title(value)
+    if not normalized:
+        return "unknown"
+    if normalized in {"worldwide", "global", "global remote", "anywhere", "work from anywhere", "anywhere in the world"}:
+        return "Worldwide"
+    if normalized == "emea":
+        return "EMEA"
+    if normalized in {"eu", "europe", "european union", "eu only", "europe only", "within europe", "across europe"}:
+        return "EU"
+    if normalized in {"country", "country only", "national", "specific country"}:
+        return "Country"
+    return "unknown"
+
+
 def _remote_scope(record: Mapping[str, Any], work_mode: str, country_codes: tuple[str, ...]) -> str:
     explicit = _text(record.get("remote_scope"))
     if explicit:
-        return explicit
+        return _normalize_remote_scope(explicit)
     if work_mode != "remote":
         return "unknown"
     if country_codes:
