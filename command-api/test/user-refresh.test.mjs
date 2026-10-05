@@ -91,6 +91,26 @@ test('stale shared corpus starts exactly one existing global Retrieve', async ()
   assert.equal(calls[0][4], 'manual-full');
 });
 
+test('completed Retrieve between lock check and dispatch is reused instead of starting a duplicate run', async () => {
+  let reads = 0;
+  let dispatches = 0;
+  const result = await userRefresh(user, baseEnv, {
+    readState:async () => {
+      reads += 1;
+      return reads === 1
+        ? state({ corpus_fresh:false, corpus_age_hours:30 })
+        : state({ corpus_fresh:true, corpus_age_hours:0.01, latest_usable_run:{ run_id:'just-finished', status:'completed', completed_at:'2026-10-05T12:00:00.000Z' } });
+    },
+    isActive:async () => false,
+    dispatch:async () => { dispatches += 1; },
+    buildIdentity:{},
+  });
+  assert.equal(result.outcome, 'REUSED_CORPUS');
+  assert.equal(result.latest_usable_run.run_id, 'just-finished');
+  assert.equal(reads, 2);
+  assert.equal(dispatches, 0);
+});
+
 test('dispatch race 409 becomes JOINED_EXISTING_RUN', async () => {
   const result = await userRefresh(user, baseEnv, {
     readState:async () => state({ corpus_fresh:false }),
