@@ -197,10 +197,17 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn("system_bootstrap", MIGRATE)
         self.assertIn("candidate_profile", MIGRATE)
         self.assertIn("search_profile", MIGRATE)
+        self.assertIn("search_profile_preferences", MIGRATE)
+        self.assertIn("canonical job classification backfill is incomplete", MIGRATE)
+        self.assertIn("Search Profile preference backfill is incomplete", MIGRATE)
 
-    def test_canonical_db_migration_runs_idempotent_search_profile_backfill(self):
+    def test_canonical_db_migration_runs_idempotent_search_profile_backfills(self):
         self.assertIn("backfillSearchProfileFoundations", DB_MIGRATE)
         self.assertIn("search_profile_backfill", DB_MIGRATE)
+        self.assertIn("backfillSearchProfilePreferences", DB_MIGRATE)
+        self.assertIn("search_profile_preferences_backfill", DB_MIGRATE)
+        self.assertIn("backfillCanonicalJobClassification", DB_MIGRATE)
+        self.assertIn("shared_classification_backfill", DB_MIGRATE)
         self.assertIn("getMigrationPool", DB_MIGRATE)
 
     def test_promotion_checklist_is_machine_readable_and_fail_closed(self):
