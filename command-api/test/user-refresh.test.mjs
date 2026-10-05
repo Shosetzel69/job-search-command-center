@@ -162,3 +162,17 @@ test('POST me refresh is same-origin USER route and does not become ADMIN-only',
   assert.doesNotMatch(block, /requireAdmin/);
   assert.doesNotMatch(secure, /adminOnlyPath[\s\S]{0,500}\/me\/refresh/);
 });
+
+test('USER refresh orchestration cannot mutate profile criteria or compute FIT directly', async () => {
+  const source = await readFile(new URL('../src/user-refresh.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /savePreferences|listProfileJobs|evaluateSharedJob|profile_job_evaluation/);
+  assert.match(source, /dispatchWorkflow/);
+  assert.match(source, /hasActiveWorkflowRun/);
+});
+
+test('USER refresh enablement is system-owned collection policy', async () => {
+  const repository = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
+  assert.match(repository, /'user_refresh_enabled'/);
+  assert.match(repository, /collection_freshness_hours/);
+  assert.match(repository, /FROM search_runs/);
+});
