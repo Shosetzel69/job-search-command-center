@@ -219,7 +219,7 @@ Repository-ul public nu contine excluderi personale sau company-specific. Exclud
 - mecanismul de autorizare curent permite un singur utilizator; multi-user este `UNDER ANALYSIS`;
 - Full Search ramane manual-only pana la implementarea separata a Package 2B;
 - JobsPipe ramane disabled in baseline;
-- stabilizarea functionala a baseline-ului a fost validata in PROD la 2026-09-11; raport final: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
+- stabilizarea functionala a baseline-ului a fost validata in PROD la 2026-09-11; evidence-ul istoric detaliat este retinut numai in repository-ul privat de arhiva.
 
 ### 6.4 Ipoteze
 
