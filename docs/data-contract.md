@@ -601,6 +601,19 @@ Invariants:
 - PROD enablement este explicit in afara ATC-489-04.
 
 
+### ADMIN Refresh — ATC-489-05
+
+`POST /admin/refresh` is the ADMIN-only global refresh control.
+
+A narrowly allowlisted Cross-Tenant Refresh Scope Aggregator reads active Search Profile selection scope and returns only deduplicated aggregate scope data: Role Family, target regions/countries, remote-eligible countries, work modes, contract types, and `active_profile_count`. It never returns tenant/search-profile/user identity, email, Candidate Profile evidence, Applications, FIT/evaluation state, or arbitrary preferences JSON.
+
+ADMIN Refresh uses the same global corpus freshness and heavy-search coalescing authority as USER Refresh. Canonical outcomes remain `REUSED_CORPUS | JOINED_EXISTING_RUN | STARTED_RUN | BLOCKED_BY_POLICY`.
+
+ADMIN-started Retrieve uses `RUN_TRIGGER=admin-ui` for operational history. The current runtime still executes at most one shared global heavy Retrieve; it never fans out one run per user or scope. Provider-specific per-scope transport remains outside ATC-489-05.
+
+PROD ADMIN Refresh is fail-closed in this slice. Legacy `/commands/run` remains compatibility-only until ATC-489-07.
+
+
 ## 14. Multiuser migration authority
 
 Planul canonic pentru trecerea JSON -> PostgreSQL pe domenii este `docs/multiuser-data-migration-plan.md`.
