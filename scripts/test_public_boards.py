@@ -243,7 +243,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Romania",rows[0]["countries"])
         self.assertEqual(rows[0]["date_posted"],"2026-09-26T00:00:00+00:00")
         self.assertIn("sortColumn=referencedate",fetch.call_args.args[0])
-        self.assertIn("/viewalljobs/",fetch.call_args.args[0])
+        self.assertIn("/tile-search-results/",fetch.call_args.args[0])
         self.assertEqual(
             boards._rmk_page_url("https://jobs.worldline.com/viewalljobs/",50),
             "https://jobs.worldline.com/viewalljobs/50/?q=&sortColumn=referencedate&sortDirection=desc",
