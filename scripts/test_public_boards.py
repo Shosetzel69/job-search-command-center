@@ -476,6 +476,56 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(rows[0]["remote"])
         self.assertTrue(rows[0]["source_url"].endswith("/jobs/detail/2530129"))
 
+    def test_wellfound_extracts_public_job_links(self):
+        html='''<section>
+          <a href="/jobs/4804897-remote-project-development-manager">REMOTE PROJECT DEVELOPMENT MANAGER</a>
+          Florida Tents & Events Remote only Canada United States Full Time Posted today
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._linked_job_board(
+                "https://wellfound.com/jobs","Wellfound",r"/jobs/\d+-[^?#]+"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"REMOTE PROJECT DEVELOPMENT MANAGER")
+        self.assertTrue(rows[0]["remote"])
+        self.assertTrue(rows[0]["source_url"].endswith("4804897-remote-project-development-manager"))
+
+    def test_skipthedrive_extracts_project_manager_jobs(self):
+        html='''<section>
+          <a href="/job/cardinal-agile-project-manager-1444485/">Agile Project Manager</a>
+          Cardinal 6 days ago Part time Remote
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._linked_job_board(
+                "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/",
+                "SkipTheDrive",r"/job/[^?#]+-\d+/"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Agile Project Manager")
+        self.assertTrue(rows[0]["remote"])
+
+    def test_prohuman_skips_closed_jobs_and_keeps_open_jobs(self):
+        listing='''<div>
+          <a href="/candidati/jobs/closedRole">Closed</a>
+          <a href="/candidati/jobs/ItNetworksupport">Open</a>
+        </div>'''
+        closed='''<html><h1>Project Manager</h1><div>Rolul este inchis Bucuresti Full time</div></html>'''
+        opened='''<html><h1>IT Network Support Specialist</h1>
+          <div>Prohuman APT IT Full time Cluj-Napoca Romania Posted 2 weeks ago</div></html>'''
+        client=Mock()
+        client.get.side_effect=[
+            ("https://www.prohuman.ro/candidati/jobs/closedRole",closed),
+            ("https://www.prohuman.ro/candidati/jobs/ItNetworksupport",opened),
+        ]
+        with patch.object(boards.browser,"render",return_value=(
+            "https://www.prohuman.ro/locuri-de-munca",listing,{"browser_status":"rendered"}
+        )), patch.object(boards,"PublicClient",return_value=client):
+            rows=boards._prohuman("https://www.prohuman.ro/locuri-de-munca")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"IT Network Support Specialist")
+        self.assertIn("Romania",rows[0]["countries"])
+        self.assertTrue(rows[0]["source_url"].endswith("/ItNetworksupport"))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
