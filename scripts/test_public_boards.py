@@ -710,13 +710,37 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Romania",by_title["IT Project Manager"]["countries"])
         self.assertNotIn("Electrician",by_title)
 
+    def test_freelancer_api_normalizes_active_projects(self):
+        payload={"result":{"projects":[{
+            "id":123456,
+            "title":"Technical Project Manager",
+            "description":"Lead a software delivery programme.",
+            "submitdate":1791115200,
+            "seo_url":"project-management/technical-project-manager-123456",
+            "type":"fixed",
+            "budget":{"minimum":500,"maximum":1200},
+            "currency":{"code":"EUR"},
+            "jobs":[{"name":"Project Management"},{"name":"Agile Development"}],
+        }]}}
+        rows=boards._freelancer_api(payload)
+        self.assertEqual(len(rows),1)
+        row=rows[0]
+        self.assertEqual(row["id"],"freelancer-com:123456")
+        self.assertEqual(row["job_title"],"Technical Project Manager")
+        self.assertEqual(row["company"],"Freelancer.com")
+        self.assertTrue(row["remote"])
+        self.assertIn("Freelance",row["employment_statuses"])
+        self.assertIn("Budget 500-1200 EUR",row["description"])
+        self.assertIn("Project Management",row["description"])
+        self.assertTrue(row["source_url"].startswith("https://www.freelancer.com/projects/"))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
                      "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
                      "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
                      "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
-                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs","Trasys International","DailyRemote","Jobspresso","awork.ro"]:
+                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs","Trasys International","DailyRemote","Jobspresso","awork.ro","Freelancer.com"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
