@@ -110,6 +110,16 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         )
         self.assertEqual(posting.contract_type, "contract")
         self.assertEqual(posting.remote_scope, "EU")
+        alias = repository.prepare_posting({
+            "_jscc_source_id": "src-1",
+            "_jscc_source_name": "Example",
+            "id": "external-78",
+            "title": "Technical Project Manager",
+            "company": "Example",
+            "work_mode": "remote",
+            "remote_scope": "worldwide",
+        })
+        self.assertEqual(alias.remote_scope, "Worldwide")
         self.assertEqual(posting.classification_status, "matched")
         self.assertEqual(posting.classification_confidence, 1.0)
         self.assertEqual(posting.classification_version, repository._taxonomy()["taxonomy_version"])
