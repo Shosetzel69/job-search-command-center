@@ -762,6 +762,27 @@ class PublicBoardAdapterTests(unittest.TestCase):
             self.assertEqual(rows[0]["company"], provider)
             self.assertTrue(rows[0]["source_url"].startswith("https://"), provider)
 
+    def test_cegeka_and_computacenter_public_routes(self):
+        cases = [
+            (
+                "Cegeka",
+                "https://www.cegeka.com/en/ro/jobs/all-jobs",
+                r"/en/ro/jobs/all-jobs/[^/?#]+-\d+",
+                '<a href="/en/ro/jobs/all-jobs/senior-sql-dba-2-years-fixed-term-contract-8353">Senior SQL DBA</a> Bucharest Romania',
+            ),
+            (
+                "Computacenter",
+                "https://careers.computacenter.com/ro/search",
+                r"/ro/offer/[^/?#]+/[0-9a-f-]+",
+                '<a href="/ro/offer/senior-servicenow-developer-with-ge/44cccd5d-d7b3-4dd5-8a99-17891eb22a75">Senior ServiceNow Developer with German</a> Romania',
+            ),
+        ]
+        for provider, url, pattern, html in cases:
+            with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+                rows = boards._linked_job_board(url, provider, pattern)
+            self.assertEqual(len(rows), 1, provider)
+            self.assertEqual(rows[0]["company"], provider)
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
