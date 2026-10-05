@@ -209,6 +209,15 @@ test('cross-tenant aggregator deduplicates equivalent scopes without identity ou
   assert.match(sql,/sp\.status = 'ACTIVE'/);
 });
 
+test('cross-tenant aggregator query excludes empty unconfigured preference rows',async()=>{
+  let sql='';
+  const db={query:async query=>{sql=query;return {rows:[]};}};
+  const result=await aggregateAdminRefreshScopes({}, {db});
+  assert.equal(result.active_profile_count,0);
+  assert.equal(result.scope_count,0);
+  assert.match(sql,/COALESCE\(pref\.preferences, '\{\}'::jsonb\) <> '\{\}'::jsonb/);
+});
+
 test('legacy role groups explode to distinct role-family scopes',async()=>{
   const db={query:async()=>({rows:[{
     target_role_families:[],
