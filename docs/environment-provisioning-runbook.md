@@ -123,6 +123,6 @@ The complete ordered component plan is `docs/testing/gcp-promotion-checklist.md`
 
 ## Historical reference
 
-Cloudflare-era Phase 7 operational evidence is intentionally excluded from the public source repository and retained only in the private historical archive.
+Cloudflare-era Phase 7 operational evidence is intentionally excluded from the current source tree; historical copies remain reachable through existing Git history.
 
 Refs: #198 #425 #478
