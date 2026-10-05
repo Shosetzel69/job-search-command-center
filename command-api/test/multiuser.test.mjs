@@ -344,7 +344,7 @@ test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the sa
   const boundedBlock = repository.slice(boundedStart, legacyStart);
   const legacyBlock = repository.slice(legacyStart, nextExport);
   assert.match(boundedBlock, /JOB_CANDIDATE_WINDOW_MAX/);
-  assert.match(boundedBlock, /LIMIT \\$\{limitParam\}::integer/);
+  assert.ok(boundedBlock.includes("LIMIT ${limitParam}::integer"));
   assert.match(boundedBlock, /profile_version/);
   assert.match(boundedBlock, /job_version/);
   assert.match(boundedBlock, /FIT_ALGORITHM_VERSION/);
@@ -352,7 +352,7 @@ test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the sa
   assert.match(boundedBlock, /spec\.prefetch/);
   assert.match(legacyBlock, /await listProfileJobs/);
   assert.match(legacyBlock, /LEGACY_JOB_PAGE_LIMIT/);
-  assert.match(legacyBlock, /schema_version:'1\\.0'/);
+  assert.ok(legacyBlock.includes("schema_version:'1.0'"));
   assert.doesNotMatch(legacyBlock, /FROM canonical_jobs/);
 });
 
