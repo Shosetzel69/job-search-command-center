@@ -4,6 +4,7 @@ This module deliberately keeps provider-specific transport/normalization outside
 canonical filtering/FIT engine. It never bypasses login, CAPTCHA, robots or paywalls.
 """
 
+import hashlib
 import json
 import re
 import time
@@ -76,6 +77,8 @@ PUBLIC_BOARD_SOURCES = {
     "Dynamite Jobs": {"kind": "rendered_links", "url": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager", "job_path": r"/company/[^/?#]+/remote-job/[^/?#]+"},
     "Just Join IT": {"kind": "linked_jobs", "url": "https://justjoin.it/job-offers/all-locations/pm?from=0", "job_path": r"/job-offer/[^/?#]+"},
     "Crossover": {"kind": "rendered_links", "url": "https://www.crossover.com/jobs", "job_path": r"/jobs/\d+/[^/?#]+/[^/?#]+"},
+    "JustRemote": {"kind": "heading_list", "url": "https://justremote.co/remote-project-manager-jobs", "default_remote": true},
+    "Techjobs.be": {"kind": "heading_list", "url": "https://techjobs.be/en/ict-jobs", "default_country": "Belgia"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
@@ -87,6 +90,106 @@ PUBLIC_BOARD_SOURCES = {
     "W Talent": {"kind": "linked_jobs", "url": "https://www.wtalent.com/uk/job-search/", "job_path": r"/job/[^/?#]+/?$"},
     "Thaleria": {"kind": "linked_jobs", "url": "https://www.thaleria.com/careers/open-positions", "job_path": r"/careers/positions/[^/?#]+-\d+"},
 }
+
+
+class _HeadingListJobs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = []
+        self.current = None
+        self.in_heading = False
+        self.heading_parts = []
+
+    def _flush(self):
+        if self.current:
+            title = " ".join(self.current.get("title_parts") or []).strip()
+            context = " ".join(self.current.get("context_parts") or []).strip()
+            if title:
+                self.jobs.append({"title": title, "context": context})
+        self.current = None
+        self.in_heading = False
+        self.heading_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"h2","h3","h4"}:
+            self._flush()
+            self.current = {"title_parts": [], "context_parts": []}
+            self.in_heading = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text or not self.current:
+            return
+        if self.in_heading:
+            self.current["title_parts"].append(text)
+        else:
+            self.current["context_parts"].append(text)
+
+    def handle_endtag(self, tag):
+        if tag in {"h2","h3","h4"} and self.in_heading:
+            self.in_heading = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+_HEADING_LIST_NOISE = {
+    "featured", "all listings", "applicant locations", "filters", "technology",
+    "receive our latest jobs to your inbox", "search and find it jobs in belgium",
+}
+
+
+def _heading_list_board(url, provider, *, default_remote=False, default_country=None):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"{provider} public list HTTP {status}")
+    parser = _HeadingListJobs()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = {}
+    for item in parser.jobs:
+        title = plain_text(item.get("title") or "")
+        context = plain_text(item.get("context") or "")
+        if not title or title.casefold() in _HEADING_LIST_NOISE:
+            continue
+        # Require some job-like context to avoid page-section headings.
+        if provider == "JustRemote":
+            company_match = re.match(r"^(.+?)\s+(?:permanent|contract|freelance|full[- ]time|part[- ]time)\b", context, re.I)
+            company = company_match.group(1).strip() if company_match else ""
+            if not company:
+                continue
+        else:
+            parts = [part.strip() for part in re.split(r"\s{2,}|\u00a0+", context) if part.strip()]
+            company = parts[0] if parts else ""
+            if not company:
+                # Techjobs context is often "skills ... Company location".
+                tokens = context.split()
+                company = tokens[-3] if len(tokens) >= 3 else ""
+            if not company:
+                continue
+
+        countries = _country_names_from_text(context)
+        if default_country and not countries:
+            countries = [default_country]
+        remote = bool(default_remote or re.search(r"\b(remote|fully remote|remote friendly|hybrid)\b", context, re.I))
+        employment = [
+            label for label in ("Permanent","Contract","Freelance","Full Time","Part Time")
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I)
+        ]
+        identity_basis = "|".join([provider.casefold(), title.casefold(), company.casefold(), context.casefold()])
+        identity = hashlib.sha1(identity_basis.encode("utf-8")).hexdigest()[:20]
+        record = _record(
+            provider, identity, title, company, context or title, url,
+            location=context,
+            countries=countries,
+            remote=remote,
+            employment_statuses=employment,
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError(f"{provider} public list contained no extractable jobs")
+    return list(records.values())
 
 
 class _RenderedCareerJobs(HTMLParser):
@@ -2386,6 +2489,8 @@ def collect(source, config=None):
         records = _epam(url)
     elif kind == "rendered_links":
         records = _rendered_career_board(url, name, spec["job_path"])
+    elif kind == "heading_list":
+        records = _heading_list_board(url, name, default_remote=spec.get("default_remote", False), default_country=spec.get("default_country"))
     elif kind == "nextventures":
         records = _nextventures(url)
     elif kind == "linked_jobs":
