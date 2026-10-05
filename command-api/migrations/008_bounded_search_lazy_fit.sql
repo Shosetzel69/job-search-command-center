@@ -10,7 +10,7 @@ CREATE TABLE profile_job_evaluation (
   job_id uuid NOT NULL,
   eligibility_state text NOT NULL
     CHECK (eligibility_state IN ('ELIGIBLE','INELIGIBLE','UNKNOWN')),
-  eligibility_reason_code text NOT NULL,
+  eligibility_reason_code text,
   eligible boolean NOT NULL,
   score integer CHECK (score IS NULL OR score BETWEEN 0 AND 100),
   pros jsonb NOT NULL DEFAULT '[]'::jsonb,
