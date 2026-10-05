@@ -309,6 +309,12 @@ test('bounded jobs cursor is opaque, deterministic and rejects malformed input',
     job_id:row.job_id,
   });
   assert.throws(() => decodeJobCursor('not-a-valid-cursor'), /Invalid jobs cursor/);
+  const malformedUuidCursor = Buffer.from(JSON.stringify({
+    v:1,
+    sort_at:'2026-10-05T10:00:00.000Z',
+    job_id:'------------------------------------',
+  }), 'utf8').toString('base64url');
+  assert.throws(() => decodeJobCursor(malformedUuidCursor), /Invalid jobs cursor/);
 });
 
 test('bounded jobs query caps page/prefetch and keeps temporary filters view-only', () => {
