@@ -580,6 +580,26 @@ ATC-489-03 face evaluarea Search-Profile-scoped si bounded:
 
 `profile_job_evaluation` este cache derivat, nu workflow durable. Migration 008 il reconstruieste cu cheia `(tenant_id, search_profile_id, job_id)`; nu sterge Applications, state, Candidate Profile sau Selection Criteria.
 
+### USER Refresh — ATC-489-04
+
+`POST /me/refresh` este un control asupra Retrieve-ului **global**, nu o cautare privata a utilizatorului.
+
+Outcomes canonice:
+- `REUSED_CORPUS`: ultima colectare shared utilizabila este in fereastra `collection_freshness_hours`;
+- `JOINED_EXISTING_RUN`: exista deja heavy Retrieve global sau request-ul pierde cursa de lock;
+- `STARTED_RUN`: corpusul este stale/lipseste si endpoint-ul a pornit exact job-ul global existent;
+- `BLOCKED_BY_POLICY`: USER refresh este dezactivat, environment/search policy nu permite Retrieve sau environment este PROD in acest slice.
+
+Freshness authority este globala: ultima intrare `search_runs` cu status `completed` sau `completed_with_errors`, folosind `completed_at`. Nu exista freshness per tenant/Search Profile.
+
+Invariants:
+- USER Refresh nu modifica Selection Criteria si nu creste `profile_version`;
+- nu calculeaza FIT;
+- nu creeaza joburi user-owned;
+- nu introduce al doilea lock; `heavy-search.lock` ramane singura autoritate de coalescing;
+- endpoint-ul nu apeleaza providerii direct; poate doar reutiliza dispatcher-ul global existent;
+- PROD enablement este explicit in afara ATC-489-04.
+
 
 ## 14. Multiuser migration authority
 
