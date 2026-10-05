@@ -8,7 +8,7 @@ Canonical deployment authority: `cloudbuild.promotion.yaml`
 
 Define the current operational deployment boundary for the JSCC Command API after migration from Cloudflare to Google Cloud.
 
-Historical Cloudflare provisioning/cutover procedures are retained only in the private historical repository and are non-authoritative.
+Historical Cloudflare provisioning/cutover procedures are available only through Git history and are non-authoritative.
 
 ## Preconditions
 
