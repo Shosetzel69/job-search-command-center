@@ -839,6 +839,26 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["company"], "Thaleria")
         self.assertIn("Franta", rows[0]["countries"])
 
+    def test_fujitsu_belgium_rendered_sap_route(self):
+        html='''<div>
+          <a href="/job/Senior-Project-Manager/12345-en_US">Senior Project Manager</a>
+          Brussels Belgium Hybrid
+        </div>'''
+        with patch.object(boards.browser, "render", return_value=(
+            "https://www.jobs.global.fujitsu.com/search/?locationsearch=Belgium",
+            html,
+            {"browser_status":"rendered"},
+        )):
+            rows=boards._rendered_career_board(
+                "https://www.jobs.global.fujitsu.com/search/?q=&locationsearch=Belgium&searchResultView=LIST",
+                "Fujitsu Belgium",
+                r"/job/[^/?#]+/\d+-[A-Za-z_]+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["company"],"Fujitsu Belgium")
+        self.assertEqual(rows[0]["job_title"],"Senior Project Manager")
+        self.assertIn("Belgia",rows[0]["countries"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
