@@ -15,6 +15,7 @@ import {
   effectiveConfig,
   updateApplication,
   evaluateProfileJobs,
+  listProfileJobs,
   listAccounts,
   listApplications,
   operationalHistory,
@@ -198,6 +199,21 @@ function jobStateMatch(url) {
   return url.pathname.match(/^\/me\/jobs\/([0-9a-f-]{36})\/state$/i)?.[1] || null;
 }
 
+function jobSearchQuery(url) {
+  return {
+    limit:url.searchParams.get('limit'),
+    cursor:url.searchParams.get('cursor'),
+    q:url.searchParams.get('q'),
+    role_family:url.searchParams.getAll('role_family'),
+    work_mode:url.searchParams.getAll('work_mode'),
+    contract_type:url.searchParams.getAll('contract_type'),
+    freshness_hours:url.searchParams.get('freshness_hours'),
+    min_fit:url.searchParams.get('min_fit'),
+    include_archived:url.searchParams.get('include_archived'),
+    prefetch:url.searchParams.get('prefetch'),
+  };
+}
+
 export async function handleAuthenticatedRoute(request, env, context) {
   const url = new URL(request.url);
 
@@ -224,6 +240,18 @@ export async function handleAuthenticatedRoute(request, env, context) {
     );
     await savePreferences(context, next, env);
     return json({ status:'saved', changed:true, preferences:next });
+  }
+
+  if (request.method === 'GET' && url.pathname === '/me/jobs') {
+    const preferences = await currentPreferences(context, env);
+    const nomenclatures = (await readNomenclatures(env)).payload;
+    return json(await listProfileJobs(
+      context,
+      preferences,
+      nomenclatures,
+      jobSearchQuery(url),
+      env,
+    ));
   }
 
   if (request.method === 'GET' && url.pathname === '/data/jobs.json') {
