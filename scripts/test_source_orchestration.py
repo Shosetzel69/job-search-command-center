@@ -171,6 +171,16 @@ class OrchestrationTests(unittest.TestCase):
         self.assertTrue(monster["policy_excluded"])
         self.assertIn("project source policy", monster["error"])
 
+    def test_non_enumerable_matching_platforms_are_policy_excluded(self):
+        catalog = {"sources": [
+            {"name": "Head Hunting IT", "url": "https://www.headhuntingit.com/", "active": True},
+            {"name": "Malt", "url": "https://www.malt.com/", "active": True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        self.assertEqual([item["outcome"] for item in plan], ["excluded_policy", "excluded_policy"])
+        self.assertTrue(all(item["status"] == "inactive" for item in plan))
+        self.assertTrue(all(item["policy_excluded"] for item in plan))
+
     def test_direct_quota_guard_does_not_block_jobicy(self):
         state = optimized.load_state(NOW)
         state["usage"]["provider_quota_exhausted_month"] = "2026-09"

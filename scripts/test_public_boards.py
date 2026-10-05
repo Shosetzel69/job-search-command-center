@@ -1180,6 +1180,24 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Senior IT Consultant Project Manager")
         self.assertTrue(rows[0]["remote"])
 
+    def test_torre_public_rendered_job_search(self):
+        html='''<div>
+          <a href="https://torre.ai/post/kWR9gZ0r-gotofrcom-project-manager">Project Manager</a>
+          GoToFR.com Freelance Remote (anywhere) Posted 3 days ago
+        </div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://app.torre.ai/search-job?query=project%20manager",
+            html,
+            {"browser_status":"rendered"},
+        )):
+            result=boards.collect({"name":"Torre","url":"https://torre.ai/"})[0]
+        self.assertTrue(result.ok)
+        self.assertEqual(len(result.records),1)
+        self.assertEqual(result.records[0]["job_title"],"Project Manager")
+        self.assertEqual(result.records[0]["source_url"],"https://torre.ai/post/kWR9gZ0r-gotofrcom-project-manager")
+        self.assertTrue(result.records[0]["remote"])
+        self.assertTrue(boards.browser_required("Torre"))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",

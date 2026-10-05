@@ -24,7 +24,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -91,6 +91,7 @@ PUBLIC_BOARD_SOURCES = {
     "Upwork": {"kind": "linked_jobs", "url": "https://www.upwork.com/freelance-jobs/project-management/", "job_path": r"/freelance-jobs/apply/[^/?#]+_~\d+/"},
     "Hubstaff Talent": {"kind": "rendered_links", "url": "https://hubstafftalent.net/search/jobs?search%5Bkeywords%5D=project%20manager", "job_path": r"/jobs/[^/?#]+"},
     "FlexJobs": {"kind": "heading_list", "url": "https://www.flexjobs.com/remote-jobs/project-manager"},
+    "Torre": {"kind": "rendered_links", "url": "https://app.torre.ai/search-job?query=project%20manager", "job_path": r"(?:https://torre\.ai)?/post/[^/?#]+"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
