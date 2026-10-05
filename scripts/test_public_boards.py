@@ -950,6 +950,35 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"VP of Program Management Office")
         self.assertTrue(rows[0]["remote"])
 
+    def test_heading_list_sources_extract_records(self):
+        justremote_html='''<h2>Mozilla Senior Staff Product Manager, Browser Control Platform</h2>
+        <div>permanent 21 Sep Remote</div>
+        <h2>Lemon.io Senior Project Manager</h2>
+        <div>contract 17 Sep Remote Romania</div>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",justremote_html.encode())):
+            rows=boards._heading_list_board(
+                "https://justremote.co/remote-project-manager-jobs",
+                "JustRemote",
+                default_remote=True,
+            )
+        self.assertEqual(len(rows),2)
+        self.assertTrue(all(row["remote"] for row in rows))
+        self.assertEqual(rows[0]["company"],"JustRemote")
+
+        techjobs_html='''<h2>Senior IT Project Manager</h2>
+        <div>Prince2 Agile Project Manager Smals Remote friendly (hybrid) Multiple locations</div>
+        <h2>PMO Manager</h2>
+        <div>Prince2 Agile BPMN Project Manager Smals Brussels Belgium</div>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",techjobs_html.encode())):
+            rows=boards._heading_list_board(
+                "https://techjobs.be/en/ict-jobs",
+                "Techjobs.be",
+                default_country="Belgia",
+            )
+        self.assertEqual(len(rows),2)
+        self.assertTrue(any(row["job_title"]=="PMO Manager" for row in rows))
+        self.assertTrue(all("Belgia" in row["countries"] for row in rows))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
