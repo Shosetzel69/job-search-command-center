@@ -365,6 +365,17 @@ class OrchestrationTests(unittest.TestCase):
         plan = orchestration.build_plan(catalog)
         self.assertEqual(plan[-1]["status"], "skipped")
 
+    def test_remotehunt_is_canonical_provider_alias(self):
+        catalog = {"sources": [
+            {"name": "We Work Remotely", "url": "https://weworkremotely.com/remote-jobs.rss", "active": True},
+            {"name": "RemoteHunt", "url": "https://remotehunt.com/", "active": True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        remotehunt = next(item for item in plan if item["source"] == "RemoteHunt")
+        self.assertEqual(remotehunt["status"], "skipped")
+        self.assertEqual(remotehunt["outcome"], "provider_alias")
+        self.assertEqual(remotehunt["provider_alias"], "We Work Remotely")
+
     def test_spoofed_hosts_and_connector_flags_are_not_trusted(self):
         for url in ("https://jobicy.com.evil.example/", "https://jobicy.com@evil.example/", "http://jobicy.com/", "https://jobicy.com:444/"):
             self.assertIsNone(orchestration.connector_for({"url": url, "connector_available": True}))
