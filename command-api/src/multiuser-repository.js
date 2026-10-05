@@ -14,6 +14,8 @@ import { EVALUATION_VERSION, evaluateSharedJob } from './profile-evaluation.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
   'role_groups',
+  'target_role_families',
+  'target_role_subfamilies',
   'work_modes',
   'contract_types',
   'freshness_hours',
@@ -132,6 +134,31 @@ async function assertCandidateProfileReferenceTx(tx, tenantId, candidateProfileI
   return candidateId;
 }
 
+async function resolveActiveSearchProfileTx(tx) {
+  const result = await tx.query(
+    `SELECT search_profile_id, candidate_profile_id, status,
+            profile_version, onboarding_state, created_at, updated_at
+       FROM search_profile
+      WHERE tenant_id=$1 AND status='ACTIVE'
+      ORDER BY created_at, search_profile_id`,
+    [tx.tenantId],
+  );
+  if (result.rows.length !== 1) {
+    throw httpError('Exactly one active Search Profile is required in the current release', 503);
+  }
+  const row = result.rows[0];
+  await assertCandidateProfileReferenceTx(tx, tx.tenantId, row.candidate_profile_id);
+  return Object.freeze({
+    search_profile_id:String(row.search_profile_id),
+    candidate_profile_id:String(row.candidate_profile_id),
+    status:String(row.status),
+    profile_version:Number(row.profile_version),
+    onboarding_state:String(row.onboarding_state),
+    created_at:row.created_at,
+    updated_at:row.updated_at,
+  });
+}
+
 async function ensureSearchProfileFoundationTx(tx, tenantId) {
   const tenant = requireUuid(tenantId, 'tenant_id');
   const candidateProfileId = deterministicTenantEntityUuid('candidate-profile', tenant);
@@ -201,30 +228,11 @@ export async function resolveActiveSearchProfile(
   env = process.env,
   { db = getPool(env) } = {},
 ) {
-  return withTenantTransaction(authContext, async tx => {
-    const result = await tx.query(
-      `SELECT search_profile_id, candidate_profile_id, status,
-              profile_version, onboarding_state, created_at, updated_at
-         FROM search_profile
-        WHERE tenant_id=$1 AND status='ACTIVE'
-        ORDER BY created_at, search_profile_id`,
-      [tx.tenantId],
-    );
-    if (result.rows.length !== 1) {
-      throw httpError('Exactly one active Search Profile is required in the current release', 503);
-    }
-    const row = result.rows[0];
-    await assertCandidateProfileReferenceTx(tx, tx.tenantId, row.candidate_profile_id);
-    return Object.freeze({
-      search_profile_id:String(row.search_profile_id),
-      candidate_profile_id:String(row.candidate_profile_id),
-      status:String(row.status),
-      profile_version:Number(row.profile_version),
-      onboarding_state:String(row.onboarding_state),
-      created_at:row.created_at,
-      updated_at:row.updated_at,
-    });
-  }, { env, db });
+  return withTenantTransaction(
+    authContext,
+    tx => resolveActiveSearchProfileTx(tx),
+    { env, db },
+  );
 }
 
 function accountLimitFromEnv(env) {
@@ -313,17 +321,19 @@ function legacyApplicationId(item) {
   ].join('-');
 }
 
-async function importBootstrapPersonalData(tx, profileId, bootstrapSeed) {
+async function importBootstrapPersonalData(tx, profileId, searchProfileId, bootstrapSeed) {
   const config = jsonObject(bootstrapSeed?.config);
   const applicationsPayload = jsonObject(bootstrapSeed?.applications);
   const { personal } = splitLegacyConfig(config);
 
   await tx.query(
-    `INSERT INTO profile_preferences(tenant_id, preferences, updated_at)
-     VALUES ($1, $2::jsonb, now())
-     ON CONFLICT(tenant_id)
+    `INSERT INTO search_profile_preferences(
+        tenant_id, search_profile_id, preferences, updated_at
+      )
+     VALUES ($1, $2, $3::jsonb, now())
+     ON CONFLICT(tenant_id, search_profile_id)
      DO UPDATE SET preferences=EXCLUDED.preferences, updated_at=now()`,
-    [profileId, JSON.stringify(personal)],
+    [profileId, searchProfileId, JSON.stringify(personal)],
   );
 
   for (const item of applicationsPayload.applications || []) {
@@ -509,17 +519,24 @@ async function createOrLoadSharedAccount(subject, payload, env, db) {
 async function initializePersonalDomain(row, bootstrapPending, bootstrapSeed, env, db) {
   const authContext = accountContext(row);
   await withTenantTransaction(authContext, async tx => {
+    const foundation = await ensureSearchProfileFoundationTx(tx, authContext.profile_id);
     await tx.query(
-      `INSERT INTO profile_preferences(tenant_id, preferences)
-       VALUES ($1, '{}'::jsonb)
-       ON CONFLICT(tenant_id) DO NOTHING`,
-      [authContext.profile_id],
+      `INSERT INTO search_profile_preferences(
+          tenant_id, search_profile_id, preferences
+        )
+       VALUES ($1, $2, '{}'::jsonb)
+       ON CONFLICT(tenant_id, search_profile_id) DO NOTHING`,
+      [authContext.profile_id, foundation.search_profile_id],
     );
-    await ensureSearchProfileFoundationTx(tx, authContext.profile_id);
 
     if (bootstrapPending) {
       if (!bootstrapSeed) throw httpError('Bootstrap seed is required for initial owner provisioning', 503);
-      await importBootstrapPersonalData(tx, authContext.profile_id, bootstrapSeed);
+      await importBootstrapPersonalData(
+        tx,
+        authContext.profile_id,
+        foundation.search_profile_id,
+        bootstrapSeed,
+      );
     }
   }, { env, db });
 }
@@ -694,8 +711,14 @@ export async function revokeSession(rawToken, env = process.env, options = {}) {
 
 export async function effectiveConfig(authContext, env = process.env, { db = getPool(env) } = {}) {
   return withTenantTransaction(authContext, async tx => {
+    const foundation = await resolveActiveSearchProfileTx(tx);
     const [personalResult, systemResult] = await Promise.all([
-      tx.query('SELECT preferences FROM profile_preferences WHERE tenant_id = $1', [authContext.profile_id]),
+      tx.query(
+        `SELECT preferences
+           FROM search_profile_preferences
+          WHERE tenant_id=$1 AND search_profile_id=$2`,
+        [tx.tenantId, foundation.search_profile_id],
+      ),
       tx.query('SELECT policy FROM collection_policy WHERE singleton = true'),
     ]);
     return mergeEffectiveConfig(
@@ -708,12 +731,41 @@ export async function effectiveConfig(authContext, env = process.env, { db = get
 export async function savePreferences(authContext, effective, env = process.env, { db = getPool(env) } = {}) {
   const { personal } = splitLegacyConfig(effective);
   return withTenantTransaction(authContext, async tx => {
+    const active = await tx.query(
+      `SELECT search_profile_id
+         FROM search_profile
+        WHERE tenant_id=$1 AND status='ACTIVE'
+        ORDER BY created_at, search_profile_id
+        FOR UPDATE`,
+      [tx.tenantId],
+    );
+    if (active.rows.length !== 1) {
+      throw httpError('Exactly one active Search Profile is required in the current release', 503);
+    }
+    const searchProfileId = String(active.rows[0].search_profile_id);
+    const current = await tx.query(
+      `SELECT preferences, preferences IS DISTINCT FROM $3::jsonb AS changed
+         FROM search_profile_preferences
+        WHERE tenant_id=$1 AND search_profile_id=$2`,
+      [tx.tenantId, searchProfileId, JSON.stringify(personal)],
+    );
+    const changed = current.rows.length === 0 || Boolean(current.rows[0].changed);
+    if (!changed) return personal;
+
     await tx.query(
-      `INSERT INTO profile_preferences(tenant_id, preferences, updated_at)
-       VALUES ($1, $2::jsonb, now())
-       ON CONFLICT(tenant_id)
-       DO UPDATE SET preferences = EXCLUDED.preferences, updated_at = now()`,
-      [authContext.profile_id, JSON.stringify(personal)],
+      `INSERT INTO search_profile_preferences(
+          tenant_id, search_profile_id, preferences, updated_at
+        )
+       VALUES ($1, $2, $3::jsonb, now())
+       ON CONFLICT(tenant_id, search_profile_id)
+       DO UPDATE SET preferences=EXCLUDED.preferences, updated_at=now()`,
+      [tx.tenantId, searchProfileId, JSON.stringify(personal)],
+    );
+    await tx.query(
+      `UPDATE search_profile
+          SET profile_version=profile_version+1, updated_at=now()
+        WHERE tenant_id=$1 AND search_profile_id=$2`,
+      [tx.tenantId, searchProfileId],
     );
     return personal;
   }, { env, db });
@@ -741,7 +793,10 @@ export async function evaluateProfileJobs(authContext, preferences, nomenclature
   return withTenantTransaction(authContext, async tx => {
     const rowsResult = await tx.query(
       `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
-              j.role_family, j.lifecycle_status, j.payload,
+              j.role_family, j.role_subfamily, j.seniority, j.contract_type,
+              j.remote_scope, j.job_version, j.classification_status,
+              j.classification_confidence, j.classification_version,
+              j.lifecycle_status, j.payload,
               sp.source_name, sp.canonical_url, sp.posted_at,
               sp.repost_of_posting_id, sp.payload AS posting_payload,
               state.seen_at, state.archived_at

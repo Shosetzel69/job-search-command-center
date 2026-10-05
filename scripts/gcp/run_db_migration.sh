@@ -29,7 +29,7 @@ const migrations = await loadMigrations();
 const db = getMigrationPool(process.env);
 const required = [
   'schema_migrations','tenants','app_user','user_identity','profile','user_session',
-  'candidate_profile','search_profile',
+  'candidate_profile','search_profile','search_profile_preferences',
   'profile_preferences','profile_job_state','profile_job_evaluation','applications',
   'profile_notes','profile_ui_preferences','collection_policy','system_bootstrap',
   'account_capacity_policy','account_deletion_audit','canonical_jobs','source_postings',
@@ -53,6 +53,35 @@ try {
     if (!relation.rows?.[0]?.relation) missing.push(name);
   }
   if (missing.length) throw new Error(`required schema objects missing: ${missing.join(' ')}`);
+
+  const classificationGap = await db.query(
+    `SELECT count(*)::integer AS count
+       FROM canonical_jobs
+      WHERE classification_version='legacy'
+         OR evaluation_basis_hash=''
+         OR job_version < 1`,
+  );
+  if (Number(classificationGap.rows?.[0]?.count || 0) !== 0) {
+    throw new Error('canonical job classification backfill is incomplete');
+  }
+
+  const preferenceGap = await db.query(
+    `SELECT count(*)::integer AS count
+       FROM app_user a
+       JOIN profile p ON p.user_id=a.user_id
+       JOIN search_profile sp
+         ON sp.tenant_id=p.profile_id AND sp.status='ACTIVE'
+       LEFT JOIN search_profile_preferences pref
+         ON pref.tenant_id=sp.tenant_id
+        AND pref.search_profile_id=sp.search_profile_id
+      WHERE p.provisioned_at IS NOT NULL
+        AND a.deletion_started_at IS NULL
+        AND pref.search_profile_id IS NULL`,
+  );
+  if (Number(preferenceGap.rows?.[0]?.count || 0) !== 0) {
+    throw new Error('Search Profile preference backfill is incomplete');
+  }
+
   process.stdout.write(JSON.stringify({
     status:'ok',
     current:migrations.at(-1).version,
