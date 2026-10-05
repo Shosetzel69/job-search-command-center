@@ -1,0 +1,6 @@
+# Reviewed full-history false positives from Secret scanning run 37364510410.
+# Keep entries fingerprint-specific so new findings remain fail-closed.
+ae7e64c453158aca87039322db7a46df7646a379:scripts/test_source_orchestration.py:generic-api-key:195
+cf143602c5c216f05e7635349377205333d3e2d2:docs/environment-provisioning-runbook.md:generic-api-key:374
+574dad5bf0e5aabd44bb88d9f0090562754f4784:ai-github-bridge/src/index.js:private-key:80
+d1627c1f9fd7de59c17f192bc6e0e72b2fdadb71:ai-github-bridge/src/index.js:private-key:80
