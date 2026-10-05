@@ -321,6 +321,11 @@
       "connector": "smartrecruiters",
       "company_identifier": "infoplustechnologies1",
       "enabled": true
+    },
+    "Infinity Quest": {
+      "connector": "smartrecruiters",
+      "company_identifier": "InfinityQuest",
+      "enabled": true
     }
   }
 }
