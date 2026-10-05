@@ -6,8 +6,8 @@ Versiune curenta: `0.06-dev`
 
 ## Obiectiv
 
-- roluri PM / IT PM / Delivery / Service / Scrum / Program;
-- Remote prioritar, apoi Hybrid/Onsite conform criteriilor;
+- familii de roluri configurabile per profil;
+- mod de lucru configurabil per profil;
 - selectie geografica pe regiuni si tari canonice;
 - criterii de compensatie configurabile per profil;
 - FIT, riscuri, descriere, tara/tari si link de job;
