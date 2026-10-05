@@ -1,4 +1,4 @@
-name: AI release dispatch
+name: AI non-deploy control dispatch
 
 on:
   issue_comment:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   dispatch:
-    if: ${{ github.actor == 'Shosetzel69' && (startsWith(github.event.comment.body, '/jscc-deploy') || startsWith(github.event.comment.body, '/jscc-search') || startsWith(github.event.comment.body, '/jscc-validate')) }}
+    if: ${{ github.actor == 'Shosetzel69' && (startsWith(github.event.comment.body, '/jscc-search') || startsWith(github.event.comment.body, '/jscc-validate')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -24,7 +24,7 @@ jobs:
         with:
           node-version: 24
 
-      - name: Parse owner command and dispatch canonical environment workflow
+      - name: Parse owner command and dispatch allowlisted non-deploy workflow
         env:
           GH_TOKEN: ${{ github.token }}
           ACTOR: ${{ github.actor }}
@@ -38,7 +38,7 @@ jobs:
           workflow="$(jq -r '.workflow' <<<"$envelope")"
           payload="$(jq -c '.payload' <<<"$envelope")"
           case "$workflow" in
-            deploy-environment.yml|test-full-search.yml|dev-source-validation.yml) ;;
+            test-full-search.yml|dev-source-validation.yml) ;;
             *) echo "Unexpected workflow target" >&2; exit 1 ;;
           esac
           printf '%s' "$payload" | gh api \
@@ -50,5 +50,5 @@ jobs:
             echo
             echo "Accepted owner command from issue #$ISSUE_NUMBER / comment $COMMENT_ID."
             echo "Allowlisted workflow: $workflow."
-            echo "PROD search/validation is not supported by this trigger."
+            echo "Deployment dispatch is retired; GCP promotion remains a separate trusted control-plane operation."
           } >> "$GITHUB_STEP_SUMMARY"
