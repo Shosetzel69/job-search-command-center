@@ -478,29 +478,23 @@ Enforced controls:
 - no implicit `main` fallback and no merge/push-triggered implicit PROD deployment;
 - promotion and release artifacts contain identifiers/evidence only, never secrets.
 
-### GitHub-native AI dispatch
+### AI control dispatch after public-repository hardening
 
-ChatGPT can start the existing canonical DEV/TEST deployment workflow without a manual Actions click by creating an owner-authored GitHub issue/PR comment.
-
-Accepted commands:
+Deployment dispatch through GitHub comments or `ai-github-bridge` is retired by #501. The owner-comment workflow keeps only two narrowly scoped non-deploy commands:
 
 ```text
-/jscc-deploy dev <CANDIDATE_SHA>
-/jscc-deploy test <CANDIDATE_SHA> <DEV_EVIDENCE_RUN_ID>
+/jscc-search test <CANDIDATE_SHA>
+/jscc-validate dev <CANDIDATE_SHA> <comma-separated-source-ids>
 ```
 
 The control workflow `.github/workflows/ai-release-dispatch.yml`:
 - runs only for comments authored by repository owner `Shosetzel69`;
-- parses only the exact commands above;
-- accepts only DEV or TEST;
-- rejects PROD and malformed commands before dispatch;
-- checks out the trusted control-plane from `main`;
-- uses the repository `GITHUB_TOKEN` with `actions: write` only to call `workflow_dispatch` on `deploy-environment.yml`;
-- hard-binds repository, workflow and ref; no arbitrary workflow selection exists;
-- derives DEV traceability from the issue/comment id;
-- requires an explicit numeric DEV evidence run id for TEST.
+- checks out trusted control-plane code from `main`;
+- can dispatch only `test-full-search.yml` or `dev-source-validation.yml`;
+- has no PROD target and no environment deployment target;
+- cannot select another repository, ref or workflow.
 
-The resulting deployment remains a normal `Environment automation` / `workflow_dispatch` run, so the #198 evidence contract and run-identity checks are unchanged. PROD remains outside this trigger and still requires the dedicated promotion workflow plus owner GO.
+DEV/TEST deployment and promotion use the approved GCP control-plane instead of AI/GitHub-comment dispatch. No fallback to the retired Cloudflare deployment path is permitted.
 
 Deferred until project scale justifies them:
 - canary percentage rollouts;
