@@ -93,11 +93,30 @@ PY
 
 bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"
 
+gcloud storage cat "gs://${RUNTIME_BUCKET}/seed/promotion-status.json" \
+  --project="${PROJECT_ID}" >"${tmpdir}/promotion-status.json"
+
+python3 - "${tmpdir}/promotion-status.json" "${CANDIDATE_SHA}" "${job_digest}" "${service_digest}" <<'PY'
+import json, sys
+path, sha, job_digest, service_digest = sys.argv[1:]
+with open(path, encoding="utf-8") as f:
+    status = json.load(f)
+assert status.get("schema_version") == "1.0", status
+assert status.get("environment") == "dev", status
+assert status.get("candidate_sha") == sha, status
+assert status.get("job_digest") == job_digest, status
+assert status.get("service_digest") == service_digest, status
+assert status.get("status") == "PASS", status
+steps = {step.get("id"): step.get("state") for step in status.get("steps", [])}
+for required in ("db-migrations", "schema-readiness", "db-privileges"):
+    assert steps.get(required) == "PASS", status
+PY
+
 python3 - "${EVIDENCE_FILE}" "${CANDIDATE_SHA}" "${job_digest}" "${service_digest}" "${latest_ready}" "${frontend_origin}" "${reported_service_url}" "${EXPECTED_DATABASE}" <<'PY'
 import datetime, json, sys
 path, sha, job_digest, service_digest, revision, url, reported_url, database = sys.argv[1:]
 payload = {
-    "schema_version": "1.0",
+    "schema_version": "1.1",
     "environment": "dev",
     "candidate_sha": sha,
     "job_digest": job_digest,
@@ -108,6 +127,8 @@ payload = {
     "database": database,
     "health": "PASS",
     "db_health": "PASS",
+    "db_migrations": "PASS",
+    "db_schema_readiness": "PASS",
     "seed_manifest": "PASS",
     "attestation_mode": "live-read-only",
     "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),

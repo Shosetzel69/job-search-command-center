@@ -98,7 +98,7 @@ async function readCandidateJson(path) {
 
 async function runtimeObjectForRead(env, path) {
   const name = path.split('/').pop();
-  if (name === 'search-config.json' || name === 'applications.json') return `seed/${name}`;
+  if (name === 'search-config.json' || name === 'applications.json' || name === 'promotion-status.json') return `seed/${name}`;
   const pointer = await objectMetadata(env, 'current.json');
   if (pointer) {
     const current = await readObjectJson(env, 'current.json');

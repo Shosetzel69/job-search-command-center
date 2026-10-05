@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-> App version: `0.6.0` — minor increment for the new Multiuser feature set and the current GCP-only runtime line.
+> App version: `0.7.0` — minor increment for fail-closed DB migration promotion and live ADMIN promotion visibility.
 
 ### Security
 
@@ -13,6 +13,9 @@
 - #232 / Release 1 Wave 3: extinsa suita negativa pentru identity authorization, protected data fara sesiune, CORS interzis, payload config invalid si forced reauthentication la protected 401.
 
 ### Functionalitati
+
+- #483: promovarea GCP DEV/TEST include DB migration Job environment-scoped din exact Service digest-ul candidatului, verifica manifestul/checksum-urile/schema inainte de rollout, mentine checklist operational `promotion-status.json` si il afiseaza ADMIN-only in UI.
+
 
 - #265 / Multiuser work package: implementat corpusul shared PostgreSQL, identity/profile + FORCE RLS, preferinte/FIT/state/aplicatii per profil, sesiuni JSCC opace Google-first, lifecycle ADMIN, collection/scheduler global, operational history PostgreSQL, separare runtime/migration DB credentials, capacity guard si tooling backup/restore non-PROD; profile changes nu declanseaza provider retrieval.
 
@@ -45,6 +48,9 @@
 - #58: adaugat connector SmartRecruiters Public Posting API cu paginare, detalii complete, normalizare in `CollectionResult` si teste izolate; nu este rutat sau activat in Source Registry pana la validarea live.
 
 ### Remedieri
+
+- #483: eliminat false-SUCCESS-ul in care `/health/db` confirma doar conectivitatea iar schema TEST putea lipsi complet; promotion PASS necesita acum migration/schema readiness si checklist terminal fara pasi incompleti.
+
 
 - #266: health/readiness PROD valideaza acum accesul real la `data/search-config.json` prin GitHub Contents API, eliminand false-PASS-ul produs de verificarea doar a metadata repo.
 

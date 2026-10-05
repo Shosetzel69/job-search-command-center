@@ -13,6 +13,10 @@ RUNTIME=(ROOT/"command-api/src/runtime-gcp.js").read_text()
 LIVE=(ROOT/"scripts/gcp/capture_live_promotion_evidence.sh").read_text()
 VERIFY_SEED=(ROOT/"scripts/gcp/verify_runtime_seed.sh").read_text()
 VERIFY_EVIDENCE=(ROOT/"scripts/gcp/verify_promotion_evidence.py").read_text()
+MIGRATE=(ROOT/"scripts/gcp/run_db_migration.sh").read_text()
+PROMOTION_STATUS=(ROOT/"scripts/gcp/promotion_status.py").read_text()
+PROTECTED=(ROOT/"shared/runtime-data.mjs").read_text()
+SECURE=(ROOT/"command-api/src/secure-entry.js").read_text()
 
 class GcpPromotionContractTests(unittest.TestCase):
     def test_supported_environments_are_bounded(self):
@@ -37,6 +41,13 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn("--service-digest", PROMOTE)
         self.assertIn('data.get("job_digest")==args.job_digest', VERIFY_EVIDENCE)
         self.assertIn('data.get("service_digest")==args.service_digest', VERIFY_EVIDENCE)
+
+    def test_promotion_evidence_schema_is_consistent_and_db_ready(self):
+        self.assertIn('"schema_version":"1.1"', PROMOTE)
+        self.assertIn('"schema_version": "1.1"', LIVE)
+        self.assertIn('data.get("schema_version")=="1.1"', VERIFY_EVIDENCE)
+        self.assertIn('data.get("db_migrations")=="PASS"', VERIFY_EVIDENCE)
+        self.assertIn('data.get("db_schema_readiness")=="PASS"', VERIFY_EVIDENCE)
 
     def test_health_and_db_are_both_gated(self):
         self.assertIn('/health")', PROMOTE)
@@ -133,6 +144,8 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('gcloud run jobs describe', LIVE)
         self.assertIn('gcloud run services describe', LIVE)
         self.assertIn('verify_runtime_seed.sh', LIVE)
+        self.assertIn('gcloud storage cat "gs://${RUNTIME_BUCKET}/seed/promotion-status.json"', LIVE)
+        self.assertIn('("db-migrations", "schema-readiness", "db-privileges")', LIVE)
         self.assertIn('gcloud storage objects describe', VERIFY_SEED)
         for forbidden in (
             'gcloud run deploy',
@@ -144,6 +157,55 @@ class GcpPromotionContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, LIVE)
             self.assertNotIn(forbidden, VERIFY_SEED)
+
+    def test_live_checklist_is_published_before_runtime_seed_mutation(self):
+        init = PROMOTE.index('promotion_status.py" init')
+        seed = PROMOTE.index('status_step runtime-seed')
+        self.assertLess(init, seed)
+        self.assertIn('Runtime bucket must exist before promotion status can be published', PROMOTE)
+
+    def test_db_migration_is_fail_closed_before_application_deploy(self):
+        migration_job = PROMOTE.index('status_step migration-job')
+        application_job = PROMOTE.index('status_step application-job')
+        service = PROMOTE.index('status_step service')
+        self.assertLess(migration_job, application_job)
+        self.assertLess(migration_job, service)
+        self.assertIn('run_db_migration.sh" deploy', PROMOTE)
+        self.assertIn('run_db_migration.sh" execute', PROMOTE)
+        self.assertIn('status_step schema-readiness', PROMOTE)
+        self.assertIn('status_pass schema-readiness', PROMOTE)
+        self.assertIn('status_step db-privileges', PROMOTE)
+        self.assertIn('status_pass db-privileges', PROMOTE)
+
+    def test_migration_job_uses_exact_candidate_service_digest_and_environment_secret(self):
+        self.assertIn('MIGRATION_JOB_NAME="jscc-db-migrate-${env_name}"', ENV)
+        self.assertIn('--image="${SERVICE_IMAGE_REPO}@${SERVICE_DIGEST}"', MIGRATE)
+        self.assertIn('NILE_DATABASE_URL=NILE_DATABASE_URL:latest', MIGRATE)
+        self.assertIn('NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:latest', MIGRATE)
+        self.assertIn('JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true', MIGRATE)
+        self.assertIn('gcloud run jobs execute "${MIGRATION_JOB_NAME}"', MIGRATE)
+        self.assertIn('--update-env-vars="DB_MIGRATION_MODE=${MODE}"', MIGRATE)
+        self.assertIn('--wait', MIGRATE)
+
+    def test_migration_execution_verifies_candidate_manifest_and_required_schema(self):
+        self.assertIn('npm --prefix command-api run db:migrate', MIGRATE)
+        self.assertIn('npm --prefix command-api run db:readiness', MIGRATE)
+        self.assertIn('npm --prefix command-api run db:privilege-readiness', MIGRATE)
+        self.assertIn("SELECT version, name, checksum FROM schema_migrations ORDER BY version", MIGRATE)
+        self.assertIn("SELECT to_regclass($1) AS relation", MIGRATE)
+        self.assertIn("system_bootstrap", MIGRATE)
+
+    def test_promotion_checklist_is_machine_readable_and_fail_closed(self):
+        self.assertIn('promotion-status.json', PROMOTION_STATUS)
+        self.assertIn('"status": "IN_PROGRESS"', PROMOTION_STATUS)
+        self.assertIn('Cannot mark promotion PASS with incomplete steps', PROMOTION_STATUS)
+        self.assertIn('status_fail_trap', PROMOTE)
+        self.assertIn('promotion_status.py" finish', PROMOTE)
+        self.assertIn('PROMOTION_STATUS=gs://', PROMOTE)
+
+    def test_promotion_status_is_protected_and_admin_only(self):
+        self.assertIn("'promotion-status.json'", PROTECTED)
+        self.assertIn("'/data/promotion-status.json'", SECURE)
 
     def test_deprecated_wrapper_has_no_deploy_implementation(self):
         self.assertIn("DEPRECATED", LEGACY)

@@ -2,23 +2,11 @@
 
 Status: canonical replacement for the manual GCP migration choreography used during #425/#440.
 
-## 1. What was wrong with the manual procedure
+## 1. Why this procedure exists
 
-The initial DEV migration proved the architecture but exposed operational defects in the procedure:
+Manual DEV/TEST migration exposed repeated release-safety defects: operator choreography, implicit project context, artifact/runtime parity gaps, omitted IAM/data-path settings and, in #483, a false SUCCESS where TEST had no database schema although `/health/db` passed. Deployment PASS and functional DEV/TEST PASS are separate gates.
 
-1. Job and Service were built with separate manual trigger invocations.
-2. Build status was polled manually.
-3. Artifact digests were resolved manually.
-4. Job and Service were deployed separately.
-5. The active gcloud project could differ from the target project.
-6. The first DEV deployment script contained historical hard-coded SHA/digest values.
-7. Runtime seed provisioning omitted `applications.json`.
-8. OAuth origin troubleshooting was mixed into runtime migration and caused an unnecessary custom-domain detour.
-9. Legacy DEV/TEST were assumed older than GCP DEV before exact deployment evidence was checked; in reality GCP DEV was behind the legacy promoted candidate.
-10. UI parity and runtime parity were initially treated as one gate; they must be evidenced separately.
-11. GitHub Actions jobs may currently fail before steps execute, so GCP promotion must not rely on GitHub-hosted runners as its only executor.
-12. DEV -> TEST promotion initially reproduced artifacts but not the effective Service -> Job override IAM contract; control-plane parity is therefore an explicit promotion responsibility.
-13. The first GCP promotion also omitted canonical Command API data-path variables that existed in the prior environment contract; TEST manual run then failed before dispatch because `SEARCH_CONFIG_PATH` was undefined.
+The consolidated incident history and the permanent control for each failure class are maintained in `docs/testing/gcp-migration-lessons-learned.md`.
 
 ## 2. Canonical model
 
@@ -31,10 +19,14 @@ candidate SHA
   -> build Service image once (or reuse exact existing artifact)
   -> resolve immutable digests
   -> DEV seed verification
+  -> DEV DB migration Job from exact Service digest
+  -> candidate migration + schema/checksum readiness
   -> DEV Job + Service deploy by digest
   -> DEV /health + /health/db
   -> DEV evidence
   -> TEST seed verification
+  -> TEST DB migration Job from exact Service digest
+  -> candidate migration + schema/checksum readiness
   -> TEST Job + Service deploy using the SAME digests
   -> TEST /health + /health/db
   -> TEST evidence
@@ -106,8 +98,9 @@ Required:
 - search-config.json
 - search-state.json
 
-`seed_runtime.sh`:
-- creates the environment bucket only when absent;
+`seed_runtime.sh` can create a bucket during one-time infrastructure bootstrap, but normal promotion requires the environment runtime bucket to exist before the live promotion checklist is published.
+
+During normal promotion it:
 - uploads only missing seed objects;
 - never overwrites existing environment runtime state during a normal promotion;
 - verifies every mandatory seed object after provisioning.
@@ -135,6 +128,8 @@ Evidence includes:
 - expected DB;
 - health PASS;
 - DB health PASS;
+- DB migrations PASS;
+- DB schema readiness PASS;
 - seed manifest PASS.
 
 TEST promotion fails unless DEV evidence exists and verifies the exact same candidate SHA **and the exact same Job/Service image digests** that TEST is about to deploy.
@@ -143,41 +138,16 @@ For `_TARGET=dev-test`, DEV evidence is produced by the DEV promotion earlier in
 
 ## 7. One-time control-plane prerequisites
 
-These are infrastructure prerequisites, not per-release operator steps.
+These are environment prerequisites, not per-release operator steps:
 
-The Cloud Build execution identity must have only the permissions required to:
-- read/write the shared Artifact Registry;
-- deploy Cloud Run Job/Service in DEV and TEST;
-- act as the respective runtime service accounts;
-- verify/provision the environment runtime buckets;
-- read Secret Manager metadata needed by deployment.
-
-Each environment must already contain:
-- `NILE_DATABASE_URL`
-- `ALLOWED_GOOGLE_SUB`
-- `GOOGLE_CLIENT_ID`
-
-The OAuth client referenced by `GOOGLE_CLIENT_ID` must authorize the canonical environment Cloud Run origin.
-
-Runtime service accounts require access to their own:
-- runtime bucket;
-- Nile secret;
-- allowed-user secret;
-- OAuth client-id secret;
-- Cloud Run Job invocation boundary as required by the Service.
-
-The Service invokes Cloud Run Jobs with per-execution overrides. Therefore the runtime service account must receive the predefined least-privilege role `roles/run.jobsExecutorWithOverrides` on its environment Job. `roles/run.invoker` is insufficient for this path because it does not grant `run.jobs.runWithOverrides`.
-
-Promotion applies and verifies this binding through `scripts/gcp/reconcile_job_invocation_iam.sh`. The same script is the control-plane-only remediation entry point for an already deployed environment; it changes IAM only and does not rebuild or redeploy Service/Job images.
-
-Canonical Command API path variables are also part of environment parity and are set explicitly on every GCP Service deployment:
-- `SEARCH_CONFIG_PATH=data/search-config.json`
-- `SOURCES_PATH=data/sources.json`
-- `SOURCE_CATEGORIES_PATH=data/source-categories.json`
-- `NOMENCLATURES_PATH=data/nomenclatures.json`
-- `APPLICATIONS_PATH=data/applications.json`
-
-No cross-environment fallback is permitted.
+- The environment runtime bucket already exists; bucket creation is infrastructure bootstrap, not release promotion.
+- Cloud Build can read/write shared Artifact Registry, deploy DEV/TEST Cloud Run resources, act as the runtime service accounts, access runtime buckets and read Secret Manager metadata.
+- Each environment contains enabled `NILE_DATABASE_URL`, `ALLOWED_GOOGLE_SUB` and `GOOGLE_CLIENT_ID` secrets.
+- Runtime service accounts can read their runtime bucket and required secrets.
+- OAuth authorizes the canonical environment Cloud Run origin.
+- The Service runtime identity has `roles/run.jobsExecutorWithOverrides` on its search Job; promotion reconciles this binding.
+- Every Service deploy sets the canonical data paths for search config, sources, source categories, nomenclatures and applications.
+- No cross-environment fallback is permitted.
 
 ## 8. Gates
 
@@ -194,6 +164,10 @@ Promotion fails immediately if:
 - /health does not report the exact candidate;
 - /health runtime backend is not GCP;
 - /health/db does not bind to the correct environment/database;
+- the environment DB migration Job fails;
+- applied migration version/name/checksum does not equal the candidate manifest;
+- a required schema relation is missing;
+- runtime DB privilege readiness fails;
 - TEST evidence does not match the DEV candidate;
 - standalone TEST is requested while live DEV is not already on the exact candidate SHA or its deployed Job/Service images do not match the immutable candidate digests.
 
@@ -213,3 +187,6 @@ Do not use as normal procedure:
 - historical hard-coded `deploy_dev_job.sh` behavior.
 
 `deploy_dev_job.sh` now only delegates to the generic promotion orchestrator.
+
+
+The exact machine-executed component checklist is `docs/testing/gcp-promotion-checklist.md`. Consolidated migration lessons and permanent controls are in `docs/testing/gcp-migration-lessons-learned.md`.

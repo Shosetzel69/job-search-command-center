@@ -9,6 +9,10 @@ export const PROTECTED_DATA_FILES = Object.freeze([
   'applications.json',
 ]);
 
+export const OPERATIONAL_DATA_FILES = Object.freeze([
+  'promotion-status.json',
+]);
+
 export const INTERNAL_DATA_FILES = Object.freeze([
   'search-state.json',
 ]);
@@ -24,5 +28,5 @@ export const CANDIDATE_MANAGED_DATA_FILES = Object.freeze([
 ]);
 
 export function protectedDataPaths() {
-  return new Set(PROTECTED_DATA_FILES.map(file => `/data/${file}`));
+  return new Set([...PROTECTED_DATA_FILES, ...OPERATIONAL_DATA_FILES].map(file => `/data/${file}`));
 }

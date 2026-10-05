@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.19`
-Versiune aplicatie de referinta: `0.06-dev`
-Ultima actualizare: `2026-10-02`
+Versiune document: `v1.20`
+Versiune aplicatie de referinta: `0.07-dev`
+Ultima actualizare: `2026-10-04`
 
 ## 1. Rol
 
@@ -44,6 +44,7 @@ Principii:
 - schedulerul de retrieval este global si controlat de ADMIN;
 - evaluarea FIT si starea user-job sunt personale si separate de corpusul shared;
 - secretele nu ajung in browser;
+- promovarea unei aplicatii PostgreSQL necesita separat artifact parity, candidate DB migration/schema readiness si environment IAM/config readiness; `/health/db` singur nu este release readiness;
 - runtime-ul curent foloseste inca JSON versionat in repository, dar target-ul persistent aprobat este Nile/PostgreSQL conform ADR-004;
 - costul operational este mentinut redus;
 - pentru domeniile controlate, datele canonice nu se dubleaza functional intre React, Worker si Python;
@@ -59,7 +60,8 @@ Principii:
 | `Cloud Build` | target CI/build; construieste o singura imagine per Git SHA |
 | `Artifact Registry` | registry Docker comun; artifact immutable promovat DEV -> TEST -> PROD |
 | `Cloud Run Service` | target hosting pentru aplicatie/API |
-| `Cloud Run Jobs` | target execution pentru heavy search async/manual/scheduled |
+| `Cloud Run Search Jobs` | target execution pentru heavy search async/manual/scheduled |
+| `Cloud Run DB Migration Jobs` | migration/schema/privilege gate environment-scoped, executat din exact Service digest-ul candidatului inainte de application rollout |
 | `Cloud Scheduler` | target scheduling pentru search PROD |
 | `search engine` | colectare, normalizare, geografie, dedupe/repost, filtrare, FIT |
 | `connectors` | transport/provider specific, fara FIT |
@@ -88,6 +90,7 @@ Navigatie principala:
 ```text
 Administrare
 ├─ Overview
+├─ Status migrare/promovare (ADMIN)
 ├─ Actualizare date
 ├─ Surse
 │  ├─ Surse
