@@ -62,6 +62,7 @@ PUBLIC_BOARD_SOURCES = {
     "GitHub": {"kind": "rendered_links", "url": "https://www.github.careers/careers-home/jobs", "job_path": r"/careers-home/jobs/\\d+"},
     "Brains Consulting": {"kind": "brains", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
     "Montreal Associates": {"kind": "montreal_associates", "url": "https://www.montrealassociates.com/uk/candidates/job-search/"},
+    "eJobs": {"kind": "ejobs", "url": "https://www.ejobs.ro/locuri-de-munca/bucuresti/it-project-manager"},
 }
 
 
@@ -341,6 +342,127 @@ def _montreal_associates(url, max_details=40, max_seconds=30):
         )
     if not records:
         raise ValueError("Montreal Associates rendered job search contained no extractable jobs")
+    return list(records.values())
+
+
+class _EjobsList(HTMLParser):
+    JOB_PATH = re.compile(r"/user/locuri-de-munca/[^/?#]+/\d+", re.I)
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = []
+        self.current = None
+        self.in_job_anchor = False
+        self.recent = []
+
+    def _flush(self):
+        if self.current:
+            title = " ".join(self.current["title_parts"]).strip()
+            if title:
+                self.current["title"] = title
+                self.jobs.append(self.current)
+        self.current = None
+        self.in_job_anchor = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        href = str(attrs.get("href") or "")
+        if tag == "a" and href and self.JOB_PATH.search(href):
+            self._flush()
+            self.current = {
+                "href": href,
+                "title_parts": [],
+                "after_parts": [],
+                "prefix_parts": list(self.recent[-3:]),
+            }
+            self.in_job_anchor = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        self.recent.append(text)
+        self.recent = self.recent[-6:]
+        if not self.current:
+            return
+        if self.in_job_anchor:
+            self.current["title_parts"].append(text)
+        else:
+            self.current["after_parts"].append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.in_job_anchor:
+            self.in_job_anchor = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+_EJOBS_MONTHS = {
+    "ian": 1, "feb": 2, "mar": 3, "apr": 4, "mai": 5, "iun": 6,
+    "iul": 7, "aug": 8, "sept": 9, "sep": 9, "oct": 10, "nov": 11, "dec": 12,
+}
+
+
+def _ejobs_date(text):
+    match = re.search(
+        r"\b(\d{1,2})\s+(Ian|Feb|Mar|Apr|Mai|Iun|Iul|Aug|Sept|Sep|Oct|Nov|Dec)\.?\s+(\d{4})\b",
+        str(text or ""), re.I,
+    )
+    if not match:
+        return None
+    month = _EJOBS_MONTHS.get(match.group(2).casefold())
+    if not month:
+        return None
+    try:
+        return datetime(int(match.group(3)), month, int(match.group(1)), tzinfo=timezone.utc).isoformat()
+    except ValueError:
+        return None
+
+
+def _ejobs_page_url(base_url, page):
+    base = str(base_url or "").rstrip("/")
+    return base if page == 1 else f"{base}/pagina{page}"
+
+
+def _ejobs(base_url, max_pages=3):
+    records = {}
+    for page in range(1, max_pages + 1):
+        page_url = _ejobs_page_url(base_url, page)
+        status, _kind, body = _fetch(page_url, "text/html,application/xhtml+xml")
+        if status != 200:
+            raise RuntimeError(f"eJobs results page HTTP {status}")
+        parser = _EjobsList()
+        parser.feed(body.decode("utf-8", errors="replace"))
+        parser.close()
+        added = 0
+        for item in parser.jobs:
+            href = item.get("href") or ""
+            title = item.get("title") or ""
+            after = [x for x in item.get("after_parts") or [] if x]
+            prefix = [x for x in item.get("prefix_parts") or [] if x]
+            if not href or not title:
+                continue
+            link = urljoin(page_url, href)
+            id_match = re.search(r"/(\d+)(?:[/?#]|$)", link)
+            identity = id_match.group(1) if id_match else link.rstrip("/").rsplit("/", 1)[-1]
+            company = after[0] if after else "eJobs"
+            context = " ".join(prefix + after[:20])
+            record = _record(
+                "eJobs", identity, title, company, context or title, link,
+                date_posted=_ejobs_date(context),
+                location=context,
+                countries=_country_names_from_text(context),
+                remote=bool(re.search(r"\b(remote|de acasa|hibrid|hybrid)\b", context, re.I)),
+            )
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+        if added == 0:
+            break
+    if not records:
+        raise ValueError("eJobs public results contained no extractable jobs")
     return list(records.values())
 
 
@@ -1977,6 +2099,8 @@ def collect(source, config=None):
         records = _brains(url)
     elif kind == "montreal_associates":
         records = _montreal_associates(url)
+    elif kind == "ejobs":
+        records = _ejobs(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
