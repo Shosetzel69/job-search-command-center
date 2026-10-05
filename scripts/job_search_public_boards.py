@@ -24,7 +24,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover", "HARMAN", "Vector Synergy"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -82,6 +82,8 @@ PUBLIC_BOARD_SOURCES = {
     "Hipo": {"kind": "hipo", "url": "https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager"},
     "Float": {"kind": "float_careers", "url": "https://www.float.com/careers"},
     "Eviden": {"kind": "eviden", "url": "https://eviden.com/careers/"},
+    "HARMAN": {"kind": "rendered_links", "url": "https://jobs.harman.com/search-jobs/?orgIds=23226", "job_path": r"/job/[^/?#]+/[^/?#]+/23226/\d+"},
+    "Vector Synergy": {"kind": "rendered_heading_list", "url": "https://www.vectorsynergy.com/job-board", "default_country": None},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
@@ -311,6 +313,56 @@ class _FloatCareers(HTMLParser):
                 self.links.append((self.current_href, title))
             self.current_href = None
             self.current_parts = []
+
+
+def _heading_list_records_from_html(html, url, provider, *, default_remote=False, default_country=None):
+    parser = _HeadingListJobs()
+    parser.feed(html)
+    parser.close()
+    records = {}
+    for item in parser.jobs:
+        title = plain_text(item.get("title") or "")
+        context = plain_text(item.get("context") or "")
+        if not title or title.casefold() in _HEADING_LIST_NOISE:
+            continue
+        if provider == "JustRemote":
+            company_match = re.match(r"^(.+?)\s+(?:permanent|contract|freelance|full[- ]time|part[- ]time)\b", context, re.I)
+            company = company_match.group(1).strip() if company_match else provider
+        else:
+            parts = [part.strip() for part in re.split(r"\s{2,}|\u00a0+", context) if part.strip()]
+            company = parts[0] if parts else provider
+        countries = _country_names_from_text(context)
+        if default_country and not countries:
+            countries = [default_country]
+        remote = bool(default_remote or re.search(r"\b(remote|fully remote|remote friendly|hybrid|off-site)\b", context, re.I))
+        employment = [
+            label for label in ("Permanent","Contract","Freelance","Full Time","Part Time")
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I)
+        ]
+        identity_basis = "|".join([provider.casefold(), title.casefold(), company.casefold()])
+        identity = hashlib.sha1(identity_basis.encode("utf-8")).hexdigest()[:20]
+        record = _record(
+            provider, identity, title, company, context or title, url,
+            location=context,
+            countries=countries,
+            remote=remote,
+            employment_statuses=employment,
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError(f"{provider} public list contained no extractable jobs")
+    return list(records.values())
+
+
+def _rendered_heading_list_board(url, provider, *, default_remote=False, default_country=None, max_seconds=20):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    final_url, rendered_html, _meta = browser.render(url, deadline, client)
+    return _heading_list_records_from_html(
+        rendered_html, final_url, provider,
+        default_remote=default_remote,
+        default_country=default_country,
+    )
 
 
 def _float_careers(url):
@@ -2739,6 +2791,8 @@ def collect(source, config=None):
         records = _rendered_career_board(url, name, spec["job_path"])
     elif kind == "heading_list":
         records = _heading_list_board(url, name, default_remote=spec.get("default_remote", False), default_country=spec.get("default_country"))
+    elif kind == "rendered_heading_list":
+        records = _rendered_heading_list_board(url, name, default_remote=spec.get("default_remote", False), default_country=spec.get("default_country"))
     elif kind == "hipo":
         records = _hipo(url)
     elif kind == "float_careers":
