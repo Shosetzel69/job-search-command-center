@@ -994,6 +994,23 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Romania",rows[0]["countries"])
         self.assertTrue(rows[1]["remote"])
 
+    def test_float_authoritative_empty_and_open_role(self):
+        empty_html='''<h2>Current open roles</h2>
+        <p>If you can't see a role that's right for you, send us a general application below.</p>
+        <h2>A great hire goes both ways</h2>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",empty_html.encode())):
+            rows=boards._float_careers("https://www.float.com/careers")
+        self.assertEqual(rows,[])
+
+        open_html='''<h2>Current open roles</h2>
+        <a href="/careers/technical-project-manager">Technical Project Manager</a>
+        <h2>A great hire goes both ways</h2>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",open_html.encode())):
+            rows=boards._float_careers("https://www.float.com/careers")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
