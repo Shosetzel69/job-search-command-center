@@ -276,7 +276,8 @@ async function main() {
       const residue = await client.query(
         `SELECT
            (SELECT count(*)::integer FROM candidate_profile WHERE tenant_id=$1) AS candidate_profiles,
-           (SELECT count(*)::integer FROM search_profile WHERE tenant_id=$1) AS search_profiles`,
+           (SELECT count(*)::integer FROM search_profile WHERE tenant_id=$1) AS search_profiles,
+           (SELECT count(*)::integer FROM search_profile_preferences WHERE tenant_id=$1) AS search_profile_preferences`,
         [tenantProfileA],
       );
       results.search_profile_delete_cascade =
