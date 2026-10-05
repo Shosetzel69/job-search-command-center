@@ -825,6 +825,20 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["company"], "W Talent")
         self.assertEqual(rows[0]["job_title"], "Construction Project Manager (Client-Side)")
 
+    def test_thaleria_public_route(self):
+        html='''<a href="/careers/positions/senior-project-management-specialist-3523">
+          Senior Project Management Specialist
+        </a> Strasbourg France Near-site PRINCE2 Agile'''
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+            rows = boards._linked_job_board(
+                "https://www.thaleria.com/careers/open-positions",
+                "Thaleria",
+                r"/careers/positions/[^/?#]+-\d+",
+            )
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["company"], "Thaleria")
+        self.assertIn("Franta", rows[0]["countries"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
