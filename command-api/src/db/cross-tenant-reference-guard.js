@@ -8,7 +8,7 @@ const DOMAIN_QUERIES = Object.freeze({
   `,
   regions: `
     SELECT count(*)::integer AS count
-      FROM profile_preferences
+      FROM search_profile_preferences
      WHERE EXISTS (
        SELECT 1 FROM jsonb_array_elements_text(COALESCE(preferences->'target_regions', '[]'::jsonb)) item(value)
         WHERE lower(item.value) = lower($1)
@@ -19,7 +19,7 @@ const DOMAIN_QUERIES = Object.freeze({
   `,
   countries: `
     SELECT count(*)::integer AS count
-      FROM profile_preferences
+      FROM search_profile_preferences
      WHERE EXISTS (
        SELECT 1 FROM jsonb_array_elements_text(COALESCE(preferences->'target_country_codes', '[]'::jsonb)) item(value)
         WHERE lower(item.value) = lower($1)
@@ -33,12 +33,12 @@ const DOMAIN_QUERIES = Object.freeze({
   `,
   work_modes: `
     SELECT count(*)::integer AS count
-      FROM profile_preferences
+      FROM search_profile_preferences
      WHERE lower(COALESCE(preferences->'work_modes'->>lower($1), 'false')) = 'true'
   `,
   contract_types: `
     SELECT count(*)::integer AS count
-      FROM profile_preferences
+      FROM search_profile_preferences
      WHERE EXISTS (
        SELECT 1 FROM jsonb_array_elements_text(COALESCE(preferences->'contract_types', '[]'::jsonb)) item(value)
         WHERE lower(item.value) = lower($1)
