@@ -19,7 +19,6 @@ That origin is now the **LEGACY rollback reference only** during Phase 7 final v
 For the final validation of DEV / TEST / PROD after Phase 7 migration, use:
 
 - GitHub issue **#188 — `[QA][Phase 7] Final validation DEV / TEST / PROD`**;
-- `docs/testing/phase7-final-environment-qa.md`;
 - `docs/environment-provisioning-runbook.md`;
 - `docs/prod-cutover-rollback-runbook.md`.
 

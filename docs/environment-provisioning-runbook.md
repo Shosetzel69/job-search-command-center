@@ -8,7 +8,7 @@ Canonical deployment authority: `cloudbuild.promotion.yaml`
 
 Define the current operational deployment boundary for the JSCC Command API after migration from Cloudflare to Google Cloud.
 
-Historical Cloudflare provisioning/cutover procedures are archived in `docs/archive/environment-provisioning-runbook-cloudflare-phase7.md` and are non-authoritative.
+Historical Cloudflare provisioning/cutover procedures are available only through Git history and are non-authoritative.
 
 ## Preconditions
 
@@ -123,10 +123,6 @@ The complete ordered component plan is `docs/testing/gcp-promotion-checklist.md`
 
 ## Historical reference
 
-The Cloudflare-era Phase 7 procedures, account separation, Worker secrets and previous Worker redeploy steps are preserved only in:
-
-`docs/archive/environment-provisioning-runbook-cloudflare-phase7.md`
-
-They must not be used as current deployment instructions.
+Cloudflare-era Phase 7 operational evidence is intentionally excluded from the current source tree; historical copies remain reachable through existing Git history.
 
 Refs: #198 #425 #478

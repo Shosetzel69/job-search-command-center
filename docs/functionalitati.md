@@ -261,4 +261,4 @@ Stare finala la 2026-09-13: `STABLE / CLOSE`.
 
 Gap acceptat: nu exista o a doua rulare Full Search live dupa fixul #160. Fixul este merged si acoperit de regression tests green; absenta retestului live este retinuta in raportul de closeout, nu reprezinta un defect cunoscut deschis.
 
-Raport: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
+Evidence-ul closeout este disponibil numai in istoricul Git.

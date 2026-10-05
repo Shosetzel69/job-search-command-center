@@ -105,7 +105,7 @@ Astfel, o stare legacy din JSON nu poate reactiva accidental Monster.
 
 Cleanup-ul fizic al intrarii Monster este separat si amanat in #237. #93 nu modifica acea intrare; aceasta este singura exceptie fizica legacy tolerata temporar.
 
-Star Storage si companiile grupului raman excluse prin regulile de business/search configurate; acestea nu sunt reintroduse prin source governance.
+Excluderile company-specific sunt profile-owned si nu fac parte din Source Registry sau din baseline-ul repository-ului.
 
 ## 5. Reguli rezultate
 

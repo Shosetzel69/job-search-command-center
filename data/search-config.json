@@ -4,37 +4,31 @@
     "pm": {
       "enabled": true,
       "titles": [
-        "Project Manager",
-        "IT Project Manager",
-        "Technical Project Manager",
-        "Agile Project Manager"
+        "Project Manager"
       ]
     },
     "delivery": {
-      "enabled": true,
+      "enabled": false,
       "titles": [
-        "Delivery Manager",
-        "Technical Delivery Manager"
+        "Delivery Manager"
       ]
     },
     "service": {
-      "enabled": true,
+      "enabled": false,
       "titles": [
-        "Service Manager",
-        "Service Delivery Manager"
+        "Service Manager"
       ]
     },
     "scrum": {
-      "enabled": true,
+      "enabled": false,
       "titles": [
         "Scrum Master"
       ]
     },
     "program": {
-      "enabled": true,
+      "enabled": false,
       "titles": [
-        "Program Manager",
-        "PMO Manager"
+        "Program Manager"
       ]
     }
   },
@@ -45,98 +39,35 @@
   },
   "contract_types": [
     "permanent",
+    "temporary",
     "contract",
-    "freelance",
-    "temporary"
+    "freelance"
   ],
-  "freshness_hours": 120,
-  "collection_freshness_hours": 120,
+  "freshness_hours": 24,
+  "collection_freshness_hours": 24,
   "fit_threshold": 60,
   "keep_reposts": true,
-  "rate_min_eur_day": 250,
-  "rate_max_eur_day": 650,
-  "immediate_start": true,
+  "rate_min_eur_day": 0,
+  "rate_max_eur_day": 10000,
+  "immediate_start": false,
   "target_regions": [
-    "EU",
-    "US"
+    "EU"
   ],
   "target_country_codes": [],
-  "excluded_regions": [
-    "ASIA"
-  ],
+  "excluded_regions": [],
   "excluded_country_codes": [],
   "search_country_codes": [],
-  "eligible_remote_country_codes": [
-    "RO",
-    "BE",
-    "LU",
-    "FR",
-    "DE",
-    "NL",
-    "PL",
-    "PT",
-    "ES",
-    "IT",
-    "IE",
-    "AT",
-    "CZ",
-    "SK",
-    "HU",
-    "BG",
-    "GR",
-    "HR",
-    "SI",
-    "EE",
-    "LV",
-    "LT",
-    "DK",
-    "SE",
-    "FI",
-    "NO",
-    "CH",
-    "CY",
-    "MT"
-  ],
-  "work_mode_priority": [
-    "Remote",
-    "Hybrid"
-  ],
+  "eligible_remote_country_codes": [],
+  "work_mode_priority": [],
   "source_strategy": "all active sources equally",
-  "web_browser_fallback_enabled": true,
-  "jobspipe_credit_budget_per_run": 14,
-  "jobspipe_monthly_credit_guard": 950,
-  "jobspipe_incremental_overlap_minutes": 2,
-  "exclusions": [
-    "Star Storage si companiile grupului",
-    "Implementari ERP care cer experienta specializata ampla",
-    "Roluri non-IT"
-  ],
-  "excluded_company_patterns": [
-    "star\\s*storage"
-  ],
-  "excluded_role_keywords": [
-    "construction",
-    "hvac",
-    "civil",
-    "mechanical",
-    "manufacturing",
-    "clinical",
-    "marketing",
-    "sales",
-    "event",
-    "facilities",
-    "facility",
-    "enablement",
-    "referral",
-    "customer support",
-    "training"
-  ],
-  "deep_erp_terms": [
-    "SAP",
-    "ERP",
-    "S/4HANA",
-    "Dynamics 365"
-  ],
+  "web_browser_fallback_enabled": false,
+  "exclusions": [],
+  "excluded_company_patterns": [],
+  "excluded_role_keywords": [],
+  "deep_erp_terms": [],
   "jobspipe_mode": "disabled",
-  "jobspipe_apify_max_items_per_run": 100
+  "jobspipe_credit_budget_per_run": 0,
+  "jobspipe_monthly_credit_guard": 0,
+  "jobspipe_incremental_overlap_minutes": 0,
+  "jobspipe_apify_max_items_per_run": 0
 }

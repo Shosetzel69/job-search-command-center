@@ -6,10 +6,10 @@ Versiune curenta: `0.06-dev`
 
 ## Obiectiv
 
-- roluri PM / IT PM / Delivery / Service / Scrum / Program;
-- Remote prioritar, apoi Hybrid/Onsite conform criteriilor;
+- familii de roluri configurabile per profil;
+- mod de lucru configurabil per profil;
 - selectie geografica pe regiuni si tari canonice;
-- B2B tinta 250-650 EUR/zi;
+- criterii de compensatie configurabile per profil;
 - FIT, riscuri, descriere, tara/tari si link de job;
 - repostari marcate;
 - full search manual controlat; scheduler separat planificat;
@@ -36,17 +36,17 @@ Pentru work `Process: AGENTFLOW`, contractul operational este `docs/agentflow.md
 
 ## Arhitectura MVP
 
-Runtime functional:
+Runtime target:
 
-`React + Tailwind + Vite -> Cloudflare Worker / Command API -> GitHub Actions -> motor cautare -> data/*.json -> main -> Cloudflare deploy`
+`React + Tailwind + Vite -> Cloud Run Service / Command API -> Cloud Run Jobs -> Nile/PostgreSQL + environment-owned runtime storage`
 
 Engineering/governance AI separat:
 
 `AI client -> ai-github-bridge -> GitHub App dedicat -> GitHub API`
 
-Repository privat. Fara GitHub Pages si fara baza de date activa pentru aplicatia functionala.
+Repository-ul sursa nu contine date runtime personale; configuratia si starea utilizatorilor apartin runtime-ului persistent.
 
-Documentul canonic de arhitectura este `ARCHITECTURE.md` din radacina repository-ului.
+Documentul canonic de arhitectura este `ARCHITECTURE.md` din radacina repository-ului. Boundary-ul pentru continut public este definit in `docs/public-repository-contract.md`.
 
 ## AI GitHub Bridge
 

@@ -22,7 +22,7 @@ Daca nu exista informatie pentru un camp sau o sectiune obligatorie, se folosest
 
 **Proiect:** Job Search Command Center  
 **Versiune aplicatie:** 0.06-dev  
-**Scop:** monitorizarea, filtrarea, evaluarea si prioritizarea rolurilor de Project Management pe baza criteriilor definite de utilizator.
+**Scop:** monitorizarea, filtrarea, evaluarea si prioritizarea joburilor pe baza criteriilor definite de utilizator.
 
 Aplicatia nu este un motor de cautare generic. Sistemul colecteaza joburi din sursele operationale, le normalizeaza, aplica eligibilitatea geografica, deduplicarea/repostarea, filtrarea si scoring-ul FIT, apoi publica rezultatele pentru evaluare.
 
@@ -33,8 +33,8 @@ Baseline-ul stabilizat foloseste Full Search manual-only. Salvarea configuratiei
 ### 2.1 Obiective
 
 - colectarea controlata a joburilor relevante;
-- prioritizarea rolurilor PM / IT PM / Delivery / Service / Scrum / Program;
-- Remote prioritar, apoi Hybrid;
+- prioritizarea familiilor de roluri configurate per profil;
+- mod de lucru configurabil per profil;
 - selectie geografica pe regiuni si tari;
 - evaluare FIT, argumente pro si riscuri;
 - pastrarea descrierii si a linkului de job cand sursa le furnizeaza;
@@ -199,26 +199,15 @@ Nota: Remote MCP / `ai-github-bridge` este infrastructura operationala de engine
 
 ## 6. Restrictii, Ipoteze si Dependinte
 
-### 6.1 Configuratie / politica baseline stabilizata
+### 6.1 Configuratie / politica baseline
 
-- roluri: PM, IT PM, Technical/Agile PM, Delivery, Service, Scrum, Program/PMO;
-- Remote prioritar, apoi Hybrid;
-- FIT ridicat: 80;
-- B2B: 250-650 EUR/zi;
-- freshness UI: 24h;
-- colectare maxima: 120h;
-- repostari: pastrate si marcate;
-- JobsPipe: `jobspipe_mode=disabled`;
-- scheduler Full Search: OFF / neimplementat in baseline;
-- istoric loguri: maximum 10 rulari.
+Repository-ul sursa nu defineste preferinte personale implicite. Rolurile, geografia, modurile de lucru, pragurile FIT, compensatia, disponibilitatea si excluderile sunt configuratie profile-owned si se stabilesc in runtime.
 
-Selectiile concrete curente din `data/search-config.json` sunt runtime data si pot fi modificate din UI; acest document defineste contractul, nu snapshot-ul exact al fiecarei selectii.
+Valorile versionate in repository sunt exclusiv seed-uri neutre / contracte de schema. Providerii cu cost raman dezactivati implicit, iar Full Search nu porneste automat.
 
-### 6.2 Excluderi de business curente
+### 6.2 Excluderi de business
 
-- Star Storage si companiile grupului;
-- implementari ERP care cer experienta specializata ampla;
-- roluri non-IT.
+Repository-ul public nu contine excluderi personale sau company-specific. Excluderile sunt configurate per profil in runtime.
 
 ### 6.3 Restrictii
 
@@ -230,7 +219,7 @@ Selectiile concrete curente din `data/search-config.json` sunt runtime data si p
 - mecanismul de autorizare curent permite un singur utilizator; multi-user este `UNDER ANALYSIS`;
 - Full Search ramane manual-only pana la implementarea separata a Package 2B;
 - JobsPipe ramane disabled in baseline;
-- stabilizarea functionala a baseline-ului a fost validata in PROD la 2026-09-11; raport final: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
+- stabilizarea functionala a baseline-ului a fost validata in PROD la 2026-09-11; evidence-ul istoric detaliat este disponibil numai in istoricul Git.
 
 ### 6.4 Ipoteze
 
@@ -241,7 +230,7 @@ Selectiile concrete curente din `data/search-config.json` sunt runtime data si p
 - Cloudflare Worker / Static Assets;
 - GitHub Actions si GitHub Contents API;
 - Google Identity Services;
-- repository GitHub privat pentru configuratie, runtime data si istoric;
+- repository GitHub pentru cod, contracte si seed-uri neutre; runtime data si istoricul operational sunt externalizate;
 - providerii/connectorii aprobati individual conform Source Registry.
 
 ## 7. Clarificare #49

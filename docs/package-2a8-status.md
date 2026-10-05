@@ -57,4 +57,4 @@ Defectele ramase din #126 sunt P3/cosmetice si nu blocheaza stabilizarea.
 
 Separarea DEV/TEST/PROD este urmarita separat prin #161 si nu face parte din Package 2A8.
 
-Raport closeout: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
+Raportul closeout istoric este disponibil numai in istoricul Git.

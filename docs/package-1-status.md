@@ -44,4 +44,4 @@ Acest gap este acceptat ca verificare live reziduala si nu blocheaza closeout-ul
 
 Package 1 indeplineste criteriile de stabilizare si poate fi inchis administrativ.
 
-Raport complet: `docs/testing/reports/2026-09-13-stabilization-closeout.md`.
+Raportul operational istoric este disponibil numai in istoricul Git.
