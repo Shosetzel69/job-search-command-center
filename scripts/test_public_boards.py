@@ -909,6 +909,20 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
         self.assertTrue(rows[0]["remote"])
 
+    def test_keyes_nrb_public_route(self):
+        html='''<a href="/o/data-engineer-employee-or-freelance">
+          Data Engineer (employee or freelance)
+        </a> Herstal Liege Belgium Hybrid'''
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+            rows = boards._linked_job_board(
+                "https://keyescareers.eu/find-my-job",
+                "KEYES / NRB",
+                r"/o/[^/?#]+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["company"],"KEYES / NRB")
+        self.assertIn("Belgia",rows[0]["countries"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
