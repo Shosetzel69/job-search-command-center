@@ -50,6 +50,7 @@ PUBLIC_BOARD_SOURCES = {
     "Orange Romania": {"kind": "softgarden_feed", "url": "https://cariere.orange.ro/jobs.feed.json"},
     "Mantu": {"kind": "rendered_links", "url": "https://careers.mantu.com/jobs", "job_path": r"/brands/[^/?#]+/jobs/\\d+"},
     "Serco Europe": {"kind": "rendered_links", "url": "https://careers.serco.com/eu/en/search-results", "job_path": r"/eu/en/job/\\d+/[^/?#]+"},
+    "Next Ventures": {"kind": "nextventures", "url": "https://next-ventures.com/jobs/"},
 }
 
 
@@ -1124,6 +1125,85 @@ def _eurobrussels(url):
     return records
 
 
+class _NextVenturesJobs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = []
+        self.current = None
+        self.in_heading = False
+        self.heading_parts = []
+
+    def _flush(self):
+        if self.current and self.current.get("ref") and self.current.get("title"):
+            self.jobs.append(self.current)
+        self.current = None
+        self.in_heading = False
+        self.heading_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"h2","h3","h4","h5"} and self.current:
+            self.in_heading = True
+            self.heading_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        match = re.search(r"\bRef:\s*#(\d+)\b", text, re.I)
+        if match:
+            self._flush()
+            self.current = {"ref": match.group(1), "title": "", "context": []}
+            return
+        if not self.current:
+            return
+        if self.in_heading:
+            self.heading_parts.append(text)
+        else:
+            self.current["context"].append(text)
+
+    def handle_endtag(self, tag):
+        if tag in {"h2","h3","h4","h5"} and self.in_heading:
+            title = " ".join(self.heading_parts).strip()
+            if title:
+                self.current["title"] = title
+            self.in_heading = False
+            self.heading_parts = []
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def _nextventures(url):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Next Ventures jobs page HTTP {status}")
+    parser = _NextVenturesJobs()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = []
+    for item in parser.jobs:
+        ref = item["ref"]
+        title = item["title"]
+        context = " ".join(item.get("context") or [])
+        countries = _country_names_from_text(context)
+        employment = []
+        for label in ("Contract","Permanent","Temporary","Freelance"):
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I):
+                employment.append(label)
+        records.append(_record(
+            "Next Ventures", ref, title, "Next Ventures", context or title,
+            f"{url}#ref-{ref}",
+            location=context,
+            countries=countries,
+            remote=bool(re.search(r"\bremote\b", context, re.I)),
+            employment_statuses=employment,
+        ))
+    if not records:
+        raise ValueError("Next Ventures jobs page contained no extractable Ref listings")
+    return records
+
+
 class _AtosJobsTable(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -1607,6 +1687,8 @@ def collect(source, config=None):
         records = _epam(url)
     elif kind == "rendered_links":
         records = _rendered_career_board(url, name, spec["job_path"])
+    elif kind == "nextventures":
+        records = _nextventures(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
