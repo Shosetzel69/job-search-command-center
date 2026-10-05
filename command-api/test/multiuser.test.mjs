@@ -242,6 +242,28 @@ test('Eligibility v1 is tri-state and only explicit contradiction excludes', () 
     'ELIGIBLE',
     'soft preferences must not affect Eligibility',
   );
+  assert.equal(
+    evaluateEligibility(
+      { ...row, country_codes:[], remote_scope:'worldwide' },
+      criteria,
+      nomenclatures,
+    ).state,
+    'ELIGIBLE',
+    'remote scope aliases must normalize canonically',
+  );
+  assert.deepEqual(
+    evaluateEligibility(
+      { ...row, country_codes:[], remote_scope:'EMEA' },
+      { ...criteria, target_country_codes:['US'], target_regions:[], remote_eligible_country_codes:['US'] },
+      nomenclatures,
+    ),
+    {
+      state:'UNKNOWN',
+      reason_code:'GEOGRAPHY_SCOPE_PARTIAL_UNKNOWN',
+      reasons:['GEOGRAPHY_SCOPE_PARTIAL_UNKNOWN','REMOTE_AUTHORIZATION_SCOPE_UNKNOWN'],
+    },
+    'EMEA without a canonical membership proof must not be falsely excluded',
+  );
 });
 
 test('ATC-489-02 migration encodes Search Profile criteria and shared classification versioning', async () => {
