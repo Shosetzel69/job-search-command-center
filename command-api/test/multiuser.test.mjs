@@ -349,8 +349,9 @@ test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the sa
   assert.match(boundedBlock, /FIT_ALGORITHM_VERSION/);
   assert.match(boundedBlock, /evaluationCacheValid/);
   assert.match(boundedBlock, /spec\.prefetch/);
-  assert.match(legacyBlock, /return listProfileJobs/);
+  assert.match(legacyBlock, /await listProfileJobs/);
   assert.match(legacyBlock, /LEGACY_JOB_PAGE_LIMIT/);
+  assert.match(legacyBlock, /schema_version:'1\\.0'/);
   assert.doesNotMatch(legacyBlock, /FROM canonical_jobs/);
 });
 
