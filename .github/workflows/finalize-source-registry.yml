@@ -1,43 +1,19 @@
-name: Validate finalized source registry
+name: Source registry finalization (retired)
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - ".github/workflows/finalize-source-registry.yml"
-      - "scripts/finalize_source_registry.py"
-      - "data/sources.json"
-  pull_request:
-    paths:
-      - ".github/workflows/finalize-source-registry.yml"
-      - "scripts/finalize_source_registry.py"
-      - "data/sources.json"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  validate:
+  retired:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - name: Check out repository
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Compute canonical finalized source registry
-        run: python3 scripts/finalize_source_registry.py
-
-      - name: Fail closed if committed registry is not finalized
+      - name: Reject retired direct finalization path
         shell: bash
         run: |
           set -euo pipefail
-          if git diff --quiet -- data/sources.json; then
-            echo "Source Registry finalization is already committed."
-            exit 0
-          fi
-          echo "data/sources.json is not finalized. Update it through a protected pull request; direct workflow pushes to main are forbidden." >&2
-          git --no-pager diff -- data/sources.json
+          echo "SOURCE_REGISTRY_FINALIZER_RETIRED: update data/sources.json through a protected pull request; this workflow cannot mutate main." >&2
           exit 1
