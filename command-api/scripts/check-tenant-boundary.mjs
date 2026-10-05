@@ -20,6 +20,7 @@ const PERSONAL_SQL_ALLOWED = new Set([
   'db/tenant-gateway.js',
   'db/privilege-readiness.js',
   'db/cross-tenant-reference-guard.js',
+  'db/cross-tenant-refresh-scope-aggregator.js',
   'db/atc-489-02-backfill.js',
 ]);
 
@@ -70,6 +71,19 @@ for (const path of files) {
   ) {
     fail(`${rel} references Nile tenant-management primitives outside tenant-gateway.js`);
   }
+}
+
+
+const refreshAggregatorPath = join(SRC_ROOT, 'db/cross-tenant-refresh-scope-aggregator.js');
+const refreshAggregator = await readFile(refreshAggregatorPath, 'utf8');
+const refreshSelect = refreshAggregator.match(/SELECT[\s\S]*?FROM search_profile/i)?.[0] || '';
+for (const forbidden of ['tenant_id','search_profile_id','user_id','email','structured_evidence','applications','profile_job_evaluation']) {
+  if (new RegExp('\\b' + forbidden + '\\b', 'i').test(refreshSelect)) {
+    fail(`cross-tenant refresh aggregator SELECT leaks forbidden field: ${forbidden}`);
+  }
+}
+if (!refreshAggregator.includes("account.status = 'ACTIVE'") || !refreshAggregator.includes("sp.status = 'ACTIVE'")) {
+  fail('cross-tenant refresh aggregator must restrict active accounts and Search Profiles');
 }
 
 const repositoryPath = join(SRC_ROOT, 'multiuser-repository.js');
