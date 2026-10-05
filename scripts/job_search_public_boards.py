@@ -69,6 +69,8 @@ PUBLIC_BOARD_SOURCES = {
     "awork.ro": {"kind": "awork", "url": "https://www.awork.ro/"},
     "Freelancer.com": {"kind": "freelancer_api", "url": "https://www.freelancer.com/api/projects/0.1/projects/active/?limit=100&or_search_query=project%20manager%20program%20manager%20programme%20manager%20scrum%20master%20delivery%20manager%20service%20manager"},
     "Fujitsu Belgium": {"kind": "rendered_links", "url": "https://www.jobs.global.fujitsu.com/search/?q=&locationsearch=Belgium&searchResultView=LIST", "job_path": r"/job/[^/?#]+/\d+-[A-Za-z_]+"},
+    "No Fluff Jobs": {"kind": "linked_jobs", "url": "https://nofluffjobs.com/remote/project-manager", "job_path": r"/job/[^/?#]+"},
+    "Flexa": {"kind": "linked_jobs", "url": "https://flexa.careers/jobs", "job_path": r"/jobs/[^/?#]+-[0-9a-f]{16,}"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
