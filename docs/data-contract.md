@@ -613,6 +613,29 @@ ADMIN-started Retrieve uses `RUN_TRIGGER=admin-ui` for operational history. The 
 
 PROD ADMIN Refresh is fail-closed in this slice. Legacy `/commands/run` remains compatibility-only until ATC-489-07.
 
+### Frontend cutover — ATC-489-06
+
+Frontend authority after this slice:
+- job list/search/pagination: `GET /me/jobs`, bounded and cursor-based;
+- Selection Criteria read/write: `GET/PUT /me/preferences`;
+- USER refresh: `POST /me/refresh`;
+- ADMIN refresh: `POST /admin/refresh`;
+- profile-job workflow state: `PUT /me/jobs/:job_id/state`;
+- Applications: `/applications`.
+
+The frontend no longer reads jobs through `/data/jobs.json` and no longer dispatches `/commands/run`. Those backend adapters may remain temporarily for compatibility and are retired only in ATC-489-07.
+
+UI invariants:
+- an unconfigured Search Profile shows onboarding and does not force Retrieve;
+- GUI/view filters never mutate Selection Criteria and never call providers;
+- visible counts describe the bounded profile-result population currently loaded, never total shared-corpus size;
+- pagination appends by canonical `job_id` and deduplicates;
+- refresh outcome handling preserves the canonical four-state contract;
+- USER UI does not depend on ADMIN-only operational history;
+- `sessionStorage` stores transient return context only (view, GUI filters, selected job, scroll position), never authentication credentials or business datasets.
+
+Mobile/PWA V1 does not change data ownership or API semantics. Its service worker is network-only and does not cache auth, API, job, application, criteria or other business payloads.
+
 
 ## 14. Multiuser migration authority
 
