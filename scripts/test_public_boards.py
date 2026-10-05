@@ -572,13 +572,40 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Medici Stomatologi - NETHERLANDS")
         self.assertIn("Tarile de Jos",rows[0]["countries"])
 
+    def test_montreal_associates_uses_stable_internal_reference(self):
+        listing='''<section>
+          <a href="/it/candidates/job/sap-btp-consultant-1564/">SAP BTP Consultant</a>
+        </section>'''
+        detail='''<html><h1>SAP BTP Consultant</h1>
+          <div>006P2000015v7hJIAQ_1789463704 Posted: 15/09/2026</div>
+          <div>Bologna Italy Permanent Hybrid</div>
+        </html>'''
+        client=Mock()
+        client.get.return_value=(
+            "https://www.montrealassociates.com/it/candidates/job/sap-btp-consultant-1564/",
+            detail,
+        )
+        with patch.object(boards.browser,"render",return_value=(
+            "https://www.montrealassociates.com/uk/candidates/job-search/",
+            listing,{"browser_status":"rendered"}
+        )), patch.object(boards,"PublicClient",return_value=client):
+            rows=boards._montreal_associates(
+                "https://www.montrealassociates.com/uk/candidates/job-search/"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["id"],"montreal-associates:006P2000015v7hJIAQ_1789463704")
+        self.assertEqual(rows[0]["job_title"],"SAP BTP Consultant")
+        self.assertEqual(rows[0]["date_posted"],"2026-09-15T00:00:00+00:00")
+        self.assertIn("Italia",rows[0]["countries"])
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
                      "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
                      "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
                      "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
-                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting"]:
+                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
