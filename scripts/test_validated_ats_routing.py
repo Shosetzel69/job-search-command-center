@@ -49,6 +49,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             "Accenture": ("workday", "https://accenture.wd103.myworkdayjobs.com/AccentureCareers"),
             "Snyk": ("ashby", "snyk"),
             "European Dynamics": ("workable", "european-dynamics"),
+            "Cronos Europa": ("breezyhr", "cronoseuropa"),
             "Orange Romania": ("softgarden", "https://cariere.orange.ro/jobs.feed.json"),
             "Vodafone / VOIS": ("eightfold_public", "https://jobs.vodafone.com"),
         }
@@ -60,7 +61,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
             route = item["connector_config"]
             route_identity = (
                 route.get("career_url") or route.get("board_token") or route.get("board_name")
-                or route.get("site") or route.get("company_identifier") or route.get("subdomain")
+                or route.get("site") or route.get("company_identifier") or route.get("subdomain") or route.get("tenant")
                 or route.get("feed_url") or route.get("base_url")
             )
             self.assertEqual(route_identity, identity, name)
