@@ -40,7 +40,9 @@ async function main() {
     tenant_delete_cascade:null,
     tenant_delete_retry_idempotent:null,
     search_profile_logical_reference_write:null,
+    search_profile_preferences_write:null,
     search_profile_cross_tenant_isolation:null,
+    search_profile_preferences_cross_tenant_isolation:null,
     search_profile_delete_cascade:null,
     details:{},
   };
@@ -227,12 +229,22 @@ async function main() {
           VALUES ($1, $2, $3, 'Default', 'ACTIVE', 1, 'NOT_CONFIGURED')`,
         [tenantProfileA, searchProfileA, candidateProfileA],
       );
+      await client.query(
+        `INSERT INTO search_profile_preferences(
+            tenant_id, search_profile_id, preferences
+          )
+          VALUES ($1, $2, '{"target_country_codes":["RO"]}'::jsonb)`,
+        [tenantProfileA, searchProfileA],
+      );
       await client.query('COMMIT');
       results.search_profile_logical_reference_write = true;
+      results.search_profile_preferences_write = true;
     } catch (error) {
       await safeRollback(client);
       results.search_profile_logical_reference_write = false;
+      results.search_profile_preferences_write = false;
       results.details.search_profile_logical_reference_write = compactError(error);
+      results.details.search_profile_preferences_write = compactError(error);
     }
 
     try {
@@ -242,12 +254,19 @@ async function main() {
         'SELECT search_profile_id FROM search_profile WHERE search_profile_id=$1',
         [searchProfileA],
       );
+      const invisiblePreferences = await client.query(
+        'SELECT search_profile_id FROM search_profile_preferences WHERE search_profile_id=$1',
+        [searchProfileA],
+      );
       await client.query('COMMIT');
       results.search_profile_cross_tenant_isolation = invisible.rows.length === 0;
+      results.search_profile_preferences_cross_tenant_isolation = invisiblePreferences.rows.length === 0;
     } catch (error) {
       await safeRollback(client);
       results.search_profile_cross_tenant_isolation = false;
+      results.search_profile_preferences_cross_tenant_isolation = false;
       results.details.search_profile_cross_tenant_isolation = compactError(error);
+      results.details.search_profile_preferences_cross_tenant_isolation = compactError(error);
     }
 
     try {
@@ -262,7 +281,8 @@ async function main() {
       );
       results.search_profile_delete_cascade =
         Number(residue.rows?.[0]?.candidate_profiles) === 0
-        && Number(residue.rows?.[0]?.search_profiles) === 0;
+        && Number(residue.rows?.[0]?.search_profiles) === 0
+        && Number(residue.rows?.[0]?.search_profile_preferences) === 0;
     } catch (error) {
       await safeRollback(client);
       results.search_profile_delete_cascade = false;
@@ -365,7 +385,9 @@ async function main() {
 
     const required489 = [
       'search_profile_logical_reference_write',
+      'search_profile_preferences_write',
       'search_profile_cross_tenant_isolation',
+      'search_profile_preferences_cross_tenant_isolation',
       'search_profile_delete_cascade',
     ];
     const failed489 = required489.filter(key => results[key] !== true);
