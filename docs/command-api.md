@@ -433,3 +433,20 @@ Se poate pastra maximum 90 zile numai un audit event neidentificabil, fara user/
 Pilot variable infrastructure cost: EUR 0.
 
 Paid capacity nu se activeaza automat. 70% din included Nile capacity este warning/gate operational. Daca fail-closed cost control nu poate fi demonstrat, multiuser PROD ramane blocat.
+
+
+## ADMIN Refresh
+
+### `POST /admin/refresh`
+
+Requires an authenticated ACTIVE `ADMIN` session and same-origin mutation request.
+
+The endpoint aggregates/deduplicates refresh scopes across active Search Profiles without exposing personal identity fields, then reuses/coalesces/starts the existing shared global Retrieve path.
+
+Canonical outcomes:
+- `REUSED_CORPUS`;
+- `JOINED_EXISTING_RUN`;
+- `STARTED_RUN`;
+- `BLOCKED_BY_POLICY`.
+
+A newly started ADMIN run is tagged `admin-ui`. PROD enablement is not part of ATC-489-05.
