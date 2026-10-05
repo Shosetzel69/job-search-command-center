@@ -58,6 +58,7 @@ PUBLIC_BOARD_SOURCES = {
     "Wellfound": {"kind": "linked_jobs", "url": "https://wellfound.com/jobs", "job_path": r"/jobs/\\d+-[^?#]+"},
     "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\\d+/"},
     "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
+    "Source Group International": {"kind": "linked_jobs", "url": "https://www.sourcegroupinternational.com/candidate/", "job_path": r"/jobs/[^?#]+/"},
 }
 
 
