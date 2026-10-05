@@ -80,6 +80,7 @@ PUBLIC_BOARD_SOURCES = {
     "JustRemote": {"kind": "heading_list", "url": "https://justremote.co/remote-project-manager-jobs", "default_remote": true},
     "Techjobs.be": {"kind": "heading_list", "url": "https://techjobs.be/en/ict-jobs", "default_country": "Belgia"},
     "Hipo": {"kind": "hipo", "url": "https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager"},
+    "Float": {"kind": "float_careers", "url": "https://www.float.com/careers"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
@@ -266,6 +267,72 @@ def _hipo(url):
         )
     if not records:
         raise ValueError("Hipo project-manager search contained no extractable jobs")
+    return list(records.values())
+
+
+class _FloatCareers(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_h2 = False
+        self.h2_parts = []
+        self.in_roles = False
+        self.current_href = None
+        self.current_parts = []
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == "h2":
+            self.in_h2 = True
+            self.h2_parts = []
+        elif self.in_roles and tag == "a" and attrs.get("href"):
+            self.current_href = attrs["href"]
+            self.current_parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        if self.in_h2:
+            self.h2_parts.append(text)
+        elif self.current_href:
+            self.current_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "h2" and self.in_h2:
+            heading = " ".join(self.h2_parts).strip().casefold()
+            self.in_roles = heading == "current open roles"
+            self.in_h2 = False
+            self.h2_parts = []
+        elif tag == "a" and self.current_href:
+            title = " ".join(self.current_parts).strip()
+            if title:
+                self.links.append((self.current_href, title))
+            self.current_href = None
+            self.current_parts = []
+
+
+def _float_careers(url):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Float careers page HTTP {status}")
+    html = body.decode("utf-8", errors="replace")
+    if not re.search(r"Current\s+open\s+roles", html, re.I):
+        raise ValueError("Float careers page missing authoritative Current open roles section")
+    parser = _FloatCareers()
+    parser.feed(html)
+    parser.close()
+    records = {}
+    for href, title in parser.links:
+        if re.search(r"general application|hiring process|blog", title, re.I):
+            continue
+        link = urljoin(url, href)
+        identity = hashlib.sha1(link.encode("utf-8")).hexdigest()[:20]
+        records[identity] = _record(
+            "Float", identity, title, "Float", title, link,
+            location="Remote", countries=[], remote=True,
+        )
+    # Empty is legitimate only because the authoritative section itself was found.
     return list(records.values())
 
 
@@ -2570,6 +2637,8 @@ def collect(source, config=None):
         records = _heading_list_board(url, name, default_remote=spec.get("default_remote", False), default_country=spec.get("default_country"))
     elif kind == "hipo":
         records = _hipo(url)
+    elif kind == "float_careers":
+        records = _float_careers(url)
     elif kind == "nextventures":
         records = _nextventures(url)
     elif kind == "linked_jobs":
