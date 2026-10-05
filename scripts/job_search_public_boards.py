@@ -547,6 +547,20 @@ class _DailyRemoteList(HTMLParser):
         self._flush()
 
 
+def _dailyremote_company(context):
+    text = " ".join(str(context or "").split())
+    if not text:
+        return "DailyRemote"
+    marker = re.search(
+        r"\b(?:Full Time|Part Time|Contract|Freelance|Internship|"
+        r"\d+\s+(?:Minutes?|Hours?|Days?|Weeks?|Months?)\s+Ago|Today|Yesterday)\b",
+        text,
+        re.I,
+    )
+    company = text[:marker.start()].strip(" ·|-") if marker else text
+    return company or "DailyRemote"
+
+
 def _dailyremote_page_url(base_url, page):
     if page <= 1:
         return base_url
@@ -573,7 +587,7 @@ def _dailyremote(base_url, max_pages=3):
                 continue
             link = urljoin(page_url, href)
             context = " ".join(after[:24])
-            company = after[0] if after else "DailyRemote"
+            company = _dailyremote_company(context)
             employment = [
                 label for label in ("Full Time", "Part Time", "Contract", "Freelance", "Internship")
                 if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I)
