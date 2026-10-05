@@ -316,6 +316,11 @@
       "connector": "smartrecruiters",
       "company_identifier": "AvanceConsultingServices2",
       "enabled": true
+    },
+    "Infoplus Technologies UK": {
+      "connector": "smartrecruiters",
+      "company_identifier": "infoplustechnologies1",
+      "enabled": true
     }
   }
 }
