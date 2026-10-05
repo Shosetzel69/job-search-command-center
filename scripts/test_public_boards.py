@@ -367,6 +367,39 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Romania",rows[0]["countries"])
         self.assertEqual(rows[0]["date_posted"],"2026-10-04")
 
+    def test_mantu_rendered_board_extracts_jobs(self):
+        html='''<div>
+          <a href="/brands/amaris-consulting/jobs/45037">IT & Digital Project Manager</a>
+          Barcelona Spain Permanent Job Remote
+        </div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://careers.mantu.com/jobs",html,{"browser_status":"rendered"}
+        )):
+            rows=boards._rendered_career_board(
+                "https://careers.mantu.com/jobs","Mantu",r"/brands/[^/?#]+/jobs/\d+"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"IT & Digital Project Manager")
+        self.assertIn("Spania",rows[0]["countries"])
+        self.assertTrue(rows[0]["remote"])
+
+    def test_serco_rendered_board_extracts_jobs(self):
+        html='''<div>
+          <a href="/eu/en/job/309763/Project-Manager">Project Manager</a>
+          Brussels Belgium Corporate Operations and ICT Hybrid
+        </div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://careers.serco.com/eu/en/search-results",html,{"browser_status":"rendered"}
+        )):
+            rows=boards._rendered_career_board(
+                "https://careers.serco.com/eu/en/search-results","Serco Europe",
+                r"/eu/en/job/\d+/[^/?#]+"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Project Manager")
+        self.assertIn("Belgia",rows[0]["countries"])
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
