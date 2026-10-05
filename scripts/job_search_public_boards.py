@@ -24,7 +24,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover", "HARMAN", "Vector Synergy"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -84,6 +84,9 @@ PUBLIC_BOARD_SOURCES = {
     "Eviden": {"kind": "eviden", "url": "https://eviden.com/careers/"},
     "HARMAN": {"kind": "rendered_links", "url": "https://jobs.harman.com/search-jobs/?orgIds=23226", "job_path": r"/job/[^/?#]+/[^/?#]+/23226/\d+"},
     "Vector Synergy": {"kind": "rendered_heading_list", "url": "https://www.vectorsynergy.com/job-board", "default_country": None},
+    "Welcome to the Jungle": {"kind": "rendered_links", "url": "https://www.welcometothejungle.com/en/jobs?query=project%20manager", "job_path": r"/en/companies/[^/?#]+/jobs/[^/?#]+"},
+    "PeoplePerHour": {"kind": "linked_jobs", "url": "https://www.peopleperhour.com/freelance-jobs?keyword=project%20manager", "job_path": r"/freelance-jobs/(?:[^/?#]+/)*[^/?#]+-\d+"},
+    "Arc.dev": {"kind": "arc", "url": "https://arc.dev/remote-jobs?jobRoles=project_manager"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
@@ -491,6 +494,107 @@ def _eviden(url):
 
     if not records:
         raise ValueError("Eviden careers page contained no extractable job listings")
+    return list(records.values())
+
+
+class _ArcJobs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = []
+        self.recent = []
+        self.current = None
+        self.in_heading = False
+
+    def _flush(self):
+        if self.current:
+            title = " ".join(self.current.get("title_parts") or []).strip()
+            context = " ".join(self.current.get("context_parts") or []).strip()
+            prefix = list(self.current.get("prefix") or [])
+            if title:
+                self.jobs.append({"title": title, "context": context, "prefix": prefix})
+        self.current = None
+        self.in_heading = False
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"h2","h3","h4"}:
+            self._flush()
+            self.current = {
+                "title_parts": [],
+                "context_parts": [],
+                "prefix": list(self.recent[-4:]),
+            }
+            self.in_heading = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        self.recent.append(text)
+        self.recent = self.recent[-8:]
+        if not self.current:
+            return
+        if self.in_heading:
+            self.current["title_parts"].append(text)
+        else:
+            self.current["context_parts"].append(text)
+
+    def handle_endtag(self, tag):
+        if tag in {"h2","h3","h4"} and self.in_heading:
+            self.in_heading = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+_ARC_NOISE = {
+    "remote project manager jobs", "find remote project manager jobs around the world",
+    "sort by", "filters", "project manager",
+}
+
+
+def _arc(url, max_seconds=20):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    final_url, rendered_html, _meta = browser.render(url, deadline, client)
+    parser = _ArcJobs()
+    parser.feed(rendered_html)
+    parser.close()
+    records = {}
+    for item in parser.jobs:
+        title = plain_text(item.get("title") or "")
+        if not title or title.casefold() in _ARC_NOISE:
+            continue
+        context = plain_text(item.get("context") or "")
+        prefix = [plain_text(x) for x in item.get("prefix") or [] if plain_text(x)]
+        # Card layout normally places company immediately before the title.
+        company = "Arc.dev"
+        for candidate in reversed(prefix):
+            if candidate.casefold() in _ARC_NOISE:
+                continue
+            if re.search(r"\b(remote|full[- ]time|part[- ]time|manager|project management)\b", candidate, re.I):
+                continue
+            if len(candidate) <= 120:
+                company = candidate
+                break
+        combined = " ".join(prefix[-2:] + [context])
+        employment = [
+            label for label in ("Full-time","Part-time","Freelance","Contract")
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", combined, re.I)
+        ]
+        countries = _country_names_from_text(combined)
+        identity_basis = "|".join([title.casefold(), company.casefold(), combined.casefold()])
+        identity = hashlib.sha1(identity_basis.encode("utf-8")).hexdigest()[:20]
+        records[identity] = _record(
+            "Arc.dev", identity, title, company, combined or title, final_url,
+            date_posted=_relative_date(combined),
+            location=combined,
+            countries=countries,
+            remote=True,
+            employment_statuses=employment,
+        )
+    if not records:
+        raise ValueError("Arc.dev project-manager page contained no extractable jobs")
     return list(records.values())
 
 
@@ -2801,6 +2905,8 @@ def collect(source, config=None):
         records = _float_careers(url)
     elif kind == "eviden":
         records = _eviden(url)
+    elif kind == "arc":
+        records = _arc(url)
     elif kind == "nextventures":
         records = _nextventures(url)
     elif kind == "linked_jobs":
