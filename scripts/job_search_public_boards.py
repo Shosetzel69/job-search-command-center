@@ -23,7 +23,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -59,6 +59,8 @@ PUBLIC_BOARD_SOURCES = {
     "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\\d+/"},
     "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
     "Source Group International": {"kind": "linked_jobs", "url": "https://www.sourcegroupinternational.com/candidate/", "job_path": r"/jobs/[^?#]+/"},
+    "GitHub": {"kind": "rendered_links", "url": "https://www.github.careers/careers-home/jobs", "job_path": r"/careers-home/jobs/\\d+"},
+    "Brains Consulting": {"kind": "brains", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
 }
 
 
@@ -288,6 +290,72 @@ def _prohuman(url, max_details=30, max_seconds=25):
         )
     if not records:
         raise ValueError("Prohuman rendered jobs page contained no open extractable jobs")
+    return list(records.values())
+
+
+class _BrainsCategoryJobs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = []
+        self.in_heading = False
+        self.current_href = None
+        self.title_parts = []
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag in {"h2","h3"}:
+            self.in_heading = True
+            self.current_href = None
+            self.title_parts = []
+        elif self.in_heading and tag == "a" and attrs.get("href"):
+            self.current_href = attrs["href"]
+
+    def handle_data(self, data):
+        if self.in_heading:
+            text = " ".join(str(data or "").split())
+            if text:
+                self.title_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag in {"h2","h3"} and self.in_heading:
+            title = " ".join(self.title_parts).strip()
+            if self.current_href and title:
+                self.jobs.append((self.current_href, title))
+            self.in_heading = False
+            self.current_href = None
+            self.title_parts = []
+
+
+def _brains(url, max_details=30):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Brains Consulting jobs category HTTP {status}")
+    parser = _BrainsCategoryJobs()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    records = {}
+    for href, list_title in parser.jobs[:max_details]:
+        link = urljoin(url, href)
+        detail_status, _detail_kind, detail_body = _fetch(link, "text/html,application/xhtml+xml")
+        if detail_status != 200:
+            continue
+        detail = _JobDetailPage()
+        detail.feed(detail_body.decode("utf-8", errors="replace"))
+        title = detail.title or list_title
+        context = detail.text
+        if re.search(
+            r"Rolul este inchis|NU mai sunt locuri vacante|TOATE LOCURILE DE MUNCA VACANTE AU FOST OCUPATE",
+            context, re.I,
+        ):
+            continue
+        identity = link.rstrip("/").rsplit("/", 1)[-1]
+        records[identity] = _record(
+            "Brains Consulting", identity, title, "Brains Consulting", context or title, link,
+            location=context,
+            countries=_country_names_from_text(context),
+            remote=bool(re.search(r"\b(remote|hybrid|online)\b", context, re.I)),
+        )
+    if not records:
+        raise ValueError("Brains Consulting category contained no open extractable jobs")
     return list(records.values())
 
 
@@ -1854,6 +1922,8 @@ def collect(source, config=None):
         records = _squareone(url)
     elif kind == "prohuman":
         records = _prohuman(url)
+    elif kind == "brains":
+        records = _brains(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
