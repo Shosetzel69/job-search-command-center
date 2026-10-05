@@ -67,6 +67,7 @@ PUBLIC_BOARD_SOURCES = {
     "DailyRemote": {"kind": "dailyremote", "url": "https://dailyremote.com/remote-project-management-jobs"},
     "Jobspresso": {"kind": "rss", "url": "https://jobspresso.co/?feed=job_feed"},
     "awork.ro": {"kind": "awork", "url": "https://www.awork.ro/"},
+    "Freelancer.com": {"kind": "freelancer_api", "url": "https://www.freelancer.com/api/projects/0.1/projects/active/?limit=100&or_search_query=project%20manager%20program%20manager%20programme%20manager%20scrum%20master%20delivery%20manager%20service%20manager"},
 }
 
 
@@ -679,6 +680,71 @@ def _awork(base_url, max_pages=3):
     if not records:
         raise ValueError("awork.ro bounded pages contained no target-role jobs")
     return list(records.values())
+
+
+def _freelancer_api(payload):
+    if not isinstance(payload, dict):
+        raise ValueError("Freelancer API response must be an object")
+    result = payload.get("result")
+    projects = result.get("projects") if isinstance(result, dict) else None
+    if not isinstance(projects, list):
+        raise ValueError("Freelancer API response missing result.projects[]")
+    records = []
+    for item in projects:
+        if not isinstance(item, dict):
+            continue
+        project_id = item.get("id")
+        title = str(item.get("title") or "").strip()
+        if not project_id or not title:
+            continue
+        description = str(item.get("description") or title).strip()
+        seo_url = str(item.get("seo_url") or item.get("url") or "").strip()
+        if seo_url.startswith(("http://","https://")):
+            source_url = seo_url
+        elif seo_url:
+            source_url = urljoin("https://www.freelancer.com/projects/", seo_url.lstrip("/"))
+        else:
+            source_url = f"https://www.freelancer.com/projects/{project_id}"
+
+        budget = item.get("budget") if isinstance(item.get("budget"), dict) else {}
+        currency = item.get("currency") if isinstance(item.get("currency"), dict) else {}
+        budget_parts = []
+        minimum, maximum = budget.get("minimum"), budget.get("maximum")
+        code = str(currency.get("code") or "").strip()
+        if minimum is not None or maximum is not None:
+            budget_parts.append(
+                f"Budget {minimum if minimum is not None else '?'}-"
+                f"{maximum if maximum is not None else '?'} {code}".strip()
+            )
+
+        skills = []
+        for job in item.get("jobs") or []:
+            if isinstance(job, dict) and job.get("name"):
+                skills.append(str(job["name"]).strip())
+        if skills:
+            budget_parts.append("Skills: " + ", ".join(skills[:20]))
+
+        project_type = str(item.get("type") or "").strip()
+        employment = ["Freelance"]
+        if project_type:
+            employment.append(project_type)
+
+        records.append(_record(
+            "Freelancer.com",
+            str(project_id),
+            title,
+            "Freelancer.com",
+            " ".join([description] + budget_parts),
+            source_url,
+            date_posted=_epoch_iso(item.get("submitdate")),
+            location="Remote",
+            countries=[],
+            remote=True,
+            employment_statuses=employment,
+        ))
+    if not records:
+        raise ValueError("Freelancer API returned no extractable active projects")
+    return records
 
 
 class _BrainsCategoryJobs(HTMLParser):
@@ -2322,6 +2388,11 @@ def collect(source, config=None):
         records = _dailyremote(url)
     elif kind == "awork":
         records = _awork(url)
+    elif kind == "freelancer_api":
+        status, _content_type, body = _fetch(url, "application/json")
+        if status != 200:
+            raise RuntimeError(f"Freelancer public API HTTP {status}")
+        records = _freelancer_api(json.loads(body.decode("utf-8", errors="replace")))
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
