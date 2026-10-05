@@ -526,13 +526,28 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Romania",rows[0]["countries"])
         self.assertTrue(rows[0]["source_url"].endswith("/ItNetworksupport"))
 
+    def test_source_group_international_extracts_jobs(self):
+        html='''<section>
+          <a href="/jobs/change-transformation-expert-zurich-31844995/">Change & Transformation Expert</a>
+          Zürich Switzerland Contract Apply by 31 Oct 2026
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._linked_job_board(
+                "https://www.sourcegroupinternational.com/candidate/",
+                "Source Group International",r"/jobs/[^?#]+/"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Change & Transformation Expert")
+        self.assertIn("Elvetia",rows[0]["countries"])
+        self.assertTrue(rows[0]["source_url"].endswith("31844995/"))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
                      "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
                      "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
                      "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
-                     "SkipTheDrive","Prohuman"]:
+                     "SkipTheDrive","Prohuman","Source Group International"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
