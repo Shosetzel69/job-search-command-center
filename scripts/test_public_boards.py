@@ -734,6 +734,34 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Project Management",row["description"])
         self.assertTrue(row["source_url"].startswith("https://www.freelancer.com/projects/"))
 
+    def test_enterprise_public_linked_routes(self):
+        cases = [
+            (
+                "Worldpay / Global Payments",
+                "https://jobs.globalpayments.com/jobs",
+                r"/en/jobs/r\d+/[^?#]+/?",
+                '<a href="/en/jobs/r0070713/customer-service-representative-1/">Customer Service Representative</a> Bucharest Romania',
+            ),
+            (
+                "Luxoft",
+                "https://career.luxoft.com/jobs?country[]=Romania&perPage=60",
+                r"/jobs/[^/?#]+-\d+",
+                '<a href="/jobs/senior-scrum-master-27444">Senior Scrum Master</a> Bucharest Romania',
+            ),
+            (
+                "Stripe",
+                "https://stripe.com/careers/search",
+                r"/careers/apply/[^/?#]+/\d+",
+                '<a href="/careers/apply/ai-solutions-program-manager-finance/7869917">AI Solutions Program Manager, Finance</a> Remote in Romania',
+            ),
+        ]
+        for provider, url, pattern, html in cases:
+            with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+                rows = boards._linked_job_board(url, provider, pattern)
+            self.assertEqual(len(rows), 1, provider)
+            self.assertEqual(rows[0]["company"], provider)
+            self.assertTrue(rows[0]["source_url"].startswith("https://"), provider)
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
