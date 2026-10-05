@@ -20,6 +20,7 @@ import {
   updateApplication,
 } from '../src/multiuser-repository.js';
 import { runtimePrivilegeReadiness } from '../src/db/privilege-readiness.js';
+import { aggregateAdminRefreshScopes } from '../src/db/cross-tenant-refresh-scope-aggregator.js';
 import { backfillSearchProfileFoundations } from '../src/db/search-profile-backfill.js';
 import { withTenantTransaction } from '../src/db/tenant-gateway.js';
 import { deleteNomenclatureValue } from '../src/nomenclature-governance.js';
@@ -237,6 +238,33 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     }, env, { db:runtimeDb });
     const versionAfterSecondChange = (await resolveActiveSearchProfile(user, env, { db:runtimeDb })).profile_version;
     assert.equal(versionAfterSecondChange, versionAfterChange + 1);
+
+    // ATC-489-05: explicit global-mode exception returns aggregate scopes only.
+    const commonRefreshScope = {
+      target_role_families:['PROJECT_MANAGEMENT'],
+      target_regions:['EU'],
+      target_country_codes:['RO'],
+      remote_eligible_country_codes:['RO'],
+      work_modes:{ remote:true, hybrid:true, onsite:false },
+      contract_types:['contract'],
+    };
+    await savePreferences(ownerA, commonRefreshScope, env, { db:runtimeDb });
+    await savePreferences(user, commonRefreshScope, env, { db:runtimeDb });
+    const adminScopes = await aggregateAdminRefreshScopes(env, { db:runtimeDb });
+    assert.equal(adminScopes.active_profile_count, 2);
+    const sharedScope = adminScopes.scopes.find(scope =>
+      scope.role_family === 'PROJECT_MANAGEMENT'
+      && scope.target_country_codes.includes('RO')
+      && scope.target_regions.includes('EU')
+    );
+    assert.ok(sharedScope, 'cross-tenant refresh aggregator must emit the configured shared scope');
+    assert.equal(sharedScope.active_profile_count, 2);
+    for (const scope of adminScopes.scopes) {
+      assert.equal(Object.hasOwn(scope, 'tenant_id'), false);
+      assert.equal(Object.hasOwn(scope, 'search_profile_id'), false);
+      assert.equal(Object.hasOwn(scope, 'user_id'), false);
+      assert.equal(Object.hasOwn(scope, 'email'), false);
+    }
     await createApplication(user, {
       company:'Tenant B',
       title:'Delivery Manager',
