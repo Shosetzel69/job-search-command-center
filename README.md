@@ -36,9 +36,9 @@ Pentru work `Process: AGENTFLOW`, contractul operational este `docs/agentflow.md
 
 ## Arhitectura MVP
 
-Runtime functional:
+Runtime target:
 
-`React + Tailwind + Vite -> Cloudflare Worker / Command API -> GitHub Actions -> motor cautare -> data/*.json -> main -> Cloudflare deploy`
+`React + Tailwind + Vite -> Cloud Run Service / Command API -> Cloud Run Jobs -> Nile/PostgreSQL + environment-owned runtime storage`
 
 Engineering/governance AI separat:
 
@@ -46,7 +46,7 @@ Engineering/governance AI separat:
 
 Repository-ul sursa nu contine date runtime personale; configuratia si starea utilizatorilor apartin runtime-ului persistent.
 
-Documentul canonic de arhitectura este `ARCHITECTURE.md` din radacina repository-ului.
+Documentul canonic de arhitectura este `ARCHITECTURE.md` din radacina repository-ului. Boundary-ul pentru continut public este definit in `docs/public-repository-contract.md`.
 
 ## AI GitHub Bridge
 
