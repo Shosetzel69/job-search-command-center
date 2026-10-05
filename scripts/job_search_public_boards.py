@@ -77,7 +77,7 @@ PUBLIC_BOARD_SOURCES = {
     "Dynamite Jobs": {"kind": "rendered_links", "url": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager", "job_path": r"/company/[^/?#]+/remote-job/[^/?#]+"},
     "Just Join IT": {"kind": "linked_jobs", "url": "https://justjoin.it/job-offers/all-locations/pm?from=0", "job_path": r"/job-offer/[^/?#]+"},
     "Crossover": {"kind": "rendered_links", "url": "https://www.crossover.com/jobs", "job_path": r"/jobs/\d+/[^/?#]+/[^/?#]+"},
-    "JustRemote": {"kind": "heading_list", "url": "https://justremote.co/remote-project-manager-jobs", "default_remote": true},
+    "JustRemote": {"kind": "heading_list", "url": "https://justremote.co/remote-project-manager-jobs", "default_remote": True},
     "Techjobs.be": {"kind": "heading_list", "url": "https://techjobs.be/en/ict-jobs", "default_country": "Belgia"},
     "Hipo": {"kind": "hipo", "url": "https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager"},
     "Float": {"kind": "float_careers", "url": "https://www.float.com/careers"},
