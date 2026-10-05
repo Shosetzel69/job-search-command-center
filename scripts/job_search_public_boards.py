@@ -23,7 +23,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -61,6 +61,7 @@ PUBLIC_BOARD_SOURCES = {
     "Source Group International": {"kind": "linked_jobs", "url": "https://www.sourcegroupinternational.com/candidate/", "job_path": r"/jobs/[^?#]+/"},
     "GitHub": {"kind": "rendered_links", "url": "https://www.github.careers/careers-home/jobs", "job_path": r"/careers-home/jobs/\\d+"},
     "Brains Consulting": {"kind": "brains", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
+    "Montreal Associates": {"kind": "montreal_associates", "url": "https://www.montrealassociates.com/uk/candidates/job-search/"},
 }
 
 
@@ -290,6 +291,56 @@ def _prohuman(url, max_details=30, max_seconds=25):
         )
     if not records:
         raise ValueError("Prohuman rendered jobs page contained no open extractable jobs")
+    return list(records.values())
+
+
+def _montreal_date(context):
+    match = re.search(r"\bPosted:\s*(\d{2})/(\d{2})/(\d{4})\b", str(context or ""), re.I)
+    if not match:
+        return None
+    try:
+        return datetime(
+            int(match.group(3)), int(match.group(2)), int(match.group(1)), tzinfo=timezone.utc
+        ).isoformat()
+    except ValueError:
+        return None
+
+
+def _montreal_associates(url, max_details=40, max_seconds=30):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    final_url, rendered_html, _meta = browser.render(url, deadline, client)
+    links = _JobLinkCollector(r"/(?:uk|it|de|es|ca|fr)/candidates/job/[^/?#]+/?")
+    links.feed(rendered_html)
+    records = {}
+    for href in links.links[:max_details]:
+        link = urljoin(final_url, href)
+        try:
+            detail_url, detail_html = client.get(link)
+        except Exception:
+            continue
+        detail = _JobDetailPage()
+        detail.feed(detail_html)
+        title = detail.title
+        context = detail.text
+        if not title:
+            continue
+        ref_match = re.search(r"\b(006P[A-Za-z0-9]+_\d+)\b", context)
+        identity = ref_match.group(1) if ref_match else detail_url.rstrip("/").rsplit("/", 1)[-1]
+        employment = [
+            label for label in ("Contract/Freelance", "Permanent", "Contract", "Freelance", "Temporary")
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I)
+        ]
+        records[identity] = _record(
+            "Montreal Associates", identity, title, "Montreal Associates", context or title, detail_url,
+            date_posted=_montreal_date(context),
+            location=context,
+            countries=_country_names_from_text(context),
+            remote=bool(re.search(r"\b(remote|hybrid)\b", context, re.I)),
+            employment_statuses=employment,
+        )
+    if not records:
+        raise ValueError("Montreal Associates rendered job search contained no extractable jobs")
     return list(records.values())
 
 
@@ -1924,6 +1975,8 @@ def collect(source, config=None):
         records = _prohuman(url)
     elif kind == "brains":
         records = _brains(url)
+    elif kind == "montreal_associates":
+        records = _montreal_associates(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
