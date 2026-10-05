@@ -879,9 +879,10 @@ async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
         tenant_id, search_profile_id, job_id,
         eligibility_state, eligibility_reason_code, eligible,
         score, pros, risks, exclusion_reason,
-        profile_version, job_version, fit_algorithm_version, evaluated_at
+        profile_version, job_version, fit_algorithm_version,
+        evaluation_version, evaluated_at
       )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14)
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15)
       ON CONFLICT(tenant_id, search_profile_id, job_id)
       DO UPDATE SET
         eligibility_state=EXCLUDED.eligibility_state,
@@ -894,6 +895,7 @@ async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
         profile_version=EXCLUDED.profile_version,
         job_version=EXCLUDED.job_version,
         fit_algorithm_version=EXCLUDED.fit_algorithm_version,
+        evaluation_version=EXCLUDED.evaluation_version,
         evaluated_at=EXCLUDED.evaluated_at`,
     [
       tx.tenantId,
@@ -908,6 +910,7 @@ async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
       evaluation.exclusionReason || null,
       foundation.profile_version,
       Number(row.job_version),
+      FIT_ALGORITHM_VERSION,
       FIT_ALGORITHM_VERSION,
       now,
     ],
