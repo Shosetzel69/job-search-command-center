@@ -6,6 +6,7 @@ const SRC_ROOT = fileURLToPath(new URL('../src/', import.meta.url));
 const PERSONAL_TABLES = [
   'candidate_profile',
   'search_profile',
+  'search_profile_preferences',
   'profile_preferences',
   'profile_job_state',
   'profile_job_evaluation',
@@ -19,6 +20,7 @@ const PERSONAL_SQL_ALLOWED = new Set([
   'db/tenant-gateway.js',
   'db/privilege-readiness.js',
   'db/cross-tenant-reference-guard.js',
+  'db/atc-489-02-backfill.js',
 ]);
 
 const TENANT_PRIMITIVE_ALLOWED = new Set([
