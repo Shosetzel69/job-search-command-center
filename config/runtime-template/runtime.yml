@@ -54,7 +54,7 @@ jobs:
             test "$RUN_TRIGGER_INPUT" = "manual-ui" || { echo "test-full requires manual-ui run_trigger" >&2; exit 1; }
           fi
           if [ "$EXECUTION_MODE" = "manual-full" ]; then
-            test "$RUN_TRIGGER_INPUT" = "manual-ui" || { echo "manual-full requires manual-ui run_trigger" >&2; exit 1; }
+            case "$RUN_TRIGGER_INPUT" in manual-ui|admin-ui) ;; *) echo "manual-full requires manual-ui or admin-ui run_trigger" >&2; exit 1 ;; esac
             case "$APP_ENV" in
               dev) test "$SEARCH_MODE" = "disabled" || { echo "DEV manual-full requires SEARCH_MODE=disabled" >&2; exit 1; } ;;
               test) test "$SEARCH_MODE" = "smoke" || { echo "TEST manual-full requires SEARCH_MODE=smoke" >&2; exit 1; } ;;
@@ -165,7 +165,7 @@ jobs:
         env:
           JOBSPIPE_API_KEY: ${{ secrets.JOBSPIPE_API_KEY }}
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-          RUN_TRIGGER: manual-ui
+          RUN_TRIGGER: ${{ inputs.run_trigger || 'manual-ui' }}
           RUNTIME_REF: main
           PUBLISH_BRANCH: main
         run: python3 scripts/job_search_runner.py
