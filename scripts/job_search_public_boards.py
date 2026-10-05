@@ -23,7 +23,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -55,6 +55,9 @@ PUBLIC_BOARD_SOURCES = {
     "Square One Resources": {"kind": "squareone", "url": "https://www.squareoneresources.com/jobs"},
     "Proactive.IT": {"kind": "rendered_links", "url": "https://www.proactive.it/job-vacancies/", "job_path": r"/job/[^/?#]+/?$"},
     "PowerToFly": {"kind": "linked_jobs", "url": "https://powertofly.com/jobs/?only_html=True", "job_path": r"/jobs/detail/\\d+"},
+    "Wellfound": {"kind": "linked_jobs", "url": "https://wellfound.com/jobs", "job_path": r"/jobs/\\d+-[^?#]+"},
+    "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\\d+/"},
+    "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
 }
 
 
@@ -247,6 +250,43 @@ def _squareone(url, max_details=20):
         )
     if not records:
         raise ValueError("Square One Resources jobs page contained no extractable job details")
+    return list(records.values())
+
+
+def _prohuman(url, max_details=30, max_seconds=25):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    final_url, rendered_html, _meta = browser.render(url, deadline, client)
+    links = _JobLinkCollector(r"/candidati/jobs/[^/?#]+")
+    links.feed(rendered_html)
+    records = {}
+    for href in links.links[:max_details]:
+        link = urljoin(final_url, href)
+        try:
+            detail_url, detail_html = client.get(link)
+        except Exception:
+            continue
+        detail = _JobDetailPage()
+        detail.feed(detail_html)
+        title = detail.title
+        context = detail.text
+        if not title or re.search(r"Rolul este inchis", context, re.I):
+            continue
+        identity = detail_url.rstrip("/").rsplit("/", 1)[-1]
+        employment = [
+            label for label in ("Full time", "Part time", "Contract", "Temporary", "Freelance")
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I)
+        ]
+        records[identity] = _record(
+            "Prohuman", identity, title, "Prohuman APT", context or title, detail_url,
+            date_posted=_relative_date(context),
+            location=context,
+            countries=_country_names_from_text(context),
+            remote=bool(re.search(r"\b(remote|hybrid)\b", context, re.I)),
+            employment_statuses=employment,
+        )
+    if not records:
+        raise ValueError("Prohuman rendered jobs page contained no open extractable jobs")
     return list(records.values())
 
 
@@ -1811,6 +1851,8 @@ def collect(source, config=None):
         records = _linked_job_board(url, name, spec["job_path"])
     elif kind == "squareone":
         records = _squareone(url)
+    elif kind == "prohuman":
+        records = _prohuman(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
