@@ -1133,6 +1133,20 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Technical Business Analyst & Project Manager")
         self.assertIn("Romania",rows[0]["countries"])
 
+    def test_upwork_public_project_management_route(self):
+        html='''<a href="/freelance-jobs/apply/Project-Manager_~022106063606007628224/">
+          Project Manager
+        </a> Worldwide Remote 3-6 months Intermediate'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._linked_job_board(
+                "https://www.upwork.com/freelance-jobs/project-management/",
+                "Upwork",
+                r"/freelance-jobs/apply/[^/?#]+_~\d+/",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Project Manager")
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
