@@ -460,6 +460,22 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"IT Projects Analyst – 11879AC")
         self.assertTrue(rows[0]["remote"])
 
+    def test_powertofly_extracts_public_job_links(self):
+        html='''<section>
+          <a href="/jobs/detail/2530129">Project Manager App Services</a>
+          SoftwareOne Madrid Spain Hybrid Posted 12 hours ago
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._linked_job_board(
+                "https://powertofly.com/jobs/?only_html=True",
+                "PowerToFly",r"/jobs/detail/\d+"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Project Manager App Services")
+        self.assertIn("Spania",rows[0]["countries"])
+        self.assertTrue(rows[0]["remote"])
+        self.assertTrue(rows[0]["source_url"].endswith("/jobs/detail/2530129"))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
