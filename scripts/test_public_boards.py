@@ -642,13 +642,56 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Belgia",rows[0]["countries"])
         self.assertTrue(rows[0]["source_url"].endswith("/o/application-cloud-architect-eu-institution"))
 
+    def test_dailyremote_preserves_company_and_numeric_identity(self):
+        page1='''<section>
+          <a href="/remote-job/it-project-manager-eu-5582352">IT Project Manager - EU</a>
+          Meta Resources Group Full Time 2 Days Ago Romania, Oman Project Management
+        </section>'''
+        page2='''<section>
+          <a href="/remote-job/technical-project-manager-5684376">Technical Project Manager</a>
+          Cloud Computing Consultants Contract 5 Days Ago United States
+        </section>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (200,"text/html",page1.encode()),
+            (200,"text/html",page2.encode()),
+        ]) as fetch:
+            rows=boards._dailyremote(
+                "https://dailyremote.com/remote-project-management-jobs",
+                max_pages=2,
+            )
+        self.assertEqual(len(rows),2)
+        by_title={row["job_title"]:row for row in rows}
+        self.assertEqual(by_title["IT Project Manager - EU"]["company"],"Meta Resources Group")
+        self.assertEqual(by_title["IT Project Manager - EU"]["id"],"dailyremote:5582352")
+        self.assertTrue(by_title["IT Project Manager - EU"]["remote"])
+        self.assertIn("Romania",by_title["IT Project Manager - EU"]["countries"])
+        self.assertEqual(fetch.call_count,2)
+        self.assertIn("page=2",fetch.call_args.args[0])
+
+    def test_jobspresso_uses_public_rss_route(self):
+        spec=boards.PUBLIC_BOARD_SOURCES["Jobspresso"]
+        self.assertEqual(spec["kind"],"rss")
+        self.assertEqual(spec["url"],"https://jobspresso.co/?feed=job_feed")
+        payload=b"""<?xml version='1.0'?><rss><channel><item>
+          <title>Technical Project Manager</title>
+          <link>https://jobspresso.co/job/technical-project-manager-current/</link>
+          <description>Remote delivery role</description>
+          <author>Example Co</author>
+          <pubDate>Sun, 04 Oct 2026 10:00:00 +0000</pubDate>
+        </item></channel></rss>"""
+        rows=boards._rss(payload,"Jobspresso",spec["url"])
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
+        self.assertEqual(rows[0]["company"],"Example Co")
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
                      "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
                      "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
                      "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
-                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs","Trasys International"]:
+                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs","Trasys International","DailyRemote","Jobspresso"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
