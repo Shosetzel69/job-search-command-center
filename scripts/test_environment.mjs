@@ -422,7 +422,8 @@ test('controlled non-PROD Full Search supports UI manual-full and TEST compatibi
   const control = readFileSync(resolve(ROOT, '.github/workflows/test-full-search.yml'), 'utf8');
 
   assert.match(runtime, /options: \[policy, manual-full, test-full\]/);
-  assert.match(runtime, /manual-full requires manual-ui run_trigger/);
+  assert.match(runtime, /manual-full requires manual-ui or admin-ui run_trigger/);
+  assert.match(runtime, /options: \[manual-ui, admin-ui, scheduled, system\]/);
   assert.match(runtime, /DEV manual-full requires SEARCH_MODE=disabled/);
   assert.match(runtime, /TEST manual-full requires SEARCH_MODE=smoke/);
   assert.match(runtime, /manual-full is DEV\/TEST-only/);
