@@ -1119,6 +1119,20 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Romania",rows[0]["countries"])
         self.assertTrue(all(row["remote"] for row in rows))
 
+    def test_efinancialcareers_public_route(self):
+        html='''<a href="/jobs-Romania-Bucharest-Technical_Business_Analyst__Project_Manager.id24278261">
+          Technical Business Analyst & Project Manager
+        </a> London Stock Exchange Group Bucharest Romania Permanent 3 days ago'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._linked_job_board(
+                "https://www.efinancialcareers.com/jobs/project-manager/in-europe",
+                "eFinancialCareers",
+                r"/jobs-[^?#]+\.id\d+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Technical Business Analyst & Project Manager")
+        self.assertIn("Romania",rows[0]["countries"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
