@@ -125,7 +125,6 @@ function criteriaFromConfig(config){
     excludedCountries:Array.isArray(config?.excluded_country_codes)?[...config.excluded_country_codes]:[],
   };
 }
-function normalizeSource
 function normalizeSource(source){const method=source.collection_method||sourceCollectionMethod(source.url)||null;return{
   id:source.id||null,category:source.category||'Altele',name:source.name||'Sursa',url:source.url||'#',active:source.active===true,collectionMethod:method,connectorAvailable:source.connector_available??Boolean(method),validationStatus:source.validation_status||(source.active?'validated':'pending'),approvalStatus:source.approval_status||(source.active?'approved':'pending'),lastValidatedAt:source.last_validated_at||null,validationReason:source.validation_reason||null,
 };}
@@ -163,7 +162,6 @@ function BottomNav({view,onView,counts,role}) {
     </div>
   </nav>;
 }
-function ProfileMenu
 function ProfileMenu({email,onLogout}){const[open,setOpen]=useState(false),ref=useRef(null);const initial=(email||'G').slice(0,1).toUpperCase();useEffect(()=>{const handler=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)};document.addEventListener('mousedown',handler);return()=>document.removeEventListener('mousedown',handler);},[]);return<div className="relative" ref={ref}><button onClick={()=>setOpen(v=>!v)} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-sm text-slate-700 shadow-sm transition hover:bg-slate-50"><span className="grid h-7 w-7 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">{initial}</span><span className="hidden max-w-40 truncate lg:block">{email||'Google conectat'}</span><Icon name="chevronDown" className="h-4 w-4 text-slate-400"/></button>{open&&<div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"><div className="px-3 py-2"><div className="text-xs font-medium uppercase tracking-wide text-slate-400">Cont conectat</div><div className="mt-1 truncate text-sm font-medium text-slate-800">{email||'Google'}</div></div><div className="my-1 border-t border-slate-100"/><button onClick={onLogout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"><Icon name="logout"/> Deconecteaza</button></div>}</div>;}
 function EnvironmentMarker({environment,className=''}){const label=environmentBadge(environment);if(!label)return null;return<span className={cx('inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold tracking-wide text-amber-800',className)}>{`[ ${label} ]`}</span>;}
 function Header({view,email,running,onRun,onLogout,environment,refreshDisabled=false}) {
@@ -175,7 +173,6 @@ function Header({view,email,running,onRun,onLogout,environment,refreshDisabled=f
   </header>;
 }
 
-function MetricCard
 
 function MetricCard({value,label,note,icon,tone='blue',active,onClick}){const tones={blue:'bg-blue-50 text-blue-600',amber:'bg-amber-50 text-amber-600',violet:'bg-violet-50 text-violet-600',slate:'bg-slate-100 text-slate-600'};return<button onClick={onClick} className={cx('w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',active?'border-blue-400 ring-4 ring-blue-50':'border-slate-200')}><div className="flex items-start gap-3"><span className={cx('grid h-9 w-9 place-items-center rounded-xl',tones[tone])}><Icon name={icon}/></span><div><div className="text-2xl font-bold leading-none text-slate-950">{value}</div><div className="mt-1 text-sm text-slate-600">{label}</div><div className="mt-1 text-xs text-slate-400">{note}</div></div></div></button>;}
 function KPIGrid({metrics,selected,onSelect}){const toggle=key=>onSelect(selected===key?'all':key);return<section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard value={metrics.jobs} label="roluri noi" note="ultimele 24h din filtrul curent" icon="jobs" active={selected==='new'} onClick={()=>toggle('new')}/><MetricCard value={metrics.high} label="fit ridicat" note={`>= ${metrics.threshold}% · ${metrics.scope}`} icon="review" tone="slate" active={selected==='high'} onClick={()=>toggle('high')}/><MetricCard value={metrics.reposts} label="repostari" note={metrics.scope} icon="refresh" tone="amber" active={selected==='repost'} onClick={()=>toggle('repost')}/><MetricCard value={metrics.remote} label="remote" note={metrics.scope} icon="globe" tone="violet" active={selected==='remote'} onClick={()=>toggle('remote')}/></section>;}
@@ -204,7 +201,6 @@ function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=f
     <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><span>{loading?'Se actualizeaza lista...':rows.length+' rezultate de profil incarcate'}</span>{hasMore&&<button type="button" disabled={loadingMore} onClick={onLoadMore} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 font-semibold text-slate-700 disabled:opacity-50">{loadingMore?'Se incarca...':'Incarca mai multe'}</button>}</div>
   </div>;
 }
-function ErrorPanel
 function ErrorPanel({error,onRetry}){return<div className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm"><div className="flex items-start gap-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 text-red-600"><Icon name="alert"/></span><div><h2 className="font-display font-bold text-slate-900">Datele nu au putut fi incarcate</h2><p className="mt-1 text-sm text-slate-600">{error?.message||'Eroare necunoscuta'}</p><button onClick={onRetry} className="mt-4 inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold"><Icon name="retry"/> Reincearca</button></div></div></div>;}
 function LoadingPanel(){return<div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex items-center gap-3 text-sm text-slate-500"><span className="h-4 w-4 animate-spin rounded-full border-2 border-slate-200 border-t-blue-600"/> Se incarca datele protejate...</div></div>;}
 function DetailDrawer({job,threshold,onClose,onApply}) {
@@ -215,7 +211,6 @@ function DetailDrawer({job,threshold,onClose,onApply}) {
   </aside></>;
 }
 
-function ScopeBadge
 
 function ScopeBadge({scope}){const gui=scope==='GUI'||scope==='GUI ONLY';return<span className={cx('inline-flex rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-wide',gui?'border-violet-200 bg-violet-50 text-violet-700':'border-blue-200 bg-blue-50 text-blue-700')}>{scope}</span>;}
 function CriteriaCard({title,note,children,className,scope}) {
@@ -225,7 +220,6 @@ function CriteriaCard({title,note,children,className,scope}) {
     <div className="mt-3 space-y-3">{children}</div>
   </details>;
 }
-function CheckRow
 function CheckRow({checked,onChange,children,disabled=false}){return<label className={cx('flex items-start gap-3 text-sm text-slate-700',disabled?'cursor-not-allowed opacity-60':'cursor-pointer')}><input type="checkbox" checked={checked} onChange={e=>onChange(e.target.checked)} disabled={disabled} className="mt-0.5 h-4 w-4 rounded border-slate-300"/><span>{children}</span></label>;}
 function ChipsSelector({label,values,onChange,options,placeholder}){const available=options.filter(([value])=>!values.includes(value));return<div><div className="text-sm text-slate-700">{label}</div><select defaultValue="" onChange={e=>{if(e.target.value)onChange([...values,e.target.value]);e.target.value='';}} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm text-slate-700"><option value="">{placeholder}</option>{available.map(([value,text])=><option key={value} value={value}>{text}</option>)}</select><div className="mt-2 flex flex-wrap gap-2">{values.map(value=><button type="button" key={value} onClick={()=>onChange(values.filter(x=>x!==value))} className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600">{COUNTRY_NAMES[value]||value}<Icon name="close" className="h-3 w-3"/></button>)}</div></div>;}
 function RegionSelector({label,values,onChange}){return<div><div className="text-sm text-slate-700">{label}</div><div className="mt-2 flex flex-wrap gap-2">{REGION_OPTIONS.map(region=><button type="button" key={region} onClick={()=>onChange(values.includes(region)?values.filter(x=>x!==region):[...values,region])} className={cx('rounded-full border px-3 py-1.5 text-xs font-semibold',values.includes(region)?'border-blue-200 bg-blue-50 text-blue-700':'border-slate-200 bg-white text-slate-600')}>{region==='ASIA'?'Asia':region}</button>)}</div></div>;}
