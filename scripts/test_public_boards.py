@@ -1068,6 +1068,57 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(any("Belgia" in row["countries"] for row in rows))
         self.assertTrue(any("Tarile de Jos" in row["countries"] for row in rows))
 
+    def test_wttj_peopleperhour_and_arc_routes(self):
+        wttj_html='''<div>
+          <a href="/en/companies/solveo-energie/jobs/construction-project-manager-romania-f-m_bucarest">
+            Construction Project Manager Romania (F/M)
+          </a>
+          Bucuresti Romania Freelance A few days at home
+        </div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://www.welcometothejungle.com/en/jobs?query=project%20manager",
+            wttj_html,
+            {"browser_status":"rendered"},
+        )):
+            rows=boards._rendered_career_board(
+                "https://www.welcometothejungle.com/en/jobs?query=project%20manager",
+                "Welcome to the Jungle",
+                r"/en/companies/[^/?#]+/jobs/[^/?#]+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Construction Project Manager Romania (F/M)")
+        self.assertIn("Romania",rows[0]["countries"])
+
+        pph_html='''<a href="/freelance-jobs/technology-programming/website-development/project-manager-4494868">
+          Project Manager
+        </a> Remote Open for Proposals $60/hr'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",pph_html.encode())):
+            rows=boards._linked_job_board(
+                "https://www.peopleperhour.com/freelance-jobs?keyword=project%20manager",
+                "PeoplePerHour",
+                r"/freelance-jobs/(?:[^/?#]+/)*[^/?#]+-\d+",
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Project Manager")
+        self.assertTrue(rows[0]["remote"])
+
+        arc_html='''<div>Jobgether</div>
+        <h3>Program Manager</h3>
+        <div>Full-time Manager Project management Remote - Romania 2 days ago</div>
+        <div>Search for Hire</div>
+        <h3>Search Engine Optimization Project Manager</h3>
+        <div>Full-time Manager Remote anywhere 2 days ago</div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://arc.dev/remote-jobs?jobRoles=project_manager",
+            arc_html,
+            {"browser_status":"rendered"},
+        )):
+            rows=boards._arc("https://arc.dev/remote-jobs?jobRoles=project_manager")
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[0]["company"],"Jobgether")
+        self.assertIn("Romania",rows[0]["countries"])
+        self.assertTrue(all(row["remote"] for row in rows))
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
