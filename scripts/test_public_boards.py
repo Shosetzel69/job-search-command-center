@@ -685,13 +685,38 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["company"],"Example Co")
         self.assertTrue(rows[0]["remote"])
 
+    def test_awork_filters_to_target_roles_and_uses_stable_id(self):
+        page1='''<section>
+          <a href="/it-project-manager/id-8401">IT Project Manager</a>
+          Construcții / Instalații fulltime Botosani, România Agile Project Management
+          postat de VESTRA INDUSTRY SRL în 3 Mar 2026
+          <a href="/electrician/id-8402">Electrician</a>
+          Bucuresti, România postat de Example SRL în 4 Oct 2026
+        </section>'''
+        page2='''<section>
+          <a href="/project-manager-eu-funds/id-8403">Project Manager | EU Funds</a>
+          Iasi, România fulltime postat de LIFE IS HARD S.A. în 24 Mar 2026
+        </section>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (200,"text/html",page1.encode()),
+            (200,"text/html",page2.encode()),
+        ]):
+            rows=boards._awork("https://www.awork.ro/",max_pages=2)
+        self.assertEqual(len(rows),2)
+        by_title={row["job_title"]:row for row in rows}
+        self.assertEqual(by_title["IT Project Manager"]["id"],"awork-ro:8401")
+        self.assertEqual(by_title["IT Project Manager"]["company"],"VESTRA INDUSTRY SRL")
+        self.assertEqual(by_title["IT Project Manager"]["date_posted"],"2026-03-03T00:00:00+00:00")
+        self.assertIn("Romania",by_title["IT Project Manager"]["countries"])
+        self.assertNotIn("Electrician",by_title)
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
                      "EU Careers / EPSO","Remote.co","Remotive","Atos","Worldline","NATO Careers","UpcoMinds",
                      "EuroBrussels","Societe Generale","SoftServe","EPAM","Orange Romania","Mantu","Serco Europe",
                      "Next Ventures","Hays Romania","Square One Resources","Proactive.IT","PowerToFly","Wellfound",
-                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs","Trasys International","DailyRemote","Jobspresso"]:
+                     "SkipTheDrive","Prohuman","Source Group International","GitHub","Brains Consulting","Montreal Associates","eJobs","Trasys International","DailyRemote","Jobspresso","awork.ro"]:
             self.assertTrue(boards.source_supported(name))
         self.assertFalse(boards.source_supported("Unknown Board"))
 
