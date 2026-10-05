@@ -1,17 +1,4 @@
 {
   "schema_version": "1.0",
-  "applications": [
-    {
-      "company": "Atos / Bull",
-      "title": "Project Manager",
-      "location": "Timisoara",
-      "countries": [
-        "Romania"
-      ],
-      "applied_at": "2026-09-02",
-      "reference": "540300",
-      "status": "applied",
-      "next_status_check": "2026-09-16"
-    }
-  ]
+  "applications": []
 }
