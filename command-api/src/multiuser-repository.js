@@ -1132,7 +1132,7 @@ export async function evaluateProfileJobs(
   { db = getPool(env), now = new Date() } = {},
 ) {
   // Compatibility adapter only. It deliberately returns a bounded first page.
-  return listProfileJobs(
+  const page = await listProfileJobs(
     authContext,
     preferences,
     nomenclatures,
@@ -1140,6 +1140,7 @@ export async function evaluateProfileJobs(
     env,
     { db, now },
   );
+  return { ...page, schema_version:'1.0' };
 }
 
 export async function nomenclatureReferenceCount(domain, code, env = process.env, { db = getPool(env) } = {}) {
