@@ -8,7 +8,7 @@ on:
         required: false
         default: manual-ui
         type: choice
-        options: [manual-ui, scheduled, system]
+        options: [manual-ui, admin-ui, scheduled, system]
       source_sha:
         description: Immutable source commit SHA
         required: true
