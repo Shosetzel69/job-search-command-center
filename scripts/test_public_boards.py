@@ -979,6 +979,21 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(any(row["job_title"]=="PMO Manager" for row in rows))
         self.assertTrue(all("Belgia" in row["countries"] for row in rows))
 
+    def test_hipo_project_manager_list(self):
+        html='''<h2>Project Manager</h2>
+        <div>Siemens Energy</div><div>03-10-2026</div><div>BUCURESTI</div>
+        <h2>Project Manager with French</h2>
+        <div>Societe Generale Global Solution Centre</div><div>03-10-2026</div><div>Hybrid</div>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._hipo(
+                "https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager"
+            )
+        self.assertEqual(len(rows),2)
+        self.assertEqual(rows[0]["company"],"Siemens Energy")
+        self.assertEqual(rows[0]["date_posted"],"2026-10-03T00:00:00+00:00")
+        self.assertIn("Romania",rows[0]["countries"])
+        self.assertTrue(rows[1]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
