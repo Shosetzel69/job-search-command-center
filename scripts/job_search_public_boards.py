@@ -68,6 +68,9 @@ PUBLIC_BOARD_SOURCES = {
     "Jobspresso": {"kind": "rss", "url": "https://jobspresso.co/?feed=job_feed"},
     "awork.ro": {"kind": "awork", "url": "https://www.awork.ro/"},
     "Freelancer.com": {"kind": "freelancer_api", "url": "https://www.freelancer.com/api/projects/0.1/projects/active/?limit=100&or_search_query=project%20manager%20program%20manager%20programme%20manager%20scrum%20master%20delivery%20manager%20service%20manager"},
+    "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
+    "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
+    "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
 }
 
 
