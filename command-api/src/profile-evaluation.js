@@ -1,7 +1,8 @@
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
 
-export const EVALUATION_VERSION = 'multiuser-v1';
+export const FIT_ALGORITHM_VERSION = 'fit-v1';
+export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
 const FAMILY_TO_GROUP = Object.freeze({
   PROJECT_MANAGEMENT:'pm',
