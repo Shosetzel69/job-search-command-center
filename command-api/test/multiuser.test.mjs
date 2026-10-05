@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 import { internalAuthContext, withInternalAuthContext } from '../src/internal-auth-context.js';
-import { EVALUATION_VERSION, FIT_ALGORITHM_VERSION, evaluateSharedJob } from '../src/profile-evaluation.js';
+import { EVALUATION_VERSION, FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from '../src/profile-evaluation.js';
 import { evaluateEligibility } from '../src/eligibility.js';
 import { classifyCanonicalJob } from '../../shared/job-classification.mjs';
 import {
@@ -354,6 +354,42 @@ test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the sa
   assert.match(legacyBlock, /LEGACY_JOB_PAGE_LIMIT/);
   assert.ok(legacyBlock.includes("schema_version:'1.0'"));
   assert.doesNotMatch(legacyBlock, /FROM canonical_jobs/);
+});
+
+test('lazy FIT cache-hit materialization is stable with freshly evaluated job output', () => {
+  const row = {
+    job_id:'55555555-5555-4555-8555-555555555555',
+    title:'Technical Project Manager',
+    company:'Example Bank',
+    location:'Bucharest',
+    country_codes:['RO'],
+    work_mode:'remote',
+    role_family:'PROJECT_MANAGEMENT',
+    role_subfamily:['technical_project_manager'],
+    contract_type:'contract',
+    remote_scope:'Country',
+    source_name:'Example',
+    canonical_url:'https://example.test/cache-stability',
+    posted_at:'2026-10-05T10:00:00Z',
+    payload:{ description:'Bank governance B2B project', contract_type:'contract', remote_scope:'Country' },
+    posting_payload:{},
+  };
+  const preferences = {
+    role_groups:{ pm:{ enabled:true }, delivery:{ enabled:true }, service:{ enabled:true }, scrum:{ enabled:true }, program:{ enabled:true } },
+    work_modes:{ remote:true, hybrid:true, onsite:false },
+    contract_types:['contract'],
+    target_country_codes:['RO'],
+    target_regions:[],
+    excluded_country_codes:[],
+    excluded_regions:[],
+    remote_eligible_country_codes:['RO'],
+    fit_threshold:80,
+    keep_reposts:true,
+  };
+  const evaluated = evaluateSharedJob(row, preferences, nomenclatures, new Date('2026-10-05T12:00:00Z'));
+  assert.equal(evaluated.eligible, true);
+  const cached = materializeCachedJob(row, evaluated, preferences, new Date('2026-10-05T12:00:00Z'));
+  assert.deepEqual(cached, evaluated.job);
 });
 
 test('Selection Criteria authority uses Search Profile preferences and semantic profile versioning', async () => {
