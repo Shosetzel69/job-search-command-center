@@ -23,7 +23,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -51,6 +51,9 @@ PUBLIC_BOARD_SOURCES = {
     "Mantu": {"kind": "rendered_links", "url": "https://careers.mantu.com/jobs", "job_path": r"/brands/[^/?#]+/jobs/\\d+"},
     "Serco Europe": {"kind": "rendered_links", "url": "https://careers.serco.com/eu/en/search-results", "job_path": r"/eu/en/job/\\d+/[^/?#]+"},
     "Next Ventures": {"kind": "nextventures", "url": "https://next-ventures.com/jobs/"},
+    "Hays Romania": {"kind": "linked_jobs", "url": "https://www.hays.ro/en/job-search", "job_path": r"/en/job-detail/[^?#]+"},
+    "Square One Resources": {"kind": "squareone", "url": "https://www.squareoneresources.com/jobs"},
+    "Proactive.IT": {"kind": "rendered_links", "url": "https://www.proactive.it/job-vacancies/", "job_path": r"/job/[^/?#]+/?$"},
 }
 
 
@@ -129,6 +132,120 @@ def _rendered_career_board(url, provider, job_path, company=None, max_seconds=20
         records[record["id"]] = record
     if not records:
         raise ValueError(f"{provider} rendered careers page contained no extractable job links")
+    return list(records.values())
+
+
+def _linked_job_board(url, provider, job_path):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"{provider} jobs page HTTP {status}")
+    parser = _RenderedCareerJobs(job_path)
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = {}
+    for href, item in parser.jobs.items():
+        title = item.get("title") or ""
+        context = item.get("context") or ""
+        if not title:
+            continue
+        link = urljoin(url, href)
+        ref_match = re.search(r"_(\d+)(?:[/?#]|$)", link)
+        identity = ref_match.group(1) if ref_match else link.rstrip("/").rsplit("/", 1)[-1]
+        countries = _country_names_from_text(context)
+        record = _record(
+            provider, identity, title, provider, context or title, link,
+            date_posted=_relative_date(context),
+            location=context,
+            countries=countries,
+            remote=bool(re.search(r"\b(remote|hybrid|telework)\b", context, re.I)),
+        )
+        records[record["id"]] = record
+    if not records:
+        raise ValueError(f"{provider} jobs page contained no extractable job links")
+    return list(records.values())
+
+
+class _JobLinkCollector(HTMLParser):
+    def __init__(self, pattern):
+        super().__init__(convert_charrefs=True)
+        self.pattern = re.compile(pattern, re.I)
+        self.links = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag != "a":
+            return
+        href = str(dict(attrs).get("href") or "")
+        if href and self.pattern.search(href) and href not in self.links:
+            self.links.append(href)
+
+
+class _JobDetailPage(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_h1 = False
+        self.title_parts = []
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "h1":
+            self.in_h1 = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text:
+            return
+        self.parts.append(text)
+        if self.in_h1:
+            self.title_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "h1":
+            self.in_h1 = False
+
+    @property
+    def title(self):
+        return " ".join(self.title_parts).strip()
+
+    @property
+    def text(self):
+        return " ".join(self.parts)
+
+
+def _squareone(url, max_details=20):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Square One Resources jobs page HTTP {status}")
+    links = _JobLinkCollector(r"/job/[^/?#]+")
+    links.feed(body.decode("utf-8", errors="replace"))
+    records = {}
+    for href in links.links[:max_details]:
+        link = urljoin(url, href)
+        detail_status, _detail_kind, detail_body = _fetch(link, "text/html,application/xhtml+xml")
+        if detail_status != 200:
+            continue
+        detail = _JobDetailPage()
+        detail.feed(detail_body.decode("utf-8", errors="replace"))
+        title = detail.title
+        context = detail.text
+        if not title:
+            continue
+        id_match = re.search(r"-(\d{5,})(?:-|$)", link)
+        identity = id_match.group(1) if id_match else link.rstrip("/").rsplit("/", 1)[-1]
+        employment = [
+            label for label in ("Contract", "Permanent", "Temporary", "Freelance")
+            if re.search(r"(?<!\w)" + re.escape(label) + r"(?!\w)", context, re.I)
+        ]
+        records[identity] = _record(
+            "Square One Resources", identity, title, "Square One Resources",
+            context or title, link,
+            date_posted=_relative_date(context),
+            location=context,
+            countries=_country_names_from_text(context),
+            remote=bool(re.search(r"Remote Work\s*-\s*Yes|\bfully remote\b", context, re.I)),
+            employment_statuses=employment,
+        )
+    if not records:
+        raise ValueError("Square One Resources jobs page contained no extractable job details")
     return list(records.values())
 
 
@@ -1689,6 +1806,10 @@ def collect(source, config=None):
         records = _rendered_career_board(url, name, spec["job_path"])
     elif kind == "nextventures":
         records = _nextventures(url)
+    elif kind == "linked_jobs":
+        records = _linked_job_board(url, name, spec["job_path"])
+    elif kind == "squareone":
+        records = _squareone(url)
     else:
         accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
