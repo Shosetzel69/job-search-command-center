@@ -81,6 +81,7 @@ PUBLIC_BOARD_SOURCES = {
     "Techjobs.be": {"kind": "heading_list", "url": "https://techjobs.be/en/ict-jobs", "default_country": "Belgia"},
     "Hipo": {"kind": "hipo", "url": "https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager"},
     "Float": {"kind": "float_careers", "url": "https://www.float.com/careers"},
+    "Eviden": {"kind": "eviden", "url": "https://eviden.com/careers/"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
@@ -333,6 +334,109 @@ def _float_careers(url):
             location="Remote", countries=[], remote=True,
         )
     # Empty is legitimate only because the authoritative section itself was found.
+    return list(records.values())
+
+
+class _EvidenCareers(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = []
+        self.in_item = False
+        self.parts = []
+        self.current_title = None
+
+    def handle_starttag(self, tag, attrs):
+        # Eviden renders the results as semantic list/card blocks but markup can vary.
+        attrs = dict(attrs)
+        cls = " ".join(attrs.get("class", []) if isinstance(attrs.get("class"), list) else [str(attrs.get("class") or "")])
+        if tag in {"li","article"} or (tag == "div" and re.search(r"job|result|vacancy", cls, re.I)):
+            if self.in_item and self.parts:
+                self._flush()
+            self.in_item = True
+            self.parts = []
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if text and self.in_item:
+            self.parts.append(text)
+
+    def handle_endtag(self, tag):
+        if self.in_item and tag in {"li","article"}:
+            self._flush()
+
+    def _flush(self):
+        text = " ".join(self.parts).strip()
+        if text:
+            self.jobs.append(text)
+        self.in_item = False
+        self.parts = []
+
+    def close(self):
+        if self.in_item and self.parts:
+            self._flush()
+        super().close()
+
+
+def _eviden(url):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Eviden careers page HTTP {status}")
+    html = body.decode("utf-8", errors="replace")
+
+    # Prefer explicit list/card blocks when present.
+    parser = _EvidenCareers()
+    parser.feed(html)
+    parser.close()
+    candidates = list(parser.jobs)
+
+    # Fallback for the current careers markup/text shape:
+    # "<title> <Mon d, YYYY> <city>, <country> <experience>"
+    if not candidates:
+        text = plain_text(html)
+        pattern = re.compile(
+            r"(?P<title>.{3,160}?)\s+"
+            r"(?P<date>(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4})\s+"
+            r"(?P<location>.{2,120}?)\s+"
+            r"(?P<experience>Experienced|Internship|Entry Level|Graduate|Professional)\b",
+            re.I,
+        )
+        candidates = [" | ".join(m.groupdict().values()) for m in pattern.finditer(text)]
+
+    records = {}
+    for raw in candidates:
+        context = plain_text(raw)
+        if not context:
+            continue
+        match = re.search(
+            r"(?P<title>.+?)\s*(?:\||\s)"
+            r"(?P<date>(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+\d{1,2},\s+\d{4})"
+            r"\s*(?:\||\s)(?P<location>.+?)\s*(?:\||\s)"
+            r"(?P<experience>Experienced|Internship|Entry Level|Graduate|Professional)\b",
+            context,
+            re.I,
+        )
+        if not match:
+            continue
+        title = plain_text(match.group("title"))
+        location = plain_text(match.group("location"))
+        published = _atos_date(match.group("date"))
+        experience = plain_text(match.group("experience"))
+        if not title or not location:
+            continue
+        identity_basis = "|".join([title.casefold(), location.casefold(), str(published or "")])
+        identity = hashlib.sha1(identity_basis.encode("utf-8")).hexdigest()[:20]
+        record = _record(
+            "Eviden", identity, title, "Eviden",
+            f"{title} {location} {experience}", url,
+            date_posted=published,
+            location=location,
+            countries=_country_names_from_text(location),
+            remote=bool(re.search(r"\b(remote|hybrid)\b", location, re.I)),
+        )
+        records[record["id"]] = record
+
+    if not records:
+        raise ValueError("Eviden careers page contained no extractable job listings")
     return list(records.values())
 
 
@@ -2639,6 +2743,8 @@ def collect(source, config=None):
         records = _hipo(url)
     elif kind == "float_careers":
         records = _float_careers(url)
+    elif kind == "eviden":
+        records = _eviden(url)
     elif kind == "nextventures":
         records = _nextventures(url)
     elif kind == "linked_jobs":
