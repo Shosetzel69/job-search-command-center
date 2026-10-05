@@ -1,14 +1,14 @@
 # Functionalitati
 
-Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-25`
+Versiune aplicatie: `0.8.0`
+Ultima actualizare: `2026-10-05`
 Status baseline: `STABLE / CLOSE`
 
 ## 1. Acces
 
 - Google Sign-In;
-- mecanismul de autorizare curent permite un singur utilizator prin Google `sub`;
-- suportul multi-user este `UNDER ANALYSIS` conform `ARCHITECTURE.md`;
+- autentificarea Google este multiuser; fiecare cont are identitate, profil si Search Profile tenant-local;
+- rolurile `USER` si `ADMIN` sunt aplicate server-side, iar datele personale raman izolate per profil;
 - continut privat ascuns pana la autentificare;
 - Google ID token nu este persistat in localStorage/sessionStorage;
 - dupa login se poate retine local numai emailul autorizat ca `login_hint` non-secret;
@@ -144,30 +144,42 @@ Reguli:
 - configuratia nu este modificata silent;
 - modificarile de nomenclator nu pornesc Full Search.
 
-## 6. Rulare si status
+## 6. Actualizare joburi si status
 
-`Ruleaza verificarea` / `Ruleaza acum`:
+`Actualizeaza joburile`:
 
-- necesita autentificare;
-- executa `POST /commands/run`;
-- valideaza configuratia curenta;
-- evita pornirea unei a doua rulari active;
-- declanseaza maximum un `workflow_dispatch` cu trigger canonic `manual-ui`;
-- in DEV si TEST foloseste explicit `execution_mode=manual-full`, pastrand `SEARCH_MODE=disabled` respectiv `smoke`;
-- in PROD pastreaza executia `policy/live` existenta;
-- frontend-ul urmareste run-ul pana la stare terminala reala si recupereaza starea dupa refresh;
-- reincarca datele dupa publicare.
+- necesita autentificare si un Search Profile configurat;
+- USER executa `POST /me/refresh`;
+- ADMIN executa `POST /admin/refresh`;
+- rezultatele posibile sunt `REUSED_CORPUS`, `JOINED_EXISTING_RUN`, `STARTED_RUN` si `BLOCKED_BY_POLICY`;
+- corpusul fresh este reutilizat fara provider Retrieve;
+- requesturile echivalente se coalizeaza si nu pornesc rulari globale duplicate;
+- in DEV/TEST runtime-ul canonic este GCP: Command API -> Cloud Run Job -> shared corpus/GCS/PostgreSQL;
+- salvarea criteriilor prin `PUT /me/preferences` nu porneste Retrieve;
+- lista de joburi foloseste `GET /me/jobs` bounded, cu cursor si lazy/cached FIT;
+- numai ADMIN vede istoricul/starea operationala globala a rularilor.
 
-Full Search este `manual-only` in baseline-ul stabilizat:
+Full Search automat ramane dezactivat in acest baseline:
 
-- fara trigger `push`;
-- fara trigger `schedule`;
-- commit-urile de config/cod/admin nu lanseaza cautarea;
-- scheduler-ul este Package 2B si este neimplementat/OFF in baseline.
+- fara trigger automat din schimbari de criterii;
+- fara scheduler activ;
+- modificarile administrative nu lanseaza cautarea;
+- scheduler-ul ramane enhancement separat.
 
-Zona `Ultima rulare` afiseaza starea si numarul surselor procesate.
+Zona ADMIN `Ultima rulare` afiseaza starea si numarul surselor procesate.
 
-Publicarea datelor foloseste protectii de concurenta/retry si nu foloseste force push.
+## 6.1 PWA / responsive Mobile V1
+
+- aceeasi aplicatie React, aceleasi API-uri, autentificare si backend pe toate dimensiunile;
+- PWA standalone cu manifest si service worker minimal network-only;
+- service worker-ul nu cache-uieste auth, API sau date business;
+- navigatie bottom compacta pe telefon si sidebar pe desktop;
+- detaliile jobului sunt full-screen pe compact si drawer pe ecrane late;
+- actiunile Detalii / Review / Aplica / Arhiveaza sunt vizibile si touch-accessible;
+- `sessionStorage` retine numai view-ul, filtrele GUI, jobul selectat si scroll position pentru return context;
+- tokenurile, aplicatiile si joburile nu sunt persistate in storage-ul UI;
+- profilul nou intra in onboarding si nu forteaza provider Retrieve inainte de configurarea criteriilor.
+
 
 ## 7. Loguri
 
