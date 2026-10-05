@@ -76,6 +76,7 @@ PUBLIC_BOARD_SOURCES = {
     "RED Global": {"kind": "linked_jobs", "url": "https://redglobal.com/jobs", "job_path": r"/jobs/job/[^/?#]+/[A-Za-z0-9]+"},
     "Salt": {"kind": "linked_jobs", "url": "https://welovesalt.com/jobs", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Lawrence Harvey": {"kind": "linked_jobs", "url": "https://www.lawrenceharvey.com/jobs", "job_path": r"/jobs/\d+[A-Za-z0-9-]+"},
+    "W Talent": {"kind": "linked_jobs", "url": "https://www.wtalent.com/uk/job-search/", "job_path": r"/job/[^/?#]+/?$"},
 }
 
 
