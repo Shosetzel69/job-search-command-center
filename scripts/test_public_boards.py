@@ -415,6 +415,51 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Contract",rows[0]["employment_statuses"])
         self.assertTrue(rows[0]["source_url"].endswith("#ref-75221"))
 
+    def test_hays_romania_extracts_job_detail_links(self):
+        html='''<section>
+          <a href="/en/job-detail/noc-lead-bucharest_1200467">NOC Lead</a>
+          We are looking for a Network Operations Center Lead. Bucharest Romania Permanent Posted 2 days ago
+        </section>'''
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
+            rows=boards._linked_job_board(
+                "https://www.hays.ro/en/job-search","Hays Romania",r"/en/job-detail/[^?#]+"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"NOC Lead")
+        self.assertIn("Romania",rows[0]["countries"])
+        self.assertTrue(rows[0]["source_url"].endswith("_1200467"))
+
+    def test_squareone_fetches_public_job_details(self):
+        listing='''<div><a href="/job/linux-programme-manager-133184-1790948751">Read More</a></div>'''
+        detail='''<html><h1>Linux Programme Manager</h1>
+          <div>Sheffield United Kingdom Posted 2 days ago Work Type Contract Remote Work - No</div>
+        </html>'''
+        with patch.object(boards,"_fetch",side_effect=[
+            (200,"text/html",listing.encode()),
+            (200,"text/html",detail.encode()),
+        ]):
+            rows=boards._squareone("https://www.squareoneresources.com/jobs")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Linux Programme Manager")
+        self.assertIn("Contract",rows[0]["employment_statuses"])
+        self.assertIn("Regatul Unit",rows[0]["countries"])
+        self.assertFalse(rows[0]["remote"])
+
+    def test_proactive_rendered_jobs_extracts_public_job_links(self):
+        html='''<div>
+          <a href="/job/it-projects-analyst-11879ac/">IT Projects Analyst – 11879AC</a>
+          Epsom, UK Permanent Posted 13 hours ago Hybrid
+        </div>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://www.proactive.it/job-vacancies/",html,{"browser_status":"rendered"}
+        )):
+            rows=boards._rendered_career_board(
+                "https://www.proactive.it/job-vacancies/","Proactive.IT",r"/job/[^/?#]+/?$"
+            )
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"IT Projects Analyst – 11879AC")
+        self.assertTrue(rows[0]["remote"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
