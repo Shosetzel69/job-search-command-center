@@ -60,6 +60,25 @@ class PublicBoardAdapterTests(unittest.TestCase):
         }]})
         self.assertTrue(rows[0]["remote"])
 
+    def test_pangian_public_job_feed(self):
+        xml=b'''<?xml version="1.0"?><rss><channel>
+          <item>
+            <title>Technical Project Manager</title>
+            <link>https://pangian.com/remote/job/technical-project-manager-remote/</link>
+            <description>Remote Europe delivery</description>
+            <pubDate>Sun, 04 Oct 2026 10:00:00 +0000</pubDate>
+          </item>
+        </channel></rss>'''
+        rows=boards._pangian_feed(xml,"https://pangian.com/feed/?post_type=job_listing")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
+        self.assertEqual(rows[0]["sources"][0]["provider"],"Pangian")
+
+    def test_pangian_empty_feed_is_not_authoritative_zero(self):
+        xml=b'''<?xml version="1.0"?><rss><channel><title>Pangian</title></channel></rss>'''
+        with self.assertRaisesRegex(ValueError,"not authoritative"):
+            boards._pangian_feed(xml,"https://pangian.com/feed/?post_type=job_listing")
+
     def test_rss_empty_feed_is_valid_empty_result(self):
         xml=b'<?xml version="1.0"?><rss><channel><title>Jobs</title></channel></rss>'
         self.assertEqual(boards._rss(xml,"Example","https://example.com/feed"),[])

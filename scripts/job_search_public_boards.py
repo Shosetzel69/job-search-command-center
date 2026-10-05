@@ -93,6 +93,7 @@ PUBLIC_BOARD_SOURCES = {
     "FlexJobs": {"kind": "heading_list", "url": "https://www.flexjobs.com/remote-jobs/project-manager"},
     "Torre": {"kind": "rendered_links", "url": "https://app.torre.ai/search-job?query=project%20manager", "job_path": r"(?:https://torre\.ai)?/post/[^/?#]+"},
     "Hirexa Solutions": {"kind": "hirexa", "url": "https://hirexa.com/careers/"},
+    "Pangian": {"kind": "pangian_rss", "url": "https://pangian.com/feed/?post_type=job_listing"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
@@ -1566,6 +1567,13 @@ def _epoch_iso(value):
         return None
 
 
+def _pangian_feed(body, url):
+    records = _rss(body, "Pangian", url)
+    if not records:
+        raise ValueError("Pangian feed contained no current job records; outage/empty state is not authoritative")
+    return records
+
+
 def _rss_date(value):
     if not value:
         return None
@@ -3001,12 +3009,14 @@ def collect(source, config=None):
             raise RuntimeError(f"Freelancer public API HTTP {status}")
         records = _freelancer_api(json.loads(body.decode("utf-8", errors="replace")))
     else:
-        accept = "application/json" if kind != "rss" else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
+        accept = "application/json" if kind not in {"rss", "pangian_rss"} else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
         if status != 200:
             raise RuntimeError(f"{name} public endpoint HTTP {status}")
         if kind == "rss":
             records = _rss(body, name, url)
+        elif kind == "pangian_rss":
+            records = _pangian_feed(body, url)
         else:
             payload = json.loads(body.decode("utf-8", errors="replace"))
             parser = {
