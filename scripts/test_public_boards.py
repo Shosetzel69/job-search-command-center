@@ -1180,6 +1180,37 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"],"Senior IT Consultant Project Manager")
         self.assertTrue(rows[0]["remote"])
 
+    def test_hirexa_authoritative_empty_board(self):
+        html='''<section>
+          <h2>Search Job</h2>
+          <div class="open-positions"></div>
+          <h4>Apply new</h4>
+        </section>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://hirexa.com/careers/",
+            html,
+            {"browser_status":"rendered"},
+        )):
+            result=boards.collect({"name":"Hirexa Solutions","url":"https://hirexa.com/"})[0]
+        self.assertTrue(result.ok)
+        self.assertEqual(result.records,[])
+        self.assertEqual(result.total_available,0)
+        self.assertTrue(boards.browser_required("Hirexa Solutions"))
+
+    def test_hirexa_never_false_zeros_named_positions(self):
+        html='''<section>
+          <h2>Search Job</h2>
+          <h3>Technical Project Manager</h3>
+          <h4>Apply new</h4>
+        </section>'''
+        with patch.object(boards.browser,"render",return_value=(
+            "https://hirexa.com/careers/",
+            html,
+            {"browser_status":"rendered"},
+        )):
+            with self.assertRaisesRegex(ValueError,"named positions"):
+                boards.collect({"name":"Hirexa Solutions","url":"https://hirexa.com/"})
+
     def test_torre_public_rendered_job_search(self):
         html='''<div>
           <a href="https://torre.ai/post/kWR9gZ0r-gotofrcom-project-manager">Project Manager</a>

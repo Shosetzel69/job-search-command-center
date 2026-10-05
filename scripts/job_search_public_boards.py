@@ -24,7 +24,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -92,6 +92,7 @@ PUBLIC_BOARD_SOURCES = {
     "Hubstaff Talent": {"kind": "rendered_links", "url": "https://hubstafftalent.net/search/jobs?search%5Bkeywords%5D=project%20manager", "job_path": r"/jobs/[^/?#]+"},
     "FlexJobs": {"kind": "heading_list", "url": "https://www.flexjobs.com/remote-jobs/project-manager"},
     "Torre": {"kind": "rendered_links", "url": "https://app.torre.ai/search-job?query=project%20manager", "job_path": r"(?:https://torre\.ai)?/post/[^/?#]+"},
+    "Hirexa Solutions": {"kind": "hirexa", "url": "https://hirexa.com/careers/"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
@@ -601,6 +602,66 @@ def _arc(url, max_seconds=20):
     if not records:
         raise ValueError("Arc.dev project-manager page contained no extractable jobs")
     return list(records.values())
+
+
+class _HirexaOpenPositions(HTMLParser):
+    """Recognize an explicitly empty Hirexa open-positions section.
+
+    Fail closed if named positions appear without a stable public detail route.
+    """
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_heading = False
+        self.heading_parts = []
+        self.in_positions = False
+        self.saw_search_job = False
+        self.saw_apply_new = False
+        self.position_headings = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"h1", "h2", "h3", "h4"}:
+            self.in_heading = True
+            self.heading_parts = []
+
+    def handle_data(self, data):
+        if self.in_heading:
+            text = " ".join(str(data or "").split())
+            if text:
+                self.heading_parts.append(text)
+
+    def handle_endtag(self, tag):
+        if tag not in {"h1", "h2", "h3", "h4"} or not self.in_heading:
+            return
+        heading = " ".join(self.heading_parts).strip()
+        folded = heading.casefold()
+        if folded == "search job":
+            self.saw_search_job = True
+            self.in_positions = True
+        elif folded == "apply new":
+            self.saw_apply_new = True
+            self.in_positions = False
+        elif self.in_positions and heading and folded != "open positions":
+            self.position_headings.append(heading)
+        self.in_heading = False
+        self.heading_parts = []
+
+
+def _hirexa(url, max_seconds=20):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    _final_url, rendered_html, _meta = browser.render(url, deadline, client)
+    parser = _HirexaOpenPositions()
+    parser.feed(rendered_html)
+    parser.close()
+    if not parser.saw_search_job or not parser.saw_apply_new:
+        raise ValueError("Hirexa careers page did not expose the expected open-positions boundary")
+    if parser.position_headings:
+        raise ValueError(
+            "Hirexa careers page exposes named positions without a stable public detail enumeration: "
+            + ", ".join(parser.position_headings[:5])
+        )
+    return []
 
 
 class _RenderedCareerJobs(HTMLParser):
@@ -2898,6 +2959,8 @@ def collect(source, config=None):
         records = _softserve(url)
     elif kind == "epam":
         records = _epam(url)
+    elif kind == "hirexa":
+        records = _hirexa(url)
     elif kind == "rendered_links":
         records = _rendered_career_board(url, name, spec["job_path"])
     elif kind == "heading_list":
