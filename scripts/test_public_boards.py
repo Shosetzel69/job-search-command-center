@@ -5,6 +5,27 @@ import job_search_public_boards as boards
 
 
 class PublicBoardAdapterTests(unittest.TestCase):
+    def test_eures_collect_uses_keyword_entry(self):
+        captured = {}
+        def fake_post(url, payload):
+            captured.update(payload)
+            return {"jvs": []}
+        with patch.object(boards, "_post_json", side_effect=fake_post):
+            result = boards.collect({"name": "EURES"})
+        self.assertEqual(result[0].records, [])
+        self.assertEqual(captured["keywords"], [{"keyword": "project manager", "specificSearchCode": "EVERYWHERE"}])
+
+    def test_brains_collects_root_level_job_posts(self):
+        archive = """<a href="/contact/">Contact</a><a href="/devops-cloud-architect-switzerland/">DevOps Cloud Architect - Switzerland</a>"""
+        detail = """<h1>DevOps Cloud Architect - Switzerland</h1><p>BRAINS CONSULTING is recruiting. Location Switzerland. Remote possible.</p>"""
+        with patch.object(boards, "_fetch", side_effect=[
+            (200, "text/html", archive.encode()),
+            (200, "text/html", detail.encode()),
+        ]):
+            rows = boards._brains("https://www.brainsconsulting.ro/category/locuri-de-munca/")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_title"], "DevOps Cloud Architect - Switzerland")
+
     def test_numeric_job_path_patterns_match_digits(self):
         cases = {
             "Mantu": "/brands/foo/jobs/12345",

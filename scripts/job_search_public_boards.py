@@ -61,7 +61,7 @@ PUBLIC_BOARD_SOURCES = {
     "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
     "Source Group International": {"kind": "linked_jobs", "url": "https://www.sourcegroupinternational.com/candidate/", "job_path": r"/jobs/[^?#]+/"},
     "GitHub": {"kind": "rendered_links", "url": "https://www.github.careers/careers-home/jobs", "job_path": r"/careers-home/jobs/\d+"},
-    "Brains Consulting": {"kind": "wordpress_archive", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
+    "Brains Consulting": {"kind": "brains", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
     "Montreal Associates": {"kind": "montreal_associates", "url": "https://www.montrealassociates.com/uk/candidates/job-search/"},
     "eJobs": {"kind": "ejobs", "url": "https://www.ejobs.ro/locuri-de-munca/bucuresti/it-project-manager"},
     "Trasys International": {"kind": "trasys_keyes", "url": "https://keyescareers.eu/find-my-job"},
@@ -1452,22 +1452,30 @@ class _BrainsCategoryJobs(HTMLParser):
             self.title_parts = []
 
 
-def _brains(url, max_details=30):
+def _brains(url, max_details=80):
     status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
     if status != 200:
         raise RuntimeError(f"Brains Consulting jobs category HTTP {status}")
-    parser = _BrainsCategoryJobs()
-    parser.feed(body.decode("utf-8", errors="replace"))
+    html = body.decode("utf-8", errors="replace")
+    links = _JobLinkCollector(
+        r"(?:https?://www\.brainsconsulting\.ro)?/(?!category/|tag/|author/|page/|despre-noi/|servicii/|candidati/|cursuri/|blog/|contact/?$|$)[^/?#]+/?$"
+    )
+    links.feed(html)
     records = {}
-    for href, list_title in parser.jobs[:max_details]:
+    for href in links.links[:max_details]:
         link = urljoin(url, href)
-        detail_status, _detail_kind, detail_body = _fetch(link, "text/html,application/xhtml+xml")
+        try:
+            detail_status, _detail_kind, detail_body = _fetch(link, "text/html,application/xhtml+xml")
+        except Exception:
+            continue
         if detail_status != 200:
             continue
         detail = _JobDetailPage()
         detail.feed(detail_body.decode("utf-8", errors="replace"))
-        title = detail.title or list_title
+        title = detail.title
         context = detail.text
+        if not title or not re.search(r"Brains Consulting|BRAINS CONSULTING|recruteaz", context, re.I):
+            continue
         if re.search(
             r"Rolul este inchis|NU mai sunt locuri vacante|TOATE LOCURILE DE MUNCA VACANTE AU FOST OCUPATE",
             context, re.I,
@@ -1478,12 +1486,11 @@ def _brains(url, max_details=30):
             "Brains Consulting", identity, title, "Brains Consulting", context or title, link,
             location=context,
             countries=_country_names_from_text(context),
-            remote=bool(re.search(r"\b(remote|hybrid|online)\b", context, re.I)),
+            remote=bool(re.search(r"\b(remote|hybrid|online|hibrid)\b", context, re.I)),
         )
     if not records:
         raise ValueError("Brains Consulting category contained no open extractable jobs")
     return list(records.values())
-
 
 class PlainText(HTMLParser):
     def __init__(self):
@@ -3012,7 +3019,8 @@ def collect(source, config=None):
         records = _softgarden_feed(json.loads(body.decode("utf-8", errors="replace")), name, url)
     elif kind == "eures":
         payload = _post_json(url, {
-            "resultsPerPage": 100, "page": 1, "sortSearch": "MOST_RECENT", "keywords": [],
+            "resultsPerPage": 100, "page": 1, "sortSearch": "MOST_RECENT",
+            "keywords": [{"keyword": "project manager", "specificSearchCode": "EVERYWHERE"}],
             "publicationPeriod": None, "occupationUris": [], "skillUris": [],
             "requiredExperienceCodes": [], "positionScheduleCodes": [], "sectorCodes": [],
             "educationAndQualificationLevelCodes": [], "positionOfferingCodes": [],
