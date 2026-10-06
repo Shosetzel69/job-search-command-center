@@ -114,34 +114,29 @@ Reguli:
 
 Entry point: `command-api/src/secure-entry.js`.
 
-Logica principala: `command-api/src/index.js`.
+Business/API routing: `command-api/src/multiuser-api.js` plus the remaining administrative/source-governance handlers in `command-api/src/index.js`.
 
-Source governance: `command-api/src/source-governance.js`.
+Canonical authenticated surface:
+- `GET /me`;
+- `GET/PUT /me/preferences`;
+- `GET /me/jobs` with bounded keyset pagination and lazy/cached FIT;
+- `PUT /me/jobs/:job_id/state`;
+- `GET/POST /applications` and `PUT/DELETE /applications/:application_id`;
+- `POST /me/refresh`;
+- `POST /admin/refresh`;
+- ADMIN account/capacity/scheduler/collection-policy endpoints;
+- Sources / Source Categories / Nomenclatures administration;
+- ADMIN-only operational runtime data where still required.
 
-Endpoint-uri curente:
+Execution semantics:
+- Selection Criteria save is profile-owned and never dispatches provider Retrieve;
+- USER/ADMIN refresh controls the same shared/system-owned corpus;
+- equivalent active heavy Retrieve work coalesces through the existing global lock;
+- no per-user private provider corpus is introduced;
+- profile changes cause personal re-evaluation/cache invalidation only;
+- PROD refresh remains fail-closed until separately authorized.
 
-- `GET /health`;
-- `GET /auth/config`;
-- `POST /auth/session`;
-- `POST /commands/run`;
-- `PUT /config`;
-- CRUD/action Surse;
-- CRUD Categorii surse;
-- `GET /data/*` prin Worker/protected assets.
-
-Package 2A8 adauga endpoint-uri autentificate pentru citirea si administrarea nomenclatoarelor conform modelului system/extensible. Contractul exact este definit in #117/#120 si `docs/data-contract.md` inainte de cod.
-
-Semantica executiei:
-
-- `PUT /config` din runtime-ul curent valideaza/persista si nu face dispatch;
-- source/category/nomenclature CRUD nu face dispatch;
-- target-ul ADR-005 separa configuratia shared/system de profilul personal;
-- collection run este global/shared, nu profile-owned;
-- operatorul autorizat poate solicita manual o collection run globala;
-- DEV (`SEARCH_MODE=disabled`) si TEST (`SEARCH_MODE=smoke`) permit heavy collection numai prin explicit `manual-full`; PROD pastreaza `live`/policy;
-- exista maximum o executie grea globala admisa simultan;
-- schimbarile profilului produc re-evaluare personala, nu provider retrieval;
-- target geografic gol ramane invalid pentru profilurile care folosesc criterii geografice.
+ATC-489-07 retires browser compatibility routes `/data/jobs.json`, `/data/search-config.json`, `/data/applications.json`, `/config` and `/commands/run`. They remain worker-first only so authenticated calls fail closed with `404` instead of falling through to the SPA. Runtime JSON seed/bootstrap artifacts may remain internal and are not browser authorities.
 
 ## 6. Source governance
 
@@ -960,7 +955,7 @@ FRONTEND_ORIGIN
 Reguli implementate:
 - lipsa/invaliditatea environment identity -> fail closed;
 - fara fallback implicit la PROD;
-- `SOURCE_SHA` este immutable si este transportat de `POST /commands/run` pana in `workflow_dispatch`;
+- in Phase 2 legacy, `SOURCE_SHA` era transportat de `/commands/run`; in runtime-ul GCP curent candidate identity ramane immutable si este transportata prin control-plane/promotion si dispatcher-ele canonice;
 - workflow-ul valideaza `source_sha` si executa codul din checkout-ul exact al acelui SHA;
 - runtime Contents read/write folosesc exclusiv runtime repository/ref explicit;
 - Command API si Nomenclature API folosesc acelasi transport `runtime-github.js`;
