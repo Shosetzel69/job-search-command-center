@@ -276,3 +276,14 @@ Stare finala la 2026-09-13: `STABLE / CLOSE`.
 Gap acceptat: nu exista o a doua rulare Full Search live dupa fixul #160. Fixul este merged si acoperit de regression tests green; absenta retestului live este retinuta in raportul de closeout, nu reprezinta un defect cunoscut deschis.
 
 Evidence-ul closeout este disponibil numai in istoricul Git.
+
+## Responsive UX / mobile shell (#515)
+
+- Header global sticky pe mobil si desktop: identitate aplicatie, mediu [DEV]/[TEST]/[PROD] permanent vizibil si acces cont.
+- Pe mobil, sumarul paginii si KPI-urile sunt compacte; KPI-urile raman actionabile ca filtre.
+- Search ramane sticky; filtrele secundare sunt mutate intr-un bottom sheet. Aceste filtre raman GUI-only si nu pornesc Retrieve.
+- Joburile sunt afisate scan-first, cu fundal alb/gri pal alternant, metadata necunoscuta omisa din cardul compact si actiuni secundare in overflow.
+- Tap pe card deschide Details; pe mobil Details este full-screen si inchiderea restaureaza pozitia anterioara in lista.
+- Navigatia mobila primara este Jobs / Review / Applications / More; More contine Criterii, Administrare pentru ADMIN, versiune si logout.
+- PASS pentru promotion status este compact; IN_PROGRESS/FAIL raman proeminente.
+- Incarcarea listei continua sa foloseasca pagination bounded prin `/me/jobs` (25 + bounded prefetch), fara logica FIT/Retrieve duplicata in frontend.
