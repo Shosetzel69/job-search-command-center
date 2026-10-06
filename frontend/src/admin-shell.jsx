@@ -200,7 +200,6 @@ function SourceDialog({ source, categories, saving, onClose, onSave, onCreateCat
   </>;
 }
 
-function Registry
 function Registry({ sources, categories, token, notify, setSources, setCategories, quickFilter='total' }) {
   const [query,setQuery] = useState('');
   const [editing,setEditing] = useState(null);
