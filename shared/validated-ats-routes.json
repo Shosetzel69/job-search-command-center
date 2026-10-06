@@ -60,8 +60,7 @@
     "ClickHouse": {
       "connector": "ashby",
       "board_name": "clickhouse",
-      "enabled": false,
-      "disabled_reason": "live_api_route_not_validated"
+      "enabled": true
     },
     "Canonical": {
       "connector": "greenhouse",
