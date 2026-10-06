@@ -14,6 +14,8 @@
 
 ### Functionalitati
 
+- #489 / ATC-489-07: retrase aliasurile browser/API legacy `/data/jobs.json`, `/data/search-config.json`, `/data/applications.json`, `/config` si `/commands/run`; authority ramane `/me/jobs`, `/me/preferences`, `/applications`, `/me/refresh` si `/admin/refresh`, iar runtime seed/bootstrap JSON poate ramane intern fara a redeveni API browser.
+
 - #489 / ATC-489-06 + #476: frontend-ul foloseste acum lista bounded `GET /me/jobs`, refresh USER/ADMIN prin `/me/refresh` si `/admin/refresh`, onboarding fara Retrieve fortat, paginare profile-scoped si stare tranzitorie de return context in `sessionStorage`; aceeasi aplicatie React devine PWA-first full responsive, cu bottom navigation compact, detalii full-screen pe mobil si actiuni touch explicite.
 - #384/#385/#386: Administrare -> Surse afiseaza validarea obligatorie a categoriei, serializeaza create-category + save-source prin single-fire guard si transforma cardurile summary in quick filters cu predicate identice count/filter; Logs are prezentare compacta fara tabel lat ca interactiune primara.
 
