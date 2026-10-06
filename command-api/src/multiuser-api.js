@@ -14,7 +14,6 @@ import {
   deleteApplication,
   effectiveConfig,
   updateApplication,
-  evaluateProfileJobs,
   listProfileJobs,
   listAccounts,
   listApplications,
@@ -223,11 +222,11 @@ export async function handleAuthenticatedRoute(request, env, context) {
     return json(summary(context));
   }
 
-  if (request.method === 'GET' && (url.pathname === '/me/preferences' || url.pathname === '/data/search-config.json')) {
+  if (request.method === 'GET' && url.pathname === '/me/preferences') {
     return json(await currentPreferences(context, env));
   }
 
-  if (request.method === 'PUT' && (url.pathname === '/me/preferences' || url.pathname === '/config')) {
+  if (request.method === 'PUT' && url.pathname === '/me/preferences') {
     requireSameOrigin(request, env);
     const raw = await request.json();
     for (const key of Object.keys(raw || {})) {
@@ -263,13 +262,7 @@ export async function handleAuthenticatedRoute(request, env, context) {
     ));
   }
 
-  if (request.method === 'GET' && url.pathname === '/data/jobs.json') {
-    const preferences = await currentPreferences(context, env);
-    const nomenclatures = (await readNomenclatures(env)).payload;
-    return json(await evaluateProfileJobs(context, preferences, nomenclatures, env));
-  }
-
-  if (request.method === 'GET' && (url.pathname === '/applications' || url.pathname === '/data/applications.json')) {
+  if (request.method === 'GET' && url.pathname === '/applications') {
     return json(await listApplications(context, env));
   }
 
