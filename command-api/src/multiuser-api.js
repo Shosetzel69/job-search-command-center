@@ -27,6 +27,7 @@ import {
   saveCollectionPolicy,
   savePreferences,
   saveSchedulerConfig,
+  splitLegacyConfig,
   schedulerConfig,
   setAccountStatus,
   setJobState,
@@ -43,6 +44,15 @@ const SYSTEM_PATCH_KEYS = new Set([
   'jobspipeApifyMaxItems',
   'jobspipeDirectRunBudget',
   'jobspipeDirectMonthlyGuard',
+  'collection_freshness_hours',
+  'source_strategy',
+  'web_browser_fallback_enabled',
+  'jobspipe_credit_budget_per_run',
+  'jobspipe_monthly_credit_guard',
+  'jobspipe_incremental_overlap_minutes',
+  'jobspipe_mode',
+  'jobspipe_apify_max_items_per_run',
+  'user_refresh_enabled',
 ]);
 
 function json(body, status = 200, headers = {}) {
@@ -87,12 +97,17 @@ async function verifyGoogle(request, env) {
   if (!env.GOOGLE_CLIENT_ID) throw Object.assign(new Error('Google OAuth client is not configured'), { status:503 });
   const token = bearer(request);
   if (!token || token === COOKIE_SENTINEL) throw Object.assign(new Error('Missing Google ID token'), { status:401 });
-  const { payload } = await jwtVerify(token, GOOGLE_JWKS, {
-    issuer:['https://accounts.google.com', 'accounts.google.com'],
-    audience:env.GOOGLE_CLIENT_ID,
-  });
-  if (!payload?.sub) throw Object.assign(new Error('Google subject is required'), { status:401 });
-  return payload;
+  try {
+    const { payload } = await jwtVerify(token, GOOGLE_JWKS, {
+      issuer:['https://accounts.google.com', 'accounts.google.com'],
+      audience:env.GOOGLE_CLIENT_ID,
+    });
+    if (!payload?.sub) throw Object.assign(new Error('Google subject is required'), { status:401 });
+    return payload;
+  } catch (error) {
+    if (error?.status) throw error;
+    throw Object.assign(new Error('Invalid Google ID token'), { status:401 });
+  }
 }
 
 export function authConfigured(env) {
@@ -239,8 +254,11 @@ export async function handleAuthenticatedRoute(request, env, context) {
       applyUserConfigPatch(structuredClone(current), patch),
       nomenclatures,
     );
-    await savePreferences(context, next, env);
-    return json({ status:'saved', changed:true, preferences:next });
+    const currentPersonal = splitLegacyConfig(current).personal;
+    const nextPersonal = splitLegacyConfig(next).personal;
+    const changed = JSON.stringify(currentPersonal) !== JSON.stringify(nextPersonal);
+    if (changed) await savePreferences(context, next, env);
+    return json({ status:'saved', changed, preferences:next });
   }
 
   if (request.method === 'POST' && url.pathname === '/me/refresh') {
