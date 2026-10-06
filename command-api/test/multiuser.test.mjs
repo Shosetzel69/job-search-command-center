@@ -23,13 +23,14 @@ import { migrationDatabaseConfig } from '../src/db/config.js';
 import { runtimePrivilegeReadiness, TENANT_AWARE_TABLES } from '../src/db/privilege-readiness.js';
 import { deleteTenantFirst, resolveAccountDeletionTarget } from '../src/db/tenant-gateway.js';
 import { provisionRuntimeRole } from '../scripts/db-provision-runtime.mjs';
+import { personalPreferencesChanged } from '../src/multiuser-api.js';
 
 const nomenclatures = JSON.parse(
   await readFile(new URL('../../data/nomenclatures.json', import.meta.url), 'utf8'),
 );
 
 test('internal AuthContext is a non-forgeable Request capability', () => {
-  const source = new Request('https://app.example.test/data/jobs.json');
+  const source = new Request('https://app.example.test/me/jobs');
   const context = { user_id:'u', profile_id:'p', role:'USER', status:'ACTIVE' };
   const forwarded = withInternalAuthContext(source, context);
   assert.equal(internalAuthContext(source), null);
@@ -342,13 +343,11 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
   assert.throws(() => normalizeJobSearchQuery({ prefetch:'51' }), /prefetch must be an integer/);
 });
 
-test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the same path', async () => {
+test('ATC-489-07 keeps jobs bounded and removes the legacy jobs adapter', async () => {
   const repository = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
   const boundedStart = repository.indexOf('export async function listProfileJobs(');
-  const legacyStart = repository.indexOf('export async function evaluateProfileJobs(');
-  const nextExport = repository.indexOf('\nexport async function nomenclatureReferenceCount', legacyStart);
-  const boundedBlock = repository.slice(boundedStart, legacyStart);
-  const legacyBlock = repository.slice(legacyStart, nextExport);
+  const nextExport = repository.indexOf('\nexport async function nomenclatureReferenceCount', boundedStart);
+  const boundedBlock = repository.slice(boundedStart, nextExport);
   assert.match(boundedBlock, /JOB_CANDIDATE_WINDOW_MAX/);
   assert.ok(boundedBlock.includes("LIMIT ${limitParam}::integer"));
   assert.match(boundedBlock, /profile_version/);
@@ -356,10 +355,8 @@ test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the sa
   assert.match(boundedBlock, /FIT_ALGORITHM_VERSION/);
   assert.match(boundedBlock, /evaluationCacheValid/);
   assert.match(boundedBlock, /spec\.prefetch/);
-  assert.match(legacyBlock, /await listProfileJobs/);
-  assert.match(legacyBlock, /LEGACY_JOB_PAGE_LIMIT/);
-  assert.ok(legacyBlock.includes("schema_version:'1.0'"));
-  assert.doesNotMatch(legacyBlock, /FROM canonical_jobs/);
+  assert.doesNotMatch(repository, /export async function evaluateProfileJobs\(/);
+  assert.doesNotMatch(repository, /LEGACY_JOB_PAGE_LIMIT/);
 });
 
 test('lazy FIT cache-hit materialization is stable with freshly evaluated job output', () => {
@@ -684,3 +681,27 @@ test('admin deletion contract uses staged shared and tenant lifecycle boundaries
   assert.doesNotMatch(gateway, /jscc\.(?:user_id|profile_id)/i);
 });
 
+
+
+test('preference response changed flag reflects semantic personal change only', () => {
+  const current = {
+    schema_version:'1.0',
+    work_modes:{ remote:true, hybrid:true, onsite:false },
+    target_country_codes:['RO'],
+    search_country_codes:['RO'],
+    jobspipe_mode:'disabled',
+  };
+  assert.equal(personalPreferencesChanged(current, structuredClone(current)), false);
+  assert.equal(
+    personalPreferencesChanged(current, {
+      ...structuredClone(current),
+      work_modes:{ remote:true, hybrid:true, onsite:true },
+    }),
+    true,
+  );
+  assert.equal(
+    personalPreferencesChanged(current, { ...structuredClone(current), jobspipe_mode:'direct' }),
+    false,
+    'system collection policy must not affect personal semantic changed flag',
+  );
+});
