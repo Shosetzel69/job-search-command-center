@@ -157,7 +157,9 @@ Reguli:
 - in DEV/TEST runtime-ul canonic este GCP: Command API -> Cloud Run Job -> shared corpus/GCS/PostgreSQL;
 - salvarea criteriilor prin `PUT /me/preferences` nu porneste Retrieve;
 - lista de joburi foloseste `GET /me/jobs` bounded, cu cursor si lazy/cached FIT;
-- numai ADMIN vede istoricul/starea operationala globala a rularilor.
+- numai ADMIN vede istoricul/starea operationala globala a rularilor;
+- in timpul unui Retrieve activ, ADMIN vede progres real `X/Y`, procent, GOOD/FAIL/SKIP/PARTIAL; progresul avanseaza numai cand o sursa planificata ajunge intr-o stare terminala;
+- la final, acelasi panou afiseaza rezumatul terminal si numarul de joburi publicate.
 
 Full Search automat ramane dezactivat in acest baseline:
 
