@@ -371,7 +371,7 @@ def write_progress_status(now, run_id, plan, planned_source_ids):
         "sources_configured": len(plan),
         "sources_active": sum(bool(item.get("active")) for item in plan),
         "sources_attempted": sum(item.get("status") in {"completed", "failed"} for item in processed),
-        "sources_processed": progress["sources_processed"],
+        "sources_processed": sum(item.get("status") in {"completed", "failed"} for item in processed),
         "sources_succeeded": progress["sources_good"],
         "sources_failed": progress["sources_failed"],
         "sources_skipped": progress["sources_skipped"],
