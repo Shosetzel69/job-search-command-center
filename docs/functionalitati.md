@@ -66,7 +66,7 @@ Validari fail-safe:
 - target geografic nenul;
 - fara conflicte include/exclude.
 
-`Salveaza preferintele` persista configuratia prin `PUT /config` si nu porneste Full Search.
+`Salveaza preferintele` persista Selection Criteria prin `PUT /me/preferences` si nu porneste provider Retrieve.
 
 ### 4.2 Preferinte GUI
 
