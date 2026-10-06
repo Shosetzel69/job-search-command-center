@@ -71,7 +71,17 @@ Campuri principale:
 - `source_failure_codes`;
 - `source_failure_stages`;
 - `records_inspected`, `jobs_published`, `excluded`;
-- `limitations`.
+- `limitations`;
+- optional `progress` pentru observabilitate live ADMIN-only.
+
+`progress` este derivat exclusiv din source outcomes reale:
+- `sources_total` = sursele executabile planificate la startul run-ului, nu intreg catalogul;
+- `sources_processed` = sursele planificate ajunse intr-o stare terminala;
+- `sources_good` = surse cu status legacy `completed`;
+- `sources_failed`, `sources_skipped`, `sources_partial`;
+- `percent = floor(sources_processed * 100 / sources_total)`, limitat la 0..100.
+
+Procentul nu este estimat din timp. In GCP, cat timp exista heavy-run lock, Command API poate citi `run-status.json` din run-ul activ prin pointerul intern `active.json`; `current.json` ramane authority pentru snapshot-ul terminal publicat.
 
 Agregatele source sunt derivate exclusiv din campurile structurate ale `source_results`:
 - `source_outcome_counts` grupeaza dupa `outcome`;
