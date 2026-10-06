@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
 import ActionDialog from './action-dialog.jsx';
+import { PromotionStatusPanel } from './promotion-status.jsx';
 import { createSingleFireGuard } from './action-dialog-guard.mjs';
 import { exclusionGroupRows, failureGroupRows, runSummaryLabel, sourceResultDetail, sourceResultRows, sortSourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
 import {
@@ -456,6 +457,7 @@ export default function AdminShell({
   setSourceCategories,
   runStatus,
   runHistory,
+  promotionStatus,
   running,
   onRun,
   notify,
@@ -465,6 +467,7 @@ export default function AdminShell({
   const governedSources = useMemo(() => sources.map(normalizeSource), [sources]);
   const props = { sources:governedSources, setSources, categories:sourceCategories, setCategories:setSourceCategories, token, notify };
   return <div className="space-y-5">
+    <PromotionStatusPanel status={promotionStatus} compactPass={false}/>
     <Tabs value={section} onChange={setSection} items={ADMIN_SECTIONS.map(key => [key, ({overview:'Overview',update:'Actualizare date',sources:'Surse',nomenclatures:'Nomenclatoare',logs:'Loguri'})[key]])}/>
     {section === 'overview' && <Overview sources={governedSources} runStatus={runStatus} onNavigate={setSection}/>} 
     {section === 'update' && <UpdateData runStatus={runStatus} running={running} onRun={onRun}/>} 
