@@ -27,3 +27,4 @@ condition = "AND"
 regexTarget = "line"
 paths = ['''^ai-github-bridge/src/index\.js$''']
 regexes = ['''normalized\.match\(/-----BEGIN (RSA )?PRIVATE KEY-----''']
+
