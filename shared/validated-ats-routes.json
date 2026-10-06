@@ -329,8 +329,7 @@
     "Float": {
       "connector": "workable",
       "subdomain": "floatjobs",
-      "enabled": false,
-      "disabled_reason": "live_api_route_not_validated"
+      "enabled": true
     }
   }
 }
