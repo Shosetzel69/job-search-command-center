@@ -174,6 +174,12 @@ async function currentPreferences(context, env) {
   return effectiveConfig(context, env);
 }
 
+export function personalPreferencesChanged(current, next) {
+  const currentPersonal = splitLegacyConfig(current).personal;
+  const nextPersonal = splitLegacyConfig(next).personal;
+  return JSON.stringify(currentPersonal) !== JSON.stringify(nextPersonal);
+}
+
 function requireAdmin(context) {
   if (context?.role !== 'ADMIN') throw Object.assign(new Error('ADMIN role required'), { status:403 });
 }
@@ -254,9 +260,7 @@ export async function handleAuthenticatedRoute(request, env, context) {
       applyUserConfigPatch(structuredClone(current), patch),
       nomenclatures,
     );
-    const currentPersonal = splitLegacyConfig(current).personal;
-    const nextPersonal = splitLegacyConfig(next).personal;
-    const changed = JSON.stringify(currentPersonal) !== JSON.stringify(nextPersonal);
+    const changed = personalPreferencesChanged(current, next);
     if (changed) await savePreferences(context, next, env);
     return json({ status:'saved', changed, preferences:next });
   }
