@@ -47,7 +47,7 @@ jobs:
           set -euo pipefail
           body="$(curl --fail --silent --show-error "$DEV_ORIGIN/auth/config")"
           echo "$body" | jq .
-          jq -e '.google_client_id != null' <<<"$body" >/dev/null
+          jq -e '.configured == true and (.client_id | type == "string" and length > 0)' <<<"$body" >/dev/null
 
       - name: Verify protected canonical endpoints fail closed without session
         shell: bash
