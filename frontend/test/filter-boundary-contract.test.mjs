@@ -31,3 +31,21 @@ test('job filters are labelled GUI-only and explain All/N-A semantics', () => {
   assert.match(main, /scope="GUI ONLY"/);
   assert.match(main, /Mod lucru: Toate include si N\/A/);
 });
+
+
+test('criteria save serializes only personal preference patch fields', () => {
+  const start = main.indexOf('function preferencePatchFromCriteria(');
+  const end = main.indexOf('\nfunction loadGoogleIdentityScript', start);
+  assert.ok(start > 0 && end > start);
+  const helper = main.slice(start, end);
+  assert.doesNotMatch(helper, /jobspipe/i);
+  assert.match(main, /JSON\.stringify\(preferencePatchFromCriteria\(draftCriteria\)\)/);
+});
+
+test('criteria geography guard rejects redundant region-country overlap', () => {
+  const start = main.indexOf('function geographyConflicts(');
+  const end = main.indexOf('\nfunction hasTargetGeography', start);
+  const helper = main.slice(start, end);
+  assert.match(helper, /targetR\)for\(const c of targetC\)/);
+  assert.match(helper, /REGION_COUNTRIES\[r\]\?\.has\(c\)/);
+});
