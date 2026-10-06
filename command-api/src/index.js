@@ -219,6 +219,12 @@ function assertGeographyNoConflict(patch, nomenclatures) {
   }
   for (const c of targetsC) if (excludedC.has(c)) throw Object.assign(new Error('Aceeasi tara nu poate fi inclusa si exclusa.'), { status: 400 });
   for (const r of targetsR) if (excludedR.has(r)) throw Object.assign(new Error('Aceeasi regiune nu poate fi inclusa si exclusa.'), { status: 400 });
+  for (const r of targetsR) for (const c of targetsC) {
+    if (membership.get(r)?.has(c)) throw Object.assign(new Error('Regiunea tinta si tara tinta se suprapun.'), { status: 400 });
+  }
+  for (const r of excludedR) for (const c of excludedC) {
+    if (membership.get(r)?.has(c)) throw Object.assign(new Error('Regiunea exclusa si tara exclusa se suprapun.'), { status: 400 });
+  }
   for (const r of targetsR) for (const c of excludedC) {
     if (membership.get(r)?.has(c)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
   }
@@ -227,10 +233,23 @@ function assertGeographyNoConflict(patch, nomenclatures) {
   }
 }
 
+const SUPPORTED_CONFIG_PATCH_KEYS = new Set([
+  'rolePm','roleDelivery','roleService','roleScrum','roleProgram',
+  'workRemote','workHybrid','workOnsite','keepReposts','immediateStart',
+  'contractTypes','freshness','fitThreshold','rateMin','rateMax','exclusions',
+  'targetRegions','targetCountries','excludedRegions','excludedCountries',
+  'jobspipeEnabled','jobspipeMode','jobspipeApifyMaxItems',
+  'jobspipeDirectRunBudget','jobspipeDirectMonthlyGuard',
+]);
+
 function validateUserConfigPatch(input, nomenclatures) {
   assertNomenclatures(nomenclatures);
   if (!input || typeof input !== 'object' || Array.isArray(input)) {
     throw Object.assign(new Error('Invalid configuration payload'), { status: 400 });
+  }
+  const unsupportedKeys = Object.keys(input).filter(key => !SUPPORTED_CONFIG_PATCH_KEYS.has(key));
+  if (unsupportedKeys.length) {
+    throw Object.assign(new Error(`Unsupported preference field: ${unsupportedKeys.join(', ')}`), { status:400 });
   }
   const output = {};
   const booleanKeys = ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','workOnsite','keepReposts','immediateStart','jobspipeEnabled'];
@@ -341,6 +360,8 @@ function validateEffectiveSearchConfig(config, nomenclatures) {
   if (!targetRegions.size && !targetCountries.size) throw Object.assign(new Error('Selecteaza cel putin o tara sau regiune tinta.'), { status: 400 });
   for (const country of targetCountries) if (excludedCountries.has(country)) throw Object.assign(new Error('Aceeasi tara nu poate fi inclusa si exclusa.'), { status: 400 });
   for (const region of targetRegions) if (excludedRegions.has(region)) throw Object.assign(new Error('Aceeasi regiune nu poate fi inclusa si exclusa.'), { status: 400 });
+  for (const region of targetRegions) for (const country of targetCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Regiunea tinta si tara tinta se suprapun.'), { status: 400 });
+  for (const region of excludedRegions) for (const country of excludedCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Regiunea exclusa si tara exclusa se suprapun.'), { status: 400 });
   for (const region of targetRegions) for (const country of excludedCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
   for (const region of excludedRegions) for (const country of targetCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea exclusa si o tara inclusa.'), { status: 400 });
   const configuredContractTypes = config.contract_types == null ? [...allowedContractTypes] : config.contract_types;
