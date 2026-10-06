@@ -1,3 +1,16 @@
+
+## Responsive application shell (#515)
+
+- header global sticky pe mobil si desktop cu identitatea Job Search, environment permanent vizibil si profil;
+- pe mobil: page summary compact, KPI-uri orizontale, search sticky si filtre secundare in bottom sheet;
+- JobCard mobil scan-first, cu fundal alb/gri pal alternativ, fara valori N/A/Nespecificat si fara buton dedicat Detalii;
+- card tap deschide detaliile; Review si Aplica raman vizibile, Archive este in overflow;
+- navigatia mobila este Jobs / Review / Aplicari / Mai multe; Criterii si Administrare sunt in Mai multe;
+- detaliile jobului sunt full-screen pe mobil si pastreaza pozitia listei deoarece lista ramane montata sub overlay;
+- Promotion PASS si run-status terminal sunt compacte pe browsing; starile active/fail raman proeminente;
+- desktop pastreaza tabelul si filtrele inline;
+- incremental loading continua exclusiv prin `/me/jobs` bounded pagination (25 + Load More), fara evaluator FIT duplicat in frontend.
+
 # Functionalitati
 
 Versiune aplicatie: `0.8.0`
