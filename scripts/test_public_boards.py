@@ -89,6 +89,11 @@ class PublicBoardAdapterTests(unittest.TestCase):
              patch.object(boards, "_fetch", return_value=(200, "text/html", static.encode())):
             self.assertEqual(boards._float_careers("https://www.float.com/careers"), [])
 
+    def test_float_marker_survives_nested_markup(self):
+        html = """<h2>Current <span>open</span> roles</h2><p>No matching opening.</p>"""
+        with patch.object(boards.browser, "render", return_value=("https://www.float.com/careers", html, {})):
+            self.assertEqual(boards._float_careers("https://www.float.com/careers"), [])
+
     def test_eures_normalizes_public_search_response(self):
         rows=boards._eures({"numberRecords":1,"jvs":[{
             "id":"abc123","title":"IT Project Manager","description":"Coordinate delivery",
@@ -876,8 +881,8 @@ class PublicBoardAdapterTests(unittest.TestCase):
             (
                 "Computacenter",
                 "https://careers.computacenter.com/ro/search",
-                r"/ro/offer/[^/?#]+/[0-9a-f-]+",
-                '<a href="/ro/offer/senior-servicenow-developer-with-ge/44cccd5d-d7b3-4dd5-8a99-17891eb22a75">Senior ServiceNow Developer with German</a> Romania',
+                r"/ro/(?:offer/[^/?#]+/[0-9a-f-]+|offer-redirect/\?offerApiId=[^&#]+)",
+                '<a href="/ro/offer-redirect/?offerApiId=NDRjY2NkNWQtZDdiMy00ZGQ1LThhOTktMTc4OTFlYjIyYTc1&showApplicationForm=false">Senior ServiceNow Developer with German</a> Romania',
             ),
         ]
         for provider, url, pattern, html in cases:

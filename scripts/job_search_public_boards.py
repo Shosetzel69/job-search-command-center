@@ -98,7 +98,7 @@ PUBLIC_BOARD_SOURCES = {
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/listing/[^/?#]+/\d+"},
     "Cegeka": {"kind": "linked_jobs", "url": "https://www.cegeka.com/en/ro/jobs/all-jobs", "job_path": r"/en/ro/jobs/all-jobs/[^/?#]+-\d+"},
-    "Computacenter": {"kind": "linked_jobs", "url": "https://careers.computacenter.com/ro/search", "job_path": r"/ro/offer/[^/?#]+/[0-9a-f-]+"},
+    "Computacenter": {"kind": "linked_jobs", "url": "https://careers.computacenter.com/ro/search", "job_path": r"/ro/(?:offer/[^/?#]+/[0-9a-f-]+|offer-redirect/\?offerApiId=[^&#]+)"},
     "RED Global": {"kind": "linked_jobs", "url": "https://redglobal.com/jobs", "job_path": r"/jobs/job/[^/?#]+/[A-Za-z0-9]+"},
     "Salt": {"kind": "linked_jobs", "url": "https://welovesalt.com/jobs", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Lawrence Harvey": {"kind": "rendered_links", "url": "https://www.lawrenceharvey.com/candidates", "job_path": r"/jobs/\d+[A-Za-z0-9-]+"},
@@ -381,13 +381,15 @@ def _float_careers(url, max_seconds=20):
     deadline = time.monotonic() + max_seconds
     client = PublicClient(deadline)
     final_url, html, _meta = browser.render(url, deadline, client)
-    if not re.search(r"Current\s+open\s+roles", html, re.I):
+    page_text = plain_text(html)
+    if not re.search(r"Current\s+open\s+roles", page_text, re.I):
         status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
         if status == 200:
             static_html = body.decode("utf-8", errors="replace")
-            if re.search(r"Current\s+open\s+roles", static_html, re.I):
-                final_url, html = url, static_html
-        if not re.search(r"Current\s+open\s+roles", html, re.I):
+            static_text = plain_text(static_html)
+            if re.search(r"Current\s+open\s+roles", static_text, re.I):
+                final_url, html, page_text = url, static_html, static_text
+        if not re.search(r"Current\s+open\s+roles", page_text, re.I):
             raise ValueError("Float careers page missing authoritative Current open roles section")
     parser = _FloatCareers()
     parser.feed(html)
@@ -762,7 +764,12 @@ def _linked_job_board(url, provider, job_path):
             continue
         link = urljoin(url, href)
         ref_match = re.search(r"_(\d+)(?:[/?#]|$)", link)
-        identity = ref_match.group(1) if ref_match else link.rstrip("/").rsplit("/", 1)[-1]
+        redirect_match = re.search(r"[?&]offerApiId=([^&#]+)", link)
+        identity = (
+            ref_match.group(1) if ref_match
+            else redirect_match.group(1) if redirect_match
+            else link.rstrip("/").rsplit("/", 1)[-1]
+        )
         countries = _country_names_from_text(context)
         record = _record(
             provider, identity, title, provider, context or title, link,
