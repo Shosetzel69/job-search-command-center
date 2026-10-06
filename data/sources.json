@@ -687,13 +687,13 @@
       "category": "Contractori UE si NATO",
       "name": "Altia",
       "url": "https://opportunities.altia.es/",
-      "active": false,
+      "active": true,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validating",
-      "approval_status": "pending",
-      "last_validated_at": null,
-      "validation_reason": "First-party Bizneo careers board identified; controlled DEV validation required before activation.",
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": "2026-10-06T23:14:48Z",
+      "validation_reason": "Controlled DEV validation PASS on run 37545459017: public Bizneo board returned 91 jobs with no source failures.",
       "policy_excluded": false
     },
     {
