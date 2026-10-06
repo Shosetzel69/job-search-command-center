@@ -2,7 +2,6 @@ import { decodeJwt } from 'jose';
 import { protectedDataPaths } from '../../shared/runtime-data.mjs';
 import commandApi from './index.js';
 import nomenclatureApi from './nomenclature-api.js';
-import { manualSearchExecutionMode } from './environment-config.js';
 import { withInternalAuthContext } from './internal-auth-context.js';
 import { handleAuthRoute, handleAuthenticatedRoute, sessionContext } from './multiuser-api.js';
 import { clearSessionCookie } from './session-cookie.js';
@@ -11,6 +10,7 @@ import { databaseReadiness } from './db/readiness.js';
 const GITHUB_ACTIONS_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
 const PROTECTED_DATA = protectedDataPaths();
 const ADMIN_DATA = new Set(['/data/run-status.json','/data/run-history.json','/data/promotion-status.json','/data/sources.json','/data/source-categories.json','/data/nomenclatures.json']);
+const RETIRED_COMPATIBILITY_PATHS = new Set(['/data/jobs.json','/data/search-config.json','/data/applications.json','/config','/commands/run']);
 
 function json(body, status = 200) {
   return new Response(JSON.stringify(body), {
@@ -43,8 +43,7 @@ function mutation(request) {
 }
 
 function adminOnlyPath(pathname) {
-  return pathname === '/commands/run'
-    || pathname === '/sources'
+  return pathname === '/sources'
     || pathname.startsWith('/sources/')
     || pathname === '/source-categories'
     || pathname.startsWith('/source-categories/')
@@ -56,15 +55,8 @@ function requireAdmin(context) {
   if (context?.role !== 'ADMIN') throw Object.assign(new Error('ADMIN role required'), { status:403 });
 }
 
-function stripCommandBody(request) {
-  const headers = new Headers(request.headers);
-  headers.delete('content-length');
-  headers.delete('content-type');
-  return new Request(request.url, { method:'POST', headers });
-}
-
-export function fullSearchAllowed(searchMode, appEnv) {
-  return Boolean(manualSearchExecutionMode(appEnv, searchMode));
+export function retiredCompatibilityPath(pathname) {
+  return RETIRED_COMPATIBILITY_PATHS.has(pathname);
 }
 
 export default {
@@ -91,22 +83,19 @@ export default {
       }
 
       const context = await sessionContext(request, env);
+      if (retiredCompatibilityPath(url.pathname)) return noStoreResponse(json({ error:'Not found' }, 404));
       if (ADMIN_DATA.has(url.pathname)) requireAdmin(context);
       const multiuser = await handleAuthenticatedRoute(request, env, context);
       if (multiuser) return noStoreResponse(multiuser);
 
       if (adminOnlyPath(url.pathname) && mutation(request)) requireAdmin(context);
-      if (url.pathname === '/commands/run') requireAdmin(context);
 
       if (url.pathname === '/nomenclatures' || url.pathname.startsWith('/nomenclatures/')) {
         const response = await nomenclatureApi.fetch(request, env);
         return noStoreResponse(response);
       }
 
-      const forwarded = withInternalAuthContext(
-        url.pathname === '/commands/run' ? stripCommandBody(request) : request,
-        context,
-      );
+      const forwarded = withInternalAuthContext(request, context);
       return noStoreResponse(await commandApi.fetch(forwarded, env));
     } catch (error) {
       const status = Number(error?.status) || 500;
