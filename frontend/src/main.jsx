@@ -6,6 +6,7 @@ import { PromotionStatusPanel } from './promotion-status.jsx';
 import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES, REGION_OPTIONS, WORK_MODE_OPTIONS, normalizedCountryNames } from './nomenclature-runtime.mjs';
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
+import { runProgressModel } from './run-progress.mjs';
 import { buildJobsPath, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
 import { readUiState, writeUiState } from './ui-state.mjs';
 import { registerPwa } from './pwa.mjs';
@@ -163,11 +164,12 @@ function SignedOutScreen({clientId,loginHint,allowAutoRestore,authError,authStat
 function SidebarBadge({value,active}){return<span className={cx('ml-auto min-w-6 rounded-full px-2 py-0.5 text-center text-xs font-semibold text-white',active?'bg-blue-500':'bg-slate-700')}>{value}</span>;}
 function Sidebar({view,onView,counts,runStatus,environment,role}) {
   const items=[['jobs','Joburi noi','jobs',counts.jobs],['review','De evaluat','review',counts.review],['applications','Aplicari','applications',counts.applications],['criteria','Criterii de selectie','criteria',null],...(role==='ADMIN'?[['admin','Administrare','admin',null]]:[])];
+  const progress=runProgressModel(runStatus);
   const statusTone=runStatus?.status==='completed'?'bg-emerald-500':isActiveRunStatus(runStatus?.status)?'bg-blue-500':runStatus?.status==='completed_with_errors'?'bg-amber-500':'bg-slate-500';
   return <aside className="hidden bg-slate-950 text-slate-300 md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col">
     <Brand/>
     <nav className="space-y-1 px-3">{items.map(([key,label,icon,count])=><button key={key} onClick={()=>onView(key)} className={cx('flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition',view===key?'bg-slate-800 text-white':'hover:bg-slate-900 hover:text-white')}><Icon name={icon}/><span>{label}</span>{count!==null&&<SidebarBadge value={count} active={view===key}/>}</button>)}</nav>
-    <div className="mt-auto border-t border-slate-800 p-4">{role==='ADMIN'&&<><div className="flex items-center gap-2 text-xs text-slate-400"><span className={cx('h-2 w-2 rounded-full',statusTone)}/><span>{isActiveRunStatus(runStatus?.status)?'Rulare in curs':'Ultima rulare'}</span></div><div className="mt-1 text-xs text-slate-500">{formatRunTime(runStatus?.completed_at||runStatus?.started_at)} · {runStatus?.sources_processed??runStatus?.sources?.length??0} surse</div></>}<div className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-400"><span>{APP_VERSION}</span><EnvironmentMarker environment={environment}/></div></div>
+    <div className="mt-auto border-t border-slate-800 p-4">{role==='ADMIN'&&<><div className="flex items-center gap-2 text-xs text-slate-400"><span className={cx('h-2 w-2 rounded-full',statusTone)}/><span>{isActiveRunStatus(runStatus?.status)?'Rulare in curs':'Ultima rulare'}</span></div><div className="mt-1 text-xs text-slate-500">{formatRunTime(runStatus?.completed_at||runStatus?.started_at)} · {progress.active?`${progress.processed}/${progress.total} surse · ${progress.percent}%`:`${progress.processed} surse`}</div></>}<div className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-400"><span>{APP_VERSION}</span><EnvironmentMarker environment={environment}/></div></div>
   </aside>;
 }
 
@@ -190,6 +192,27 @@ function Header({view,email,running,onRun,onLogout,environment,refreshDisabled=f
   </header>;
 }
 
+
+function RunProgressPanel({status}) {
+  if(!status)return null;
+  const progress=runProgressModel(status);
+  if(!progress.active&&!progress.terminal)return null;
+  const title=progress.active?'Actualizare joburi in curs':status?.status==='completed'?'Ultima actualizare finalizata':status?.status==='completed_with_errors'?'Ultima actualizare cu erori':'Ultima actualizare esuata';
+  return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Progres actualizare surse">
+    <div className="flex flex-wrap items-start justify-between gap-3">
+      <div><div className="text-sm font-semibold text-slate-900">{title}</div><div className="mt-1 text-xs text-slate-500">{progress.processed} din {progress.total} surse procesate</div></div>
+      <div className="text-2xl font-bold tabular-nums text-slate-950">{progress.percent}%</div>
+    </div>
+    <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600 transition-[width] duration-500" style={{width:`${progress.percent}%`}}/></div>
+    <div className="mt-3 flex flex-wrap gap-2 text-xs font-semibold">
+      <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">GOOD {progress.good}</span>
+      <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700">FAIL {progress.failed}</span>
+      {progress.skipped>0&&<span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">SKIP {progress.skipped}</span>}
+      {progress.partial>0&&<span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">PARTIAL {progress.partial}</span>}
+      {progress.terminal&&<span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">JOBURI {progress.jobsPublished}</span>}
+    </div>
+  </section>;
+}
 
 function MetricCard({value,label,note,icon,tone='blue',active,onClick}){const tones={blue:'bg-blue-50 text-blue-600',amber:'bg-amber-50 text-amber-600',violet:'bg-violet-50 text-violet-600',slate:'bg-slate-100 text-slate-600'};return<button onClick={onClick} className={cx('w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',active?'border-blue-400 ring-4 ring-blue-50':'border-slate-200')}><div className="flex items-start gap-3"><span className={cx('grid h-9 w-9 place-items-center rounded-xl',tones[tone])}><Icon name={icon}/></span><div><div className="text-2xl font-bold leading-none text-slate-950">{value}</div><div className="mt-1 text-sm text-slate-600">{label}</div><div className="mt-1 text-xs text-slate-400">{note}</div></div></div></button>;}
 function KPIGrid({metrics,selected,onSelect}){const toggle=key=>onSelect(selected===key?'all':key);return<section className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4"><MetricCard value={metrics.jobs} label="roluri noi" note="ultimele 24h din filtrul curent" icon="jobs" active={selected==='new'} onClick={()=>toggle('new')}/><MetricCard value={metrics.high} label="fit ridicat" note={`>= ${metrics.threshold}% · ${metrics.scope}`} icon="review" tone="slate" active={selected==='high'} onClick={()=>toggle('high')}/><MetricCard value={metrics.reposts} label="repostari" note={metrics.scope} icon="refresh" tone="amber" active={selected==='repost'} onClick={()=>toggle('repost')}/><MetricCard value={metrics.remote} label="remote" note={metrics.scope} icon="globe" tone="violet" active={selected==='remote'} onClick={()=>toggle('remote')}/></section>;}
@@ -417,7 +440,8 @@ function App(){
       const notice=refreshOutcomeNotice(result);notify(notice.message,notice.type);
       if(result.outcome==='REUSED_CORPUS'){await loadJobsPage(auth.token,savedCriteria,filtersRef.current);}
       else if(auth.role==='ADMIN'&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome)){
-        try{const currentStatus=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);setRunStatus(currentStatus);if(isActiveRunStatus(currentStatus?.status))await pollRun(previousRunId,previousCompletedAt);}catch(statusError){notify('Actualizarea a fost acceptata, dar statusul operational nu poate fi urmarit: '+statusError.message,'error');}
+        try{const currentStatus=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);setRunStatus(currentStatus);}catch(statusError){notify('Actualizarea a fost acceptata; astept statusul live al executiei.','info');}
+        await pollRun(previousRunId,previousCompletedAt);
       }
     }catch(error){notify('Nu am putut actualiza joburile: '+error.message,'error');}
     finally{setRunning(false);}
@@ -430,7 +454,7 @@ function App(){
 
   if(auth.status!=='authenticated')return<><SignedOutScreen clientId={clientId} loginHint={loginHint} allowAutoRestore={allowAutoRestore} authError={auth.error} authStatus={auth.status} onCredential={handleCredential}/><EnvironmentMarker environment={environment} className="fixed left-4 top-4 z-50"/><Toast toast={toast}/></>;
   const onboarding=!profileConfigured&&(view==='jobs'||view==='review');
-  return<div className="min-h-screen bg-slate-50 md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} environment={environment} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-5 px-3 py-4 sm:px-6 lg:px-8 lg:py-7"><Header view={view} email={auth.email} running={running} onRun={runSearch} onLogout={logout} environment={environment} refreshDisabled={!profileConfigured}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>}{dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={setDetailJob} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} onLoadMore={loadMoreJobs}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token}/>}</>}</div></main><BottomNav view={view} onView={changeView} counts={counts} role={auth.role}/><DetailDrawer job={detailJob} threshold={threshold} onClose={()=>setDetailJob(null)} onApply={applyJob}/><Toast toast={toast}/></div>;
+  return<div className="min-h-screen bg-slate-50 md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} environment={environment} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-5 px-3 py-4 sm:px-6 lg:px-8 lg:py-7"><Header view={view} email={auth.email} running={running} onRun={runSearch} onLogout={logout} environment={environment} refreshDisabled={!profileConfigured}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={setDetailJob} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} onLoadMore={loadMoreJobs}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token}/>}</>}</div></main><BottomNav view={view} onView={changeView} counts={counts} role={auth.role}/><DetailDrawer job={detailJob} threshold={threshold} onClose={()=>setDetailJob(null)} onApply={applyJob}/><Toast toast={toast}/></div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
