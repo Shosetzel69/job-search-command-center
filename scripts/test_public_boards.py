@@ -9,7 +9,9 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Dynamite Jobs"]["kind"], "heading_list")
         self.assertIn("/skill/remote-project-management-jobs", boards.PUBLIC_BOARD_SOURCES["Dynamite Jobs"]["url"])
         self.assertFalse(boards.browser_required("Dynamite Jobs"))
-        self.assertIn("origin.prd.powertofly.com/jobs/", boards.PUBLIC_BOARD_SOURCES["PowerToFly"]["url"])
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["PowerToFly"]["kind"], "rendered_links")
+        self.assertIn("powertofly.com/jobs/", boards.PUBLIC_BOARD_SOURCES["PowerToFly"]["url"])
+        self.assertTrue(boards.browser_required("PowerToFly"))
         self.assertRegex("/jobs/detail/2581003", boards.PUBLIC_BOARD_SOURCES["PowerToFly"]["job_path"])
 
     def test_eures_collect_uses_keyword_entry(self):
@@ -952,15 +954,11 @@ class PublicBoardAdapterTests(unittest.TestCase):
           <a href="/job/Senior-Project-Manager/12345-en_US">Senior Project Manager</a>
           Brussels Belgium Hybrid
         </div>'''
-        with patch.object(boards.browser, "render", return_value=(
-            "https://www.jobs.global.fujitsu.com/search/?locationsearch=Belgium",
-            html,
-            {"browser_status":"rendered"},
-        )):
-            rows=boards._rendered_career_board(
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+            rows=boards._linked_job_board(
                 "https://www.jobs.global.fujitsu.com/search/?q=&locationsearch=Belgium&searchResultView=LIST",
                 "Fujitsu Belgium",
-                r"/job/[^/?#]+/\d+-[A-Za-z_]+",
+                r"/job/[^/?#]+/\d+-[A-Za-z_]+/?",
             )
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["company"],"Fujitsu Belgium")

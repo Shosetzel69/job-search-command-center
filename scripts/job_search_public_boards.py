@@ -24,7 +24,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions", "Float", "W Talent", "Lawrence Harvey"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Prohuman", "GitHub", "Montreal Associates", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions", "Float", "W Talent", "Lawrence Harvey", "PowerToFly"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -49,13 +49,13 @@ PUBLIC_BOARD_SOURCES = {
     "SoftServe": {"kind": "softserve", "url": "https://career.softserveinc.com/en-us/vacancies/country-romania"},
     "EPAM": {"kind": "epam", "url": "https://careers.epam.com/en/jobs/romania"},
     "Orange Romania": {"kind": "softgarden_feed", "url": "https://cariere.orange.ro/jobs.feed.json"},
-    "Mantu": {"kind": "rendered_links", "url": "https://careers.mantu.com/jobs", "job_path": r"/brands/[^/?#]+/jobs/\d+"},
+    "Mantu": {"kind": "rendered_links", "url": "https://careers.mantu.com/brands/mantu", "job_path": r"/brands/[^/?#]+/jobs/\d+"},
     "Serco Europe": {"kind": "rendered_links", "url": "https://careers.serco.com/eu/en/search-results", "job_path": r"/eu/en/job/\d+/[^/?#]+"},
     "Next Ventures": {"kind": "nextventures", "url": "https://next-ventures.com/jobs/"},
     "Hays Romania": {"kind": "linked_jobs", "url": "https://www.hays.ro/en/job-search", "job_path": r"/en/job-detail/[^?#]+"},
     "Square One Resources": {"kind": "squareone", "url": "https://www.squareoneresources.com/jobs"},
     "Proactive.IT": {"kind": "wordpress_archive", "url": "https://www.proactive.it/job-category/project-management-business-analysis/"},
-    "PowerToFly": {"kind": "linked_jobs", "url": "https://origin.prd.powertofly.com/jobs/?primary_skills=Project+Management", "job_path": r"/jobs/detail/\d+"},
+    "PowerToFly": {"kind": "rendered_links", "url": "https://powertofly.com/jobs/?primary_skills=Project%20Management", "job_path": r"/jobs/detail/\d+"},
     "Wellfound": {"kind": "linked_jobs", "url": "https://wellfound.com/role/project-manager", "job_path": r"/jobs/\d+-[^?#]+"},
     "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\d+/"},
     "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
@@ -70,7 +70,7 @@ PUBLIC_BOARD_SOURCES = {
     "Jobspresso": {"kind": "rss", "url": "https://jobspresso.co/?feed=job_feed"},
     "awork.ro": {"kind": "awork", "url": "https://www.awork.ro/"},
     "Freelancer.com": {"kind": "freelancer_api", "url": "https://www.freelancer.com/api/projects/0.1/projects/active/?limit=100&or_search_query=project%20manager%20program%20manager%20programme%20manager%20scrum%20master%20delivery%20manager%20service%20manager"},
-    "Fujitsu Belgium": {"kind": "rendered_links", "url": "https://www.jobs.global.fujitsu.com/search/?q=&locationsearch=Belgium&searchResultView=LIST", "job_path": r"/job/[^/?#]+/\d+-[A-Za-z_]+"},
+    "Fujitsu Belgium": {"kind": "linked_jobs", "url": "https://www.jobs.global.fujitsu.com/search/?q=&locationsearch=Belgium&searchResultView=LIST", "job_path": r"/job/[^/?#]+/\d+-[A-Za-z_]+/?"},
     "No Fluff Jobs": {"kind": "linked_jobs", "url": "https://nofluffjobs.com/remote/project-manager", "job_path": r"/job/[^/?#]+"},
     "Flexa": {"kind": "heading_list", "url": "https://flexa.careers/jobs"},
     "Freelancermap": {"kind": "linked_jobs", "url": "https://www.freelancermap.com/projects", "job_path": r"/project/[^/?#]+"},
