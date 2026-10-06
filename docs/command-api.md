@@ -40,49 +40,31 @@ Nu exista Retrieve implicit la schimbarea profilului, Surse/Categorii/Nomenclato
 
 ## Autentificare
 
-### AS-IS single-user
-
-Browserul obtine un Google ID token prin Google Identity Services. Command API valideaza server-side Google JWKS, issuer si `GOOGLE_CLIENT_ID`, iar autorizarea curenta este limitata prin `ALLOWED_GOOGLE_SUB`.
-
-Current compatibility behavior may still place the verified Google ID token in the current `__Host-jscc_session` cookie until the multiuser cutover.
-
-### Target ADR-005 + ADR-007
-
-Identity resolution:
+Google Identity Services este Stage-1 IdP numai la stabilirea sesiunii. Command API valideaza server-side Google JWKS, issuer si `GOOGLE_CLIENT_ID`, apoi rezolva/provisioneaza identitatea interna:
 
 ```text
 Google ID token
  -> server-side verify
  -> user_identity(provider=GOOGLE, provider_subject=sub)
  -> app_user.user_id
- -> profile.profile_id
+ -> profile.profile_id / Nile tenant
+ -> opaque JSCC session
 ```
 
-Rules:
-- Google remains Stage-1 IdP;
-- Google `sub` is an external subject, not an internal FK;
-- account/profile resolution is server-side;
-- exactly one profile per user in MVP;
-- roles are `USER` and `ADMIN`;
-- browser-supplied user/profile identifiers do not confer authority;
-- ADMIN cannot read another user's personal content.
+Reguli curente:
+- Google `sub` este external subject, nu PK/FK pentru date personale;
+- exact un profil/user in MVP;
+- rolurile sunt `USER` si `ADMIN`;
+- browser-supplied user/profile identifiers nu confera authority;
+- sesiunea aplicatiei foloseste cookie `__Host-jscc_session; Secure; HttpOnly; SameSite=Strict; Path=/`;
+- numai hash-ul tokenului opac este persistat server-side;
+- Stage-1 absolute maximum lifetime este 60 minute;
+- logout/deactivation/deletion invalideaza server-side sesiunile;
+- Google ID token nu autorizeaza direct endpoint-uri normale dupa stabilirea sesiunii;
+- frontend poate pastra numai login hint non-secret pentru UX; tokenurile nu intra in Web Storage;
+- CI/CD GitHub Actions OIDC ramane identitate separata, strict allowlisted pentru reconciliere/read-only, nu sesiune end-user.
 
-On successful Google authentication, JSCC creates a fresh application-owned opaque session:
-- cookie `__Host-jscc_session`;
-- `Secure; HttpOnly; SameSite=Strict; Path=/`;
-- no Domain attribute;
-- raw token only in browser cookie;
-- only token hash persisted server-side;
-- Stage-1 absolute maximum lifetime 60 minutes;
-- logout/deactivation/deletion invalidate server-side sessions.
-
-After the multiuser cutover, Google ID tokens are accepted at the session-establishment boundary, not as direct authorization bypass for normal protected application endpoints.
-
-Business/repository code receives server-derived `AuthContext(user_id, profile_id, role, status)` and does not consume Google claims directly.
-
-Frontend may retain only non-secret Google login hint metadata for UX. Authentication/session tokens are not persisted in browser Web Storage.
-
-CI/CD keeps its separate GitHub Actions OIDC identity. It remains limited to the already-approved read-only functional-verification surface and cannot establish an end-user session or authorize mutations.
+Business/repository code consuma numai `AuthContext(user_id, profile_id, role, status)`.
 
 ## Endpoint-uri publice
 
@@ -93,7 +75,7 @@ CI/CD keeps its separate GitHub Actions OIDC identity. It remains limited to the
 
 ### `POST /auth/session`
 
-Target behavior:
+Behavior:
 - with a Google bearer credential: verify Google token, resolve/provision account, create a fresh JSCC session and set the session cookie;
 - with only a valid JSCC session cookie: validate the existing session and return the current account/profile summary without extending the absolute expiry;
 - DEACTIVATED account -> denied;
@@ -102,7 +84,7 @@ Target behavior:
 
 ### `POST /auth/logout`
 
-Target:
+Behavior:
 - same-origin;
 - revoke current server-side session if present;
 - clear cookie;
@@ -110,7 +92,7 @@ Target:
 
 ### `GET /me`
 
-Target authenticated identity summary:
+Authenticated identity summary:
 - own role/status;
 - account email metadata when needed by UI;
 - own profile identity.
@@ -118,9 +100,9 @@ Target authenticated identity summary:
 No caller-selected user/profile authority.
 
 
-## Target auth/authorization error semantics
+## Auth/authorization error semantics
 
-After multiuser cutover:
+Current semantics:
 - `401` — missing, invalid, expired or revoked JSCC session; invalid Google credential at session establishment;
 - `403` — authenticated account is DEACTIVATED or authenticated role lacks the requested capability;
 - `404` — tenant-scoped object is not visible in the caller's personal domain, including cross-tenant object-id probing;
