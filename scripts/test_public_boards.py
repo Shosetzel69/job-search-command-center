@@ -25,6 +25,30 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"], "Project Manager")
         self.assertIn("Belgia", rows[0]["countries"])
 
+    def test_altia_bizneo_paginates_public_jobs(self):
+        pages = {
+            "https://opportunities.altia.es/jobs": (
+                200, "text/html",
+                b'<a href="/jobs/senior-project-manager-far-site">Senior Project Manager | Far-site</a> Brussel Teletrabajo/Remoto'
+            ),
+            "https://opportunities.altia.es/jobs?page=2": (
+                200, "text/html",
+                b'<a href="/jobs/project-manager-7be4b255-1939-48af-a04e-49ebc5765f67">Project Manager</a> Brussel Hybrid'
+            ),
+            "https://opportunities.altia.es/jobs?page=3": (200, "text/html", b"<html></html>"),
+        }
+
+        def fake_fetch(url, accept):
+            return pages[url]
+
+        with patch.object(boards, "_fetch", side_effect=fake_fetch):
+            rows = boards._bizneo_job_board("https://opportunities.altia.es/jobs", "Altia")
+
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(all(row["company"] == "Altia" for row in rows))
+        self.assertTrue(all(row["remote"] for row in rows))
+        self.assertTrue(any(row["job_title"] == "Senior Project Manager | Far-site" for row in rows))
+
     def test_eures_collect_uses_keyword_entry(self):
         captured = {}
         def fake_post(url, payload):
