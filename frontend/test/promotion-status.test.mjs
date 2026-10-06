@@ -7,7 +7,9 @@ const main = readFileSync(new URL('../src/main.jsx', import.meta.url), 'utf8');
 
 test('promotion checklist is ADMIN-visible and polls only while active', () => {
   assert.match(main, /\/data\/promotion-status\.json/);
-  assert.match(main, /auth\.role==='ADMIN'&&<PromotionStatusPanel/);
+  assert.match(main, /auth\.role==='ADMIN'&&view!=='admin'&&<PromotionStatusPanel/);
+  assert.match(main, /promotionStatus=\{promotionStatus\}/);
+  assert.match(panel, /compactPass/);
   assert.match(main, /setTimeout\(poll,5000\)/);
   assert.match(main, /payload\?\.status==='QUEUED'\|\|payload\?\.status==='IN_PROGRESS'/);
   assert.match(main, /clearTimeout\(timer\)/);
