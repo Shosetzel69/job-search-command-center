@@ -5,6 +5,13 @@ import job_search_public_boards as boards
 
 
 class PublicBoardAdapterTests(unittest.TestCase):
+    def test_current_dynamite_and_powertofly_routes(self):
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Dynamite Jobs"]["kind"], "heading_list")
+        self.assertIn("/skill/remote-project-management-jobs", boards.PUBLIC_BOARD_SOURCES["Dynamite Jobs"]["url"])
+        self.assertFalse(boards.browser_required("Dynamite Jobs"))
+        self.assertIn("origin.prd.powertofly.com/jobs/", boards.PUBLIC_BOARD_SOURCES["PowerToFly"]["url"])
+        self.assertRegex("/jobs/detail/2581003", boards.PUBLIC_BOARD_SOURCES["PowerToFly"]["job_path"])
+
     def test_eures_collect_uses_keyword_entry(self):
         captured = {}
         def fake_post(url, payload):
