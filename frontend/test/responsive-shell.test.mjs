@@ -31,7 +31,8 @@ test('mobile filter surface uses sticky search and a bottom sheet', () => {
   assert.match(block, /sticky top-14/);
   assert.match(block, /aria-label="Filtre afisare"/);
   assert.match(block, /role="dialog"/);
-  assert.doesNotMatch(block, /GUI ONLY/);
+  assert.match(block, /ScopeBadge scope="GUI ONLY"/);
+  assert.match(block, /mobileOpen&&/);
 });
 
 test('mobile job cards are alternating scan-first cards with overflow actions', () => {
