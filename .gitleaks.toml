@@ -3,3 +3,27 @@ minVersion = "8.30.1"
 
 [extend]
 useDefault = true
+
+[[allowlists]]
+description = "Reviewed false positive: blocked-source orchestration fixture"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^scripts/test_source_orchestration\.py$''']
+regexes = ['''error_code="ACCESS_DENIED".*failure_stage="fetch".*http_status=403''']
+
+[[allowlists]]
+description = "Reviewed false positive: historical Cloudflare negative-access checklist text"
+targetRules = ["generic-api-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^docs/environment-provisioning-runbook\.md$''']
+regexes = ['''PROD Cloudflare credential -> DEV/TEST/legacy account: refuz;''']
+
+[[allowlists]]
+description = "Reviewed false positive: PEM parser delimiter regex, not a private key"
+targetRules = ["private-key"]
+condition = "AND"
+regexTarget = "line"
+paths = ['''^ai-github-bridge/src/index\.js$''']
+regexes = ['''normalized\.match\(/-----BEGIN (RSA )?PRIVATE KEY-----''']
