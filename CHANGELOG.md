@@ -17,7 +17,6 @@
 - #489 / ATC-489-06 + #476: frontend-ul foloseste acum lista bounded `GET /me/jobs`, refresh USER/ADMIN prin `/me/refresh` si `/admin/refresh`, onboarding fara Retrieve fortat, paginare profile-scoped si stare tranzitorie de return context in `sessionStorage`; aceeasi aplicatie React devine PWA-first full responsive, cu bottom navigation compact, detalii full-screen pe mobil si actiuni touch explicite.
 - #384/#385/#386: Administrare -> Surse afiseaza validarea obligatorie a categoriei, serializeaza create-category + save-source prin single-fire guard si transforma cardurile summary in quick filters cu predicate identice count/filter; Logs are prezentare compacta fara tabel lat ca interactiune primara.
 
-
 - #489 / ATC-489-01: adaugata fundatia persistenta tenant-aware pentru Search Profile si Candidate Profile, cu ID-uri distincte de Nile tenant/workspace, provisioning/backfill idempotent si referinta logica fail-closed Search Profile -> Candidate Profile compatibila cu tenant hard-delete Nile; comportamentul UI/API existent ramane neschimbat in acest slice.
 - #483: promovarea GCP DEV/TEST include DB migration Job environment-scoped din exact Service digest-ul candidatului, verifica manifestul/checksum-urile/schema inainte de rollout, mentine checklist operational `promotion-status.json` si il afiseaza ADMIN-only in UI.
 
@@ -82,3 +81,191 @@
 - #49 redeschis: colectare web reala pentru surse fara API, prin pagini de cariere/anunturi/paginare si JobPosting JSON-LD. Rezultate si limite per pagina/sursa, transport public protejat, teste izolate; fara dependinte noi.
 
 - #49: colectare din catalog pentru toate sursele active suportate; JobsPipe si Jobicy independente, fara modificarea scoring-ului.
+- Loguri: acoperire reala, surse nesuportate si omiteri motivate, erori/query si records/sursa.
+- Deduplicare intre provideri si protectie pentru ID-uri locale identice; pastrarea rezultatelor la esec total.
+- Rutare comuna Python/Worker/UI; cooldown Jobicy de o ora si teste izolate in CI. E2E de confirmat dupa merge.
+
+### Documentatie
+
+- #450 / ADR-007: aprobat si documentat target-ul Multiuser Google-first: `user_identity -> app_user -> profile`, sesiuni JSCC opace/revocabile, `AuthContext`, RLS transaction-local, lifecycle/ADMIN privacy, authority matrix JSON->PostgreSQL si pregatirea extensiei viitoare email/parola fara redesign de tenancy. Implementarea ramane neautorizata si fara mutatii DEV/TEST/PROD.
+
+- 2026-09-27: standardizata evaluarea surselor noi in `docs/source-strategy.md`: acoperire geografica reala, roluri tinta, remote/eligibilitate, volum relevant dupa filtre, calitate/duplicate, contract, acces tehnic, ToS si canonical company-site resolution. `.ai-instructions.md` v1.16 adauga triggerul `JSCC + URL` care obliga consultarea acestei reguli inainte de verdict, fara a reintroduce `priority` in Source Registry.
+
+- #288: `docs/agentflow.md` -> v1.1; aliniat contractul canonic cu modelul DTP din Discovery: DTP devine handoff formal Discovery -> Development, Discovery ramane sursa de adevar pentru intentia de business, Development pentru implementare, iar boundary-ul intre etape/chaturi si stop conditions sunt explicite; template-ul Discovery este versionat separat la v2.0 si foloseste taxonomia canonica Phase/Status.
+
+- #285: documentatia AgentFlow este consolidata in `docs/agentflow.md` v1.0, aliniata cu `GOVERNANCE.md` v1.11 si taxonomia canonica Phase/Status; sunt definite routing-ul AGENTFLOW/LEGACY-ADAPTED, control tokens `APPROVE_TRANSFER`, `APPROVE_TASK_CONTRACT`, `PROD_GO`, architecture delta check si handoff-ul catre lifecycle-ul DEV -> TEST -> PROD.
+
+- Adaugat contractul canonic `docs/testing/qa-testability-ui-contract.md`: fluxurile UI automatizabile sunt DOM-first, dialogurile browser-native nu sunt acceptate in nominal DEV/TEST, iar blocajele de acest tip devin `BLOCKED-TESTABILITY`; #257 urmareste violarea curenta din stergerea Surse/Nomenclatoare.
+- #224: adaugat enforcement lightweight pentru politica de documentatie: CI verifica doar Markdown-ul schimbat, runbook-urile active esueaza peste 200 de linii si primesc warning peste 150, iar template-ul de executable task cere context minim explicit.
+- #220: introdusa politica de documentatie cu progressive disclosure si context budget; AI nu mai incarca implicit toate documentele canonice, Issues/runbook-urile au limite de marime, iar analiza nu mai este sincronizata ca documentatie live dupa fiecare implementare.
+- #216: clarificat lifecycle-ul release-urilor multi-wave: checkpoint-urile intermediare pot valida DEV -> TEST si se opresc inainte de PROD; dupa finalizarea tuturor wave-urilor se ingheata un singur Final Release Candidate care parcurge integral DEV -> TEST -> PROD si produce Release Record.
+
+- #198: documentat lantul permanent de artifacts `promotion-dev-pass -> promotion-test-deployed -> promotion-test-pass -> release-record`, gate-urile automate, concurenta per mediu si cerintele conditionale de rollback/config/DB.
+- Clarificata capabilitatea Claude de testare web/browser: `ARCHITECTURE.md` -> v1.11 si `.ai-instructions.md` -> v1.8. Browser/UI testing este mod QA suportat atunci cand sesiunea Claude il expune si preflight-ul confirma accesul; DevTools/Network, shell/CLI/Playwright, GitHub Actions si Cloudflare raman capabilitati separate. Toate testele Claude viitoare trebuie sa declare conditiile de browser, autentificare, evidence, rollback si owner gate.
+- #145: revizuite si aliniate documentele proiectului afectate de configuratia finala AI GitHub; `ARCHITECTURE.md` -> v1.9, `GOVERNANCE.md` -> v1.5, `.ai-instructions.md` -> v1.6; README, CONTRIBUTING, ADR-002 si analizele bridge/MCP descriu acum starea operationala reala.
+- #141/#144: documentate `Branch Target Safety Rule` si `Issue Metadata Preservation Rule`; operatiile de continut nu folosesc direct `main`, iar titlul/label-urile unui Issue existent se pastreaza implicit.
+- #136: actualizate analiza si documentatia operationala pentru Remote MCP Claude; adaugate dependintele MCP/OAuth si pasii de configurare `OAUTH_KV` + `MCP_OWNER_ACCESS_CODE`.
+- Governance: introdus baseline obligatoriu pe starea GitHub, `Implementation Preservation Rule`, interdictia refactorizarii oportuniste si `Deploy Immutability Rule`; conversatia/memoria/copii locale raman context, nu adevar tehnic.
+- #132: adaugate ADR-002, analiza/runtime docs pentru `ai-github-bridge`; `ARCHITECTURE.md` actualizat la v1.7 si v1.6 arhivat.
+- Pachetul 2A8: documentat contractul canonic pentru nomenclatoare, distinctia `system/semantic` vs `extensible`, geografia canonica, tipurile de lucru/contract si regulile de integritate referentiala.
+- Pachetul 2A: `ARCHITECTURE.md` actualizat la v1.5, v1.4 arhivat; documentate contractele `sources`, `source-categories` si `applications`, plus statusul livrarii Package 2.
+- Definit fluxul formal `Ideas / Requirements -> Analiza -> cerinta/decizie aprobata explicit -> Development -> implementare` si interzisa trecerea directa din idei sau analiza in Development.
+- Adaugate criteriile de maturitate pentru transferul unei idei in `Analiza` si formatul scurt de sumar pentru transfer.
+- Aliniate `GOVERNANCE.md`, `.ai-instructions.md`, `CONTRIBUTING.md` si `README.md` cu noul flux de lucru.
+- Aliniate `GOVERNANCE.md`, `.ai-instructions.md`, `CONTRIBUTING.md`, `README.md` si documentele tehnice cu `ARCHITECTURE.md` v1.0.
+- Clarificata precedenta intre arhitectura, guvernanta si instructiunile AI.
+- Documentat taskul programat ChatGPT `Actualizare documentatie proiect` pentru review periodic la 2 ore.
+- Restructurat `docs/requirements.md` conform structurii oficiale a documentului de cerinte.
+- Eliminata documentatia backend legacy care contrazice arhitectura curenta.
+- Clarificat faptul ca autorizarea curenta este single-user, iar arhitectura multi-user este `UNDER ANALYSIS`.
+
+## 0.05 - 2026-09-06
+
+### Interfata
+
+- KPI-urile din `Joburi noi` devin filtre rapide single-select.
+- Tara este afisata separat in Joburi noi, De evaluat si Aplicari.
+- Joburile multi-country folosesc `prima tara + N` in lista si toate tarile in detalii.
+- Detaliile jobului includ campuri separate pentru locatie, tari, remote scope si sursa.
+- `Criterii de selectie` include regiuni `EU`, `US`, `Asia` si tari individuale.
+- Adaugate excluderi teritoriale pe regiuni si tari.
+- Cardul `Excluderi` este compactat.
+- `Ultima rulare` afiseaza numarul surselor procesate.
+- Adaugata pagina `Loguri` cu ultimele 10 rulari.
+
+### Surse
+
+- Pagina `Surse` permite adaugare, editare, activare/dezactivare si stergere.
+- Modificarile sunt persistate canonic prin Command API si GitHub Contents API.
+- URL-urile duplicate sunt blocate.
+- UI separa starea din catalog de disponibilitatea connectorului.
+- Catalogul legacy este normalizat la schema 1.0 la prima modificare persistenta.
+
+### Geografie
+
+- Adaugate campurile canonice `countries`, `country_codes`, `remote_scope`.
+- Remote fara teritoriu explicit este tratat ca Worldwide.
+- Remote cu tari explicite necesita Romania intre tarile acceptate.
+- Remote EU/EMEA foloseste restrictia declarata.
+- Remote Worldwide ramane eligibil la excluderi regionale.
+- Conflictele includere/excludere sunt blocate in UI, Command API si configuratia motorului.
+
+### Rulare si loguri
+
+- `run-status.json` include `sources_processed` si `failed_sources`.
+- JobsPipe este numarat ca o singura sursa indiferent de transportul Apify/Direct.
+- Adaugat `data/run-history.json`, maximum 10 rulari.
+- Publicarea rezultatelor reincearca de maximum 3 ori daca `main` se modifica in timpul push-ului.
+
+### CI
+
+- CI valideaza si Python/search configuration.
+- Adaugate teste de regresie pentru geografie si normalizarea sursei JobsPipe.
+- Raman active validarile React/Vite si Cloudflare Worker dry-run.
+
+### Stare operationala
+
+- JobsPipe transport: `apify`.
+- Plafon Apify: 100 joburi brute/rulare.
+- Validarea CI este finalizata; validarea E2E live pentru 0.05 ramane de confirmat.
+
+## 0.04 - 2026-09-05
+
+### JobsPipe transport
+
+- Adaugat `jobspipe_mode`: `disabled`, `apify`, `direct`.
+- Apify devine transportul recomandat dupa stabilizare.
+- JobsPipe Direct ramane fallback cu quota guards.
+- UI permite selectarea transportului si configurarea limitelor specifice.
+- Adaugat suport pentru secretul GitHub Actions `APIFY_TOKEN`.
+- Plafon Apify implicit: 5.000 joburi brute/rulare; configurabil 100-20.000.
+- La introducerea functionalitatii transportul a ramas initial dezactivat pentru stabilizare.
+
+## 0.03 - 2026-09-05
+
+### Frontend
+
+- #194 / R1.5: dupa un genuine HTTP 409, UI confirma o singura data run-status; polling continua numai daca exista un run activ, altfel butonul revine imediat la idle.
+- #35 / R1.5: canonicalizeaza aliasurile de tara dupa codul canonic si elimina duplicate lingvistice precum `Belgium` + `Belgia` din output si afisare.
+- Migrare completa la React 18 + Tailwind CSS + Vite.
+- Layout principal centrat, maximum 1400 px.
+- Fundal slate deschis si carduri albe cu border/shadow discret.
+- Profil discret cu dropdown si logout.
+- Albastru rezervat actiunii primare `Ruleaza verificarea`.
+- Verde folosit pentru stari active/succes.
+- KPI-uri afisate numai in `Joburi noi`.
+- Filtre impartite pe doua randuri.
+- Filtru vechime: 24h / 36h / 48h / 5 zile.
+- Multiselect Remote / Hibrid / Onsite / N/A.
+- FIT descrescator implicit + optiune crescator.
+- `Reseteaza filtrele`.
+- Tabel compact cu actiuni la hover.
+- Badge-uri sidebar cu contrast ridicat.
+- `Criterii de selectie` in grid responsive 1/2 coloane.
+
+### Autentificare si securitate
+
+- Google Sign-In integrat in React.
+- Separare explicita intre login si incarcarea datelor.
+- Eroarea de date nu mai invalideaza sesiunea Google.
+- Retry explicit pentru incarcarea datelor protejate.
+- Token Google pastrat numai in memoria paginii.
+- `/data/*` protejat prin Cloudflare Worker.
+- Logout-ul goleste datele clientului.
+
+### Command API
+
+- `GET /auth/config`.
+- `POST /auth/session`.
+- `POST /commands/run`.
+- `PUT /config`.
+- Protectie duplicate run.
+- Persistenta configuratie prin GitHub Contents API.
+
+### Search engine
+
+- Colectare maxima 5 zile pentru filtrare locala 24h/36h/48h/5 zile.
+- JobsPipe polling incremental.
+- Preview gratuit.
+- Cursor backlog.
+- Buget 14 credite/rulare.
+- Guard lunar 950.
+- Circuit breaker quota.
+- JobsPipe a fost dezactivat in perioada initiala de stabilizare.
+
+### Build si hosting
+
+- GitHub Pages eliminat din arhitectura.
+- Hosting prin Cloudflare Worker Static Assets.
+- Build React/Vite integrat in build-ul Worker.
+- CI valideaza frontend-ul si `wrangler deploy --dry-run`.
+
+### Documentatie
+
+- Cerinte sincronizate cu implementarea React.
+- Arhitectura actualizata.
+- Command API actualizat.
+- Contractele JSON actualizate.
+- Strategia surselor actualizata.
+- Adaugat inventar functional separat.
+
+## 0.02 - 2026-09-03
+
+### Functionalitati
+
+- Previzualizare dinamica a rezultatelor in Criterii de selectie.
+- Redenumirea aplicatiei in Job Search.
+
+### Buguri rezolvate
+
+- Separarea continutului intre Joburi noi, De evaluat, Aplicari, Criterii de selectie si Surse.
+- Ascunderea controalelor care apartin altor pagini.
+- Ascunderea actiunii Ruleaza verificarea in Criterii de selectie.
+
+## 0.01 - 2026-09-03
+
+### Functionalitati
+
+- Criterii de selectie salvate local.
+- Excluderi dinamice.
+- Afisarea versiunii aplicatiei.
