@@ -412,5 +412,50 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(len(deduplicate([base, other, separate])), 2)
 
 
+class SourceProgressContractTests(unittest.TestCase):
+    def test_progress_denominator_uses_only_executable_plan(self):
+        plan = [
+            {"source_id":"a","status":"completed","outcome":"success"},
+            {"source_id":"b","status":"pending","outcome":None},
+            {"source_id":"c","status":"failed","outcome":"failed"},
+            {"source_id":"inactive","status":"inactive","outcome":"disabled_config"},
+        ]
+        progress = orchestration.source_progress(plan, {"a","b","c"})
+        self.assertEqual(progress["sources_total"], 3)
+        self.assertEqual(progress["sources_processed"], 2)
+        self.assertEqual(progress["sources_good"], 1)
+        self.assertEqual(progress["sources_failed"], 1)
+        self.assertEqual(progress["percent"], 66)
+
+    def test_progress_counts_runtime_skip_as_processed_without_calling_it_good(self):
+        plan = [
+            {"source_id":"a","status":"completed","outcome":"partial"},
+            {"source_id":"b","status":"skipped","outcome":"skipped"},
+        ]
+        progress = orchestration.source_progress(plan, {"a","b"})
+        self.assertEqual(progress["sources_processed"], 2)
+        self.assertEqual(progress["sources_good"], 1)
+        self.assertEqual(progress["sources_skipped"], 1)
+        self.assertEqual(progress["sources_partial"], 1)
+        self.assertEqual(progress["percent"], 100)
+
+    def test_live_checkpoint_is_non_terminal_and_contains_progress(self):
+        with tempfile.TemporaryDirectory() as root:
+            status_path = Path(root) / "run-status.json"
+            plan = [
+                {"source":"One","source_id":"a","active":True,"status":"completed","outcome":"success","records":3},
+                {"source":"Two","source_id":"b","active":True,"status":"pending","outcome":None,"records":0},
+            ]
+            with patch.object(engine, "STATUS_PATH", status_path):
+                orchestration.write_progress_status(NOW, "run-progress", plan, {"a","b"})
+            payload = json.loads(status_path.read_text())
+        self.assertEqual(payload["status"], "in_progress")
+        self.assertIsNone(payload["completed_at"])
+        self.assertEqual(payload["progress"]["sources_total"], 2)
+        self.assertEqual(payload["progress"]["sources_processed"], 1)
+        self.assertEqual(payload["progress"]["percent"], 50)
+        self.assertEqual(payload["records_inspected"], 3)
+
+
 if __name__ == "__main__":
     unittest.main()
