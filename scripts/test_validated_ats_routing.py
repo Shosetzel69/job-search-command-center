@@ -22,10 +22,11 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         self.assertEqual(plan[0]["outcome"], "blocked_credentials")
         self.assertEqual(plan[0]["failure_reason"], "connector_requires_credentials")
 
-    def test_unvalidated_greenhouse_board_stays_disabled(self):
+    def test_unvalidated_clickhouse_ashby_board_stays_disabled(self):
         source = {"id": "x", "name": "ClickHouse", "url": "https://clickhouse.com/company/careers", "active": True}
         plan = orchestration.build_plan({"sources": [source]})
-        self.assertEqual(plan[0]["connector"], "greenhouse")
+        self.assertEqual(plan[0]["connector"], "ashby")
+        self.assertEqual(plan[0]["connector_config"]["board_name"], "clickhouse")
         self.assertEqual(plan[0]["status"], "inactive")
         self.assertEqual(plan[0]["outcome"], "validation_pending")
         self.assertEqual(plan[0]["failure_reason"], "live_api_route_not_validated")

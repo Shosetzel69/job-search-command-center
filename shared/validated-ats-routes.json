@@ -58,8 +58,8 @@
       "disabled_reason": "connector_requires_credentials"
     },
     "ClickHouse": {
-      "connector": "greenhouse",
-      "board_token": "clickhouse",
+      "connector": "ashby",
+      "board_name": "clickhouse",
       "enabled": false,
       "disabled_reason": "live_api_route_not_validated"
     },

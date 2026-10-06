@@ -82,6 +82,13 @@ class PublicBoardAdapterTests(unittest.TestCase):
         with patch.object(boards.browser, "render", return_value=("https://www.float.com/careers", html, {})):
             self.assertEqual(boards._float_careers("https://www.float.com/careers"), [])
 
+    def test_float_falls_back_to_static_authoritative_empty(self):
+        rendered = """<main><h1>Float Careers</h1></main>"""
+        static = """<h2>Current open roles</h2><p>If you don't see a role that's right for you, let us know you're interested.</p>"""
+        with patch.object(boards.browser, "render", return_value=("https://www.float.com/careers", rendered, {})), \
+             patch.object(boards, "_fetch", return_value=(200, "text/html", static.encode())):
+            self.assertEqual(boards._float_careers("https://www.float.com/careers"), [])
+
     def test_eures_normalizes_public_search_response(self):
         rows=boards._eures({"numberRecords":1,"jvs":[{
             "id":"abc123","title":"IT Project Manager","description":"Coordinate delivery",
