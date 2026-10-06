@@ -49,7 +49,7 @@ PUBLIC_BOARD_SOURCES = {
     "SoftServe": {"kind": "softserve", "url": "https://career.softserveinc.com/en-us/vacancies/country-romania"},
     "EPAM": {"kind": "epam", "url": "https://careers.epam.com/en/jobs/romania"},
     "Orange Romania": {"kind": "softgarden_feed", "url": "https://cariere.orange.ro/jobs.feed.json"},
-    "Mantu": {"kind": "rendered_links", "url": "https://careers.mantu.com/brands/mantu", "job_path": r"/brands/[^/?#]+/jobs/\d+"},
+    "Mantu": {"kind": "linked_jobs", "url": "https://careers.mantu.com/brands/mantu", "job_path": r"/brands/[^/?#]+/jobs/\d+"},
     "Serco Europe": {"kind": "rendered_links", "url": "https://careers.serco.com/eu/en/search-results", "job_path": r"/eu/en/job/\d+/[^/?#]+"},
     "Next Ventures": {"kind": "nextventures", "url": "https://next-ventures.com/jobs/"},
     "Hays Romania": {"kind": "linked_jobs", "url": "https://www.hays.ro/en/job-search", "job_path": r"/en/job-detail/[^?#]+"},
