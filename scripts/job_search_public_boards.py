@@ -49,19 +49,19 @@ PUBLIC_BOARD_SOURCES = {
     "SoftServe": {"kind": "softserve", "url": "https://career.softserveinc.com/en-us/vacancies/country-romania"},
     "EPAM": {"kind": "epam", "url": "https://careers.epam.com/en/jobs/romania"},
     "Orange Romania": {"kind": "softgarden_feed", "url": "https://cariere.orange.ro/jobs.feed.json"},
-    "Mantu": {"kind": "rendered_links", "url": "https://careers.mantu.com/jobs", "job_path": r"/brands/[^/?#]+/jobs/\\d+"},
-    "Serco Europe": {"kind": "rendered_links", "url": "https://careers.serco.com/eu/en/search-results", "job_path": r"/eu/en/job/\\d+/[^/?#]+"},
+    "Mantu": {"kind": "rendered_links", "url": "https://careers.mantu.com/jobs", "job_path": r"/brands/[^/?#]+/jobs/\d+"},
+    "Serco Europe": {"kind": "rendered_links", "url": "https://careers.serco.com/eu/en/search-results", "job_path": r"/eu/en/job/\d+/[^/?#]+"},
     "Next Ventures": {"kind": "nextventures", "url": "https://next-ventures.com/jobs/"},
     "Hays Romania": {"kind": "linked_jobs", "url": "https://www.hays.ro/en/job-search", "job_path": r"/en/job-detail/[^?#]+"},
     "Square One Resources": {"kind": "squareone", "url": "https://www.squareoneresources.com/jobs"},
-    "Proactive.IT": {"kind": "linked_jobs", "url": "https://www.proactive.it/job-vacancies/", "job_path": r"/job/[^/?#]+/?$"},
-    "PowerToFly": {"kind": "linked_jobs", "url": "https://powertofly.com/jobs/?only_html=True", "job_path": r"/jobs/detail/\\d+"},
-    "Wellfound": {"kind": "linked_jobs", "url": "https://wellfound.com/role/project-manager", "job_path": r"/jobs/\\d+-[^?#]+"},
-    "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\\d+/"},
+    "Proactive.IT": {"kind": "wordpress_archive", "url": "https://www.proactive.it/job-category/project-management-business-analysis/"},
+    "PowerToFly": {"kind": "linked_jobs", "url": "https://powertofly.com/jobs/?only_html=True", "job_path": r"/jobs/detail/\d+"},
+    "Wellfound": {"kind": "linked_jobs", "url": "https://wellfound.com/role/project-manager", "job_path": r"/jobs/\d+-[^?#]+"},
+    "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\d+/"},
     "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
     "Source Group International": {"kind": "linked_jobs", "url": "https://www.sourcegroupinternational.com/candidate/", "job_path": r"/jobs/[^?#]+/"},
-    "GitHub": {"kind": "rendered_links", "url": "https://www.github.careers/careers-home/jobs", "job_path": r"/careers-home/jobs/\\d+"},
-    "Brains Consulting": {"kind": "brains", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
+    "GitHub": {"kind": "rendered_links", "url": "https://www.github.careers/careers-home/jobs", "job_path": r"/careers-home/jobs/\d+"},
+    "Brains Consulting": {"kind": "wordpress_archive", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
     "Montreal Associates": {"kind": "montreal_associates", "url": "https://www.montrealassociates.com/uk/candidates/job-search/"},
     "eJobs": {"kind": "ejobs", "url": "https://www.ejobs.ro/locuri-de-munca/bucuresti/it-project-manager"},
     "Trasys International": {"kind": "trasys_keyes", "url": "https://keyescareers.eu/find-my-job"},
@@ -87,7 +87,7 @@ PUBLIC_BOARD_SOURCES = {
     "Welcome to the Jungle": {"kind": "rendered_links", "url": "https://www.welcometothejungle.com/en/jobs?query=project%20manager", "job_path": r"/en/companies/[^/?#]+/jobs/[^/?#]+"},
     "PeoplePerHour": {"kind": "linked_jobs", "url": "https://www.peopleperhour.com/freelance-jobs?keyword=project%20manager", "job_path": r"/freelance-jobs/(?:[^/?#]+/)*[^/?#]+-\d+"},
     "Arc.dev": {"kind": "arc", "url": "https://arc.dev/remote-jobs?jobRoles=project_manager"},
-    "eFinancialCareers": {"kind": "linked_jobs", "url": "https://www.efinancialcareers.com/jobs/project-manager/in-europe", "job_path": r"/jobs-[^?#]+\.id\d+"},
+    "eFinancialCareers": {"kind": "linked_jobs", "url": "https://www.efinancialcareers.com/jobs/project-manager", "job_path": r"/jobs-[^?#]+\.id\d+"},
     "Upwork": {"kind": "linked_jobs", "url": "https://www.upwork.com/freelance-jobs/project-management/", "job_path": r"/freelance-jobs/apply/[^/?#]+_~\d+/"},
     "Hubstaff Talent": {"kind": "rendered_links", "url": "https://hubstafftalent.net/search/jobs?search%5Bkeywords%5D=project%20manager", "job_path": r"/jobs/[^/?#]+"},
     "FlexJobs": {"kind": "heading_list", "url": "https://www.flexjobs.com/remote-jobs/project-manager"},
@@ -98,11 +98,11 @@ PUBLIC_BOARD_SOURCES = {
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/listing/[^/?#]+/\d+"},
     "Cegeka": {"kind": "linked_jobs", "url": "https://www.cegeka.com/en/ro/jobs/all-jobs", "job_path": r"/en/ro/jobs/all-jobs/[^/?#]+-\d+"},
-    "Computacenter": {"kind": "linked_jobs", "url": "https://careers.computacenter.com/ro/search", "job_path": r"/ro/offer/[^/?#]+/[0-9a-f-]+"},
+    "Computacenter": {"kind": "linked_jobs", "url": "https://careers.computacenter.com/ro/delivery-project-management", "job_path": r"/ro/offer/[^/?#]+/[0-9a-f-]+"},
     "RED Global": {"kind": "linked_jobs", "url": "https://redglobal.com/jobs", "job_path": r"/jobs/job/[^/?#]+/[A-Za-z0-9]+"},
     "Salt": {"kind": "linked_jobs", "url": "https://welovesalt.com/jobs", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Lawrence Harvey": {"kind": "rendered_links", "url": "https://www.lawrenceharvey.com/candidates", "job_path": r"/jobs/\d+[A-Za-z0-9-]+"},
-    "W Talent": {"kind": "rendered_links", "url": "https://www.wtalent.com/uk/job-search/", "job_path": r"/(?:uk/)?job/[^/?#]+/?(?:[?#].*)?$"},
+    "W Talent": {"kind": "rendered_heading_list", "url": "https://www.wtalent.com/uk/job-search/"},
     "Thaleria": {"kind": "linked_jobs", "url": "https://www.thaleria.com/careers/open-positions", "job_path": r"/careers/positions/[^/?#]+-\d+"},
 }
 
@@ -1337,6 +1337,86 @@ def _freelancer_api(payload):
     if not records:
         raise ValueError("Freelancer API returned no extractable active projects")
     return records
+
+
+class _WordpressArchiveJobs(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.jobs = []
+        self.current = None
+        self.in_heading = False
+        self.in_anchor = False
+
+    def _flush(self):
+        if self.current and self.current.get("href"):
+            title = " ".join(self.current.get("title_parts") or []).strip()
+            context = " ".join(self.current.get("context_parts") or []).strip()
+            if title:
+                self.jobs.append({"href": self.current["href"], "title": title, "context": context})
+        self.current = None
+        self.in_heading = False
+        self.in_anchor = False
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag in {"h2", "h3"}:
+            self._flush()
+            self.current = {"href": None, "title_parts": [], "context_parts": []}
+            self.in_heading = True
+        elif self.current and self.in_heading and tag == "a" and attrs.get("href"):
+            self.current["href"] = attrs["href"]
+            self.in_anchor = True
+
+    def handle_data(self, data):
+        text = " ".join(str(data or "").split())
+        if not text or not self.current:
+            return
+        if self.in_heading:
+            self.current["title_parts"].append(text)
+        else:
+            self.current["context_parts"].append(text)
+
+    def handle_endtag(self, tag):
+        if tag == "a" and self.in_anchor:
+            self.in_anchor = False
+        elif tag in {"h2", "h3"} and self.in_heading:
+            self.in_heading = False
+
+    def close(self):
+        super().close()
+        self._flush()
+
+
+def _wordpress_archive(url, provider):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"{provider} archive HTTP {status}")
+    parser = _WordpressArchiveJobs()
+    parser.feed(body.decode("utf-8", errors="replace"))
+    parser.close()
+    records = {}
+    for item in parser.jobs:
+        title = plain_text(item.get("title") or "")
+        context = plain_text(item.get("context") or "")
+        if not title:
+            continue
+        if re.search(
+            r"Rolul este inchis|NU mai sunt locuri vacante|TOATE LOCURILE DE MUNCA VACANTE AU FOST OCUPATE",
+            context, re.I,
+        ):
+            continue
+        link = urljoin(url, item["href"])
+        identity = link.rstrip("/").rsplit("/", 1)[-1]
+        records[identity] = _record(
+            provider, identity, title, provider, context or title, link,
+            date_posted=_relative_date(context),
+            location=context,
+            countries=_country_names_from_text(context),
+            remote=bool(re.search(r"\b(remote|hybrid|online|hibrid)\b", context, re.I)),
+        )
+    if not records:
+        raise ValueError(f"{provider} archive contained no open extractable jobs")
+    return list(records.values())
 
 
 class _BrainsCategoryJobs(HTMLParser):
@@ -2991,6 +3071,8 @@ def collect(source, config=None):
         records = _prohuman(url)
     elif kind == "brains":
         records = _brains(url)
+    elif kind == "wordpress_archive":
+        records = _wordpress_archive(url, name)
     elif kind == "montreal_associates":
         records = _montreal_associates(url)
     elif kind == "ejobs":

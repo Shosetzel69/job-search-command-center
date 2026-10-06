@@ -5,6 +5,29 @@ import job_search_public_boards as boards
 
 
 class PublicBoardAdapterTests(unittest.TestCase):
+    def test_numeric_job_path_patterns_match_digits(self):
+        cases = {
+            "Mantu": "/brands/foo/jobs/12345",
+            "Serco Europe": "/eu/en/job/308663/user-support",
+            "PowerToFly": "/jobs/detail/12345",
+            "Wellfound": "/jobs/4797157-project-manager",
+            "SkipTheDrive": "/job/remote-project-manager-12345/",
+            "GitHub": "/careers-home/jobs/12345",
+        }
+        for source, path in cases.items():
+            with self.subTest(source=source):
+                self.assertRegex(path, boards.PUBLIC_BOARD_SOURCES[source]["job_path"])
+
+    def test_wordpress_archive_extracts_real_job_links(self):
+        html = """<h2><a href="/job/project-manager-123/">Project Manager – 123</a></h2>
+        <p>Remote UK Contract Posted 2 days ago</p>
+        <h2><a href="/job/delivery-manager-456/">Delivery Manager – 456</a></h2>
+        <p>London Permanent Posted 1 day ago</p>"""
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+            rows = boards._wordpress_archive("https://example.com/category/jobs/", "Example")
+        self.assertEqual(len(rows), 2)
+        self.assertTrue(rows[0]["source_url"].startswith("https://example.com/job/"))
+
     def test_recovered_source_routes_use_current_public_shapes(self):
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Remote.co"]["url"], "https://remote.co/remote-jobs/project-manager")
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Remote.co"]["kind"], "heading_list")
