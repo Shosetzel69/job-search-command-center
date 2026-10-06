@@ -383,7 +383,7 @@ Exemplu:
 }
 ```
 
-## 8. Mapare `PUT /config`
+## 8. Mapare `PUT /me/preferences`
 
 - `rolePm` -> `role_groups.pm.enabled`;
 - `roleDelivery` -> `role_groups.delivery.enabled`;
@@ -401,7 +401,7 @@ Exemplu:
 - `excludedRegions` / `excludedCountries` -> geografie exclusa;
 - `exclusions` -> reguli aprobate.
 
-Save nu porneste full search.
+Save nu porneste provider Retrieve.
 
 ## 9. `data/sources.json`
 
@@ -539,7 +539,7 @@ Invarianti:
 - Cloud Run Job foloseste repository/data-access Python si `NILE_DATABASE_URL` environment-scoped; lipsa DB binding in container/GCP este fail-closed;
 - PostgreSQL persistence se executa inainte de publicarea JSON tranzitorie, astfel incat un esec DB nu publica silent un nou snapshot divergent.
 
-`data/jobs.json` ramane temporar output de compatibilitate pentru fluxul single-user pana la slice-urile de profile/FIT; nu devine o a doua autoritate permanenta pentru shared corpus.
+`data/jobs.json` poate ramane runtime artifact intern/tranzitoriu pentru collector/bootstrap, dar nu este browser API si nu este o a doua autoritate pentru shared corpus.
 
 ### Shared lifecycle
 
@@ -575,8 +575,9 @@ ATC-489-03 face evaluarea Search-Profile-scoped si bounded:
 - Eligibility pastreaza `ELIGIBLE | INELIGIBLE | UNKNOWN`; numai `INELIGIBLE` este exclus;
 - cache identity/validity: `tenant_id + search_profile_id + job_id + profile_version + job_version + fit_algorithm_version`;
 - cache hit reutilizeaza FIT; cache miss/stale calculeaza numai randurile bounded necesare paginii curente plus prefetch bounded;
-- `/data/jobs.json` este doar adapter temporar peste aceeasi cale bounded; full-corpus evaluate-on-GET este interzis;
-- `GET /me/jobs` si adapterul legacy nu apeleaza provider Retrieve si nu modifica shared corpus.
+- `GET /me/jobs` este singura authority de listare browser pentru joburile profilului;
+- adapterul browser `/data/jobs.json` si `evaluateProfileJobs` sunt retrase in ATC-489-07;
+- `GET /me/jobs` nu apeleaza provider Retrieve si nu modifica shared corpus.
 
 `profile_job_evaluation` este cache derivat, nu workflow durable. Migration 008 il reconstruieste cu cheia `(tenant_id, search_profile_id, job_id)`; nu sterge Applications, state, Candidate Profile sau Selection Criteria.
 
@@ -611,7 +612,7 @@ ADMIN Refresh uses the same global corpus freshness and heavy-search coalescing 
 
 ADMIN-started Retrieve uses `RUN_TRIGGER=admin-ui` for operational history. The current runtime still executes at most one shared global heavy Retrieve; it never fans out one run per user or scope. Provider-specific per-scope transport remains outside ATC-489-05.
 
-PROD ADMIN Refresh is fail-closed in this slice. Legacy `/commands/run` remains compatibility-only until ATC-489-07.
+PROD ADMIN Refresh remains fail-closed until separately authorized. Legacy `/commands/run` is retired by ATC-489-07.
 
 ### Frontend cutover — ATC-489-06
 
@@ -623,7 +624,7 @@ Frontend authority after this slice:
 - profile-job workflow state: `PUT /me/jobs/:job_id/state`;
 - Applications: `/applications`.
 
-The frontend no longer reads jobs through `/data/jobs.json` and no longer dispatches `/commands/run`. Those backend adapters may remain temporarily for compatibility and are retired only in ATC-489-07.
+The frontend uses only the canonical personal/admin surface. ATC-489-07 retires the backend browser aliases `/data/jobs.json`, `/data/search-config.json`, `/data/applications.json`, `/config` and `/commands/run`; runtime seed/bootstrap files may remain internal.
 
 UI invariants:
 - an unconfigured Search Profile shows onboarding and does not force Retrieve;
