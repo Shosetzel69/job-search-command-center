@@ -13,6 +13,7 @@
 - #232 / Release 1 Wave 3: extinsa suita negativa pentru identity authorization, protected data fara sesiune, CORS interzis, payload config invalid si forced reauthentication la protected 401.
 
 ### Functionalitati
+- #515: shell responsive pentru mobile/desktop, header global cu environment permanent, KPI compact, filtre mobile in bottom sheet, JobCard-uri compacte alternate, nav Jobs/Review/Aplicari/Mai multe, detalii full-screen si compaction pentru statusurile PASS/terminale; desktop ramane functional stabil.
 
 - #13 / ATC-13-01: progres live ADMIN-only pentru Retrieve: active-run GCP status, checkpoint dupa fiecare sursa terminala, X/Y, procent real si GOOD/FAIL/SKIP/PARTIAL plus rezumat final; fara estimare temporala si fara schimbari de connectori.
 
