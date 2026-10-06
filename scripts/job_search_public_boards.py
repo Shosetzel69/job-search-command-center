@@ -43,6 +43,7 @@ PUBLIC_BOARD_SOURCES = {
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/go/Jobs-in-Romania/3686501/"},
     "UpcoMinds": {"kind": "jobs4it", "url": "https://jobs4it.gr/"},
     "Worldline": {"kind": "worldline", "url": "https://jobs.worldline.com/viewalljobs/"},
+    "Altia": {"kind": "bizneo", "url": "https://opportunities.altia.es/jobs"},
     "NATO Careers": {"kind": "nato_taleo", "url": "https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en", "portal": "101430233", "section": "2"},
     "EuroBrussels": {"kind": "eurobrussels", "url": "https://www.eurobrussels.com/job_search"},
     "Societe Generale": {"kind": "socgen", "url": "https://careers.societegenerale.com/en/Technical/all-job-offers"},
@@ -781,6 +782,46 @@ def _linked_job_board(url, provider, job_path):
         records[record["id"]] = record
     if not records:
         raise ValueError(f"{provider} jobs page contained no extractable job links")
+    return list(records.values())
+
+
+def _bizneo_job_board(base_url, provider, max_pages=25):
+    records = {}
+    saw_first_page = False
+    for page in range(1, max_pages + 1):
+        page_url = base_url if page == 1 else f"{base_url}?page={page}"
+        status, _kind, body = _fetch(page_url, "text/html,application/xhtml+xml")
+        if status != 200:
+            if page == 1:
+                raise RuntimeError(f"{provider} Bizneo jobs page HTTP {status}")
+            break
+        parser = _RenderedCareerJobs(r"/jobs/(?!preview(?:[/?#]|$))[^/?#]+")
+        parser.feed(body.decode("utf-8", errors="replace"))
+        parser.close()
+        if page == 1:
+            saw_first_page = True
+        added = 0
+        for href, item in parser.jobs.items():
+            title = plain_text(item.get("title") or "")
+            context = plain_text(item.get("context") or "")
+            if not title:
+                continue
+            link = urljoin(page_url, href)
+            identity = link.rstrip("/").rsplit("/", 1)[-1]
+            countries = _country_names_from_text(context)
+            record = _record(
+                provider, identity, title, provider, context or title, link,
+                location=context,
+                countries=countries,
+                remote=bool(re.search(r"\b(remote|teletrabajo|far-site|hybrid|h[ií]brido)\b", context, re.I)),
+            )
+            if record["id"] not in records:
+                records[record["id"]] = record
+                added += 1
+        if added == 0:
+            break
+    if not saw_first_page or not records:
+        raise ValueError(f"{provider} Bizneo board contained no extractable job links")
     return list(records.values())
 
 
@@ -3087,6 +3128,8 @@ def collect(source, config=None):
         records = _arc(url)
     elif kind == "nextventures":
         records = _nextventures(url)
+    elif kind == "bizneo":
+        records = _bizneo_job_board(url, name)
     elif kind == "linked_jobs":
         records = _linked_job_board(url, name, spec["job_path"])
     elif kind == "squareone":
