@@ -8,9 +8,15 @@ const tone = status => status === 'FAIL'
 
 const symbol = state => state === 'PASS' ? '✓' : state === 'FAIL' ? '✕' : state === 'IN_PROGRESS' ? '●' : state === 'SKIPPED' || state === 'N/A' ? '–' : '□';
 
-export function PromotionStatusPanel({ status }) {
+export function PromotionStatusPanel({ status, compactPass = false }) {
   if (!status) return null;
   const active = status.status === 'IN_PROGRESS' || status.status === 'QUEUED';
+  if (compactPass && status.status === 'PASS') {
+    return <section data-testid="promotion-status" data-compact="pass" className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs shadow-sm">
+      <div className="flex items-center gap-2 font-semibold text-emerald-800"><span aria-hidden="true" className="h-2 w-2 rounded-full bg-emerald-500"/>Promovare PASS</div>
+      <div className="hidden text-emerald-700 sm:block">{status.candidate_sha ? `Candidate ${status.candidate_sha.slice(0,12)}` : ''}</div>
+    </section>;
+  }
   return <section data-testid="promotion-status" className={`rounded-2xl border p-4 shadow-sm ${tone(status.status)}`}>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div>
