@@ -14,6 +14,17 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(boards.browser_required("PowerToFly"))
         self.assertRegex("/jobs/detail/2581003", boards.PUBLIC_BOARD_SOURCES["PowerToFly"]["job_path"])
 
+    def test_mantu_uses_public_brand_links(self):
+        spec = boards.PUBLIC_BOARD_SOURCES["Mantu"]
+        self.assertEqual(spec["kind"], "linked_jobs")
+        self.assertEqual(spec["url"], "https://careers.mantu.com/brands/mantu")
+        html = '<a href="/brands/amaris-consulting/jobs/45293">Project Manager</a> Brussels Belgium Permanent Job'
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html.encode())):
+            rows = boards._linked_job_board(spec["url"], "Mantu", spec["job_path"])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_title"], "Project Manager")
+        self.assertIn("Belgia", rows[0]["countries"])
+
     def test_eures_collect_uses_keyword_entry(self):
         captured = {}
         def fake_post(url, payload):
