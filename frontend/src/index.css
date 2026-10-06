@@ -4,10 +4,24 @@
 
 @layer base {
   html { @apply bg-slate-50; }
-  body { @apply m-0 min-h-screen bg-slate-50 font-sans text-slate-900 antialiased; }
+  body { @apply m-0 min-h-screen overflow-x-hidden bg-slate-50 font-sans text-slate-900 antialiased; }
   #root { @apply min-h-screen; }
   button, input, select { font: inherit; }
   button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, summary:focus-visible {
     @apply outline-none ring-2 ring-blue-500 ring-offset-2;
+  }
+}
+
+@layer utilities {
+  .safe-bottom { padding-bottom: max(0.75rem, env(safe-area-inset-bottom)); }
+  .safe-top { padding-top: max(0.75rem, env(safe-area-inset-top)); }
+}
+
+@media (max-width: 767px) {
+  button,
+  a[role="button"],
+  input:not([type="checkbox"]):not([type="radio"]),
+  select {
+    min-height: 44px;
   }
 }

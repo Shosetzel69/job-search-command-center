@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { adminSourceSummary, approvalSourceRows, categoryDuplicate, sortCategories, sortSources, sourceGovernanceActions, sourceNeedsGovernanceAttention, sourcePolicyExcluded } from '../src/admin-model.mjs';
+import { adminSourceSummary, approvalSourceRows, categoryDuplicate, sortCategories, sortSources, sourceGovernanceActions, sourceMatchesQuickFilter, sourceNeedsGovernanceAttention, sourcePolicyExcluded, sourceQuickFilterRows } from '../src/admin-model.mjs';
 
 test('admin source summary separates active, validation and problem states', () => {
   const summary = adminSourceSummary([
@@ -60,4 +60,35 @@ test('approval default exposes only governance attention and all mode remains in
   assert.equal(sourceNeedsGovernanceAttention(rows[1]), true);
   assert.deepEqual(approvalSourceRows(rows).map(row => row.name), ['Needs connector','Pending approval']);
   assert.deepEqual(approvalSourceRows(rows,{mode:'all'}).map(row => row.name), ['Approved active','Monster','Needs connector','Pending approval']);
+});
+
+test('source summary cards and quick filters use the exact same canonical predicates', () => {
+  const rows = [
+    {name:'A',active:true,validationStatus:'validated',approvalStatus:'approved'},
+    {name:'B',active:false,validationStatus:'pending',approvalStatus:'pending'},
+    {name:'C',active:false,validationStatus:'requires_connector',approvalStatus:'pending'},
+    {name:'Monster',active:true,validationStatus:'validated',approvalStatus:'approved'},
+  ];
+  const summary = adminSourceSummary(rows);
+  for (const [filter,key] of [
+    ['total','total'],
+    ['active','active'],
+    ['inactive','inactive'],
+    ['pendingApproval','pendingApproval'],
+    ['validated','validated'],
+    ['problems','problems'],
+  ]) {
+    assert.equal(sourceQuickFilterRows(rows,{filter}).length, summary[key], filter);
+  }
+  assert.equal(sourceMatchesQuickFilter(rows[0],'active'), true);
+  assert.equal(sourceMatchesQuickFilter(rows[3],'active'), false);
+  assert.equal(sourceMatchesQuickFilter(rows[3],'inactive'), true);
+});
+
+test('source quick filter composes with text query deterministically', () => {
+  const rows = [
+    {name:'Alpha Jobs',category:'Direct',url:'https://a.example',active:true,validationStatus:'validated',approvalStatus:'approved'},
+    {name:'Beta Jobs',category:'Direct',url:'https://b.example',active:true,validationStatus:'validated',approvalStatus:'approved'},
+  ];
+  assert.deepEqual(sourceQuickFilterRows(rows,{filter:'active',query:'beta'}).map(row=>row.name), ['Beta Jobs']);
 });

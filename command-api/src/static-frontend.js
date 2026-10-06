@@ -7,6 +7,7 @@ const MIME = Object.freeze({
   '.mjs':'text/javascript; charset=utf-8',
   '.css':'text/css; charset=utf-8',
   '.json':'application/json; charset=utf-8',
+  '.webmanifest':'application/manifest+json; charset=utf-8',
   '.svg':'image/svg+xml',
   '.png':'image/png',
   '.jpg':'image/jpeg',
@@ -21,12 +22,15 @@ const API_PREFIXES = [
   '/auth/',
   '/data/',
   '/commands/',
+  '/me/',
+  '/admin/',
+  '/applications/',
   '/sources',
   '/source-categories',
   '/nomenclatures',
 ];
 
-const API_EXACT = new Set(['/health','/health/db','/auth/config','/auth/session','/auth/logout','/config']);
+const API_EXACT = new Set(['/health','/health/db','/auth/config','/auth/session','/auth/logout','/config','/me','/applications']);
 
 export function isApiPath(pathname) {
   if (API_EXACT.has(pathname)) return true;
@@ -49,8 +53,12 @@ function responseFor(bytes, path, method='GET') {
     'content-type': MIME[extname(path).toLowerCase()] || 'application/octet-stream',
     'x-content-type-options':'nosniff',
   });
-  if (path.endsWith('index.html')) headers.set('cache-control','no-store');
-  else headers.set('cache-control','public, max-age=31536000, immutable');
+  if (path.endsWith('index.html') || path.endsWith('manifest.webmanifest') || path.endsWith('sw.js')) {
+    headers.set('cache-control','no-store');
+  } else {
+    headers.set('cache-control','public, max-age=31536000, immutable');
+  }
+  if (path.endsWith('sw.js')) headers.set('service-worker-allowed','/');
   return new Response(method === 'HEAD' ? null : bytes, { status:200, headers });
 }
 

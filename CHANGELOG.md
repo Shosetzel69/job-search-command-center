@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-> App version: `0.7.0` — minor increment for fail-closed DB migration promotion and live ADMIN promotion visibility.
+> App version: `0.8.0` — frontend cutover to Search Profile APIs plus PWA-first responsive Mobile V1.
 
 ### Security
 
@@ -13,6 +13,9 @@
 - #232 / Release 1 Wave 3: extinsa suita negativa pentru identity authorization, protected data fara sesiune, CORS interzis, payload config invalid si forced reauthentication la protected 401.
 
 ### Functionalitati
+
+- #489 / ATC-489-06 + #476: frontend-ul foloseste acum lista bounded `GET /me/jobs`, refresh USER/ADMIN prin `/me/refresh` si `/admin/refresh`, onboarding fara Retrieve fortat, paginare profile-scoped si stare tranzitorie de return context in `sessionStorage`; aceeasi aplicatie React devine PWA-first full responsive, cu bottom navigation compact, detalii full-screen pe mobil si actiuni touch explicite.
+- #384/#385/#386: Administrare -> Surse afiseaza validarea obligatorie a categoriei, serializeaza create-category + save-source prin single-fire guard si transforma cardurile summary in quick filters cu predicate identice count/filter; Logs are prezentare compacta fara tabel lat ca interactiune primara.
 
 - #489 / ATC-489-01: adaugata fundatia persistenta tenant-aware pentru Search Profile si Candidate Profile, cu ID-uri distincte de Nile tenant/workspace, provisioning/backfill idempotent si referinta logica fail-closed Search Profile -> Candidate Profile compatibila cu tenant hard-delete Nile; comportamentul UI/API existent ramane neschimbat in acest slice.
 - #483: promovarea GCP DEV/TEST include DB migration Job environment-scoped din exact Service digest-ul candidatului, verifica manifestul/checksum-urile/schema inainte de rollout, mentine checklist operational `promotion-status.json` si il afiseaza ADMIN-only in UI.

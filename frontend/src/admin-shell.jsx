@@ -1,7 +1,8 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
 import ActionDialog from './action-dialog.jsx';
+import { createSingleFireGuard } from './action-dialog-guard.mjs';
 import { exclusionGroupRows, failureGroupRows, runSummaryLabel, sourceResultDetail, sourceResultRows, sortSourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
 import {
   ADMIN_SECTIONS,
@@ -11,6 +12,7 @@ import {
   categoryDuplicate,
   sortCategories,
   sortSources,
+  sourceQuickFilterRows,
   sourceApprovalLabel,
   sourceGovernanceActions,
   sourcePolicyExcluded,
@@ -134,45 +136,77 @@ function SourceDialog({ source, categories, saving, onClose, onSave, onCreateCat
   const [form,setForm] = useState(() => ({
     name:source?.name || '',
     url:source?.url || '',
-    category:source?.category || ordered[0]?.label || '',
+    category:source?.category || '',
   }));
   const [newCategory,setNewCategory] = useState('');
   const [creatingCategory,setCreatingCategory] = useState(false);
+  const [submitted,setSubmitted] = useState(false);
+  const [submitting,setSubmitting] = useState(false);
+  const submitGuard = useRef(null);
+  if (!submitGuard.current) submitGuard.current = createSingleFireGuard();
+  const categoryMissing = !creatingCategory && !form.category;
+  const newCategoryInvalid = creatingCategory && (!newCategory.trim() || categoryDuplicate(categories,newCategory));
+  const locked = saving || submitting;
+
   const submit = async () => {
-    let category = form.category;
-    if (creatingCategory) {
-      const label = newCategory.trim().replace(/\s+/g,' ');
-      if (!label) return;
-      if (categoryDuplicate(categories, label)) return;
-      const created = await onCreateCategory(label);
-      if (!created) return;
-      category = created.label;
+    setSubmitted(true);
+    if (!form.name.trim() || !form.url.trim() || categoryMissing || newCategoryInvalid || !submitGuard.current.tryStart()) return;
+    setSubmitting(true);
+    try {
+      let category = form.category;
+      if (creatingCategory) {
+        const label = newCategory.trim().replace(/\s+/g,' ');
+        const created = await onCreateCategory(label);
+        if (!created) return;
+        category = created.label;
+      }
+      await onSave({ ...form, category });
+    } finally {
+      submitGuard.current.finish();
+      setSubmitting(false);
     }
-    await onSave({ ...form, category });
   };
-  return <><button className="fixed inset-0 z-50 bg-slate-950/30" onClick={onClose}/><div className="fixed left-1/2 top-1/2 z-[70] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-2xl border border-slate-200 bg-white p-5 shadow-2xl">
-    <div className="flex items-center justify-between"><h2 className="font-display text-lg font-bold text-slate-900">{source ? 'Editeaza sursa' : 'Adauga sursa'}</h2><button onClick={onClose} className="rounded-lg px-2 py-1 text-slate-500 hover:bg-slate-100">×</button></div>
-    <div className="mt-4 space-y-3">
-      <label className="block text-sm text-slate-700">Nume<input value={form.name} onChange={event => setForm(value => ({...value,name:event.target.value}))} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-3"/></label>
-      <label className="block text-sm text-slate-700">URL<input value={form.url} onChange={event => setForm(value => ({...value,url:event.target.value}))} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-3"/></label>
-      <label className="block text-sm text-slate-700">Categorie<select value={creatingCategory ? '__new__' : form.category} onChange={event => { if (event.target.value === '__new__') setCreatingCategory(true); else { setCreatingCategory(false); setForm(value => ({...value,category:event.target.value})); } }} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 bg-white px-3"><option value="" disabled>Selecteaza categoria</option>{ordered.map(category => <option key={category.id} value={category.label}>{category.label}</option>)}<option value="__new__">+ Categorie noua</option></select></label>
-      {creatingCategory && <label className="block text-sm text-slate-700">Categorie noua<input value={newCategory} onChange={event => setNewCategory(event.target.value)} className="mt-1.5 h-10 w-full rounded-xl border border-slate-200 px-3"/>{newCategory && categoryDuplicate(categories,newCategory) && <span className="mt-1 block text-xs text-red-600">Categoria exista deja.</span>}</label>}
-      {!source && <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-700">Sursele noi sunt create `pending` si inactive. Validarea, aprobarea si activarea sunt pasi separati.</div>}
-    </div>
-    <div className="mt-5 flex justify-end gap-2"><button onClick={onClose} className="h-9 rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-600">Renunta</button><button disabled={saving || !form.name.trim() || !form.url.trim() || (!creatingCategory && !form.category) || (creatingCategory && (!newCategory.trim() || categoryDuplicate(categories,newCategory)))} onClick={submit} className="h-9 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-50">{saving ? 'Se salveaza...' : 'Salveaza'}</button></div>
-  </div></>;
+
+  return <>
+    <button type="button" aria-label="Inchide dialogul" className="fixed inset-0 z-50 bg-slate-950/30" onClick={onClose} disabled={locked}/>
+    <section role="dialog" aria-modal="true" aria-labelledby="source-dialog-title" className="safe-top safe-bottom fixed inset-0 z-[70] overflow-y-auto bg-white p-4 shadow-2xl md:left-1/2 md:top-1/2 md:inset-auto md:w-[calc(100%-2rem)] md:max-w-lg md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border md:border-slate-200 md:p-5">
+      <div className="flex items-center justify-between"><h2 id="source-dialog-title" className="font-display text-lg font-bold text-slate-900">{source ? 'Editeaza sursa' : 'Adauga sursa'}</h2><button type="button" onClick={onClose} disabled={locked} className="grid min-h-11 min-w-11 place-items-center rounded-lg text-slate-500 hover:bg-slate-100 disabled:opacity-50">×</button></div>
+      <div className="mt-4 space-y-4">
+        <label className="block text-sm text-slate-700">Nume<input value={form.name} onChange={event => setForm(value => ({...value,name:event.target.value}))} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3" disabled={locked}/></label>
+        <label className="block text-sm text-slate-700">URL<input value={form.url} onChange={event => setForm(value => ({...value,url:event.target.value}))} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3" disabled={locked}/></label>
+        <label className="block text-sm text-slate-700">Categorie
+          <select
+            value={creatingCategory ? '__new__' : form.category}
+            aria-invalid={submitted && categoryMissing ? 'true' : undefined}
+            aria-describedby={submitted && categoryMissing ? 'source-category-error' : undefined}
+            onChange={event => {
+              if (event.target.value === '__new__') { setCreatingCategory(true); setForm(value => ({...value,category:''})); }
+              else { setCreatingCategory(false); setForm(value => ({...value,category:event.target.value})); }
+            }}
+            className={cx('mt-1.5 min-h-11 w-full rounded-xl border bg-white px-3',submitted&&categoryMissing?'border-red-400':'border-slate-200')}
+            disabled={locked}
+          >
+            <option value="">Selecteaza categoria</option>
+            {ordered.map(category => <option key={category.id} value={category.label}>{category.label}</option>)}
+            <option value="__new__">+ Categorie noua</option>
+          </select>
+        </label>
+        {submitted && categoryMissing && <div id="source-category-error" role="alert" className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Categoria este obligatorie inainte de salvarea sursei.</div>}
+        {creatingCategory && <label className="block text-sm text-slate-700">Categorie noua<input value={newCategory} onChange={event => setNewCategory(event.target.value)} className="mt-1.5 min-h-11 w-full rounded-xl border border-slate-200 px-3" disabled={locked}/>{newCategory && categoryDuplicate(categories,newCategory) && <span role="alert" className="mt-1 block text-xs text-red-600">Categoria exista deja.</span>}</label>}
+        {!source && <div className="rounded-xl bg-blue-50 px-3 py-2 text-xs text-blue-700">Sursele noi sunt create pending si inactive. Validarea, aprobarea si activarea sunt pasi separati.</div>}
+      </div>
+      <div className="mt-6 flex gap-2 md:justify-end"><button type="button" onClick={onClose} disabled={locked} className="min-h-11 flex-1 rounded-xl border border-slate-200 px-3 text-sm font-medium text-slate-600 disabled:opacity-50 md:flex-none">Renunta</button><button type="button" disabled={locked || !form.name.trim() || !form.url.trim() || newCategoryInvalid} onClick={submit} className="min-h-11 flex-1 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white disabled:opacity-50 md:flex-none">{locked ? 'Se salveaza...' : 'Salveaza'}</button></div>
+    </section>
+  </>;
 }
 
-function Registry({ sources, categories, token, notify, setSources, setCategories }) {
+function Registry({ sources, categories, token, notify, setSources, setCategories, quickFilter='total' }) {
   const [query,setQuery] = useState('');
   const [editing,setEditing] = useState(null);
   const [open,setOpen] = useState(false);
   const [saving,setSaving] = useState(false);
   const [deleteTarget,setDeleteTarget] = useState(null);
-  const rows = useMemo(() => {
-    const q = query.trim().toLocaleLowerCase('ro-RO');
-    return sortSources(sources).filter(source => !q || `${source.name} ${source.category} ${source.url}`.toLocaleLowerCase('ro-RO').includes(q));
-  }, [sources,query]);
+  const rows = useMemo(() => sourceQuickFilterRows(sources,{filter:quickFilter,query}), [sources,quickFilter,query]);
   const applyCatalog = payload => setSources((payload?.catalog?.sources || []).map(normalizeSource));
   const createCategory = async label => {
     try {
@@ -296,19 +330,24 @@ function Categories({ categories, sources, token, notify, setCategories, setSour
 
 function SourcesAdmin(props) {
   const [section,setSection] = useState('registry');
+  const [quickFilter,setQuickFilter] = useState('total');
   const summary = adminSourceSummary(props.sources);
   const counters = [
-    ['Total',summary.total],
-    ['Active',summary.active],
-    ['Inactive',summary.inactive],
-    ['Asteapta aprobare',summary.pendingApproval],
-    ['Validate',summary.validated],
-    ['Probleme',summary.problems],
+    ['total','Total',summary.total],
+    ['active','Active',summary.active],
+    ['inactive','Inactive',summary.inactive],
+    ['pendingApproval','Asteapta aprobare',summary.pendingApproval],
+    ['validated','Validate',summary.validated],
+    ['problems','Probleme',summary.problems],
   ];
+  const selectQuickFilter = key => {
+    setSection('registry');
+    setQuickFilter(current => key === 'total' || current === key ? 'total' : key);
+  };
   return <div className="space-y-4">
-    <div className="grid gap-2 sm:grid-cols-3 xl:grid-cols-6">{counters.map(([label,value]) => <div key={label} className="rounded-xl border border-slate-200 bg-white px-3 py-3 shadow-sm"><div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div><div className="mt-1 text-xl font-bold text-slate-900">{value}</div></div>)}</div>
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">{counters.map(([key,label,value]) => <button type="button" key={key} aria-pressed={quickFilter===key} onClick={()=>selectQuickFilter(key)} className={cx('min-h-20 rounded-xl border bg-white px-3 py-3 text-left shadow-sm transition',quickFilter===key?'border-blue-400 ring-2 ring-blue-50':'border-slate-200 hover:border-slate-300')}><div className="text-[11px] font-semibold uppercase tracking-wide text-slate-400">{label}</div><div className="mt-1 text-xl font-bold text-slate-900">{value}</div></button>)}</div>
     <Tabs value={section} onChange={setSection} items={SOURCE_SECTIONS.map(key => [key, ({registry:'Surse',approval:'Aprobare surse',categories:'Categorii surse'})[key]])}/>
-    {section === 'registry' && <Registry {...props}/>} 
+    {section === 'registry' && <Registry {...props} quickFilter={quickFilter}/>} 
     {section === 'approval' && <Approval {...props}/>} 
     {section === 'categories' && <Categories {...props}/>} 
   </div>;
@@ -380,26 +419,27 @@ function Logs({ runs }) {
           </div>
         </div>}
 
-        {sourceRows.length > 0 && <div className="mt-4 overflow-x-auto rounded-xl border border-slate-200 bg-white">
-          <div className="min-w-[760px]">
+        {sourceRows.length > 0 && <div className="mt-4">
+          <div className="space-y-2 md:hidden">
+            {sourceRows.map((item,index) => {
+              const detail=sourceResultDetail(item);
+              const warning=['partial','blocked','no_extractable_jobs'].includes(item.outcome);
+              return <article key={`${item.source}-compact-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2"><div className="font-semibold text-slate-700">{item.source}</div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div>
+                <div className="mt-2 text-xs text-slate-500">Joburi: <strong className="text-slate-700">{item.jobsLabel}</strong></div>
+                <div className={cx('mt-2 break-words text-xs',item.outcome === 'failed' ? 'text-red-700' : warning ? 'text-amber-700' : 'text-slate-500')}>{detail}</div>
+              </article>;
+            })}
+          </div>
+          <div className="hidden overflow-hidden rounded-xl border border-slate-200 bg-white md:block">
             <div className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2 text-[10px]">
-              <SortHeader field="source">Sursa</SortHeader>
-              <SortHeader field="status">Status</SortHeader>
-              <SortHeader field="jobs">Joburi</SortHeader>
-              <SortHeader field="detail">Detaliu</SortHeader>
+              <SortHeader field="source">Sursa</SortHeader><SortHeader field="status">Status</SortHeader><SortHeader field="jobs">Joburi</SortHeader><SortHeader field="detail">Detaliu</SortHeader>
             </div>
-            <div className="divide-y divide-slate-100">
-              {sourceRows.map((item,index) => {
-                const detail=sourceResultDetail(item);
-                const warning=['partial','blocked','no_extractable_jobs'].includes(item.outcome);
-                return <div key={`${item.source}-${index}`} className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 px-3 py-2">
-                  <div className="font-medium text-slate-700">{item.source}</div>
-                  <div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div>
-                  <div>{item.jobsLabel}</div>
-                  <div className={item.outcome === 'failed' ? 'text-red-700' : warning ? 'text-amber-700' : 'text-slate-500'} title={item.message || undefined}>{detail}</div>
-                </div>;
-              })}
-            </div>
+            <div className="divide-y divide-slate-100">{sourceRows.map((item,index) => {
+              const detail=sourceResultDetail(item);
+              const warning=['partial','blocked','no_extractable_jobs'].includes(item.outcome);
+              return <div key={`${item.source}-${index}`} className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 px-3 py-2"><div className="font-medium text-slate-700">{item.source}</div><div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div><div>{item.jobsLabel}</div><div className={item.outcome === 'failed' ? 'text-red-700' : warning ? 'text-amber-700' : 'text-slate-500'} title={item.message || undefined}>{detail}</div></div>;
+            })}</div>
           </div>
         </div>}
 
