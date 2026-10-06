@@ -24,7 +24,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions", "Float", "W Talent", "Lawrence Harvey"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions", "Float", "W Talent", "Lawrence Harvey"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -55,7 +55,7 @@ PUBLIC_BOARD_SOURCES = {
     "Hays Romania": {"kind": "linked_jobs", "url": "https://www.hays.ro/en/job-search", "job_path": r"/en/job-detail/[^?#]+"},
     "Square One Resources": {"kind": "squareone", "url": "https://www.squareoneresources.com/jobs"},
     "Proactive.IT": {"kind": "wordpress_archive", "url": "https://www.proactive.it/job-category/project-management-business-analysis/"},
-    "PowerToFly": {"kind": "linked_jobs", "url": "https://powertofly.com/jobs/?only_html=True", "job_path": r"/jobs/detail/\d+"},
+    "PowerToFly": {"kind": "linked_jobs", "url": "https://origin.prd.powertofly.com/jobs/?primary_skills=Project+Management", "job_path": r"/jobs/detail/\d+"},
     "Wellfound": {"kind": "linked_jobs", "url": "https://wellfound.com/role/project-manager", "job_path": r"/jobs/\d+-[^?#]+"},
     "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\d+/"},
     "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
@@ -74,7 +74,7 @@ PUBLIC_BOARD_SOURCES = {
     "No Fluff Jobs": {"kind": "linked_jobs", "url": "https://nofluffjobs.com/remote/project-manager", "job_path": r"/job/[^/?#]+"},
     "Flexa": {"kind": "heading_list", "url": "https://flexa.careers/jobs"},
     "Freelancermap": {"kind": "linked_jobs", "url": "https://www.freelancermap.com/projects", "job_path": r"/project/[^/?#]+"},
-    "Dynamite Jobs": {"kind": "rendered_links", "url": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager", "job_path": r"/company/[^/?#]+/remote-job/[^/?#]+"},
+    "Dynamite Jobs": {"kind": "heading_list", "url": "https://dynamitejobs.com/skill/remote-project-management-jobs", "default_remote": True},
     "Just Join IT": {"kind": "linked_jobs", "url": "https://justjoin.it/job-offers/all-locations/pm?from=0", "job_path": r"/job-offer/[^/?#]+"},
     "Crossover": {"kind": "heading_list", "url": "https://www.crossover.com/jobs"},
     "JustRemote": {"kind": "heading_list", "url": "https://justremote.co/remote-project-manager-jobs", "default_remote": True},
