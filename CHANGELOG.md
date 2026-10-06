@@ -14,6 +14,8 @@
 
 ### Functionalitati
 
+- #515: responsive application shell, header global cu environment permanent, mobile KPI strip, sticky search + filter bottom sheet, JobCards compacte alternante, bottom navigation Jobs/Review/Applications/More, full-screen mobile Details cu scroll restoration si PASS promotion compact.
+
 - #13 / ATC-13-01: progres live ADMIN-only pentru Retrieve: active-run GCP status, checkpoint dupa fiecare sursa terminala, X/Y, procent real si GOOD/FAIL/SKIP/PARTIAL plus rezumat final; fara estimare temporala si fara schimbari de connectori.
 
 - #489 / ATC-489-07: retrase aliasurile browser/API legacy `/data/jobs.json`, `/data/search-config.json`, `/data/applications.json`, `/config` si `/commands/run`; authority ramane `/me/jobs`, `/me/preferences`, `/applications`, `/me/refresh` si `/admin/refresh`, iar runtime seed/bootstrap JSON poate ramane intern fara a redeveni API browser.
