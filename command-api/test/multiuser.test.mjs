@@ -23,6 +23,7 @@ import { migrationDatabaseConfig } from '../src/db/config.js';
 import { runtimePrivilegeReadiness, TENANT_AWARE_TABLES } from '../src/db/privilege-readiness.js';
 import { deleteTenantFirst, resolveAccountDeletionTarget } from '../src/db/tenant-gateway.js';
 import { provisionRuntimeRole } from '../scripts/db-provision-runtime.mjs';
+import { personalPreferencesChanged } from '../src/multiuser-api.js';
 
 const nomenclatures = JSON.parse(
   await readFile(new URL('../../data/nomenclatures.json', import.meta.url), 'utf8'),
@@ -680,3 +681,27 @@ test('admin deletion contract uses staged shared and tenant lifecycle boundaries
   assert.doesNotMatch(gateway, /jscc\.(?:user_id|profile_id)/i);
 });
 
+
+
+test('preference response changed flag reflects semantic personal change only', () => {
+  const current = {
+    schema_version:'1.0',
+    work_modes:{ remote:true, hybrid:true, onsite:false },
+    target_country_codes:['RO'],
+    search_country_codes:['RO'],
+    jobspipe_mode:'disabled',
+  };
+  assert.equal(personalPreferencesChanged(current, structuredClone(current)), false);
+  assert.equal(
+    personalPreferencesChanged(current, {
+      ...structuredClone(current),
+      work_modes:{ remote:true, hybrid:true, onsite:true },
+    }),
+    true,
+  );
+  assert.equal(
+    personalPreferencesChanged(current, { ...structuredClone(current), jobspipe_mode:'direct' }),
+    false,
+    'system collection policy must not affect personal semantic changed flag',
+  );
+});
