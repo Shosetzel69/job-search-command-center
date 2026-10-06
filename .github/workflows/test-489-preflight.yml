@@ -1,0 +1,62 @@
+name: TEST 489 preflight
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/test-489-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      TEST_ORIGIN: https://jscc-command-api-test-458209223616.europe-west1.run.app
+      CANDIDATE_SHA: af83b12125df0e138237dc35433033ab072a128e
+    steps:
+      - name: Wait for exact TEST candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            if body="$(curl --fail --silent --show-error "$TEST_ORIGIN/health" 2>/dev/null)"; then
+              echo "$body" | jq .
+              if jq -e --arg sha "$CANDIDATE_SHA" '.status == "ok" and .environment == "test" and .source_sha == $sha and .runtime_backend == "gcp"' <<<"$body" >/dev/null; then
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo "TEST did not expose the exact candidate within probe window" >&2
+          exit 1
+
+      - name: Verify TEST DB binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error "$TEST_ORIGIN/health/db")"
+          echo "$body" | jq .
+          jq -e '.status == "ok" and .environment == "test" and .database == "jobsearch_test"' <<<"$body" >/dev/null
+
+      - name: Verify auth config
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error "$TEST_ORIGIN/auth/config")"
+          echo "$body" | jq .
+          jq -e '.configured == true and (.client_id | type == "string" and length > 0)' <<<"$body" >/dev/null
+
+      - name: Verify protected endpoints fail closed without session
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in             "GET /me"             "GET /me/jobs"             "GET /me/preferences"             "GET /applications"             "POST /me/refresh"             "POST /admin/refresh"; do
+            method="${spec%% *}"
+            path="${spec#* }"
+            code="$(curl --silent --output /tmp/body --write-out '%{http_code}' -X "$method" "$TEST_ORIGIN$path")"
+            echo "$method $path -> $code"
+            test "$code" = "401" || { cat /tmp/body; exit 1; }
+          done
