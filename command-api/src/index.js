@@ -15,10 +15,10 @@ import {
   validateCategoryInput,
   validateSourceInput,
 } from './source-governance.js';
-import { assertEnvironmentConfig, manualSearchExecutionMode } from './environment-config.js';
+import { assertEnvironmentConfig } from './environment-config.js';
 import { BUILD_IDENTITY } from './build-identity.generated.js';
 import { internalAuthContext } from './internal-auth-context.js';
-import { canAccessRuntimeRepository, dispatchWorkflow, hasActiveWorkflowRun, readRuntimeJson, writeRuntimeJson } from './runtime-backend.js';
+import { canAccessRuntimeRepository, readRuntimeJson, writeRuntimeJson } from './runtime-backend.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const RUNTIME_PROTECTED_DATA_FILES = new Set([...PROTECTED_DATA_FILES, ...OPERATIONAL_DATA_FILES]);
@@ -156,14 +156,6 @@ async function authenticate(request, env, { allowGithubOidc = false, oidcDataFil
 
 function runtimeConfig(env) {
   return assertEnvironmentConfig(env, BUILD_IDENTITY);
-}
-
-async function hasActiveRun(env) {
-  return hasActiveWorkflowRun(env, runtimeConfig(env));
-}
-
-async function dispatchRun(env, runTrigger = 'manual-ui', checkActive = true, executionMode = 'policy') {
-  return dispatchWorkflow(env, runtimeConfig(env), runTrigger, checkActive, executionMode);
 }
 
 async function readRepoJson(env, path) {
@@ -360,33 +352,6 @@ function validateEffectiveSearchConfig(config, nomenclatures) {
   return config;
 }
 
-async function updateSearchConfig(env, patch, nomenclatures = null) {
-  const canonical = nomenclatures || (await readNomenclatures(env)).payload;
-  const path = env.SEARCH_CONFIG_PATH;
-  const { sha, payload: config } = await readRepoJson(env, path);
-  const before = JSON.stringify(config);
-  const updated = validateEffectiveSearchConfig(applyUserConfigPatch(config, patch), canonical);
-  if (JSON.stringify(updated) === before) return { config: updated, commit: null, changed: false };
-  const result = await writeRepoJson(env, path, sha, updated, 'Update search config from command API');
-  return { config: updated, commit: result?.commit?.sha || null, changed: true };
-}
-
-async function readSearchConfig(env, nomenclatures = null) {
-  const canonical = nomenclatures || (await readNomenclatures(env)).payload;
-  const { payload } = await readRepoJson(env, env.SEARCH_CONFIG_PATH);
-  return validateEffectiveSearchConfig(payload, canonical);
-}
-
-async function optionalJsonBody(request) {
-  const text = await request.text();
-  if (!text.trim()) return null;
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw Object.assign(new Error('Invalid JSON payload'), { status: 400 });
-  }
-}
-
 async function readSourceCategories(env) {
   const path = env.SOURCE_CATEGORIES_PATH || 'data/source-categories.json';
   const { sha, payload } = await readRepoJson(env, path);
@@ -483,32 +448,7 @@ export default {
         return json(await readProtectedRuntimeData(env, file), 200, cors);
       }
 
-      const user = await authenticate(request, env);
-
-      if (request.method === 'POST' && url.pathname === '/commands/run') {
-        const executionMode = manualSearchExecutionMode(runtime.appEnv, runtime.searchMode);
-        if (!executionMode) throw Object.assign(new Error('Full search is disabled for this environment'), { status: 409 });
-        if (await hasActiveRun(env)) throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
-        const input = await optionalJsonBody(request);
-        const nomenclatures = (await readNomenclatures(env)).payload;
-        let configCommit = null;
-        if (input !== null) {
-          const patch = validateUserConfigPatch(input, nomenclatures);
-          const result = await updateSearchConfig(env, patch, nomenclatures);
-          configCommit = result.commit;
-        } else {
-          await readSearchConfig(env, nomenclatures);
-        }
-        await dispatchRun(env, 'manual-ui', false, executionMode);
-        return json({ status:'accepted', requested_by:user.user_id || user.sub, trigger:'manual-ui', execution_mode:executionMode, source_sha:runtime.sourceSha, config_commit:configCommit }, 202, cors);
-      }
-
-      if (request.method === 'PUT' && url.pathname === '/config') {
-        const nomenclatures = (await readNomenclatures(env)).payload;
-        const input = validateUserConfigPatch(await request.json(), nomenclatures);
-        const result = await updateSearchConfig(env, input, nomenclatures);
-        return json({ status:'saved', commit:result.commit, changed:result.changed }, 200, cors);
-      }
+      await authenticate(request, env);
 
       if (request.method === 'GET' && url.pathname === '/source-categories') {
         const result = await readSourceCategories(env);
