@@ -1,0 +1,94 @@
+name: DEV 489 live acceptance probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/dev-489-live-acceptance.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEV_ORIGIN: https://jscc-command-api-dev-828902654738.europe-west1.run.app
+      CANDIDATE_SHA: af83b12125df0e138237dc35433033ab072a128e
+    steps:
+      - name: Wait for exact candidate health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            if body="$(curl --fail --silent --show-error "$DEV_ORIGIN/health" 2>/dev/null)"; then
+              echo "$body" | jq .
+              if jq -e --arg sha "$CANDIDATE_SHA" '.status == "ok" and .environment == "dev" and .source_sha == $sha' <<<"$body" >/dev/null; then
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo "DEV did not expose the exact candidate within probe window" >&2
+          exit 1
+
+      - name: Verify DEV DB binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error "$DEV_ORIGIN/health/db")"
+          echo "$body" | jq .
+          jq -e '.status == "ok" and .environment == "dev" and .database == "jobsearch_dev"' <<<"$body" >/dev/null
+
+      - name: Verify public auth configuration
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(curl --fail --silent --show-error "$DEV_ORIGIN/auth/config")"
+          echo "$body" | jq .
+          jq -e '.google_client_id != null' <<<"$body" >/dev/null
+
+      - name: Verify protected canonical endpoints fail closed without session
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in             "GET /me"             "GET /me/jobs"             "GET /me/preferences"             "GET /applications"             "POST /me/refresh"             "POST /admin/refresh"; do
+            method="${spec%% *}"
+            path="${spec#* }"
+            code="$(curl --silent --output /tmp/body --write-out '%{http_code}' -X "$method" "$DEV_ORIGIN$path")"
+            echo "$method $path -> $code"
+            test "$code" = "401" || { cat /tmp/body; exit 1; }
+          done
+
+      - name: Verify retired endpoints are not anonymously active
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in             "GET /data/jobs.json"             "GET /data/search-config.json"             "GET /data/applications.json"             "PUT /config"             "POST /commands/run"; do
+            method="${spec%% *}"
+            path="${spec#* }"
+            code="$(curl --silent --output /tmp/body --write-out '%{http_code}' -X "$method" "$DEV_ORIGIN$path")"
+            echo "$method $path -> $code"
+            case "$code" in
+              401|403|404) ;;
+              *) cat /tmp/body; exit 1 ;;
+            esac
+          done
+
+      - name: Verify PWA assets are network-safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error -D /tmp/manifest.h "$DEV_ORIGIN/manifest.webmanifest" -o /tmp/manifest
+          grep -qi '^cache-control: no-store' /tmp/manifest.h
+          jq -e '.display == "standalone"' /tmp/manifest >/dev/null
+
+          curl --fail --silent --show-error -D /tmp/sw.h "$DEV_ORIGIN/sw.js" -o /tmp/sw
+          grep -qi '^cache-control: no-store' /tmp/sw.h
+          grep -q "fetch" /tmp/sw
+          if grep -Eqi 'cache\.open|caches\.open|CacheStorage' /tmp/sw; then
+            echo "Service worker appears to cache data" >&2
+            cat /tmp/sw
+            exit 1
+          fi
