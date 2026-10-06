@@ -4,7 +4,7 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT } from 'jose';
 
 import { CANDIDATE_MANAGED_DATA_FILES, INTERNAL_DATA_FILES, OPERATIONAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import commandApi, { authorizeGithubOidcPayload, authorizeGooglePayload, protectedRuntimePath, readProtectedRuntimeData, validateUserConfigPatch, verifyGithubActionsOidcToken } from '../src/index.js';
-import secureEntry, { fullSearchAllowed } from '../src/secure-entry.js';
+import secureEntry, { retiredCompatibilityPath } from '../src/secure-entry.js';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -118,7 +118,7 @@ test('GitHub Actions OIDC is rejected on mutation endpoints before Google verifi
   const payload = Buffer.from(JSON.stringify(validOidcClaims())).toString('base64url');
   const fakeOidc = `${header}.${payload}.`;
 
-  const response = await commandApi.fetch(new Request('https://app.example.test/commands/run', {
+  const response = await commandApi.fetch(new Request('https://app.example.test/sources', {
     method:'POST',
     headers:{
       Origin:env.FRONTEND_ORIGIN,
@@ -312,22 +312,18 @@ test('privileged request from a forbidden origin is rejected before auth', async
 });
 
 test('preflight from a forbidden origin is rejected', async () => {
-  const response = await commandApi.fetch(new Request('https://app.example.test/config', {
+  const response = await commandApi.fetch(new Request('https://app.example.test/sources', {
     method: 'OPTIONS',
     headers: { Origin: 'https://evil.example.test' },
   }), env);
   assert.equal(response.status, 403);
 });
 
-test('manual full search admission is explicit per environment role', () => {
-  assert.equal(fullSearchAllowed('disabled', 'dev'), true);
-  assert.equal(fullSearchAllowed('smoke', 'test'), true);
-  assert.equal(fullSearchAllowed('live', 'prod'), true);
-
-  assert.equal(fullSearchAllowed('smoke', 'dev'), false);
-  assert.equal(fullSearchAllowed('live', 'dev'), false);
-  assert.equal(fullSearchAllowed('disabled', 'test'), false);
-  assert.equal(fullSearchAllowed('live', 'test'), false);
-  assert.equal(fullSearchAllowed('smoke', 'prod'), false);
-  assert.equal(fullSearchAllowed(undefined, 'dev'), false);
+test('ATC-489-07 retired compatibility paths are explicit and canonical paths remain active', () => {
+  for (const path of ['/data/jobs.json','/data/search-config.json','/data/applications.json','/config','/commands/run']) {
+    assert.equal(retiredCompatibilityPath(path), true, path);
+  }
+  for (const path of ['/me/jobs','/me/preferences','/me/refresh','/admin/refresh','/applications']) {
+    assert.equal(retiredCompatibilityPath(path), false, path);
+  }
 });
