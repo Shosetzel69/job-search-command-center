@@ -1660,7 +1660,10 @@ def _country_names_from_text(value):
 
 def _epoch_iso(value):
     try:
-        return datetime.fromtimestamp(float(value), tz=timezone.utc).isoformat()
+        raw = float(value)
+        if raw > 100_000_000_000:
+            raw /= 1000.0
+        return datetime.fromtimestamp(raw, tz=timezone.utc).isoformat()
     except (TypeError, ValueError, OSError):
         return None
 
@@ -3032,7 +3035,7 @@ def collect(source, config=None):
         records = _softgarden_feed(json.loads(body.decode("utf-8", errors="replace")), name, url)
     elif kind == "eures":
         payload = _post_json(url, {
-            "resultsPerPage": 100, "page": 1, "sortSearch": "MOST_RECENT",
+            "resultsPerPage": 50, "page": 1, "sortSearch": "MOST_RECENT",
             "keywords": [{"keyword": "project manager", "specificSearchCode": "EVERYWHERE"}],
             "publicationPeriod": None, "occupationUris": [], "skillUris": [],
             "requiredExperienceCodes": [], "positionScheduleCodes": [], "sectorCodes": [],

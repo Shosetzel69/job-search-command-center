@@ -22,7 +22,11 @@ class PublicBoardAdapterTests(unittest.TestCase):
         with patch.object(boards, "_post_json", side_effect=fake_post):
             result = boards.collect({"name": "EURES"})
         self.assertEqual(result[0].records, [])
+        self.assertEqual(captured["resultsPerPage"], 50)
         self.assertEqual(captured["keywords"], [{"keyword": "project manager", "specificSearchCode": "EVERYWHERE"}])
+
+    def test_eures_epoch_milliseconds_are_normalized(self):
+        self.assertEqual(boards._epoch_iso(1790330400000), "2026-09-25T06:00:00+00:00")
 
     def test_brains_collects_root_level_job_posts(self):
         archive = """<a href="/contact/">Contact</a><a href="/devops-cloud-architect-switzerland/">DevOps Cloud Architect - Switzerland</a>"""
