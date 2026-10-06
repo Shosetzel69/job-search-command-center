@@ -1,0 +1,68 @@
+name: DEV 515 combined preflight
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/dev-515-combined-preflight.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      DEV_ORIGIN: https://jscc-command-api-dev-828902654738.europe-west1.run.app
+      CANDIDATE_SHA: bd64bd9246431f6fcac1ee11d3213528eac61473
+    steps:
+      - name: Wait for exact combined candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            if body="$(curl --fail --silent --show-error "$DEV_ORIGIN/health" 2>/dev/null)"; then
+              echo "$body" | jq .
+              if jq -e --arg sha "$CANDIDATE_SHA" '.status == "ok" and .environment == "dev" and .source_sha == $sha and .runtime_data_sha == $sha and .runtime_backend == "gcp"' <<<"$body" >/dev/null; then
+                exit 0
+              fi
+            fi
+            sleep 15
+          done
+          echo "DEV did not expose exact #514+#515 candidate" >&2
+          exit 1
+
+      - name: Verify DEV DB and auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          db="$(curl --fail --silent --show-error "$DEV_ORIGIN/health/db")"
+          echo "$db" | jq .
+          jq -e '.status == "ok" and .environment == "dev" and .database == "jobsearch_dev"' <<<"$db" >/dev/null
+          auth="$(curl --fail --silent --show-error "$DEV_ORIGIN/auth/config")"
+          echo "$auth" | jq .
+          jq -e '.configured == true' <<<"$auth" >/dev/null
+
+      - name: Verify live responsive bundle markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$DEV_ORIGIN/" -o /tmp/index.html
+          asset="$(grep -oE 'src="/assets/[^"]+\.js"' /tmp/index.html | head -1 | cut -d'"' -f2)"
+          test -n "$asset"
+          curl --fail --silent --show-error "$DEV_ORIGIN$asset" -o /tmp/app.js
+          for marker in             'Job Search Command Center'             'Filtre'             'Mai multe'             'Progres actualizare surse'             'Inapoi'; do
+            grep -Fq "$marker" /tmp/app.js || { echo "Missing live GUI marker: $marker" >&2; exit 1; }
+          done
+
+      - name: Verify protected runtime status remains gated
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --output /tmp/body --write-out '%{http_code}' "$DEV_ORIGIN/data/run-status.json")"
+          echo "GET /data/run-status.json -> $code"
+          case "$code" in
+            401|403) ;;
+            *) cat /tmp/body; exit 1 ;;
+          esac
