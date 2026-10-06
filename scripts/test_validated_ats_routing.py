@@ -31,6 +31,15 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         self.assertEqual(plan[0]["outcome"], "validation_pending")
         self.assertEqual(plan[0]["failure_reason"], "live_api_route_not_validated")
 
+    def test_unvalidated_float_workable_board_stays_disabled(self):
+        source = {"id": "x", "name": "Float", "url": "https://www.float.com/careers", "active": True}
+        plan = orchestration.build_plan({"sources": [source]})
+        self.assertEqual(plan[0]["connector"], "workable")
+        self.assertEqual(plan[0]["connector_config"]["subdomain"], "floatjobs")
+        self.assertEqual(plan[0]["status"], "inactive")
+        self.assertEqual(plan[0]["outcome"], "validation_pending")
+        self.assertEqual(plan[0]["failure_reason"], "live_api_route_not_validated")
+
     def test_previously_live_validated_recovery_routes_remain_enabled(self):
         cases = {
             "ING Careers": ("workday", "https://ing.wd3.myworkdayjobs.com/ICSGBLCOR"),

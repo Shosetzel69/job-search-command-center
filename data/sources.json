@@ -2228,7 +2228,7 @@
       "name": "Float",
       "url": "https://www.float.com/careers",
       "active": true,
-      "collection_method": "web",
+      "collection_method": "workable",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
