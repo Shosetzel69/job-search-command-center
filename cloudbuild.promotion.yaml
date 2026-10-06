@@ -78,6 +78,8 @@ steps:
 
   - id: promote-dev
     name: gcr.io/cloud-builders/gcloud
+    env:
+      - "COMMIT_SHA=${COMMIT_SHA}"
     entrypoint: bash
     args:
       - -ceu
@@ -90,6 +92,8 @@ steps:
 
   - id: promote-test
     name: gcr.io/cloud-builders/gcloud
+    env:
+      - "COMMIT_SHA=${COMMIT_SHA}"
     entrypoint: bash
     args:
       - -ceu
