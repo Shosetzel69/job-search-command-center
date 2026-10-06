@@ -106,8 +106,8 @@ Reguli:
 - Google ID token ramane numai in memoria paginii;
 - filtrele/KPI locale nu declanseaza provider request;
 - modificarile administrative nu pornesc full search;
-- in target-ul ADR-005, retrieval-ul ramane shared/system-owned; manual collection este o actiune administrativa/operator, nu un retrieval per profil;
-- `Ruleaza verificarea` / `Ruleaza acum` poate porni explicit o collection run globala in DEV si TEST prin `manual-full`; nu exista trigger automat si nu se schimba politica PROD;
+- retrieval-ul este shared/system-owned; refresh-ul USER/ADMIN controleaza acelasi corpus global, nu un corpus provider per profil;
+- `POST /me/refresh` si `POST /admin/refresh` pot reutiliza, coalesca sau porni explicit collection globala conform policy; nu exista trigger automat din schimbari de profil si politica PROD ramane fail-closed;
 - dupa Package 2A8, UI nu mai detine liste functionale independente pentru regions/countries/work_modes/contract_types.
 
 ## 5. Command API
@@ -479,12 +479,12 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 - CI/CD functional verification foloseste separat GitHub Actions OIDC, cu token short-lived emis per workflow run;
 - GitHub OIDC este acceptat numai pentru read-only functional verification numai pentru `GET /data/sources.json`, `GET /data/source-categories.json` si `GET /data/nomenclatures.json`, cu issuer/audience/repository_id/environment/workflow_ref/time claims validate fail-closed;
 - GitHub OIDC nu autorizeaza `/commands`, configuratie sau alte mutatii si nu substituie autentificarea Google a utilizatorului;
-- target multiuser ADR-007: `Google sub -> user_identity -> app_user.user_id -> profile.profile_id`, cu exact un profil per user in MVP;
+- multiuser ADR-007 este implementat: `Google sub -> user_identity -> app_user.user_id -> profile.profile_id`, cu exact un profil per user in MVP;
 - `Google sub` este external identity subject; nu este PK/FK pentru datele personale si nu este authority furnizata de browser;
-- `ALLOWED_GOOGLE_SUB` ramane numai mecanism AS-IS single-user pana la cutover si nu exista fallback silent la el dupa cutover;
-- la autentificare Google reusita, target-ul emite o sesiune JSCC opaca, server-controlled, in cookie `__Host-jscc_session; Secure; HttpOnly; SameSite=Strict; Path=/`;
-- target Stage 1 foloseste sesiuni cu maximum absolut 60 minute; logout, DEACTIVATED si DELETE invalideaza server-side sesiunile;
-- dupa cutover, Google ID token este acceptat la boundary-ul de stabilire a sesiunii, nu ca bypass direct pentru endpoint-urile aplicatiei protejate;
+- `ALLOWED_GOOGLE_SUB` nu este authority end-user dupa cutover si nu exista fallback silent la mecanismul single-user;
+- la autentificare Google reusita, runtime-ul emite o sesiune JSCC opaca, server-controlled, in cookie `__Host-jscc_session; Secure; HttpOnly; SameSite=Strict; Path=/`;
+- Stage 1 foloseste sesiuni cu maximum absolut 60 minute; logout, DEACTIVATED si DELETE invalideaza server-side sesiunile;
+- Google ID token este acceptat la boundary-ul de stabilire a sesiunii, nu ca bypass direct pentru endpoint-urile aplicatiei protejate;
 - business/repository code consuma `AuthContext(user_id, profile_id, role, status)`, nu claims Google;
 - profilul autorizat este rezolvat server-side; un `profile_id` trimis de browser nu confera acces;
 - repository-urile personale necesita profile context autentificat si transaction-local;
