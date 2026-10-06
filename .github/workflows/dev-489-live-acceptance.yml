@@ -96,7 +96,7 @@ jobs:
               exit 1
             fi
           done
-          if grep -Eq '["'"']\/config["'"']' /tmp/app.js; then
+          if grep -Fq '"/config"' /tmp/app.js || grep -Fq "'/config'" /tmp/app.js; then
             echo "Retired /config endpoint remains in live frontend bundle" >&2
             exit 1
           fi
