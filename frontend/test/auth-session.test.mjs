@@ -111,7 +111,7 @@ test('protected 401 schedules visible reauthentication and disables automatic re
     setTimeout(callback){ callback(); },
   };
   assert.equal(installAuthFailureReload(target), true);
-  const response = await target.fetch('/data/jobs.json');
+  const response = await target.fetch('/me/jobs');
   assert.equal(response.status, 401);
   assert.equal(storage.getItem(GOOGLE_AUTO_RESTORE_DISABLED_KEY), '1');
   assert.equal(reloads, 1);
@@ -119,9 +119,9 @@ test('protected 401 schedules visible reauthentication and disables automatic re
 
 test('only same-origin protected 401 responses trigger forced reauthentication', () => {
   const target = { location:{ href:'https://app.example.test/', origin:'https://app.example.test' } };
-  assert.equal(isProtectedAuthFailure('/data/jobs.json', { status:401 }, target), true);
-  assert.equal(isProtectedAuthFailure('/commands/run', { status:401 }, target), true);
+  assert.equal(isProtectedAuthFailure('/me/jobs', { status:401 }, target), true);
+  assert.equal(isProtectedAuthFailure('/me/refresh', { status:401 }, target), true);
   assert.equal(isProtectedAuthFailure('/auth/session', { status:401 }, target), false);
-  assert.equal(isProtectedAuthFailure('/commands/run', { status:403 }, target), false);
+  assert.equal(isProtectedAuthFailure('/me/refresh', { status:403 }, target), false);
   assert.equal(isProtectedAuthFailure('https://other.example.test/x', { status:401 }, target), false);
 });

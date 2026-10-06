@@ -97,7 +97,6 @@ function normalizeApplication(application){const ref=application.reference?`Refe
 };}
 function criteriaFromConfig(config){
   const groups=config?.role_groups||{},modes=config?.work_modes||{};
-  const legacyMode=config?.jobspipe_enabled===true?'direct':'disabled';
   return{
     rolePm:groups.pm?.enabled===true,
     roleDelivery:groups.delivery?.enabled===true,
@@ -114,10 +113,6 @@ function criteriaFromConfig(config){
     rateMin:Number(config?.rate_min_eur_day??0),
     rateMax:Number(config?.rate_max_eur_day??10000),
     immediateStart:config?.immediate_start===true,
-    jobspipeMode:config?.jobspipe_mode||legacyMode,
-    jobspipeApifyMaxItems:Number(config?.jobspipe_apify_max_items_per_run??5000),
-    jobspipeDirectRunBudget:Number(config?.jobspipe_credit_budget_per_run??14),
-    jobspipeDirectMonthlyGuard:Number(config?.jobspipe_monthly_credit_guard??950),
     exclusions:Array.isArray(config?.exclusions)?[...config.exclusions]:[],
     targetRegions:Array.isArray(config?.target_regions)?[...config.target_regions]:[],
     targetCountries:Array.isArray(config?.target_country_codes)?[...config.target_country_codes]:Array.isArray(config?.search_country_codes)?[...config.search_country_codes]:[],
@@ -131,11 +126,33 @@ function normalizeSource(source){const method=source.collection_method||sourceCo
 const jobKey=job=>String(job.id||`${job.title}|${job.company}|${job.date_posted||''}`);
 function publishedLabel(job){if(job.isApplication)return job.date_posted?`aplicat ${job.date_posted}`:'aplicat';const age=ageHours(job.date_posted,job.age);if(age<1)return'sub 1h';if(age<24)return`${age}h`;const days=Math.floor(age/24),hours=age%24;return hours?`${days}z ${hours}h`:`${days}z`;}
 function formatRunTime(value){if(!value)return'—';try{return new Intl.DateTimeFormat('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Bucharest'}).format(new Date(value));}catch{return value;}}
-function geographyConflicts(criteria){const targetR=new Set(criteria.targetRegions||[]),excludedR=new Set(criteria.excludedRegions||[]),targetC=new Set(criteria.targetCountries||[]),excludedC=new Set(criteria.excludedCountries||[]);for(const x of targetR)if(excludedR.has(x))return true;for(const x of targetC)if(excludedC.has(x))return true;for(const r of targetR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;return false;}
+function geographyConflicts(criteria){const targetR=new Set(criteria.targetRegions||[]),excludedR=new Set(criteria.excludedRegions||[]),targetC=new Set(criteria.targetCountries||[]),excludedC=new Set(criteria.excludedCountries||[]);for(const x of targetR)if(excludedR.has(x))return true;for(const x of targetC)if(excludedC.has(x))return true;for(const r of targetR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of targetR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;return false;}
 function hasTargetGeography(criteria){return Boolean(criteria?.targetRegions?.length||criteria?.targetCountries?.length);}
 function hasSelectedRole(criteria){return Boolean(criteria?.rolePm||criteria?.roleDelivery||criteria?.roleService||criteria?.roleScrum||criteria?.roleProgram);}
 function hasSelectedWorkMode(criteria){return Boolean(criteria?.workRemote||criteria?.workHybrid||criteria?.workOnsite);}
 function hasSelectedContractType(criteria){return Array.isArray(criteria?.contractTypes)&&criteria.contractTypes.length>0;}
+function preferencePatchFromCriteria(criteria){return{
+  rolePm:criteria.rolePm===true,
+  roleDelivery:criteria.roleDelivery===true,
+  roleService:criteria.roleService===true,
+  roleScrum:criteria.roleScrum===true,
+  roleProgram:criteria.roleProgram===true,
+  workRemote:criteria.workRemote===true,
+  workHybrid:criteria.workHybrid===true,
+  workOnsite:criteria.workOnsite===true,
+  contractTypes:[...(criteria.contractTypes||[])],
+  freshness:Number(criteria.freshness),
+  fitThreshold:Number(criteria.fitThreshold),
+  keepReposts:criteria.keepReposts!==false,
+  rateMin:Number(criteria.rateMin),
+  rateMax:Number(criteria.rateMax),
+  immediateStart:criteria.immediateStart===true,
+  exclusions:[...(criteria.exclusions||[])],
+  targetRegions:[...(criteria.targetRegions||[])],
+  targetCountries:[...(criteria.targetCountries||[])],
+  excludedRegions:[...(criteria.excludedRegions||[])],
+  excludedCountries:[...(criteria.excludedCountries||[])],
+};}
 
 function loadGoogleIdentityScript(){if(window.google?.accounts?.id)return Promise.resolve();return new Promise((resolve,reject)=>{const existing=document.querySelector('script[data-google-identity]');if(existing){existing.addEventListener('load',resolve,{once:true});existing.addEventListener('error',reject,{once:true});return;}const script=document.createElement('script');script.src='https://accounts.google.com/gsi/client';script.async=true;script.defer=true;script.dataset.googleIdentity='true';script.onload=resolve;script.onerror=()=>reject(new Error('Google Identity Services nu a putut fi incarcat.'));document.head.appendChild(script);});}
 function GoogleSignIn({clientId,loginHint,allowAutoRestore,onCredential,disabled}){const ref=useRef(null);useEffect(()=>{let active=true;if(!clientId||disabled)return undefined;loadGoogleIdentityScript().then(()=>{if(!active||!ref.current)return;const options=googleIdentityOptions({clientId,loginHint,allowAutoRestore,onCredential});window.google.accounts.id.initialize(options);ref.current.innerHTML='';window.google.accounts.id.renderButton(ref.current,{theme:'outline',size:'large',shape:'rectangular',text:'signin_with'});if(options.auto_select)window.google.accounts.id.prompt();}).catch(()=>{});return()=>{active=false;};},[clientId,loginHint,allowAutoRestore,disabled,onCredential]);return<div ref={ref} className={disabled?'pointer-events-none opacity-60':''}/>;}
@@ -406,7 +423,7 @@ function App(){
     finally{setRunning(false);}
   },[auth.token,auth.role,running,savedCriteria,runStatus,notify,loadJobsPage,pollRun]);
 
-  const saveCriteria=useCallback(async()=>{if(!auth.token||saving)return;if(geographyConflicts(draftCriteria)){notify('Rezolva conflictul dintre includerile si excluderile teritoriale.','error');return;}if(!hasTargetGeography(draftCriteria)){notify('Selecteaza cel putin o tara sau regiune tinta.','error');return;}if(!hasSelectedRole(draftCriteria)){notify('Selecteaza cel putin un grup de roluri pentru Retrieve.','error');return;}if(!hasSelectedWorkMode(draftCriteria)){notify('Selecteaza cel putin un mod de lucru pentru Retrieve.','error');return;}if(!hasSelectedContractType(draftCriteria)){notify('Selecteaza cel putin un tip de contract pentru Retrieve.','error');return;}setSaving(true);try{const result=await commandApi('/me/preferences',auth.token,{method:'PUT',body:JSON.stringify(draftCriteria)});setSavedCriteria(draftCriteria);setCanonicalConfig(result?.preferences||canonicalConfig);const nextFilters={...filtersRef.current,freshness:filtersRef.current.freshness??draftCriteria.freshness};setFilters(nextFilters);await loadJobsPage(auth.token,draftCriteria,nextFilters);notify('Preferintele au fost salvate. Nu a fost pornit niciun Retrieve.','success');}catch(error){notify('Preferintele nu au putut fi salvate: '+error.message,'error');}finally{setSaving(false);}},[auth.token,saving,draftCriteria,notify,loadJobsPage,canonicalConfig]);
+  const saveCriteria=useCallback(async()=>{if(!auth.token||saving)return;if(geographyConflicts(draftCriteria)){notify('Rezolva conflictul dintre includerile si excluderile teritoriale.','error');return;}if(!hasTargetGeography(draftCriteria)){notify('Selecteaza cel putin o tara sau regiune tinta.','error');return;}if(!hasSelectedRole(draftCriteria)){notify('Selecteaza cel putin un grup de roluri pentru Retrieve.','error');return;}if(!hasSelectedWorkMode(draftCriteria)){notify('Selecteaza cel putin un mod de lucru pentru Retrieve.','error');return;}if(!hasSelectedContractType(draftCriteria)){notify('Selecteaza cel putin un tip de contract pentru Retrieve.','error');return;}setSaving(true);try{const result=await commandApi('/me/preferences',auth.token,{method:'PUT',body:JSON.stringify(preferencePatchFromCriteria(draftCriteria))});setSavedCriteria(draftCriteria);setCanonicalConfig(result?.preferences||canonicalConfig);const nextFilters={...filtersRef.current,freshness:filtersRef.current.freshness??draftCriteria.freshness};setFilters(nextFilters);await loadJobsPage(auth.token,draftCriteria,nextFilters);notify('Preferintele au fost salvate. Nu a fost pornit niciun Retrieve.','success');}catch(error){notify('Preferintele nu au putut fi salvate: '+error.message,'error');}finally{setSaving(false);}},[auth.token,saving,draftCriteria,notify,loadJobsPage,canonicalConfig]);
 
   const loadMoreJobs=useCallback(()=>{if(auth.token&&jobPage.nextCursor&&!jobPage.loadingMore)loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor:jobPage.nextCursor,append:true}).catch(error=>notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error'));},[auth.token,jobPage.nextCursor,jobPage.loadingMore,savedCriteria,loadJobsPage,notify]);
   const changeView=useCallback(next=>{setView(next);if(next!=='jobs')setKpiFilter('all');},[]);
