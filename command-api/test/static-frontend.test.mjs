@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { isApiPath, staticFrontendResponse } from '../src/static-frontend.js';
 
-test('API paths are never handled by the static frontend', () => {
+test('canonical and retired API paths are never handled by the static frontend', () => {
   for (const path of ['/health','/health/db','/auth/config','/auth/session','/data/jobs.json','/commands/run','/config','/me','/me/jobs','/me/refresh','/admin/refresh','/applications','/applications/example','/sources','/source-categories/x','/nomenclatures']) {
     assert.equal(isApiPath(path), true, path);
   }
@@ -38,9 +38,11 @@ test('serves index, static assets and SPA fallback', async () => {
   assert.equal(missingAsset.status, 404);
 });
 
-test('API request returns null so Command API retains authority', async () => {
-  const response = await staticFrontendResponse(new Request('https://dev.example/data/jobs.json'));
-  assert.equal(response, null);
+test('canonical and retired API requests return null so Command API retains authority', async () => {
+  for (const path of ['/me/jobs','/data/jobs.json','/commands/run','/config']) {
+    const response = await staticFrontendResponse(new Request('https://dev.example' + path));
+    assert.equal(response, null, path);
+  }
 });
 
 test('manifest and service worker use explicit non-cacheable static semantics', async () => {
