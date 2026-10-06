@@ -5,10 +5,12 @@ deduplication and scoring remain in the canonical search engine.
 """
 
 import json
+import time
 from concurrent.futures import ThreadPoolExecutor
 import re
 from html.parser import HTMLParser
 from urllib.parse import quote, urlsplit
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import job_search as engine
@@ -56,9 +58,25 @@ def parse_career_url(career_url):
             "origin": origin, "public_base": public_base, "cxs_base": cxs_base}
 
 
-def _request_json(request, opener=urlopen):
-    with opener(request, timeout=30) as response:
-        body = response.read(MAX_BYTES + 1)
+def _request_json(request, opener=urlopen, max_attempts=3):
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            with opener(request, timeout=30) as response:
+                body = response.read(MAX_BYTES + 1)
+            break
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code != 429 or attempt + 1 >= max_attempts:
+                raise
+            retry_after = 0
+            try:
+                retry_after = int((exc.headers or {}).get("Retry-After") or 0)
+            except (TypeError, ValueError):
+                retry_after = 0
+            time.sleep(min(5, max(1, retry_after or (attempt + 1))))
+    else:
+        raise last_error
     if len(body) > MAX_BYTES:
         raise ValueError("Workday response exceeds size limit")
     payload = json.loads(body)

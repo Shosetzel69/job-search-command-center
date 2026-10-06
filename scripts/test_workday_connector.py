@@ -1,6 +1,6 @@
 import json
 import unittest
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import job_search_workday as workday
 
@@ -20,6 +20,17 @@ class FakeResponse:
 
 
 class WorkdayConnectorTests(unittest.TestCase):
+    def test_request_json_retries_http_429(self):
+        from urllib.error import HTTPError
+        error = HTTPError("https://example.com", 429, "Too Many Requests", {"Retry-After": "1"}, None)
+        opener = Mock(side_effect=[error, FakeResponse({"ok": True})])
+        request = workday.Request("https://example.com")
+        with patch.object(workday.time, "sleep") as sleep:
+            payload = workday._request_json(request, opener=opener)
+        self.assertEqual(payload, {"ok": True})
+        self.assertEqual(opener.call_count, 2)
+        sleep.assert_called_once()
+
     def test_parse_career_url_with_locale(self):
         board = workday.parse_career_url(
             "https://example.wd3.myworkdayjobs.com/en-US/External"
