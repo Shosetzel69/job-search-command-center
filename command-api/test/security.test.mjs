@@ -327,3 +327,18 @@ test('ATC-489-07 retired compatibility paths are explicit and canonical paths re
     assert.equal(retiredCompatibilityPath(path), false, path);
   }
 });
+
+
+test('malformed Google credential at session establishment is normalized to generic 401', async () => {
+  const response = await secureEntry.fetch(new Request('https://app.example.test/auth/session', {
+    method:'POST',
+    headers:{
+      Origin:env.FRONTEND_ORIGIN,
+      Authorization:'Bearer abc',
+    },
+  }), env);
+  assert.equal(response.status, 401);
+  const body = await response.json();
+  assert.equal(body.error, 'Invalid Google ID token');
+  assert.doesNotMatch(body.error, /jose|jws|jwk|compact/i);
+});
