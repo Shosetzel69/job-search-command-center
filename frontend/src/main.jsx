@@ -162,33 +162,57 @@ function Brand(){return<div className="flex items-center gap-3 px-5 py-5"><div c
 function SignedOutScreen({clientId,loginHint,allowAutoRestore,authError,authStatus,onCredential}){return<div className="min-h-screen bg-slate-50 md:flex"><aside className="bg-slate-950 md:min-h-screen md:w-64 md:shrink-0"><Brand/></aside><main className="flex min-h-[calc(100vh-80px)] flex-1 items-start justify-center p-6 pt-10 md:min-h-screen md:justify-start md:p-12"><div className="w-full max-w-sm rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><h1 className="font-display text-xl font-bold text-slate-900">Acces securizat</h1><p className="mt-1 text-sm text-slate-500">Autentifica-te cu contul Google autorizat.</p><div className="mt-5 min-h-11">{clientId?<GoogleSignIn clientId={clientId} loginHint={loginHint} allowAutoRestore={allowAutoRestore} onCredential={onCredential} disabled={authStatus==='authenticating'}/>:<div className="h-11 animate-pulse rounded-lg bg-slate-100"/>}</div>{authStatus==='authenticating'&&<p className="mt-3 text-sm text-slate-500">Se verifica sesiunea...</p>}{authError&&<div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{authError}</div>}</div></main></div>;}
 
 function SidebarBadge({value,active}){return<span className={cx('ml-auto min-w-6 rounded-full px-2 py-0.5 text-center text-xs font-semibold text-white',active?'bg-blue-500':'bg-slate-700')}>{value}</span>;}
-function Sidebar({view,onView,counts,runStatus,environment,role}) {
+function Sidebar({view,onView,counts,runStatus,role}) {
   const items=[['jobs','Joburi noi','jobs',counts.jobs],['review','De evaluat','review',counts.review],['applications','Aplicari','applications',counts.applications],['criteria','Criterii de selectie','criteria',null],...(role==='ADMIN'?[['admin','Administrare','admin',null]]:[])];
   const progress=runProgressModel(runStatus);
   const statusTone=runStatus?.status==='completed'?'bg-emerald-500':isActiveRunStatus(runStatus?.status)?'bg-blue-500':runStatus?.status==='completed_with_errors'?'bg-amber-500':'bg-slate-500';
-  return <aside className="hidden bg-slate-950 text-slate-300 md:sticky md:top-0 md:flex md:h-screen md:w-64 md:shrink-0 md:flex-col">
-    <Brand/>
-    <nav className="space-y-1 px-3">{items.map(([key,label,icon,count])=><button key={key} onClick={()=>onView(key)} className={cx('flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition',view===key?'bg-slate-800 text-white':'hover:bg-slate-900 hover:text-white')}><Icon name={icon}/><span>{label}</span>{count!==null&&<SidebarBadge value={count} active={view===key}/>}</button>)}</nav>
-    <div className="mt-auto border-t border-slate-800 p-4">{role==='ADMIN'&&<><div className="flex items-center gap-2 text-xs text-slate-400"><span className={cx('h-2 w-2 rounded-full',statusTone)}/><span>{isActiveRunStatus(runStatus?.status)?'Rulare in curs':'Ultima rulare'}</span></div><div className="mt-1 text-xs text-slate-500">{formatRunTime(runStatus?.completed_at||runStatus?.started_at)} · {progress.active?`${progress.processed}/${progress.total} surse · ${progress.percent}%`:`${progress.processed} surse`}</div></>}<div className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-400"><span>{APP_VERSION}</span><EnvironmentMarker environment={environment}/></div></div>
+  return <aside className="hidden bg-slate-950 text-slate-300 md:sticky md:top-14 md:flex md:h-[calc(100vh-3.5rem)] md:w-64 md:shrink-0 md:flex-col">
+    <nav className="space-y-1 px-3 py-4">{items.map(([key,label,icon,count])=><button key={key} onClick={()=>onView(key)} className={cx('flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-medium transition',view===key?'bg-slate-800 text-white':'hover:bg-slate-900 hover:text-white')}><Icon name={icon}/><span>{label}</span>{count!==null&&<SidebarBadge value={count} active={view===key}/>}</button>)}</nav>
+    {role==='ADMIN'&&<div className="mt-auto border-t border-slate-800 p-4"><div className="flex items-center gap-2 text-xs text-slate-400"><span className={cx('h-2 w-2 rounded-full',statusTone)}/><span>{isActiveRunStatus(runStatus?.status)?'Rulare in curs':'Ultima rulare'}</span></div><div className="mt-1 text-xs text-slate-500">{formatRunTime(runStatus?.completed_at||runStatus?.started_at)} · {progress.active?`${progress.processed}/${progress.total} surse · ${progress.percent}%`:`${progress.processed} surse`}</div></div>}
   </aside>;
 }
 
-function BottomNav({view,onView,counts,role}) {
-  const items=[['jobs','Joburi','jobs',counts.jobs],['review','Review','review',counts.review],['applications','Aplicari','applications',counts.applications],['criteria','Criterii','criteria',null],...(role==='ADMIN'?[['admin','Admin','admin',null]]:[])];
-  return <nav aria-label="Navigatie principala" className="safe-bottom fixed inset-x-0 bottom-0 z-40 border-t border-slate-200 bg-white/95 px-1 pt-1 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
-    <div className={cx('grid gap-1',items.length===5?'grid-cols-5':'grid-cols-4')}>
-      {items.map(([key,label,icon,count])=><button key={key} type="button" onClick={()=>onView(key)} aria-current={view===key?'page':undefined} className={cx('relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold',view===key?'bg-blue-50 text-blue-700':'text-slate-500')}><Icon name={icon} className="h-5 w-5"/><span className="max-w-full truncate">{label}</span>{count!==null&&<span className="absolute right-1 top-1 min-w-4 rounded-full bg-slate-100 px-1 text-[9px] text-slate-600">{count}</span>}</button>)}
-    </div>
-  </nav>;
+function BottomNav({view,onView,counts,role,onLogout}) {
+  const[moreOpen,setMoreOpen]=useState(false);
+  const primary=[['jobs','Joburi','jobs',counts.jobs],['review','Review','review',counts.review],['applications','Aplicari','applications',counts.applications]];
+  const choose=key=>{setMoreOpen(false);onView(key);};
+  const moreActive=['criteria','admin'].includes(view);
+  return <>
+    {moreOpen&&<button type="button" aria-label="Inchide meniul More" onClick={()=>setMoreOpen(false)} className="fixed inset-0 z-40 bg-slate-950/20 md:hidden"/>}
+    {moreOpen&&<section aria-label="Mai multe optiuni" className="safe-bottom fixed inset-x-3 bottom-[4.75rem] z-50 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl md:hidden">
+      <button type="button" onClick={()=>choose('criteria')} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"><Icon name="criteria"/> Criterii de selectie</button>
+      {role==='ADMIN'&&<button type="button" onClick={()=>choose('admin')} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"><Icon name="admin"/> Administrare</button>}
+      <div className="my-1 border-t border-slate-100"/>
+      <div className="px-3 py-2 text-xs text-slate-400">{APP_VERSION}</div>
+      <button type="button" onClick={onLogout} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-600 hover:bg-slate-50"><Icon name="logout"/> Deconecteaza</button>
+    </section>}
+    <nav aria-label="Navigatie principala" className="safe-bottom fixed inset-x-0 bottom-0 z-50 border-t border-slate-200 bg-white/95 px-1 pt-1 shadow-[0_-8px_24px_rgba(15,23,42,0.08)] backdrop-blur md:hidden">
+      <div className="grid grid-cols-4 gap-1">
+        {primary.map(([key,label,icon,count])=><button key={key} type="button" onClick={()=>choose(key)} aria-current={view===key?'page':undefined} className={cx('relative flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold',view===key?'bg-blue-50 text-blue-700':'text-slate-500')}><Icon name={icon} className="h-5 w-5"/><span className="max-w-full truncate">{label}</span>{count!==null&&<span className="absolute right-1 top-1 min-w-4 rounded-full bg-slate-100 px-1 text-[9px] text-slate-600">{count}</span>}</button>)}
+        <button type="button" onClick={()=>setMoreOpen(v=>!v)} aria-expanded={moreOpen} className={cx('flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl px-1 text-[10px] font-semibold',moreOpen||moreActive?'bg-blue-50 text-blue-700':'text-slate-500')}><span className="text-xl leading-none">•••</span><span>More</span></button>
+      </div>
+    </nav>
+  </>;
 }
 function ProfileMenu({email,onLogout}){const[open,setOpen]=useState(false),ref=useRef(null);const initial=(email||'G').slice(0,1).toUpperCase();useEffect(()=>{const handler=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)};document.addEventListener('mousedown',handler);return()=>document.removeEventListener('mousedown',handler);},[]);return<div className="relative" ref={ref}><button onClick={()=>setOpen(v=>!v)} className="flex h-10 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 text-sm text-slate-700 shadow-sm transition hover:bg-slate-50"><span className="grid h-7 w-7 place-items-center rounded-full bg-slate-100 text-xs font-bold text-slate-700">{initial}</span><span className="hidden max-w-40 truncate lg:block">{email||'Google conectat'}</span><Icon name="chevronDown" className="h-4 w-4 text-slate-400"/></button>{open&&<div className="absolute right-0 z-50 mt-2 w-64 rounded-xl border border-slate-200 bg-white p-2 shadow-lg"><div className="px-3 py-2"><div className="text-xs font-medium uppercase tracking-wide text-slate-400">Cont conectat</div><div className="mt-1 truncate text-sm font-medium text-slate-800">{email||'Google'}</div></div><div className="my-1 border-t border-slate-100"/><button onClick={onLogout} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm text-slate-600 hover:bg-slate-50 hover:text-slate-900"><Icon name="logout"/> Deconecteaza</button></div>}</div>;}
-function EnvironmentMarker({environment,className=''}){const label=environmentBadge(environment);if(!label)return null;return<span className={cx('inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold tracking-wide text-amber-800',className)}>{`[ ${label} ]`}</span>;}
-function Header({view,email,running,onRun,onLogout,environment,refreshDisabled=false}) {
+function EnvironmentMarker({environment,className=''}){const label=environmentBadge(environment);if(!label)return null;return<span className={cx('inline-flex rounded-md border border-amber-300 bg-amber-50 px-2 py-1 text-xs font-bold tracking-wide text-amber-800',className)}>{`[${label}]`}</span>;}
+
+function ApplicationHeader({email,onLogout,environment}) {
+  return <header className="safe-top sticky top-0 z-50 h-14 border-b border-slate-200 bg-white/95 backdrop-blur">
+    <div className="mx-auto flex h-full w-full max-w-[1660px] items-center justify-between px-3 sm:px-6">
+      <div className="flex min-w-0 items-center gap-2.5"><div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-blue-600 text-sm font-bold text-white">S</div><span className="truncate font-display text-sm font-bold text-slate-950 sm:text-base">Job Search</span><EnvironmentMarker environment={environment}/></div>
+      <div className="flex items-center gap-2"><span className="hidden text-xs text-slate-400 sm:inline">{APP_VERSION}</span><ProfileMenu email={email} onLogout={onLogout}/></div>
+    </div>
+  </header>;
+}
+
+function Header({view,running,onRun,refreshDisabled=false,metrics}) {
   const titles={jobs:'Joburi noi',review:'De evaluat',applications:'Aplicari',criteria:'Criterii de selectie',admin:'Administrare'};
   const date=new Intl.DateTimeFormat('ro-RO',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Bucharest'}).format(new Date()).toUpperCase();
-  return <header className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <div><div className="text-xs font-semibold tracking-[0.16em] text-slate-400">{date}</div><div className="mt-1 flex items-center gap-2"><h1 className="font-display text-xl font-bold tracking-tight text-slate-950 sm:text-2xl">{titles[view]}</h1><EnvironmentMarker environment={environment}/></div></div>
-    <div className="flex items-center gap-2"><button onClick={onRun} disabled={running||refreshDisabled} className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:flex-none sm:px-4"><Icon name="refresh" className={cx('h-4 w-4',running&&'animate-spin')}/>{running?'Actualizare...':'Actualizeaza joburile'}</button><ProfileMenu email={email} onLogout={onLogout}/></div>
+  const summary=view==='jobs'&&metrics?`${metrics.jobs} noi · ${metrics.high} fit · ${metrics.remote} remote`:view==='review'&&metrics?`${metrics.high} fit ridicat · ${metrics.scope}`:'';
+  return <header className="flex items-center justify-between gap-3">
+    <div className="min-w-0"><div className="hidden text-xs font-semibold tracking-[0.16em] text-slate-400 sm:block">{date}</div><h1 className="truncate font-display text-xl font-bold tracking-tight text-slate-950 sm:mt-1 sm:text-2xl">{titles[view]}</h1>{summary&&<div className="mt-0.5 truncate text-xs font-medium text-slate-500 md:hidden">{summary}</div>}</div>
+    {(view==='jobs'||view==='review'||view==='admin')&&<button onClick={onRun} disabled={running||refreshDisabled} className="inline-flex min-h-10 shrink-0 items-center justify-center gap-2 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-11 sm:px-4 sm:text-sm"><Icon name="refresh" className={cx('h-4 w-4',running&&'animate-spin')}/><span className="hidden sm:inline">{running?'Actualizare...':'Actualizeaza joburile'}</span><span className="sm:hidden">{running?'...':'Refresh'}</span></button>}
   </header>;
 }
 
