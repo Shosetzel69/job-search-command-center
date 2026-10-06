@@ -113,6 +113,13 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('"${_TARGET}" == "dev" || "${_TARGET}" == "dev-test"', promote_dev)
         self.assertNotIn('"${_TARGET}" == "test"', promote_dev)
 
+    def test_promotion_steps_export_control_plane_sha_to_promote_script(self):
+        promote_dev = BUILD[BUILD.index("- id: promote-dev"):BUILD.index("- id: promote-test")]
+        promote_test = BUILD[BUILD.index("- id: promote-test"):BUILD.index("- id: summarize")]
+        for step in (promote_dev, promote_test):
+            self.assertIn('COMMIT_SHA=${COMMIT_SHA}', step)
+        self.assertIn('pipeline_sha="${COMMIT_SHA:-${CANDIDATE_SHA}}"', PROMOTE)
+
     def test_standalone_test_attests_live_dev_before_test_promotion(self):
         promote_test = BUILD[BUILD.index("- id: promote-test"):BUILD.index("- id: summarize")]
         self.assertIn('capture_live_promotion_evidence.sh dev', promote_test)
