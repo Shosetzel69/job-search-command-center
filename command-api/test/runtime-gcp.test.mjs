@@ -39,7 +39,11 @@ test('GCP runtime adapter protects candidate-managed catalogs and uses atomic co
   assert.match(text, /heavy-search\.lock/);
   assert.match(text, /GCP_CURRENT_GENERATION/);
   assert.match(text, /current\.json&ifGenerationMatch/);
-  assert.match(text, /trap .*heavy-search\.lock/);
+  assert.match(text, /trap .*active\.json .*heavy-search\.lock/);
+  assert.match(text, /name === 'run-status\.json'/);
+  assert.match(text, /activeRunId/);
+  assert.match(text, /runs\/\$\{runId\}\/\$\{name\}/);
+  assert.match(text, /deleteObject\(env, 'active\.json'\)/);
 });
 
 test('Node server listens on PORT and delegates to the existing secure handler', () => {
