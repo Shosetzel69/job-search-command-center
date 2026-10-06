@@ -113,3 +113,28 @@ test('720h freshness is accepted for diagnostic runs', () => {
   const patch = validateUserConfigPatch({ freshness:720 }, nomenclatures);
   assert.equal(patch.freshness, 720);
 });
+
+
+test('unsupported canonical snake_case patch fields fail closed instead of reporting false success', () => {
+  assert.throws(
+    () => validateUserConfigPatch({ work_modes:{ remote:true, hybrid:true, onsite:true } }, nomenclatures),
+    error => error?.status === 400 && /unsupported preference field: work_modes/i.test(error.message),
+  );
+});
+
+test('target region and contained target country overlap is rejected', () => {
+  assert.throws(
+    () => validateUserConfigPatch({ targetRegions:['EU'], targetCountries:['RO'] }, nomenclatures),
+    error => error?.status === 400 && /se suprapun/i.test(error.message),
+  );
+  const config = {
+    ...baseConfig(),
+    target_regions:['EU'],
+    target_country_codes:['RO'],
+    search_country_codes:['RO'],
+  };
+  assert.throws(
+    () => validateEffectiveSearchConfig(config, nomenclatures),
+    error => error?.status === 400 && /se suprapun/i.test(error.message),
+  );
+});

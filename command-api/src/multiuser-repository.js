@@ -834,7 +834,6 @@ const JOB_PAGE_DEFAULT = 25;
 const JOB_PAGE_MAX = 100;
 const JOB_CANDIDATE_WINDOW_MAX = 400;
 const JOB_PREFETCH_MAX = 50;
-const LEGACY_JOB_PAGE_LIMIT = 100;
 
 function listValues(input) {
   const raw = Array.isArray(input) ? input : input == null ? [] : [input];
@@ -1165,25 +1164,6 @@ export async function listProfileJobs(
       jobs,
     };
   }, { env, db });
-}
-
-export async function evaluateProfileJobs(
-  authContext,
-  preferences,
-  nomenclatures,
-  env = process.env,
-  { db = getPool(env), now = new Date() } = {},
-) {
-  // Compatibility adapter only. It deliberately returns a bounded first page.
-  const page = await listProfileJobs(
-    authContext,
-    preferences,
-    nomenclatures,
-    { limit:LEGACY_JOB_PAGE_LIMIT },
-    env,
-    { db, now },
-  );
-  return { ...page, schema_version:'1.0' };
 }
 
 export async function nomenclatureReferenceCount(domain, code, env = process.env, { db = getPool(env) } = {}) {

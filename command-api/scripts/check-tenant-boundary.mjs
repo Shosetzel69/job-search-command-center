@@ -111,23 +111,10 @@ for (const fn of [
   }
 }
 
-// ATC-489-03: the legacy jobs endpoint is a compatibility adapter only.
-// It may delegate to the guarded listProfileJobs() boundary, but it must not
-// regain direct personal/shared SQL or a second tenant-transaction implementation.
-{
-  const fn = 'evaluateProfileJobs';
-  const start = repository.indexOf(`export async function ${fn}(`);
-  const next = start < 0 ? -1 : repository.indexOf('\nexport async function ', start + 1);
-  const block = start < 0 ? '' : repository.slice(start, next < 0 ? repository.length : next);
-  if (start < 0) {
-    fail(`missing expected compatibility adapter ${fn}`);
-  } else {
-    if (!block.includes('listProfileJobs(')) {
-      fail(`${fn} must delegate to listProfileJobs`);
-    }
-    if (block.includes('withTenantTransaction(') || /\b(?:FROM|JOIN|INTO|UPDATE|DELETE\s+FROM)\b/i.test(block)) {
-      fail(`${fn} compatibility adapter must not own SQL or tenant transactions`);
-    }
+// ATC-489-07: retired compatibility adapters must not reappear.
+for (const retired of ['evaluateProfileJobs']) {
+  if (repository.includes(`export async function ${retired}(`)) {
+    fail(`retired compatibility adapter ${retired} must not exist`);
   }
 }
 

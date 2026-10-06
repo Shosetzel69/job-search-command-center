@@ -166,14 +166,14 @@ Nota: Remote MCP / `ai-github-bridge` este infrastructura operationala de engine
 
 | ID | Titlu | Descriere | Categorie | Sursa | Prioritate |
 |---|---|---|---|---|---|
-| CFR-38 | Lansare cautare | `Ruleaza verificarea` porneste workflow-ul prin Command API. | Functionala | ##### | ##### |
-| CFR-39 | Duplicate run | Nu se porneste o a doua rulare daca una este `queued`/`in_progress`. | Functionala | ##### | ##### |
+| CFR-38 | Actualizare joburi | USER foloseste `POST /me/refresh`, iar ADMIN `POST /admin/refresh`; endpoint-ul reutilizeaza, se alatura sau porneste un singur Retrieve shared conform policy. | Functionala | #489 | P1 |
+| CFR-39 | Coalescing Retrieve | Un heavy Retrieve global activ este reutilizat; nu se porneste o a doua rulare echivalenta per utilizator. | Functionala | #489 | P1 |
 | CFR-40 | Polling status | Frontend-ul urmareste `run-status.json` pana la stare terminala si reincarca datele. | Functionala | #83 | ##### |
-| CFR-41 | Salvare preferinte | `Salveaza preferintele` persista prin `PUT /config` si nu porneste Full Search. | Functionala | #18 | P1 |
-| CFR-42 | Full Search manual-only | Full Search este pornit numai explicit prin `POST /commands/run` / `workflow_dispatch`; commit/push/config/admin nu il declanseaza. | Functionala | #79 | P1 |
+| CFR-41 | Salvare preferinte | `Salveaza preferintele` persista prin `PUT /me/preferences` si nu porneste provider Retrieve. | Functionala | #489 | P1 |
+| CFR-42 | Retrieve explicit | Provider Retrieve poate fi pornit numai prin controalele canonice de refresh/policy; save, GUI filters si administrarea metadata nu il declanseaza implicit. | Functionala | #489 | P1 |
 | CFR-88 | CRUD Surse API | CRUD-ul Surse foloseste Command API autentificat si GitHub Contents API; credentialele GitHub nu ajung in browser. | Functionala | ##### | ##### |
 | CFR-89 | Retry publicare | Publicarea rezultatelor reincearca controlat daca `main` se modifica in timpul publicarii si nu foloseste force push. | Functionala | #33 | ##### |
-| CFR-95 | Trigger canonic | Rularea manuala este inregistrata cu trigger canonic `manual-ui`. | Functionala | #79 | P1 |
+| CFR-95 | Trigger canonic | Rularile pornite din controalele canonice pastreaza trigger-ul operational aprobat (`admin-ui` pentru ADMIN; USER foloseste contractul global de refresh existent). | Functionala | #489 | P1 |
 
 ## 5. Cerinte Non-Functionale
 

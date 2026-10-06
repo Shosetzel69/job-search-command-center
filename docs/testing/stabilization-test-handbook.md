@@ -113,18 +113,15 @@ Navigheaza la:
 - Criterii de selectie;
 - Administrare.
 
-Unde inspectia network este disponibila, verifica accesul reusit la:
+Unde inspectia network este disponibila, verifica suprafata canonica:
+- `/me/jobs`;
+- `/me/preferences`;
+- `/applications`;
+- pentru ADMIN: `/data/run-status.json`, `/data/run-history.json`, `/data/sources.json`, `/data/source-categories.json`, `/data/nomenclatures.json`.
 
-- `/data/jobs.json`;
-- `/data/run-status.json`;
-- `/data/run-history.json`;
-- `/data/applications.json`;
-- `/data/sources.json`;
-- `/data/source-categories.json`;
-- `/data/search-config.json`;
-- `/data/nomenclatures.json`.
+ATC-489-07: cu sesiune autentificata, `/data/jobs.json`, `/data/search-config.json`, `/data/applications.json`, `/config` si `/commands/run` sunt retrase si trebuie sa raspunda fail-closed `404`; frontend-ul nu trebuie sa le apeleze.
 
-Regresie obligatorie #114: `source-categories.json` nu trebuie sa returneze 404.
+Regresie obligatorie #114: `source-categories.json` nu trebuie sa returneze 404 pentru ADMIN.
 
 Daca login-ul interactiv necesita interventie umana si nu exista sesiune reutilizabila, marcheaza testele UI dependente de auth `BLOCKED-AUTH`; nu astepta utilizatorul.
 

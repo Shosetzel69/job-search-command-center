@@ -1,101 +1,70 @@
 # Command API
 
-Versiune aplicatie: `0.07-dev`
-Ultima actualizare: `2026-10-02`
+Versiune aplicatie: `0.8.0`
+Ultima actualizare: `2026-10-06`
 
 ## Scop
 
-Command API executa actiunile privilegiate ale frontend-ului fara a expune credentiale GitHub in browser.
+Command API este boundary-ul server-side pentru autentificare/autorizare, date personale tenant-aware, administrare si controlul Retrieve-ului shared.
 
 Responsabilitati:
-- autentificare/autorizare Google;
-- protectie `/data/*`;
-- persistenta `search-config.json`;
-- comanda manuala de full search;
+- sesiuni JSCC opace peste autentificarea Google;
+- derivarea server-side a `AuthContext(user_id, profile_id, role, status)`;
+- `GET/PUT /me/preferences`, `GET /me/jobs` si profile-job state;
+- Applications profile-owned;
+- USER/ADMIN Refresh peste acelasi shared corpus si acelasi heavy-run lock;
 - Source Registry + categorii;
 - Nomenclatoare canonice + integritate referentiala;
-- acces server-side la GitHub Actions/Contents API.
+- date operationale ADMIN-only si reconcilierea candidate-managed strict allowlisted.
 
-Command API nu este motorul de cautare. In target-ul ADR-005/ADR-008 devine boundary-ul server-side pentru identity/authorization si repository/data-access catre PostgreSQL, fara SQL direct in frontend/business logic.
+Command API nu este motorul de cautare. Provider Retrieve ramane shared/system-owned si ruleaza prin runtime-ul canonic GCP.
 
-## Regula Save != Run
-
-AS-IS single-user:
+## Regula Save != Retrieve
 
 ```text
-PUT /config
--> valideaza
--> persista
--> STOP
+PUT /me/preferences
+-> valideaza Selection Criteria
+-> persista profile-owned preferences
+-> profile_version numai la schimbare semantica
+-> STOP (zero provider Retrieve)
 
-POST /commands/run
--> valideaza configuratia
--> blocheaza daca exista run activ
--> DEV/TEST: workflow_dispatch(run_trigger=manual-ui, source_sha=SOURCE_SHA, execution_mode=manual-full)
--> PROD: workflow_dispatch(run_trigger=manual-ui, source_sha=SOURCE_SHA, execution_mode=policy)
+POST /me/refresh
+-> reuse / join / start shared Retrieve conform policy
+
+POST /admin/refresh
+-> aggregate scope fara identitati personale
+-> reuse / join / start shared Retrieve conform policy
 ```
 
-Target ADR-005:
-
-```text
-USER profile change
--> persist personal profile
--> optional personal re-evaluation
--> NO provider retrieval
-
-global scheduler due OR ADMIN manual collection
--> global run admission
--> maximum one heavy collection run
--> shared corpus refresh
-```
-
-USER nu are manual Run/Search in target. Manual collection este ADMIN-only. Modificarile de profil, surse, categorii sau nomenclatoare nu pornesc implicit full search.
+Nu exista Retrieve implicit la schimbarea profilului, Surse/Categorii/Nomenclatoare sau GUI filters. Echivalentele legacy `PUT /config` si `POST /commands/run` sunt retrase de ATC-489-07.
 
 ## Autentificare
 
-### AS-IS single-user
-
-Browserul obtine un Google ID token prin Google Identity Services. Command API valideaza server-side Google JWKS, issuer si `GOOGLE_CLIENT_ID`, iar autorizarea curenta este limitata prin `ALLOWED_GOOGLE_SUB`.
-
-Current compatibility behavior may still place the verified Google ID token in the current `__Host-jscc_session` cookie until the multiuser cutover.
-
-### Target ADR-005 + ADR-007
-
-Identity resolution:
+Google Identity Services este Stage-1 IdP numai la stabilirea sesiunii. Command API valideaza server-side Google JWKS, issuer si `GOOGLE_CLIENT_ID`, apoi rezolva/provisioneaza identitatea interna:
 
 ```text
 Google ID token
  -> server-side verify
  -> user_identity(provider=GOOGLE, provider_subject=sub)
  -> app_user.user_id
- -> profile.profile_id
+ -> profile.profile_id / Nile tenant
+ -> opaque JSCC session
 ```
 
-Rules:
-- Google remains Stage-1 IdP;
-- Google `sub` is an external subject, not an internal FK;
-- account/profile resolution is server-side;
-- exactly one profile per user in MVP;
-- roles are `USER` and `ADMIN`;
-- browser-supplied user/profile identifiers do not confer authority;
-- ADMIN cannot read another user's personal content.
+Reguli curente:
+- Google `sub` este external subject, nu PK/FK pentru date personale;
+- exact un profil/user in MVP;
+- rolurile sunt `USER` si `ADMIN`;
+- browser-supplied user/profile identifiers nu confera authority;
+- sesiunea aplicatiei foloseste cookie `__Host-jscc_session; Secure; HttpOnly; SameSite=Strict; Path=/`;
+- numai hash-ul tokenului opac este persistat server-side;
+- Stage-1 absolute maximum lifetime este 60 minute;
+- logout/deactivation/deletion invalideaza server-side sesiunile;
+- Google ID token nu autorizeaza direct endpoint-uri normale dupa stabilirea sesiunii;
+- frontend poate pastra numai login hint non-secret pentru UX; tokenurile nu intra in Web Storage;
+- CI/CD GitHub Actions OIDC ramane identitate separata, strict allowlisted pentru reconciliere/read-only, nu sesiune end-user.
 
-On successful Google authentication, JSCC creates a fresh application-owned opaque session:
-- cookie `__Host-jscc_session`;
-- `Secure; HttpOnly; SameSite=Strict; Path=/`;
-- no Domain attribute;
-- raw token only in browser cookie;
-- only token hash persisted server-side;
-- Stage-1 absolute maximum lifetime 60 minutes;
-- logout/deactivation/deletion invalidate server-side sessions.
-
-After the multiuser cutover, Google ID tokens are accepted at the session-establishment boundary, not as direct authorization bypass for normal protected application endpoints.
-
-Business/repository code receives server-derived `AuthContext(user_id, profile_id, role, status)` and does not consume Google claims directly.
-
-Frontend may retain only non-secret Google login hint metadata for UX. Authentication/session tokens are not persisted in browser Web Storage.
-
-CI/CD keeps its separate GitHub Actions OIDC identity. It remains limited to the already-approved read-only functional-verification surface and cannot establish an end-user session or authorize mutations.
+Business/repository code consuma numai `AuthContext(user_id, profile_id, role, status)`.
 
 ## Endpoint-uri publice
 
@@ -106,7 +75,7 @@ CI/CD keeps its separate GitHub Actions OIDC identity. It remains limited to the
 
 ### `POST /auth/session`
 
-Target behavior:
+Behavior:
 - with a Google bearer credential: verify Google token, resolve/provision account, create a fresh JSCC session and set the session cookie;
 - with only a valid JSCC session cookie: validate the existing session and return the current account/profile summary without extending the absolute expiry;
 - DEACTIVATED account -> denied;
@@ -115,7 +84,7 @@ Target behavior:
 
 ### `POST /auth/logout`
 
-Target:
+Behavior:
 - same-origin;
 - revoke current server-side session if present;
 - clear cookie;
@@ -123,7 +92,7 @@ Target:
 
 ### `GET /me`
 
-Target authenticated identity summary:
+Authenticated identity summary:
 - own role/status;
 - account email metadata when needed by UI;
 - own profile identity.
@@ -131,9 +100,9 @@ Target authenticated identity summary:
 No caller-selected user/profile authority.
 
 
-## Target auth/authorization error semantics
+## Auth/authorization error semantics
 
-After multiuser cutover:
+Current semantics:
 - `401` — missing, invalid, expired or revoked JSCC session; invalid Google credential at session establishment;
 - `403` — authenticated account is DEACTIVATED or authenticated role lacks the requested capability;
 - `404` — tenant-scoped object is not visible in the caller's personal domain, including cross-tenant object-id probing;
@@ -142,83 +111,42 @@ After multiuser cutover:
 
 Mutating cookie-authenticated requests remain same-origin and validate the environment `FRONTEND_ORIGIN`.
 
-## Date protejate
+## Date protejate si runtime artifacts
 
-Manifestul canonic este `shared/runtime-data.mjs`.
+`shared/runtime-data.mjs` ramane manifestul comun pentru runtime artifacts. Existenta unui fisier in manifest nu il face automat API browser.
 
-Protected assets includ:
-- `jobs.json`;
-- `run-status.json`;
-- `run-history.json`;
-- `promotion-status.json`;
-- `search-config.json`;
-- `sources.json`;
-- `source-categories.json`;
-- `nomenclatures.json`;
-- `applications.json`.
+Browser/API canonic:
+- personal: `GET/PUT /me/preferences`, `GET /me/jobs`, `/applications`;
+- refresh: `POST /me/refresh`, `POST /admin/refresh`;
+- ADMIN operational: `/data/run-status.json`, `/data/run-history.json`, `/data/promotion-status.json`, plus datele administrative necesare;
+- candidate-managed reconciliation: numai fisierele explicit allowlisted pentru GitHub Actions OIDC.
 
-Reguli:
-- numai GET;
-- token lipsa/invalid -> 401/403;
-- path necunoscut -> 404;
-- `cache-control: no-store`;
-- `x-content-type-options: nosniff`.
+Runtime seed/bootstrap poate pastra intern `jobs.json`, `search-config.json` si `applications.json`, dar ATC-489-07 retrage aliasurile browser:
+- `GET /data/jobs.json`;
+- `GET /data/search-config.json`;
+- `GET /data/applications.json`;
+- `PUT /config`;
+- `POST /commands/run`.
 
-`promotion-status.json` este operational, ADMIN-only si citit din runtime-ul environment-ului; nu este release authority si nu contine secrete.
+Pentru o sesiune autentificata aceste rute retrase raspund fail-closed `404` in `secure-entry.js` si nu sunt forwardate catre implementarea legacy. Fara sesiune valida, auth ramane fail-closed inainte de aceasta rezolutie.
 
-`search-state.json` ramane intern.
+Toate raspunsurile protejate folosesc `cache-control: no-store` si `x-content-type-options: nosniff`. `search-state.json` ramane intern.
 
-## Configuratie
+## Personal / refresh API boundary
 
-### `PUT /config`
+Personal operations deriva tenantul exclusiv din sesiunea JSCC autentificata.
 
-Campuri UI principale:
-- role groups;
-- `workRemote`, `workHybrid`, `workOnsite`;
-- `contractTypes`;
-- freshness/FIT/reposts/rate/immediate start;
-- excluderi;
-- `targetRegions`, `targetCountries`;
-- `excludedRegions`, `excludedCountries`;
-- JobsPipe settings existente, cu JobsPipe ramas disabled in Package 2.
-
-Validarea pentru regions/countries/contract types foloseste `data/nomenclatures.json`, nu liste independente in Worker.
-
-Reguli geografice:
-- target complet gol -> 400;
-- cod/regiune inexistenta sau inactiva -> 400;
-- include/exclude conflict -> 400;
-- suprapunere regiune/tara -> 400.
-
-### `POST /commands/run`
-
-**AS-IS:** porneste exact un Full Search manual dupa validarea configuratiei. DEV si TEST folosesc explicit `execution_mode=manual-full` peste rolurile canonice `disabled` / `smoke`; PROD pastreaza `policy/live`. Run activ -> 409.
-
-**Target ADR-005:** endpoint-ul de manual collection este ADMIN-only si global, nu profile-owned. Run admission garanteaza maximum o executie grea globala. USER nu primeste acest drept.
-
-Dispatch-ul continua sa transporte obligatoriu `source_sha` exact al Worker-ului; workflow-ul valideaza SHA-ul si face checkout la acel commit inainte de executie.
-
-## Target personal/admin API boundary
-
-Personal operations derive the tenant from the authenticated JSCC session.
-
-Preferred target surface:
+Suprafata canonica:
+- `GET /me`;
 - `GET/PUT /me/preferences`;
-- personal job-state operations by shared `job_id`;
+- `GET /me/jobs` cu paginare bounded/cursor;
+- `PUT /me/jobs/:job_id/state`;
 - `GET/POST /applications`;
-- `PUT/DELETE /applications/:application_id`.
+- `PUT/DELETE /applications/:application_id`;
+- `POST /me/refresh`;
+- `POST /admin/refresh` pentru ADMIN.
 
-Compatibility endpoints such as current `PUT /config` may remain temporarily during migration, but the effective `profile_id` is always server-derived.
-
-ADMIN account lifecycle surface may expose:
-- account list/metadata required for administration;
-- deactivate;
-- reactivate;
-- delete.
-
-ADMIN endpoints do not expose another user's profile preferences, FIT/evaluation, applications, notes or personal workspace.
-
-Current `POST /commands/run` may remain the manual collection endpoint, but the ADR-005 target authorizes it only for ADMIN/system global collection.
+ADMIN lifecycle poate lista/dezactiva/reactiva/sterge accounts fara a expune continut personal cross-tenant. ADMIN nu primeste acces la preferintele, FIT/evaluation, applications, notes sau workspace-ul personal al altui utilizator.
 
 ## Source Registry
 

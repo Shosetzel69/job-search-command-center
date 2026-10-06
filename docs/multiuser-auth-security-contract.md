@@ -475,7 +475,7 @@ ADR-005 remains unchanged:
 - profile preference changes trigger personal re-evaluation only;
 - user count must not multiply source/provider retrieval.
 
-Existing `POST /commands/run` may remain the compatibility endpoint, but target authorization becomes ADMIN-only.
+ATC-489-07 retires `POST /commands/run`. USER refresh is `POST /me/refresh`; ADMIN global refresh is `POST /admin/refresh`. Neither endpoint accepts a caller-supplied tenant/profile selector, and user count must not multiply provider retrieval.
 
 ## 15. Environment isolation
 
