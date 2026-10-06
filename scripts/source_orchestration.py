@@ -335,7 +335,64 @@ def tag_collection_records(item, results):
             record.setdefault("_jscc_source_name", item.get("source"))
 
 
-def collect_sources(config, state, now, plan, run_id=None):
+def source_progress(plan, planned_source_ids):
+    planned = [item for item in plan if item.get("source_id") in planned_source_ids]
+    terminal = [item for item in planned if item.get("status") != "pending"]
+    total = len(planned)
+    processed = len(terminal)
+    completed = sum(item.get("status") == "completed" for item in terminal)
+    failed = sum(item.get("status") == "failed" for item in terminal)
+    skipped = sum(item.get("status") == "skipped" for item in terminal)
+    partial = sum(item.get("outcome") == "partial" for item in terminal)
+    percent = 100 if total == 0 else min(100, (processed * 100) // total)
+    return {
+        "sources_total": total,
+        "sources_processed": processed,
+        "sources_good": completed,
+        "sources_failed": failed,
+        "sources_skipped": skipped,
+        "sources_partial": partial,
+        "percent": percent,
+    }
+
+
+def write_progress_status(now, run_id, plan, planned_source_ids):
+    progress = source_progress(plan, planned_source_ids)
+    processed = [
+        item for item in plan
+        if item.get("source_id") in planned_source_ids and item.get("status") != "pending"
+    ]
+    payload = {
+        "schema_version": engine.SCHEMA_VERSION,
+        "run_id": run_id,
+        "status": "in_progress",
+        "started_at": now.isoformat(),
+        "completed_at": None,
+        "sources_configured": len(plan),
+        "sources_active": sum(bool(item.get("active")) for item in plan),
+        "sources_attempted": sum(item.get("status") in {"completed", "failed"} for item in processed),
+        "sources_processed": progress["sources_processed"],
+        "sources_succeeded": progress["sources_good"],
+        "sources_failed": progress["sources_failed"],
+        "sources_skipped": progress["sources_skipped"],
+        "sources_partial": progress["sources_partial"],
+        "sources": [item.get("source") for item in processed],
+        "failed_sources": [item.get("source") for item in processed if item.get("status") == "failed"],
+        "source_results": plan,
+        "source_outcome_schema_version": "1.0",
+        "progress": progress,
+        "records_inspected": sum(int(item.get("records") or 0) for item in processed),
+        "jobs_published": 0,
+        "excluded": 0,
+        "limitations": [],
+    }
+    engine.STATUS_PATH.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
+
+
+def collect_sources(config, state, now, plan, run_id=None, progress_callback=None):
     run_id = run_id or ("github-" + now.strftime("%Y%m%dT%H%M%SZ"))
     prepare_source_execution_ids(plan, run_id)
     with ThreadPoolExecutor(max_workers=12) as pool:
@@ -350,7 +407,7 @@ def collect_sources(config, state, now, plan, run_id=None):
                 config,
                 now,
             )
-        collection, metadata, mode = collect_api_sources(config, state, now, plan, run_id)
+        collection, metadata, mode = collect_api_sources(config, state, now, plan, run_id, progress_callback)
         for item in plan:
             if item["connector"] != "web" or item["status"] != "pending":
                 continue
@@ -364,6 +421,8 @@ def collect_sources(config, state, now, plan, run_id=None):
             tag_collection_records(item, results)
             record_results(item, results)
             collection.extend(results)
+            if progress_callback:
+                progress_callback()
     return collection, metadata, mode
 
 
@@ -456,7 +515,7 @@ def collect_ats(item):
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
-def collect_api_sources(config, state, now, plan, run_id=None):
+def collect_api_sources(config, state, now, plan, run_id=None, progress_callback=None):
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
@@ -469,11 +528,15 @@ def collect_api_sources(config, state, now, plan, run_id=None):
             item.update(status="skipped", outcome="disabled_config",
                         error="JobsPipe disabled by configuration",
                         failure_reason="JobsPipe disabled by configuration")
+            if progress_callback:
+                progress_callback()
             continue
         if connector == "jobspipe" and mode == "direct" and state.get("usage", {}).get("provider_quota_exhausted_month") == now.strftime("%Y-%m"):
             item.update(status="skipped", outcome="skipped",
                         error="JobsPipe direct monthly quota exhausted; no API call",
                         failure_reason="JobsPipe direct monthly quota exhausted; no API call")
+            if progress_callback:
+                progress_callback()
             continue
         if connector == "jobicy":
             last = engine.parse_posted_datetime(state.get("source_last_attempt", {}).get(connector))
@@ -481,6 +544,8 @@ def collect_api_sources(config, state, now, plan, run_id=None):
                 item.update(status="skipped", outcome="skipped",
                             error="Jobicy hourly polling limit; no API call",
                             failure_reason="Jobicy hourly polling limit; no API call")
+                if progress_callback:
+                    progress_callback()
                 continue
             state.setdefault("source_last_attempt", {})[connector] = now.isoformat()
         if run_id:
@@ -520,6 +585,8 @@ def collect_api_sources(config, state, now, plan, run_id=None):
         tag_collection_records(item, results)
         collection.extend(results)
         record_results(item, results)
+        if progress_callback:
+            progress_callback()
         if connector == "jobspipe" and mode == "direct" and "Monthly request quota exceeded" in (item["error"] or ""):
             state.setdefault("usage", {})["provider_quota_exhausted_month"] = now.strftime("%Y-%m")
     return collection, metadata, mode
@@ -530,6 +597,9 @@ def run(config, now):
     run_id = "github-" + now.strftime("%Y%m%dT%H%M%SZ")
     plan = build_plan(json.loads(SOURCES_PATH.read_text(encoding="utf-8")))
     prepare_source_execution_ids(plan, run_id)
+    planned_source_ids = {item.get("source_id") for item in plan if item.get("status") == "pending"}
+    write_progress_status(now, run_id, plan, planned_source_ids)
+    progress_callback = lambda: write_progress_status(now, run_id, plan, planned_source_ids)
     collection_config = shared_corpus.shared_collection_config(config)
     diagnostics.emit_event(
         "search.run.started",
@@ -539,8 +609,11 @@ def run(config, now):
         sources_configured=len(plan),
         sources_active=sum(item["active"] for item in plan),
     )
-    collection, metadata, mode = collect_sources(collection_config, state, now, plan, run_id)
+    collection, metadata, mode = collect_sources(
+        collection_config, state, now, plan, run_id, progress_callback
+    )
     finalize_source_outcomes(plan, run_id)
+    progress_callback()
     successful = any(result.ok for result in collection)
     shared_corpus_result = None
     output = None
@@ -583,6 +656,7 @@ def run(config, now):
         "lifecycle_advanced": 0,
     }
     status["source_outcome_schema_version"] = "1.0"
+    status["progress"] = source_progress(plan, planned_source_ids)
     status.update(aggregate_source_results(plan))
     attempted = [item for item in plan if item["status"] in {"completed", "failed"}]
     status.update({"source_strategy": config.get("source_strategy") or "all active sources equally",
