@@ -76,6 +76,31 @@ jobs:
             esac
           done
 
+      - name: Verify live frontend bundle uses canonical API surface
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error "$DEV_ORIGIN/" -o /tmp/index.html
+          grep -q 'rel="manifest"' /tmp/index.html
+          asset="$(grep -oE 'src="/assets/[^"]+\.js"' /tmp/index.html | head -1 | cut -d'"' -f2)"
+          test -n "$asset"
+          curl --fail --silent --show-error "$DEV_ORIGIN$asset" -o /tmp/app.js
+
+          for canonical in '/me/jobs' '/me/preferences' '/me/refresh' '/admin/refresh' '/applications'; do
+            grep -Fq "$canonical" /tmp/app.js || { echo "Missing canonical endpoint in live frontend bundle: $canonical" >&2; exit 1; }
+          done
+
+          for retired in '/data/jobs.json' '/data/search-config.json' '/data/applications.json' '/commands/run'; do
+            if grep -Fq "$retired" /tmp/app.js; then
+              echo "Retired endpoint remains in live frontend bundle: $retired" >&2
+              exit 1
+            fi
+          done
+          if grep -Eq '["'"']\/config["'"']' /tmp/app.js; then
+            echo "Retired /config endpoint remains in live frontend bundle" >&2
+            exit 1
+          fi
+
       - name: Verify PWA assets are network-safe
         shell: bash
         run: |
