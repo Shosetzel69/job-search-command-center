@@ -5,6 +5,32 @@ import job_search_public_boards as boards
 
 
 class PublicBoardAdapterTests(unittest.TestCase):
+    def test_recovered_source_routes_use_current_public_shapes(self):
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Remote.co"]["url"], "https://remote.co/remote-jobs/project-manager")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Remote.co"]["kind"], "heading_list")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Wellfound"]["url"], "https://wellfound.com/role/project-manager")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Flexa"]["kind"], "heading_list")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Crossover"]["kind"], "heading_list")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Proactive.IT"]["kind"], "linked_jobs")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Lawrence Harvey"]["url"], "https://www.lawrenceharvey.com/candidates")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Stripe"]["job_path"], r"/careers/listing/[^/?#]+/\d+")
+        self.assertTrue(boards.browser_required("Float"))
+        self.assertTrue(boards.browser_required("W Talent"))
+        self.assertTrue(boards.browser_required("Lawrence Harvey"))
+
+    def test_float_uses_rendered_authoritative_open_roles(self):
+        html = """<h2>Current open roles</h2><a href="/careers/technical-project-manager">Technical Project Manager</a>"""
+        with patch.object(boards.browser, "render", return_value=("https://www.float.com/careers", html, {})):
+            rows = boards._float_careers("https://www.float.com/careers")
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_title"], "Technical Project Manager")
+        self.assertEqual(rows[0]["source_url"], "https://www.float.com/careers/technical-project-manager")
+
+    def test_float_rendered_authoritative_empty_is_success_empty(self):
+        html = """<h2>Current open roles</h2><p>There are no openings right now.</p>"""
+        with patch.object(boards.browser, "render", return_value=("https://www.float.com/careers", html, {})):
+            self.assertEqual(boards._float_careers("https://www.float.com/careers"), [])
+
     def test_eures_normalizes_public_search_response(self):
         rows=boards._eures({"numberRecords":1,"jvs":[{
             "id":"abc123","title":"IT Project Manager","description":"Coordinate delivery",

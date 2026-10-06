@@ -53,6 +53,12 @@ DEFERRED_PROVIDER_ROOTS = {
     "jobs.ashbyhq.com": ("Ashby", "root"),
     "www.lever.co": ("Lever", "root"),
     "lever.co": ("Lever", "root"),
+    "recruitee.com": ("Recruitee", "root"),
+    "www.recruitee.com": ("Recruitee", "root"),
+    "bamboohr.com": ("BambooHR", "root"),
+    "www.bamboohr.com": ("BambooHR", "root"),
+    "eightfold.ai": ("Eightfold", "root"),
+    "www.eightfold.ai": ("Eightfold", "root"),
 }
 
 

@@ -37,6 +37,15 @@ def record(provider="jobspipe", id="1"):
 
 
 class OrchestrationTests(unittest.TestCase):
+    def test_generic_ats_roots_are_deferred_providers(self):
+        catalog = {"sources": [
+            {"id": "r", "name": "Recruitee", "url": "https://recruitee.com/", "active": True},
+            {"id": "b", "name": "BambooHR", "url": "https://www.bamboohr.com/", "active": True},
+            {"id": "e", "name": "Eightfold", "url": "https://eightfold.ai/", "active": True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        self.assertEqual([item["outcome"] for item in plan], ["deferred_provider", "deferred_provider", "deferred_provider"])
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)

@@ -24,7 +24,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Proactive.IT", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "Crossover", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Prohuman", "GitHub", "Montreal Associates", "Fujitsu Belgium", "Dynamite Jobs", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions", "Float", "W Talent", "Lawrence Harvey"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -38,7 +38,7 @@ PUBLIC_BOARD_SOURCES = {
     "EU Remote Jobs": {"kind": "eu_remote", "url": "https://euremotejobs.com/", "feed_url": "https://euremotejobs.com/feed/"},
     "Remote in Europe": {"kind": "rss", "url": "https://remoteineurope.com/feed/"},
     "EU Careers / EPSO": {"kind": "eu_careers", "url": "https://eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast"},
-    "Remote.co": {"kind": "remote_co", "url": "https://remote.co/remote-jobs"},
+    "Remote.co": {"kind": "heading_list", "url": "https://remote.co/remote-jobs/project-manager", "default_remote": True},
     "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/go/Jobs-in-Romania/3686501/"},
     "UpcoMinds": {"kind": "jobs4it", "url": "https://jobs4it.gr/"},
@@ -54,9 +54,9 @@ PUBLIC_BOARD_SOURCES = {
     "Next Ventures": {"kind": "nextventures", "url": "https://next-ventures.com/jobs/"},
     "Hays Romania": {"kind": "linked_jobs", "url": "https://www.hays.ro/en/job-search", "job_path": r"/en/job-detail/[^?#]+"},
     "Square One Resources": {"kind": "squareone", "url": "https://www.squareoneresources.com/jobs"},
-    "Proactive.IT": {"kind": "rendered_links", "url": "https://www.proactive.it/job-vacancies/", "job_path": r"/job/[^/?#]+/?$"},
+    "Proactive.IT": {"kind": "linked_jobs", "url": "https://www.proactive.it/job-vacancies/", "job_path": r"/job/[^/?#]+/?$"},
     "PowerToFly": {"kind": "linked_jobs", "url": "https://powertofly.com/jobs/?only_html=True", "job_path": r"/jobs/detail/\\d+"},
-    "Wellfound": {"kind": "linked_jobs", "url": "https://wellfound.com/jobs", "job_path": r"/jobs/\\d+-[^?#]+"},
+    "Wellfound": {"kind": "linked_jobs", "url": "https://wellfound.com/role/project-manager", "job_path": r"/jobs/\\d+-[^?#]+"},
     "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\\d+/"},
     "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
     "Source Group International": {"kind": "linked_jobs", "url": "https://www.sourcegroupinternational.com/candidate/", "job_path": r"/jobs/[^?#]+/"},
@@ -72,11 +72,11 @@ PUBLIC_BOARD_SOURCES = {
     "Freelancer.com": {"kind": "freelancer_api", "url": "https://www.freelancer.com/api/projects/0.1/projects/active/?limit=100&or_search_query=project%20manager%20program%20manager%20programme%20manager%20scrum%20master%20delivery%20manager%20service%20manager"},
     "Fujitsu Belgium": {"kind": "rendered_links", "url": "https://www.jobs.global.fujitsu.com/search/?q=&locationsearch=Belgium&searchResultView=LIST", "job_path": r"/job/[^/?#]+/\d+-[A-Za-z_]+"},
     "No Fluff Jobs": {"kind": "linked_jobs", "url": "https://nofluffjobs.com/remote/project-manager", "job_path": r"/job/[^/?#]+"},
-    "Flexa": {"kind": "linked_jobs", "url": "https://flexa.careers/jobs", "job_path": r"/jobs/[^/?#]+-[0-9a-f]{16,}"},
+    "Flexa": {"kind": "heading_list", "url": "https://flexa.careers/jobs"},
     "Freelancermap": {"kind": "linked_jobs", "url": "https://www.freelancermap.com/projects", "job_path": r"/project/[^/?#]+"},
     "Dynamite Jobs": {"kind": "rendered_links", "url": "https://dynamitejobs.com/remote-jobs/management-operations/project-manager", "job_path": r"/company/[^/?#]+/remote-job/[^/?#]+"},
     "Just Join IT": {"kind": "linked_jobs", "url": "https://justjoin.it/job-offers/all-locations/pm?from=0", "job_path": r"/job-offer/[^/?#]+"},
-    "Crossover": {"kind": "rendered_links", "url": "https://www.crossover.com/jobs", "job_path": r"/jobs/\d+/[^/?#]+/[^/?#]+"},
+    "Crossover": {"kind": "heading_list", "url": "https://www.crossover.com/jobs"},
     "JustRemote": {"kind": "heading_list", "url": "https://justremote.co/remote-project-manager-jobs", "default_remote": True},
     "Techjobs.be": {"kind": "heading_list", "url": "https://techjobs.be/en/ict-jobs", "default_country": "Belgia"},
     "Hipo": {"kind": "hipo", "url": "https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager"},
@@ -96,13 +96,13 @@ PUBLIC_BOARD_SOURCES = {
     "Pangian": {"kind": "pangian_rss", "url": "https://pangian.com/feed/?post_type=job_listing"},
     "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
-    "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/apply/[^/?#]+/\d+"},
+    "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/listing/[^/?#]+/\d+"},
     "Cegeka": {"kind": "linked_jobs", "url": "https://www.cegeka.com/en/ro/jobs/all-jobs", "job_path": r"/en/ro/jobs/all-jobs/[^/?#]+-\d+"},
     "Computacenter": {"kind": "linked_jobs", "url": "https://careers.computacenter.com/ro/search", "job_path": r"/ro/offer/[^/?#]+/[0-9a-f-]+"},
     "RED Global": {"kind": "linked_jobs", "url": "https://redglobal.com/jobs", "job_path": r"/jobs/job/[^/?#]+/[A-Za-z0-9]+"},
     "Salt": {"kind": "linked_jobs", "url": "https://welovesalt.com/jobs", "job_path": r"/jobs/[^/?#]+-\d+"},
-    "Lawrence Harvey": {"kind": "linked_jobs", "url": "https://www.lawrenceharvey.com/jobs", "job_path": r"/jobs/\d+[A-Za-z0-9-]+"},
-    "W Talent": {"kind": "linked_jobs", "url": "https://www.wtalent.com/uk/job-search/", "job_path": r"/job/[^/?#]+/?$"},
+    "Lawrence Harvey": {"kind": "rendered_links", "url": "https://www.lawrenceharvey.com/candidates", "job_path": r"/jobs/\d+[A-Za-z0-9-]+"},
+    "W Talent": {"kind": "rendered_links", "url": "https://www.wtalent.com/uk/job-search/", "job_path": r"/(?:uk/)?job/[^/?#]+/?(?:[?#].*)?$"},
     "Thaleria": {"kind": "linked_jobs", "url": "https://www.thaleria.com/careers/open-positions", "job_path": r"/careers/positions/[^/?#]+-\d+"},
 }
 
@@ -377,11 +377,10 @@ def _rendered_heading_list_board(url, provider, *, default_remote=False, default
     )
 
 
-def _float_careers(url):
-    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
-    if status != 200:
-        raise RuntimeError(f"Float careers page HTTP {status}")
-    html = body.decode("utf-8", errors="replace")
+def _float_careers(url, max_seconds=20):
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    final_url, html, _meta = browser.render(url, deadline, client)
     if not re.search(r"Current\s+open\s+roles", html, re.I):
         raise ValueError("Float careers page missing authoritative Current open roles section")
     parser = _FloatCareers()
@@ -391,7 +390,7 @@ def _float_careers(url):
     for href, title in parser.links:
         if re.search(r"general application|hiring process|blog", title, re.I):
             continue
-        link = urljoin(url, href)
+        link = urljoin(final_url, href)
         identity = hashlib.sha1(link.encode("utf-8")).hexdigest()[:20]
         records[identity] = _record(
             "Float", identity, title, "Float", title, link,
@@ -399,7 +398,6 @@ def _float_careers(url):
         )
     # Empty is legitimate only because the authoritative section itself was found.
     return list(records.values())
-
 
 class _EvidenCareers(HTMLParser):
     def __init__(self):
