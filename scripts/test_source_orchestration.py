@@ -37,6 +37,19 @@ def record(provider="jobspipe", id="1"):
 
 
 class OrchestrationTests(unittest.TestCase):
+    def test_remote_in_europe_is_provider_alias(self):
+        catalog = {"sources": [
+            {"id": "wwr", "name": "We Work Remotely", "url": "https://weworkremotely.com/", "active": True},
+            {"id": "rie", "name": "Remote in Europe", "url": "https://remoteineurope.com/", "active": True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        alias = next(item for item in plan if item["source_id"] == "rie")
+        self.assertEqual(alias["outcome"], "provider_alias")
+
+    def test_access_control_sources_are_policy_excluded(self):
+        for name in ("Arc.dev", "Welcome to the Jungle", "CGI"):
+            self.assertTrue(orchestration.policy_excluded({"name": name}))
+
     def test_generic_ats_roots_are_deferred_providers(self):
         catalog = {"sources": [
             {"id": "r", "name": "Recruitee", "url": "https://recruitee.com/", "active": True},

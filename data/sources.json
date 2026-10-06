@@ -259,13 +259,13 @@
       "category": "Job boards si agregatoare",
       "name": "Remote in Europe",
       "url": "https://remoteineurope.com/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validated",
+      "validation_status": "deferred",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "Provider now maps to We Work Remotely Europe inventory; canonical provider is already collected.",
       "policy_excluded": false
     },
     {
@@ -455,14 +455,14 @@
       "category": "Job boards si agregatoare",
       "name": "Welcome to the Jungle",
       "url": "https://www.welcometothejungle.com/en/jobs",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validated",
+      "validation_status": "excluded_policy",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
-      "policy_excluded": false
+      "validation_reason": "Public route cannot be collected under JSCC robots policy.",
+      "policy_excluded": true
     },
     {
       "id": "src-de78b466",
@@ -631,14 +631,14 @@
       "category": "Contract, B2B si freelance",
       "name": "Arc.dev",
       "url": "https://arc.dev/remote-jobs",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validated",
+      "validation_status": "excluded_policy",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
-      "policy_excluded": false
+      "validation_reason": "Public route cannot be collected under JSCC access-control policy.",
+      "policy_excluded": true
     },
     {
       "id": "src-cd888ac5",
@@ -771,14 +771,14 @@
       "category": "Contractori UE si NATO",
       "name": "CGI",
       "url": "https://www.cgi.com/en/careers",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validated",
+      "validation_status": "excluded_policy",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
-      "policy_excluded": false
+      "validation_reason": "Official careers route requires access controls that JSCC does not bypass.",
+      "policy_excluded": true
     },
     {
       "id": "src-f6ec92c2",

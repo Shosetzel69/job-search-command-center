@@ -35,8 +35,8 @@ SOURCES_PATH = engine.CANDIDATE_DATA / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
-POLICY_EXCLUDED_SOURCE_NAMES = {"monster", "head hunting it", "malt"}
-PROVIDER_ALIASES = {"RemoteHunt": "We Work Remotely"}
+POLICY_EXCLUDED_SOURCE_NAMES = {"monster", "head hunting it", "malt", "arc.dev", "welcome to the jungle", "cgi"}
+PROVIDER_ALIASES = {"RemoteHunt": "We Work Remotely", "Remote in Europe": "We Work Remotely"}
 
 DEFERRED_PROVIDER_ROOTS = {
     "linkedin.com": ("LinkedIn", "jobs"),
