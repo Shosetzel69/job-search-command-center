@@ -49,10 +49,11 @@ jobs:
         run: |
           set -euo pipefail
           curl --fail --silent --show-error "$DEV_ORIGIN/" -o /tmp/index.html
+          grep -Fq '<title>Job Search Command Center</title>' /tmp/index.html
           asset="$(grep -oE 'src="/assets/[^"]+\.js"' /tmp/index.html | head -1 | cut -d'"' -f2)"
           test -n "$asset"
           curl --fail --silent --show-error "$DEV_ORIGIN$asset" -o /tmp/app.js
-          for marker in             'Job Search Command Center'             'Filtre'             'Mai multe'             'Progres actualizare surse'             'Inapoi'; do
+          for marker in 'Job Search' 'Filtre' 'Mai multe optiuni' 'Progres actualizare surse' 'Inapoi'; do
             grep -Fq "$marker" /tmp/app.js || { echo "Missing live GUI marker: $marker" >&2; exit 1; }
           done
 
