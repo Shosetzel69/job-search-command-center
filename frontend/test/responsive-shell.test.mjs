@@ -35,7 +35,7 @@ test('mobile filter surface uses sticky search and a bottom sheet', () => {
 });
 
 test('mobile job cards are alternating scan-first cards with overflow actions', () => {
-  const start = main.indexOf('function JobTable(');
+  const start = main.indexOf('function MobileOverflow(');
   const end = main.indexOf('function ErrorPanel', start);
   const block = main.slice(start, end);
   assert.match(block, /index%2===0\?'bg-white':'bg-slate-50\/70'/);
