@@ -29,7 +29,7 @@ const nomenclatures = JSON.parse(
 );
 
 test('internal AuthContext is a non-forgeable Request capability', () => {
-  const source = new Request('https://app.example.test/data/jobs.json');
+  const source = new Request('https://app.example.test/me/jobs');
   const context = { user_id:'u', profile_id:'p', role:'USER', status:'ACTIVE' };
   const forwarded = withInternalAuthContext(source, context);
   assert.equal(internalAuthContext(source), null);
@@ -342,13 +342,11 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
   assert.throws(() => normalizeJobSearchQuery({ prefetch:'51' }), /prefetch must be an integer/);
 });
 
-test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the same path', async () => {
+test('ATC-489-07 keeps jobs bounded and removes the legacy jobs adapter', async () => {
   const repository = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
   const boundedStart = repository.indexOf('export async function listProfileJobs(');
-  const legacyStart = repository.indexOf('export async function evaluateProfileJobs(');
-  const nextExport = repository.indexOf('\nexport async function nomenclatureReferenceCount', legacyStart);
-  const boundedBlock = repository.slice(boundedStart, legacyStart);
-  const legacyBlock = repository.slice(legacyStart, nextExport);
+  const nextExport = repository.indexOf('\nexport async function nomenclatureReferenceCount', boundedStart);
+  const boundedBlock = repository.slice(boundedStart, nextExport);
   assert.match(boundedBlock, /JOB_CANDIDATE_WINDOW_MAX/);
   assert.ok(boundedBlock.includes("LIMIT ${limitParam}::integer"));
   assert.match(boundedBlock, /profile_version/);
@@ -356,10 +354,8 @@ test('ATC-489-03 repository is bounded and legacy jobs is an adapter over the sa
   assert.match(boundedBlock, /FIT_ALGORITHM_VERSION/);
   assert.match(boundedBlock, /evaluationCacheValid/);
   assert.match(boundedBlock, /spec\.prefetch/);
-  assert.match(legacyBlock, /await listProfileJobs/);
-  assert.match(legacyBlock, /LEGACY_JOB_PAGE_LIMIT/);
-  assert.ok(legacyBlock.includes("schema_version:'1.0'"));
-  assert.doesNotMatch(legacyBlock, /FROM canonical_jobs/);
+  assert.doesNotMatch(repository, /export async function evaluateProfileJobs\(/);
+  assert.doesNotMatch(repository, /LEGACY_JOB_PAGE_LIMIT/);
 });
 
 test('lazy FIT cache-hit materialization is stable with freshly evaluated job output', () => {
