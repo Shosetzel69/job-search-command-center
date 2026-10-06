@@ -60,7 +60,16 @@ class PublicBoardAdapterTests(unittest.TestCase):
 
     def test_recovered_source_routes_use_current_public_shapes(self):
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Remote.co"]["url"], "https://remote.co/remote-jobs/project-manager")
-        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Remote.co"]["kind"], "heading_list")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Remote.co"]["kind"], "rendered_heading_list")
+        self.assertTrue(boards.browser_required("Remote.co"))
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["FlexJobs"]["kind"], "rendered_heading_list")
+        self.assertTrue(boards.browser_required("FlexJobs"))
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["eFinancialCareers"]["kind"], "rendered_links")
+        self.assertTrue(boards.browser_required("eFinancialCareers"))
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Worldpay / Global Payments"]["kind"], "rendered_links")
+        self.assertTrue(boards.browser_required("Worldpay / Global Payments"))
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["GitHub"]["kind"], "linked_jobs")
+        self.assertFalse(boards.browser_required("GitHub"))
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Wellfound"]["url"], "https://wellfound.com/role/project-manager")
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Flexa"]["kind"], "heading_list")
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Crossover"]["kind"], "heading_list")

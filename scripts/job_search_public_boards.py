@@ -24,7 +24,7 @@ from web_transport import PublicClient
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
 
-BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Prohuman", "GitHub", "Montreal Associates", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions", "Float", "W Talent", "Lawrence Harvey", "PowerToFly"}
+BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Prohuman", "Montreal Associates", "HARMAN", "Vector Synergy", "Welcome to the Jungle", "Arc.dev", "Hubstaff Talent", "Torre", "Hirexa Solutions", "Float", "W Talent", "Lawrence Harvey", "PowerToFly", "eFinancialCareers", "Remote.co", "FlexJobs", "Worldpay / Global Payments"}
 
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
@@ -38,7 +38,7 @@ PUBLIC_BOARD_SOURCES = {
     "EU Remote Jobs": {"kind": "eu_remote", "url": "https://euremotejobs.com/", "feed_url": "https://euremotejobs.com/feed/"},
     "Remote in Europe": {"kind": "rss", "url": "https://remoteineurope.com/feed/"},
     "EU Careers / EPSO": {"kind": "eu_careers", "url": "https://eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast"},
-    "Remote.co": {"kind": "heading_list", "url": "https://remote.co/remote-jobs/project-manager", "default_remote": True},
+    "Remote.co": {"kind": "rendered_heading_list", "url": "https://remote.co/remote-jobs/project-manager", "default_remote": True},
     "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/go/Jobs-in-Romania/3686501/"},
     "UpcoMinds": {"kind": "jobs4it", "url": "https://jobs4it.gr/"},
@@ -60,7 +60,7 @@ PUBLIC_BOARD_SOURCES = {
     "SkipTheDrive": {"kind": "linked_jobs", "url": "https://www.skipthedrive.com/job-category/remote-project-manager-jobs/", "job_path": r"/job/[^?#]+-\d+/"},
     "Prohuman": {"kind": "prohuman", "url": "https://www.prohuman.ro/locuri-de-munca"},
     "Source Group International": {"kind": "linked_jobs", "url": "https://www.sourcegroupinternational.com/candidate/", "job_path": r"/jobs/[^?#]+/"},
-    "GitHub": {"kind": "rendered_links", "url": "https://www.github.careers/careers-home/jobs", "job_path": r"/careers-home/jobs/\d+"},
+    "GitHub": {"kind": "linked_jobs", "url": "https://www.github.careers/careers-home/jobs", "job_path": r"/careers-home/jobs/\d+"},
     "Brains Consulting": {"kind": "brains", "url": "https://www.brainsconsulting.ro/category/locuri-de-munca/"},
     "Montreal Associates": {"kind": "montreal_associates", "url": "https://www.montrealassociates.com/uk/candidates/job-search/"},
     "eJobs": {"kind": "ejobs", "url": "https://www.ejobs.ro/locuri-de-munca/bucuresti/it-project-manager"},
@@ -87,14 +87,14 @@ PUBLIC_BOARD_SOURCES = {
     "Welcome to the Jungle": {"kind": "rendered_links", "url": "https://www.welcometothejungle.com/en/jobs?query=project%20manager", "job_path": r"/en/companies/[^/?#]+/jobs/[^/?#]+"},
     "PeoplePerHour": {"kind": "linked_jobs", "url": "https://www.peopleperhour.com/freelance-jobs?keyword=project%20manager", "job_path": r"/freelance-jobs/(?:[^/?#]+/)*[^/?#]+-\d+"},
     "Arc.dev": {"kind": "arc", "url": "https://arc.dev/remote-jobs?jobRoles=project_manager"},
-    "eFinancialCareers": {"kind": "linked_jobs", "url": "https://www.efinancialcareers.com/jobs/project-manager", "job_path": r"/jobs-[^?#]+\.id\d+"},
+    "eFinancialCareers": {"kind": "rendered_links", "url": "https://www.efinancialcareers.com/jobs/search", "job_path": r"/jobs-[^?#]+\.id\d+"},
     "Upwork": {"kind": "linked_jobs", "url": "https://www.upwork.com/freelance-jobs/project-management/", "job_path": r"/freelance-jobs/apply/[^/?#]+_~\d+/"},
     "Hubstaff Talent": {"kind": "rendered_links", "url": "https://hubstafftalent.net/search/jobs?search%5Bkeywords%5D=project%20manager", "job_path": r"/jobs/[^/?#]+"},
-    "FlexJobs": {"kind": "heading_list", "url": "https://www.flexjobs.com/remote-jobs/project-manager"},
+    "FlexJobs": {"kind": "rendered_heading_list", "url": "https://www.flexjobs.com/remote-jobs/project-manager"},
     "Torre": {"kind": "rendered_links", "url": "https://app.torre.ai/search-job?query=project%20manager", "job_path": r"(?:https://torre\.ai)?/post/[^/?#]+"},
     "Hirexa Solutions": {"kind": "hirexa", "url": "https://hirexa.com/careers/"},
     "Pangian": {"kind": "pangian_rss", "url": "https://pangian.com/feed/?post_type=job_listing"},
-    "Worldpay / Global Payments": {"kind": "linked_jobs", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/en/jobs/r\d+/[^?#]+/?"},
+    "Worldpay / Global Payments": {"kind": "rendered_links", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/(?:en/)?jobs/r\d+(?:-\d+)?(?:/[^?#]+/?)?"},
     "Luxoft": {"kind": "linked_jobs", "url": "https://career.luxoft.com/jobs?country[]=Romania&perPage=60", "job_path": r"/jobs/[^/?#]+-\d+"},
     "Stripe": {"kind": "linked_jobs", "url": "https://stripe.com/careers/search", "job_path": r"/careers/listing/[^/?#]+/\d+"},
     "Cegeka": {"kind": "linked_jobs", "url": "https://www.cegeka.com/en/ro/jobs/all-jobs", "job_path": r"/en/ro/jobs/all-jobs/[^/?#]+-\d+"},

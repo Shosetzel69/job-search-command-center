@@ -273,13 +273,13 @@
       "category": "Job boards si agregatoare",
       "name": "Landing.Jobs",
       "url": "https://landing.jobs/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validated",
+      "validation_status": "deferred",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "The historically public Landing.Jobs job API and site currently return HTTP 403; retry only when a public route is restored.",
       "policy_excluded": false
     },
     {
@@ -617,13 +617,13 @@
       "category": "Contract, B2B si freelance",
       "name": "Upwork",
       "url": "https://www.upwork.com/freelance-jobs/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validated",
+      "validation_status": "blocked_credentials",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "Official Upwork API requires approved client credentials and OAuth 2.0; JSCC does not bypass the public-site access controls.",
       "policy_excluded": false
     },
     {
