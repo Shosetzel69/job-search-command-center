@@ -172,6 +172,12 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
   if (!['policy','manual-full'].includes(executionMode)) throw runtimeError('Invalid execution mode', 400);
   if (checkActive && await hasActiveWorkflowRun(env)) throw runtimeError('A search run is already queued or running', 409);
   const lock = await createLock(env);
+  try {
+    await deleteObject(env, 'active.json');
+  } catch (error) {
+    await deleteObject(env, lock).catch(() => {});
+    throw error;
+  }
   const current = await objectMetadata(env, 'current.json');
   const currentGeneration = String(current?.generation || '0');
   const name = `projects/${project(env)}/locations/${region(env)}/jobs/${job(env)}`;
