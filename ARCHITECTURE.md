@@ -106,42 +106,37 @@ Reguli:
 - Google ID token ramane numai in memoria paginii;
 - filtrele/KPI locale nu declanseaza provider request;
 - modificarile administrative nu pornesc full search;
-- in target-ul ADR-005, retrieval-ul ramane shared/system-owned; manual collection este o actiune administrativa/operator, nu un retrieval per profil;
-- `Ruleaza verificarea` / `Ruleaza acum` poate porni explicit o collection run globala in DEV si TEST prin `manual-full`; nu exista trigger automat si nu se schimba politica PROD;
+- retrieval-ul este shared/system-owned; refresh-ul USER/ADMIN controleaza acelasi corpus global, nu un corpus provider per profil;
+- `POST /me/refresh` si `POST /admin/refresh` pot reutiliza, coalesca sau porni explicit collection globala conform policy; nu exista trigger automat din schimbari de profil si politica PROD ramane fail-closed;
 - dupa Package 2A8, UI nu mai detine liste functionale independente pentru regions/countries/work_modes/contract_types.
 
 ## 5. Command API
 
 Entry point: `command-api/src/secure-entry.js`.
 
-Logica principala: `command-api/src/index.js`.
+Business/API routing: `command-api/src/multiuser-api.js` plus the remaining administrative/source-governance handlers in `command-api/src/index.js`.
 
-Source governance: `command-api/src/source-governance.js`.
+Canonical authenticated surface:
+- `GET /me`;
+- `GET/PUT /me/preferences`;
+- `GET /me/jobs` with bounded keyset pagination and lazy/cached FIT;
+- `PUT /me/jobs/:job_id/state`;
+- `GET/POST /applications` and `PUT/DELETE /applications/:application_id`;
+- `POST /me/refresh`;
+- `POST /admin/refresh`;
+- ADMIN account/capacity/scheduler/collection-policy endpoints;
+- Sources / Source Categories / Nomenclatures administration;
+- ADMIN-only operational runtime data where still required.
 
-Endpoint-uri curente:
+Execution semantics:
+- Selection Criteria save is profile-owned and never dispatches provider Retrieve;
+- USER/ADMIN refresh controls the same shared/system-owned corpus;
+- equivalent active heavy Retrieve work coalesces through the existing global lock;
+- no per-user private provider corpus is introduced;
+- profile changes cause personal re-evaluation/cache invalidation only;
+- PROD refresh remains fail-closed until separately authorized.
 
-- `GET /health`;
-- `GET /auth/config`;
-- `POST /auth/session`;
-- `POST /commands/run`;
-- `PUT /config`;
-- CRUD/action Surse;
-- CRUD Categorii surse;
-- `GET /data/*` prin Worker/protected assets.
-
-Package 2A8 adauga endpoint-uri autentificate pentru citirea si administrarea nomenclatoarelor conform modelului system/extensible. Contractul exact este definit in #117/#120 si `docs/data-contract.md` inainte de cod.
-
-Semantica executiei:
-
-- `PUT /config` din runtime-ul curent valideaza/persista si nu face dispatch;
-- source/category/nomenclature CRUD nu face dispatch;
-- target-ul ADR-005 separa configuratia shared/system de profilul personal;
-- collection run este global/shared, nu profile-owned;
-- operatorul autorizat poate solicita manual o collection run globala;
-- DEV (`SEARCH_MODE=disabled`) si TEST (`SEARCH_MODE=smoke`) permit heavy collection numai prin explicit `manual-full`; PROD pastreaza `live`/policy;
-- exista maximum o executie grea globala admisa simultan;
-- schimbarile profilului produc re-evaluare personala, nu provider retrieval;
-- target geografic gol ramane invalid pentru profilurile care folosesc criterii geografice.
+ATC-489-07 retires browser compatibility routes `/data/jobs.json`, `/data/search-config.json`, `/data/applications.json`, `/config` and `/commands/run`. They remain worker-first only so authenticated calls fail closed with `404` instead of falling through to the SPA. Runtime JSON seed/bootstrap artifacts may remain internal and are not browser authorities.
 
 ## 6. Source governance
 
@@ -484,12 +479,12 @@ Frontend-ul urmareste rularea pana la stare terminala reala si poate relua urmar
 - CI/CD functional verification foloseste separat GitHub Actions OIDC, cu token short-lived emis per workflow run;
 - GitHub OIDC este acceptat numai pentru read-only functional verification numai pentru `GET /data/sources.json`, `GET /data/source-categories.json` si `GET /data/nomenclatures.json`, cu issuer/audience/repository_id/environment/workflow_ref/time claims validate fail-closed;
 - GitHub OIDC nu autorizeaza `/commands`, configuratie sau alte mutatii si nu substituie autentificarea Google a utilizatorului;
-- target multiuser ADR-007: `Google sub -> user_identity -> app_user.user_id -> profile.profile_id`, cu exact un profil per user in MVP;
+- multiuser ADR-007 este implementat: `Google sub -> user_identity -> app_user.user_id -> profile.profile_id`, cu exact un profil per user in MVP;
 - `Google sub` este external identity subject; nu este PK/FK pentru datele personale si nu este authority furnizata de browser;
-- `ALLOWED_GOOGLE_SUB` ramane numai mecanism AS-IS single-user pana la cutover si nu exista fallback silent la el dupa cutover;
-- la autentificare Google reusita, target-ul emite o sesiune JSCC opaca, server-controlled, in cookie `__Host-jscc_session; Secure; HttpOnly; SameSite=Strict; Path=/`;
-- target Stage 1 foloseste sesiuni cu maximum absolut 60 minute; logout, DEACTIVATED si DELETE invalideaza server-side sesiunile;
-- dupa cutover, Google ID token este acceptat la boundary-ul de stabilire a sesiunii, nu ca bypass direct pentru endpoint-urile aplicatiei protejate;
+- `ALLOWED_GOOGLE_SUB` nu este authority end-user dupa cutover si nu exista fallback silent la mecanismul single-user;
+- la autentificare Google reusita, runtime-ul emite o sesiune JSCC opaca, server-controlled, in cookie `__Host-jscc_session; Secure; HttpOnly; SameSite=Strict; Path=/`;
+- Stage 1 foloseste sesiuni cu maximum absolut 60 minute; logout, DEACTIVATED si DELETE invalideaza server-side sesiunile;
+- Google ID token este acceptat la boundary-ul de stabilire a sesiunii, nu ca bypass direct pentru endpoint-urile aplicatiei protejate;
 - business/repository code consuma `AuthContext(user_id, profile_id, role, status)`, nu claims Google;
 - profilul autorizat este rezolvat server-side; un `profile_id` trimis de browser nu confera acces;
 - repository-urile personale necesita profile context autentificat si transaction-local;
@@ -960,7 +955,7 @@ FRONTEND_ORIGIN
 Reguli implementate:
 - lipsa/invaliditatea environment identity -> fail closed;
 - fara fallback implicit la PROD;
-- `SOURCE_SHA` este immutable si este transportat de `POST /commands/run` pana in `workflow_dispatch`;
+- in Phase 2 legacy, `SOURCE_SHA` era transportat de `/commands/run`; in runtime-ul GCP curent candidate identity ramane immutable si este transportata prin control-plane/promotion si dispatcher-ele canonice;
 - workflow-ul valideaza `source_sha` si executa codul din checkout-ul exact al acelui SHA;
 - runtime Contents read/write folosesc exclusiv runtime repository/ref explicit;
 - Command API si Nomenclature API folosesc acelasi transport `runtime-github.js`;
