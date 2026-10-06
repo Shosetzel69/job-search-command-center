@@ -353,7 +353,6 @@ function SourcesAdmin(props) {
   </div>;
 }
 
-function Nomenclatures()
 function Nomenclatures() {
   const groups = [
     ['Regiuni','EU, US, ASIA'],
