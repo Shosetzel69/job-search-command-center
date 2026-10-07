@@ -39,7 +39,8 @@ function aggregate(overrides={}){
     active_profile_count:2,
     scope_count:1,
     scopes:[{
-      role_family:'PROJECT_MANAGEMENT',
+      role_family:'PROJECT_DELIVERY_MANAGEMENT',
+      role_subfamilies:['project_management'],
       target_regions:['EU'],
       target_country_codes:['RO'],
       remote_eligible_country_codes:['RO'],
@@ -215,14 +216,14 @@ test('PROD ADMIN refresh fails closed without runtime interaction',async()=>{
   assert.equal(dispatches,0);
 });
 
-test('cross-tenant aggregator deduplicates equivalent scopes without identity output',async()=>{
+test('cross-tenant aggregator deduplicates equivalent family+subfamily scopes without identity output',async()=>{
   let sql='';
   const db={query:async query=>{
     sql=query;
     return {rows:[
       {
-        target_role_families:['PROJECT_MANAGEMENT'],
-        role_groups:{},
+        target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+        target_role_subfamilies:['project_management'],
         target_regions:['eu'],
         target_country_codes:['ro'],
         remote_eligible_country_codes:['ro'],
@@ -230,8 +231,8 @@ test('cross-tenant aggregator deduplicates equivalent scopes without identity ou
         contract_types:['CONTRACT'],
       },
       {
-        target_role_families:['project_management'],
-        role_groups:{},
+        target_role_families:['project_delivery_management'],
+        target_role_subfamilies:['project_management'],
         target_regions:['EU'],
         target_country_codes:['RO'],
         remote_eligible_country_codes:['RO'],
@@ -244,7 +245,8 @@ test('cross-tenant aggregator deduplicates equivalent scopes without identity ou
   assert.equal(result.active_profile_count,2);
   assert.equal(result.scope_count,1);
   assert.equal(result.scopes[0].active_profile_count,2);
-  assert.equal(result.scopes[0].role_family,'PROJECT_MANAGEMENT');
+  assert.equal(result.scopes[0].role_family,'PROJECT_DELIVERY_MANAGEMENT');
+  assert.deepEqual(result.scopes[0].role_subfamilies,['project_management']);
   assert.deepEqual(result.scopes[0].target_country_codes,['RO']);
   assert.equal(/tenant_id|search_profile_id|user_id/.test(JSON.stringify(result)),false);
   assert.match(sql,/account\.status = 'ACTIVE'/);
@@ -260,18 +262,33 @@ test('cross-tenant aggregator query excludes empty unconfigured preference rows'
   assert.match(sql,/COALESCE\(pref\.preferences, '\{\}'::jsonb\) <> '\{\}'::jsonb/);
 });
 
-test('legacy role groups explode to distinct role-family scopes',async()=>{
-  const db={query:async()=>({rows:[{
-    target_role_families:[],
-    role_groups:{pm:{enabled:true},delivery:{enabled:true},service:{enabled:false},scrum:{enabled:false},program:{enabled:false}},
-    target_regions:[],
-    target_country_codes:['RO'],
-    remote_eligible_country_codes:['RO'],
-    work_modes:{remote:true,hybrid:true,onsite:false},
-    contract_types:['contract'],
-  }]})};
+test('different subfamilies remain distinct aggregate scopes',async()=>{
+  const db={query:async()=>({rows:[
+    {
+      target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+      target_role_subfamilies:['project_management'],
+      target_regions:[],
+      target_country_codes:['RO'],
+      remote_eligible_country_codes:['RO'],
+      work_modes:{remote:true,hybrid:true,onsite:false},
+      contract_types:['contract'],
+    },
+    {
+      target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+      target_role_subfamilies:['delivery_management'],
+      target_regions:[],
+      target_country_codes:['RO'],
+      remote_eligible_country_codes:['RO'],
+      work_modes:{remote:true,hybrid:true,onsite:false},
+      contract_types:['contract'],
+    },
+  ]})};
   const result=await aggregateAdminRefreshScopes({}, {db});
-  assert.deepEqual(result.scopes.map(x=>x.role_family),['DELIVERY','PROJECT_MANAGEMENT']);
+  assert.equal(result.scope_count,2);
+  assert.deepEqual(
+    result.scopes.map(x=>x.role_subfamilies[0]).sort(),
+    ['delivery_management','project_management'],
+  );
 });
 
 test('POST admin refresh is same-origin and ADMIN-only',async()=>{
