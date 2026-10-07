@@ -72,7 +72,7 @@ class RoleTaxonomyTests(unittest.TestCase):
     def test_duplicate_include_pattern_is_rejected(self) -> None:
         taxonomy = copy.deepcopy(self.taxonomy)
         taxonomy["families"]["SERVICE_OPERATIONS_MANAGEMENT"]["members"][0]["include_patterns"] = [
-            r"\bproject\s+manager\b"
+            taxonomy["families"]["PROJECT_DELIVERY_MANAGEMENT"]["members"][0]["include_patterns"][0]
         ]
         with self.assertRaisesRegex(
             role_taxonomy.TaxonomyValidationError,
