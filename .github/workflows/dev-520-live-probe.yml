@@ -1,0 +1,32 @@
+name: DEV 520 live acceptance probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/dev-520-live-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      DEV_ORIGIN: https://jscc-command-api-dev-828902654738.europe-west1.run.app
+      CANDIDATE_SHA: 5000f62736adbc9219dc88498c18d9dd21bca783
+    steps:
+      - name: Verify exact DEV candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          health="$(curl --fail --silent --show-error "$DEV_ORIGIN/health")"
+          echo "$health" | jq .
+          jq -e --arg sha "$CANDIDATE_SHA" '.status=="ok" and .environment=="dev" and .source_sha==$sha and .runtime_data_sha==$sha and .runtime_backend=="gcp"' <<<"$health" >/dev/null
+          db="$(curl --fail --silent --show-error "$DEV_ORIGIN/health/db")"
+          echo "$db" | jq .
+          jq -e '.status=="ok" and .environment=="dev" and .database=="jobsearch_dev"' <<<"$db" >/dev/null
+          auth="$(curl --fail --silent --show-error "$DEV_ORIGIN/auth/config")"
+          echo "$auth" | jq .
+          jq -e '.configured==true' <<<"$auth" >/dev/null
