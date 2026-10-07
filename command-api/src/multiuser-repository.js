@@ -47,6 +47,10 @@ const SYSTEM_CONFIG_KEYS = Object.freeze([
   'jobspipe_mode',
   'jobspipe_apify_max_items_per_run',
   'user_refresh_enabled',
+  'coverage_min_corpus_volume',
+  'coverage_max_corpus_volume',
+  'coverage_min_source_diversity',
+  'coverage_refresh_cooldown_hours',
 ]);
 
 function httpError(message, status) {
