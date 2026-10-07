@@ -484,8 +484,18 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     selected_contract_types = configured_contract_types(config)
     target_codes = set(resolve_target_country_codes(config))
     excluded_company, excluded_role, deep_erp = compile_config_patterns(config)
-    target_title = re.compile(r"\b(project|program|programme|delivery|service|scrum|pmo)\b", re.I)
-    configured_phrases = configured_role_phrases(config)
+    taxonomy = json.loads(role_taxonomy.DEFAULT_TAXONOMY_PATH.read_text(encoding="utf-8"))
+    role_taxonomy.validate_taxonomy(taxonomy)
+    selected_role_families = {
+        str(value).strip().upper()
+        for value in (config.get("target_role_families") or [])
+        if str(value).strip()
+    }
+    selected_role_subfamilies = {
+        str(value).strip()
+        for value in (config.get("target_role_subfamilies") or [])
+        if str(value).strip()
+    }
 
     raw: list[dict[str, Any]] = []
     totals: dict[str, int] = {}
@@ -555,8 +565,14 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             reason = "web publication date unavailable"
         else:
             role_filter_audit["role_gate_evaluated"] += 1
-            title_match = target_title.search(title)
-            if not title_match:
+            role = role_taxonomy.classify_title(title, taxonomy)
+            role_members = set(role.get("role_member") or [])
+            role_match = (
+                role.get("classification_status") == "matched"
+                and role.get("role_family") in selected_role_families
+                and bool(role_members & selected_role_subfamilies)
+            )
+            if not role_match:
                 role_filter_audit["role_rejected_total"] += 1
                 near_miss_signals = [
                     signal for signal, pattern in ROLE_NEAR_MISS_PATTERNS.items()
@@ -576,23 +592,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
                 reason = "title outside target"
             else:
                 role_filter_audit["accepted_title_gate_total"] += 1
-                if title_contains_role_phrase(title, configured_phrases):
-                    role_filter_audit["explicit_role_match_count"] += 1
-                else:
-                    role_filter_audit["generic_keyword_only_count"] += 1
-                    generic_matches = sorted({
-                        match.group(1).casefold()
-                        for match in target_title.finditer(title)
-                    })
-                    for keyword in generic_matches:
-                        counts = role_filter_audit["generic_keyword_only_by_keyword"]
-                        counts[keyword] = counts.get(keyword, 0) + 1
-                        append_role_audit_example(
-                            role_filter_audit["generic_keyword_only_examples"],
-                            keyword,
-                            title,
-                            company,
-                        )
+                role_filter_audit["explicit_role_match_count"] += 1
 
         if reason is None and excluded_company and excluded_company.search(company):
             reason = "excluded company"
