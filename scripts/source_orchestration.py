@@ -351,6 +351,68 @@ def tag_collection_records(item, results):
             record.setdefault("_jscc_source_name", item.get("source"))
 
 
+def _posting_matches_scope(posting, scope):
+    if posting.role_family != str(scope.get("role_family") or "").strip().upper():
+        return False
+
+    work_modes = {str(value).strip().casefold() for value in (scope.get("work_modes") or []) if str(value).strip()}
+    if work_modes and posting.work_mode != "unknown" and posting.work_mode not in work_modes:
+        return False
+
+    contract_types = {str(value).strip().casefold() for value in (scope.get("contract_types") or []) if str(value).strip()}
+    if contract_types and posting.contract_type != "unknown" and posting.contract_type not in contract_types:
+        return False
+
+    allowed_countries = {
+        str(value).strip().upper()
+        for value in (scope.get("target_country_codes") or [])
+        if str(value).strip()
+    }
+    for region in scope.get("target_regions") or []:
+        allowed_countries.update(engine.REGION_COUNTRIES.get(str(region).strip().upper(), set()))
+
+    if allowed_countries and posting.country_codes:
+        if set(posting.country_codes) & allowed_countries:
+            return True
+        if posting.work_mode == "remote" and posting.remote_scope in {"Worldwide", "EMEA", "EU"}:
+            return True
+        return False
+
+    return True
+
+
+def apply_retrieve_scope(item, results, config):
+    retrieve_scope = config.get("_jscc_retrieve_scope")
+    scopes = retrieve_scope.get("scopes") if isinstance(retrieve_scope, dict) else None
+    if not scopes:
+        return results
+
+    scoped_results = []
+    for result in results:
+        if not result.ok:
+            scoped_results.append(result)
+            continue
+        records = []
+        for record in result.records or []:
+            if not isinstance(record, dict):
+                continue
+            posting = shared_corpus.prepare_posting(record, source_hint=item.get("source"))
+            if posting and any(_posting_matches_scope(posting, scope) for scope in scopes if isinstance(scope, dict)):
+                records.append(record)
+        scoped_results.append(engine.CollectionResult(
+            result.connector,
+            result.query,
+            True,
+            records,
+            result.total_available,
+            result.error,
+            result.error_code,
+            result.failure_stage,
+            result.http_status,
+        ))
+    return scoped_results
+
+
 def source_progress(plan, planned_source_ids):
     planned = [item for item in plan if item.get("source_id") in planned_source_ids]
     terminal = [item for item in planned if item.get("status") != "pending"]
@@ -372,7 +434,7 @@ def source_progress(plan, planned_source_ids):
     }
 
 
-def write_progress_status(now, run_id, plan, planned_source_ids):
+def write_progress_status(now, run_id, plan, planned_source_ids, retrieve_scope=None, request_signature=None):
     progress = source_progress(plan, planned_source_ids)
     processed = [
         item for item in plan
@@ -401,6 +463,8 @@ def write_progress_status(now, run_id, plan, planned_source_ids):
         "jobs_published": 0,
         "excluded": 0,
         "limitations": [],
+        "request_signature": request_signature,
+        "retrieve_scope": retrieve_scope,
     }
     engine.STATUS_PATH.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
@@ -435,6 +499,7 @@ def collect_sources(config, state, now, plan, run_id=None, progress_callback=Non
                 item["web_outcome"] = "error"
                 item["failure_reason"] = diagnostics.sanitize_text(exc)
             tag_collection_records(item, results)
+            results = apply_retrieve_scope(item, results, config)
             record_results(item, results)
             collection.extend(results)
             if progress_callback:
@@ -608,6 +673,7 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
         except Exception as exc:
             results = [failure_result(connector, "collect", exc)]
         tag_collection_records(item, results)
+        results = apply_retrieve_scope(item, results, config)
         collection.extend(results)
         record_results(item, results)
         if progress_callback:
@@ -617,15 +683,38 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
     return collection, metadata, mode
 
 
-def run(config, now):
+def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
     state = optimized.load_state(now)
-    run_id = "github-" + now.strftime("%Y%m%dT%H%M%SZ")
-    plan = build_plan(json.loads(SOURCES_PATH.read_text(encoding="utf-8")))
+    run_id = run_id or ("github-" + now.strftime("%Y%m%dT%H%M%SZ"))
+    retrieve_scope = retrieve_scope if isinstance(retrieve_scope, dict) else None
+    request_signature = str(request_signature or "").strip().casefold() or None
+    raw_plan = build_plan(json.loads(SOURCES_PATH.read_text(encoding="utf-8")))
+    effective_source_ids = {
+        str(value).strip()
+        for value in ((retrieve_scope or {}).get("effective_source_ids") or [])
+        if str(value).strip()
+    }
+    plan = [
+        item for item in raw_plan
+        if not effective_source_ids or str(item.get("source_id") or "") in effective_source_ids
+    ]
+    scope_families = sorted({
+        str(scope.get("role_family") or "").strip().upper()
+        for scope in ((retrieve_scope or {}).get("scopes") or [])
+        if isinstance(scope, dict) and str(scope.get("role_family") or "").strip()
+    })
+    for item in plan:
+        item["request_signature"] = request_signature
+        item["retrieve_scope_role_families"] = scope_families
     prepare_source_execution_ids(plan, run_id)
     planned_source_ids = {item.get("source_id") for item in plan if item.get("status") == "pending"}
-    write_progress_status(now, run_id, plan, planned_source_ids)
-    progress_callback = lambda: write_progress_status(now, run_id, plan, planned_source_ids)
-    collection_config = shared_corpus.shared_collection_config(config)
+    write_progress_status(now, run_id, plan, planned_source_ids, retrieve_scope, request_signature)
+    progress_callback = lambda: write_progress_status(
+        now, run_id, plan, planned_source_ids, retrieve_scope, request_signature
+    )
+    collection_config = shared_corpus.shared_collection_config(
+        config, retrieve_scope=retrieve_scope, request_signature=request_signature
+    )
     diagnostics.emit_event(
         "search.run.started",
         "INFO",
@@ -650,6 +739,7 @@ def run(config, now):
             plan,
             run_id=run_id,
             now=now,
+            advance_lifecycle=not bool(retrieve_scope),
         )
         output = engine.process_records(config, collection, now)
         output = optimized.merge_with_existing(output, state, config, now)
@@ -664,6 +754,10 @@ def run(config, now):
         apify.update_status([r for r in collection if r.connector.startswith("jobspipe")],
                             max(100, min(20000, int(config.get("jobspipe_apify_max_items_per_run", 5000)))))
     status = json.loads(engine.STATUS_PATH.read_text())
+    status["run_id"] = run_id
+    status["started_at"] = now.isoformat()
+    status["request_signature"] = request_signature
+    status["retrieve_scope"] = retrieve_scope
     if output is not None:
         status["excluded_by_reason"] = output.get("excluded_by_reason") or {}
         status["excluded_by_category"] = output.get("excluded_by_category") or {}
@@ -682,6 +776,10 @@ def run(config, now):
     }
     status["source_outcome_schema_version"] = "1.0"
     status["progress"] = source_progress(plan, planned_source_ids)
+    status["progress"]["jobs_collected_or_updated"] = int(
+        (shared_corpus_result or {}).get("postings_created", 0)
+        + (shared_corpus_result or {}).get("postings_updated", 0)
+    )
     status.update(aggregate_source_results(plan))
     attempted = [item for item in plan if item["status"] in {"completed", "failed"}]
     status.update({"source_strategy": config.get("source_strategy") or "all active sources equally",
