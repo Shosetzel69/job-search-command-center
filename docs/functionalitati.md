@@ -52,7 +52,7 @@ Pagina separa explicit doua clase:
 
 Aceste controale afecteaza urmatorul Full Search si setul publicat in runtime-ul JSON tranzitoriu curent:
 
-- grupuri de roluri — selectie runtime legacy pana la cutover-ul taxonomiei #403;
+- Role Family + Role Subfamily din taxonomia canonica shared; subfamilia participa la Selection Criteria, Eligibility, Coverage si bounded Retrieve;
 - Remote / Hibrid / Onsite;
 - regiuni/tari incluse si excluse;
 - tipuri contract canonice Permanent / Temporar / Contract / Freelance;
@@ -80,12 +80,17 @@ Validari fail-safe:
 - JobsPipe/providerii apartin zonei Administrare, nu criteriilor utilizatorului;
 - rate min/max si Disponibilitate imediata nu sunt afisate ca filtre active cat timp motorul curent nu le aplica efectiv.
 
-### 4.4 Limitare tranzitorie
+### 4.4 Role Family v1
 
-Aceasta separare face explicita semantica runtime-ului curent, dar nu reprezinta cutover-ul complet ADR-005:
-- taxonomia #403 nu este inca S5 runtime;
-- corpusul canonic shared si Profile Evaluation raman dependente de ATC-402-02..04 / #275;
-- un criteriu RETRIEVE modificat necesita inca un Full Search in runtime-ul tranzitoriu.
+Taxonomia runtime foloseste sase familii majore:
+- Project & Delivery Management;
+- Service & Operations Management;
+- Product & Agile;
+- Business Analysis & Transformation;
+- Customer & Professional Services;
+- Technical Leadership & Architecture.
+
+Fiecare familie are subfamilii canonice. Search Profile persista familia si subfamilia, iar scope-ul bounded este Family + Subfamily + Geography + Work Mode + Contract.
 
 ## 5. Administrare
 
