@@ -18,6 +18,56 @@ HISTORY_PATH = engine.RUNTIME_DATA / "run-history.json"
 HISTORY_LIMIT = 10
 
 
+def retrieve_context(now: datetime) -> tuple[str, str | None, dict | None]:
+    run_id = str(os.environ.get("JSCC_RUN_ID") or "").strip() or ("github-" + now.strftime("%Y%m%dT%H%M%SZ"))
+    signature = str(os.environ.get("JSCC_REQUEST_SIGNATURE") or "").strip().casefold() or None
+    raw_scope = str(os.environ.get("JSCC_RETRIEVE_SCOPE_JSON") or "").strip()
+    scope = None
+    if raw_scope:
+        parsed = json.loads(raw_scope)
+        if not isinstance(parsed, dict):
+            raise RuntimeError("JSCC_RETRIEVE_SCOPE_JSON must be an object")
+        scopes = parsed.get("scopes")
+        if not isinstance(scopes, list) or not scopes:
+            raise RuntimeError("bounded retrieve scope must contain scopes")
+        scope = parsed
+    if signature and (len(signature) != 64 or any(ch not in "0123456789abcdef" for ch in signature)):
+        raise RuntimeError("JSCC_REQUEST_SIGNATURE must be a lowercase sha256")
+    if scope and not signature:
+        raise RuntimeError("bounded retrieve scope requires JSCC_REQUEST_SIGNATURE")
+    return run_id, signature, scope
+
+
+def terminal_failure_status(now: datetime, run_id: str, signature: str | None, scope: dict | None, exc: Exception) -> dict:
+    try:
+        current = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+        if not isinstance(current, dict):
+            current = {}
+    except Exception:
+        current = {}
+    current.update({
+        "schema_version": engine.SCHEMA_VERSION,
+        "run_id": run_id,
+        "status": "failed",
+        "started_at": current.get("started_at") or now.isoformat(),
+        "completed_at": datetime.now(timezone.utc).isoformat(),
+        "request_signature": signature,
+        "retrieve_scope": scope,
+    })
+    current.setdefault("sources", [])
+    current.setdefault("sources_processed", 0)
+    current.setdefault("failed_sources", [])
+    current.setdefault("source_results", [])
+    current.setdefault("records_inspected", 0)
+    current.setdefault("jobs_published", current_job_count())
+    current.setdefault("excluded", 0)
+    limitations = list(current.get("limitations") or [])
+    limitations.append(f"run_failure: {type(exc).__name__}: {str(exc)[:500]}")
+    current["limitations"] = limitations
+    engine.STATUS_PATH.write_text(json.dumps(current, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    return current
+
+
 def quota_exhausted_this_month(state: dict, now: datetime) -> bool:
     return state.get("usage", {}).get("provider_quota_exhausted_month") == now.strftime("%Y-%m")
 
@@ -152,6 +202,9 @@ def append_run_history() -> None:
         "source_failure_codes": status.get("source_failure_codes") or {},
         "source_failure_stages": status.get("source_failure_stages") or {},
         "limitations": status.get("limitations") or [],
+        "request_signature": status.get("request_signature"),
+        "retrieve_scope": status.get("retrieve_scope"),
+        "progress": status.get("progress") or {},
         "publication": "published",
     }
     entry.update({key: status[key] for key in (*orchestration.COUNTERS, "source_strategy") if key in status})
@@ -226,12 +279,40 @@ def main() -> int:
         return 0
 
     now = datetime.now(timezone.utc)
+    run_id, request_signature, retrieve_scope = retrieve_context(now)
     config = shared_corpus.apply_collection_policy(engine.load_config())
-    code = orchestration.run(config, now)
+    shared_corpus.persist_run_started(
+        run_id,
+        now,
+        {
+            "request_signature": request_signature,
+            "retrieve_scope": retrieve_scope,
+            "trigger": os.environ.get("RUN_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME") or "unknown",
+            "source_sha": (os.environ.get("SOURCE_SHA") or "").strip().lower() or None,
+        },
+    )
 
+    try:
+        code = orchestration.run(
+            config,
+            now,
+            run_id=run_id,
+            retrieve_scope=retrieve_scope,
+            request_signature=request_signature,
+        )
+    except Exception as exc:
+        terminal_failure_status(now, run_id, request_signature, retrieve_scope, exc)
+        append_run_history()
+        status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+        shared_corpus.persist_operational_run(status)
+        stamp_jobs_provenance()
+        validate_history()
+        print(f"Run failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
+
+    append_run_history()
     status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
     shared_corpus.persist_operational_run(status)
-    append_run_history()
     stamp_jobs_provenance()
     if code == 0:
         engine.validate_output()
