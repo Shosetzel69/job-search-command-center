@@ -11,6 +11,13 @@ const symbol = state => state === 'PASS' ? '✓' : state === 'FAIL' ? '✕' : st
 export function PromotionStatusPanel({ status }) {
   if (!status) return null;
   const active = status.status === 'IN_PROGRESS' || status.status === 'QUEUED';
+  if (status.status === 'PASS') {
+    return <div data-testid="promotion-status" className="flex justify-end">
+      <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
+        <span aria-hidden="true">✓</span> Promotion PASS
+      </span>
+    </div>;
+  }
   return <section data-testid="promotion-status" className={`rounded-2xl border p-4 shadow-sm ${tone(status.status)}`}>
     <div className="flex flex-wrap items-center justify-between gap-2">
       <div>

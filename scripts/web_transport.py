@@ -18,13 +18,15 @@ LOCK = threading.Lock()
 
 
 class FetchError(Exception):
-    def __init__(self, message, kind="error", status_code=None, requested_url=None, final_url=None, robots_status=None):
+    def __init__(self, message, kind="error", status_code=None, requested_url=None, final_url=None,
+                 robots_status=None, block_reason=None):
         super().__init__(message)
         self.kind = kind
         self.status_code = status_code
         self.requested_url = requested_url
         self.final_url = final_url
         self.robots_status = robots_status
+        self.block_reason = block_reason
 
 
 class RobotsPolicy(RobotFileParser):
@@ -89,13 +91,13 @@ def public_url(url):
         host_text = f"[{host}]" if ":" in host else host
         return urlunsplit((value.scheme, host_text, value.path or "/", value.query, ""))
     except (ValueError, UnicodeError) as exc:
-        raise FetchError(str(exc), "blocked", requested_url=url) from exc
+        raise FetchError(str(exc), "blocked", requested_url=url, block_reason="UNSAFE_URL") from exc
 
 
 def public_addresses(host, port):
     addresses = list(dict.fromkeys(info[4][0] for info in socket.getaddrinfo(host, port, type=socket.SOCK_STREAM)))
     if not addresses or any(not ipaddress.ip_address(address).is_global for address in addresses):
-        raise FetchError("DNS resolved to non-public address", "blocked")
+        raise FetchError("DNS resolved to non-public address", "blocked", block_reason="UNSAFE_DNS")
     return addresses
 
 
@@ -183,16 +185,17 @@ class PublicClient:
             elif status == 200:
                 if b"<html" in body[:500].lower() or b"<!doctype" in body[:500].lower():
                     raise FetchError("robots.txt returned HTML instead of rules", "blocked", requested_url=url,
-                                     final_url=robots_url, robots_status=status)
+                                     final_url=robots_url, robots_status=status, block_reason="ROBOTS_UNAVAILABLE")
                 parser.parse(body.decode("utf-8", errors="replace").splitlines())
             else:
                 raise FetchError(f"robots.txt HTTP {status}; access not established", "blocked", status_code=status,
-                                 requested_url=url, final_url=robots_url, robots_status=status)
+                                 requested_url=url, final_url=robots_url, robots_status=status,
+                                 block_reason="ROBOTS_UNAVAILABLE")
             self.robots[origin] = parser
         parser = self.robots[origin]
         if not parser.can_fetch(USER_AGENT, url):
             raise FetchError("Disallowed by robots.txt", "blocked", requested_url=url, final_url=url,
-                             robots_status=self.last_robots_status)
+                             robots_status=self.last_robots_status, block_reason="ROBOTS_DISALLOWED")
         delay = parser.crawl_delay(USER_AGENT) or 0
         rate = parser.request_rate(USER_AGENT)
         return max(0.5, delay, rate.seconds / rate.requests if rate and rate.requests else 0)
@@ -213,13 +216,19 @@ class PublicClient:
                 url = public_url(urljoin(url, headers["location"]))
                 continue
             if status != 200:
-                raise FetchError(f"HTTP {status}", "blocked" if status in {401, 403, 429} else "error",
+                block_reason = {
+                    401: "HTTP_AUTH_REQUIRED",
+                    403: "HTTP_ACCESS_DENIED",
+                    429: "HTTP_RATE_LIMITED",
+                }.get(status)
+                raise FetchError(f"HTTP {status}", "blocked" if block_reason else "error",
                                  status_code=status, requested_url=requested, final_url=url,
-                                 robots_status=self.last_robots_status)
+                                 robots_status=self.last_robots_status, block_reason=block_reason)
             kind = headers.get("content-type", "").lower()
             if kind and not any(token in kind for token in ("html", "json", "text/plain")):
                 raise FetchError("Unsupported page content type: " + kind, "unsupported", status_code=status,
                                  requested_url=requested, final_url=url, robots_status=self.last_robots_status)
             return url, body.decode("utf-8", errors="replace")
         raise FetchError("Too many redirects", "blocked", requested_url=requested, final_url=url,
-                         status_code=self.last_status, robots_status=self.last_robots_status)
+                         status_code=self.last_status, robots_status=self.last_robots_status,
+                         block_reason="REDIRECT_BLOCKED")

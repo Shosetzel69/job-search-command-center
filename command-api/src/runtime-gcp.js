@@ -96,9 +96,24 @@ async function readCandidateJson(path) {
   return structuredClone(CANDIDATE_DATA[name]);
 }
 
+async function activeRunId(env) {
+  if (!await objectMetadata(env, 'locks/heavy-search.lock')) return null;
+  try {
+    const active = await readObjectJson(env, 'active.json');
+    return String(active.payload?.run_id || '').trim() || null;
+  } catch (error) {
+    if (error?.status === 404) return null;
+    throw error;
+  }
+}
+
 async function runtimeObjectForRead(env, path) {
   const name = path.split('/').pop();
   if (name === 'search-config.json' || name === 'applications.json' || name === 'promotion-status.json') return `seed/${name}`;
+  if (name === 'run-status.json') {
+    const runId = await activeRunId(env);
+    if (runId) return `runs/${runId}/${name}`;
+  }
   const pointer = await objectMetadata(env, 'current.json');
   if (pointer) {
     const current = await readObjectJson(env, 'current.json');
@@ -148,7 +163,7 @@ function fullRunArgs() {
   ].join('; ');
   return [
     '-ceu',
-    'trap \'rm -f /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${CLOUD_RUN_EXECUTION:?CLOUD_RUN_EXECUTION is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 -c ' + JSON.stringify(publishPointer) + '; exit ${rc}'
+    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${CLOUD_RUN_EXECUTION:?CLOUD_RUN_EXECUTION is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; printf \'{"run_id":"%s"}\\n\' "${CLOUD_RUN_EXECUTION}" > /runtime/active.json; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 -c ' + JSON.stringify(publishPointer) + '; exit ${rc}'
   ];
 }
 
@@ -157,6 +172,12 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
   if (!['policy','manual-full'].includes(executionMode)) throw runtimeError('Invalid execution mode', 400);
   if (checkActive && await hasActiveWorkflowRun(env)) throw runtimeError('A search run is already queued or running', 409);
   const lock = await createLock(env);
+  try {
+    await deleteObject(env, 'active.json');
+  } catch (error) {
+    await deleteObject(env, lock).catch(() => {});
+    throw error;
+  }
   const current = await objectMetadata(env, 'current.json');
   const currentGeneration = String(current?.generation || '0');
   const name = `projects/${project(env)}/locations/${region(env)}/jobs/${job(env)}`;

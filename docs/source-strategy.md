@@ -1,7 +1,7 @@
 # Strategia surselor
 
 Versiune aplicatie: `0.06-dev`
-Ultima actualizare: `2026-09-27`
+Ultima actualizare: `2026-10-04`
 
 ## 1. Principiu
 
@@ -33,6 +33,24 @@ Stare curenta:
 - Jobicy ramane operational independent;
 - collector web comun pentru sursele HTTP(S) active, eligibile si nerutate/amanate explicit;
 - suportul se deriva din cod/registru, nu dintr-un flag trimis de client.
+
+### 2.1 Surse `blocked` — dispozitie fail-closed
+
+`blocked` este un outcome de executie per-run, nu o stare de guvernanta si nu inseamna automat defect de connector. Collectorul web pastreaza un motiv structurat separat de mesajul uman.
+
+Motivele stabile includ:
+- `ROBOTS_DISALLOWED` / `ROBOTS_UNAVAILABLE`;
+- `HTTP_AUTH_REQUIRED` / `HTTP_ACCESS_DENIED` / `HTTP_RATE_LIMITED`;
+- `BOT_CHALLENGE` / `AUTHENTICATION_PAGE`;
+- `UNSAFE_URL` / `UNSAFE_DNS` / `REDIRECT_BLOCKED`;
+- `UNKNOWN_BLOCK` doar ca fallback fail-closed.
+
+Reguli:
+- aplicatia nu parseaza textul `failure_reason` pentru clasificare;
+- robots, 401/403/429, login si CAPTCHA/challenge nu sunt ocolite;
+- browser fallback nu ruleaza dupa un access block;
+- un blocaj care necesita ruta ATS/connector dedicat ramane blocat pana la validarea si activarea explicita a acelei rute;
+- outcome-ul canonic ramane `blocked`; motivul structurat exista pentru triere si remediere, nu pentru cosmetizarea ratei de succes.
 
 ## 3. Administrarea registrului - Package 2A
 
@@ -212,6 +230,8 @@ Nu este folosit pentru bypass robots, HTTP 401/403/429, login obligatoriu sau CA
 - `error`.
 
 `coverage_complete=false` inseamna ca collectorul generic nu garanteaza acoperire exhaustiva.
+
+Atingerea limitei intentionate de pagini/timp nu transforma singura o extractie valida in `partial`; acoperirea neexhaustiva ramane vizibila prin `coverage_complete=false` si `discovered_pages_complete=false`. `partial` ramane rezervat unei colectari cu rezultate valide dar si cu erori reale de fetch/parse/browser sau payload malformed.
 
 Lipsa rezultatelor nu demonstreaza lipsa joburilor.
 

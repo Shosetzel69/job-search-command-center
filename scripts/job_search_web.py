@@ -25,7 +25,7 @@ CAREER = re.compile(r"job|career|vacanc|recruit|cariere|posturi|stellen|emploi|o
 ROLE = re.compile(r"project|program|programme|delivery|service.manager|scrum|pmo", re.I)
 SKIP = re.compile(
     r"/(login|signin|sign-in|sign_in|register|privacy|terms|blog|news|press|events|about|pricing|"
-    r"products?|solutions?|resources?|webinars?|status|history|demo|contact|faq|support|help|career-advice)(/|$)",
+    r"products?|solutions?|resources?|webinars?|status|history|demo|contact|faq|support|help|career-advice|job/track_click)(/|$)",
     re.I,
 )
 DYNAMIC = re.compile(r"<script[^>]+src=|__NEXT_DATA__|webpack|data-reactroot|id=[\"'](?:root|app|__next)[\"']", re.I)
@@ -245,11 +245,13 @@ def collect(source, config, now=None, client=None):
             roots.add(site_root(urlsplit(final_url).hostname))
             if challenge(html):
                 raise FetchError("Bot challenge; no bypass attempted", "blocked", requested_url=requested, final_url=final_url,
-                                 status_code=getattr(client, "last_status", None), robots_status=getattr(client, "last_robots_status", None))
+                                 status_code=getattr(client, "last_status", None), robots_status=getattr(client, "last_robots_status", None),
+                                 block_reason="BOT_CHALLENGE")
             page = Page(html)
             if not page.documents and re.search(r"<input[^>]+type=[\"\']password", html, re.I) and re.search(r"/(login|signin|sign-in|sign_in)(/|$)", urlsplit(final_url).path, re.I):
                 raise FetchError("Authentication required", "blocked", requested_url=requested, final_url=final_url,
-                                 status_code=getattr(client, "last_status", None), robots_status=getattr(client, "last_robots_status", None))
+                                 status_code=getattr(client, "last_status", None), robots_status=getattr(client, "last_robots_status", None),
+                                 block_reason="AUTHENTICATION_PAGE")
 
             page_detected, count, page_malformed, page_expired = extract_page(page, final_url, source, now, records)
             detected += page_detected
@@ -258,6 +260,7 @@ def collect(source, config, now=None, client=None):
             page_browser_attempted = False
             page_browser_status = None
             page_browser_error = None
+            page_browser_block_reason = None
 
             # Browser rendering is a second attempt only for the first accessible dynamic page.
             # It never runs after robots/access failures and never performs login or CAPTCHA handling.
@@ -269,7 +272,8 @@ def collect(source, config, now=None, client=None):
                     rendered_url, rendered_html, browser_meta = browser.render(final_url, deadline, client, roots)
                     if challenge(rendered_html):
                         raise FetchError("Bot challenge after browser render; no bypass attempted", "blocked",
-                                         requested_url=final_url, final_url=rendered_url)
+                                         requested_url=final_url, final_url=rendered_url,
+                                         block_reason="BOT_CHALLENGE")
                     rendered = Page(rendered_html)
                     rendered_detected, rendered_count, rendered_malformed, rendered_expired = extract_page(
                         rendered, rendered_url, source, now, records)
@@ -283,6 +287,7 @@ def collect(source, config, now=None, client=None):
                 except (FetchError, ValueError, OSError) as exc:
                     browser_status = page_browser_status = getattr(exc, "kind", "error")
                     browser_failure = page_browser_error = str(exc)
+                    page_browser_block_reason = getattr(exc, "block_reason", None)
 
             diagnostic_error = list(page.errors)
             if page_browser_error:
@@ -298,6 +303,7 @@ def collect(source, config, now=None, client=None):
                 "records": count,
                 "browser_attempted": page_browser_attempted,
                 "browser_status": page_browser_status,
+                "block_reason": page_browser_block_reason,
                 "error": "; ".join(diagnostic_error) or None,
             })
             for link in page.links[:MAX_LINKS]:
@@ -317,13 +323,17 @@ def collect(source, config, now=None, client=None):
                 "records": 0,
                 "browser_attempted": False,
                 "browser_status": None,
+                "block_reason": getattr(exc, "block_reason", None),
                 "error": str(exc),
             })
 
     errors = [item for item in diagnostics if item["status"] != "fetched" or item.get("error")]
+    block_reasons = list(dict.fromkeys(item["block_reason"] for item in diagnostics if item.get("block_reason")))
     limited = bool(queue)
+    # Reaching the intentional crawl budget is not itself a source failure. Successful
+    # bounded extraction remains explicit through coverage/discovery completeness fields.
     if records:
-        outcome = "partial" if errors or limited or malformed else "extracted"
+        outcome = "partial" if errors or malformed else "extracted"
     elif diagnostics and all(item["status"] == "blocked" for item in diagnostics):
         outcome = "blocked"
     elif diagnostics and not any(item["status"] == "fetched" for item in diagnostics):
@@ -333,11 +343,20 @@ def collect(source, config, now=None, client=None):
     else:
         outcome = "no_extractable_jobs"
 
+    block_reason = None
+    if outcome == "blocked":
+        if len(block_reasons) == 1:
+            block_reason = block_reasons[0]
+        elif block_reasons:
+            block_reason = "MULTIPLE_BLOCK_REASONS"
+        else:
+            block_reason = "UNKNOWN_BLOCK"
+
     note = f"{pages} pages attempted; {detected} JobPosting nodes; {len(records)} valid records; {expired} expired; {malformed} malformed"
     if browser_attempted:
         note += f"; browser fallback {browser_status}"
     if limited:
-        note += "; page/time/link budget reached; coverage is partial"
+        note += "; bounded crawl limit reached; discovery coverage is incomplete"
     if outcome == "no_extractable_jobs":
         note += "; HTML/browser access does not establish absence of vacancies; site-specific extraction may be required"
     results = [engine.CollectionResult(connector, "web_pages", True, list(records.values()), len(records))] if records or outcome == "no_active_jobs" else []
@@ -358,6 +377,8 @@ def collect(source, config, now=None, client=None):
         "browser_attempted": browser_attempted,
         "browser_status": browser_status,
         "failure_reason": failure_reason,
+        "block_reason": block_reason,
+        "block_reasons": block_reasons,
         "pages_attempted": pages,
         "pages_fetched": sum(item["status"] == "fetched" for item in diagnostics),
         "jobs_detected": detected,

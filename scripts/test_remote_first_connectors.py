@@ -247,11 +247,12 @@ class RemoteFirstRoutingTests(unittest.TestCase):
                 self.assertEqual(item["connector"], connector)
                 self.assertEqual(item["connector_config"][key], value)
 
-    def test_traefik_uses_bounded_connector_and_float_uses_web(self):
+    def test_traefik_and_float_use_validated_bounded_connectors(self):
         traefik_item = self._plan("Traefik Labs", "https://traefik.io/careers")
         self.assertEqual(traefik_item["connector"], "traefik")
         float_item = self._plan("Float", "https://www.float.com/careers")
-        self.assertEqual(float_item["connector"], "web")
+        self.assertEqual(float_item["connector"], "workable")
+        self.assertEqual(float_item["connector_config"]["subdomain"], "floatjobs")
 
     def test_new_registry_entries_are_unique_governed_and_canonical(self):
         catalog = json.loads(
