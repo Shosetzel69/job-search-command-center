@@ -858,6 +858,16 @@ def shared_collection_config(
         if _text(item.get("role_family")).upper() in role_taxonomy.CANONICAL_FAMILIES
         and _text(item.get("role_family")).upper() != "UNKNOWN"
     }
+    selected_subfamilies: dict[str, set[str]] = {}
+    for item in scopes:
+        family = _text(item.get("role_family")).upper()
+        if family not in selected_families:
+            continue
+        selected_subfamilies.setdefault(family, set()).update(
+            _text(value)
+            for value in (item.get("role_subfamilies") or [])
+            if _text(value)
+        )
     families = [
         family for family in role_taxonomy.CANONICAL_FAMILIES
         if family != "UNKNOWN" and (not selected_families or family in selected_families)
@@ -865,7 +875,10 @@ def shared_collection_config(
 
     titles: list[str] = []
     for family in families:
+        selected = selected_subfamilies.get(family, set())
         for member in taxonomy["families"][family]["members"]:
+            if selected and _text(member.get("code")) not in selected:
+                continue
             label = _text(member.get("label"))
             if label and label not in titles:
                 titles.append(label)
