@@ -522,6 +522,34 @@ class OrchestrationTests(unittest.TestCase):
 
 
 
+    def test_targeted_incremental_progress_is_namespaced_by_request_signature(self):
+        base = {
+            **CONFIG,
+            "jobspipe_mode": "direct",
+            "_jscc_targeted_collection": True,
+        }
+        first = {**base, "_jscc_request_signature": "1" * 64}
+        second = {**base, "_jscc_request_signature": "2" * 64}
+        self.assertNotEqual(
+            optimized.query_progress_key(first, "target_geography"),
+            optimized.query_progress_key(second, "target_geography"),
+        )
+        state = {"query_progress": {}, "usage": {}}
+        optimized.build_query_specs(first, state, NOW)
+        optimized.build_query_specs(second, state, NOW)
+        keys = set(state["query_progress"])
+        self.assertIn("r1:" + "1" * 16 + ":target_geography", keys)
+        self.assertIn("r1:" + "2" * 16 + ":target_geography", keys)
+        self.assertNotIn("target_geography", keys)
+
+    def test_runner_establishes_postgres_run_before_orchestration(self):
+        source = Path(runner.__file__).read_text(encoding="utf-8")
+        start = source.index("shared_corpus.persist_run_started(")
+        execute = source.index("code = orchestration.run(")
+        self.assertLess(start, execute)
+
+
+
 class AdapterTests(unittest.TestCase):
     def fixture(self, geo="Anywhere"):
         return {"id": 1, "jobTitle": "IT Project Manager", "companyName": "Example",
