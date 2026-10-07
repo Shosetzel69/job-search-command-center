@@ -155,7 +155,7 @@ Reguli:
 ### 5.4 Coverage
 
 - Coverage este global/system, nu profil relevance;
-- unitatea canonica este bounded scope: Role Family + geografie/remote scope + work mode + contract;
+- unitatea canonica este bounded scope: Role Family + Role Subfamily + geografie/remote scope + work mode + contract;
 - observatiile persistente retin ultimul run utilizabil, timestamp, volum corpus si diversitate surse;
 - starea curenta este calculata din Collection Policy: `SUFFICIENT`, `INSUFFICIENT` sau `STALE`;
 - `SUFFICIENT` produce reuse fara provider calls;
@@ -181,7 +181,7 @@ Reguli:
 - ADMIN executa `POST /admin/refresh`;
 - rezultatele posibile sunt `REUSED_CORPUS`, `JOINED_EXISTING_RUN`, `STARTED_RUN` si `BLOCKED_BY_POLICY`;
 - corpusul fresh este reutilizat fara provider Retrieve;
-- USER deriva server-side un scope bounded de maximum 1-2 Role Families plus geografie/work mode; caller-ul nu poate selecta arbitrar provideri/surse;
+- USER deriva server-side un scope bounded de maximum 1-2 Role Families, subfamiliile selectate, geografie/work mode/contract; caller-ul nu poate selecta arbitrar provideri/surse;
 - ADMIN agrega si deduplica scope-urile Search Profile active fara a trimite identificatori personali catre runner;
 - requesturile se semneaza determinist din scope + setul efectiv de surse + collection freshness; numai semnaturile identice se coalizeaza in acelasi `run_id`, iar un run activ neechivalent blocheaza pornirea unui al doilea heavy Retrieve;
 - in DEV/TEST runtime-ul canonic este GCP: Command API -> Cloud Run Job -> shared corpus/GCS/PostgreSQL;
