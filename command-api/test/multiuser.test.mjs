@@ -24,6 +24,7 @@ import { runtimePrivilegeReadiness, TENANT_AWARE_TABLES } from '../src/db/privil
 import { deleteTenantFirst, resolveAccountDeletionTarget } from '../src/db/tenant-gateway.js';
 import { provisionRuntimeRole } from '../scripts/db-provision-runtime.mjs';
 import { personalPreferencesChanged } from '../src/multiuser-api.js';
+import { migrateRoleCriteria } from '../src/db/atc-489-02-backfill.js';
 
 const nomenclatures = JSON.parse(
   await readFile(new URL('../../data/nomenclatures.json', import.meta.url), 'utf8'),
@@ -179,6 +180,45 @@ test('legacy configuration splits profile preferences from system collection pol
   assert.equal(system.jobspipe_mode, 'disabled');
   const merged = mergeEffectiveConfig(personal, system);
   assert.deepEqual(merged.search_country_codes, ['RO']);
+});
+
+test('Role Family v1 preference migration preserves legacy intent and is idempotent', () => {
+  const legacy = {
+    role_groups:{
+      pm:{ enabled:true },
+      delivery:{ enabled:true },
+      service:{ enabled:false },
+      scrum:{ enabled:true },
+      program:{ enabled:true },
+    },
+    target_country_codes:['RO'],
+  };
+  const migrated = migrateRoleCriteria(legacy);
+  assert.deepEqual(migrated.target_role_families, [
+    'PROJECT_DELIVERY_MANAGEMENT',
+    'PRODUCT_AGILE',
+  ]);
+  assert.deepEqual(migrated.target_role_subfamilies, [
+    'project_management',
+    'program_management',
+    'pmo',
+    'delivery_management',
+    'agile_scrum',
+  ]);
+  assert.equal(Object.hasOwn(migrated, 'role_groups'), false);
+  assert.deepEqual(migrated.target_country_codes, ['RO']);
+  assert.deepEqual(migrateRoleCriteria(migrated), migrated);
+
+  const broadCanonical = migrateRoleCriteria({
+    target_role_families:['TECHNICAL_LEADERSHIP_ARCHITECTURE'],
+    target_role_subfamilies:[],
+  });
+  assert.deepEqual(broadCanonical.target_role_subfamilies, [
+    'engineering_management',
+    'technical_leadership',
+    'solution_architecture',
+    'enterprise_architecture',
+  ]);
 });
 
 test('shared classification reuses canonical role taxonomy and is deterministic', () => {
