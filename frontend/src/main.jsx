@@ -342,9 +342,10 @@ function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
   const conflict=geographyConflicts(draft);
   const missingTarget=!hasTargetGeography(draft);
   const missingRole=!hasSelectedRole(draft);
+  const tooManyRoleFamilies=(draft.roleFamilies||[]).length>2;
   const missingWorkMode=!hasSelectedWorkMode(draft);
   const missingContract=!hasSelectedContractType(draft);
-  const invalidRetrieve=conflict||missingTarget||missingRole||missingWorkMode||missingContract;
+  const invalidRetrieve=conflict||missingTarget||missingRole||tooManyRoleFamilies||missingWorkMode||missingContract;
   return <div className="space-y-5">
     <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
       <div className="flex flex-wrap items-center gap-2"><h2 className="font-display text-base font-bold text-slate-900">Criterii Retrieve</h2><ScopeBadge scope="RETRIEVE"/></div>
@@ -357,6 +358,7 @@ function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
           const selectedSubs=new Set(draft.roleSubfamilies);
           const toggleFamily=checked=>{
             if(checked){
+              if(!familySelected&&draft.roleFamilies.length>=2)return;
               update('roleFamilies',[...new Set([...draft.roleFamilies,family.code])]);
               update('roleSubfamilies',[...new Set([...draft.roleSubfamilies,...family.subfamilies.map(item=>item.code)])]);
             }else{
@@ -377,6 +379,8 @@ function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
           </div>;
         })}
         {missingRole&&<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Selecteaza cel putin o familie si o subfamilie pentru Retrieve.</div>}
+        {!missingRole&&draft.roleFamilies.length>=2&&<div className="text-xs text-slate-500">Poti selecta maximum doua familii majore pentru un Retrieve USER.</div>}
+        {tooManyRoleFamilies&&<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Pastreaza maximum doua familii pentru Retrieve.</div>}
       </CriteriaCard>
       <CriteriaCard title="Mod de lucru" scope="RETRIEVE" note="Aici controlezi eligibilitatea backend. Filtrul de pe pagina Joburi este separat si GUI-only.">
         <CheckRow checked={draft.workRemote} onChange={v=>update('workRemote',v)}>Remote</CheckRow>
