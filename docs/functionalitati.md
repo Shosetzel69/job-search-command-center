@@ -153,12 +153,15 @@ Reguli:
 - ADMIN executa `POST /admin/refresh`;
 - rezultatele posibile sunt `REUSED_CORPUS`, `JOINED_EXISTING_RUN`, `STARTED_RUN` si `BLOCKED_BY_POLICY`;
 - corpusul fresh este reutilizat fara provider Retrieve;
-- requesturile echivalente se coalizeaza si nu pornesc rulari globale duplicate;
+- USER deriva server-side un scope bounded de maximum 1-2 Role Families plus geografie/work mode; caller-ul nu poate selecta arbitrar provideri/surse;
+- ADMIN agrega si deduplica scope-urile Search Profile active fara a trimite identificatori personali catre runner;
+- requesturile se semneaza determinist din scope + setul efectiv de surse + collection freshness; numai semnaturile identice se coalizeaza in acelasi `run_id`, iar un run activ neechivalent blocheaza pornirea unui al doilea heavy Retrieve;
 - in DEV/TEST runtime-ul canonic este GCP: Command API -> Cloud Run Job -> shared corpus/GCS/PostgreSQL;
 - salvarea criteriilor prin `PUT /me/preferences` nu porneste Retrieve;
 - lista de joburi foloseste `GET /me/jobs` bounded, cu cursor si lazy/cached FIT;
 - numai ADMIN vede istoricul/starea operationala globala a rularilor;
-- in timpul unui Retrieve activ, ADMIN vede progres real `X/Y`, procent, GOOD/FAIL/SKIP/PARTIAL; progresul avanseaza numai cand o sursa planificata ajunge intr-o stare terminala;
+- `run_id` este stabilit inainte de provider work si ramane identic in refresh response, active status, PostgreSQL `search_runs`, source outcomes si run history;
+- in timpul unui Retrieve activ, ADMIN vede progres real `X/Y`, procent, GOOD/FAIL/SKIP/PARTIAL; denominatorul contine numai sursele executabile planificate, iar progresul avanseaza numai cand o sursa ajunge intr-o stare terminala;
 - la final, acelasi panou afiseaza rezumatul terminal si numarul de joburi publicate.
 
 Full Search automat ramane dezactivat in acest baseline:
