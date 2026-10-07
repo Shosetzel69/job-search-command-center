@@ -51,6 +51,29 @@ function aggregate(overrides={}){
   };
 }
 function runtime(overrides={}){ return {appEnv:'dev',searchMode:'disabled',...overrides}; }
+function coverage(kind='SUFFICIENT', scopes=aggregate().scopes, overrides={}) {
+  const entries=(scopes||[]).map(item=>({
+    scope:item,
+    state:kind,
+    reason:kind==='SUFFICIENT'?null:kind==='STALE'?'FRESHNESS_EXPIRED':'CORPUS_VOLUME_BELOW_MINIMUM',
+    refresh_allowed:kind!=='SUFFICIENT',
+    corpus_volume:kind==='INSUFFICIENT'?0:10,
+    source_diversity:kind==='INSUFFICIENT'?0:3,
+    ...overrides,
+  }));
+  return {
+    schema_version:'1.0',
+    scopes:entries,
+    refresh_scopes:kind==='SUFFICIENT'?[]:(scopes||[]),
+    all_sufficient:entries.length>0&&entries.every(item=>item.state==='SUFFICIENT'),
+    blocked_by_cooldown:false,
+    state_counts:{
+      SUFFICIENT:entries.filter(item=>item.state==='SUFFICIENT').length,
+      INSUFFICIENT:entries.filter(item=>item.state==='INSUFFICIENT').length,
+      STALE:entries.filter(item=>item.state==='STALE').length,
+    },
+  };
+}
 function request(a=aggregate()){
   return buildRetrieveRequest({scopes:a.scopes,collectionFreshnessHours:24});
 }
@@ -58,6 +81,7 @@ function deps(overrides={}){
   return {
     aggregateScopes:async()=>aggregate(),
     readState:async()=>state(),
+    readCoverage:async()=>coverage(),
     getActive:async()=>null,
     dispatch:async()=>({name:'op',run_id:'run-admin'}),
     buildIdentity:{},
@@ -67,10 +91,10 @@ function deps(overrides={}){
 
 test('ADMIN refresh decision exposes canonical outcomes',()=>{
   const a=aggregate(),req=request(a);
-  assert.equal(decideAdminRefresh({state:state(),runtime:runtime(),activeRun:null,aggregate:a,request:req}).outcome,'REUSED_CORPUS');
-  assert.equal(decideAdminRefresh({state:state(),runtime:runtime(),activeRun:{run_id:'live',request_signature:req.request_signature},aggregate:a,request:req}).outcome,'JOINED_EXISTING_RUN');
-  assert.equal(decideAdminRefresh({state:state({corpus_fresh:false}),runtime:runtime(),activeRun:null,aggregate:a,request:req}).outcome,'STARTED_RUN');
-  assert.equal(decideAdminRefresh({state:state(),runtime:runtime({appEnv:'prod',searchMode:'live'}),activeRun:null,aggregate:a,request:req}).outcome,'BLOCKED_BY_POLICY');
+  assert.equal(decideAdminRefresh({state:state(),coverage:coverage(),runtime:runtime(),activeRun:null,aggregate:a,request:req}).outcome,'REUSED_CORPUS');
+  assert.equal(decideAdminRefresh({state:state(),coverage:coverage('STALE'),runtime:runtime(),activeRun:{run_id:'live',request_signature:req.request_signature},aggregate:a,request:req}).outcome,'JOINED_EXISTING_RUN');
+  assert.equal(decideAdminRefresh({state:state(),coverage:coverage('STALE'),runtime:runtime(),activeRun:null,aggregate:a,request:req}).outcome,'STARTED_RUN');
+  assert.equal(decideAdminRefresh({state:state(),coverage:coverage('STALE'),runtime:runtime({appEnv:'prod',searchMode:'live'}),activeRun:null,aggregate:a,request:req}).outcome,'BLOCKED_BY_POLICY');
 });
 
 test('non-ADMIN cannot invoke ADMIN refresh',async()=>{
@@ -80,7 +104,7 @@ test('non-ADMIN cannot invoke ADMIN refresh',async()=>{
   );
 });
 
-test('fresh corpus is reused with zero dispatch',async()=>{
+test('SUFFICIENT coverage is reused with zero dispatch',async()=>{
   let dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({dispatch:async()=>{dispatches+=1;}}));
   assert.equal(result.outcome,'REUSED_CORPUS');
@@ -94,7 +118,8 @@ test('equivalent active global Retrieve coalesces ADMIN refresh',async()=>{
   const req=request();
   let dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({
-    readState:async()=>state({corpus_fresh:false,corpus_age_hours:30}),
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
     getActive:async()=>({run_id:'run-live',request_signature:req.request_signature}),
     dispatch:async()=>{dispatches+=1;},
   }));
@@ -106,7 +131,8 @@ test('equivalent active global Retrieve coalesces ADMIN refresh',async()=>{
 test('non-equivalent active run blocks a second ADMIN heavy Retrieve',async()=>{
   let dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({
-    readState:async()=>state({corpus_fresh:false}),
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
     getActive:async()=>({run_id:'other',request_signature:'0'.repeat(64)}),
     dispatch:async()=>{dispatches+=1;},
   }));
@@ -118,7 +144,8 @@ test('non-equivalent active run blocks a second ADMIN heavy Retrieve',async()=>{
 test('stale corpus starts exactly one bounded admin-ui Retrieve',async()=>{
   const calls=[];
   const result=await adminRefresh(admin,baseEnv,deps({
-    readState:async()=>state({corpus_fresh:false,corpus_age_hours:30}),
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
     dispatch:async(...args)=>{calls.push(args);return{name:'projects/jscc-dev/operations/admin-1',run_id:'run-admin-1'};},
   }));
   assert.equal(result.outcome,'STARTED_RUN');
@@ -134,7 +161,8 @@ test('dispatch race 409 joins only equivalent ADMIN request',async()=>{
   const req=request();
   let reads=0;
   const result=await adminRefresh(admin,baseEnv,deps({
-    readState:async()=>state({corpus_fresh:false}),
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
     getActive:async()=>{reads+=1;return reads===1?null:{run_id:'run-race',request_signature:req.request_signature};},
     dispatch:async()=>{throw Object.assign(new Error('active'),{status:409});},
   }));
@@ -146,11 +174,10 @@ test('dispatch race 409 joins only equivalent ADMIN request',async()=>{
 test('completed Retrieve race reuses fresh corpus before dispatch',async()=>{
   let reads=0,dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({
-    readState:async()=>{
+    readState:async()=>state(),
+    readCoverage:async()=>{
       reads+=1;
-      return reads===1
-        ? state({corpus_fresh:false,corpus_age_hours:30})
-        : state({corpus_fresh:true,corpus_age_hours:0.01,latest_usable_run:{run_id:'just-finished',status:'completed',completed_at:'2026-10-05T12:00:00.000Z'}});
+      return reads===1?coverage('STALE'):coverage('SUFFICIENT');
     },
     dispatch:async()=>{dispatches+=1;},
   }));
@@ -163,7 +190,8 @@ test('zero active refresh scopes fail closed without dispatch',async()=>{
   let activeReads=0,dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({
     aggregateScopes:async()=>aggregate({active_profile_count:0,scope_count:0,scopes:[]}),
-    readState:async()=>state({corpus_fresh:false}),
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('INSUFFICIENT',[]),
     getActive:async()=>{activeReads+=1;return null;},
     dispatch:async()=>{dispatches+=1;},
   }));
@@ -176,7 +204,8 @@ test('zero active refresh scopes fail closed without dispatch',async()=>{
 test('PROD ADMIN refresh fails closed without runtime interaction',async()=>{
   let activeReads=0,dispatches=0;
   const result=await adminRefresh(admin,{...baseEnv,APP_ENV:'prod',GCP_PROJECT_ID:'jscc-prod',SEARCH_MODE:'live'},deps({
-    readState:async()=>state({corpus_fresh:false}),
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
     getActive:async()=>{activeReads+=1;return null;},
     dispatch:async()=>{dispatches+=1;},
   }));
