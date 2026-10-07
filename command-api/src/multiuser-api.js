@@ -11,6 +11,7 @@ import {
   createApplication,
   createSession,
   deleteAccount,
+  deleteOwnAccount,
   deleteApplication,
   effectiveConfig,
   updateApplication,
@@ -241,6 +242,12 @@ export async function handleAuthenticatedRoute(request, env, context) {
 
   if (request.method === 'GET' && url.pathname === '/me') {
     return json(summary(context));
+  }
+
+  if (request.method === 'DELETE' && url.pathname === '/me/account') {
+    requireSameOrigin(request, env);
+    const result = await deleteOwnAccount(context, env);
+    return withCookie(json(result), clearSessionCookie());
   }
 
   if (request.method === 'GET' && url.pathname === '/me/preferences') {

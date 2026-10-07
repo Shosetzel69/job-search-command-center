@@ -62,6 +62,17 @@ test('missing session and idempotent logout do not require a database binding', 
   assert.equal(await revokeSession(null, {}), false);
 });
 
+test('self-service account deletion is same-origin and cannot accept a caller-selected target', async () => {
+  const source = await readFile(new URL('../src/multiuser-api.js', import.meta.url), 'utf8');
+  const start = source.indexOf("request.method === 'DELETE' && url.pathname === '/me/account'");
+  assert.ok(start >= 0);
+  const block = source.slice(start, start + 420);
+  assert.match(block, /requireSameOrigin\(request, env\)/);
+  assert.match(block, /deleteOwnAccount\(context, env\)/);
+  assert.match(block, /clearSessionCookie\(\)/);
+  assert.doesNotMatch(block, /request\.json|userId|profile_id|tenant_id/);
+});
+
 test('DEV provisioning errors expose the failing shared-transaction stage without changing the database flow', async () => {
   const queries = [];
   const query = async text => {

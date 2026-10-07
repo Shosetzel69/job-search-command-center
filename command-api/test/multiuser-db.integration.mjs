@@ -6,9 +6,11 @@ import {
   createApplication,
   createSession,
   deleteAccount,
+  deleteOwnAccount,
   deleteApplication,
   effectiveConfig,
   ensureSearchProfileFoundation,
+  listAccounts,
   listApplications,
   listProfileJobs,
   nomenclatureReferenceCount,
@@ -380,16 +382,83 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       'DB-held reference from another profile must block nomenclature delete without exposing personal content',
     );
 
-    const session = await createSession(user, env, { db:runtimeDb });
-    const resolved = await resolveSession(session.rawToken, env, { db:runtimeDb });
-    assert.equal(resolved.user_id, user.user_id);
+    // #522 lifecycle matrix: ADMIN A + USER B + two active USER B sessions.
+    const [sessionB1, sessionB2] = await Promise.all([
+      createSession(user, env, { db:runtimeDb }),
+      createSession(user, env, { db:runtimeDb }),
+    ]);
+    assert.equal((await resolveSession(sessionB1.rawToken, env, { db:runtimeDb })).user_id, user.user_id);
+    assert.equal((await resolveSession(sessionB2.rawToken, env, { db:runtimeDb })).user_id, user.user_id);
+
+    const adminAccountRows = await listAccounts(ownerA, env, { db:runtimeDb });
+    const listedUser = adminAccountRows.find(row => String(row.user_id) === user.user_id);
+    assert.ok(listedUser);
+    assert.equal(listedUser.email, 'user-b@example.test');
+    assert.ok(listedUser.last_login_at);
+    for (const forbidden of ['preferences','applications','candidate_profile','search_profile','fit','notes','documents']) {
+      assert.equal(Object.hasOwn(listedUser, forbidden), false);
+    }
+    await assert.rejects(
+      setAccountStatus(user, ownerA.user_id, 'DEACTIVATED', env, { db:runtimeDb }),
+      error => error?.status === 403,
+    );
 
     await setAccountStatus(ownerA, user.user_id, 'DEACTIVATED', env, { db:runtimeDb });
-    await assert.rejects(
-      resolveSession(session.rawToken, env, { db:runtimeDb }),
-      error => error?.status === 401,
-    );
+    await assert.rejects(resolveSession(sessionB1.rawToken, env, { db:runtimeDb }), error => error?.status === 401);
+    await assert.rejects(resolveSession(sessionB2.rawToken, env, { db:runtimeDb }), error => error?.status === 401);
+
     await setAccountStatus(ownerA, user.user_id, 'ACTIVE', env, { db:runtimeDb });
+    const freshSession = await createSession(user, env, { db:runtimeDb });
+    assert.equal((await resolveSession(freshSession.rawToken, env, { db:runtimeDb })).user_id, user.user_id);
+
+    const originalUserId = user.user_id;
+    const originalUserProfileId = user.profile_id;
+    const sharedJobsBeforeSelfDelete = Number((await adminDb.query(
+      'SELECT count(*)::integer AS count FROM canonical_jobs',
+    )).rows[0].count);
+
+    const selfDelete = await deleteOwnAccount(user, env, { db:runtimeDb });
+    assert.equal(selfDelete.result, 'DELETED');
+    await assert.rejects(resolveSession(freshSession.rawToken, env, { db:runtimeDb }), error => error?.status === 401);
+
+    const userResidue = await adminDb.query(
+      `SELECT
+         (SELECT count(*)::integer FROM tenants WHERE name=$3) AS tenants,
+         (SELECT count(*)::integer FROM app_user WHERE user_id=$1) AS users,
+         (SELECT count(*)::integer FROM user_identity WHERE user_id=$1) AS identities,
+         (SELECT count(*)::integer FROM user_session WHERE user_id=$1) AS sessions,
+         (SELECT count(*)::integer FROM profile WHERE profile_id=$2) AS profiles,
+         (SELECT count(*)::integer FROM candidate_profile WHERE tenant_id=$2) AS candidate_profiles,
+         (SELECT count(*)::integer FROM search_profile WHERE tenant_id=$2) AS search_profiles,
+         (SELECT count(*)::integer FROM search_profile_preferences WHERE tenant_id=$2) AS search_profile_preferences,
+         (SELECT count(*)::integer FROM profile_preferences WHERE tenant_id=$2) AS preferences,
+         (SELECT count(*)::integer FROM applications WHERE tenant_id=$2) AS applications,
+         (SELECT count(*)::integer FROM profile_job_state WHERE tenant_id=$2) AS job_state,
+         (SELECT count(*)::integer FROM profile_job_evaluation WHERE tenant_id=$2) AS evaluations,
+         (SELECT count(*)::integer FROM profile_notes WHERE tenant_id=$2) AS notes,
+         (SELECT count(*)::integer FROM profile_ui_preferences WHERE tenant_id=$2) AS ui_preferences`,
+      [originalUserId, originalUserProfileId, `jscc-${originalUserProfileId}`],
+    );
+    assert.deepEqual(userResidue.rows[0], {
+      tenants:0, users:0, identities:0, sessions:0, profiles:0,
+      candidate_profiles:0, search_profiles:0, search_profile_preferences:0,
+      preferences:0, applications:0, job_state:0, evaluations:0, notes:0, ui_preferences:0,
+    });
+    assert.equal(
+      Number((await adminDb.query('SELECT count(*)::integer AS count FROM canonical_jobs')).rows[0].count),
+      sharedJobsBeforeSelfDelete,
+      'self-delete must preserve shared canonical corpus',
+    );
+
+    const resignedUser = await resolveOrProvisionGoogleIdentity(
+      { sub:'user-b', email:'user-b@example.test', email_verified:true },
+      env,
+      { db:runtimeDb },
+    );
+    assert.notEqual(resignedUser.user_id, originalUserId);
+    assert.notEqual(resignedUser.profile_id, originalUserProfileId);
+    assert.equal((await listApplications(resignedUser, env, { db:runtimeDb })).applications.length, 0);
+    await deleteAccount(ownerA, resignedUser.user_id, env, { db:runtimeDb });
 
     const ownerApps = (await listApplications(ownerA, env, { db:runtimeDb })).applications;
     for (const application of ownerApps) {
