@@ -1,83 +1,68 @@
 {
   "schema_version": "1.0",
-  "taxonomy_version": "2026.09.25-1",
+  "taxonomy_version": "2026.10.08-1",
   "canonical_families": [
-    "PROJECT_MANAGEMENT",
-    "DELIVERY",
-    "SERVICE_MANAGEMENT",
-    "SCRUM_AGILE",
-    "PROGRAM_PMO",
+    "PROJECT_DELIVERY_MANAGEMENT",
+    "SERVICE_OPERATIONS_MANAGEMENT",
+    "PRODUCT_AGILE",
+    "BUSINESS_ANALYSIS_TRANSFORMATION",
+    "CUSTOMER_PROFESSIONAL_SERVICES",
+    "TECHNICAL_LEADERSHIP_ARCHITECTURE",
     "UNKNOWN"
   ],
   "families": {
-    "PROJECT_MANAGEMENT": {
-      "label": "Project Management",
+    "PROJECT_DELIVERY_MANAGEMENT": {
+      "label": "Project & Delivery Management",
       "members": [
         {
-          "code": "project_manager",
-          "label": "Project Manager",
+          "code": "project_management",
+          "label": "Project Management",
           "include_patterns": [
-            "\\bproject\\s+manager\\b"
+            "\\b(?:it\\s+|technical\\s+|agile\\s+)?project\\s+manager\\b",
+            "\\bproject\\s+management\\s+(?:manager|lead)\\b"
           ],
           "exclude_patterns": []
         },
         {
-          "code": "it_project_manager",
-          "label": "IT Project Manager",
+          "code": "program_management",
+          "label": "Program Management",
           "include_patterns": [
-            "\\bit\\s+project\\s+manager\\b"
+            "\\b(?:technical\\s+)?(?:program|programme)\\s+manager\\b",
+            "\\b(?:program|programme)\\s+management\\s+(?:manager|lead)\\b"
           ],
           "exclude_patterns": []
         },
         {
-          "code": "technical_project_manager",
-          "label": "Technical Project Manager",
+          "code": "pmo",
+          "label": "PMO",
           "include_patterns": [
-            "\\btechnical\\s+project\\s+manager\\b"
+            "\\bpmo\\s+(?:manager|lead|head)\\b",
+            "\\bproject\\s+management\\s+office\\s+(?:manager|lead|head)\\b"
           ],
           "exclude_patterns": []
         },
         {
-          "code": "agile_project_manager",
-          "label": "Agile Project Manager",
+          "code": "delivery_management",
+          "label": "Delivery Management",
           "include_patterns": [
-            "\\bagile\\s+project\\s+manager\\b"
-          ],
-          "exclude_patterns": []
-        }
-      ]
-    },
-    "DELIVERY": {
-      "label": "Delivery",
-      "members": [
-        {
-          "code": "delivery_manager",
-          "label": "Delivery Manager",
-          "include_patterns": [
-            "\\bdelivery\\s+manager\\b"
+            "\\b(?:technical\\s+)?delivery\\s+manager\\b",
+            "\\bdelivery\\s+management\\s+(?:manager|lead)\\b"
           ],
           "exclude_patterns": [
             "\\bservice\\s+delivery\\s+manager\\b"
           ]
-        },
-        {
-          "code": "technical_delivery_manager",
-          "label": "Technical Delivery Manager",
-          "include_patterns": [
-            "\\btechnical\\s+delivery\\s+manager\\b"
-          ],
-          "exclude_patterns": []
         }
       ]
     },
-    "SERVICE_MANAGEMENT": {
-      "label": "Service Management",
+    "SERVICE_OPERATIONS_MANAGEMENT": {
+      "label": "Service & Operations Management",
       "members": [
         {
-          "code": "service_manager",
-          "label": "Service Manager",
+          "code": "service_management",
+          "label": "Service Management",
           "include_patterns": [
-            "\\b(?:it\\s+)?service\\s+manager\\b"
+            "\\b(?:it\\s+)?service\\s+manager\\b",
+            "\\bservice\\s+delivery\\s+manager\\b"
           ],
           "exclude_patterns": [
             "\\bcustomer\\s+service\\s+manager\\b",
@@ -85,52 +70,170 @@
           ]
         },
         {
-          "code": "service_delivery_manager",
-          "label": "Service Delivery Manager",
+          "code": "it_operations",
+          "label": "IT Operations",
           "include_patterns": [
-            "\\bservice\\s+delivery\\s+manager\\b"
+            "\\bit\\s+operations?\\s+(?:manager|lead|head)\\b",
+            "\\binfrastructure\\s+operations?\\s+(?:manager|lead|head)\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "support_management",
+          "label": "Support Management",
+          "include_patterns": [
+            "\\b(?:it\\s+|technical\\s+)?support\\s+(?:manager|lead|head)\\b"
+          ],
+          "exclude_patterns": [
+            "\\bcustomer\\s+support\\s+(?:manager|lead|head)\\b"
+          ]
+        }
+      ]
+    },
+    "PRODUCT_AGILE": {
+      "label": "Product & Agile",
+      "members": [
+        {
+          "code": "product_management",
+          "label": "Product Management",
+          "include_patterns": [
+            "\\bproduct\\s+manager\\b",
+            "\\bproduct\\s+management\\s+(?:manager|lead)\\b"
+          ],
+          "exclude_patterns": [
+            "\\bproduct\\s+marketing\\s+manager\\b"
+          ]
+        },
+        {
+          "code": "product_owner",
+          "label": "Product Owner",
+          "include_patterns": [
+            "\\bproduct\\s+owner\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "agile_scrum",
+          "label": "Agile / Scrum",
+          "include_patterns": [
+            "\\bscrum\\s+master\\b",
+            "\\bagile\\s+coach\\b"
           ],
           "exclude_patterns": []
         }
       ]
     },
-    "SCRUM_AGILE": {
-      "label": "Scrum / Agile",
+    "BUSINESS_ANALYSIS_TRANSFORMATION": {
+      "label": "Business Analysis & Transformation",
       "members": [
         {
-          "code": "scrum_master",
-          "label": "Scrum Master",
+          "code": "business_analysis",
+          "label": "Business Analysis",
           "include_patterns": [
-            "\\bscrum\\s+master\\b"
+            "\\b(?:senior\\s+|lead\\s+|technical\\s+)?business\\s+analyst\\b",
+            "\\bbusiness\\s+analysis\\s+(?:manager|lead)\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "transformation",
+          "label": "Transformation",
+          "include_patterns": [
+            "\\b(?:digital\\s+|business\\s+|it\\s+)?transformation\\s+(?:manager|lead|director)\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "change_management",
+          "label": "Change Management",
+          "include_patterns": [
+            "\\bchange\\s+manager\\b",
+            "\\bchange\\s+management\\s+(?:manager|lead|head)\\b"
+          ],
+          "exclude_patterns": [
+            "\\bchange\\s+and\\s+release\\s+coordinator\\b"
+          ]
+        }
+      ]
+    },
+    "CUSTOMER_PROFESSIONAL_SERVICES": {
+      "label": "Customer & Professional Services",
+      "members": [
+        {
+          "code": "customer_success",
+          "label": "Customer Success",
+          "include_patterns": [
+            "\\bcustomer\\s+success\\s+(?:manager|lead|director)\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "technical_account_management",
+          "label": "Technical Account Management",
+          "include_patterns": [
+            "\\btechnical\\s+account\\s+(?:manager|lead|director)\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "technical_customer_management",
+          "label": "Technical Customer Management",
+          "include_patterns": [
+            "\\btechnical\\s+customer\\s+(?:manager|lead|director)\\b",
+            "\\btechnical\\s+customer\\s+success\\s+(?:manager|lead)\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "implementation",
+          "label": "Implementation",
+          "include_patterns": [
+            "\\bimplementation\\s+(?:manager|lead|consultant)\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "professional_services",
+          "label": "Professional Services",
+          "include_patterns": [
+            "\\bprofessional\\s+services\\s+(?:manager|lead|director)\\b"
           ],
           "exclude_patterns": []
         }
       ]
     },
-    "PROGRAM_PMO": {
-      "label": "Program / PMO",
+    "TECHNICAL_LEADERSHIP_ARCHITECTURE": {
+      "label": "Technical Leadership & Architecture",
       "members": [
         {
-          "code": "program_manager",
-          "label": "Program Manager",
+          "code": "engineering_management",
+          "label": "Engineering Management",
           "include_patterns": [
-            "\\b(?:program|programme)\\s+manager\\b"
+            "\\b(?:software\\s+)?engineering\\s+(?:manager|director)\\b"
           ],
           "exclude_patterns": []
         },
         {
-          "code": "technical_program_manager",
-          "label": "Technical Program Manager",
+          "code": "technical_leadership",
+          "label": "Technical Leadership",
           "include_patterns": [
-            "\\btechnical\\s+(?:program|programme)\\s+manager\\b"
+            "\\b(?:technical|tech)\\s+(?:lead|leader)\\b"
           ],
           "exclude_patterns": []
         },
         {
-          "code": "pmo_manager",
-          "label": "PMO Manager",
+          "code": "solution_architecture",
+          "label": "Solution Architecture",
           "include_patterns": [
-            "\\bpmo\\s+manager\\b"
+            "\\bsolutions?\\s+architect\\b"
+          ],
+          "exclude_patterns": []
+        },
+        {
+          "code": "enterprise_architecture",
+          "label": "Enterprise Architecture",
+          "include_patterns": [
+            "\\benterprise\\s+architect\\b"
           ],
           "exclude_patterns": []
         }
