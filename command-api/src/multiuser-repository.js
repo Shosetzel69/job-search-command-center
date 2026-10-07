@@ -11,6 +11,7 @@ import {
 } from './db/tenant-gateway.js';
 import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
 import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from './profile-evaluation.js';
+import { userRefreshScopes } from './retrieve-scope.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
   'role_groups',
@@ -788,6 +789,26 @@ export async function saveCollectionPolicy(authContext, policy, env = process.en
     [JSON.stringify(system)],
   );
   return system;
+}
+
+export async function userRefreshScope(
+  authContext,
+  env = process.env,
+  { db = getPool(env) } = {},
+) {
+  return withTenantTransaction(authContext, async tx => {
+    const foundation = await resolveActiveSearchProfileTx(tx);
+    const result = await tx.query(
+      `SELECT preferences
+         FROM search_profile_preferences
+        WHERE tenant_id=$1 AND search_profile_id=$2`,
+      [tx.tenantId, foundation.search_profile_id],
+    );
+    const preferences = jsonObject(result.rows?.[0]?.preferences);
+    return Object.freeze({
+      scopes:userRefreshScopes(preferences),
+    });
+  }, { env, db });
 }
 
 export async function sharedCorpusRefreshState(
