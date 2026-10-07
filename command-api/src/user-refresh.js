@@ -3,6 +3,7 @@ import { assertEnvironmentConfig, manualSearchExecutionMode } from './environmen
 import { activeWorkflowRun, dispatchWorkflow } from './runtime-backend.js';
 import { sharedCorpusRefreshState, userRefreshScope } from './multiuser-repository.js';
 import { buildRetrieveRequest, equivalentActiveRun } from './retrieve-scope.js';
+import { coverageStateForScopes } from './coverage.js';
 
 export const USER_REFRESH_OUTCOMES = Object.freeze([
   'REUSED_CORPUS',
@@ -11,29 +12,37 @@ export const USER_REFRESH_OUTCOMES = Object.freeze([
   'BLOCKED_BY_POLICY',
 ]);
 
-function metadata(state, request = null) {
+function metadata(state, coverage, request = null) {
   return {
     collection_freshness_hours:state.collection_freshness_hours,
     corpus_age_hours:state.corpus_age_hours == null ? null : Number(state.corpus_age_hours.toFixed(3)),
     latest_usable_run:state.latest_usable_run,
     request_signature:request?.request_signature || null,
     scope_summary:request?.scope_summary || { scope_count:0, role_families:[], source_count:0 },
+    coverage:{
+      state_counts:coverage?.state_counts || { SUFFICIENT:0, INSUFFICIENT:0, STALE:0 },
+      scopes:coverage?.scopes || [],
+    },
   };
 }
 
-export function decideUserRefresh({ state, runtime, activeRun, request }) {
+export function decideUserRefresh({ state, coverage, runtime, activeRun, request }) {
   if (!state?.user_refresh_enabled) {
-    return { outcome:'BLOCKED_BY_POLICY', reason:'USER_REFRESH_DISABLED', ...metadata(state, request) };
+    return { outcome:'BLOCKED_BY_POLICY', reason:'USER_REFRESH_DISABLED', ...metadata(state, coverage, request) };
   }
   if (runtime?.appEnv === 'prod') {
-    return { outcome:'BLOCKED_BY_POLICY', reason:'PROD_NOT_AUTHORIZED', ...metadata(state, request) };
+    return { outcome:'BLOCKED_BY_POLICY', reason:'PROD_NOT_AUTHORIZED', ...metadata(state, coverage, request) };
   }
   const executionMode = manualSearchExecutionMode(runtime?.appEnv, runtime?.searchMode);
   if (!executionMode) {
-    return { outcome:'BLOCKED_BY_POLICY', reason:'RETRIEVE_NOT_ALLOWED', ...metadata(state, request) };
+    return { outcome:'BLOCKED_BY_POLICY', reason:'RETRIEVE_NOT_ALLOWED', ...metadata(state, coverage, request) };
+  }
+  if (coverage?.all_sufficient) {
+    return { outcome:'REUSED_CORPUS', reason:null, execution_mode:executionMode, ...metadata(state, coverage, request) };
   }
   if (!request?.retrieve_scope?.scopes?.length) {
-    return { outcome:'BLOCKED_BY_POLICY', reason:'NO_ACTIVE_REFRESH_SCOPE', execution_mode:executionMode, ...metadata(state, request) };
+    const reason = coverage?.blocked_by_cooldown ? 'COVERAGE_REFRESH_COOLDOWN' : 'NO_ACTIVE_REFRESH_SCOPE';
+    return { outcome:'BLOCKED_BY_POLICY', reason, execution_mode:executionMode, ...metadata(state, coverage, request) };
   }
   if (activeRun) {
     if (equivalentActiveRun(activeRun, request)) {
@@ -42,7 +51,7 @@ export function decideUserRefresh({ state, runtime, activeRun, request }) {
         reason:null,
         execution_mode:executionMode,
         run_id:activeRun.run_id || null,
-        ...metadata(state, request),
+        ...metadata(state, coverage, request),
       };
     }
     return {
@@ -50,13 +59,10 @@ export function decideUserRefresh({ state, runtime, activeRun, request }) {
       reason:'NON_EQUIVALENT_RUN_ACTIVE',
       execution_mode:executionMode,
       active_run_id:activeRun.run_id || null,
-      ...metadata(state, request),
+      ...metadata(state, coverage, request),
     };
   }
-  if (state?.corpus_fresh) {
-    return { outcome:'REUSED_CORPUS', reason:null, execution_mode:executionMode, ...metadata(state, request) };
-  }
-  return { outcome:'STARTED_RUN', reason:null, execution_mode:executionMode, ...metadata(state, request) };
+  return { outcome:'STARTED_RUN', reason:null, execution_mode:executionMode, ...metadata(state, coverage, request) };
 }
 
 export async function userRefresh(
@@ -65,6 +71,7 @@ export async function userRefresh(
   {
     readState = sharedCorpusRefreshState,
     readScope = userRefreshScope,
+    readCoverage = coverageStateForScopes,
     getActive = activeWorkflowRun,
     dispatch = dispatchWorkflow,
     buildRequest = buildRetrieveRequest,
@@ -78,23 +85,25 @@ export async function userRefresh(
   const runtime = assertEnvironmentConfig(env, buildIdentity);
   const scope = await readScope(authContext, env);
   const initialState = await readState(env);
+  const initialCoverage = await readCoverage(scope?.scopes, env);
   let request = buildRequest({
-    scopes:scope?.scopes,
+    scopes:initialCoverage.refresh_scopes,
     collectionFreshnessHours:initialState.collection_freshness_hours,
   });
 
-  let decision = decideUserRefresh({ state:initialState, runtime, activeRun:null, request });
-  if (decision.outcome === 'BLOCKED_BY_POLICY') return decision;
+  let decision = decideUserRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun:null, request });
+  if (decision.outcome !== 'STARTED_RUN') return decision;
 
   const activeRun = await getActive(env, runtime);
-  if (activeRun) return decideUserRefresh({ state:initialState, runtime, activeRun, request });
+  if (activeRun) return decideUserRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun, request });
 
   const currentState = await readState(env);
+  const currentCoverage = await readCoverage(scope?.scopes, env);
   request = buildRequest({
-    scopes:scope?.scopes,
+    scopes:currentCoverage.refresh_scopes,
     collectionFreshnessHours:currentState.collection_freshness_hours,
   });
-  decision = decideUserRefresh({ state:currentState, runtime, activeRun:null, request });
+  decision = decideUserRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, request });
   if (decision.outcome !== 'STARTED_RUN') return decision;
 
   try {
@@ -113,7 +122,7 @@ export async function userRefresh(
           reason:'COALESCED_AFTER_RACE',
           execution_mode:decision.execution_mode,
           run_id:joined?.run_id || null,
-          ...metadata(currentState, request),
+          ...metadata(currentState, currentCoverage, request),
         };
       }
       return {
@@ -121,7 +130,7 @@ export async function userRefresh(
         reason:'NON_EQUIVALENT_RUN_ACTIVE',
         execution_mode:decision.execution_mode,
         active_run_id:joined?.run_id || null,
-        ...metadata(currentState, request),
+        ...metadata(currentState, currentCoverage, request),
       };
     }
     throw error;
