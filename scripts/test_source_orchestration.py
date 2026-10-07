@@ -20,7 +20,8 @@ CONFIG = {"schema_version": "1.0", "source_strategy": "all active sources equall
           "jobspipe_mode": "apify", "freshness_hours": 24,
           "target_regions": [], "target_country_codes": ["RO"],
           "excluded_regions": [], "excluded_country_codes": [],
-          "role_groups": {"pm": {"enabled": True, "titles": ["IT Project Manager"]}}}
+          "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+          "target_role_subfamilies": ["project_management"]}
 CATALOG = {"sources": [
     {"name": "JobsPipe", "url": "https://jobspipe.dev/", "active": True},
     {"name": "Jobicy", "url": "https://jobicy.com/", "active": True},
@@ -423,7 +424,8 @@ class OrchestrationTests(unittest.TestCase):
     def test_targeted_collection_config_uses_only_requested_family_and_geography(self):
         scope = {
             "scopes": [{
-                "role_family": "PROJECT_MANAGEMENT",
+                "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+                "role_subfamilies": ["project_management"],
                 "target_regions": ["EU"],
                 "target_country_codes": ["RO"],
                 "remote_eligible_country_codes": ["RO"],
@@ -458,7 +460,8 @@ class OrchestrationTests(unittest.TestCase):
             **CONFIG,
             "_jscc_retrieve_scope": {
                 "scopes": [{
-                    "role_family": "PROJECT_MANAGEMENT",
+                    "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+                "role_subfamilies": ["project_management"],
                     "target_country_codes": ["RO"],
                     "target_regions": [],
                     "work_modes": ["remote"],
@@ -481,7 +484,8 @@ class OrchestrationTests(unittest.TestCase):
         orchestration.SOURCES_PATH.write_text(json.dumps(catalog))
         scope = {
             "scopes": [{
-                "role_family": "PROJECT_MANAGEMENT",
+                "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+                "role_subfamilies": ["project_management"],
                 "target_regions": [],
                 "target_country_codes": ["RO"],
                 "remote_eligible_country_codes": ["RO"],
