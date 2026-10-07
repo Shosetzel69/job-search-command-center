@@ -105,7 +105,7 @@ function Overview({ sources, runStatus, onNavigate }) {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{cards.map(([label,value,note]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div><div className="mt-2 text-2xl font-bold text-slate-950">{value}</div><div className="mt-1 text-xs text-slate-500">{note}</div></div>)}</div>
     <Panel title="Acces rapid" note="Administrarea ramane separata de executia cautarii.">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[['update','Actualizare date'],['sources','Surse'],['nomenclatures','Nomenclatoare'],['users','Utilizatori'],['logs','Loguri']].map(([key,label]) => <button key={key} onClick={() => onNavigate(key)} className="rounded-xl border border-slate-200 p-4 text-left text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50">{label}<div className="mt-1 text-xs font-normal text-slate-400">Deschide sectiunea</div></button>)}
+        {[['update','Actualizare date'],['sources','Surse'],['nomenclatures','Nomenclatoare'],['coverage','Coverage'],['users','Utilizatori'],['logs','Loguri']].map(([key,label]) => <button key={key} onClick={() => onNavigate(key)} className="rounded-xl border border-slate-200 p-4 text-left text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50">{label}<div className="mt-1 text-xs font-normal text-slate-400">Deschide sectiunea</div></button>)}
       </div>
     </Panel>
   </div>;
@@ -450,6 +450,61 @@ function Logs({ runs }) {
 }
 
 
+function CoverageAdmin({ token, notify }) {
+  const [snapshot,setSnapshot] = useState(null);
+  const [loading,setLoading] = useState(true);
+
+  useEffect(() => {
+    let active=true;
+    setLoading(true);
+    api('/admin/coverage', token)
+      .then(payload => { if(active)setSnapshot(payload); })
+      .catch(error => { if(active)notify(`Coverage nu a putut fi incarcat: ${error.message}`,'error'); })
+      .finally(() => { if(active)setLoading(false); });
+    return () => { active=false; };
+  }, [token, notify]);
+
+  if (loading) return <Panel title="Coverage" note="Stare globala a corpusului pe scope-uri bounded."><div className="text-sm text-slate-500">Se incarca Coverage...</div></Panel>;
+  const scopes=Array.isArray(snapshot?.scopes)?snapshot.scopes:[];
+  const counts=snapshot?.state_counts||{};
+  const policy=snapshot?.policy||{};
+  const tone=state=>state==='SUFFICIENT'?'green':state==='STALE'?'amber':'red';
+  return <div className="space-y-4">
+    <div className="grid gap-3 sm:grid-cols-3">
+      {[['SUFFICIENT',counts.SUFFICIENT||0],['STALE',counts.STALE||0],['INSUFFICIENT',counts.INSUFFICIENT||0]].map(([label,value])=>
+        <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div><div className="mt-2 text-2xl font-bold text-slate-950">{value}</div></div>
+      )}
+    </div>
+    <Panel title="Collection Policy" note="Threshold-urile sunt globale/system; Coverage nu reprezinta oportunitati USER.">
+      <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
+        <div><span className="text-slate-400">Freshness:</span> {policy.collection_freshness_hours ?? '—'}h</div>
+        <div><span className="text-slate-400">Corpus minim:</span> {policy.coverage_min_corpus_volume ?? '—'}</div>
+        <div><span className="text-slate-400">Diversitate minima:</span> {policy.coverage_min_source_diversity ?? '—'}</div>
+        <div><span className="text-slate-400">Cooldown:</span> {policy.coverage_refresh_cooldown_hours ?? 0}h</div>
+      </div>
+    </Panel>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="hidden grid-cols-[minmax(170px,1fr)_120px_110px_110px_150px_minmax(220px,1.2fr)] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 lg:grid">
+        <span>Role Family</span><span>Stare</span><span>Volum</span><span>Surse</span><span>Ultimul usable</span><span>Scope</span>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {scopes.map(item => <div key={item.scope_key} className="grid gap-3 px-5 py-4 text-sm lg:grid-cols-[minmax(170px,1fr)_120px_110px_110px_150px_minmax(220px,1.2fr)] lg:items-center">
+          <div className="font-semibold text-slate-800">{item.scope?.role_family || '—'}</div>
+          <div><Pill tone={tone(item.state)}>{item.state}</Pill></div>
+          <div className="tabular-nums text-slate-700">{item.corpus_volume ?? 0}</div>
+          <div className="tabular-nums text-slate-700">{item.source_diversity ?? 0}</div>
+          <div className="text-xs text-slate-600">{formatTime(item.last_usable_at)}</div>
+          <div className="text-xs leading-5 text-slate-500">
+            {(item.scope?.target_regions||[]).join(', ') || (item.scope?.target_country_codes||[]).join(', ') || 'global'} · {(item.scope?.work_modes||[]).join('/')}
+          </div>
+        </div>)}
+      </div>
+    </div>
+    {!scopes.length&&<div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Nu exista inca observatii Coverage. Primul bounded Retrieve utilizabil va popula aceasta zona.</div>}
+  </div>;
+}
+
+
 function UsersAdmin({ token, notify }) {
   const [accounts,setAccounts] = useState([]);
   const [loading,setLoading] = useState(true);
@@ -553,11 +608,12 @@ export default function AdminShell({
   const governedSources = useMemo(() => sources.map(normalizeSource), [sources]);
   const props = { sources:governedSources, setSources, categories:sourceCategories, setCategories:setSourceCategories, token, notify };
   return <div className="space-y-5">
-    <Tabs value={section} onChange={setSection} items={ADMIN_SECTIONS.map(key => [key, ({overview:'Overview',update:'Actualizare date',sources:'Surse',nomenclatures:'Nomenclatoare',users:'Utilizatori',logs:'Loguri'})[key]])}/>
+    <Tabs value={section} onChange={setSection} items={ADMIN_SECTIONS.map(key => [key, ({overview:'Overview',update:'Actualizare date',sources:'Surse',nomenclatures:'Nomenclatoare',coverage:'Coverage',users:'Utilizatori',logs:'Loguri'})[key]])}/>
     {section === 'overview' && <Overview sources={governedSources} runStatus={runStatus} onNavigate={setSection}/>} 
     {section === 'update' && <UpdateData runStatus={runStatus} running={running} onRun={onRun}/>} 
     {section === 'sources' && <SourcesAdmin {...props}/>} 
     {section === 'nomenclatures' && <NomenclaturesAdmin token={token} notify={notify}/>} 
+    {section === 'coverage' && <CoverageAdmin token={token} notify={notify}/>} 
     {section === 'users' && <UsersAdmin token={token} notify={notify}/>} 
     {section === 'logs' && <Logs runs={runHistory}/>} 
   </div>;
