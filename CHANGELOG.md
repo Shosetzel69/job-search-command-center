@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-> App version: `0.9.0` — account lifecycle UI, self-service deletion and ADMIN privacy-safe user management.
+> App version: `0.10.0` — bounded Coverage per Role Family with selective corpus refresh.
 
 ### Security
 
@@ -14,6 +14,7 @@
 
 ### Functionalitati
 
+- #521 / R2: Coverage global/system este evaluat per bounded scope (Role Family + geografie/work mode/contract), cu observatii persistente, stari dinamice `SUFFICIENT/INSUFFICIENT/STALE`, threshold-uri in Collection Policy, planner selectiv care reia doar scope-urile stale/insufficient si inspector ADMIN `Administrare -> Coverage`.
 - #522 / R3: Administrare -> Utilizatori expune exclusiv metadata de cont privacy-safe si actiuni deactivate/reactivate/delete; self-service `DELETE /me/account` foloseste acelasi Account Lifecycle Gateway, revoca toate sesiunile, sterge datele personale tenant-aware, pastreaza corpusul shared si cere confirmare ireversibila `STERGE` in UI.
 - #520 / R1: Retrieve USER/ADMIN foloseste acum scope bounded derivat server-side, semnatura determinista scope+surse+freshness, coalescing numai pentru cereri echivalente, `run_id` stabilit inainte de provider work si propagat in GCP status/PostgreSQL/history; targeted runs filtreaza rezultatele inainte de shared persistence si nu avanseaza lifecycle-ul joburilor din afara scope-ului.
 

@@ -936,6 +936,10 @@ SYSTEM_COLLECTION_KEYS = (
     "jobspipe_incremental_overlap_minutes",
     "jobspipe_mode",
     "jobspipe_apify_max_items_per_run",
+    "coverage_min_corpus_volume",
+    "coverage_max_corpus_volume",
+    "coverage_min_source_diversity",
+    "coverage_refresh_cooldown_hours",
 )
 
 
@@ -1038,6 +1042,150 @@ def persist_run_started(
     return {"status": "persisted", "run_id": run_id}
 
 
+
+def _coverage_allowed_countries(scope: Mapping[str, Any]) -> list[str]:
+    countries = {
+        _text(value).upper()
+        for value in (scope.get("target_country_codes") or [])
+        if _text(value)
+    }
+    regions = canonical_nomenclatures.region_countries()
+    for region in scope.get("target_regions") or []:
+        countries.update(regions.get(_text(region).upper(), set()))
+    return sorted(countries)
+
+
+def _coverage_scope_metrics(cursor: Any, scope: Mapping[str, Any]) -> tuple[int, int, list[str]]:
+    role_family = _text(scope.get("role_family")).upper()
+    work_modes = sorted({
+        _text(value).casefold()
+        for value in (scope.get("work_modes") or [])
+        if _text(value)
+    })
+    contract_types = sorted({
+        _text(value).casefold()
+        for value in (scope.get("contract_types") or [])
+        if _text(value)
+    })
+    allowed_countries = _coverage_allowed_countries(scope)
+
+    cursor.execute(
+        """
+        SELECT
+          count(DISTINCT j.job_id)::integer AS corpus_volume,
+          count(DISTINCT sp.source_id)::integer AS source_diversity,
+          COALESCE(
+            array_agg(DISTINCT sp.source_id) FILTER (WHERE sp.source_id IS NOT NULL),
+            ARRAY[]::text[]
+          ) AS source_ids
+        FROM canonical_jobs j
+        LEFT JOIN source_postings sp
+          ON sp.job_id = j.job_id
+         AND sp.lifecycle_status <> 'INACTIVE'
+        WHERE j.lifecycle_status <> 'INACTIVE'
+          AND j.role_family = %s
+          AND (
+            cardinality(%s::text[]) = 0
+            OR j.work_mode = 'unknown'
+            OR j.work_mode = ANY(%s::text[])
+          )
+          AND (
+            cardinality(%s::text[]) = 0
+            OR j.contract_type = 'unknown'
+            OR j.contract_type = ANY(%s::text[])
+          )
+          AND (
+            cardinality(%s::text[]) = 0
+            OR cardinality(j.country_codes) = 0
+            OR j.country_codes && %s::text[]
+            OR (
+              j.work_mode = 'remote'
+              AND j.remote_scope IN ('Worldwide', 'EMEA', 'EU')
+            )
+          )
+        """,
+        (
+            role_family,
+            work_modes,
+            work_modes,
+            contract_types,
+            contract_types,
+            allowed_countries,
+            allowed_countries,
+        ),
+    )
+    row = cursor.fetchone() or (0, 0, [])
+    return int(row[0] or 0), int(row[1] or 0), sorted(str(value) for value in (row[2] or []))
+
+
+def _persist_coverage_observations(cursor: Any, status: Mapping[str, Any]) -> int:
+    if _text(status.get("status")) not in {"completed", "completed_with_errors"}:
+        return 0
+    shared = status.get("shared_corpus")
+    if not isinstance(shared, Mapping) or _text(shared.get("status")) != "persisted":
+        return 0
+    retrieve_scope = status.get("retrieve_scope")
+    scopes = retrieve_scope.get("scopes") if isinstance(retrieve_scope, Mapping) else []
+    completed_at = status.get("completed_at")
+    run_id = _text(status.get("run_id"))
+    if not completed_at or not run_id:
+        return 0
+
+    updated = 0
+    for raw_scope in scopes or []:
+        if not isinstance(raw_scope, Mapping):
+            continue
+        scope_key = _text(raw_scope.get("scope_key")).casefold()
+        role_family = _text(raw_scope.get("role_family")).upper()
+        if not re.fullmatch(r"[0-9a-f]{64}", scope_key):
+            raise SharedCorpusError("Coverage scope_key is missing or invalid")
+        if role_family not in {
+            "PROJECT_MANAGEMENT", "DELIVERY", "SERVICE_MANAGEMENT", "SCRUM_AGILE", "PROGRAM_PMO"
+        }:
+            raise SharedCorpusError("Coverage role_family is invalid")
+
+        canonical_scope = {
+            "role_family": role_family,
+            "target_regions": sorted({_text(value).upper() for value in (raw_scope.get("target_regions") or []) if _text(value)}),
+            "target_country_codes": sorted({_text(value).upper() for value in (raw_scope.get("target_country_codes") or []) if _text(value)}),
+            "remote_eligible_country_codes": sorted({_text(value).upper() for value in (raw_scope.get("remote_eligible_country_codes") or []) if _text(value)}),
+            "work_modes": sorted({_text(value).casefold() for value in (raw_scope.get("work_modes") or []) if _text(value)}),
+            "contract_types": sorted({_text(value).casefold() for value in (raw_scope.get("contract_types") or []) if _text(value)}),
+        }
+        corpus_volume, source_diversity, source_ids = _coverage_scope_metrics(cursor, canonical_scope)
+        cursor.execute(
+            """
+            INSERT INTO coverage_scope_state(
+              scope_key, role_family, scope, last_usable_run_id, last_usable_at,
+              corpus_volume, source_diversity, source_ids, updated_at
+            )
+            VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s, %s::text[], now())
+            ON CONFLICT(scope_key)
+            DO UPDATE SET
+              role_family=EXCLUDED.role_family,
+              scope=EXCLUDED.scope,
+              last_usable_run_id=EXCLUDED.last_usable_run_id,
+              last_usable_at=EXCLUDED.last_usable_at,
+              corpus_volume=EXCLUDED.corpus_volume,
+              source_diversity=EXCLUDED.source_diversity,
+              source_ids=EXCLUDED.source_ids,
+              updated_at=now()
+            """,
+            (
+                scope_key,
+                role_family,
+                json.dumps(canonical_scope, ensure_ascii=False),
+                run_id,
+                completed_at,
+                corpus_volume,
+                source_diversity,
+                source_ids,
+            ),
+        )
+        updated += 1
+    return updated
+
+
 def persist_operational_run(
     status: Mapping[str, Any],
     *,
@@ -1130,6 +1278,8 @@ def persist_operational_run(
                     ),
                 )
 
+            coverage_updated = _persist_coverage_observations(cursor, status)
+
             cursor.execute(
                 """
                 INSERT INTO scheduler_state(singleton, last_triggered_at, last_run_id, state, updated_at)
@@ -1150,4 +1300,4 @@ def persist_operational_run(
                 ),
             )
 
-    return {"status": "persisted", "run_id": run_id}
+    return {"status": "persisted", "run_id": run_id, "coverage_updated": coverage_updated}

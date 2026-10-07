@@ -1,6 +1,6 @@
 # Functionalitati
 
-Versiune aplicatie: `0.9.0`
+Versiune aplicatie: `0.10.0`
 Ultima actualizare: `2026-10-07`
 Status baseline: `STABLE / CLOSE`
 
@@ -97,6 +97,7 @@ Administrare
 |- Actualizare date
 |- Surse
 |- Nomenclatoare
+|- Coverage
 |- Utilizatori
 `- Loguri
 ```
@@ -146,7 +147,18 @@ Reguli:
 - configuratia nu este modificata silent;
 - modificarile de nomenclator nu pornesc Full Search.
 
-### 5.4 Utilizatori
+### 5.4 Coverage
+
+- Coverage este global/system, nu profil relevance;
+- unitatea canonica este bounded scope: Role Family + geografie/remote scope + work mode + contract;
+- observatiile persistente retin ultimul run utilizabil, timestamp, volum corpus si diversitate surse;
+- starea curenta este calculata din Collection Policy: `SUFFICIENT`, `INSUFFICIENT` sau `STALE`;
+- `SUFFICIENT` produce reuse fara provider calls;
+- plannerul trimite la Retrieve numai scope-urile stale/insufficient eligibile;
+- ADMIN poate inspecta Coverage fara identificatori de profil/utilizator;
+- maximum corpus este configurabil ca policy/metric; #521 nu face pruning automat si nu sterge Applications/profile-job state.
+
+### 5.5 Utilizatori
 
 - ADMIN vede numai metadata de cont: email, rol, status, created/updated si ultimul login derivat din sesiuni;
 - ADMIN nu poate inspecta Selection Criteria, FIT/evaluari, Aplicari, Candidate Profile, note sau workspace-ul altui utilizator;

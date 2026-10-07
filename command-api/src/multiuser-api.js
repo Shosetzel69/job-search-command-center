@@ -35,6 +35,7 @@ import {
 } from './multiuser-repository.js';
 import { clearSessionCookie, cookieValue, sessionCookie } from './session-cookie.js';
 import { userRefresh } from './user-refresh.js';
+import { adminCoverageSnapshot } from './coverage.js';
 import { adminRefresh } from './admin-refresh.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
@@ -54,6 +55,10 @@ const SYSTEM_PATCH_KEYS = new Set([
   'jobspipe_mode',
   'jobspipe_apify_max_items_per_run',
   'user_refresh_enabled',
+  'coverage_min_corpus_volume',
+  'coverage_max_corpus_volume',
+  'coverage_min_source_diversity',
+  'coverage_refresh_cooldown_hours',
 ]);
 
 function json(body, status = 200, headers = {}) {
@@ -341,6 +346,11 @@ export async function handleAuthenticatedRoute(request, env, context) {
     requireSameOrigin(request, env);
     requireAdmin(context);
     return json(await deleteAccount(context, deleteUserId, env));
+  }
+
+  if (request.method === 'GET' && url.pathname === '/admin/coverage') {
+    requireAdmin(context);
+    return json(await adminCoverageSnapshot(context, env));
   }
 
   if (request.method === 'GET' && url.pathname === '/admin/capacity') {
