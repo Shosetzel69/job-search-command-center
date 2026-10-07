@@ -1,6 +1,6 @@
 export const ADMIN_SECTIONS = ['overview','update','sources','nomenclatures','logs'];
 export const SOURCE_SECTIONS = ['registry','approval','categories'];
-export const POLICY_EXCLUDED_SOURCE_NAMES = new Set(['monster']);
+export const POLICY_EXCLUDED_SOURCE_NAMES = new Set(['monster','head hunting it','malt','arc.dev','welcome to the jungle','cgi']);
 
 export function sourceValidationLabel(status) {
   return ({
