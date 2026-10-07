@@ -14,6 +14,8 @@
 
 ### Functionalitati
 
+- #520 / R1: Retrieve USER/ADMIN foloseste acum scope bounded derivat server-side, semnatura determinista scope+surse+freshness, coalescing numai pentru cereri echivalente, `run_id` stabilit inainte de provider work si propagat in GCP status/PostgreSQL/history; targeted runs filtreaza rezultatele inainte de shared persistence si nu avanseaza lifecycle-ul joburilor din afara scope-ului.
+
 - #486: outcome-ul web `blocked` expune acum un motiv structurat stabil pentru robots, HTTP 401/403/429, bot challenge, pagina de autentificare, URL/DNS nesigur si redirect blocat; toate guardrail-urile fail-closed raman neschimbate si nu se activeaza rute noi.
 
 - #484: collectorul web nu mai marcheaza `partial` doar pentru atingerea guardrail-ului intentionat de pagini/timp; acoperirea neexhaustiva ramane explicita separat, iar erorile reale continua sa produca `partial`. Linkurile de tracking `/job/track_click` nu mai sunt crawl-uite ca pagini de discovery.
