@@ -61,7 +61,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(captured["keywords"], [{"keyword": "project manager", "specificSearchCode": "EVERYWHERE"}])
 
     def test_eures_epoch_milliseconds_are_normalized(self):
-        self.assertEqual(boards._epoch_iso(1790330400000), "2026-09-25T06:00:00+00:00")
+        self.assertEqual(boards._epoch_iso(1790330400000), "2026-09-25T10:00:00+00:00")
 
     def test_brains_collects_root_level_job_posts(self):
         archive = """<a href="/contact/">Contact</a><a href="/devops-cloud-architect-switzerland/">DevOps Cloud Architect - Switzerland</a>"""
@@ -112,7 +112,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Wellfound"]["url"], "https://wellfound.com/role/project-manager")
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Flexa"]["kind"], "heading_list")
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Crossover"]["kind"], "heading_list")
-        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Proactive.IT"]["kind"], "linked_jobs")
+        self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Proactive.IT"]["kind"], "wordpress_archive")
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Lawrence Harvey"]["url"], "https://www.lawrenceharvey.com/candidates")
         self.assertEqual(boards.PUBLIC_BOARD_SOURCES["Stripe"]["job_path"], r"/careers/listing/[^/?#]+/\d+")
         self.assertTrue(boards.browser_required("Float"))
@@ -718,7 +718,7 @@ class PublicBoardAdapterTests(unittest.TestCase):
     def test_brains_consulting_skips_filled_jobs(self):
         listing='''<article><h2><a href="/active-job/">Active Job</a></h2></article>
                    <article><h2><a href="/filled-job/">Filled Job</a></h2></article>'''
-        active='''<html><h1>Medici Stomatologi - NETHERLANDS</h1><div>Netherlands post disponibil</div></html>'''
+        active='''<html><h1>Medici Stomatologi - NETHERLANDS</h1><div>BRAINS CONSULTING is recruiting. Netherlands post disponibil</div></html>'''
         filled='''<html><h1>Sofer camion</h1><div>TOATE LOCURILE DE MUNCA VACANTE AU FOST OCUPATE</div></html>'''
         with patch.object(boards,"_fetch",side_effect=[
             (200,"text/html",listing.encode()),
@@ -1152,14 +1152,14 @@ class PublicBoardAdapterTests(unittest.TestCase):
         empty_html='''<h2>Current open roles</h2>
         <p>If you can't see a role that's right for you, send us a general application below.</p>
         <h2>A great hire goes both ways</h2>'''
-        with patch.object(boards,"_fetch",return_value=(200,"text/html",empty_html.encode())):
+        with patch.object(boards.browser,"render",return_value=("https://www.float.com/careers",empty_html,{"browser_status":"rendered"})):
             rows=boards._float_careers("https://www.float.com/careers")
         self.assertEqual(rows,[])
 
         open_html='''<h2>Current open roles</h2>
         <a href="/careers/technical-project-manager">Technical Project Manager</a>
         <h2>A great hire goes both ways</h2>'''
-        with patch.object(boards,"_fetch",return_value=(200,"text/html",open_html.encode())):
+        with patch.object(boards.browser,"render",return_value=("https://www.float.com/careers",open_html,{"browser_status":"rendered"})):
             rows=boards._float_careers("https://www.float.com/careers")
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"Technical Project Manager")
