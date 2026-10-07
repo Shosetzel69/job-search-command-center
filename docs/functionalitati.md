@@ -1,7 +1,7 @@
 # Functionalitati
 
-Versiune aplicatie: `0.8.0`
-Ultima actualizare: `2026-10-05`
+Versiune aplicatie: `0.9.0`
+Ultima actualizare: `2026-10-07`
 Status baseline: `STABLE / CLOSE`
 
 ## 1. Acces
@@ -14,6 +14,7 @@ Status baseline: `STABLE / CLOSE`
 - dupa login se poate retine local numai emailul autorizat ca `login_hint` non-secret;
 - la reload, Google Identity Services reobtine un credential care este revalidat server-side;
 - profil + logout;
+- profilul permite self-service delete prin `DELETE /me/account`, cu confirmare explicita `STERGE`; stergerea revoca sesiunile, elimina datele personale tenant-aware si pastreaza corpusul shared;
 - retry separat pentru erori de incarcare date.
 
 ## 2. Joburi
@@ -96,6 +97,7 @@ Administrare
 |- Actualizare date
 |- Surse
 |- Nomenclatoare
+|- Utilizatori
 `- Loguri
 ```
 
@@ -143,6 +145,15 @@ Reguli:
 - deactivate/delete pe valoare referentiata este respins cu HTTP 409 + referinte;
 - configuratia nu este modificata silent;
 - modificarile de nomenclator nu pornesc Full Search.
+
+### 5.4 Utilizatori
+
+- ADMIN vede numai metadata de cont: email, rol, status, created/updated si ultimul login derivat din sesiuni;
+- ADMIN nu poate inspecta Selection Criteria, FIT/evaluari, Aplicari, Candidate Profile, note sau workspace-ul altui utilizator;
+- deactivate revoca imediat toate sesiunile contului;
+- reactivate pastreaza workspace-ul retinut si necesita autentificare noua;
+- delete este ireversibil, elimina tenant/profile/account/identity/session/personal residue si nu sterge corpusul canonic shared;
+- re-signup dupa delete creeaza identificatori noi.
 
 ## 6. Actualizare joburi si status
 
