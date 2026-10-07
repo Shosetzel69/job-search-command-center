@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "count": 160,
+  "count": 161,
   "sources": [
     {
       "id": "src-db8da20e",
@@ -259,13 +259,13 @@
       "category": "Job boards si agregatoare",
       "name": "Remote in Europe",
       "url": "https://remoteineurope.com/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "Provider now maps to We Work Remotely Europe inventory; canonical provider is already collected.",
       "policy_excluded": false
     },
     {
@@ -273,13 +273,13 @@
       "category": "Job boards si agregatoare",
       "name": "Landing.Jobs",
       "url": "https://landing.jobs/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validated",
-      "approval_status": "approved",
+      "validation_status": "requires_connector",
+      "approval_status": "pending",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "The historically public Landing.Jobs job API and site currently return HTTP 403; retry only when a public route is restored.",
       "policy_excluded": false
     },
     {
@@ -455,14 +455,14 @@
       "category": "Job boards si agregatoare",
       "name": "Welcome to the Jungle",
       "url": "https://www.welcometothejungle.com/en/jobs",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
-      "policy_excluded": false
+      "validation_reason": "Exclus operational conform politicii curente.",
+      "policy_excluded": true
     },
     {
       "id": "src-de78b466",
@@ -547,13 +547,13 @@
       "category": "Job boards si agregatoare",
       "name": "RemoteHunt",
       "url": "https://remotehunt.com/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "Provider alias of We Work Remotely; canonical provider is already collected.",
       "policy_excluded": false
     },
     {
@@ -575,14 +575,14 @@
       "category": "Contract, B2B si freelance",
       "name": "Malt",
       "url": "https://www.malt.com/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
-      "policy_excluded": false
+      "validation_reason": "Exclus operational conform politicii curente.",
+      "policy_excluded": true
     },
     {
       "id": "src-d7caf4d7",
@@ -617,13 +617,13 @@
       "category": "Contract, B2B si freelance",
       "name": "Upwork",
       "url": "https://www.upwork.com/freelance-jobs/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
-      "validation_status": "validated",
-      "approval_status": "approved",
+      "validation_status": "requires_connector",
+      "approval_status": "pending",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "Official Upwork API requires approved client credentials and OAuth 2.0; JSCC does not bypass the public-site access controls.",
       "policy_excluded": false
     },
     {
@@ -631,14 +631,14 @@
       "category": "Contract, B2B si freelance",
       "name": "Arc.dev",
       "url": "https://arc.dev/remote-jobs",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
-      "policy_excluded": false
+      "validation_reason": "Exclus operational conform politicii curente.",
+      "policy_excluded": true
     },
     {
       "id": "src-cd888ac5",
@@ -680,6 +680,20 @@
       "approval_status": "approved",
       "last_validated_at": null,
       "validation_reason": null,
+      "policy_excluded": false
+    },
+    {
+      "id": "src-063f4045",
+      "category": "Contractori UE si NATO",
+      "name": "Altia",
+      "url": "https://opportunities.altia.es/",
+      "active": true,
+      "collection_method": "web",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": "2026-10-06T23:14:48Z",
+      "validation_reason": "Controlled DEV validation PASS on run 37545459017: public Bizneo board returned 91 jobs with no source failures.",
       "policy_excluded": false
     },
     {
@@ -771,14 +785,14 @@
       "category": "Contractori UE si NATO",
       "name": "CGI",
       "url": "https://www.cgi.com/en/careers",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
-      "policy_excluded": false
+      "validation_reason": "Exclus operational conform politicii curente.",
+      "policy_excluded": true
     },
     {
       "id": "src-f6ec92c2",
@@ -1065,13 +1079,13 @@
       "category": "Servicii IT si consultanta",
       "name": "Eviden",
       "url": "https://eviden.com/careers/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "Official Eviden careers page routes open positions to jobs.atos.net; canonical Atos source is already collected.",
       "policy_excluded": false
     },
     {
@@ -1248,7 +1262,7 @@
       "name": "ClickHouse",
       "url": "https://clickhouse.com/company/careers",
       "active": true,
-      "collection_method": "web",
+      "collection_method": "ashby",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
@@ -1457,13 +1471,13 @@
       "category": "ATS publice",
       "name": "Recruitee",
       "url": "https://recruitee.com/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "ATS provider root, not an enumerable public job source; tenant career sites are collected separately.",
       "policy_excluded": false
     },
     {
@@ -1471,13 +1485,13 @@
       "category": "ATS publice",
       "name": "BambooHR",
       "url": "https://www.bamboohr.com/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "ATS provider root, not an enumerable public job source; tenant career sites are collected separately.",
       "policy_excluded": false
     },
     {
@@ -1485,13 +1499,13 @@
       "category": "ATS publice",
       "name": "Eightfold",
       "url": "https://eightfold.ai/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
+      "validation_reason": "ATS provider root, not an enumerable public job source; tenant career sites are collected separately.",
       "policy_excluded": false
     },
     {
@@ -1653,14 +1667,14 @@
       "category": "Agentii si recrutare",
       "name": "Head Hunting IT",
       "url": "https://www.headhuntingit.com/",
-      "active": true,
+      "active": false,
       "collection_method": "web",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",
       "last_validated_at": null,
-      "validation_reason": null,
-      "policy_excluded": false
+      "validation_reason": "Exclus operational conform politicii curente.",
+      "policy_excluded": true
     },
     {
       "id": "src-5e2000e7",
@@ -2228,7 +2242,7 @@
       "name": "Float",
       "url": "https://www.float.com/careers",
       "active": true,
-      "collection_method": "web",
+      "collection_method": "workable",
       "connector_available": true,
       "validation_status": "validated",
       "approval_status": "approved",

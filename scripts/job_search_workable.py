@@ -60,10 +60,24 @@ def normalize(item, subdomain, company_name):
         raise ValueError("Malformed Workable posting: missing id/title/url/company")
 
     location_obj = item.get("location") if isinstance(item.get("location"), dict) else item
+    locations = item.get("locations") if isinstance(item.get("locations"), list) else []
+    location_parts = []
+    countries = []
+    for candidate in locations:
+        if not isinstance(candidate, dict):
+            continue
+        text = ", ".join(str(candidate.get(key) or "").strip() for key in ("city", "state", "country_name") if str(candidate.get(key) or "").strip())
+        if text and text not in location_parts:
+            location_parts.append(text)
+        country = _country(candidate)
+        if country and country not in countries:
+            countries.append(country)
     location = str(location_obj.get("location_str") or "").strip()
     if not location:
-        location = ", ".join(str(location_obj.get(key)).strip() for key in ("city", "region", "country") if location_obj.get(key))
-    country = _country(location_obj)
+        location = "; ".join(location_parts) or ", ".join(str(location_obj.get(key)).strip() for key in ("city", "region", "country") if location_obj.get(key))
+    if not countries:
+        country = _country(location_obj)
+        countries = [country] if country else []
     workplace = str(location_obj.get("workplace_type") or item.get("workplace_type") or "").lower()
     remote = bool(location_obj.get("telecommuting") or item.get("telecommuting") or workplace == "remote")
     arrangement = "hybrid" if workplace == "hybrid" else ("remote" if remote else "onsite")
@@ -72,9 +86,9 @@ def normalize(item, subdomain, company_name):
         "id": f"workable:{subdomain}:{posting_id}",
         "job_title": str(title).strip(),
         "company": str(company_name).strip(),
-        "description": plain_text(item.get("description") or item.get("full_description")),
+        "description": plain_text(item.get("full_description") or item.get("description") or title),
         "location": location,
-        "countries": [country] if country else [],
+        "countries": countries,
         "remote": remote,
         "work_arrangement": arrangement,
         "employment_statuses": engine.list_values(item.get("employment_type")),

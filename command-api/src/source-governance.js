@@ -4,7 +4,7 @@ export const SOURCE_SCHEMA = '1.0';
 export const CATEGORY_SCHEMA = '1.0';
 export const VALIDATION_STATUSES = new Set(['pending','validating','validated','requires_connector','rejected']);
 export const APPROVAL_STATUSES = new Set(['pending','approved','rejected']);
-export const POLICY_EXCLUDED_SOURCE_NAMES = new Set(['monster']);
+export const POLICY_EXCLUDED_SOURCE_NAMES = new Set(['monster','head hunting it','malt','arc.dev','welcome to the jungle','cgi']);
 
 function fail(message, status = 400) {
   throw Object.assign(new Error(message), { status });

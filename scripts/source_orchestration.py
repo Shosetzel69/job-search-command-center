@@ -13,15 +13,18 @@ import job_search_apify as apify
 import job_search_ashby as ashby
 import job_search_bamboohr as bamboohr
 import job_search_breezyhr as breezyhr
+import job_search_eightfold_public as eightfold_public
 import job_search_greenhouse as greenhouse
 import job_search_jobicy as jobicy
 import job_search_lever as lever
 import job_search_pinpoint as pinpoint
 import job_search_recruitee as recruitee
 import job_search_smartrecruiters as smartrecruiters
+import job_search_softgarden as softgarden
 import job_search_traefik as traefik
 import job_search_web as web
 import job_search_workday as workday
+import job_search_workable as workable
 import job_search_optimized as optimized
 import shared_corpus_repository as shared_corpus
 import job_search_public_boards as public_boards
@@ -32,7 +35,8 @@ SOURCES_PATH = engine.CANDIDATE_DATA / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
-POLICY_EXCLUDED_SOURCE_NAMES = {"monster"}
+POLICY_EXCLUDED_SOURCE_NAMES = {"monster", "head hunting it", "malt", "arc.dev", "welcome to the jungle", "cgi"}
+PROVIDER_ALIASES = {"RemoteHunt": "We Work Remotely", "Remote in Europe": "We Work Remotely"}
 
 DEFERRED_PROVIDER_ROOTS = {
     "linkedin.com": ("LinkedIn", "jobs"),
@@ -49,6 +53,12 @@ DEFERRED_PROVIDER_ROOTS = {
     "jobs.ashbyhq.com": ("Ashby", "root"),
     "www.lever.co": ("Lever", "root"),
     "lever.co": ("Lever", "root"),
+    "recruitee.com": ("Recruitee", "root"),
+    "www.recruitee.com": ("Recruitee", "root"),
+    "bamboohr.com": ("BambooHR", "root"),
+    "www.bamboohr.com": ("BambooHR", "root"),
+    "eightfold.ai": ("Eightfold", "root"),
+    "www.eightfold.ai": ("Eightfold", "root"),
 }
 
 
@@ -268,8 +278,10 @@ def build_plan(catalog):
         raise ValueError("Source catalog must contain a sources array")
     plan = []
     seen = set()
+    catalog_names = {str(source.get("name") or "") for source in catalog["sources"]}
     for source in catalog["sources"]:
         route = ATS_ROUTES.get(source.get("name"))
+        alias_target = PROVIDER_ALIASES.get(source.get("name"))
         connector = connector_for(source)
         deferred = None if connector else deferred_provider(source)
         if not connector and not deferred:
@@ -297,6 +309,10 @@ def build_plan(catalog):
         if excluded_by_policy:
             reason = "Excluded operationally by project source policy"
             item.update(status="inactive", outcome="excluded_policy", error=reason, failure_reason=reason)
+        elif alias_target and alias_target in catalog_names:
+            reason = f"Provider alias of {alias_target}; canonical provider already planned"
+            item.update(status="skipped", outcome="provider_alias", error=reason,
+                        failure_reason=reason, provider_alias=alias_target)
         if route:
             item["connector_config"] = route
             if route.get("enabled") is False:
@@ -497,7 +513,10 @@ def collect_ats(item):
     if connector == "smartrecruiters":
         return smartrecruiters.collect(route["company_identifier"])
     if connector == "workday":
-        return workday.collect(route["career_url"], company)
+        return workday.collect(
+            route["career_url"], company,
+            detail_workers=route.get("detail_workers", 4),
+        )
     if connector == "greenhouse":
         return greenhouse.collect(route["board_token"], company)
     if connector == "ashby":
@@ -512,6 +531,12 @@ def collect_ats(item):
         return breezyhr.collect(route["tenant"], company)
     if connector == "pinpoint":
         return pinpoint.collect(route["subdomain"], company)
+    if connector == "workable":
+        return workable.collect(route["subdomain"], company)
+    if connector == "softgarden":
+        return softgarden.collect(route["feed_url"], company)
+    if connector == "eightfold_public":
+        return eightfold_public.collect(route["base_url"], route["domain"], company)
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
@@ -519,7 +544,7 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
-    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint"}
+    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable", "softgarden", "eightfold_public"}
     for item in plan:
         if item["status"] != "pending" or item["connector"] == "web":
             continue

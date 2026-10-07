@@ -14,6 +14,9 @@
 
 ### Functionalitati
 
+- #486: outcome-ul web `blocked` expune acum un motiv structurat stabil pentru robots, HTTP 401/403/429, bot challenge, pagina de autentificare, URL/DNS nesigur si redirect blocat; toate guardrail-urile fail-closed raman neschimbate si nu se activeaza rute noi.
+
+- #484: collectorul web nu mai marcheaza `partial` doar pentru atingerea guardrail-ului intentionat de pagini/timp; acoperirea neexhaustiva ramane explicita separat, iar erorile reale continua sa produca `partial`. Linkurile de tracking `/job/track_click` nu mai sunt crawl-uite ca pagini de discovery.
 - #515: responsive application shell, header global cu environment permanent, mobile KPI strip, sticky search + filter bottom sheet, JobCards compacte alternante, bottom navigation Jobs/Review/Applications/More, full-screen mobile Details cu scroll restoration si PASS promotion compact.
 
 - #13 / ATC-13-01: progres live ADMIN-only pentru Retrieve: active-run GCP status, checkpoint dupa fiecare sursa terminala, X/Y, procent real si GOOD/FAIL/SKIP/PARTIAL plus rezumat final; fara estimare temporala si fara schimbari de connectori.

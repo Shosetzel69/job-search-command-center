@@ -37,6 +37,28 @@ def record(provider="jobspipe", id="1"):
 
 
 class OrchestrationTests(unittest.TestCase):
+    def test_remote_in_europe_is_provider_alias(self):
+        catalog = {"sources": [
+            {"id": "wwr", "name": "We Work Remotely", "url": "https://weworkremotely.com/", "active": True},
+            {"id": "rie", "name": "Remote in Europe", "url": "https://remoteineurope.com/", "active": True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        alias = next(item for item in plan if item["source_id"] == "rie")
+        self.assertEqual(alias["outcome"], "provider_alias")
+
+    def test_access_control_sources_are_policy_excluded(self):
+        for name in ("Arc.dev", "Welcome to the Jungle", "CGI"):
+            self.assertTrue(orchestration.policy_excluded({"name": name}))
+
+    def test_generic_ats_roots_are_deferred_providers(self):
+        catalog = {"sources": [
+            {"id": "r", "name": "Recruitee", "url": "https://recruitee.com/", "active": True},
+            {"id": "b", "name": "BambooHR", "url": "https://www.bamboohr.com/", "active": True},
+            {"id": "e", "name": "Eightfold", "url": "https://eightfold.ai/", "active": True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        self.assertEqual([item["outcome"] for item in plan], ["deferred_provider", "deferred_provider", "deferred_provider"])
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
@@ -170,6 +192,16 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(monster["outcome"], "excluded_policy")
         self.assertTrue(monster["policy_excluded"])
         self.assertIn("project source policy", monster["error"])
+
+    def test_non_enumerable_matching_platforms_are_policy_excluded(self):
+        catalog = {"sources": [
+            {"name": "Head Hunting IT", "url": "https://www.headhuntingit.com/", "active": True},
+            {"name": "Malt", "url": "https://www.malt.com/", "active": True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        self.assertEqual([item["outcome"] for item in plan], ["excluded_policy", "excluded_policy"])
+        self.assertTrue(all(item["status"] == "inactive" for item in plan))
+        self.assertTrue(all(item["policy_excluded"] for item in plan))
 
     def test_direct_quota_guard_does_not_block_jobicy(self):
         state = optimized.load_state(NOW)
@@ -364,6 +396,17 @@ class OrchestrationTests(unittest.TestCase):
         catalog["sources"].append({"name": "Alias", "url": "https://www.jobicy.com/jobs"})
         plan = orchestration.build_plan(catalog)
         self.assertEqual(plan[-1]["status"], "skipped")
+
+    def test_remotehunt_is_canonical_provider_alias(self):
+        catalog = {"sources": [
+            {"name": "We Work Remotely", "url": "https://weworkremotely.com/remote-jobs.rss", "active": True},
+            {"name": "RemoteHunt", "url": "https://remotehunt.com/", "active": True},
+        ]}
+        plan = orchestration.build_plan(catalog)
+        remotehunt = next(item for item in plan if item["source"] == "RemoteHunt")
+        self.assertEqual(remotehunt["status"], "skipped")
+        self.assertEqual(remotehunt["outcome"], "provider_alias")
+        self.assertEqual(remotehunt["provider_alias"], "We Work Remotely")
 
     def test_spoofed_hosts_and_connector_flags_are_not_trusted(self):
         for url in ("https://jobicy.com.evil.example/", "https://jobicy.com@evil.example/", "http://jobicy.com/", "https://jobicy.com:444/"):

@@ -5,9 +5,12 @@ deduplication and scoring remain in the canonical search engine.
 """
 
 import json
+import time
+from concurrent.futures import ThreadPoolExecutor
 import re
 from html.parser import HTMLParser
 from urllib.parse import quote, urlsplit
+from urllib.error import HTTPError
 from urllib.request import Request, urlopen
 
 import job_search as engine
@@ -55,9 +58,25 @@ def parse_career_url(career_url):
             "origin": origin, "public_base": public_base, "cxs_base": cxs_base}
 
 
-def _request_json(request, opener=urlopen):
-    with opener(request, timeout=30) as response:
-        body = response.read(MAX_BYTES + 1)
+def _request_json(request, opener=urlopen, max_attempts=3):
+    last_error = None
+    for attempt in range(max_attempts):
+        try:
+            with opener(request, timeout=30) as response:
+                body = response.read(MAX_BYTES + 1)
+            break
+        except HTTPError as exc:
+            last_error = exc
+            if exc.code != 429 or attempt + 1 >= max_attempts:
+                raise
+            retry_after = 0
+            try:
+                retry_after = int((exc.headers or {}).get("Retry-After") or 0)
+            except (TypeError, ValueError):
+                retry_after = 0
+            time.sleep(min(5, max(1, retry_after or (attempt + 1))))
+    else:
+        raise last_error
     if len(body) > MAX_BYTES:
         raise ValueError("Workday response exceeds size limit")
     payload = json.loads(body)
@@ -173,12 +192,14 @@ def normalize(detail, summary, board, company_name):
     }
 
 
-def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen):
+def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1):
     company_name = str(company_name or "").strip()
     if not company_name:
         raise ValueError("Workday company_name is required")
     if not isinstance(max_postings, int) or max_postings < 1 or max_postings > MAX_POSTINGS:
         raise ValueError(f"max_postings must be between 1 and {MAX_POSTINGS}")
+    if not isinstance(detail_workers, int) or detail_workers < 1 or detail_workers > 8:
+        raise ValueError("detail_workers must be between 1 and 8")
 
     board = parse_career_url(career_url)
     summaries = []
@@ -198,12 +219,20 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen)
         if isinstance(total, int) and offset >= total:
             break
 
-    records = []
-    for summary in summaries[:max_postings]:
+    selected = summaries[:max_postings]
+    for summary in selected:
         if not isinstance(summary, dict):
             raise ValueError("Malformed Workday posting summary")
+
+    def load_record(summary):
         detail = _get_detail(board, summary.get("externalPath"), opener=opener)
-        records.append(normalize(detail, summary, board, company_name))
+        return normalize(detail, summary, board, company_name)
+
+    if detail_workers == 1 or len(selected) < 2:
+        records = [load_record(summary) for summary in selected]
+    else:
+        with ThreadPoolExecutor(max_workers=detail_workers) as pool:
+            records = list(pool.map(load_record, selected))
 
     connector = f"workday:{board['tenant']}:{board['site']}"
     return [engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
