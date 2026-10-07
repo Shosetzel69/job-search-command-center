@@ -196,13 +196,13 @@ test('shared classification reuses canonical role taxonomy and is deterministic'
   };
   const first = classifyCanonicalJob(row);
   const second = classifyCanonicalJob(row);
-  assert.equal(first.role_family, 'PROJECT_MANAGEMENT');
-  assert.deepEqual(first.role_subfamily, ['project_manager','technical_project_manager']);
+  assert.equal(first.role_family, 'PROJECT_DELIVERY_MANAGEMENT');
+  assert.deepEqual(first.role_subfamily, ['project_management']);
   assert.equal(first.contract_type, 'contract');
   assert.equal(first.remote_scope, 'EU');
   assert.equal(first.classification_status, 'matched');
   assert.equal(first.classification_confidence, 1);
-  assert.equal(first.classification_version, '2026.09.25-1');
+  assert.equal(first.classification_version, '2026.10.08-1');
   assert.equal(first.evaluation_basis_hash.length, 64);
   assert.equal(first.evaluation_basis_hash, second.evaluation_basis_hash);
 });
@@ -213,14 +213,15 @@ test('Eligibility v1 is tri-state and only explicit contradiction excludes', () 
     company:'Example',
     country_codes:['RO'],
     work_mode:'remote',
-    role_family:'PROJECT_MANAGEMENT',
-    role_subfamily:['technical_project_manager'],
+    role_family:'PROJECT_DELIVERY_MANAGEMENT',
+    role_subfamily:['project_management'],
     contract_type:'contract',
     remote_scope:'Country',
     payload:{ description:'Bank governance project' },
   };
   const criteria = {
-    target_role_families:['PROJECT_MANAGEMENT'],
+    target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+    target_role_subfamilies:['project_management'],
     target_country_codes:['RO'],
     target_regions:[],
     excluded_country_codes:[],
@@ -333,7 +334,8 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
   const query = normalizeJobSearchQuery({
     limit:'40',
     prefetch:'12',
-    role_family:['PROJECT_MANAGEMENT,DELIVERY'],
+    role_family:['PROJECT_DELIVERY_MANAGEMENT,PRODUCT_AGILE'],
+    role_subfamily:['project_management,product_owner'],
     work_mode:['remote'],
     contract_type:['contract'],
     freshness_hours:'48',
@@ -343,7 +345,8 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
   });
   assert.equal(query.limit, 40);
   assert.equal(query.prefetch, 12);
-  assert.deepEqual(query.role_family, ['PROJECT_MANAGEMENT','DELIVERY']);
+  assert.deepEqual(query.role_family, ['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE']);
+  assert.deepEqual(query.role_subfamily, ['project_management','product_owner']);
   assert.deepEqual(query.work_mode, ['remote']);
   assert.deepEqual(query.contract_type, ['contract']);
   assert.equal(query.freshness_hours, 48);
@@ -378,8 +381,8 @@ test('lazy FIT cache-hit materialization is stable with freshly evaluated job ou
     location:'Bucharest',
     country_codes:['RO'],
     work_mode:'remote',
-    role_family:'PROJECT_MANAGEMENT',
-    role_subfamily:['technical_project_manager'],
+    role_family:'PROJECT_DELIVERY_MANAGEMENT',
+    role_subfamily:['project_management'],
     contract_type:'contract',
     remote_scope:'Country',
     source_name:'Example',
@@ -389,7 +392,8 @@ test('lazy FIT cache-hit materialization is stable with freshly evaluated job ou
     posting_payload:{},
   };
   const preferences = {
-    role_groups:{ pm:{ enabled:true }, delivery:{ enabled:true }, service:{ enabled:true }, scrum:{ enabled:true }, program:{ enabled:true } },
+    target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+    target_role_subfamilies:['project_management'],
     work_modes:{ remote:true, hybrid:true, onsite:false },
     contract_types:['contract'],
     target_country_codes:['RO'],
@@ -425,7 +429,7 @@ test('same shared job can produce different per-profile eligibility without prov
     location:'Bucharest',
     country_codes:['RO'],
     work_mode:'remote',
-    role_family:'PROJECT_MANAGEMENT',
+    role_family:'PROJECT_DELIVERY_MANAGEMENT',
     source_name:'Example',
     canonical_url:'https://example.test/job',
     posted_at:'2026-10-01T00:00:00Z',
@@ -433,7 +437,8 @@ test('same shared job can produce different per-profile eligibility without prov
     posting_payload:{},
   };
   const base = {
-    role_groups:{ pm:{ enabled:true } },
+    target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+    target_role_subfamilies:['project_management'],
     work_modes:{ remote:true, hybrid:true, onsite:false },
     contract_types:['contract'],
     target_country_codes:['RO'],
