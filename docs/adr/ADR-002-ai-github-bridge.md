@@ -105,7 +105,7 @@ Private keys, JWT-urile si installation tokens nu sunt returnate clientului si n
 - niciun endpoint generic de proxy;
 - repository fix, neparametrizabil in v1;
 - operatiile administrative, secrets, collaborators, branch protection si deploy generic sunt excluse;
-- exceptie aprobata #204: bridge-ul poate dispatch-ui exclusiv `deploy-environment.yml` pentru `dev|test`, cu repository/ref/action/inputurile structurale fixate server-side;
+- exceptia de deployment dispatch introdusa prin #204 este retrasa prin #501; bridge-ul nu are authority de deployment;
 - write direct in `main` nu este relevant pentru MVP issues si ramane interzis la extinderea viitoare pe fisiere;
 - merge/deploy PROD ramane in governance-ul existent si necesita owner GO;
 - orice extindere spre files/branches/PR necesita contract explicit si teste dedicate.
@@ -185,3 +185,18 @@ Issue #204 extinde acelasi boundary cu o singura capabilitate Actions mutabila, 
 Aceasta extensie automatizeaza etapa DEV/TEST din #198 fara a autoriza PROD, owner GO sau workflow-uri arbitrare.
 
 Remote MCP ChatGPT nu este activ in configuratia curenta. REST/OpenAPI poate expune aceeasi operatie actorului ChatGPT dupa configurarea integrarii bridge existente. Orice extindere a MCP spre ChatGPT sau spre files/branches/PR necesita change separat si actualizare de contract/documentatie.
+
+
+## Addendum public-repository hardening - 2026-10-05
+
+Issue #501 retrage capabilitatea Actions mutabila introdusa prin #204.
+
+Decizia curenta este:
+
+- `POST /v1/actions/environment-deploy` ramane numai ca raspuns fail-closed de compatibilitate si nu dispatch-uieste GitHub;
+- tool-ul MCP `dispatch_environment_deploy` este eliminat;
+- workflow-ul AI owner-comment nu mai accepta `/jscc-deploy`;
+- bridge-ul pastreaza numai operatiile GitHub engineering/governance allowlisted;
+- deployment-ul DEV/TEST/PROD nu este autorizat prin bridge si urmeaza control-plane-ul GCP aprobat.
+
+Acest addendum supersedeaza operational sectiunea "Addendum release dispatch - 2026-09-18" fara a sterge istoricul deciziei #204.

@@ -1,5 +1,8 @@
 # Changelog
 
+- #501: hardening post-publication GitHub Actions. Source-repo full search devine tombstone fail-closed fara secrets/write, Source Registry finalization devine tombstone fail-closed, joburile legacy Cloudflare DEV/TEST/PROD cu OIDC/mutation sunt eliminate, iar deployment dispatch prin AI bridge/MCP/comment este retras. GCP ramane control-plane-ul canonic pentru promotion.
+
+
 ## [Unreleased]
 
 > App version: `0.8.0` — frontend cutover to Search Profile APIs plus PWA-first responsive Mobile V1.
