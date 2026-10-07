@@ -674,15 +674,24 @@ test('tenant lifecycle delete starts with tenant DML and is independently idempo
   assert.match(calls[0], /^DELETE FROM tenants/);
 });
 
-test('admin deletion contract uses staged shared and tenant lifecycle boundaries', async () => {
+test('ADMIN and SELF deletion converge on the staged lifecycle gateway', async () => {
   const repository = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
   const gateway = await readFile(new URL('../src/db/tenant-gateway.js', import.meta.url), 'utf8');
-  const block = repository.match(/export async function deleteAccount[\s\S]*?^}/m)?.[0] || '';
-  assert.match(block, /startAccountDeletion/);
-  assert.match(block, /deleteTenantDomain/);
-  assert.match(block, /verifyTenantPersonalResidue/);
-  assert.match(block, /finalizeAccountDeletion/);
-  assert.doesNotMatch(block, /withTenantTransaction/i);
+  const lifecycle = repository.match(/async function deleteAccountLifecycle[\s\S]*?^}/m)?.[0] || '';
+  const admin = repository.match(/export async function deleteAccount\([\s\S]*?^}/m)?.[0] || '';
+  const self = repository.match(/export async function deleteOwnAccount[\s\S]*?^}/m)?.[0] || '';
+
+  assert.match(lifecycle, /startAccountDeletion/);
+  assert.match(lifecycle, /deleteTenantDomain/);
+  assert.match(lifecycle, /verifyTenantPersonalResidue/);
+  assert.match(lifecycle, /finalizeAccountDeletion/);
+  assert.doesNotMatch(lifecycle, /withTenantTransaction/i);
+
+  assert.match(admin, /requireAdmin\(authContext\)/);
+  assert.match(admin, /deleteAccountLifecycle\(userId, 'ADMIN'/);
+  assert.match(self, /deleteAccountLifecycle\(authContext\.user_id, 'SELF'/);
+  assert.doesNotMatch(self, /userId|request\.json/);
+
   assert.match(repository, /deletion_started_at/);
   assert.match(repository, /deletion_initiated_by/);
   assert.match(repository, /DELETE FROM app_user WHERE user_id=\$1 RETURNING user_id/);
