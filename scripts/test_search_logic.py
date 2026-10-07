@@ -98,7 +98,8 @@ class GeographyTests(unittest.TestCase):
             "target_country_codes": ["RO", "BE", "LU"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {"pm": {"enabled": True, "titles": ["Technical Project Manager"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
         }
         record = {
             "id": "bosch-yokohama-regression",
@@ -186,7 +187,8 @@ class OutputTests(unittest.TestCase):
             "target_country_codes": ["RO"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {"pm": {"enabled": True, "titles": ["IT Project Manager"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
         }
         record = {
             "id": "test-1",
@@ -221,7 +223,8 @@ class OutputTests(unittest.TestCase):
             "target_country_codes": ["RO"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {"pm": {"enabled": True, "titles": ["IT Project Manager"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
         }
         record = {
             "id": "unknown-contract",
@@ -255,10 +258,8 @@ class OutputTests(unittest.TestCase):
             "target_country_codes": ["RO"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {
-                "pm": {"enabled": True, "titles": ["Project Manager", "IT Project Manager"]},
-                "service": {"enabled": True, "titles": ["Service Manager"]},
-            },
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT", "SERVICE_OPERATIONS_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management", "service_management"],
         }
         now = datetime(2026, 9, 25, 9, 0, tzinfo=timezone.utc)
         fresh = "2026-09-25T08:00:00+00:00"
@@ -303,7 +304,8 @@ class OutputTests(unittest.TestCase):
             "target_country_codes": ["RO"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {"pm": {"enabled": True, "titles": ["Project Manager"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
         }
         now = datetime(2026, 9, 25, 9, 0, tzinfo=timezone.utc)
         fresh = "2026-09-25T08:00:00+00:00"
