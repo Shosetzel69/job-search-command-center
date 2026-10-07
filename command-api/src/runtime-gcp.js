@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { CANDIDATE_MANAGED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import sources from '../../data/sources.json' with { type:'json' };
 import sourceCategories from '../../data/source-categories.json' with { type:'json' };
@@ -74,13 +75,25 @@ async function writeObjectJson(env, object, generation, payload) {
   return { commit:{ sha:String(metadata.generation) } };
 }
 
-async function createLock(env) {
-  const object = 'locks/heavy-search.lock';
+async function createObjectJson(env, object, payload) {
   const url = `${STORAGE_API}/upload/storage/v1/b/${encodeURIComponent(bucket(env))}/o?uploadType=media&name=${encodeURIComponent(object)}&ifGenerationMatch=0`;
-  const response = await authorizedFetch(url, { method:'POST', headers:{ 'Content-Type':'text/plain' }, body:`started_at=${new Date().toISOString()}\n` });
-  if (response.status === 412) throw runtimeError('A search run is already queued or running', 409);
-  if (!response.ok) throw runtimeError(`Heavy-run lock acquisition failed: ${response.status}`);
+  const response = await authorizedFetch(url, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json' },
+    body:`${JSON.stringify(payload, null, 2)}\n`,
+  });
+  if (response.status === 412) throw runtimeError(`Runtime object already exists: ${object}`, 409);
+  if (!response.ok) throw runtimeError(`Runtime object create failed: ${response.status}`);
   return object;
+}
+
+async function createLock(env, descriptor) {
+  try {
+    return await createObjectJson(env, 'locks/heavy-search.lock', descriptor);
+  } catch (error) {
+    if (Number(error?.status) === 409) throw runtimeError('A search run is already queued or running', 409);
+    throw error;
+  }
 }
 
 async function deleteObject(env, object) {
@@ -96,15 +109,27 @@ async function readCandidateJson(path) {
   return structuredClone(CANDIDATE_DATA[name]);
 }
 
-async function activeRunId(env) {
+export async function activeWorkflowRun(env) {
   if (!await objectMetadata(env, 'locks/heavy-search.lock')) return null;
-  try {
-    const active = await readObjectJson(env, 'active.json');
-    return String(active.payload?.run_id || '').trim() || null;
-  } catch (error) {
-    if (error?.status === 404) return null;
-    throw error;
+  for (const object of ['active.json', 'locks/heavy-search.lock']) {
+    try {
+      const current = await readObjectJson(env, object);
+      const runId = String(current.payload?.run_id || '').trim();
+      if (!runId) continue;
+      return {
+        run_id:runId,
+        request_signature:String(current.payload?.request_signature || '').trim().toLowerCase() || null,
+        retrieve_scope:current.payload?.retrieve_scope || null,
+      };
+    } catch (error) {
+      if (error?.status !== 404) throw error;
+    }
   }
+  return { run_id:null, request_signature:null, retrieve_scope:null };
+}
+
+async function activeRunId(env) {
+  return String((await activeWorkflowRun(env))?.run_id || '').trim() || null;
 }
 
 async function runtimeObjectForRead(env, path) {
@@ -147,7 +172,7 @@ export async function writeRuntimeJson(env, runtime, path, sha, payload) {
 }
 
 export async function hasActiveWorkflowRun(env) {
-  return Boolean(await objectMetadata(env, 'locks/heavy-search.lock'));
+  return Boolean(await activeWorkflowRun(env));
 }
 
 function fullRunArgs() {
@@ -155,7 +180,7 @@ function fullRunArgs() {
     'import json, os, urllib.parse, urllib.request',
     'meta=urllib.request.Request("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",headers={"Metadata-Flavor":"Google"})',
     'token=json.load(urllib.request.urlopen(meta))["access_token"]',
-    'bucket=os.environ["GCP_RUNTIME_BUCKET"]; run_id=os.environ["CLOUD_RUN_EXECUTION"]; generation=os.environ["GCP_CURRENT_GENERATION"]',
+    'bucket=os.environ["GCP_RUNTIME_BUCKET"]; run_id=os.environ["JSCC_RUN_ID"]; generation=os.environ["GCP_CURRENT_GENERATION"]',
     'body=json.dumps({"run_id":run_id,"artifact_identity":"runs/"+run_id+"/jobs.json"}).encode()',
     'url="https://storage.googleapis.com/upload/storage/v1/b/"+urllib.parse.quote(bucket,safe="")+"/o?uploadType=media&name=current.json&ifGenerationMatch="+generation',
     'put=urllib.request.Request(url,data=body,method="POST",headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})',
@@ -163,21 +188,41 @@ function fullRunArgs() {
   ].join('; ');
   return [
     '-ceu',
-    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${CLOUD_RUN_EXECUTION:?CLOUD_RUN_EXECUTION is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; printf \'{"run_id":"%s"}\\n\' "${CLOUD_RUN_EXECUTION}" > /runtime/active.json; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 -c ' + JSON.stringify(publishPointer) + '; exit ${rc}'
+    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 -c ' + JSON.stringify(publishPointer) + '; exit ${rc}'
   ];
 }
 
-export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', checkActive = true, executionMode = 'policy') {
+export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', checkActive = true, executionMode = 'policy', retrieveRequest = null) {
   if (!['manual-ui','admin-ui','scheduled','system'].includes(runTrigger)) throw runtimeError('Invalid run trigger', 400);
   if (!['policy','manual-full'].includes(executionMode)) throw runtimeError('Invalid execution mode', 400);
-  if (checkActive && await hasActiveWorkflowRun(env)) throw runtimeError('A search run is already queued or running', 409);
-  const lock = await createLock(env);
+  const scoped = ['manual-ui','admin-ui'].includes(runTrigger);
+  const requestSignature = String(retrieveRequest?.request_signature || '').trim().toLowerCase();
+  const retrieveScope = retrieveRequest?.retrieve_scope;
+  if (scoped && (!/^[0-9a-f]{64}$/.test(requestSignature) || !retrieveScope || !Array.isArray(retrieveScope.scopes) || !retrieveScope.scopes.length)) {
+    throw runtimeError('Bounded retrieve scope and request signature are required', 400);
+  }
+  if (checkActive && await activeWorkflowRun(env)) throw runtimeError('A search run is already queued or running', 409);
+
+  const runId = `run-${randomUUID()}`;
+  const descriptor = {
+    schema_version:'1.0',
+    run_id:runId,
+    request_signature:requestSignature || null,
+    retrieve_scope:retrieveScope || null,
+    run_trigger:runTrigger,
+    source_sha:runtime.sourceSha,
+    started_at:new Date().toISOString(),
+  };
+  const lock = await createLock(env, descriptor);
   try {
     await deleteObject(env, 'active.json');
+    await createObjectJson(env, 'active.json', descriptor);
   } catch (error) {
+    await deleteObject(env, 'active.json').catch(() => {});
     await deleteObject(env, lock).catch(() => {});
     throw error;
   }
+
   const current = await objectMetadata(env, 'current.json');
   const currentGeneration = String(current?.generation || '0');
   const name = `projects/${project(env)}/locations/${region(env)}/jobs/${job(env)}`;
@@ -192,7 +237,10 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
             { name:'RUN_TRIGGER', value:runTrigger },
             { name:'SOURCE_SHA', value:runtime.sourceSha },
             { name:'GCP_RUNTIME_BUCKET', value:bucket(env) },
-            { name:'GCP_CURRENT_GENERATION', value:currentGeneration }
+            { name:'GCP_CURRENT_GENERATION', value:currentGeneration },
+            { name:'JSCC_RUN_ID', value:runId },
+            { name:'JSCC_REQUEST_SIGNATURE', value:requestSignature },
+            { name:'JSCC_RETRIEVE_SCOPE_JSON', value:JSON.stringify(retrieveScope || {}) }
           ]
         }],
         taskCount:1,
@@ -201,9 +249,11 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
     })
   });
   if (!response.ok) {
+    await deleteObject(env, 'active.json').catch(() => {});
     await deleteObject(env, lock).catch(() => {});
     const detail = (await response.text()).slice(0, 500);
     throw runtimeError(`Cloud Run Job invocation failed: ${response.status} ${detail}`, 502);
   }
-  return response.json();
+  const operation = await response.json();
+  return { ...operation, run_id:runId, request_signature:requestSignature || null };
 }
