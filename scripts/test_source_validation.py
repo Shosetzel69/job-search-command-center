@@ -16,7 +16,8 @@ NOW = datetime(2026, 9, 24, 20, 0, tzinfo=timezone.utc)
 CONFIG = {
     "schema_version": "1.0",
     "jobspipe_mode": "disabled",
-    "role_groups": {"pm": {"enabled": True, "titles": ["Project Manager"]}},
+    "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+    "target_role_subfamilies": ["project_management"],
     "work_modes": {"remote": True, "hybrid": True, "onsite": True},
     "contract_types": ["permanent", "temporary", "contract", "freelance"],
     "target_regions": ["EU"],
