@@ -341,6 +341,8 @@ def _heading_list_records_from_html(html, url, provider, *, default_remote=False
         if provider == "JustRemote":
             company_match = re.match(r"^(.+?)\s+(?:permanent|contract|freelance|full[- ]time|part[- ]time)\b", context, re.I)
             company = company_match.group(1).strip() if company_match else provider
+        elif provider == "Vector Synergy":
+            company = provider
         else:
             parts = [part.strip() for part in re.split(r"\s{2,}|\u00a0+", context) if part.strip()]
             company = parts[0] if parts else provider
