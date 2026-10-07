@@ -116,18 +116,33 @@ test('physical source registry is canonical for all non-deferred sources', () =>
   assert.equal(deferredMonster, 1, 'Exactly one deferred Monster physical record is expected');
 });
 
-test('owner-activated registry leaves only Oyster physically inactive', () => {
+test('owner-activated registry keeps only explicitly non-operational sources inactive', () => {
   const catalog = JSON.parse(readFileSync(resolve(process.cwd(), '../data/sources.json'), 'utf8'));
   const inactive = catalog.sources.filter(source => source.active !== true);
-  assert.deepEqual(inactive.map(source => source.name), ['Oyster']);
+  assert.deepEqual(inactive.map(source => source.name), [
+    'Remote in Europe',
+    'Landing.Jobs',
+    'Welcome to the Jungle',
+    'RemoteHunt',
+    'Malt',
+    'Upwork',
+    'Arc.dev',
+    'CGI',
+    'Eviden',
+    'Recruitee',
+    'BambooHR',
+    'Eightfold',
+    'Head Hunting IT',
+    'Oyster',
+  ]);
 
-  const oyster = inactive[0];
+  const oyster = inactive.find(source => source.name === 'Oyster');
   assert.equal(oyster.validation_status, 'validating');
   assert.equal(oyster.approval_status, 'pending');
 
   const pending = catalog.sources.filter(source => source.name !== 'Monster' && source.approval_status === 'pending');
-  assert.deepEqual(pending.map(source => source.name), ['Oyster']);
-  assert.equal(catalog.sources.filter(source => source.active === true).length, 159);
+  assert.deepEqual(pending.map(source => source.name), ['Landing.Jobs', 'Upwork', 'Oyster']);
+  assert.equal(catalog.sources.filter(source => source.active === true).length, 147);
 });
 
 test('legacy executable source is normalized as approved/validated', () => {
