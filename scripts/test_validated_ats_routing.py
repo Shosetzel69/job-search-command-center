@@ -22,23 +22,21 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         self.assertEqual(plan[0]["outcome"], "blocked_credentials")
         self.assertEqual(plan[0]["failure_reason"], "connector_requires_credentials")
 
-    def test_unvalidated_clickhouse_ashby_board_stays_disabled(self):
+    def test_validated_clickhouse_ashby_board_is_enabled(self):
         source = {"id": "x", "name": "ClickHouse", "url": "https://clickhouse.com/company/careers", "active": True}
         plan = orchestration.build_plan({"sources": [source]})
         self.assertEqual(plan[0]["connector"], "ashby")
         self.assertEqual(plan[0]["connector_config"]["board_name"], "clickhouse")
-        self.assertEqual(plan[0]["status"], "inactive")
-        self.assertEqual(plan[0]["outcome"], "validation_pending")
-        self.assertEqual(plan[0]["failure_reason"], "live_api_route_not_validated")
+        self.assertTrue(plan[0]["active"])
+        self.assertEqual(plan[0]["status"], "pending")
 
-    def test_unvalidated_float_workable_board_stays_disabled(self):
+    def test_validated_float_workable_board_is_enabled(self):
         source = {"id": "x", "name": "Float", "url": "https://www.float.com/careers", "active": True}
         plan = orchestration.build_plan({"sources": [source]})
         self.assertEqual(plan[0]["connector"], "workable")
         self.assertEqual(plan[0]["connector_config"]["subdomain"], "floatjobs")
-        self.assertEqual(plan[0]["status"], "inactive")
-        self.assertEqual(plan[0]["outcome"], "validation_pending")
-        self.assertEqual(plan[0]["failure_reason"], "live_api_route_not_validated")
+        self.assertTrue(plan[0]["active"])
+        self.assertEqual(plan[0]["status"], "pending")
 
     def test_previously_live_validated_recovery_routes_remain_enabled(self):
         cases = {
