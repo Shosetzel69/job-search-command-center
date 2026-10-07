@@ -61,6 +61,13 @@ def parse_datetime(value: Any) -> datetime | None:
         return None
 
 
+def query_progress_key(config: dict[str, Any], name: str) -> str:
+    signature = str(config.get("_jscc_request_signature") or "").strip().casefold()
+    if config.get("_jscc_targeted_collection") and signature:
+        return f"r1:{signature[:16]}:{name}"
+    return name
+
+
 def build_query_specs(config: dict[str, Any], state: dict[str, Any], now: datetime) -> dict[str, dict[str, Any]]:
     titles = engine.configured_titles(config)
     if not titles:
@@ -73,7 +80,7 @@ def build_query_specs(config: dict[str, Any], state: dict[str, Any], now: dateti
     fallback = now - timedelta(hours=collection_hours)
 
     def incremental_fields(name: str) -> dict[str, Any]:
-        progress = state.setdefault("query_progress", {}).setdefault(name, {})
+        progress = state.setdefault("query_progress", {}).setdefault(query_progress_key(config, name), {})
         parsed = parse_datetime(progress.get("watermark")) or fallback
         fields: dict[str, Any] = {
             "discovered_at_gte": discovered_timestamp(parsed - timedelta(minutes=overlap_minutes))
@@ -129,11 +136,12 @@ def preview_queries(
     client: PacedJobsPipe,
     specs: dict[str, dict[str, Any]],
     state: dict[str, Any],
+    config: dict[str, Any],
 ) -> tuple[dict[str, int], dict[str, str]]:
     counts: dict[str, int] = {}
     errors: dict[str, str] = {}
     for name, spec in specs.items():
-        progress = state.setdefault("query_progress", {}).setdefault(name, {})
+        progress = state.setdefault("query_progress", {}).setdefault(query_progress_key(config, name), {})
         if progress.get("cursor"):
             # Continue unfinished paid pagination without altering the cursor query.
             counts[name] = max(1, int(progress.get("remaining_estimate") or 1))
@@ -183,8 +191,9 @@ def update_query_progress(
     response: dict[str, Any],
     records: list[dict[str, Any]],
     now: datetime,
+    config: dict[str, Any],
 ) -> None:
-    progress = state.setdefault("query_progress", {}).setdefault(name, {})
+    progress = state.setdefault("query_progress", {}).setdefault(query_progress_key(config, name), {})
     progress.setdefault("poll_started_at", now.isoformat())
 
     seen_times = [parse_datetime(record.get("discovered_at")) for record in records]
@@ -216,8 +225,8 @@ def update_query_progress(
     progress.pop("max_discovered_at_seen", None)
 
 
-def mark_empty_query_complete(state: dict[str, Any], name: str, now: datetime) -> None:
-    progress = state.setdefault("query_progress", {}).setdefault(name, {})
+def mark_empty_query_complete(state: dict[str, Any], name: str, now: datetime, config: dict[str, Any]) -> None:
+    progress = state.setdefault("query_progress", {}).setdefault(query_progress_key(config, name), {})
     progress["watermark"] = now.isoformat()
     progress.pop("cursor", None)
     progress.pop("remaining_estimate", None)
@@ -232,7 +241,7 @@ def collect_incremental(
 ) -> tuple[list[engine.CollectionResult], int, dict[str, int], int]:
     client = PacedJobsPipe(os.environ.get("JOBSPIPE_API_KEY", ""))
     specs = build_query_specs(config, state, now)
-    preview_counts, preview_errors = preview_queries(client, specs, state)
+    preview_counts, preview_errors = preview_queries(client, specs, state, config)
 
     monthly_guard = max(0, int(config.get("jobspipe_monthly_credit_guard", 950)))
     per_run_budget = max(0, int(config.get("jobspipe_credit_budget_per_run", 14)))
@@ -250,10 +259,10 @@ def collect_incremental(
             continue
 
         total = preview_counts.get(name, 0)
-        progress = state.setdefault("query_progress", {}).setdefault(name, {})
+        progress = state.setdefault("query_progress", {}).setdefault(query_progress_key(config, name), {})
         if total == 0 and not progress.get("cursor"):
             results.append(engine.CollectionResult("jobspipe", name, True, [], 0))
-            mark_empty_query_complete(state, name, now)
+            mark_empty_query_complete(state, name, now, config)
             continue
 
         limit = allocations.get(name, 0)
@@ -268,7 +277,7 @@ def collect_incremental(
             credits_used += len(records)
             metadata_total = max(total, int(response.get("metadata", {}).get("total_results") or 0))
             results.append(engine.CollectionResult("jobspipe", name, True, records, metadata_total))
-            update_query_progress(state, name, response, records, now)
+            update_query_progress(state, name, response, records, now, config)
         except Exception as exc:
             results.append(engine.CollectionResult("jobspipe", name, False, [], total, str(exc)))
 
