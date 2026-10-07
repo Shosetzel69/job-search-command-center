@@ -777,6 +777,7 @@ def persist_collection(
     now: datetime,
     env: Mapping[str, str] | None = None,
     connect: Any | None = None,
+    advance_lifecycle: bool = True,
 ) -> dict[str, Any]:
     runtime_env = os.environ if env is None else env
     connection_string = str(runtime_env.get("NILE_DATABASE_URL") or "").strip()
@@ -802,7 +803,7 @@ def persist_collection(
 
     postings, skipped, incomplete_source_ids, global_projection_gap = project_collection(collection)
     complete_source_ids = _complete_source_ids(plan)
-    if global_projection_gap:
+    if not advance_lifecycle or global_projection_gap:
         complete_source_ids = set()
     else:
         complete_source_ids.difference_update(incomplete_source_ids)
@@ -838,16 +839,32 @@ def persist_collection(
         "complete_sources": len(complete_source_ids),
         "lifecycle_suppressed_sources": sorted(incomplete_source_ids),
         "global_projection_gap": global_projection_gap,
+        "lifecycle_suppressed_targeted": not advance_lifecycle,
     }
 
 
-def shared_collection_config(config: Mapping[str, Any]) -> dict[str, Any]:
-    """Build a user-count-invariant retrieval envelope from the canonical taxonomy."""
+def shared_collection_config(
+    config: Mapping[str, Any],
+    retrieve_scope: Mapping[str, Any] | None = None,
+    request_signature: str | None = None,
+) -> dict[str, Any]:
+    """Build a system-owned collection envelope, optionally bounded by R1 scope."""
     taxonomy = _taxonomy()
+    scopes = retrieve_scope.get("scopes") if isinstance(retrieve_scope, Mapping) else []
+    scopes = [item for item in scopes or [] if isinstance(item, Mapping)]
+    selected_families = {
+        _text(item.get("role_family")).upper()
+        for item in scopes
+        if _text(item.get("role_family")).upper() in role_taxonomy.CANONICAL_FAMILIES
+        and _text(item.get("role_family")).upper() != "UNKNOWN"
+    }
+    families = [
+        family for family in role_taxonomy.CANONICAL_FAMILIES
+        if family != "UNKNOWN" and (not selected_families or family in selected_families)
+    ]
+
     titles: list[str] = []
-    for family in role_taxonomy.CANONICAL_FAMILIES:
-        if family == "UNKNOWN":
-            continue
+    for family in families:
         for member in taxonomy["families"][family]["members"]:
             label = _text(member.get("label"))
             if label and label not in titles:
@@ -864,12 +881,49 @@ def shared_collection_config(config: Mapping[str, Any]) -> dict[str, Any]:
             "titles": titles,
         }
     }
-    shared["target_regions"] = []
-    shared["target_country_codes"] = []
-    shared["search_country_codes"] = []
+
+    if scopes:
+        shared["target_regions"] = sorted({
+            _text(value).upper()
+            for scope in scopes for value in (scope.get("target_regions") or [])
+            if _text(value)
+        })
+        shared["target_country_codes"] = sorted({
+            _text(value).upper()
+            for scope in scopes for value in (scope.get("target_country_codes") or [])
+            if _text(value)
+        })
+        shared["search_country_codes"] = list(shared["target_country_codes"])
+        shared["eligible_remote_country_codes"] = sorted({
+            _text(value).upper()
+            for scope in scopes for value in (scope.get("remote_eligible_country_codes") or [])
+            if _text(value)
+        })
+        work_modes = {
+            _text(value).casefold()
+            for scope in scopes for value in (scope.get("work_modes") or [])
+            if _text(value)
+        }
+        shared["work_modes"] = {mode: mode in work_modes for mode in ("remote", "hybrid", "onsite")}
+        shared["contract_types"] = sorted({
+            _text(value).casefold()
+            for scope in scopes for value in (scope.get("contract_types") or [])
+            if _text(value)
+        })
+        shared["_jscc_shared_collection"] = False
+        shared["_jscc_targeted_collection"] = True
+        shared["_jscc_retrieve_scope"] = _json_safe(retrieve_scope)
+        shared["_jscc_request_signature"] = _text(request_signature).casefold()
+    else:
+        shared["target_regions"] = []
+        shared["target_country_codes"] = []
+        shared["search_country_codes"] = []
+        shared["excluded_regions"] = []
+        shared["excluded_country_codes"] = []
+        shared["_jscc_shared_collection"] = True
+
     shared["excluded_regions"] = []
     shared["excluded_country_codes"] = []
-    shared["_jscc_shared_collection"] = True
     return shared
 
 
@@ -930,6 +984,58 @@ def apply_collection_policy(
         if key in policy:
             merged[key] = policy[key]
     return merged
+
+
+def persist_run_started(
+    run_id: str,
+    started_at: datetime,
+    metadata: Mapping[str, Any] | None = None,
+    *,
+    env: Mapping[str, str] | None = None,
+    connect: Any | None = None,
+) -> dict[str, Any]:
+    """Establish the system-owned run in PostgreSQL before provider work begins."""
+    runtime_env = os.environ if env is None else env
+    connection_string = str(runtime_env.get("NILE_DATABASE_URL") or "").strip()
+    if not connection_string:
+        if _is_cloud_runtime(runtime_env):
+            raise SharedCorpusError("NILE_DATABASE_URL is required in container/GCP runtime")
+        return {"status": "local_not_configured", "run_id": run_id}
+
+    expected, connection_string, connector = _db_connect(runtime_env, connect)
+    run_id = _text(run_id)
+    if not run_id:
+        raise SharedCorpusError("run_id is required for run start persistence")
+    payload = {
+        "schema_version": "1.0",
+        "run_id": run_id,
+        "status": "running",
+        "started_at": started_at.isoformat(),
+        "completed_at": None,
+        **_json_safe(dict(metadata or {})),
+    }
+    with connector(connection_string) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            row = cursor.fetchone()
+            if not row or str(row[0]) != expected:
+                raise SharedCorpusError(f"Connected database does not match environment binding: expected {expected}")
+            cursor.execute(
+                """
+                INSERT INTO search_runs(
+                    run_id, status, started_at, completed_at, records_inspected,
+                    jobs_published, excluded, payload
+                )
+                VALUES (%s, 'running', %s, NULL, 0, 0, 0, %s::jsonb)
+                ON CONFLICT(run_id)
+                DO UPDATE SET status='running',
+                              started_at=EXCLUDED.started_at,
+                              completed_at=NULL,
+                              payload=EXCLUDED.payload
+                """,
+                (run_id, started_at, json.dumps(payload, ensure_ascii=False)),
+            )
+    return {"status": "persisted", "run_id": run_id}
 
 
 def persist_operational_run(

@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 
 import { adminRefresh, decideAdminRefresh } from '../src/admin-refresh.js';
 import { aggregateAdminRefreshScopes } from '../src/db/cross-tenant-refresh-scope-aggregator.js';
+import { buildRetrieveRequest } from '../src/retrieve-scope.js';
 
 const SHA='3'.repeat(40);
 const RUNTIME_SHA='4'.repeat(40);
@@ -50,92 +51,109 @@ function aggregate(overrides={}){
   };
 }
 function runtime(overrides={}){ return {appEnv:'dev',searchMode:'disabled',...overrides}; }
+function request(a=aggregate()){
+  return buildRetrieveRequest({scopes:a.scopes,collectionFreshnessHours:24});
+}
+function deps(overrides={}){
+  return {
+    aggregateScopes:async()=>aggregate(),
+    readState:async()=>state(),
+    getActive:async()=>null,
+    dispatch:async()=>({name:'op',run_id:'run-admin'}),
+    buildIdentity:{},
+    ...overrides,
+  };
+}
 
 test('ADMIN refresh decision exposes canonical outcomes',()=>{
-  assert.equal(decideAdminRefresh({state:state(),runtime:runtime(),activeRun:false,aggregate:aggregate()}).outcome,'REUSED_CORPUS');
-  assert.equal(decideAdminRefresh({state:state(),runtime:runtime(),activeRun:true,aggregate:aggregate()}).outcome,'JOINED_EXISTING_RUN');
-  assert.equal(decideAdminRefresh({state:state({corpus_fresh:false}),runtime:runtime(),activeRun:false,aggregate:aggregate()}).outcome,'STARTED_RUN');
-  assert.equal(decideAdminRefresh({state:state(),runtime:runtime({appEnv:'prod',searchMode:'live'}),activeRun:false,aggregate:aggregate()}).outcome,'BLOCKED_BY_POLICY');
+  const a=aggregate(),req=request(a);
+  assert.equal(decideAdminRefresh({state:state(),runtime:runtime(),activeRun:null,aggregate:a,request:req}).outcome,'REUSED_CORPUS');
+  assert.equal(decideAdminRefresh({state:state(),runtime:runtime(),activeRun:{run_id:'live',request_signature:req.request_signature},aggregate:a,request:req}).outcome,'JOINED_EXISTING_RUN');
+  assert.equal(decideAdminRefresh({state:state({corpus_fresh:false}),runtime:runtime(),activeRun:null,aggregate:a,request:req}).outcome,'STARTED_RUN');
+  assert.equal(decideAdminRefresh({state:state(),runtime:runtime({appEnv:'prod',searchMode:'live'}),activeRun:null,aggregate:a,request:req}).outcome,'BLOCKED_BY_POLICY');
 });
 
 test('non-ADMIN cannot invoke ADMIN refresh',async()=>{
   await assert.rejects(
-    adminRefresh(user,baseEnv,{aggregateScopes:async()=>aggregate(),readState:async()=>state(),buildIdentity:{}}),
+    adminRefresh(user,baseEnv,deps()),
     error=>error?.status===403,
   );
 });
 
 test('fresh corpus is reused with zero dispatch',async()=>{
   let dispatches=0;
-  const result=await adminRefresh(admin,baseEnv,{
-    aggregateScopes:async()=>aggregate(),
-    readState:async()=>state(),
-    isActive:async()=>false,
-    dispatch:async()=>{dispatches+=1;},
-    buildIdentity:{},
-  });
+  const result=await adminRefresh(admin,baseEnv,deps({dispatch:async()=>{dispatches+=1;}}));
   assert.equal(result.outcome,'REUSED_CORPUS');
   assert.equal(result.scope_summary.active_profile_count,2);
   assert.equal(result.scope_summary.scope_count,1);
+  assert.ok(result.scope_summary.source_count>0);
   assert.equal(dispatches,0);
 });
 
-test('active global Retrieve coalesces ADMIN refresh',async()=>{
+test('equivalent active global Retrieve coalesces ADMIN refresh',async()=>{
+  const req=request();
   let dispatches=0;
-  const result=await adminRefresh(admin,baseEnv,{
-    aggregateScopes:async()=>aggregate(),
+  const result=await adminRefresh(admin,baseEnv,deps({
     readState:async()=>state({corpus_fresh:false,corpus_age_hours:30}),
-    isActive:async()=>true,
+    getActive:async()=>({run_id:'run-live',request_signature:req.request_signature}),
     dispatch:async()=>{dispatches+=1;},
-    buildIdentity:{},
-  });
+  }));
   assert.equal(result.outcome,'JOINED_EXISTING_RUN');
+  assert.equal(result.run_id,'run-live');
   assert.equal(dispatches,0);
 });
 
-test('stale corpus starts exactly one global admin-ui Retrieve',async()=>{
+test('non-equivalent active run blocks a second ADMIN heavy Retrieve',async()=>{
+  let dispatches=0;
+  const result=await adminRefresh(admin,baseEnv,deps({
+    readState:async()=>state({corpus_fresh:false}),
+    getActive:async()=>({run_id:'other',request_signature:'0'.repeat(64)}),
+    dispatch:async()=>{dispatches+=1;},
+  }));
+  assert.equal(result.outcome,'BLOCKED_BY_POLICY');
+  assert.equal(result.reason,'NON_EQUIVALENT_RUN_ACTIVE');
+  assert.equal(dispatches,0);
+});
+
+test('stale corpus starts exactly one bounded admin-ui Retrieve',async()=>{
   const calls=[];
-  const result=await adminRefresh(admin,baseEnv,{
-    aggregateScopes:async()=>aggregate(),
+  const result=await adminRefresh(admin,baseEnv,deps({
     readState:async()=>state({corpus_fresh:false,corpus_age_hours:30}),
-    isActive:async()=>false,
-    dispatch:async(...args)=>{calls.push(args);return{name:'projects/jscc-dev/operations/admin-1'};},
-    buildIdentity:{},
-  });
+    dispatch:async(...args)=>{calls.push(args);return{name:'projects/jscc-dev/operations/admin-1',run_id:'run-admin-1'};},
+  }));
   assert.equal(result.outcome,'STARTED_RUN');
-  assert.equal(result.operation_name,'projects/jscc-dev/operations/admin-1');
+  assert.equal(result.run_id,'run-admin-1');
   assert.equal(calls.length,1);
   assert.equal(calls[0][2],'admin-ui');
   assert.equal(calls[0][3],true);
   assert.equal(calls[0][4],'manual-full');
+  assert.match(calls[0][5].request_signature,/^[0-9a-f]{64}$/);
 });
 
-test('dispatch race 409 becomes JOINED_EXISTING_RUN',async()=>{
-  const result=await adminRefresh(admin,baseEnv,{
-    aggregateScopes:async()=>aggregate(),
+test('dispatch race 409 joins only equivalent ADMIN request',async()=>{
+  const req=request();
+  let reads=0;
+  const result=await adminRefresh(admin,baseEnv,deps({
     readState:async()=>state({corpus_fresh:false}),
-    isActive:async()=>false,
+    getActive:async()=>{reads+=1;return reads===1?null:{run_id:'run-race',request_signature:req.request_signature};},
     dispatch:async()=>{throw Object.assign(new Error('active'),{status:409});},
-    buildIdentity:{},
-  });
+  }));
   assert.equal(result.outcome,'JOINED_EXISTING_RUN');
   assert.equal(result.reason,'COALESCED_AFTER_RACE');
+  assert.equal(result.run_id,'run-race');
 });
 
 test('completed Retrieve race reuses fresh corpus before dispatch',async()=>{
   let reads=0,dispatches=0;
-  const result=await adminRefresh(admin,baseEnv,{
-    aggregateScopes:async()=>aggregate(),
+  const result=await adminRefresh(admin,baseEnv,deps({
     readState:async()=>{
       reads+=1;
       return reads===1
         ? state({corpus_fresh:false,corpus_age_hours:30})
         : state({corpus_fresh:true,corpus_age_hours:0.01,latest_usable_run:{run_id:'just-finished',status:'completed',completed_at:'2026-10-05T12:00:00.000Z'}});
     },
-    isActive:async()=>false,
     dispatch:async()=>{dispatches+=1;},
-    buildIdentity:{},
-  });
+  }));
   assert.equal(result.outcome,'REUSED_CORPUS');
   assert.equal(reads,2);
   assert.equal(dispatches,0);
@@ -143,13 +161,12 @@ test('completed Retrieve race reuses fresh corpus before dispatch',async()=>{
 
 test('zero active refresh scopes fail closed without dispatch',async()=>{
   let activeReads=0,dispatches=0;
-  const result=await adminRefresh(admin,baseEnv,{
+  const result=await adminRefresh(admin,baseEnv,deps({
     aggregateScopes:async()=>aggregate({active_profile_count:0,scope_count:0,scopes:[]}),
     readState:async()=>state({corpus_fresh:false}),
-    isActive:async()=>{activeReads+=1;return false;},
+    getActive:async()=>{activeReads+=1;return null;},
     dispatch:async()=>{dispatches+=1;},
-    buildIdentity:{},
-  });
+  }));
   assert.equal(result.outcome,'BLOCKED_BY_POLICY');
   assert.equal(result.reason,'NO_ACTIVE_REFRESH_SCOPES');
   assert.equal(activeReads,0);
@@ -158,13 +175,11 @@ test('zero active refresh scopes fail closed without dispatch',async()=>{
 
 test('PROD ADMIN refresh fails closed without runtime interaction',async()=>{
   let activeReads=0,dispatches=0;
-  const result=await adminRefresh(admin,{...baseEnv,APP_ENV:'prod',GCP_PROJECT_ID:'jscc-prod',SEARCH_MODE:'live'},{
-    aggregateScopes:async()=>aggregate(),
+  const result=await adminRefresh(admin,{...baseEnv,APP_ENV:'prod',GCP_PROJECT_ID:'jscc-prod',SEARCH_MODE:'live'},deps({
     readState:async()=>state({corpus_fresh:false}),
-    isActive:async()=>{activeReads+=1;return false;},
+    getActive:async()=>{activeReads+=1;return null;},
     dispatch:async()=>{dispatches+=1;},
-    buildIdentity:{},
-  });
+  }));
   assert.equal(result.outcome,'BLOCKED_BY_POLICY');
   assert.equal(result.reason,'PROD_NOT_AUTHORIZED');
   assert.equal(activeReads,0);
@@ -202,9 +217,7 @@ test('cross-tenant aggregator deduplicates equivalent scopes without identity ou
   assert.equal(result.scopes[0].active_profile_count,2);
   assert.equal(result.scopes[0].role_family,'PROJECT_MANAGEMENT');
   assert.deepEqual(result.scopes[0].target_country_codes,['RO']);
-  assert.equal(JSON.stringify(result).includes('tenant_id'),false);
-  assert.equal(JSON.stringify(result).includes('search_profile_id'),false);
-  assert.equal(JSON.stringify(result).includes('user_id'),false);
+  assert.equal(/tenant_id|search_profile_id|user_id/.test(JSON.stringify(result)),false);
   assert.match(sql,/account\.status = 'ACTIVE'/);
   assert.match(sql,/sp\.status = 'ACTIVE'/);
 });
@@ -240,6 +253,7 @@ test('POST admin refresh is same-origin and ADMIN-only',async()=>{
   assert.match(block,/requireSameOrigin\(request, env\)/);
   assert.match(block,/requireAdmin\(context\)/);
   assert.match(block,/adminRefresh\(context, env\)/);
+  assert.doesNotMatch(block,/request\.json|tenant_id|user_id|profile_id/);
 });
 
 test('aggregator is a narrow ADR-008 allowlisted exception',async()=>{
@@ -250,9 +264,10 @@ test('aggregator is a narrow ADR-008 allowlisted exception',async()=>{
   assert.match(aggregator,/active_profile_count/);
 });
 
-test('both runtime adapters accept admin-ui trigger',async()=>{
+test('both runtime adapters expose active run identity and accept admin-ui trigger',async()=>{
   for(const path of ['../src/runtime-gcp.js','../src/runtime-github.js']){
     const source=await readFile(new URL(path,import.meta.url),'utf8');
     assert.match(source,/admin-ui/);
+    assert.match(source,/activeWorkflowRun/);
   }
 });

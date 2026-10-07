@@ -44,6 +44,14 @@ test('GCP runtime adapter protects candidate-managed catalogs and uses atomic co
   assert.match(text, /activeRunId/);
   assert.match(text, /runs\/\$\{runId\}\/\$\{name\}/);
   assert.match(text, /deleteObject\(env, 'active\.json'\)/);
+  assert.match(text, /activeWorkflowRun/);
+  assert.match(text, /request_signature/);
+  assert.match(text, /retrieve_scope/);
+  assert.match(text, /JSCC_RUN_ID/);
+  assert.match(text, /JSCC_REQUEST_SIGNATURE/);
+  assert.match(text, /JSCC_RETRIEVE_SCOPE_JSON/);
+  assert.match(text, /run-\$\{randomUUID\(\)\}/);
+  assert.match(text, /Bounded retrieve scope and request signature are required/);
 });
 
 test('Node server listens on PORT and delegates to the existing secure handler', () => {

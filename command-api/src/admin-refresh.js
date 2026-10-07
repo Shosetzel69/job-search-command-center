@@ -1,8 +1,9 @@
 import { BUILD_IDENTITY } from './build-identity.generated.js';
 import { assertEnvironmentConfig, manualSearchExecutionMode } from './environment-config.js';
-import { dispatchWorkflow, hasActiveWorkflowRun } from './runtime-backend.js';
+import { activeWorkflowRun, dispatchWorkflow } from './runtime-backend.js';
 import { sharedCorpusRefreshState } from './multiuser-repository.js';
 import { aggregateAdminRefreshScopes } from './db/cross-tenant-refresh-scope-aggregator.js';
+import { buildRetrieveRequest, equivalentActiveRun } from './retrieve-scope.js';
 
 export const ADMIN_REFRESH_OUTCOMES = Object.freeze([
   'REUSED_CORPUS',
@@ -11,37 +12,55 @@ export const ADMIN_REFRESH_OUTCOMES = Object.freeze([
   'BLOCKED_BY_POLICY',
 ]);
 
-function metadata(state, aggregate) {
+function metadata(state, aggregate, request = null) {
   return {
     collection_freshness_hours:state.collection_freshness_hours,
     corpus_age_hours:state.corpus_age_hours == null ? null : Number(state.corpus_age_hours.toFixed(3)),
     latest_usable_run:state.latest_usable_run,
+    request_signature:request?.request_signature || null,
     scope_summary:{
       active_profile_count:Number(aggregate?.active_profile_count || 0),
-      scope_count:Number(aggregate?.scope_count || 0),
+      scope_count:Number(request?.scope_summary?.scope_count || aggregate?.scope_count || 0),
+      role_families:request?.scope_summary?.role_families || [],
+      source_count:Number(request?.scope_summary?.source_count || 0),
     },
     scopes:Array.isArray(aggregate?.scopes) ? aggregate.scopes : [],
   };
 }
 
-export function decideAdminRefresh({ state, runtime, activeRun, aggregate }) {
+export function decideAdminRefresh({ state, runtime, activeRun, aggregate, request }) {
   if (runtime?.appEnv === 'prod') {
-    return { outcome:'BLOCKED_BY_POLICY', reason:'PROD_NOT_AUTHORIZED', ...metadata(state, aggregate) };
+    return { outcome:'BLOCKED_BY_POLICY', reason:'PROD_NOT_AUTHORIZED', ...metadata(state, aggregate, request) };
   }
   const executionMode = manualSearchExecutionMode(runtime?.appEnv, runtime?.searchMode);
   if (!executionMode) {
-    return { outcome:'BLOCKED_BY_POLICY', reason:'RETRIEVE_NOT_ALLOWED', ...metadata(state, aggregate) };
+    return { outcome:'BLOCKED_BY_POLICY', reason:'RETRIEVE_NOT_ALLOWED', ...metadata(state, aggregate, request) };
   }
-  if (!aggregate?.scope_count) {
-    return { outcome:'BLOCKED_BY_POLICY', reason:'NO_ACTIVE_REFRESH_SCOPES', execution_mode:executionMode, ...metadata(state, aggregate) };
+  if (!aggregate?.scope_count || !request?.retrieve_scope?.scopes?.length) {
+    return { outcome:'BLOCKED_BY_POLICY', reason:'NO_ACTIVE_REFRESH_SCOPES', execution_mode:executionMode, ...metadata(state, aggregate, request) };
   }
   if (activeRun) {
-    return { outcome:'JOINED_EXISTING_RUN', reason:null, execution_mode:executionMode, ...metadata(state, aggregate) };
+    if (equivalentActiveRun(activeRun, request)) {
+      return {
+        outcome:'JOINED_EXISTING_RUN',
+        reason:null,
+        execution_mode:executionMode,
+        run_id:activeRun.run_id || null,
+        ...metadata(state, aggregate, request),
+      };
+    }
+    return {
+      outcome:'BLOCKED_BY_POLICY',
+      reason:'NON_EQUIVALENT_RUN_ACTIVE',
+      execution_mode:executionMode,
+      active_run_id:activeRun.run_id || null,
+      ...metadata(state, aggregate, request),
+    };
   }
   if (state?.corpus_fresh) {
-    return { outcome:'REUSED_CORPUS', reason:null, execution_mode:executionMode, ...metadata(state, aggregate) };
+    return { outcome:'REUSED_CORPUS', reason:null, execution_mode:executionMode, ...metadata(state, aggregate, request) };
   }
-  return { outcome:'STARTED_RUN', reason:null, execution_mode:executionMode, ...metadata(state, aggregate) };
+  return { outcome:'STARTED_RUN', reason:null, execution_mode:executionMode, ...metadata(state, aggregate, request) };
 }
 
 export async function adminRefresh(
@@ -50,8 +69,9 @@ export async function adminRefresh(
   {
     aggregateScopes = aggregateAdminRefreshScopes,
     readState = sharedCorpusRefreshState,
-    isActive = hasActiveWorkflowRun,
+    getActive = activeWorkflowRun,
     dispatch = dispatchWorkflow,
+    buildRequest = buildRetrieveRequest,
     buildIdentity = BUILD_IDENTITY,
   } = {},
 ) {
@@ -65,33 +85,50 @@ export async function adminRefresh(
   const runtime = assertEnvironmentConfig(env, buildIdentity);
   const aggregate = await aggregateScopes(env);
   const initialState = await readState(env);
+  let request = buildRequest({
+    scopes:aggregate?.scopes,
+    collectionFreshnessHours:initialState.collection_freshness_hours,
+  });
 
-  let decision = decideAdminRefresh({ state:initialState, runtime, activeRun:false, aggregate });
+  let decision = decideAdminRefresh({ state:initialState, runtime, activeRun:null, aggregate, request });
   if (decision.outcome === 'BLOCKED_BY_POLICY') return decision;
 
-  const activeRun = await isActive(env, runtime);
-  if (activeRun) {
-    return decideAdminRefresh({ state:initialState, runtime, activeRun:true, aggregate });
-  }
+  const activeRun = await getActive(env, runtime);
+  if (activeRun) return decideAdminRefresh({ state:initialState, runtime, activeRun, aggregate, request });
 
-  // Close the same run-completion race guarded by USER Refresh.
   const currentState = await readState(env);
-  decision = decideAdminRefresh({ state:currentState, runtime, activeRun:false, aggregate });
+  request = buildRequest({
+    scopes:aggregate?.scopes,
+    collectionFreshnessHours:currentState.collection_freshness_hours,
+  });
+  decision = decideAdminRefresh({ state:currentState, runtime, activeRun:null, aggregate, request });
   if (decision.outcome !== 'STARTED_RUN') return decision;
 
   try {
-    const operation = await dispatch(env, runtime, 'admin-ui', true, decision.execution_mode);
+    const operation = await dispatch(env, runtime, 'admin-ui', true, decision.execution_mode, request);
     return {
       ...decision,
+      run_id:String(operation?.run_id || '').trim() || null,
       operation_name:String(operation?.name || '').trim() || null,
     };
   } catch (error) {
     if (Number(error?.status) === 409) {
+      const joined = await getActive(env, runtime);
+      if (equivalentActiveRun(joined, request)) {
+        return {
+          outcome:'JOINED_EXISTING_RUN',
+          reason:'COALESCED_AFTER_RACE',
+          execution_mode:decision.execution_mode,
+          run_id:joined?.run_id || null,
+          ...metadata(currentState, aggregate, request),
+        };
+      }
       return {
-        outcome:'JOINED_EXISTING_RUN',
-        reason:'COALESCED_AFTER_RACE',
+        outcome:'BLOCKED_BY_POLICY',
+        reason:'NON_EQUIVALENT_RUN_ACTIVE',
         execution_mode:decision.execution_mode,
-        ...metadata(currentState, aggregate),
+        active_run_id:joined?.run_id || null,
+        ...metadata(currentState, aggregate, request),
       };
     }
     throw error;

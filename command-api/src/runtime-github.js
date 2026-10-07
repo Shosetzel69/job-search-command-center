@@ -99,14 +99,19 @@ export async function writeRuntimeJson(env, runtime, path, sha, payload, message
   });
 }
 
-export async function hasActiveWorkflowRun(env, runtime) {
+export async function activeWorkflowRun(env, runtime) {
   const workflow = encodeURIComponent(runtime.workflow);
   const payload = await runtimeGithubRequest(env, runtime, `/actions/workflows/${workflow}/runs?per_page=10`);
-  return (payload?.workflow_runs || []).some(run => run.status === 'queued' || run.status === 'in_progress');
+  const run = (payload?.workflow_runs || []).find(item => item.status === 'queued' || item.status === 'in_progress');
+  return run ? { run_id:String(run.id), request_signature:null } : null;
 }
 
-export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', checkActive = true, executionMode = 'policy') {
-  if (checkActive && await hasActiveWorkflowRun(env, runtime)) {
+export async function hasActiveWorkflowRun(env, runtime) {
+  return Boolean(await activeWorkflowRun(env, runtime));
+}
+
+export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', checkActive = true, executionMode = 'policy', retrieveRequest = null) {
+  if (checkActive && await activeWorkflowRun(env, runtime)) {
     throw Object.assign(new Error('A search run is already queued or running'), { status: 409 });
   }
   if (!['manual-ui', 'admin-ui', 'scheduled', 'system'].includes(runTrigger)) {

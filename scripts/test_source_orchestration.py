@@ -420,6 +420,136 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(result["results"], 2)
 
 
+    def test_targeted_collection_config_uses_only_requested_family_and_geography(self):
+        scope = {
+            "scopes": [{
+                "role_family": "PROJECT_MANAGEMENT",
+                "target_regions": ["EU"],
+                "target_country_codes": ["RO"],
+                "remote_eligible_country_codes": ["RO"],
+                "work_modes": ["remote", "hybrid"],
+                "contract_types": ["contract"],
+            }],
+            "effective_source_ids": ["src-one"],
+        }
+        targeted = orchestration.shared_corpus.shared_collection_config(
+            CONFIG,
+            retrieve_scope=scope,
+            request_signature="a" * 64,
+        )
+        titles = engine.configured_titles(targeted)
+        self.assertTrue(titles)
+        self.assertIn("Project Manager", titles)
+        self.assertNotIn("Scrum Master", titles)
+        self.assertEqual(targeted["target_country_codes"], ["RO"])
+        self.assertEqual(targeted["target_regions"], ["EU"])
+        self.assertTrue(targeted["_jscc_targeted_collection"])
+        self.assertFalse(targeted["_jscc_shared_collection"])
+        self.assertEqual(targeted["_jscc_request_signature"], "a" * 64)
+
+    def test_targeted_scope_filters_unrelated_role_before_shared_persistence(self):
+        pm = record("Jobicy", "pm")
+        pm["country_codes"] = ["RO"]
+        other = record("Jobicy", "svc")
+        other["title"] = "Service Manager"
+        other["country_codes"] = ["RO"]
+        item = {"source": "Jobicy", "source_id": "jobicy"}
+        config = {
+            **CONFIG,
+            "_jscc_retrieve_scope": {
+                "scopes": [{
+                    "role_family": "PROJECT_MANAGEMENT",
+                    "target_country_codes": ["RO"],
+                    "target_regions": [],
+                    "work_modes": ["remote"],
+                    "contract_types": [],
+                }]
+            },
+        }
+        results = [engine.CollectionResult("jobicy", "q", True, [pm, other], 2)]
+        orchestration.tag_collection_records(item, results)
+        scoped = orchestration.apply_retrieve_scope(item, results, config)
+        self.assertEqual(len(scoped[0].records), 1)
+        self.assertEqual(scoped[0].records[0]["id"], "pm")
+
+    def test_targeted_run_filters_source_plan_and_suppresses_lifecycle_aging(self):
+        catalog = copy.deepcopy(CATALOG)
+        catalog["sources"][0]["id"] = "jobs"
+        catalog["sources"][1]["id"] = "jobicy"
+        catalog["sources"][2]["id"] = "unsupported"
+        catalog["sources"][3]["id"] = "inactive"
+        orchestration.SOURCES_PATH.write_text(json.dumps(catalog))
+        scope = {
+            "scopes": [{
+                "role_family": "PROJECT_MANAGEMENT",
+                "target_regions": [],
+                "target_country_codes": ["RO"],
+                "remote_eligible_country_codes": ["RO"],
+                "work_modes": ["remote"],
+                "contract_types": [],
+            }],
+            "effective_source_ids": ["jobicy"],
+            "freshness": {"collection_freshness_hours": 24},
+        }
+        evidence = {
+            "status": "persisted",
+            "records_projected": 1,
+            "records_skipped": 0,
+            "postings_created": 1,
+            "postings_updated": 0,
+            "lifecycle_advanced": 0,
+            "complete_sources": 0,
+        }
+        with patch.object(orchestration.shared_corpus, "persist_collection", return_value=evidence) as persist:
+            code = orchestration.run(
+                CONFIG,
+                NOW,
+                run_id="run-targeted",
+                retrieve_scope=scope,
+                request_signature="b" * 64,
+            )
+        self.assertEqual(code, 0)
+        self.apify.assert_not_called()
+        self.jobicy.assert_called_once()
+        _, plan = persist.call_args.args[:2]
+        self.assertEqual([item["source_id"] for item in plan], ["jobicy"])
+        self.assertFalse(persist.call_args.kwargs["advance_lifecycle"])
+        status = json.loads(engine.STATUS_PATH.read_text())
+        self.assertEqual(status["run_id"], "run-targeted")
+        self.assertEqual(status["request_signature"], "b" * 64)
+        self.assertEqual(status["progress"]["sources_total"], 1)
+        self.assertEqual(status["progress"]["percent"], 100)
+
+
+
+    def test_targeted_incremental_progress_is_namespaced_by_request_signature(self):
+        base = {
+            **CONFIG,
+            "jobspipe_mode": "direct",
+            "_jscc_targeted_collection": True,
+        }
+        first = {**base, "_jscc_request_signature": "1" * 64}
+        second = {**base, "_jscc_request_signature": "2" * 64}
+        self.assertNotEqual(
+            optimized.query_progress_key(first, "target_geography"),
+            optimized.query_progress_key(second, "target_geography"),
+        )
+        state = {"query_progress": {}, "usage": {}}
+        optimized.build_query_specs(first, state, NOW)
+        optimized.build_query_specs(second, state, NOW)
+        keys = set(state["query_progress"])
+        self.assertIn("r1:" + "1" * 16 + ":target_geography", keys)
+        self.assertIn("r1:" + "2" * 16 + ":target_geography", keys)
+        self.assertNotIn("target_geography", keys)
+
+    def test_runner_establishes_postgres_run_before_orchestration(self):
+        source = Path(runner.__file__).read_text(encoding="utf-8")
+        start = source.index("shared_corpus.persist_run_started(")
+        execute = source.index("code = orchestration.run(")
+        self.assertLess(start, execute)
+
+
+
 class AdapterTests(unittest.TestCase):
     def fixture(self, geo="Anywhere"):
         return {"id": 1, "jobTitle": "IT Project Manager", "companyName": "Example",

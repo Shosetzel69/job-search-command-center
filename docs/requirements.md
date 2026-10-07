@@ -166,14 +166,16 @@ Nota: Remote MCP / `ai-github-bridge` este infrastructura operationala de engine
 
 | ID | Titlu | Descriere | Categorie | Sursa | Prioritate |
 |---|---|---|---|---|---|
-| CFR-38 | Actualizare joburi | USER foloseste `POST /me/refresh`, iar ADMIN `POST /admin/refresh`; endpoint-ul reutilizeaza, se alatura sau porneste un singur Retrieve shared conform policy. | Functionala | #489 | P1 |
-| CFR-39 | Coalescing Retrieve | Un heavy Retrieve global activ este reutilizat; nu se porneste o a doua rulare echivalenta per utilizator. | Functionala | #489 | P1 |
+| CFR-38 | Actualizare joburi | USER foloseste `POST /me/refresh`, iar ADMIN `POST /admin/refresh`; endpoint-ul reutilizeaza, se alatura sau porneste un singur Retrieve shared conform policy si scope-ului server-side. | Functionala | #520 | P1 |
+| CFR-39 | Coalescing Retrieve | Cererile cu aceeasi semnatura determinista scope+surse+freshness folosesc acelasi `run_id`; un heavy run activ neechivalent blocheaza pornirea unei a doua rulari. | Functionala | #520 | P1 |
 | CFR-40 | Polling status | Frontend-ul ADMIN urmareste `run-status.json` pana la stare terminala, afiseaza progres real X/Y si procent derivat din source outcomes, apoi reincarca datele. | Functionala | #13 | P1 |
 | CFR-41 | Salvare preferinte | `Salveaza preferintele` persista prin `PUT /me/preferences` si nu porneste provider Retrieve. | Functionala | #489 | P1 |
 | CFR-42 | Retrieve explicit | Provider Retrieve poate fi pornit numai prin controalele canonice de refresh/policy; save, GUI filters si administrarea metadata nu il declanseaza implicit. | Functionala | #489 | P1 |
 | CFR-88 | CRUD Surse API | CRUD-ul Surse foloseste Command API autentificat si GitHub Contents API; credentialele GitHub nu ajung in browser. | Functionala | ##### | ##### |
 | CFR-89 | Retry publicare | Publicarea rezultatelor reincearca controlat daca `main` se modifica in timpul publicarii si nu foloseste force push. | Functionala | #33 | ##### |
 | CFR-95 | Trigger canonic | Rularile pornite din controalele canonice pastreaza trigger-ul operational aprobat (`admin-ui` pentru ADMIN; USER foloseste contractul global de refresh existent). | Functionala | #489 | P1 |
+| CFR-96 | Scope bounded Retrieve | USER deriva server-side maximum 1-2 Role Families si geografia relevanta; ADMIN foloseste agregarea deduplicata a Search Profile-urilor active, fara PII in runner. | Functionala | #520 | P1 |
+| CFR-97 | Identitate run coerenta | `run_id` este stabilit inainte de provider work si ramane identic in refresh response, active status, PostgreSQL `search_runs`, source outcomes si run history; esecul dupa lucru partial produce stare terminala diagnosticabila. | Functionala | #520 | P1 |
 
 ## 5. Cerinte Non-Functionale
 
