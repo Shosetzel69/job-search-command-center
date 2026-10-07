@@ -87,7 +87,7 @@ async function readPolicy(db) {
 async function rowsForKeys(db, keys) {
   if (!keys.length) return [];
   const result = await db.query(
-    `SELECT scope_key, role_family, scope, last_usable_run_id, last_usable_at,
+    `SELECT scope_key, role_family, role_subfamilies, scope, last_usable_run_id, last_usable_at,
             corpus_volume, source_diversity, source_ids, updated_at
        FROM coverage_scope_state
       WHERE scope_key = ANY($1::text[])`,
@@ -139,7 +139,7 @@ export async function adminCoverageSnapshot(
   const [policyInput, result] = await Promise.all([
     readPolicy(db),
     db.query(
-      `SELECT scope_key, role_family, scope, last_usable_run_id, last_usable_at,
+      `SELECT scope_key, role_family, role_subfamilies, scope, last_usable_run_id, last_usable_at,
               corpus_volume, source_diversity, source_ids, updated_at
          FROM coverage_scope_state
         ORDER BY role_family, scope_key`,
