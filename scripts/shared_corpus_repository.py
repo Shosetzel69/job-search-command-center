@@ -1057,6 +1057,11 @@ def _coverage_allowed_countries(scope: Mapping[str, Any]) -> list[str]:
 
 def _coverage_scope_metrics(cursor: Any, scope: Mapping[str, Any]) -> tuple[int, int, list[str]]:
     role_family = _text(scope.get("role_family")).upper()
+    role_subfamilies = sorted({
+        _text(value)
+        for value in (scope.get("role_subfamilies") or [])
+        if _text(value)
+    })
     work_modes = sorted({
         _text(value).casefold()
         for value in (scope.get("work_modes") or [])
@@ -1086,6 +1091,10 @@ def _coverage_scope_metrics(cursor: Any, scope: Mapping[str, Any]) -> tuple[int,
           AND j.role_family = %s
           AND (
             cardinality(%s::text[]) = 0
+            OR j.role_subfamily && %s::text[]
+          )
+          AND (
+            cardinality(%s::text[]) = 0
             OR j.work_mode = 'unknown'
             OR j.work_mode = ANY(%s::text[])
           )
@@ -1106,6 +1115,8 @@ def _coverage_scope_metrics(cursor: Any, scope: Mapping[str, Any]) -> tuple[int,
         """,
         (
             role_family,
+            role_subfamilies,
+            role_subfamilies,
             work_modes,
             work_modes,
             contract_types,
@@ -1139,13 +1150,12 @@ def _persist_coverage_observations(cursor: Any, status: Mapping[str, Any]) -> in
         role_family = _text(raw_scope.get("role_family")).upper()
         if not re.fullmatch(r"[0-9a-f]{64}", scope_key):
             raise SharedCorpusError("Coverage scope_key is missing or invalid")
-        if role_family not in {
-            "PROJECT_MANAGEMENT", "DELIVERY", "SERVICE_MANAGEMENT", "SCRUM_AGILE", "PROGRAM_PMO"
-        }:
+        if role_family not in set(role_taxonomy.CANONICAL_FAMILIES) - {"UNKNOWN"}:
             raise SharedCorpusError("Coverage role_family is invalid")
 
         canonical_scope = {
             "role_family": role_family,
+            "role_subfamilies": sorted({_text(value) for value in (raw_scope.get("role_subfamilies") or []) if _text(value)}),
             "target_regions": sorted({_text(value).upper() for value in (raw_scope.get("target_regions") or []) if _text(value)}),
             "target_country_codes": sorted({_text(value).upper() for value in (raw_scope.get("target_country_codes") or []) if _text(value)}),
             "remote_eligible_country_codes": sorted({_text(value).upper() for value in (raw_scope.get("remote_eligible_country_codes") or []) if _text(value)}),
@@ -1156,13 +1166,14 @@ def _persist_coverage_observations(cursor: Any, status: Mapping[str, Any]) -> in
         cursor.execute(
             """
             INSERT INTO coverage_scope_state(
-              scope_key, role_family, scope, last_usable_run_id, last_usable_at,
+              scope_key, role_family, role_subfamilies, scope, last_usable_run_id, last_usable_at,
               corpus_volume, source_diversity, source_ids, updated_at
             )
-            VALUES (%s, %s, %s::jsonb, %s, %s, %s, %s, %s::text[], now())
+            VALUES (%s, %s, %s::text[], %s::jsonb, %s, %s, %s, %s, %s::text[], now())
             ON CONFLICT(scope_key)
             DO UPDATE SET
               role_family=EXCLUDED.role_family,
+              role_subfamilies=EXCLUDED.role_subfamilies,
               scope=EXCLUDED.scope,
               last_usable_run_id=EXCLUDED.last_usable_run_id,
               last_usable_at=EXCLUDED.last_usable_at,
@@ -1174,6 +1185,7 @@ def _persist_coverage_observations(cursor: Any, status: Mapping[str, Any]) -> in
             (
                 scope_key,
                 role_family,
+                canonical_scope["role_subfamilies"],
                 json.dumps(canonical_scope, ensure_ascii=False),
                 run_id,
                 completed_at,
