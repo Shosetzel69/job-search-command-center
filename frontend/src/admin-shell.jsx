@@ -516,7 +516,7 @@ function UsersAdmin({ token, notify }) {
           <div><Pill tone={account.role === 'ADMIN' ? 'blue' : 'slate'}>{account.role}</Pill></div>
           <div><Pill tone={account.status === 'ACTIVE' ? 'green' : 'amber'}>{account.status}</Pill></div>
           <div className="text-xs text-slate-600">{formatTime(account.created_at)}</div>
-          <div className="text-xs text-slate-600">{formatTime(account.last_login_at || account.updated_at)}</div>
+          <div className="text-xs text-slate-600">{account.last_login_at ? formatTime(account.last_login_at) : '—'}</div>
           <div className="flex flex-wrap gap-2">
             <button disabled={busyUserId===account.user_id} onClick={() => changeStatus(account)} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 disabled:opacity-50">{account.status === 'ACTIVE' ? 'Dezactiveaza' : 'Reactiveaza'}</button>
             <button disabled={busyUserId===account.user_id} onClick={() => setDeleteTarget(account)} className="min-h-9 rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-700 disabled:opacity-50">Sterge</button>
