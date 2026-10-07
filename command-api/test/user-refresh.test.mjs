@@ -187,6 +187,7 @@ test('empty USER scope fails closed before lock or dispatch', async () => {
   const result = await userRefresh(user, baseEnv, deps({
     readScope:async()=>({scopes:[]}),
     readState:async()=>state(),
+    readCoverage:async()=>coverage('INSUFFICIENT', []),
     getActive:async()=>{activeReads+=1;return null;},
     dispatch:async()=>{dispatches+=1;},
   }));
