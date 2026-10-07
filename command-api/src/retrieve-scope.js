@@ -95,18 +95,28 @@ function stablePayload(value) {
   return value;
 }
 
+export function coverageScopeKey(scope) {
+  const canonical = canonicalScope(scope);
+  const payload = JSON.stringify(stablePayload(canonical));
+  return createHash('sha256').update(payload, 'utf8').digest('hex');
+}
+
 export function buildRetrieveRequest({
   scopes,
   collectionFreshnessHours,
   sourceCatalog = sourcesCatalog,
 } = {}) {
   const canonicalScopes = canonicalizeRefreshScopes(scopes);
+  const keyedScopes = canonicalScopes.map(scope => Object.freeze({
+    ...scope,
+    scope_key:coverageScopeKey(scope),
+  }));
   const sourceIds = effectiveSourceIds(sourceCatalog);
   const freshness = Number(collectionFreshnessHours);
   const safeFreshness = Number.isFinite(freshness) && freshness > 0 ? Math.min(freshness, 24 * 365) : 24;
   const scope = Object.freeze({
     schema_version:'1.0',
-    scopes:canonicalScopes,
+    scopes:keyedScopes,
     effective_source_ids:sourceIds,
     freshness:{ collection_freshness_hours:safeFreshness },
   });
@@ -116,8 +126,8 @@ export function buildRetrieveRequest({
     request_signature:requestSignature,
     retrieve_scope:scope,
     scope_summary:Object.freeze({
-      scope_count:canonicalScopes.length,
-      role_families:[...new Set(canonicalScopes.map(item => item.role_family))],
+      scope_count:keyedScopes.length,
+      role_families:[...new Set(keyedScopes.map(item => item.role_family))],
       source_count:sourceIds.length,
     }),
   });
