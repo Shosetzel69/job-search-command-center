@@ -260,6 +260,9 @@ function validateUserConfigPatch(input, nomenclatures) {
       const unsupported = raw.filter(value => !ROLE_FAMILY_CODES.includes(value));
       throw Object.assign(new Error(`Unsupported Role Family: ${unsupported.join(', ')}`), { status:400 });
     }
+    if (normalized.length > 2) {
+      throw Object.assign(new Error('Selecteaza maximum doua familii de roluri pentru Retrieve.'), { status:400 });
+    }
     output.roleFamilies = normalized;
   }
   if ('roleSubfamilies' in input) {
@@ -384,6 +387,9 @@ function validateEffectiveSearchConfig(config, nomenclatures) {
   const families = normalizeRoleFamilies(rawFamilies);
   if (!families.length || families.length !== rawFamilies.length) {
     throw Object.assign(new Error('Selecteaza cel putin o familie de roluri valida.'), { status:400 });
+  }
+  if (families.length > 2) {
+    throw Object.assign(new Error('Selecteaza maximum doua familii de roluri pentru Retrieve.'), { status:400 });
   }
   const rawSubfamilies = Array.isArray(config.target_role_subfamilies) ? config.target_role_subfamilies : [];
   const subfamilies = normalizeRoleSubfamilies(rawSubfamilies);
