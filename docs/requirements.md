@@ -138,7 +138,7 @@ Nota: Remote MCP / `ai-github-bridge` este infrastructura operationala de engine
 | CFR-84 | Loguri | Pagina Loguri afiseaza ultimele 10 rulari de cautare si detaliile fiecarei rulari. | Functionala | ##### | ##### |
 | CFR-85 | CRUD Surse | Administrare -> Surse permite adaugare, editare, activare/dezactivare si stergere persistenta conform source governance. | Functionala | ##### | ##### |
 | CFR-86 | Surse neoperationale | URL-urile duplicate sunt blocate, iar sursele fara ruta operationala sunt marcate corespunzator. | Functionala | ##### | ##### |
-| CFR-91 | Administrare | Exista shell Administrare cu Overview, Actualizare date, Surse, Nomenclatoare si Loguri. | Functionala | #85 | P1 |
+| CFR-91 | Administrare | Exista shell Administrare cu Overview, Actualizare date, Surse, Nomenclatoare, Utilizatori si Loguri. | Functionala | #85/#522 | P1 |
 | CFR-92 | Nomenclatoare canonice | UI foloseste domeniile canonice regions, countries, work_modes, contract_types, application_statuses si seniority infrastructure. | Functionala | #116 | P1 |
 | CFR-93 | Integritate nomenclatoare | O valoare referentiata nu poate fi dezactivata/stearsa silent; API raspunde 409 cu referinte. | Functionala | #120 | P1 |
 
@@ -161,6 +161,8 @@ Nota: Remote MCP / `ai-github-bridge` este infrastructura operationala de engine
 | CFR-68 | Erori vizibile | Erorile de auth/data raman vizibile. | Functionala | ##### | ##### |
 | CFR-87 | Run history protejat | `run-history.json` este protejat la fel ca celelalte date private. | Functionala | ##### | ##### |
 | CFR-94 | Reload auth | La reload, fluxul Google favorizeaza contul autorizat prin login hint si revalideaza server-side noul credential. | Functionala | #153 | P1 |
+| CFR-98 | Lifecycle ADMIN privacy-safe | Administrare -> Utilizatori expune numai metadata de cont si permite deactivate/reactivate/delete fara acces la continutul personal al altui utilizator; deactivate revoca toate sesiunile. | Functionala | #522 | P1 |
+| CFR-99 | Self-service delete | `DELETE /me/account` sterge ireversibil contul curent si datele personale prin acelasi Account Lifecycle Gateway ca delete-ul ADMIN, revoca toate sesiunile, pastreaza corpusul shared si permite re-signup cu identificatori noi. | Functionala | #522 | P1 |
 
 ### 4.4 Comenzi si configurare
 

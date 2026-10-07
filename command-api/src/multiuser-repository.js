@@ -1354,7 +1354,8 @@ export async function listAccounts(authContext, env = process.env, { db = getPoo
   requireAdmin(authContext);
   const result = await db.query(
     `SELECT a.user_id, a.role, a.status, a.created_at, a.updated_at,
-            i.email, i.email_verified
+            i.email, i.email_verified,
+            (SELECT max(s.created_at) FROM user_session s WHERE s.user_id = a.user_id) AS last_login_at
        FROM app_user a
        LEFT JOIN user_identity i ON i.user_id = a.user_id AND i.provider = 'GOOGLE'
       ORDER BY a.created_at ASC, a.user_id ASC`,
@@ -1456,14 +1457,13 @@ async function verifySharedAccountResidue(target, db) {
   }
 }
 
-export async function deleteAccount(authContext, userId, env = process.env, { db = getPool(env) } = {}) {
-  requireAdmin(authContext);
-  const target = await startAccountDeletion(userId, 'ADMIN', env, db);
+async function deleteAccountLifecycle(userId, actorKind, env, db) {
+  const target = await startAccountDeletion(userId, actorKind, env, db);
   if (target.result === 'NOT_FOUND') {
     await db.query(
       `INSERT INTO account_deletion_audit(audit_id, event_type, actor_kind, result)
-       VALUES ($1, 'ACCOUNT_DELETE', 'ADMIN', 'NOT_FOUND')`,
-      [randomUUID()],
+       VALUES ($1, 'ACCOUNT_DELETE', $2, 'NOT_FOUND')`,
+      [randomUUID(), actorKind],
     );
     return { result:'NOT_FOUND' };
   }
@@ -1473,6 +1473,18 @@ export async function deleteAccount(authContext, userId, env = process.env, { db
   const deletion = await finalizeAccountDeletion(target, env, db);
   await verifySharedAccountResidue(target, db);
   return deletion;
+}
+
+export async function deleteAccount(authContext, userId, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  return deleteAccountLifecycle(userId, 'ADMIN', env, db);
+}
+
+export async function deleteOwnAccount(authContext, env = process.env, { db = getPool(env) } = {}) {
+  if (!authContext?.user_id || authContext?.status !== 'ACTIVE') {
+    throw httpError('Authenticated active user is required', 401);
+  }
+  return deleteAccountLifecycle(authContext.user_id, 'SELF', env, db);
 }
 
 export async function saveCapacityPolicy(authContext, input, env = process.env, { db = getPool(env) } = {}) {

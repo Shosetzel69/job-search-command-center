@@ -1,4 +1,4 @@
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
 import ActionDialog from './action-dialog.jsx';
@@ -105,7 +105,7 @@ function Overview({ sources, runStatus, onNavigate }) {
     <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">{cards.map(([label,value,note]) => <div key={label} className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="text-xs font-semibold uppercase tracking-wide text-slate-400">{label}</div><div className="mt-2 text-2xl font-bold text-slate-950">{value}</div><div className="mt-1 text-xs text-slate-500">{note}</div></div>)}</div>
     <Panel title="Acces rapid" note="Administrarea ramane separata de executia cautarii.">
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        {[['update','Actualizare date'],['sources','Surse'],['nomenclatures','Nomenclatoare'],['logs','Loguri']].map(([key,label]) => <button key={key} onClick={() => onNavigate(key)} className="rounded-xl border border-slate-200 p-4 text-left text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50">{label}<div className="mt-1 text-xs font-normal text-slate-400">Deschide sectiunea</div></button>)}
+        {[['update','Actualizare date'],['sources','Surse'],['nomenclatures','Nomenclatoare'],['users','Utilizatori'],['logs','Loguri']].map(([key,label]) => <button key={key} onClick={() => onNavigate(key)} className="rounded-xl border border-slate-200 p-4 text-left text-sm font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50">{label}<div className="mt-1 text-xs font-normal text-slate-400">Deschide sectiunea</div></button>)}
       </div>
     </Panel>
   </div>;
@@ -449,6 +449,94 @@ function Logs({ runs }) {
   })}</div>;
 }
 
+
+function UsersAdmin({ token, notify }) {
+  const [accounts,setAccounts] = useState([]);
+  const [loading,setLoading] = useState(true);
+  const [busyUserId,setBusyUserId] = useState(null);
+  const [deleteTarget,setDeleteTarget] = useState(null);
+
+  const reload = async () => {
+    const payload = await api('/admin/accounts', token);
+    setAccounts(Array.isArray(payload?.accounts) ? payload.accounts : []);
+    return payload;
+  };
+
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    api('/admin/accounts', token)
+      .then(payload => { if (active) setAccounts(Array.isArray(payload?.accounts) ? payload.accounts : []); })
+      .catch(error => { if (active) notify(`Lista de utilizatori nu a putut fi incarcata: ${error.message}`,'error'); })
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
+  }, [token, notify]);
+
+  const changeStatus = async account => {
+    const action = account.status === 'ACTIVE' ? 'deactivate' : 'reactivate';
+    setBusyUserId(account.user_id);
+    try {
+      await api(`/admin/accounts/${encodeURIComponent(account.user_id)}/${action}`, token, { method:'POST' });
+      await reload();
+      notify(account.status === 'ACTIVE' ? 'Contul a fost dezactivat; sesiunile active au fost revocate.' : 'Contul a fost reactivat; este necesara o autentificare noua.','success');
+    } catch (error) {
+      notify(`Starea contului nu a putut fi modificata: ${error.message}`,'error');
+    } finally {
+      setBusyUserId(null);
+    }
+  };
+
+  const remove = async account => {
+    setBusyUserId(account.user_id);
+    try {
+      await api(`/admin/accounts/${encodeURIComponent(account.user_id)}`, token, { method:'DELETE' });
+      await reload();
+      notify('Contul si datele personale asociate au fost sterse definitiv.','success');
+    } catch (error) {
+      notify(`Contul nu a putut fi sters: ${error.message}`,'error');
+    } finally {
+      setBusyUserId(null);
+      setDeleteTarget(null);
+    }
+  };
+
+  if (loading) return <Panel title="Utilizatori" note="Doar metadata de cont este vizibila administratorului."><div className="text-sm text-slate-500">Se incarca utilizatorii...</div></Panel>;
+
+  return <div className="space-y-4">
+    <div className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
+      Administratorul poate gestiona doar ciclul de viata al contului. Criteriile, FIT, aplicarile, notele si workspace-ul personal nu sunt expuse aici.
+    </div>
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+      <div className="hidden grid-cols-[minmax(220px,1.4fr)_100px_120px_150px_150px_minmax(220px,1fr)] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 lg:grid">
+        <span>Utilizator</span><span>Rol</span><span>Status</span><span>Creat</span><span>Ultimul login</span><span>Actiuni</span>
+      </div>
+      <div className="divide-y divide-slate-100">
+        {accounts.map(account => <div key={account.user_id} className="grid gap-3 px-5 py-4 text-sm lg:grid-cols-[minmax(220px,1.4fr)_100px_120px_150px_150px_minmax(220px,1fr)] lg:items-center">
+          <div className="min-w-0"><div className="truncate font-semibold text-slate-800">{account.email || 'Email indisponibil'}</div><div className="mt-1 truncate text-xs text-slate-400">{account.user_id}</div></div>
+          <div><Pill tone={account.role === 'ADMIN' ? 'blue' : 'slate'}>{account.role}</Pill></div>
+          <div><Pill tone={account.status === 'ACTIVE' ? 'green' : 'amber'}>{account.status}</Pill></div>
+          <div className="text-xs text-slate-600">{formatTime(account.created_at)}</div>
+          <div className="text-xs text-slate-600">{account.last_login_at ? formatTime(account.last_login_at) : '—'}</div>
+          <div className="flex flex-wrap gap-2">
+            <button disabled={busyUserId===account.user_id} onClick={() => changeStatus(account)} className="min-h-9 rounded-lg border border-slate-200 px-3 text-xs font-semibold text-slate-700 disabled:opacity-50">{account.status === 'ACTIVE' ? 'Dezactiveaza' : 'Reactiveaza'}</button>
+            <button disabled={busyUserId===account.user_id} onClick={() => setDeleteTarget(account)} className="min-h-9 rounded-lg border border-red-200 px-3 text-xs font-semibold text-red-700 disabled:opacity-50">Sterge</button>
+          </div>
+        </div>)}
+      </div>
+    </div>
+    {!accounts.length && <div className="rounded-2xl border border-slate-200 bg-white p-8 text-center text-sm text-slate-500">Nu exista conturi.</div>}
+    {deleteTarget && <ActionDialog
+      title="Sterge definitiv contul"
+      description={`Stergerea contului ${deleteTarget.email || deleteTarget.user_id} este ireversibila. Sesiunile si datele personale vor fi eliminate; corpusul partajat ramane intact.`}
+      confirmLabel="Sterge definitiv"
+      danger
+      busy={busyUserId===deleteTarget.user_id}
+      onCancel={() => setDeleteTarget(null)}
+      onConfirm={() => remove(deleteTarget)}
+    />}
+  </div>;
+}
+
 export default function AdminShell({
   sources,
   setSources,
@@ -465,11 +553,12 @@ export default function AdminShell({
   const governedSources = useMemo(() => sources.map(normalizeSource), [sources]);
   const props = { sources:governedSources, setSources, categories:sourceCategories, setCategories:setSourceCategories, token, notify };
   return <div className="space-y-5">
-    <Tabs value={section} onChange={setSection} items={ADMIN_SECTIONS.map(key => [key, ({overview:'Overview',update:'Actualizare date',sources:'Surse',nomenclatures:'Nomenclatoare',logs:'Loguri'})[key]])}/>
+    <Tabs value={section} onChange={setSection} items={ADMIN_SECTIONS.map(key => [key, ({overview:'Overview',update:'Actualizare date',sources:'Surse',nomenclatures:'Nomenclatoare',users:'Utilizatori',logs:'Loguri'})[key]])}/>
     {section === 'overview' && <Overview sources={governedSources} runStatus={runStatus} onNavigate={setSection}/>} 
     {section === 'update' && <UpdateData runStatus={runStatus} running={running} onRun={onRun}/>} 
     {section === 'sources' && <SourcesAdmin {...props}/>} 
     {section === 'nomenclatures' && <NomenclaturesAdmin token={token} notify={notify}/>} 
+    {section === 'users' && <UsersAdmin token={token} notify={notify}/>} 
     {section === 'logs' && <Logs runs={runHistory}/>} 
   </div>;
 }

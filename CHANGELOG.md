@@ -2,7 +2,7 @@
 
 ## [Unreleased]
 
-> App version: `0.8.0` — frontend cutover to Search Profile APIs plus PWA-first responsive Mobile V1.
+> App version: `0.9.0` — account lifecycle UI, self-service deletion and ADMIN privacy-safe user management.
 
 ### Security
 
@@ -14,6 +14,7 @@
 
 ### Functionalitati
 
+- #522 / R3: Administrare -> Utilizatori expune exclusiv metadata de cont privacy-safe si actiuni deactivate/reactivate/delete; self-service `DELETE /me/account` foloseste acelasi Account Lifecycle Gateway, revoca toate sesiunile, sterge datele personale tenant-aware, pastreaza corpusul shared si cere confirmare ireversibila `STERGE` in UI.
 - #520 / R1: Retrieve USER/ADMIN foloseste acum scope bounded derivat server-side, semnatura determinista scope+surse+freshness, coalescing numai pentru cereri echivalente, `run_id` stabilit inainte de provider work si propagat in GCP status/PostgreSQL/history; targeted runs filtreaza rezultatele inainte de shared persistence si nu avanseaza lifecycle-ul joburilor din afara scope-ului.
 
 - #486: outcome-ul web `blocked` expune acum un motiv structurat stabil pentru robots, HTTP 401/403/429, bot challenge, pagina de autentificare, URL/DNS nesigur si redirect blocat; toate guardrail-urile fail-closed raman neschimbate si nu se activeaza rute noi.
