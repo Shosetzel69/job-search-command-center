@@ -888,12 +888,17 @@ def shared_collection_config(
         for key in SYSTEM_COLLECTION_KEYS
         if key in config
     }
-    shared["role_groups"] = {
-        "shared_canonical_roles": {
-            "enabled": True,
-            "titles": titles,
-        }
-    }
+    shared["target_role_families"] = list(families)
+    shared["target_role_subfamilies"] = sorted({
+        _text(member.get("code"))
+        for family in families
+        for member in taxonomy["families"][family]["members"]
+        if (
+            not selected_subfamilies.get(family, set())
+            or _text(member.get("code")) in selected_subfamilies.get(family, set())
+        )
+        and _text(member.get("code"))
+    })
 
     if scopes:
         shared["target_regions"] = sorted({
