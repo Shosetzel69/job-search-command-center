@@ -163,6 +163,9 @@ Nota: Remote MCP / `ai-github-bridge` este infrastructura operationala de engine
 | CFR-94 | Reload auth | La reload, fluxul Google favorizeaza contul autorizat prin login hint si revalideaza server-side noul credential. | Functionala | #153 | P1 |
 | CFR-98 | Lifecycle ADMIN privacy-safe | Administrare -> Utilizatori expune numai metadata de cont si permite deactivate/reactivate/delete fara acces la continutul personal al altui utilizator; deactivate revoca toate sesiunile. | Functionala | #522 | P1 |
 | CFR-99 | Self-service delete | `DELETE /me/account` sterge ireversibil contul curent si datele personale prin acelasi Account Lifecycle Gateway ca delete-ul ADMIN, revoca toate sesiunile, pastreaza corpusul shared si permite re-signup cu identificatori noi. | Functionala | #522 | P1 |
+| CFR-100 | Coverage bounded | Coverage global/system este queryable per Role Family + geografie/work mode/contract si deriva `SUFFICIENT/INSUFFICIENT/STALE` din observatii persistente si Collection Policy. | Functionala | #521 | P1 |
+| CFR-101 | Selective refill | Refresh planner reutilizeaza scope-urile suficiente fara provider calls si trimite catre Retrieve numai scope-urile stale/insufficient eligibile. | Functionala | #521 | P1 |
+| CFR-102 | Coverage ADMIN | ADMIN poate inspecta freshness, corpus volume si source diversity per bounded scope fara date personale si fara a prezenta corpus size drept USER opportunity count. | Functionala | #521 | P1 |
 
 ### 4.4 Comenzi si configurare
 
