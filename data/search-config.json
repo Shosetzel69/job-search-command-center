@@ -1,37 +1,5 @@
 {
   "schema_version": "1.0",
-  "role_groups": {
-    "pm": {
-      "enabled": true,
-      "titles": [
-        "Project Manager"
-      ]
-    },
-    "delivery": {
-      "enabled": false,
-      "titles": [
-        "Delivery Manager"
-      ]
-    },
-    "service": {
-      "enabled": false,
-      "titles": [
-        "Service Manager"
-      ]
-    },
-    "scrum": {
-      "enabled": false,
-      "titles": [
-        "Scrum Master"
-      ]
-    },
-    "program": {
-      "enabled": false,
-      "titles": [
-        "Program Manager"
-      ]
-    }
-  },
   "work_modes": {
     "remote": true,
     "hybrid": true,
@@ -69,5 +37,11 @@
   "jobspipe_credit_budget_per_run": 0,
   "jobspipe_monthly_credit_guard": 0,
   "jobspipe_incremental_overlap_minutes": 0,
-  "jobspipe_apify_max_items_per_run": 0
+  "jobspipe_apify_max_items_per_run": 0,
+  "target_role_families": [
+    "PROJECT_DELIVERY_MANAGEMENT"
+  ],
+  "target_role_subfamilies": [
+    "project_management"
+  ]
 }
