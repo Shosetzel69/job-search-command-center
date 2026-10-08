@@ -381,6 +381,32 @@
         "role_member": []
       },
       "evidence": "negative/near-miss regression"
+    },
+    {
+      "id": "cross-family-business-product-conflict",
+      "title": "Business Analyst / Product Owner",
+      "expected": {
+        "classification_status": "conflict",
+        "role_family": null,
+        "role_member": [
+          "business_analysis",
+          "product_owner"
+        ]
+      },
+      "evidence": "#534 G1 ambiguity regression"
+    },
+    {
+      "id": "cross-family-project-technical-conflict",
+      "title": "Technical Lead Project Manager",
+      "expected": {
+        "classification_status": "conflict",
+        "role_family": null,
+        "role_member": [
+          "project_management",
+          "technical_leadership"
+        ]
+      },
+      "evidence": "#534 G1 ambiguity regression"
     }
   ]
 }
