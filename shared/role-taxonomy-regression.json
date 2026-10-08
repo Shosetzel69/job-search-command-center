@@ -1,179 +1,306 @@
 {
   "schema_version": "1.0",
-  "taxonomy_version": "2026.09.25-1",
+  "taxonomy_version": "2026.10.08-1",
   "cases": [
     {
-      "id": "pm-basic",
+      "id": "project-manager",
       "title": "Project Manager",
       "expected": {
         "classification_status": "matched",
-        "role_family": "PROJECT_MANAGEMENT",
+        "role_family": "PROJECT_DELIVERY_MANAGEMENT",
         "role_member": [
-          "project_manager"
+          "project_management"
         ]
       },
-      "evidence": "#399 explicit/current target"
+      "evidence": "#489 approved Role Family v1"
     },
     {
-      "id": "pm-it",
-      "title": "IT Project Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "PROJECT_MANAGEMENT",
-        "role_member": [
-          "it_project_manager",
-          "project_manager"
-        ]
-      },
-      "evidence": "#399/current target"
-    },
-    {
-      "id": "pm-technical",
+      "id": "technical-project-manager",
       "title": "Technical Project Manager",
       "expected": {
         "classification_status": "matched",
-        "role_family": "PROJECT_MANAGEMENT",
+        "role_family": "PROJECT_DELIVERY_MANAGEMENT",
         "role_member": [
-          "project_manager",
-          "technical_project_manager"
+          "project_management"
         ]
       },
-      "evidence": "#399/current target"
-    },
-    {
-      "id": "pm-agile",
-      "title": "Agile Project Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "PROJECT_MANAGEMENT",
-        "role_member": [
-          "agile_project_manager",
-          "project_manager"
-        ]
-      },
-      "evidence": "current target"
-    },
-    {
-      "id": "delivery-basic",
-      "title": "Delivery Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "DELIVERY",
-        "role_member": [
-          "delivery_manager"
-        ]
-      },
-      "evidence": "current target"
-    },
-    {
-      "id": "delivery-technical",
-      "title": "Technical Delivery Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "DELIVERY",
-        "role_member": [
-          "delivery_manager",
-          "technical_delivery_manager"
-        ]
-      },
-      "evidence": "current target"
-    },
-    {
-      "id": "service-basic",
-      "title": "Service Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "SERVICE_MANAGEMENT",
-        "role_member": [
-          "service_manager"
-        ]
-      },
-      "evidence": "current target"
-    },
-    {
-      "id": "service-it",
-      "title": "IT Service Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "SERVICE_MANAGEMENT",
-        "role_member": [
-          "service_manager"
-        ]
-      },
-      "evidence": "#399 generic-only interpretation: missing alias"
-    },
-    {
-      "id": "service-delivery",
-      "title": "Service Delivery Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "SERVICE_MANAGEMENT",
-        "role_member": [
-          "service_delivery_manager"
-        ]
-      },
-      "evidence": "current target"
-    },
-    {
-      "id": "scrum-master",
-      "title": "Scrum Master",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "SCRUM_AGILE",
-        "role_member": [
-          "scrum_master"
-        ]
-      },
-      "evidence": "current target"
+      "evidence": "#489 approved Role Family v1"
     },
     {
       "id": "program-manager",
       "title": "Program Manager",
       "expected": {
         "classification_status": "matched",
-        "role_family": "PROGRAM_PMO",
+        "role_family": "PROJECT_DELIVERY_MANAGEMENT",
         "role_member": [
-          "program_manager"
+          "program_management"
         ]
       },
-      "evidence": "current target"
-    },
-    {
-      "id": "programme-manager",
-      "title": "Programme Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "PROGRAM_PMO",
-        "role_member": [
-          "program_manager"
-        ]
-      },
-      "evidence": "#399 generic spelling"
-    },
-    {
-      "id": "technical-program-manager",
-      "title": "Technical Program Manager",
-      "expected": {
-        "classification_status": "matched",
-        "role_family": "PROGRAM_PMO",
-        "role_member": [
-          "program_manager",
-          "technical_program_manager"
-        ]
-      },
-      "evidence": "target-adjacent technical program"
+      "evidence": "#489 approved Role Family v1"
     },
     {
       "id": "pmo-manager",
       "title": "PMO Manager",
       "expected": {
         "classification_status": "matched",
-        "role_family": "PROGRAM_PMO",
+        "role_family": "PROJECT_DELIVERY_MANAGEMENT",
         "role_member": [
-          "pmo_manager"
+          "pmo"
         ]
       },
-      "evidence": "current target"
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "delivery-manager",
+      "title": "Delivery Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+        "role_member": [
+          "delivery_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "service-manager",
+      "title": "IT Service Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "SERVICE_OPERATIONS_MANAGEMENT",
+        "role_member": [
+          "service_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "service-delivery-manager",
+      "title": "Service Delivery Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "SERVICE_OPERATIONS_MANAGEMENT",
+        "role_member": [
+          "service_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "it-operations-manager",
+      "title": "IT Operations Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "SERVICE_OPERATIONS_MANAGEMENT",
+        "role_member": [
+          "it_operations"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "support-manager",
+      "title": "Technical Support Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "SERVICE_OPERATIONS_MANAGEMENT",
+        "role_member": [
+          "support_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "product-manager",
+      "title": "Product Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PRODUCT_AGILE",
+        "role_member": [
+          "product_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "product-owner",
+      "title": "Product Owner",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PRODUCT_AGILE",
+        "role_member": [
+          "product_owner"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "scrum-master",
+      "title": "Scrum Master",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PRODUCT_AGILE",
+        "role_member": [
+          "agile_scrum"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "agile-coach",
+      "title": "Agile Coach",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "PRODUCT_AGILE",
+        "role_member": [
+          "agile_scrum"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "business-analyst",
+      "title": "Senior Business Analyst",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "BUSINESS_ANALYSIS_TRANSFORMATION",
+        "role_member": [
+          "business_analysis"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "transformation-manager",
+      "title": "Digital Transformation Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "BUSINESS_ANALYSIS_TRANSFORMATION",
+        "role_member": [
+          "transformation"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "change-manager",
+      "title": "Change Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "BUSINESS_ANALYSIS_TRANSFORMATION",
+        "role_member": [
+          "change_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "customer-success",
+      "title": "Customer Success Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "CUSTOMER_PROFESSIONAL_SERVICES",
+        "role_member": [
+          "customer_success"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "technical-account",
+      "title": "Technical Account Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "CUSTOMER_PROFESSIONAL_SERVICES",
+        "role_member": [
+          "technical_account_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "technical-customer",
+      "title": "Technical Customer Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "CUSTOMER_PROFESSIONAL_SERVICES",
+        "role_member": [
+          "technical_customer_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "implementation-manager",
+      "title": "Implementation Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "CUSTOMER_PROFESSIONAL_SERVICES",
+        "role_member": [
+          "implementation"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "professional-services",
+      "title": "Professional Services Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "CUSTOMER_PROFESSIONAL_SERVICES",
+        "role_member": [
+          "professional_services"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "engineering-manager",
+      "title": "Engineering Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "TECHNICAL_LEADERSHIP_ARCHITECTURE",
+        "role_member": [
+          "engineering_management"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "technical-lead",
+      "title": "Technical Lead",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "TECHNICAL_LEADERSHIP_ARCHITECTURE",
+        "role_member": [
+          "technical_leadership"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "solution-architect",
+      "title": "Solution Architect",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "TECHNICAL_LEADERSHIP_ARCHITECTURE",
+        "role_member": [
+          "solution_architecture"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
+    },
+    {
+      "id": "enterprise-architect",
+      "title": "Enterprise Architect",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "TECHNICAL_LEADERSHIP_ARCHITECTURE",
+        "role_member": [
+          "enterprise_architecture"
+        ]
+      },
+      "evidence": "#489 approved Role Family v1"
     },
     {
       "id": "negative-project-purchaser",
@@ -183,57 +310,17 @@
         "role_family": "UNKNOWN",
         "role_member": []
       },
-      "evidence": "#399 generic-only false-positive example"
+      "evidence": "negative/near-miss regression"
     },
     {
-      "id": "negative-service-desk-operator",
+      "id": "negative-service-desk",
       "title": "Service Desk Operator",
       "expected": {
         "classification_status": "unknown",
         "role_family": "UNKNOWN",
         "role_member": []
       },
-      "evidence": "#399 generic-only false-positive example"
-    },
-    {
-      "id": "negative-engagement-manager",
-      "title": "Engagement Manager",
-      "expected": {
-        "classification_status": "unknown",
-        "role_family": "UNKNOWN",
-        "role_member": []
-      },
-      "evidence": "#399 near-miss; not promoted without label evidence"
-    },
-    {
-      "id": "negative-implementation-manager",
-      "title": "Implementation Manager",
-      "expected": {
-        "classification_status": "unknown",
-        "role_family": "UNKNOWN",
-        "role_member": []
-      },
-      "evidence": "#399 near-miss; not promoted without label evidence"
-    },
-    {
-      "id": "negative-agile-coach",
-      "title": "Agile Coach",
-      "expected": {
-        "classification_status": "unknown",
-        "role_family": "UNKNOWN",
-        "role_member": []
-      },
-      "evidence": "#399 near-miss; not promoted without label evidence"
-    },
-    {
-      "id": "negative-change-release-coordinator",
-      "title": "Change and Release Coordinator",
-      "expected": {
-        "classification_status": "unknown",
-        "role_family": "UNKNOWN",
-        "role_member": []
-      },
-      "evidence": "#399 near-miss; not promoted without label evidence"
+      "evidence": "negative/near-miss regression"
     },
     {
       "id": "negative-sales-manager",
@@ -243,7 +330,7 @@
         "role_family": "UNKNOWN",
         "role_member": []
       },
-      "evidence": "#399 manager near-miss"
+      "evidence": "negative/near-miss regression"
     },
     {
       "id": "negative-store-manager",
@@ -253,37 +340,47 @@
         "role_family": "UNKNOWN",
         "role_member": []
       },
-      "evidence": "#399 manager near-miss"
+      "evidence": "negative/near-miss regression"
     },
     {
-      "id": "negative-product-manager",
-      "title": "Product Manager",
-      "expected": {
-        "classification_status": "unknown",
-        "role_family": "UNKNOWN",
-        "role_member": []
-      },
-      "evidence": "lookalike"
-    },
-    {
-      "id": "negative-customer-service-manager",
+      "id": "negative-customer-service",
       "title": "Customer Service Manager",
       "expected": {
         "classification_status": "unknown",
         "role_family": "UNKNOWN",
         "role_member": []
       },
-      "evidence": "same-member exclusion"
+      "evidence": "negative/near-miss regression"
     },
     {
-      "id": "negative-field-service-manager",
+      "id": "negative-field-service",
       "title": "Field Service Manager",
       "expected": {
         "classification_status": "unknown",
         "role_family": "UNKNOWN",
         "role_member": []
       },
-      "evidence": "same-member exclusion"
+      "evidence": "negative/near-miss regression"
+    },
+    {
+      "id": "negative-product-marketing",
+      "title": "Product Marketing Manager",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "negative/near-miss regression"
+    },
+    {
+      "id": "negative-change-release",
+      "title": "Change and Release Coordinator",
+      "expected": {
+        "classification_status": "unknown",
+        "role_family": "UNKNOWN",
+        "role_member": []
+      },
+      "evidence": "negative/near-miss regression"
     }
   ]
 }

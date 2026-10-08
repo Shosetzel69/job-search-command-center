@@ -41,57 +41,38 @@ class RoleTaxonomyTests(unittest.TestCase):
             },
         )
 
-    def test_multi_match_within_family_is_preserved(self) -> None:
-        result = role_taxonomy.classify_title(
-            "Technical Project Manager",
-            self.taxonomy,
-        )
+    def test_family_and_subfamily_are_classified(self) -> None:
+        result = role_taxonomy.classify_title("Technical Project Manager", self.taxonomy)
         self.assertEqual(result["classification_status"], "matched")
-        self.assertEqual(result["role_family"], "PROJECT_MANAGEMENT")
-        self.assertEqual(
-            result["role_member"],
-            ["project_manager", "technical_project_manager"],
-        )
+        self.assertEqual(result["role_family"], "PROJECT_DELIVERY_MANAGEMENT")
+        self.assertEqual(result["role_member"], ["project_management"])
 
     def test_member_exclusion_does_not_cancel_other_member(self) -> None:
         taxonomy = copy.deepcopy(self.taxonomy)
-        taxonomy["families"]["PROJECT_MANAGEMENT"]["members"] = [
+        taxonomy["families"]["PROJECT_DELIVERY_MANAGEMENT"]["members"].append(
             {
-                "code": "manager",
-                "label": "Manager",
-                "include_patterns": [r"\bmanager\b"],
-                "exclude_patterns": [r"\btechnical\s+manager\b"],
-            },
-            {
-                "code": "technical_manager",
-                "label": "Technical Manager",
+                "code": "technical_management_test",
+                "label": "Technical Management Test",
                 "include_patterns": [r"\btechnical\s+manager\b"],
                 "exclude_patterns": [],
-            },
-        ]
-        for code in (
-            "DELIVERY",
-            "SERVICE_MANAGEMENT",
-            "SCRUM_AGILE",
-            "PROGRAM_PMO",
-        ):
-            taxonomy["families"][code]["members"] = [
-                {
-                    "code": f"placeholder_{code.casefold()}",
-                    "label": "Placeholder",
-                    "include_patterns": [rf"\bplaceholder_{code.casefold()}\b"],
-                    "exclude_patterns": [],
-                }
-            ]
+            }
+        )
+        taxonomy["families"]["PROJECT_DELIVERY_MANAGEMENT"]["members"][0]["include_patterns"].append(
+            r"\bmanager\b"
+        )
+        taxonomy["families"]["PROJECT_DELIVERY_MANAGEMENT"]["members"][0]["exclude_patterns"].append(
+            r"\btechnical\s+manager\b"
+        )
 
         result = role_taxonomy.classify_title("Technical Manager", taxonomy)
         self.assertEqual(result["classification_status"], "matched")
-        self.assertEqual(result["role_member"], ["technical_manager"])
+        self.assertEqual(result["role_family"], "PROJECT_DELIVERY_MANAGEMENT")
+        self.assertEqual(result["role_member"], ["technical_management_test"])
 
     def test_duplicate_include_pattern_is_rejected(self) -> None:
         taxonomy = copy.deepcopy(self.taxonomy)
-        taxonomy["families"]["DELIVERY"]["members"][0]["include_patterns"] = [
-            r"\bproject\s+manager\b"
+        taxonomy["families"]["SERVICE_OPERATIONS_MANAGEMENT"]["members"][0]["include_patterns"] = [
+            taxonomy["families"]["PROJECT_DELIVERY_MANAGEMENT"]["members"][0]["include_patterns"][0]
         ]
         with self.assertRaisesRegex(
             role_taxonomy.TaxonomyValidationError,
@@ -101,7 +82,7 @@ class RoleTaxonomyTests(unittest.TestCase):
 
     def test_invalid_regex_is_rejected(self) -> None:
         taxonomy = copy.deepcopy(self.taxonomy)
-        taxonomy["families"]["DELIVERY"]["members"][0]["include_patterns"] = ["("]
+        taxonomy["families"]["SERVICE_OPERATIONS_MANAGEMENT"]["members"][0]["include_patterns"] = ["("]
         with self.assertRaisesRegex(
             role_taxonomy.TaxonomyValidationError,
             "invalid include regex",
@@ -119,11 +100,11 @@ class RoleTaxonomyTests(unittest.TestCase):
 
     def test_taxonomy_data_can_change_without_classifier_code_change(self) -> None:
         taxonomy = copy.deepcopy(self.taxonomy)
-        taxonomy["taxonomy_version"] = "2026.09.25-2"
-        taxonomy["families"]["PROGRAM_PMO"]["members"].append(
+        taxonomy["taxonomy_version"] = "2026.10.08-2"
+        taxonomy["families"]["PROJECT_DELIVERY_MANAGEMENT"]["members"].append(
             {
-                "code": "portfolio_manager",
-                "label": "Portfolio Manager",
+                "code": "portfolio_management",
+                "label": "Portfolio Management",
                 "include_patterns": [r"\bportfolio\s+manager\b"],
                 "exclude_patterns": [],
             }
@@ -131,12 +112,12 @@ class RoleTaxonomyTests(unittest.TestCase):
         role_taxonomy.validate_taxonomy(taxonomy)
 
         result = role_taxonomy.classify_title("Portfolio Manager", taxonomy)
-        self.assertEqual(result["role_family"], "PROGRAM_PMO")
-        self.assertEqual(result["role_member"], ["portfolio_manager"])
+        self.assertEqual(result["role_family"], "PROJECT_DELIVERY_MANAGEMENT")
+        self.assertEqual(result["role_member"], ["portfolio_management"])
 
     def test_regression_version_mismatch_is_rejected(self) -> None:
         corpus = copy.deepcopy(self.corpus)
-        corpus["taxonomy_version"] = "2026.09.25-999"
+        corpus["taxonomy_version"] = "2026.10.08-999"
         with self.assertRaisesRegex(
             role_taxonomy.TaxonomyValidationError,
             "taxonomy_version",
@@ -148,15 +129,9 @@ class RoleTaxonomyTests(unittest.TestCase):
             role_taxonomy.normalize_title("  IT—Project_Manager  "),
             "it project manager",
         )
-        result = role_taxonomy.classify_title(
-            "IT—Project_Manager",
-            self.taxonomy,
-        )
-        self.assertEqual(result["role_family"], "PROJECT_MANAGEMENT")
-        self.assertEqual(
-            result["role_member"],
-            ["it_project_manager", "project_manager"],
-        )
+        result = role_taxonomy.classify_title("IT—Project_Manager", self.taxonomy)
+        self.assertEqual(result["role_family"], "PROJECT_DELIVERY_MANAGEMENT")
+        self.assertEqual(result["role_member"], ["project_management"])
 
 
 if __name__ == "__main__":

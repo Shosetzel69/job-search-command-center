@@ -98,7 +98,8 @@ class GeographyTests(unittest.TestCase):
             "target_country_codes": ["RO", "BE", "LU"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {"pm": {"enabled": True, "titles": ["Technical Project Manager"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
         }
         record = {
             "id": "bosch-yokohama-regression",
@@ -186,7 +187,8 @@ class OutputTests(unittest.TestCase):
             "target_country_codes": ["RO"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {"pm": {"enabled": True, "titles": ["IT Project Manager"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
         }
         record = {
             "id": "test-1",
@@ -221,7 +223,8 @@ class OutputTests(unittest.TestCase):
             "target_country_codes": ["RO"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {"pm": {"enabled": True, "titles": ["IT Project Manager"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
         }
         record = {
             "id": "unknown-contract",
@@ -255,10 +258,8 @@ class OutputTests(unittest.TestCase):
             "target_country_codes": ["RO"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {
-                "pm": {"enabled": True, "titles": ["Project Manager", "IT Project Manager"]},
-                "service": {"enabled": True, "titles": ["Service Manager"]},
-            },
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT", "SERVICE_OPERATIONS_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management", "service_management"],
         }
         now = datetime(2026, 9, 25, 9, 0, tzinfo=timezone.utc)
         fresh = "2026-09-25T08:00:00+00:00"
@@ -276,19 +277,18 @@ class OutputTests(unittest.TestCase):
         )
         audit = output["role_filter_audit"]
         self.assertEqual(audit["role_gate_evaluated"], 5)
-        self.assertEqual(audit["role_rejected_total"], 3)
+        self.assertEqual(audit["role_rejected_total"], 4)
         self.assertEqual(audit["rejected_near_miss_total"], 3)
-        self.assertEqual(audit["accepted_title_gate_total"], 2)
+        self.assertEqual(audit["accepted_title_gate_total"], 1)
         self.assertEqual(audit["explicit_role_match_count"], 1)
-        self.assertEqual(audit["generic_keyword_only_count"], 1)
-        self.assertEqual(audit["generic_keyword_only_by_keyword"], {"service": 1})
+        self.assertEqual(audit["generic_keyword_only_count"], 0)
+        self.assertEqual(audit["generic_keyword_only_by_keyword"], {})
         self.assertEqual(audit["rejected_near_miss_by_signal"], {
             "agile": 1,
             "manager": 1,
             "release": 1,
             "transition": 1,
         })
-        self.assertEqual(audit["generic_keyword_only_examples"]["service"][0]["title"], "Service Desk Operator")
         self.assertEqual(audit["rejected_near_miss_examples"]["transition"][0]["title"], "Transition Manager")
 
     def test_process_records_reports_complete_exclusion_counts(self) -> None:
@@ -303,7 +303,8 @@ class OutputTests(unittest.TestCase):
             "target_country_codes": ["RO"],
             "excluded_regions": [],
             "excluded_country_codes": [],
-            "role_groups": {"pm": {"enabled": True, "titles": ["Project Manager"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
         }
         now = datetime(2026, 9, 25, 9, 0, tzinfo=timezone.utc)
         fresh = "2026-09-25T08:00:00+00:00"

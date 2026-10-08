@@ -1,7 +1,9 @@
 const MODE_CODE = Object.freeze({ Remote:'remote', Hybrid:'hybrid', Onsite:'onsite' });
 
 export function isSearchProfileConfigured(criteria = {}) {
-  const role = Boolean(criteria.rolePm || criteria.roleDelivery || criteria.roleService || criteria.roleScrum || criteria.roleProgram);
+  const families = Array.isArray(criteria.roleFamilies) ? criteria.roleFamilies : [];
+  const subfamilies = Array.isArray(criteria.roleSubfamilies) ? criteria.roleSubfamilies : [];
+  const role = families.length > 0 && subfamilies.length > 0;
   const geography = Boolean(criteria.targetRegions?.length || criteria.targetCountries?.length);
   const workMode = Boolean(criteria.workRemote || criteria.workHybrid || criteria.workOnsite);
   const contract = Array.isArray(criteria.contractTypes) && criteria.contractTypes.length > 0;

@@ -1,14 +1,11 @@
 import { createHash } from 'node:crypto';
 import sourcesCatalog from '../../data/sources.json' with { type:'json' };
-
-const FAMILY_TO_GROUP = Object.freeze({
-  PROJECT_MANAGEMENT:'pm',
-  DELIVERY:'delivery',
-  SERVICE_MANAGEMENT:'service',
-  SCRUM_AGILE:'scrum',
-  PROGRAM_PMO:'program',
-});
-const FAMILY_ORDER = Object.freeze(Object.keys(FAMILY_TO_GROUP));
+import {
+  ROLE_FAMILY_CODES,
+  normalizeRoleFamilies,
+  normalizeRoleSubfamilies,
+  roleSubfamiliesForFamily,
+} from '../../shared/role-taxonomy-runtime.mjs';
 
 function list(value, { upper=false, lower=false } = {}) {
   const raw = Array.isArray(value) ? value : value == null ? [] : [value];
@@ -21,16 +18,13 @@ function list(value, { upper=false, lower=false } = {}) {
 }
 
 function orderedFamilies(preferences, maxFamilies = null) {
-  const explicit = list(preferences?.target_role_families, { upper:true })
-    .filter(family => FAMILY_ORDER.includes(family));
-  let families = explicit;
-  if (!families.length) {
-    const groups = preferences?.role_groups && typeof preferences.role_groups === 'object'
-      && !Array.isArray(preferences.role_groups) ? preferences.role_groups : {};
-    families = FAMILY_ORDER.filter(family => groups?.[FAMILY_TO_GROUP[family]]?.enabled === true);
-  }
-  const unique = [...new Set(families)];
-  return maxFamilies == null ? unique : unique.slice(0, maxFamilies);
+  const families = normalizeRoleFamilies(preferences?.target_role_families);
+  return maxFamilies == null ? families : families.slice(0, maxFamilies);
+}
+
+function subfamiliesForScope(preferences, family) {
+  const explicit = normalizeRoleSubfamilies(preferences?.target_role_subfamilies, family);
+  return (explicit.length ? explicit : roleSubfamiliesForFamily(family)).sort();
 }
 
 function workModes(value) {
@@ -41,8 +35,10 @@ function workModes(value) {
 }
 
 function canonicalScope(scope) {
+  const family = String(scope?.role_family || '').trim().toUpperCase();
   return Object.freeze({
-    role_family:String(scope?.role_family || '').trim().toUpperCase(),
+    role_family:family,
+    role_subfamilies:normalizeRoleSubfamilies(scope?.role_subfamilies, family).sort(),
     target_regions:list(scope?.target_regions, { upper:true }).sort(),
     target_country_codes:list(scope?.target_country_codes, { upper:true }).sort(),
     remote_eligible_country_codes:list(scope?.remote_eligible_country_codes, { upper:true }).sort(),
@@ -60,14 +56,19 @@ export function userRefreshScopes(preferences) {
     work_modes:workModes(p.work_modes),
     contract_types:list(p.contract_types, { lower:true }),
   };
-  return orderedFamilies(p, 2).map(role_family => canonicalScope({ role_family, ...shared }));
+  return orderedFamilies(p, 2).map(role_family => canonicalScope({
+    role_family,
+    role_subfamilies:subfamiliesForScope(p, role_family),
+    ...shared,
+  }));
 }
 
 export function canonicalizeRefreshScopes(scopes) {
   const keyed = new Map();
   for (const raw of Array.isArray(scopes) ? scopes : []) {
     const scope = canonicalScope(raw);
-    if (!FAMILY_ORDER.includes(scope.role_family)) continue;
+    if (!ROLE_FAMILY_CODES.includes(scope.role_family)) continue;
+    if (!scope.role_subfamilies.length) continue;
     const key = JSON.stringify(scope);
     if (!keyed.has(key)) keyed.set(key, scope);
   }
@@ -115,7 +116,7 @@ export function buildRetrieveRequest({
   const freshness = Number(collectionFreshnessHours);
   const safeFreshness = Number.isFinite(freshness) && freshness > 0 ? Math.min(freshness, 24 * 365) : 24;
   const scope = Object.freeze({
-    schema_version:'1.0',
+    schema_version:'1.1',
     scopes:keyedScopes,
     effective_source_ids:sourceIds,
     freshness:{ collection_freshness_hours:safeFreshness },
@@ -128,6 +129,7 @@ export function buildRetrieveRequest({
     scope_summary:Object.freeze({
       scope_count:keyedScopes.length,
       role_families:[...new Set(keyedScopes.map(item => item.role_family))],
+      role_subfamilies:[...new Set(keyedScopes.flatMap(item => item.role_subfamilies))].sort(),
       source_count:sourceIds.length,
     }),
   });

@@ -18,6 +18,7 @@ from urllib.request import Request, urlopen
 import diagnostics
 from job_identity import deduplicate
 import nomenclatures as canonical_nomenclatures
+import role_taxonomy
 
 ROOT = Path(__file__).resolve().parents[1]
 CANDIDATE_DATA = ROOT / "data"
@@ -137,11 +138,28 @@ class JobsPipeConnector:
 
 
 def configured_titles(config: dict[str, Any]) -> list[str]:
+    taxonomy = json.loads(role_taxonomy.DEFAULT_TAXONOMY_PATH.read_text(encoding="utf-8"))
+    role_taxonomy.validate_taxonomy(taxonomy)
+    families = [
+        str(value).strip().upper()
+        for value in (config.get("target_role_families") or [])
+        if str(value).strip().upper() in role_taxonomy.CANONICAL_FAMILIES
+        and str(value).strip().upper() != "UNKNOWN"
+    ]
+    selected_subfamilies = {
+        str(value).strip()
+        for value in (config.get("target_role_subfamilies") or [])
+        if str(value).strip()
+    }
     titles: list[str] = []
-    for group in (config.get("role_groups") or {}).values():
-        if group.get("enabled"):
-            titles.extend(group.get("titles") or [])
-    return list(dict.fromkeys(str(title).strip() for title in titles if str(title).strip()))
+    for family in families:
+        for member in taxonomy["families"][family]["members"]:
+            if selected_subfamilies and member["code"] not in selected_subfamilies:
+                continue
+            label = str(member.get("label") or "").strip()
+            if label and label not in titles:
+                titles.append(label)
+    return titles
 
 
 ROLE_NEAR_MISS_PATTERNS = {
@@ -259,8 +277,25 @@ def load_config() -> dict[str, Any]:
     config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
     if config.get("schema_version") != SCHEMA_VERSION:
         raise RuntimeError(f"Unsupported search config schema: {config.get('schema_version')}")
-    if not isinstance(config.get("role_groups"), dict):
-        raise RuntimeError("role_groups must be an object")
+    families = config.get("target_role_families")
+    subfamilies = config.get("target_role_subfamilies")
+    if not isinstance(families, list) or not families:
+        raise RuntimeError("target_role_families must be a non-empty array")
+    if not isinstance(subfamilies, list) or not subfamilies:
+        raise RuntimeError("target_role_subfamilies must be a non-empty array")
+    taxonomy = json.loads(role_taxonomy.DEFAULT_TAXONOMY_PATH.read_text(encoding="utf-8"))
+    role_taxonomy.validate_taxonomy(taxonomy)
+    valid_families = set(role_taxonomy.CANONICAL_FAMILIES) - {"UNKNOWN"}
+    if any(str(value).strip().upper() not in valid_families for value in families):
+        raise RuntimeError("Unsupported target Role Family")
+    member_owner = {
+        member["code"]: family
+        for family in valid_families
+        for member in taxonomy["families"][family]["members"]
+    }
+    selected_families = {str(value).strip().upper() for value in families}
+    if any(member_owner.get(str(value).strip()) not in selected_families for value in subfamilies):
+        raise RuntimeError("Role Subfamily must belong to a selected Role Family")
     if not isinstance(config.get("work_modes"), dict):
         raise RuntimeError("work_modes must be an object")
     for key in ("remote", "hybrid", "onsite"):
@@ -449,8 +484,18 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     selected_contract_types = configured_contract_types(config)
     target_codes = set(resolve_target_country_codes(config))
     excluded_company, excluded_role, deep_erp = compile_config_patterns(config)
-    target_title = re.compile(r"\b(project|program|programme|delivery|service|scrum|pmo)\b", re.I)
-    configured_phrases = configured_role_phrases(config)
+    taxonomy = json.loads(role_taxonomy.DEFAULT_TAXONOMY_PATH.read_text(encoding="utf-8"))
+    role_taxonomy.validate_taxonomy(taxonomy)
+    selected_role_families = {
+        str(value).strip().upper()
+        for value in (config.get("target_role_families") or [])
+        if str(value).strip()
+    }
+    selected_role_subfamilies = {
+        str(value).strip()
+        for value in (config.get("target_role_subfamilies") or [])
+        if str(value).strip()
+    }
 
     raw: list[dict[str, Any]] = []
     totals: dict[str, int] = {}
@@ -520,8 +565,14 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             reason = "web publication date unavailable"
         else:
             role_filter_audit["role_gate_evaluated"] += 1
-            title_match = target_title.search(title)
-            if not title_match:
+            role = role_taxonomy.classify_title(title, taxonomy)
+            role_members = set(role.get("role_member") or [])
+            role_match = (
+                role.get("classification_status") == "matched"
+                and role.get("role_family") in selected_role_families
+                and bool(role_members & selected_role_subfamilies)
+            )
+            if not role_match:
                 role_filter_audit["role_rejected_total"] += 1
                 near_miss_signals = [
                     signal for signal, pattern in ROLE_NEAR_MISS_PATTERNS.items()
@@ -541,23 +592,7 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
                 reason = "title outside target"
             else:
                 role_filter_audit["accepted_title_gate_total"] += 1
-                if title_contains_role_phrase(title, configured_phrases):
-                    role_filter_audit["explicit_role_match_count"] += 1
-                else:
-                    role_filter_audit["generic_keyword_only_count"] += 1
-                    generic_matches = sorted({
-                        match.group(1).casefold()
-                        for match in target_title.finditer(title)
-                    })
-                    for keyword in generic_matches:
-                        counts = role_filter_audit["generic_keyword_only_by_keyword"]
-                        counts[keyword] = counts.get(keyword, 0) + 1
-                        append_role_audit_example(
-                            role_filter_audit["generic_keyword_only_examples"],
-                            keyword,
-                            title,
-                            company,
-                        )
+                role_filter_audit["explicit_role_match_count"] += 1
 
         if reason is None and excluded_company and excluded_company.search(company):
             reason = "excluded company"
