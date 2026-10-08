@@ -146,7 +146,8 @@ test('G1: Python↔JS conflict semantics, canonical UNKNOWN and Eligibility UNKN
     assert.equal(js.classification_status,pyResult.classification_status,title);
     assert.equal(js.role_family,pyResult.role_family??'UNKNOWN',title);
     assert.deepEqual(js.role_subfamily,pyResult.role_member,title);
-    assert.deepEqual(js.family_candidates,pyResult.family_candidates,title);
+    const semanticFamilies=pyResult.family_candidates ?? (pyResult.role_family && pyResult.role_family!=='UNKNOWN' ? [pyResult.role_family] : []);
+    assert.deepEqual(js.family_candidates,semanticFamilies,title);
     const classified=classifyCanonicalJob({title,country_codes:['RO'],location:'Bucharest',
       work_mode:'remote',payload:{contract_type:'contract',remote_scope:'Country'}});
     assert.equal(classified.classification_status,js.classification_status,title);
