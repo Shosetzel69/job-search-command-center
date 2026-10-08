@@ -52,7 +52,8 @@ class RoleTaxonomyTests(unittest.TestCase):
             with self.subTest(title=title):
                 result = role_taxonomy.classify_title(title, self.taxonomy)
                 self.assertEqual(result["classification_status"], "conflict")
-                self.assertEqual(result["role_family"], "UNKNOWN")
+                self.assertIsNone(result["role_family"])
+                self.assertEqual(result["role_member"], [])
 
     def test_same_family_multi_member_does_not_invent_single_subfamily(self) -> None:
         result = role_taxonomy.classify_title("Technical Customer Success Manager", self.taxonomy)
