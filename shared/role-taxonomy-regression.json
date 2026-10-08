@@ -391,6 +391,10 @@
         "role_member": [
           "business_analysis",
           "product_owner"
+        ],
+        "family_candidates": [
+          "BUSINESS_ANALYSIS_TRANSFORMATION",
+          "PRODUCT_AGILE"
         ]
       },
       "evidence": "#534 G1 ambiguity regression"
@@ -404,9 +408,26 @@
         "role_member": [
           "project_management",
           "technical_leadership"
+        ],
+        "family_candidates": [
+          "PROJECT_DELIVERY_MANAGEMENT",
+          "TECHNICAL_LEADERSHIP_ARCHITECTURE"
         ]
       },
       "evidence": "#534 G1 ambiguity regression"
+    },
+    {
+      "id": "same-family-customer-multi-member",
+      "title": "Technical Customer Success Manager",
+      "expected": {
+        "classification_status": "matched",
+        "role_family": "CUSTOMER_PROFESSIONAL_SERVICES",
+        "role_member": [
+          "customer_success",
+          "technical_customer_management"
+        ]
+      },
+      "evidence": "#534 G1 same-family multi-member regression"
     }
   ]
 }
