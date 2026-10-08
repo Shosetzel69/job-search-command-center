@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Archive an existing completed DEV search run into a stable private QA snapshot.
+# Copy a completed DEV search run into a private, non-overwriting QA snapshot.
 # Run must first have been triggered from the authenticated JSCC DEV application.
 set -euo pipefail
 
