@@ -1,9 +1,9 @@
 # AgentFlow - Operating Contract
 
 Status: **CANONICAL**  
-Version: **1.3**  
+Version: **1.4**  
 Applies to: **AGENTFLOW**  
-Last verified: **2026-09-30**
+Last verified: **2026-10-08**
 
 ## 1. Purpose
 
@@ -190,6 +190,22 @@ Executia se opreste si foloseste statusul canonic de blocare al fazei curente ca
 - testele obligatorii raman failing dupa limita de retry din ATC.
 
 Nu necesita escaladare o alegere locala, reversibila si in-scope privind fisiere, functii sau structura interna, daca respecta arhitectura si contractul aprobat.
+
+## 9.2 Post-execution Gmail error verification
+
+Pentru orice executie AgentFlow care lanseaza sau interogheaza operational un workflow GitHub ori efectueaza un apel API, executorul foloseste imediat dupa acel pas pluginul Gmail pentru a verifica notificari de eroare/failure relevante inainte de urmatorul gate sau urmatoarea mutatie.
+
+Reguli obligatorii:
+
+- verificarea Gmail este secventiala: apelul/workflow-ul se executa mai intai, apoi se verifica Gmail;
+- cautarea trebuie sa acopere cel putin repository-ul/proiectul, workflow-ul sau serviciul relevant si termeni de failure/error;
+- o notificare Gmail gasita nu inlocuieste evidence-ul tehnic primar; ea este un semnal suplimentar care trebuie corelat cu statusul workflow/API, logs si candidate SHA;
+- daca Gmail indica un failure relevant care nu este explicat de evidence-ul deja inspectat, executia se opreste inainte de urmatorul gate si se investigheaza cauza;
+- notificari istorice sau pentru SHA-uri vechi nu invalideaza automat candidatul curent, dar trebuie diferentiate explicit de starea exacta curenta;
+- regula se aplica inclusiv apelurilor API read-only folosite pentru status/verificare si apelurilor care muta starea;
+- daca pluginul Gmail nu este disponibil sau accesul Gmail esueaza, executia AgentFlow se considera blocata pentru acel control pana cand verificarea poate fi efectuata sau owner-ul modifica explicit regula.
+
+Aceasta verificare este un control procedural suplimentar; nu modifica sursa de adevar pentru CI, Cloud Build, runtime health sau release evidence.
 
 ## 10. Evidence Bundle
 
