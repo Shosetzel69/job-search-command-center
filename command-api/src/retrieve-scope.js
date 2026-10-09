@@ -56,7 +56,14 @@ export function userRefreshScopes(preferences) {
     work_modes:workModes(p.work_modes),
     contract_types:list(p.contract_types, { lower:true }),
   };
-  return orderedFamilies(p, 2).map(role_family => canonicalScope({
+  const families = orderedFamilies(p);
+  if (families.length > 2) {
+    const error = new Error('Refresh requires at most two role families. Review and save your migrated role selections before refreshing.');
+    error.code = 'ROLE_FAMILY_SELECTION_NEEDS_REVIEW';
+    error.status = 409;
+    throw error;
+  }
+  return families.map(role_family => canonicalScope({
     role_family,
     role_subfamilies:subfamiliesForScope(p, role_family),
     ...shared,

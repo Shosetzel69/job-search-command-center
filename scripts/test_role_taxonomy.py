@@ -47,6 +47,27 @@ class RoleTaxonomyTests(unittest.TestCase):
         self.assertEqual(result["role_family"], "PROJECT_DELIVERY_MANAGEMENT")
         self.assertEqual(result["role_member"], ["project_management"])
 
+    def test_cross_family_conflicts_remain_explicit(self) -> None:
+        for title in ("Business Analyst / Product Owner", "Technical Lead Project Manager"):
+            with self.subTest(title=title):
+                result = role_taxonomy.classify_title(title, self.taxonomy)
+                self.assertEqual(result["classification_status"], "conflict")
+                self.assertIsNone(result["role_family"])
+                self.assertEqual(
+                    set(result["role_member"]),
+                    {
+                        "business_analysis", "product_owner"
+                    } if title.startswith("Business Analyst") else {
+                        "project_management", "technical_leadership"
+                    },
+                )
+
+    def test_same_family_multi_member_does_not_invent_single_subfamily(self) -> None:
+        result = role_taxonomy.classify_title("Technical Customer Success Manager", self.taxonomy)
+        self.assertEqual(result["classification_status"], "matched")
+        self.assertEqual(result["role_family"], "CUSTOMER_PROFESSIONAL_SERVICES")
+        self.assertEqual(result["role_member"], ["customer_success", "technical_customer_management"])
+
     def test_member_exclusion_does_not_cancel_other_member(self) -> None:
         taxonomy = copy.deepcopy(self.taxonomy)
         taxonomy["families"]["PROJECT_DELIVERY_MANAGEMENT"]["members"].append(

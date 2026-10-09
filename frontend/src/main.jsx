@@ -1,5 +1,6 @@
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import { ROLE_FAMILIES } from '../../shared/role-taxonomy-runtime.mjs';
+import { selectRoleFamily } from './role-family-selection.mjs';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AdminShell from './admin-shell.jsx';
@@ -356,16 +357,7 @@ function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
         {ROLE_FAMILIES.map(family=>{
           const familySelected=draft.roleFamilies.includes(family.code);
           const selectedSubs=new Set(draft.roleSubfamilies);
-          const toggleFamily=checked=>{
-            if(checked){
-              if(!familySelected&&draft.roleFamilies.length>=2)return;
-              update('roleFamilies',[...new Set([...draft.roleFamilies,family.code])]);
-              update('roleSubfamilies',[...new Set([...draft.roleSubfamilies,...family.subfamilies.map(item=>item.code)])]);
-            }else{
-              update('roleFamilies',draft.roleFamilies.filter(code=>code!==family.code));
-              update('roleSubfamilies',draft.roleSubfamilies.filter(code=>!family.subfamilies.some(item=>item.code===code)));
-            }
-          };
+          const toggleFamily=checked=>setDraft(current=>selectRoleFamily(current,family,checked));
           const toggleSubfamily=(code,checked)=>{
             const next=checked?[...new Set([...draft.roleSubfamilies,code])]:draft.roleSubfamilies.filter(item=>item!==code);
             update('roleSubfamilies',next);
