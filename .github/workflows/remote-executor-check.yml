@@ -118,6 +118,7 @@ jobs:
 
           checks = {
             "N5 gateway has no Cloud Run mutation authority in runtime code": all(x not in gateway for x in ("run.services.update","run.jobs.update","run.jobs.delete","run.services.delete")),
+            "N6 gateway has no raw product runtime or DB read path": all(x not in gateway for x in ("GCP_RUNTIME_BUCKET","runtimeBucket","NILE_DATABASE_URL","DATABASE_URL","POSTGRES_URL","POSTGRESQL_URL")),
             "N7 worker cannot execute Cloud Run jobs": "run.jobs.run" not in worker and "runWithOverrides" not in worker,
             "N8 DEV-only runtime source boundary": "GCP_PROJECT !== 'jscc-dev'" in Path("ops/src/lib.mjs").read_text(),
             "N15 no run.executions.cancel": "run.executions.cancel" not in provision and "run.executions.cancel" not in gateway,
