@@ -72,7 +72,7 @@ for role in roles/run.admin roles/run.developer roles/run.jobsExecutor roles/run
 done
 
 # Worker: execution metadata only on the two allowlisted Jobs; never Job execution/admin.
-role_permissions_exact jsccDiagnosticsExecutionReaderDev 'run.executions.get' 'worker execution-reader role exact' "$PROJECT"
+role_permissions_exact jsccDiagnosticsExecutionReaderDev 'run.executions.get,run.tasks.list' 'worker execution-reader role exact' "$PROJECT"
 WK_PROJECT_ROLES="$(gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' --filter="bindings.members:$WK" --format='value(bindings.role)')"
 for role in roles/run.admin roles/run.developer roles/run.jobsExecutor roles/run.jobsExecutorWithOverrides roles/editor roles/owner roles/viewer roles/logging.viewer; do
   require_absent "$WK_PROJECT_ROLES" "$role" "worker lacks $role"
