@@ -3,7 +3,7 @@ import {
   ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow, logicalTokenError,
-  makeSignedClient, normalizeExecutionName, operationObject, parseSignedClient, publicEvidence,
+  makeSignedClient, makeSignedState, normalizeExecutionName, operationObject, parseSignedClient, parseSignedState, publicEvidence,
   randomToken, releaseLease, sha256, validateTaskRequest, verifyGoogleIdToken
 } from './lib.mjs';
 
@@ -70,7 +70,7 @@ function extractExecutionName(op) {
 }
 async function resolveExecution(lro) {
   let op = lro;
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 120; i++) {
     const direct = extractExecutionName(op);
     if (direct) return direct;
     if (!op?.name) break;
@@ -109,7 +109,7 @@ async function acceptOperation(auth, toolArgs) {
     work_item_ref: workItem,
     idempotency_key_hash: idemHash,
     actor_sub_hash: sha256(auth.record.actor_sub),
-    source_sha: cfg.sourceSha,
+    ops_source_sha: cfg.opsSourceSha,
     gateway_image_digest: cfg.gatewayDigest,
     worker_image_digest: cfg.workerDigest,
   });
@@ -120,7 +120,7 @@ async function acceptOperation(auth, toolArgs) {
     const dispatch = {
       schema_version: '1.0', operation_id: opId, work_item_ref: workItem, execution_name: execution, task: op.task,
       task_class: op.task_class, args: op.args, catalog_version: CATALOG_VERSION,
-      source_sha: cfg.sourceSha, worker_image_digest: cfg.workerDigest,
+      ops_source_sha: cfg.opsSourceSha, worker_image_digest: cfg.workerDigest,
       expires_at_ms: Date.now() + timeout, created_at: isoNow(),
     };
     await gcsWriteJson(cfg.bucket, `dispatch/${execution}.json`, dispatch, 0);
@@ -174,8 +174,8 @@ const server = http.createServer(async (req, res) => {
       if (method !== 'S256' || !challenge) return sendText(res, 400, 'pkce_s256_required');
       if (!scope.split(/\s+/).includes(REQUIRED_SCOPE)) return sendText(res, 400, 'required_scope_missing');
       if (![REQUIRED_AUDIENCE, `${issuer}/mcp`].includes(resource)) return sendText(res, 400, 'invalid_resource');
-      const upstreamState = randomToken(24), nonce = randomToken(24);
-      await gcsWriteJson(cfg.bucket, `auth/states/${sha256(upstreamState)}.json`, { consumed: false, expires_at_ms: Date.now()+STATE_TTL_MS, client_id: clientId, redirect_uri: redirectUri, client_state: state, scope, challenge, audience: REQUIRED_AUDIENCE, nonce }, 0);
+      const nonce = randomToken(24);
+      const upstreamState = makeSignedState({ expires_at_ms: Date.now()+STATE_TTL_MS, client_id: clientId, redirect_uri: redirectUri, client_state: state, scope, challenge, audience: REQUIRED_AUDIENCE, nonce }, cfg.clientSigningKey);
       const redirect = `${issuer}/oauth/google/callback`;
       const gp = new URLSearchParams({ client_id: cfg.googleClientId, redirect_uri: redirect, response_type: 'code', scope: 'openid', state: upstreamState, nonce, prompt: 'select_account' });
       res.writeHead(302, { location: `https://accounts.google.com/o/oauth2/v2/auth?${gp}`, 'cache-control': 'no-store' }); return res.end();
@@ -183,7 +183,8 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/oauth/google/callback') {
       const upstreamState = u.searchParams.get('state') || '', googleCode = u.searchParams.get('code') || '';
       if (!(upstreamState && googleCode)) return sendText(res, 400, 'invalid_callback');
-      const st = await consumeJson(cfg.bucket, `auth/states/${sha256(upstreamState)}.json`);
+      const st = parseSignedState(upstreamState, cfg.clientSigningKey);
+      if (!st) return sendText(res, 400, 'invalid_or_expired_upstream_state');
       const redirect = `${issuer}/oauth/google/callback`;
       const gt = await googleTokenExchange(googleCode, redirect);
       if (!gt.id_token) return sendText(res, 400, 'google_id_token_missing');
