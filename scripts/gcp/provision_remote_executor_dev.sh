@@ -114,6 +114,7 @@ title: JSCC Diagnostics Execution Reader DEV
 stage: GA
 includedPermissions:
 - run.executions.get
+- run.tasks.list
 YAML
 gcloud iam roles describe jsccDiagnosticsExecutionReaderDev --project="$PROJECT" >/dev/null 2>&1 && gcloud iam roles update jsccDiagnosticsExecutionReaderDev --project="$PROJECT" --file=/tmp/jscc537-worker-exec-role.yaml >/dev/null || gcloud iam roles create jsccDiagnosticsExecutionReaderDev --project="$PROJECT" --file=/tmp/jscc537-worker-exec-role.yaml >/dev/null
 for job in jscc-diagnostics-dev jscc-search-dev; do
