@@ -52,6 +52,9 @@ jobs:
           bash -n scripts/gcp/bootstrap_remote_executor_dev.sh
           bash -n scripts/gcp/provision_remote_executor_dev.sh
           bash -n scripts/gcp/deploy_remote_executor_dev.sh
+          bash -n scripts/gcp/assert_trusted_ops_source.sh
+          bash -n scripts/gcp/verify_trusted_ops_ref.sh
+          bash -n scripts/gcp/build_remote_executor_dev.sh
           bash -n scripts/gcp/verify_remote_executor_dev.sh
 
       - name: Validate security boundaries statically
