@@ -29,6 +29,8 @@ GW_EMAIL="jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com"
 WK_EMAIL="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com"
 DP_EMAIL="jscc-ops-deployer-dev@$PROJECT.iam.gserviceaccount.com"
 BUILD_EMAIL="jscc-ops-build@$SHARED.iam.gserviceaccount.com"
+LOG_LOCATION="$(gcloud logging buckets list --project="$PROJECT" --format='value(location,bucketId)' | awk '$2=="_Default"{print $1; exit}')"
+[[ -n "$LOG_LOCATION" ]] || { echo "FAIL cannot resolve _Default log bucket location" >&2; exit 2; }
 PRODUCT_BUILD_EMAIL="jscc-build@$SHARED.iam.gserviceaccount.com"
 GW="serviceAccount:$GW_EMAIL"
 WK="serviceAccount:$WK_EMAIL"
@@ -129,10 +131,10 @@ BUCKET_DESC="$(gcloud storage buckets describe "gs://$OPS_BUCKET" --format=json)
 python3 -c 'import json,sys; d=json.load(sys.stdin); ages=[r.get("condition",{}).get("age") for r in d.get("lifecycle",{}).get("rule",[]) if r.get("action",{}).get("type")=="Delete"]; ok=14 in ages; print(("PASS " if ok else "FAIL ")+"private ops-state lifecycle is 14 days",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$BUCKET_DESC" || fail=1
 
 # Dedicated log view only.
-LOG_POLICY="$(gcloud logging views get-iam-policy jscc-ops-dev --project="$PROJECT" --location=global --bucket=_Default --format=json)"
+LOG_POLICY="$(gcloud logging views get-iam-policy jscc-ops-dev --project="$PROJECT" --location="$LOG_LOCATION" --bucket=_Default --format=json)"
 require_contains "$LOG_POLICY" "$WK_EMAIL" 'worker bound to dedicated log view'
 require_contains "$LOG_POLICY" 'roles/logging.viewAccessor' 'worker uses logging.viewAccessor'
-VIEW="$(gcloud logging views describe jscc-ops-dev --project="$PROJECT" --location=global --bucket=_Default --format=json)"
+VIEW="$(gcloud logging views describe jscc-ops-dev --project="$PROJECT" --location="$LOG_LOCATION" --bucket=_Default --format=json)"
 require_contains "$VIEW" 'jscc-search-dev' 'log view includes search job'
 require_contains "$VIEW" 'jscc-diagnostics-dev' 'log view includes diagnostics job'
 
