@@ -133,7 +133,8 @@ export function sanitizeText(input) {
 
 const PUBLIC_ASSERTION_FIELDS = Object.freeze([
   'target_alias','failed_count','succeeded_count','cancelled_count','completed','line_count',
-  'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha','exit_code','test_verdict','coarse_error'
+  'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha','exit_code','test_verdict','coarse_error',
+  'task_count','target_exit_code','target_term_signal','root_cause'
 ]);
 
 export function publicAssertions(input) {
@@ -149,7 +150,7 @@ export function publicAssertions(input) {
 
 export function publicEvidence(result) {
   const allow = [
-    'operation_id','work_item_ref','task','task_class','operation_state','test_verdict',
+    'operation_id','work_item_ref','task','task_class','operation_state','test_verdict','execution_name',
     'target_alias','ops_source_sha','target_source_sha','gateway_image_digest','worker_image_digest','started_at',
     'finished_at','exit_code','sanitizer_version','line_count','byte_count'
   ];
