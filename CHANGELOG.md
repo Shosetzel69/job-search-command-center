@@ -4,6 +4,10 @@
 
 > App version: `0.10.0` — bounded Coverage per Role Family with selective corpus refresh.
 
+### Guvernanta
+
+- #545: adoptata regula `Feature-led closure / Return-to-root` in `GOVERNANCE.md` §2.9, cu referinta AI; blocker-ele nu substituie acceptanta functionala sau gate-urile existente.
+
 ### Security
 
 - #250 / R1.5: protected `/data/*` reads now use the current isolated runtime repository instead of the immutable deploy Static Assets snapshot, so Source Registry/config/nomenclature mutations persist visibly across reload.
