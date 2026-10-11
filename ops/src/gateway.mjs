@@ -3,7 +3,7 @@ import {
   ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE, authorizationCodeError,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow, logicalTokenError,
-  makeSignedClient, makeSignedState, normalizeExecutionName, operationObject, parseSignedClient, parseSignedState, publicEvidence,
+  makeSignedClient, makeSignedState, normalizeExecutionName, operationObject, parseSignedClient, parseSignedState, authenticatedEvidence,
   randomToken, releaseLease, sha256, validateChatGptRedirectUris, validateTaskRequest, verifyGoogleIdToken
 } from './lib.mjs';
 
@@ -169,7 +169,7 @@ async function getOperation(id) {
   const rec = await gcsReadJson(cfg.bucket, `operations/${opId}.json`);
   if (!rec) throw new Error('operation_not_found');
   const result = await gcsReadJson(cfg.bucket, `results/${opId}.json`);
-  return result ? publicEvidence({ ...rec.data, ...result.data }) : publicEvidence(rec.data);
+  return result ? authenticatedEvidence({ ...rec.data, ...result.data }) : authenticatedEvidence(rec.data);
 }
 
 const server = http.createServer(async (req, res) => {
