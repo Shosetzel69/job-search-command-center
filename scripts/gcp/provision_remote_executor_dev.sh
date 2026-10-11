@@ -71,6 +71,9 @@ GOOGLE_CLIENT_SECRET_SECRET_VERSION="$(matching_secret_version JSCC_OPS_GOOGLE_C
 GOOGLE_ALLOWED_SUB_SECRET_VERSION="$(matching_secret_version JSCC_OPS_GOOGLE_ALLOWED_SUB "$OWNER_SUB")"
 [[ -n "$GOOGLE_CLIENT_ID_SECRET_VERSION" && -n "$GOOGLE_CLIENT_SECRET_SECRET_VERSION" && -n "$GOOGLE_ALLOWED_SUB_SECRET_VERSION" ]] || { echo "cannot resolve pinned Secret Manager versions" >&2; exit 3; }
 for s in JSCC_OPS_GOOGLE_CLIENT_ID JSCC_OPS_GOOGLE_CLIENT_SECRET JSCC_OPS_GOOGLE_ALLOWED_SUB; do gcloud secrets add-iam-policy-binding "$s" --project="$PROJECT" --member="serviceAccount:jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --condition=None >/dev/null; done
+if gcloud secrets describe JSCC_OPS_CLIENT_SIGNING_KEY --project="$PROJECT" >/dev/null 2>&1; then
+  gcloud secrets remove-iam-policy-binding JSCC_OPS_CLIENT_SIGNING_KEY --project="$PROJECT" --member="serviceAccount:jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --all >/dev/null 2>&1 || true
+fi
 
 DEV_PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
 SERVERLESS_AGENT="service-${DEV_PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
