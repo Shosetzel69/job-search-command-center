@@ -39,6 +39,10 @@ put_secret JSCC_OPS_GOOGLE_ALLOWED_SUB "$OWNER_SUB"
 put_secret JSCC_OPS_CLIENT_SIGNING_KEY "$SIGNING_KEY_VALUE"
 for s in JSCC_OPS_GOOGLE_CLIENT_ID JSCC_OPS_GOOGLE_CLIENT_SECRET JSCC_OPS_GOOGLE_ALLOWED_SUB JSCC_OPS_CLIENT_SIGNING_KEY; do gcloud secrets add-iam-policy-binding "$s" --project="$PROJECT" --member="serviceAccount:jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor >/dev/null; done
 
+DEV_PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+SERVERLESS_AGENT="service-${DEV_PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
+gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="serviceAccount:$SERVERLESS_AGENT" --role=roles/artifactregistry.reader >/dev/null
+
 gcloud run jobs deploy jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --tasks=1 --max-retries=0 --task-timeout=15m --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_IMAGE,WORKER_IMAGE_DIGEST=$WORKER_IMAGE,DIAGNOSTICS_JOB=jscc-diagnostics-dev,DEV_BASE_URL=$DEV_BASE_URL,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev" --no-cpu-boost
 
 cat >/tmp/jscc537-gateway-role.yaml <<'YAML'
@@ -118,9 +122,5 @@ for sa in jscc-ops-gateway-dev jscc-diagnostics-dev; do
   gcloud iam service-accounts add-iam-policy-binding "$sa@$PROJECT.iam.gserviceaccount.com" --project="$PROJECT" --member="$DEPLOYER" --role=roles/iam.serviceAccountUser >/dev/null
 done
 gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="$DEPLOYER" --role=roles/artifactregistry.reader >/dev/null
-
-DEV_PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
-SERVERLESS_AGENT="service-${DEV_PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
-gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="serviceAccount:$SERVERLESS_AGENT" --role=roles/artifactregistry.reader >/dev/null
 
 echo "Dedicated routine deployer configured. Use deploy_remote_executor_dev.sh under impersonation for subsequent deployments."
