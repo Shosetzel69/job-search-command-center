@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 export const CATALOG_VERSION = '537-v1';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
 export const REQUIRED_AUDIENCE = 'urn:jscc:ops:dev';
+export const CHATGPT_REDIRECT_URI = 'https://chatgpt.com/connector_platform_oauth_redirect';
 export const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
 export const AUTH_CODE_TTL_MS = 5 * 60 * 1000;
 export const STATE_TTL_MS = 5 * 60 * 1000;
@@ -195,6 +196,13 @@ export async function verifyGoogleIdToken(idToken, nonce, clientId, fetchImpl = 
   const claimError = validateGoogleClaims(payload, nonce, clientId);
   if (claimError) throw new Error(claimError);
   return payload;
+}
+
+export function validateChatGptRedirectUris(redirectUris) {
+  if (!Array.isArray(redirectUris) || redirectUris.length !== 1 || redirectUris[0] !== CHATGPT_REDIRECT_URI) {
+    throw new Error('invalid_redirect_uris');
+  }
+  return redirectUris;
 }
 
 export function makeSignedClient(redirectUris, signingKey) {
