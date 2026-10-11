@@ -30,13 +30,23 @@ async function describeExecution(args) {
   const r = await gcpFetch(url); if (!r.ok) throw new Error(`execution_read_${r.status}`); const j=await r.json();
 
   const tr = await gcpFetch(`${url}/tasks?pageSize=1000`);
-  if (!tr.ok) throw new Error(`task_read_${tr.status}`);
-  const tj = await tr.json();
+  let taskMetadataAvailable = false;
+  let taskMetadataError = null;
+  let tasks = [];
+  if (tr.ok) {
+    const tj = await tr.json();
+    tasks = tj.tasks || [];
+    taskMetadataAvailable = true;
+  } else if (tr.status === 403 || tr.status === 404) {
+    taskMetadataError = `task_read_${tr.status}`;
+  } else {
+    throw new Error(`task_read_${tr.status}`);
+  }
 
   let targetExitCode = null;
   let targetTermSignal = null;
   let rootCause = null;
-  for (const task of (tj.tasks || [])) {
+  for (const task of tasks) {
     const attempt = task.lastAttemptResult || {};
     const status = attempt.status || {};
     const taskCondition = (task.conditions || []).find(c => c && c.message);
@@ -72,17 +82,20 @@ async function describeExecution(args) {
     task_count:Number(j.taskCount || 0),
     target_exit_code:targetExitCode,
     target_term_signal:targetTermSignal,
-    root_cause:rootCause
+    root_cause:rootCause,
+    task_metadata_available:taskMetadataAvailable,
+    task_metadata_error:taskMetadataError
   };
 }
 async function readExecutionLogs(args) {
   const id = normalizeExecutionId(args.execution_id); const job = executionJobName(id);
-  const filter = `resource.type="cloud_run_job" AND resource.labels.job_name="${job}" AND labels.execution_name="${id}"`;
+  const filter = `resource.type="cloud_run_job" AND resource.labels.job_name="${job}" AND (labels.execution_name="${id}" OR labels."run.googleapis.com/execution_name"="${id}")`;
   if (!cfg.logViewResource) throw new Error('log_view_not_configured');
   const r = await gcpFetch('https://logging.googleapis.com/v2/entries:list',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({resourceNames:[cfg.logViewResource],filter,orderBy:'timestamp asc',pageSize:Math.min(args.limit,200)})});
   if (!r.ok) throw new Error(`logging_read_${r.status}`); const j=await r.json();
   const lines=(j.entries||[]).slice(0,args.limit).map(e=>sanitizeText(typeof (e.textPayload ?? e.jsonPayload ?? e.protoPayload ?? '')==='string'?(e.textPayload ?? ''):JSON.stringify(e.jsonPayload ?? e.protoPayload ?? {}))).filter(Boolean);
-  return { target_alias:id, line_count:lines.length, logs:lines };
+  const logExcerpt = sanitizeText(lines.join('\n'));
+  return { target_alias:id, line_count:lines.length, log_excerpt:logExcerpt, logs:lines };
 }
 async function inspectRuntimeSnapshot(args) {
   if (!cfg.runtimeBucket) throw new Error('runtime_bucket_not_configured');
@@ -117,8 +130,8 @@ async function runTestSuite(args) {
   return { target_alias:args.suite, target_source_sha:targetSourceSha, exit_code:0, test_verdict:'PASS', coarse_error:null };
 }
 function publicAssertions(task, value) {
-  if (task === 'describe_execution') return { target_alias:value.target_alias, failed_count:value.failed_count, succeeded_count:value.succeeded_count, cancelled_count:value.cancelled_count, completed:Boolean(value.completion_time), task_count:value.task_count, target_exit_code:value.target_exit_code, target_term_signal:value.target_term_signal, root_cause:value.root_cause };
-  if (task === 'read_execution_logs') return { target_alias:value.target_alias, line_count:value.line_count };
+  if (task === 'describe_execution') return { target_alias:value.target_alias, failed_count:value.failed_count, succeeded_count:value.succeeded_count, cancelled_count:value.cancelled_count, completed:Boolean(value.completion_time), task_count:value.task_count, target_exit_code:value.target_exit_code, target_term_signal:value.target_term_signal, root_cause:value.root_cause, task_metadata_available:value.task_metadata_available, task_metadata_error:value.task_metadata_error };
+  if (task === 'read_execution_logs') return { target_alias:value.target_alias, line_count:value.line_count, log_excerpt:value.log_excerpt };
   if (task === 'inspect_runtime_snapshot') return { target_alias:value.target_alias, run_status:value.run_status, published_jobs:value.published_jobs, status_present:value.status_present, jobs_present:value.jobs_present };
   if (task === 'run_test_suite') return { target_alias:value.target_alias, target_source_sha:value.target_source_sha, exit_code:value.exit_code, test_verdict:value.test_verdict, coarse_error:value.coarse_error || null };
   return {};
