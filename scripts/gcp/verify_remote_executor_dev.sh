@@ -151,6 +151,11 @@ for secret in JSCC_OPS_GOOGLE_CLIENT_ID JSCC_OPS_GOOGLE_CLIENT_SECRET JSCC_OPS_G
   require_contains "$p" "$GW_EMAIL" "gateway can access $secret"
   require_absent "$p" "$WK_EMAIL" "worker cannot access $secret"
 done
+if gcloud secrets describe JSCC_OPS_CLIENT_SIGNING_KEY --project="$PROJECT" >/dev/null 2>&1; then
+  LEGACY_SIGNING_POLICY="$(gcloud secrets get-iam-policy JSCC_OPS_CLIENT_SIGNING_KEY --project="$PROJECT" --format=json)"
+  require_absent "$LEGACY_SIGNING_POLICY" "$GW_EMAIL" 'gateway cannot access retired custom OAuth signing secret'
+  require_absent "$LEGACY_SIGNING_POLICY" "$WK_EMAIL" 'worker cannot access retired custom OAuth signing secret'
+fi
 
 # Runtime/cost invariants.
 JOB_DESC="$(gcloud run jobs describe jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --format=json)"
