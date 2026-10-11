@@ -26,6 +26,12 @@ gcloud iam service-accounts describe "jscc-ops-build@$SHARED.iam.gserviceaccount
 gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION"   --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/artifactregistry.writer --condition=None >/dev/null
 gcloud projects add-iam-policy-binding "$SHARED"   --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/logging.logWriter --condition=None >/dev/null
 
+CLOUDBUILD_SOURCE_BUCKET="${SHARED}_cloudbuild"
+gcloud storage buckets add-iam-policy-binding "gs://$CLOUDBUILD_SOURCE_BUCKET" \
+  --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" \
+  --role=roles/storage.objectViewer \
+  --condition="expression=resource.name.startsWith('projects/_/buckets/$CLOUDBUILD_SOURCE_BUCKET/objects/source/'),title=jscc_ops_build_source_only,description=Ops build identity reads only Cloud Build submitted source objects" >/dev/null
+
 # Build exact current SHA with the isolated ops build identity.
 gcloud builds submit   --project="$SHARED"   --region="$REGION"   --config=cloudbuild.ops.yaml   --substitutions="_GIT_SHA=$SOURCE_SHA"   .
 
