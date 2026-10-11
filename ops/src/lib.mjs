@@ -44,12 +44,6 @@ export function randomToken(bytes = 32) {
   return crypto.randomBytes(bytes).toString('base64url');
 }
 
-export function timingSafeEqualText(a, b) {
-  const aa = Buffer.from(String(a));
-  const bb = Buffer.from(String(b));
-  return aa.length === bb.length && crypto.timingSafeEqual(aa, bb);
-}
-
 export function isoNow() { return new Date().toISOString(); }
 
 export function parseJson(text, fallback = null) {
@@ -205,78 +199,11 @@ export function logicalTokenError(record, now = Date.now()) {
   return null;
 }
 
-export function validateGoogleClaims(payload, expectedNonce, clientId, nowSec = Math.floor(Date.now()/1000)) {
-  if (!payload || !['https://accounts.google.com','accounts.google.com'].includes(payload.iss)) return 'bad_issuer';
-  const aud = Array.isArray(payload.aud) ? payload.aud : [payload.aud];
-  if (!aud.includes(clientId)) return 'bad_audience';
-  if (typeof payload.exp !== 'number' || payload.exp <= nowSec) return 'expired_id_token';
-  if (typeof payload.iat === 'number' && payload.iat > nowSec + 60) return 'bad_iat';
-  if (!payload.nonce || payload.nonce !== expectedNonce) return 'bad_nonce';
-  if (!payload.sub || typeof payload.sub !== 'string') return 'missing_sub';
-  return null;
-}
-
-export async function verifyGoogleIdToken(idToken, nonce, clientId, fetchImpl = fetch) {
-  const parts = String(idToken || '').split('.');
-  if (parts.length !== 3) throw new Error('google_id_token_malformed');
-  const header = JSON.parse(Buffer.from(parts[0], 'base64url').toString('utf8'));
-  const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf8'));
-  if (header.alg !== 'RS256' || !header.kid) throw new Error('google_id_token_header_invalid');
-  const r = await fetchImpl('https://www.googleapis.com/oauth2/v3/certs');
-  if (!r.ok) throw new Error('google_jwks_fetch_failed');
-  const jwks = await r.json();
-  const jwk = (jwks.keys || []).find(k => k.kid === header.kid && k.kty === 'RSA');
-  if (!jwk) throw new Error('google_jwk_not_found');
-  const key = crypto.createPublicKey({ key: jwk, format: 'jwk' });
-  const ok = crypto.verify('RSA-SHA256', Buffer.from(`${parts[0]}.${parts[1]}`), key, Buffer.from(parts[2], 'base64url'));
-  if (!ok) throw new Error('google_id_token_signature_invalid');
-  const claimError = validateGoogleClaims(payload, nonce, clientId);
-  if (claimError) throw new Error(claimError);
-  return payload;
-}
-
 export function validateChatGptRedirectUris(redirectUris) {
   if (!Array.isArray(redirectUris) || redirectUris.length !== 1 || redirectUris[0] !== CHATGPT_REDIRECT_URI) {
     throw new Error('invalid_redirect_uris');
   }
   return redirectUris;
-}
-
-export function makeSignedClient(redirectUris, signingKey) {
-  const payload = Buffer.from(JSON.stringify({ r: redirectUris, v: 1 })).toString('base64url');
-  const sig = crypto.createHmac('sha256', signingKey).update(payload).digest('base64url');
-  return `jscc537.${payload}.${sig}`;
-}
-
-export function parseSignedClient(clientId, signingKey) {
-  try {
-    const [prefix, payload, sig] = String(clientId || '').split('.');
-    if (prefix !== 'jscc537' || !payload || !sig) return null;
-    const expected = crypto.createHmac('sha256', signingKey).update(payload).digest('base64url');
-    if (!timingSafeEqualText(sig, expected)) return null;
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (decoded.v !== 1 || !Array.isArray(decoded.r) || decoded.r.length < 1) return null;
-    return { redirect_uris: decoded.r };
-  } catch { return null; }
-}
-
-export function makeSignedState(data, signingKey) {
-  const payload = Buffer.from(JSON.stringify({ ...data, v: 1 })).toString('base64url');
-  const sig = crypto.createHmac('sha256', signingKey).update(`state:${payload}`).digest('base64url');
-  return `jscc537s.${payload}.${sig}`;
-}
-
-export function parseSignedState(value, signingKey, nowMs = Date.now()) {
-  try {
-    const [prefix, payload, sig] = String(value || '').split('.');
-    if (prefix !== 'jscc537s' || !payload || !sig) return null;
-    const expected = crypto.createHmac('sha256', signingKey).update(`state:${payload}`).digest('base64url');
-    if (!timingSafeEqualText(sig, expected)) return null;
-    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
-    if (decoded.v !== 1 || Number(decoded.expires_at_ms) <= nowMs) return null;
-    if (!decoded.nonce || !decoded.client_id || !decoded.redirect_uri || !decoded.challenge) return null;
-    return decoded;
-  } catch { return null; }
 }
 
 export function envConfig(env = process.env) {
@@ -299,7 +226,6 @@ export function envConfig(env = process.env) {
     googleClientId: String(env.GOOGLE_CLIENT_ID || ''),
     googleClientSecret: String(env.GOOGLE_CLIENT_SECRET || ''),
     googleAllowedSub: String(env.GOOGLE_ALLOWED_SUB || ''),
-    clientSigningKey: String(env.OAUTH_CLIENT_SIGNING_KEY || ''),
   });
 }
 
