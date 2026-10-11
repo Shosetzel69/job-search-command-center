@@ -97,14 +97,33 @@ async function acceptOperation(auth, toolArgs) {
   const idem = String(toolArgs.idempotency_key || '').trim();
   if (!/^#[0-9]{1,8}$/.test(workItem)) throw new Error('invalid_work_item_ref');
   if (!/^[A-Za-z0-9._:-]{12,128}$/.test(idem)) throw new Error('invalid_idempotency_key');
-  const idemHash = sha256(idem);
-  const existing = await gcsReadJson(cfg.bucket, `idempotency/${idemHash}.json`);
-  if (existing) return { operation_id: existing.data.operation_id, duplicate: true };
+
   const taskReq = validateTaskRequest(toolArgs.task, toolArgs.args || {});
+  const idemHash = sha256(idem);
+  const requestHash = sha256(JSON.stringify({ work_item_ref: workItem, task: taskReq.task, args: taskReq.args }));
+  const idemName = `idempotency/${idemHash}.json`;
+
+  const returnExisting = async () => {
+    const existing = await gcsReadJson(cfg.bucket, idemName);
+    if (!existing) throw new Error('idempotency_reservation_missing');
+    if (existing.data.request_hash !== requestHash) throw new Error('idempotency_conflict');
+    return { operation_id: existing.data.operation_id, duplicate: true };
+  };
+
+  const existing = await gcsReadJson(cfg.bucket, idemName);
+  if (existing) return returnExisting();
+
   const timeout = taskReq.task_class === 'VERIFY' ? VERIFY_TIMEOUT_MS : OBSERVE_TIMEOUT_MS;
   const opId = `op-${Date.now().toString(36)}-${randomToken(8).toLowerCase()}`;
-  await incrementDailyCounter(cfg.bucket, new Date().toISOString().slice(0,10));
-  await acquireLease(cfg.bucket, opId, timeout + 60_000);
+  const reservation = { operation_id: opId, request_hash: requestHash, created_at: isoNow() };
+
+  try {
+    await gcsWriteJson(cfg.bucket, idemName, reservation, 0);
+  } catch (e) {
+    if (e.message === 'generation_precondition_failed') return returnExisting();
+    throw e;
+  }
+
   const op = operationObject(opId, taskReq, {
     work_item_ref: workItem,
     idempotency_key_hash: idemHash,
@@ -113,8 +132,12 @@ async function acceptOperation(auth, toolArgs) {
     gateway_image_digest: cfg.gatewayDigest,
     worker_image_digest: cfg.workerDigest,
   });
+
   try {
     await gcsWriteJson(cfg.bucket, `operations/${opId}.json`, op, 0);
+    await incrementDailyCounter(cfg.bucket, new Date().toISOString().slice(0,10));
+    await acquireLease(cfg.bucket, opId, timeout + 60_000);
+
     const lro = await runDiagnosticsJob();
     const execution = await resolveExecution(lro);
     const dispatch = {
@@ -125,14 +148,21 @@ async function acceptOperation(auth, toolArgs) {
     };
     await gcsWriteJson(cfg.bucket, `dispatch/${execution}.json`, dispatch, 0);
     await updateOperation(opId, () => ({ operation_state: 'RUNNING', execution_name: execution, started_at: isoNow() }));
-    await gcsWriteJson(cfg.bucket, `idempotency/${idemHash}.json`, { operation_id: opId, created_at: isoNow() }, 0);
     return { operation_id: opId, duplicate: false, operation_state: 'RUNNING' };
   } catch (e) {
-    try { await updateOperation(opId, () => ({ operation_state: 'FAILED', coarse_error: 'dispatch_failed', finished_at: isoNow() })); } catch {}
+    const preDispatch = ['daily_operation_limit','diagnostic_already_active'].includes(e.message);
+    try {
+      await updateOperation(opId, () => ({
+        operation_state: preDispatch ? 'REJECTED' : 'FAILED',
+        coarse_error: preDispatch ? e.message : 'dispatch_failed',
+        finished_at: isoNow()
+      }));
+    } catch {}
     try { await releaseLease(cfg.bucket, opId); } catch {}
     throw e;
   }
 }
+
 async function getOperation(id) {
   const opId = String(id || '').trim();
   if (!/^op-[a-z0-9-]{10,100}$/.test(opId)) throw new Error('invalid_operation_id');
