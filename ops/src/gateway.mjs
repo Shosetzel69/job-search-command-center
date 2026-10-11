@@ -5,7 +5,7 @@ import {
   ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, CHATGPT_REDIRECT_URI, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow,
-  normalizeExecutionName, operationObject, authenticatedEvidence, authorizationCodeRecordError, logicalTokenError,
+  normalizeExecutionName, operationObject, authenticatedEvidence, accessTokenRecordError, authorizationCodeRecordError,
   randomToken, releaseLease, resolveIdempotencyReservation, sha256, validateChatGptRedirectUris, validateTaskRequest
 } from './lib.mjs';
 
@@ -109,7 +109,7 @@ const oauthModel = {
   },
   getAccessToken: async (accessToken) => {
     const rec = await gcsReadJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`);
-    if (logicalTokenError(rec?.data)) return false;
+    if (accessTokenRecordError(rec?.data)) return false;
     return {
       accessToken,
       accessTokenExpiresAt:new Date(rec.data.expires_at_ms),
