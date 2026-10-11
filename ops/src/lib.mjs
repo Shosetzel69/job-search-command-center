@@ -134,7 +134,7 @@ export function sanitizeText(input) {
 const PUBLIC_ASSERTION_FIELDS = Object.freeze([
   'target_alias','failed_count','succeeded_count','cancelled_count','completed','line_count',
   'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha','exit_code','test_verdict','coarse_error',
-  'task_count','target_exit_code','target_term_signal','root_cause'
+  'task_count','target_exit_code','target_term_signal','root_cause','task_metadata_available','task_metadata_error','log_excerpt'
 ]);
 
 export function publicAssertions(input) {
