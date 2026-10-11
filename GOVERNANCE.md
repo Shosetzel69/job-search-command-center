@@ -1,12 +1,12 @@
 # GOVERNANCE.md - Job Search Command Center
 
 Status: `CANONICAL`
-Version: `v1.14`
+Version: `v1.15`
 Applicability: `CURRENT`
 Applies to: `BOTH`
 Effective from: `2026-09-23`
-Supersedes: `v1.13`
-Last updated: `2026-09-30`
+Supersedes: `v1.14`
+Last updated: `2026-10-11`
 
 ## 1. Principiu
 
@@ -241,6 +241,34 @@ REQUIREMENT_APPROVED
 -> PROD_SMOKE_PASS
 -> DONE
 ```
+
+### 2.9 Feature-led closure / Return-to-root rule
+
+Aceasta regula se aplica lucrului pornit de la o functionalitate de produs aprobata, indiferent daca work item-ul foloseste `AGENTFLOW` sau `LEGACY-ADAPTED`. Nu converteste procesul unui item existent si nu transforma automat taskurile independente de infrastructura/mentenanta in feature-uri.
+
+`Root feature` este work item-ul care pastreaza problema utilizatorului, rezultatul de produs aprobat, scope-ul si criteriile de Functional Acceptance. Un blocker tehnic derivat este o dependenta, nu un nou root si nu o aprobare pentru extinderea scope-ului.
+
+```text
+FEATURE (root)
+-> blocker necesar?
+-> deblocare minima, conforma si autorizata
+-> RETURN TO FEATURE
+-> implementare
+-> Functional Acceptance pe comportamentul aprobat
+-> gate-uri de release aplicabile
+-> DONE
+```
+
+Reguli obligatorii:
+
+- **Root ownership:** feature-ul original ramane obiectivul principal si pastreaza legaturile catre blocker-ele sale (Issue/ATC/Architecture Gate). Fiecare blocker declara ce comportament al root feature-ului impiedica si ce conditie verificabila il deblocheaza.
+- **Minimum compliant unblock:** blocker-ul se remediaza doar pana la nivelul necesar pentru deblocarea feature-ului, respectand integral arhitectura aprobata, securitatea, privacy, testele obligatorii, autorizarea owner-ului si gate-urile AgentFlow. „Minim” nu autorizeaza workaround-uri nesigure sau exceptii tacite.
+- **Scoped stop:** un blocker material opreste executia afectata si foloseste statusul canonic al fazei curente plus `Blocked by`; alte lucrari independente pot continua numai daca nu sunt afectate de acelasi risc/gate. Conditiile cu impact global se trateaza conform controalelor aplicabile, fara exceptii.
+- **Mandatory return:** dupa rezolvarea si verificarea blocker-ului, se inregistreaza explicit `RETURN TO FEATURE: #<root> / blocker #<id> / unblock evidence <ref>`. Development revalideaza Development Analysis, ATC-urile afectate, dependintele si criteriile de acceptare; orice delta materiala urmeaza aprobarea necesara inainte de reluarea implementarii.
+- **No scope creep:** problemele adiacente care nu sunt necesare pentru Functional Acceptance-ul curent se consemneaza separat in backlog / Parking Lot. Descoperirea lor nu extinde automat scope-ul, nu creeaza gate-uri suplimentare pentru root si nu autorizeaza redesign oportunist.
+- **Feature closure:** `ARCHITECTURE_APPROVED`, closure-ul unui blocker, `IMPLEMENTATION_COMPLETE`, `REVIEW_PASS`, `DEV_PASS`, deploy-ul si health checks sunt milestone-uri/dovezi tehnice, nu substitut pentru Functional Acceptance. QA verifica comportamentul de produs si criteriile aprobate, cu evidence pentru mediul si candidate-ul relevante. Root feature-ul primeste `DONE` numai dupa Functional Acceptance **si** toate gate-urile obligatorii aplicabile din `docs/software-delivery-lifecycle.md`; in caz contrar ramane deschis cu statusul canonic corespunzator.
+
+Aceasta regula stabileste prioritatea de produs si obligatia de intoarcere la root; nu modifica separarea de roluri intre Discovery, Architecture, Development si QA, taxonomia Phase/Status, aprobarile explicite sau release lifecycle-ul canonic.
 
 ## 3. Surse de adevar si precedenta
 
