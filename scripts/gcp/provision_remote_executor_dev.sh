@@ -28,6 +28,13 @@ for sa in jscc-ops-deployer-dev jscc-ops-gateway-dev jscc-diagnostics-dev; do gc
 gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/artifactregistry.writer --condition=None >/dev/null
 gcloud projects add-iam-policy-binding "$SHARED" --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/logging.logWriter --condition=None >/dev/null
 
+# Enforce product/ops Artifact Registry separation. Product build keeps writer only on repository jscc.
+PRODUCT_BUILD_MEMBER="serviceAccount:jscc-build@$SHARED.iam.gserviceaccount.com"
+gcloud artifacts repositories add-iam-policy-binding jscc --project="$SHARED" --location="$REGION" --member="$PRODUCT_BUILD_MEMBER" --role=roles/artifactregistry.writer --condition=None >/dev/null
+if gcloud projects get-iam-policy "$SHARED" --flatten='bindings[].members' --filter="bindings.role=roles/artifactregistry.writer AND bindings.members:$PRODUCT_BUILD_MEMBER" --format='value(bindings.role)' | grep -Fxq roles/artifactregistry.writer; then
+  gcloud projects remove-iam-policy-binding "$SHARED" --member="$PRODUCT_BUILD_MEMBER" --role=roles/artifactregistry.writer --all >/dev/null
+fi
+
 gcloud storage buckets describe "gs://$OPS_BUCKET" --project="$PROJECT" >/dev/null 2>&1 || gcloud storage buckets create "gs://$OPS_BUCKET" --project="$PROJECT" --location="$REGION" --uniform-bucket-level-access
 cat >/tmp/jscc537-lifecycle.json <<JSON
 {"rule":[{"action":{"type":"Delete"},"condition":{"age":14}}]}
