@@ -26,14 +26,31 @@ gcloud iam service-accounts describe "jscc-ops-build@$SHARED.iam.gserviceaccount
 gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION"   --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/artifactregistry.writer --condition=None >/dev/null
 gcloud projects add-iam-policy-binding "$SHARED"   --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/logging.logWriter --condition=None >/dev/null
 
-CLOUDBUILD_SOURCE_BUCKET="${SHARED}_cloudbuild"
-gcloud storage buckets add-iam-policy-binding "gs://$CLOUDBUILD_SOURCE_BUCKET" \
+OPS_BUILD_SOURCE_BUCKET="${SHARED}-ops-cloudbuild-source"
+gcloud storage buckets describe "gs://$OPS_BUILD_SOURCE_BUCKET" --project="$SHARED" >/dev/null 2>&1 || \
+  gcloud storage buckets create "gs://$OPS_BUILD_SOURCE_BUCKET" \
+    --project="$SHARED" \
+    --location="$REGION" \
+    --uniform-bucket-level-access
+
+cat >/tmp/jscc537-build-source-lifecycle.json <<'JSON'
+{"rule":[{"action":{"type":"Delete"},"condition":{"age":1}}]}
+JSON
+gcloud storage buckets update "gs://$OPS_BUILD_SOURCE_BUCKET" --lifecycle-file=/tmp/jscc537-build-source-lifecycle.json >/dev/null
+
+gcloud storage buckets add-iam-policy-binding "gs://$OPS_BUILD_SOURCE_BUCKET" \
   --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" \
   --role=roles/storage.objectViewer \
-  --condition="expression=resource.name.startsWith('projects/_/buckets/$CLOUDBUILD_SOURCE_BUCKET/objects/source/'),title=jscc_ops_build_source_only,description=Ops build identity reads only Cloud Build submitted source objects" >/dev/null
+  --condition=None >/dev/null
 
 # Build exact current SHA with the isolated ops build identity.
-gcloud builds submit   --project="$SHARED"   --region="$REGION"   --config=cloudbuild.ops.yaml   --substitutions="_GIT_SHA=$SOURCE_SHA"   .
+gcloud builds submit \
+  --project="$SHARED" \
+  --region="$REGION" \
+  --gcs-source-staging-dir="gs://$OPS_BUILD_SOURCE_BUCKET/source" \
+  --config=cloudbuild.ops.yaml \
+  --substitutions="_GIT_SHA=$SOURCE_SHA" \
+  .
 
 GATEWAY_DIGEST="$(gcloud artifacts docker images describe "$GATEWAY_REPO:$SOURCE_SHA" --project="$SHARED" --format='value(image_summary.digest)')"
 WORKER_DIGEST="$(gcloud artifacts docker images describe "$WORKER_REPO:$SOURCE_SHA" --project="$SHARED" --format='value(image_summary.digest)')"
