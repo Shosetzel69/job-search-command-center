@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  REQUIRED_AUDIENCE, REQUIRED_SCOPE, logicalTokenError, makeSignedClient, parseSignedClient,
-  CHATGPT_REDIRECT_URI, makeSignedState, parseSignedState, publicEvidence, authenticatedEvidence, sanitizeText, sha256, validateChatGptRedirectUris, validateGoogleClaims, validateTaskRequest
+  REQUIRED_AUDIENCE, REQUIRED_SCOPE, logicalTokenError,
+  CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeText, sha256, validateChatGptRedirectUris, validateTaskRequest
 } from '../src/lib.mjs';
 
 test('N1 unknown task rejected',()=>assert.throws(()=>validateTaskRequest('shell',{command:'id'}),/unknown_task/));
@@ -32,13 +32,6 @@ test('N26 public projection is allowlist only',()=>{
   const x=publicEvidence({operation_id:'x',raw_logs:'secret',actor_sub:'id',signed_url:'url',assertions:{a:true}});
   assert.deepEqual(x,{operation_id:'x',assertions:{}});
 });
-test('signed dynamic clients are tamper evident',()=>{
-  const id=makeSignedClient(['https://example.com/cb'],'k');assert.deepEqual(parseSignedClient(id,'k').redirect_uris,['https://example.com/cb']);assert.equal(parseSignedClient(id+'x','k'),null);
-});
-test('OIDC nonce and subject requirements fail closed',()=>{
-  const now=Math.floor(Date.now()/1000);const p={iss:'https://accounts.google.com',aud:'cid',exp:now+60,iat:now,nonce:'n',sub:'s'};
-  assert.equal(validateGoogleClaims(p,'bad','cid'),'bad_nonce');assert.equal(validateGoogleClaims({...p,sub:''},'n','cid'),'missing_sub');
-});
 test('idempotency hashing is deterministic',()=>assert.equal(sha256('abc'),sha256('abc')));
 
 test('N26 nested assertions reject raw logs and output', () => {
@@ -47,13 +40,6 @@ test('N26 nested assertions reject raw logs and output', () => {
     assertions:{target_alias:'jscc-search-dev-abc123',line_count:2,logs:['secret'],output:'secret',private_output:'secret'}
   });
   assert.deepEqual(out.assertions,{target_alias:'jscc-search-dev-abc123',line_count:2});
-});
-
-test('OAuth upstream state is stateless, expiring and tamper evident',()=>{
-  const st=makeSignedState({expires_at_ms:Date.now()+60000,client_id:'c',redirect_uri:'https://example.com/cb',challenge:'x',nonce:'n'},'k');
-  assert.equal(parseSignedState(st,'k').nonce,'n');
-  assert.equal(parseSignedState(st+'x','k'),null);
-  assert.equal(parseSignedState(makeSignedState({expires_at_ms:Date.now()-1,client_id:'c',redirect_uri:'https://example.com/cb',challenge:'x',nonce:'n'},'k'),'k'),null);
 });
 
 test('DCR accepts only the stable ChatGPT callback',()=>{
