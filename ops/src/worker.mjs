@@ -32,7 +32,7 @@ async function describeExecution(args) {
 }
 async function readExecutionLogs(args) {
   const id = normalizeExecutionId(args.execution_id); const job = executionJobName(id);
-  const filter = `resource.type="cloud_run_job" AND resource.labels.job_name="${job}" AND labels."run.googleapis.com/execution_name"="${id}"`;
+  const filter = `resource.type="cloud_run_job" AND resource.labels.job_name="${job}" AND labels.execution_name="${id}"`;
   if (!cfg.logViewResource) throw new Error('log_view_not_configured');
   const r = await gcpFetch('https://logging.googleapis.com/v2/entries:list',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({resourceNames:[cfg.logViewResource],filter,orderBy:'timestamp asc',pageSize:Math.min(args.limit,200)})});
   if (!r.ok) throw new Error(`logging_read_${r.status}`); const j=await r.json();
