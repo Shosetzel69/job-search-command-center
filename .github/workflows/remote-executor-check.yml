@@ -65,7 +65,9 @@ jobs:
           grep -q 'COPY ops/src ./ops/src' ops/Dockerfile.worker
           ! grep -q '^COPY \. \.$' ops/Dockerfile.worker
           grep -q '^PROJECT=jscc-dev$' scripts/gcp/provision_remote_executor_dev.sh
-          grep -q 'jscc_ops_build_source_only' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q 'OPS_BUILD_SOURCE_BUCKET="${SHARED}-ops-cloudbuild-source"' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q -- '--uniform-bucket-level-access' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q -- '--gcs-source-staging-dir=' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'run.jobs.run' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'run.operations.get' scripts/gcp/provision_remote_executor_dev.sh
 
