@@ -101,7 +101,10 @@ jobs:
           grep -q 'oauth.token' ops/src/gateway.mjs
           grep -q 'oauth.authenticate' ops/src/gateway.mjs
           grep -q 'oidc.authorizationCodeGrant' ops/src/gateway.mjs
-          ! grep -R -Eq 'createHmac|crypto\.verify|verifyGoogleIdToken|makeSignedClient|makeSignedState|OAUTH_CLIENT_SIGNING_KEY|JSCC_OPS_CLIENT_SIGNING_KEY' ops/src scripts/gcp docs/runbooks/remote-executor-dev.md
+          ! grep -R -Eq 'createHmac|crypto\.verify|verifyGoogleIdToken|makeSignedClient|makeSignedState|OAUTH_CLIENT_SIGNING_KEY|JSCC_OPS_CLIENT_SIGNING_KEY' ops/src
+          ! grep -Eq -- '--set-secrets=.*OAUTH_CLIENT_SIGNING_KEY|--update-secrets=.*OAUTH_CLIENT_SIGNING_KEY' scripts/gcp/*.sh
+          grep -q -- '--remove-secrets=OAUTH_CLIENT_SIGNING_KEY' scripts/gcp/deploy_remote_executor_dev.sh
+          grep -q 'remove-iam-policy-binding JSCC_OPS_CLIENT_SIGNING_KEY' scripts/gcp/provision_remote_executor_dev.sh
 
       - name: Validate IAM CLI compatibility
         run: |
