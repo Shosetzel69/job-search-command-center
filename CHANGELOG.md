@@ -4,6 +4,10 @@
 
 > App version: `0.10.0` — bounded Coverage per Role Family with selective corpus refresh.
 
+### Guvernanta
+
+- #545: adoptata regula `Feature-led closure / Return-to-root` si modelul hibrid de urmarire: observatii locale prin puncte si comentarii in root Issue, Issues separate doar pentru obiective independente/dependinte transversale/controale distincte; se pastreaza ATC, review, Functional Acceptance si gate-urile de release.
+
 ### Security
 
 - #250 / R1.5: protected `/data/*` reads now use the current isolated runtime repository instead of the immutable deploy Static Assets snapshot, so Source Registry/config/nomenclature mutations persist visibly across reload.
