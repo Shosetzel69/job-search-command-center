@@ -199,6 +199,18 @@ export function logicalTokenError(record, now = Date.now()) {
   return null;
 }
 
+export function authorizationCodeRecordError(record, now = Date.now()) {
+  if (!record || record.consumed || Number(record.expires_at_ms) <= now) return 'invalid_grant';
+  return null;
+}
+
+export function resolveIdempotencyReservation(record, requestHash) {
+  if (!record) throw new Error('idempotency_reservation_missing');
+  if (record.request_hash !== requestHash) throw new Error('idempotency_conflict');
+  if (!/^op-[a-z0-9_-]{10,100}$/.test(String(record.operation_id || ''))) throw new Error('idempotency_reservation_invalid');
+  return { operation_id: record.operation_id, duplicate: true };
+}
+
 export function validateChatGptRedirectUris(redirectUris) {
   if (!Array.isArray(redirectUris) || redirectUris.length !== 1 || redirectUris[0] !== CHATGPT_REDIRECT_URI) {
     throw new Error('invalid_redirect_uris');
