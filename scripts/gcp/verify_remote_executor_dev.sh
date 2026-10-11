@@ -97,6 +97,8 @@ python3 -c 'import json,sys; gw,wk=sys.argv[1:]; d=json.load(sys.stdin); ex=lamb
 RUNTIME_POLICY="$(gcloud storage buckets get-iam-policy "gs://$RUNTIME_BUCKET" --format=json)"
 require_contains "$RUNTIME_POLICY" "$WK_EMAIL" 'worker has DEV runtime read binding'
 require_contains "$RUNTIME_POLICY" '/objects/runs/' 'worker runtime binding limited to runs prefix'
+require_contains "$RUNTIME_POLICY" "/run-status.json" 'worker runtime binding limited to run-status metadata'
+require_absent "$RUNTIME_POLICY" "/jobs.json" 'worker runtime binding excludes jobs payloads'
 require_absent "$RUNTIME_POLICY" "$GW_EMAIL" 'N6 gateway has no raw runtime bucket access'
 BUCKET_DESC="$(gcloud storage buckets describe "gs://$OPS_BUCKET" --format=json)"
 python3 -c 'import json,sys; d=json.load(sys.stdin); ages=[r.get("condition",{}).get("age") for r in d.get("lifecycle",{}).get("rule",[]) if r.get("action",{}).get("type")=="Delete"]; ok=14 in ages; print(("PASS " if ok else "FAIL ")+"private ops-state lifecycle is 14 days",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$BUCKET_DESC" || fail=1
