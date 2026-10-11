@@ -1,14 +1,138 @@
 import http from 'node:http';
+import OAuth2Server from '@node-oauth/oauth2-server';
+import * as oidc from 'openid-client';
 import {
-  ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE, authorizationCodeError,
+  ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
-  gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow, logicalTokenError,
-  makeSignedClient, makeSignedState, normalizeExecutionName, operationObject, parseSignedClient, parseSignedState, authenticatedEvidence,
-  randomToken, releaseLease, sha256, validateChatGptRedirectUris, validateTaskRequest, verifyGoogleIdToken
+  gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow,
+  normalizeExecutionName, operationObject, authenticatedEvidence,
+  randomToken, releaseLease, sha256, validateChatGptRedirectUris, validateTaskRequest
 } from './lib.mjs';
 
 const cfg = envConfig();
 const PORT = Number(process.env.PORT || 8080);
+const CHATGPT_CLIENT_ID = 'jscc-ops-chatgpt-private';
+const CHATGPT_CLIENT = Object.freeze({
+  id: CHATGPT_CLIENT_ID,
+  grants: ['authorization_code'],
+  redirectUris: [CHATGPT_REDIRECT_URI],
+});
+
+const { Request: OAuthRequest, Response: OAuthResponse } = OAuth2Server;
+let googleConfigPromise;
+function googleConfig() {
+  if (!googleConfigPromise) {
+    googleConfigPromise = oidc.discovery(
+      new URL('https://accounts.google.com'),
+      cfg.googleClientId,
+      cfg.googleClientSecret
+    );
+  }
+  return googleConfigPromise;
+}
+
+const oauthModel = {
+  generateAuthorizationCode: async () => randomToken(32),
+  generateAccessToken: async () => randomToken(32),
+  getClient: async (clientId, clientSecret) => {
+    if (clientId !== CHATGPT_CLIENT_ID) return false;
+    if (clientSecret) return false;
+    return CHATGPT_CLIENT;
+  },
+  validateRedirectUri: async (redirectUri, client) => (
+    client?.id === CHATGPT_CLIENT_ID && redirectUri === CHATGPT_REDIRECT_URI
+  ),
+  validateScope: async (_user, client, scope) => {
+    const values = Array.isArray(scope) ? scope : String(scope || '').split(/\s+/).filter(Boolean);
+    return client?.id === CHATGPT_CLIENT_ID && values.length === 1 && values[0] === REQUIRED_SCOPE ? values : false;
+  },
+  verifyScope: async (token, scope) => {
+    const required = Array.isArray(scope) ? scope : String(scope || '').split(/\s+/).filter(Boolean);
+    const actual = Array.isArray(token.scope) ? token.scope : String(token.scope || '').split(/\s+/).filter(Boolean);
+    return required.every(v => actual.includes(v));
+  },
+  saveAuthorizationCode: async (code, client, user) => {
+    const record = {
+      consumed:false,
+      expires_at_ms:new Date(code.expiresAt).getTime(),
+      redirect_uri:code.redirectUri,
+      scope:code.scope,
+      code_challenge:code.codeChallenge || null,
+      code_challenge_method:code.codeChallengeMethod || null,
+      client_id:client.id,
+      user,
+    };
+    await gcsWriteJson(cfg.bucket, `auth/codes/${sha256(code.authorizationCode)}.json`, record, 0);
+    return { ...code, client, user };
+  },
+  getAuthorizationCode: async (authorizationCode) => {
+    const rec = await gcsReadJson(cfg.bucket, `auth/codes/${sha256(authorizationCode)}.json`);
+    if (!rec || rec.data.consumed || Number(rec.data.expires_at_ms) <= Date.now()) return false;
+    return {
+      authorizationCode,
+      expiresAt:new Date(rec.data.expires_at_ms),
+      redirectUri:rec.data.redirect_uri,
+      scope:rec.data.scope,
+      codeChallenge:rec.data.code_challenge,
+      codeChallengeMethod:rec.data.code_challenge_method,
+      client:CHATGPT_CLIENT,
+      user:rec.data.user,
+    };
+  },
+  revokeAuthorizationCode: async (code) => {
+    const name = `auth/codes/${sha256(code.authorizationCode)}.json`;
+    const rec = await gcsReadJson(cfg.bucket, name);
+    if (!rec || rec.data.consumed) return false;
+    await gcsReplaceJson(cfg.bucket, name, { ...rec.data, consumed:true, consumed_at:isoNow() }, rec.generation);
+    return true;
+  },
+  saveToken: async (token, client, user) => {
+    const expiresAt = token.accessTokenExpiresAt || new Date(Date.now() + ACCESS_TOKEN_TTL_MS);
+    const record = {
+      revoked:false,
+      expires_at_ms:new Date(expiresAt).getTime(),
+      scope:token.scope,
+      audience:user.audience,
+      resource:user.resource,
+      actor_sub:user.id,
+      client_id:client.id,
+      issued_at:isoNow(),
+    };
+    await gcsWriteJson(cfg.bucket, `auth/tokens/${sha256(token.accessToken)}.json`, record, 0);
+    return {
+      accessToken:token.accessToken,
+      accessTokenExpiresAt:new Date(expiresAt),
+      scope:token.scope,
+      client,
+      user,
+    };
+  },
+  getAccessToken: async (accessToken) => {
+    const rec = await gcsReadJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`);
+    if (!rec || rec.data.revoked || Number(rec.data.expires_at_ms) <= Date.now()) return false;
+    return {
+      accessToken,
+      accessTokenExpiresAt:new Date(rec.data.expires_at_ms),
+      scope:rec.data.scope,
+      client:CHATGPT_CLIENT,
+      user:{ id:rec.data.actor_sub, audience:rec.data.audience, resource:rec.data.resource },
+    };
+  },
+};
+
+const oauth = new OAuth2Server({
+  model:oauthModel,
+  authorizationCodeLifetime:AUTH_CODE_TTL_MS / 1000,
+  accessTokenLifetime:ACCESS_TOKEN_TTL_MS / 1000,
+  requireClientAuthentication:{ authorization_code:false },
+});
+
+function makeOAuthRequest({ method='GET', headers={}, query={}, body={} } = {}) {
+  return new OAuthRequest({ method, headers, query, body });
+}
+function makeOAuthResponse() {
+  return new OAuthResponse({ headers:{} });
+}
 
 function base(req) {
   const proto = String(req.headers['x-forwarded-proto'] || 'https').split(',')[0].trim();
@@ -38,22 +162,23 @@ function bearer(req) {
   return value.startsWith('Bearer ') ? value.slice(7) : null;
 }
 async function authenticate(req) {
-  const raw = bearer(req);
-  if (!raw) return { ok: false, error: 'missing_token' };
-  const rec = await gcsReadJson(cfg.bucket, `auth/tokens/${sha256(raw)}.json`);
-  const error = logicalTokenError(rec?.data);
-  if (error) return { ok: false, error };
-  return { ok: true, record: rec.data };
+  try {
+    const token = await oauth.authenticate(
+      makeOAuthRequest({ method:req.method, headers:req.headers }),
+      makeOAuthResponse(),
+      { scope:REQUIRED_SCOPE }
+    );
+    if (token?.user?.audience !== REQUIRED_AUDIENCE) return { ok:false, error:'wrong_audience' };
+    if (token?.user?.resource !== `${base(req)}/mcp`) return { ok:false, error:'wrong_resource' };
+    return { ok:true, record:{ actor_sub:token.user.id, scope:REQUIRED_SCOPE, audience:REQUIRED_AUDIENCE } };
+  } catch {
+    return { ok:false, error:'invalid_token' };
+  }
 }
 function unauthorized(req, res, error) {
   sendJson(res, 401, { error }, { 'www-authenticate': `Bearer resource_metadata="${base(req)}/.well-known/oauth-protected-resource", error="${error}"` });
 }
-async function googleTokenExchange(code, redirectUri) {
-  const body = new URLSearchParams({ code, client_id: cfg.googleClientId, client_secret: cfg.googleClientSecret, redirect_uri: redirectUri, grant_type: 'authorization_code' });
-  const r = await fetch('https://oauth2.googleapis.com/token', { method: 'POST', headers: { 'content-type': 'application/x-www-form-urlencoded' }, body });
-  if (!r.ok) throw new Error(`google_token_exchange_${r.status}`);
-  return r.json();
-}
+
 async function runDiagnosticsJob() {
   const url = `https://run.googleapis.com/v2/projects/${cfg.project}/locations/${cfg.region}/jobs/${cfg.diagnosticsJob}:run`;
   const r = await gcpFetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
