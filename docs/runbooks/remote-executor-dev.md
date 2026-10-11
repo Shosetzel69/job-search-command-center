@@ -31,9 +31,15 @@ Do not use the product `jscc-build` identity to publish `jscc-ops` images.
 
 ## Bootstrap inputs
 
-The one-time bootstrap script is:
+The preferred one-shot bootstrap script is:
+
+`scripts/gcp/bootstrap_remote_executor_dev.sh`
+
+It builds the exact reviewed branch HEAD with the isolated ops build identity, resolves the existing DEV target facts, prompts only for missing OAuth bootstrap values, and then invokes the idempotent provisioning layer:
 
 `scripts/gcp/provision_remote_executor_dev.sh`
+
+Do not run the provisioning layer directly unless you intentionally supply all required immutable image/configuration inputs.
 
 Required environment inputs:
 
@@ -69,7 +75,10 @@ After the first gateway deployment:
    `<gateway-url>/oauth/google/callback`
    as an authorized redirect URI for the DEV ops OAuth client.
 3. Do not reuse the retired Render callback as the active target.
-4. Connect the private ChatGPT custom MCP to:
+4. The **ChatGPT client callback** is a different URI and is pinned by the gateway to:
+   `https://chatgpt.com/connector_platform_oauth_redirect`
+   It is not the Google upstream callback and must not be replaced with the gateway URL.
+5. Connect the private ChatGPT custom MCP to:
    `<gateway-url>/mcp`.
 
 The gateway OAuth contract is Authorization Code + PKCE S256, Google OIDC, exact owner `sub`, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, 15-minute opaque access token, no refresh token.
