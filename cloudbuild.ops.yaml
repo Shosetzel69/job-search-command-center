@@ -19,7 +19,7 @@ steps:
   - id: ops-contract-tests
     name: node:22-bookworm-slim
     entrypoint: bash
-    args: ['-ceu', 'cd ops && node --test test/*.test.mjs && node --check src/lib.mjs && node --check src/gateway.mjs && node --check src/worker.mjs']
+    args: ['-ceu', 'cd ops && npm install --ignore-scripts --no-audit --no-fund && node --test test/*.test.mjs && node --check src/lib.mjs && node --check src/gateway.mjs && node --check src/worker.mjs && node -e "Promise.all([import(\x27@node-oauth/oauth2-server\x27),import(\x27openid-client\x27)])"']
   - id: registry-immutability
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
