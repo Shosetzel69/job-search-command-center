@@ -81,20 +81,35 @@ fi
 [[ "$DEV_BASE_URL" == https://* ]] || { echo "cannot resolve DEV_BASE_URL" >&2; exit 3; }
 [[ -n "$GCP_RUNTIME_BUCKET" ]] || { echo "cannot resolve GCP_RUNTIME_BUCKET" >&2; exit 3; }
 
-# Remote Executor owner identity is independent from product runtime identity.
+# Reuse already-provisioned Remote Executor OAuth material when available.
+# Prompt only on first bootstrap or after an intentional rotation.
 if [[ -z "${GOOGLE_ALLOWED_SUB:-}" ]]; then
+  GOOGLE_ALLOWED_SUB="$(gcloud secrets versions access latest --secret=JSCC_OPS_GOOGLE_ALLOWED_SUB --project="$PROJECT" 2>/dev/null || true)"
+fi
+if [[ -z "$GOOGLE_ALLOWED_SUB" ]]; then
   read -rp "Remote Executor Google owner sub: " GOOGLE_ALLOWED_SUB
 fi
 [[ -n "$GOOGLE_ALLOWED_SUB" ]] || { echo "Remote Executor Google owner sub is required" >&2; exit 3; }
 
 if [[ -z "${GOOGLE_CLIENT_ID:-}" ]]; then
+  GOOGLE_CLIENT_ID="$(gcloud secrets versions access latest --secret=JSCC_OPS_GOOGLE_CLIENT_ID --project="$PROJECT" 2>/dev/null || true)"
+fi
+if [[ -z "$GOOGLE_CLIENT_ID" ]]; then
   read -rp "Remote Executor Google OAuth client ID: " GOOGLE_CLIENT_ID
 fi
+
 if [[ -z "${GOOGLE_CLIENT_SECRET:-}" ]]; then
+  GOOGLE_CLIENT_SECRET="$(gcloud secrets versions access latest --secret=JSCC_OPS_GOOGLE_CLIENT_SECRET --project="$PROJECT" 2>/dev/null || true)"
+fi
+if [[ -z "$GOOGLE_CLIENT_SECRET" ]]; then
   read -rsp "Remote Executor Google OAuth client secret: " GOOGLE_CLIENT_SECRET
   echo
 fi
 [[ -n "$GOOGLE_CLIENT_ID" && -n "$GOOGLE_CLIENT_SECRET" ]]
+
+if [[ -z "${OAUTH_CLIENT_SIGNING_KEY:-}" ]]; then
+  OAUTH_CLIENT_SIGNING_KEY="$(gcloud secrets versions access latest --secret=JSCC_OPS_CLIENT_SIGNING_KEY --project="$PROJECT" 2>/dev/null || true)"
+fi
 OAUTH_CLIENT_SIGNING_KEY="${OAUTH_CLIENT_SIGNING_KEY:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')}"
 
 export OPS_BUCKET GCP_RUNTIME_BUCKET DEV_BASE_URL GOOGLE_ALLOWED_SUB GOOGLE_CLIENT_ID GOOGLE_CLIENT_SECRET
