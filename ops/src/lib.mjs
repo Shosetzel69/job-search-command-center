@@ -348,6 +348,12 @@ export async function incrementDailyCounter(bucket, day, limit = DAILY_OPERATION
   throw new Error('daily_counter_contention');
 }
 
+export function assertLeaseAvailable(record, now = Date.now()) {
+  const active = record?.state === 'ACTIVE' && Number(record?.expires_at_ms) > now;
+  if (active) throw new Error('diagnostic_already_active');
+  return true;
+}
+
 export async function acquireLease(bucket, operationId, ttlMs, fetchImpl = fetch) {
   const name = 'leases/diagnostics.json';
   for (let i = 0; i < 4; i++) {
@@ -358,8 +364,7 @@ export async function acquireLease(bucket, operationId, ttlMs, fetchImpl = fetch
       try { await gcsWriteJson(bucket, name, next, 0, fetchImpl); return next; }
       catch (e) { if (e.message !== 'generation_precondition_failed') throw e; continue; }
     }
-    const active = cur.data.state === 'ACTIVE' && Number(cur.data.expires_at_ms) > now;
-    if (active) throw new Error('diagnostic_already_active');
+    assertLeaseAvailable(cur.data, now);
     try { await gcsReplaceJson(bucket, name, next, cur.generation, fetchImpl); return next; }
     catch (e) { if (e.message !== 'generation_precondition_failed') throw e; }
   }
