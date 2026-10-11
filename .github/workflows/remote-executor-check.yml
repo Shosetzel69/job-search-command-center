@@ -76,6 +76,7 @@ jobs:
           ! grep -q -- '--no-cpu-boost' scripts/gcp/provision_remote_executor_dev.sh
           ! grep -q -- '--no-cpu-boost' scripts/gcp/deploy_remote_executor_dev.sh
           grep -q 'LOG_LOCATION=' scripts/gcp/provision_remote_executor_dev.sh
+          grep -Fq 'job_name=~"^(jscc-search-dev|jscc-diagnostics-dev)$"' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'labels.execution_name' ops/src/worker.mjs
           ! grep -Eq 'read[[:space:]]+-r|read[[:space:]]+-s|read[[:space:]]+-p' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING' scripts/gcp/bootstrap_remote_executor_dev.sh
