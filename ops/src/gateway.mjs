@@ -4,7 +4,7 @@ import {
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow, logicalTokenError,
   makeSignedClient, makeSignedState, normalizeExecutionName, operationObject, parseSignedClient, parseSignedState, publicEvidence,
-  randomToken, releaseLease, sha256, validateTaskRequest, verifyGoogleIdToken
+  randomToken, releaseLease, sha256, validateChatGptRedirectUris, validateTaskRequest, verifyGoogleIdToken
 } from './lib.mjs';
 
 const cfg = envConfig();
@@ -149,13 +149,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/health') return sendJson(res, 200, { ok: true, component: 'jscc-ops-gateway-dev', privileged: true, project: cfg.project, catalog_version: CATALOG_VERSION });
     if (req.method === 'GET' && u.pathname === '/.well-known/oauth-protected-resource') return sendJson(res, 200, { resource: `${issuer}/mcp`, authorization_servers: [issuer], scopes_supported: [REQUIRED_SCOPE], bearer_methods_supported: ['header'] });
     if (req.method === 'GET' && (u.pathname === '/.well-known/oauth-authorization-server' || u.pathname === '/.well-known/openid-configuration')) {
-      return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code'], code_challenge_methods_supported: ['S256'], scopes_supported: [REQUIRED_SCOPE], token_endpoint_auth_methods_supported: ['none'] });
+      return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code'], code_challenge_methods_supported: ['S256'], scopes_supported: [REQUIRED_SCOPE], token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
     }
     if (req.method === 'POST' && u.pathname === '/register') {
       if (!cfg.clientSigningKey) return sendJson(res, 503, { error: 'oauth_not_configured' });
       const body = await readBody(req);
       const redirects = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
-      if (!redirects.length || redirects.some(x => typeof x !== 'string' || !x.startsWith('https://'))) return sendJson(res, 400, { error: 'invalid_redirect_uris' });
+      try { validateChatGptRedirectUris(redirects); } catch { return sendJson(res, 400, { error: 'invalid_redirect_uris' }); }
       const clientId = makeSignedClient(redirects, cfg.clientSigningKey);
       return sendJson(res, 201, { client_id: clientId, redirect_uris: redirects, token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code'] });
     }
@@ -169,13 +169,13 @@ const server = http.createServer(async (req, res) => {
       const challenge = q.get('code_challenge') || '';
       const method = q.get('code_challenge_method') || '';
       const scope = q.get('scope') || '';
-      const resource = q.get('resource') || REQUIRED_AUDIENCE;
+      const resource = q.get('resource') || '';
       if (!client || !client.redirect_uris.includes(redirectUri)) return sendText(res, 400, 'invalid_client_or_redirect');
       if (method !== 'S256' || !challenge) return sendText(res, 400, 'pkce_s256_required');
       if (!scope.split(/\s+/).includes(REQUIRED_SCOPE)) return sendText(res, 400, 'required_scope_missing');
-      if (![REQUIRED_AUDIENCE, `${issuer}/mcp`].includes(resource)) return sendText(res, 400, 'invalid_resource');
+      if (resource !== `${issuer}/mcp`) return sendText(res, 400, 'invalid_resource');
       const nonce = randomToken(24);
-      const upstreamState = makeSignedState({ expires_at_ms: Date.now()+STATE_TTL_MS, client_id: clientId, redirect_uri: redirectUri, client_state: state, scope, challenge, audience: REQUIRED_AUDIENCE, nonce }, cfg.clientSigningKey);
+      const upstreamState = makeSignedState({ expires_at_ms: Date.now()+STATE_TTL_MS, client_id: clientId, redirect_uri: redirectUri, client_state: state, scope, challenge, resource, audience: REQUIRED_AUDIENCE, nonce }, cfg.clientSigningKey);
       const redirect = `${issuer}/oauth/google/callback`;
       const gp = new URLSearchParams({ client_id: cfg.googleClientId, redirect_uri: redirect, response_type: 'code', scope: 'openid', state: upstreamState, nonce, prompt: 'select_account' });
       res.writeHead(302, { location: `https://accounts.google.com/o/oauth2/v2/auth?${gp}`, 'cache-control': 'no-store' }); return res.end();
@@ -191,8 +191,8 @@ const server = http.createServer(async (req, res) => {
       const claims = await verifyGoogleIdToken(gt.id_token, st.nonce, cfg.googleClientId);
       if (claims.sub !== cfg.googleAllowedSub) return sendText(res, 403, 'unapproved_google_subject');
       const code = randomToken(32);
-      await gcsWriteJson(cfg.bucket, `auth/codes/${sha256(code)}.json`, { consumed: false, expires_at_ms: Date.now()+AUTH_CODE_TTL_MS, client_id: st.client_id, redirect_uri: st.redirect_uri, scope: st.scope, audience: st.audience, challenge: st.challenge, actor_sub: claims.sub }, 0);
-      const out = new URL(st.redirect_uri); out.searchParams.set('code', code); if (st.client_state) out.searchParams.set('state', st.client_state);
+      await gcsWriteJson(cfg.bucket, `auth/codes/${sha256(code)}.json`, { consumed: false, expires_at_ms: Date.now()+AUTH_CODE_TTL_MS, client_id: st.client_id, redirect_uri: st.redirect_uri, scope: st.scope, resource: st.resource, audience: st.audience, challenge: st.challenge, actor_sub: claims.sub }, 0);
+      const out = new URL(st.redirect_uri); out.searchParams.set('code', code); out.searchParams.set('iss', issuer); if (st.client_state) out.searchParams.set('state', st.client_state);
       res.writeHead(302, { location: out.toString(), 'cache-control': 'no-store' }); return res.end();
     }
     if (req.method === 'POST' && u.pathname === '/token') {
@@ -201,6 +201,7 @@ const server = http.createServer(async (req, res) => {
       try { codeRec = await consumeJson(cfg.bucket, `auth/codes/${sha256(body.code || '')}.json`); }
       catch { return sendJson(res, 400, { error: 'invalid_grant' }); }
       if (body.client_id !== codeRec.client_id || body.redirect_uri !== codeRec.redirect_uri) return sendJson(res, 400, { error: 'invalid_grant' });
+      if (body.resource !== codeRec.resource) return sendJson(res, 400, { error: 'invalid_target' });
       if (sha256(body.code_verifier || '') !== codeRec.challenge) return sendJson(res, 400, { error: 'invalid_grant', error_description: 'pkce_failed' });
       const accessToken = randomToken(32);
       await gcsWriteJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`, { revoked: false, expires_at_ms: Date.now()+ACCESS_TOKEN_TTL_MS, scope: codeRec.scope, audience: codeRec.audience, actor_sub: codeRec.actor_sub, issued_at: isoNow() }, 0);
