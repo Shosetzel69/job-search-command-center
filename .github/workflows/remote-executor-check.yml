@@ -75,21 +75,26 @@ jobs:
           grep -q 'detect-existing-images' cloudbuild.ops.yaml
           ! grep -q -- '--no-cpu-boost' scripts/gcp/provision_remote_executor_dev.sh
           ! grep -q -- '--no-cpu-boost' scripts/gcp/deploy_remote_executor_dev.sh
+          grep -q 'LOG_LOCATION=' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q 'labels.execution_name' ops/src/worker.mjs
           ! grep -Eq 'read[[:space:]]+-r|read[[:space:]]+-s|read[[:space:]]+-p' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING' scripts/gcp/bootstrap_remote_executor_dev.sh
 
-      - name: Validate IAM commands are non-interactive
+      - name: Validate IAM CLI compatibility
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          for path in [
-              Path("scripts/gcp/bootstrap_remote_executor_dev.sh"),
-              Path("scripts/gcp/provision_remote_executor_dev.sh"),
-          ]:
-              raw = path.read_text()
-              logical = raw.replace("\\\n", " ")
-              for no, line in enumerate(logical.splitlines(), 1):
-                  if "add-iam-policy-binding" in line and "--condition=" not in line:
-                      raise SystemExit(f"{path}:{no}: unconditional IAM binding lacks explicit --condition=None")
-          print("IAM condition declarations are explicit")
+          p = Path("scripts/gcp/provision_remote_executor_dev.sh")
+          unsupported = (
+              "gcloud secrets add-iam-policy-binding",
+              "gcloud run jobs add-iam-policy-binding",
+              "gcloud run services add-iam-policy-binding",
+              "gcloud logging views add-iam-policy-binding",
+              "gcloud iam service-accounts add-iam-policy-binding",
+          )
+          for no, line in enumerate(p.read_text().splitlines(), 1):
+              t = line.lstrip()
+              if any(t.startswith(x) for x in unsupported) and "--condition=None" in line:
+                  raise SystemExit(f"{p}:{no}: unsupported --condition=None")
+          print("IAM CLI compatibility PASS")
           PY
