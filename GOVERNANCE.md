@@ -1,12 +1,12 @@
 # GOVERNANCE.md - Job Search Command Center
 
 Status: `CANONICAL`
-Version: `v1.14`
+Version: `v1.15`
 Applicability: `CURRENT`
 Applies to: `BOTH`
 Effective from: `2026-09-23`
-Supersedes: `v1.13`
-Last updated: `2026-09-30`
+Supersedes: `v1.14`
+Last updated: `2026-10-11`
 
 ## 1. Principiu
 
@@ -241,6 +241,42 @@ REQUIREMENT_APPROVED
 -> PROD_SMOKE_PASS
 -> DONE
 ```
+
+### 2.9 Feature-led closure / Return-to-root rule
+
+Pentru work pornit de la o functionalitate sau un rezultat functional aprobat, work item-ul functional ramane **root work item** pana la Functional Acceptance.
+
+Fluxul este:
+
+```text
+FEATURE
+-> blocker necesar, daca exista
+-> rezolvare minima a blocker-ului
+-> RETURN TO FEATURE
+-> implementare / continuare
+-> Functional Acceptance
+-> DONE
+```
+
+Reguli:
+
+- un blocker arhitectural, structural, de infrastructura, securitate, proces sau testabilitate nu inlocuieste feature-ul root ca obiectiv principal;
+- orice blocker/dependency deschis pentru un feature trebuie sa pastreze explicit referinta la root work item; un blocker fara root identificabil nu poate deveni workstream principal;
+- pentru un blocker/dependency urmarit prin Issue, referinta minima recomandata este:
+
+```text
+Root feature: #XXX
+Blocked work: #XXX
+```
+
+- blocker-ul se trateaza numai in masura necesara pentru deblocarea rezultatului functional aprobat;
+- dupa closure-ul blocker-ului, controlul revine explicit la root work item;
+- Development Analysis / ATC-urile afectate se revalideaza dupa deblocare inainte de continuarea executiei;
+- problemele adiacente care nu sunt necesare pentru feature-ul curent se separa in backlog / Parking Lot si nu extind automat scope-ul;
+- inchiderea Architecture Gate-ului, a unui ATC, a implementarii, a deploy-ului, a unei remedieri sau a unui task dependent nu inchide implicit feature-ul root;
+- `IMPLEMENTATION_COMPLETE`, `REVIEW_PASS`, `DEV_PASS` sau orice alt gate tehnic intermediar nu substituie Functional Acceptance;
+- un feature poate ajunge `DONE` numai dupa validarea criteriilor functionale aprobate pentru root work item **in mediul prevazut de lifecycle-ul aplicabil**;
+- daca blocker-ul modifica material cerinta sau acceptance criteria ale feature-ului root, se revine la gate-ul corespunzator; regula Return-to-root nu autorizeaza schimbarea silent a scope-ului.
 
 ## 3. Surse de adevar si precedenta
 
