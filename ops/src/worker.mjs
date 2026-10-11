@@ -28,7 +28,52 @@ async function describeExecution(args) {
   const id = normalizeExecutionId(args.execution_id); const job = executionJobName(id);
   const url = `https://run.googleapis.com/v2/projects/${cfg.project}/locations/${cfg.region}/jobs/${job}/executions/${id}`;
   const r = await gcpFetch(url); if (!r.ok) throw new Error(`execution_read_${r.status}`); const j=await r.json();
-  return { target_alias:id, state:j.conditions || [], start_time:j.startTime || null, completion_time:j.completionTime || null, cancelled_count:j.cancelledCount || 0, failed_count:j.failedCount || 0, succeeded_count:j.succeededCount || 0 };
+
+  const tr = await gcpFetch(`${url}/tasks?pageSize=1000`);
+  if (!tr.ok) throw new Error(`task_read_${tr.status}`);
+  const tj = await tr.json();
+
+  let targetExitCode = null;
+  let targetTermSignal = null;
+  let rootCause = null;
+  for (const task of (tj.tasks || [])) {
+    const attempt = task.lastAttemptResult || {};
+    const status = attempt.status || {};
+    const taskCondition = (task.conditions || []).find(c => c && c.message);
+    const message = status.message || taskCondition?.message || null;
+    const exitCode = Number.isInteger(attempt.exitCode) ? attempt.exitCode : null;
+    const termSignal = Number.isInteger(attempt.termSignal) ? attempt.termSignal : null;
+
+    if (targetExitCode === null && exitCode !== null) targetExitCode = exitCode;
+    if (targetTermSignal === null && termSignal !== null) targetTermSignal = termSignal;
+    if (!rootCause && message) rootCause = sanitizeText(message).slice(0, 2048);
+
+    if ((exitCode !== null && exitCode !== 0) || (termSignal !== null && termSignal !== 0) || (status.code && Number(status.code) !== 0)) {
+      targetExitCode = exitCode;
+      targetTermSignal = termSignal;
+      if (message) rootCause = sanitizeText(message).slice(0, 2048);
+      break;
+    }
+  }
+
+  if (!rootCause) {
+    const executionCondition = (j.conditions || []).find(c => c && c.message);
+    if (executionCondition?.message) rootCause = sanitizeText(executionCondition.message).slice(0, 2048);
+  }
+
+  return {
+    target_alias:id,
+    state:j.conditions || [],
+    start_time:j.startTime || null,
+    completion_time:j.completionTime || null,
+    cancelled_count:j.cancelledCount || 0,
+    failed_count:j.failedCount || 0,
+    succeeded_count:j.succeededCount || 0,
+    task_count:Number(j.taskCount || 0),
+    target_exit_code:targetExitCode,
+    target_term_signal:targetTermSignal,
+    root_cause:rootCause
+  };
 }
 async function readExecutionLogs(args) {
   const id = normalizeExecutionId(args.execution_id); const job = executionJobName(id);
@@ -72,7 +117,7 @@ async function runTestSuite(args) {
   return { target_alias:args.suite, target_source_sha:targetSourceSha, exit_code:0, test_verdict:'PASS', coarse_error:null };
 }
 function publicAssertions(task, value) {
-  if (task === 'describe_execution') return { target_alias:value.target_alias, failed_count:value.failed_count, succeeded_count:value.succeeded_count, cancelled_count:value.cancelled_count, completed:Boolean(value.completion_time) };
+  if (task === 'describe_execution') return { target_alias:value.target_alias, failed_count:value.failed_count, succeeded_count:value.succeeded_count, cancelled_count:value.cancelled_count, completed:Boolean(value.completion_time), task_count:value.task_count, target_exit_code:value.target_exit_code, target_term_signal:value.target_term_signal, root_cause:value.root_cause };
   if (task === 'read_execution_logs') return { target_alias:value.target_alias, line_count:value.line_count };
   if (task === 'inspect_runtime_snapshot') return { target_alias:value.target_alias, run_status:value.run_status, published_jobs:value.published_jobs, status_present:value.status_present, jobs_present:value.jobs_present };
   if (task === 'run_test_suite') return { target_alias:value.target_alias, target_source_sha:value.target_source_sha, exit_code:value.exit_code, test_verdict:value.test_verdict, coarse_error:value.coarse_error || null };
