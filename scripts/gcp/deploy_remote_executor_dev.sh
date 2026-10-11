@@ -8,6 +8,8 @@ RUNTIME_BUCKET="${GCP_RUNTIME_BUCKET:?GCP_RUNTIME_BUCKET required}"
 GATEWAY_IMAGE="${GATEWAY_IMAGE:?digest-pinned GATEWAY_IMAGE required}"
 WORKER_IMAGE="${WORKER_IMAGE:?digest-pinned WORKER_IMAGE required}"
 SOURCE_SHA="${SOURCE_SHA:?SOURCE_SHA required}"
+DEV_BASE_URL="${DEV_BASE_URL:?DEV_BASE_URL required}"
+[[ "$DEV_BASE_URL" == https://* ]]
 [[ "$GATEWAY_IMAGE" == *@sha256:* && "$WORKER_IMAGE" == *@sha256:* ]]
 [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
@@ -18,7 +20,7 @@ gcloud run jobs deploy jscc-diagnostics-dev \
   --project="$PROJECT" --region="$REGION" --impersonate-service-account="$DEPLOYER" \
   --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" \
   --tasks=1 --max-retries=0 --task-timeout=15m --no-cpu-boost \
-  --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_IMAGE,WORKER_IMAGE_DIGEST=$WORKER_IMAGE,DIAGNOSTICS_JOB=jscc-diagnostics-dev,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev"
+  --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_IMAGE,WORKER_IMAGE_DIGEST=$WORKER_IMAGE,DIAGNOSTICS_JOB=jscc-diagnostics-dev,DEV_BASE_URL=$DEV_BASE_URL,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev"
 
 gcloud run deploy jscc-ops-gateway-dev \
   --project="$PROJECT" --region="$REGION" --impersonate-service-account="$DEPLOYER" \
