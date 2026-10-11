@@ -15,7 +15,12 @@ steps:
   - id: registry-immutability
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
-    args: ['-ceu', 'v="$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format=value\\(dockerConfig.immutableTags\\))"; [[ "$v" == True || "$v" == true ]]']
+    args:
+      - -ceu
+      - |
+        v="$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+        [[ "$v" == "True" || "$v" == "true" ]]
+
   - id: build-gateway
     name: gcr.io/cloud-builders/docker
     args: ['build','--pull','-f','ops/Dockerfile.gateway','--build-arg','SOURCE_SHA=${_GIT_SHA}','-t','${_GATEWAY_IMAGE}:${_GIT_SHA}','.']
