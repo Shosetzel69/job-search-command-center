@@ -295,6 +295,31 @@ export async function consumeJson(bucket, name, nowMs = Date.now(), fetchImpl = 
   return current.data;
 }
 
+export function validateDispatchBinding(dispatch, ownExecution, expected, nowMs = Date.now()) {
+  if (!dispatch || typeof dispatch !== 'object') throw new Error('dispatch_not_found');
+  if (dispatch.execution_name !== ownExecution) throw new Error('execution_binding_mismatch');
+  if (dispatch.catalog_version !== expected.catalog_version) throw new Error('catalog_version_mismatch');
+  if (dispatch.ops_source_sha !== expected.ops_source_sha) throw new Error('ops_source_sha_mismatch');
+  if (dispatch.worker_image_digest !== expected.worker_image_digest) throw new Error('worker_digest_mismatch');
+  if (!Number.isFinite(Number(dispatch.expires_at_ms)) || Number(dispatch.expires_at_ms) <= nowMs) throw new Error('dispatch_expired');
+  return dispatch;
+}
+
+export function sanitizeExternal(input, sanitizer = sanitizeText) {
+  try {
+    return { ok:true, text:String(sanitizer(input) ?? ''), coarse_error:null };
+  } catch {
+    return { ok:false, text:'', coarse_error:'sanitizer_failed' };
+  }
+}
+
+export function assertDailyOperationAllowed(count, limit = DAILY_OPERATION_LIMIT) {
+  const n = Number(count);
+  if (!Number.isFinite(n) || n < 0) throw new Error('daily_counter_invalid');
+  if (n >= limit) throw new Error('daily_operation_limit');
+  return n + 1;
+}
+
 export async function incrementDailyCounter(bucket, day, limit = DAILY_OPERATION_LIMIT, fetchImpl = fetch) {
   const name = `limits/${day}.json`;
   for (let i = 0; i < 4; i++) {
@@ -304,8 +329,8 @@ export async function incrementDailyCounter(bucket, day, limit = DAILY_OPERATION
       catch (e) { if (e.message !== 'generation_precondition_failed') throw e; continue; }
     }
     const n = Number(cur.data.count || 0);
-    if (n >= limit) throw new Error('daily_operation_limit');
-    try { await gcsReplaceJson(bucket, name, { count: n + 1, day }, cur.generation, fetchImpl); return n + 1; }
+    const next = assertDailyOperationAllowed(n, limit);
+    try { await gcsReplaceJson(bucket, name, { count: next, day }, cur.generation, fetchImpl); return next; }
     catch (e) { if (e.message !== 'generation_precondition_failed') throw e; }
   }
   throw new Error('daily_counter_contention');
