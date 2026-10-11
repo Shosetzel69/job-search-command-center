@@ -70,6 +70,9 @@ jobs:
           grep -q -- '--gcs-source-staging-dir=' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'run.jobs.run' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'run.operations.get' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q 'REUSE_GATEWAY_IMMUTABLE_TAG' cloudbuild.ops.yaml
+          grep -q 'REUSE_WORKER_IMMUTABLE_TAG' cloudbuild.ops.yaml
+          grep -q 'detect-existing-images' cloudbuild.ops.yaml
 
       - name: Validate IAM commands are non-interactive
         run: |
