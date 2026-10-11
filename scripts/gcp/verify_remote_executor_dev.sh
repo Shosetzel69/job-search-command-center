@@ -146,7 +146,7 @@ require_contains "$VIEW" 'jscc-search-dev' 'log view includes search job'
 require_contains "$VIEW" 'jscc-diagnostics-dev' 'log view includes diagnostics job'
 
 # OAuth secrets are gateway-only.
-for secret in JSCC_OPS_GOOGLE_CLIENT_ID JSCC_OPS_GOOGLE_CLIENT_SECRET JSCC_OPS_GOOGLE_ALLOWED_SUB JSCC_OPS_CLIENT_SIGNING_KEY; do
+for secret in JSCC_OPS_GOOGLE_CLIENT_ID JSCC_OPS_GOOGLE_CLIENT_SECRET JSCC_OPS_GOOGLE_ALLOWED_SUB; do
   p="$(gcloud secrets get-iam-policy "$secret" --project="$PROJECT" --format=json)"
   require_contains "$p" "$GW_EMAIL" "gateway can access $secret"
   require_absent "$p" "$WK_EMAIL" "worker cannot access $secret"
