@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   REQUIRED_AUDIENCE, REQUIRED_SCOPE, logicalTokenError, makeSignedClient, parseSignedClient,
-  makeSignedState, parseSignedState, publicEvidence, sanitizeText, sha256, validateGoogleClaims, validateTaskRequest
+  CHATGPT_REDIRECT_URI, makeSignedState, parseSignedState, publicEvidence, sanitizeText, sha256, validateChatGptRedirectUris, validateGoogleClaims, validateTaskRequest
 } from '../src/lib.mjs';
 
 test('N1 unknown task rejected',()=>assert.throws(()=>validateTaskRequest('shell',{command:'id'}),/unknown_task/));
@@ -54,4 +54,10 @@ test('OAuth upstream state is stateless, expiring and tamper evident',()=>{
   assert.equal(parseSignedState(st,'k').nonce,'n');
   assert.equal(parseSignedState(st+'x','k'),null);
   assert.equal(parseSignedState(makeSignedState({expires_at_ms:Date.now()-1,client_id:'c',redirect_uri:'https://example.com/cb',challenge:'x',nonce:'n'},'k'),'k'),null);
+});
+
+test('DCR accepts only the stable ChatGPT callback',()=>{
+  assert.deepEqual(validateChatGptRedirectUris([CHATGPT_REDIRECT_URI]),[CHATGPT_REDIRECT_URI]);
+  assert.throws(()=>validateChatGptRedirectUris(['https://attacker.example/callback']),/invalid_redirect_uris/);
+  assert.throws(()=>validateChatGptRedirectUris([CHATGPT_REDIRECT_URI,'https://attacker.example/callback']),/invalid_redirect_uris/);
 });
