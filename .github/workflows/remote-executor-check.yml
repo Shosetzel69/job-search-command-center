@@ -106,6 +106,36 @@ jobs:
           grep -q -- '--remove-secrets=OAUTH_CLIENT_SIGNING_KEY' scripts/gcp/deploy_remote_executor_dev.sh
           grep -q 'remove-iam-policy-binding JSCC_OPS_CLIENT_SIGNING_KEY' scripts/gcp/provision_remote_executor_dev.sh
 
+      - name: Execute N5-N8 N15-N19 N28-N30 source-boundary contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          provision = Path("scripts/gcp/provision_remote_executor_dev.sh").read_text()
+          gateway = Path("ops/src/gateway.mjs").read_text()
+          worker = Path("ops/src/worker.mjs").read_text()
+          cloudbuild = Path("cloudbuild.ops.yaml").read_text()
+          trusted = Path("scripts/gcp/verify_trusted_ops_ref.sh").read_text()
+
+          checks = {
+            "N5 gateway has no Cloud Run mutation authority in runtime code": all(x not in gateway for x in ("run.services.update","run.jobs.update","run.jobs.delete","run.services.delete")),
+            "N7 worker cannot execute Cloud Run jobs": "run.jobs.run" not in worker and "runWithOverrides" not in worker,
+            "N8 DEV-only runtime source boundary": "GCP_PROJECT !== 'jscc-dev'" in Path("ops/src/lib.mjs").read_text(),
+            "N15 no run.executions.cancel": "run.executions.cancel" not in provision and "run.executions.cancel" not in gateway,
+            "N16 gateway invocation targets fixed diagnostics job": "DIAGNOSTICS_JOB" in gateway and ":run" in gateway and "runWithOverrides" not in gateway,
+            "N17 gateway runtime has no product Service config API path": "/services/" not in gateway and "run.services.get" not in gateway,
+            "N18 product build identity excluded from ops build config": "jscc-ops-build@jscc-shared.iam.gserviceaccount.com" in cloudbuild and "jscc-build@jscc-shared" not in cloudbuild,
+            "N19 trusted ops source admission enforced": "_TRUSTED_REF" in cloudbuild and "refs/heads/main|refs/tags/jscc-ops-approved/*" in trusted,
+            "N28 no DB credential or DB diagnostic path": all(x not in gateway+worker for x in ("NILE_DATABASE_URL","DATABASE_URL","POSTGRES_URL","POSTGRESQL_URL","db_health_readonly")),
+            "N29 worker has no end-user or tenant auth path": all(x not in worker for x in ("GOOGLE_ALLOWED_SUB","GOOGLE_ID_TOKEN","TENANT_ID","PROFILE_ID")),
+            "N30 no TEST/PROD selector in runtime code": all(x not in gateway+worker for x in ("jscc-test","jscc-prod")),
+          }
+          failed=[name for name,ok in checks.items() if not ok]
+          for name,ok in checks.items():
+              print(("PASS " if ok else "FAIL ")+name)
+          if failed:
+              raise SystemExit("source-boundary failures: "+", ".join(failed))
+          PY
+
       - name: Validate IAM CLI compatibility
         run: |
           python3 - <<'PY'
