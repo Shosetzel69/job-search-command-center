@@ -1,6 +1,6 @@
 import http from 'node:http';
 import {
-  ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
+  ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE, authorizationCodeError,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow, logicalTokenError,
   makeSignedClient, makeSignedState, normalizeExecutionName, operationObject, parseSignedClient, parseSignedState, publicEvidence,
@@ -227,15 +227,23 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && u.pathname === '/token') {
       const body = await readBody(req);
-      let codeRec;
-      try { codeRec = await consumeJson(cfg.bucket, `auth/codes/${sha256(body.code || '')}.json`); }
-      catch { return sendJson(res, 400, { error: 'invalid_grant' }); }
-      if (body.client_id !== codeRec.client_id || body.redirect_uri !== codeRec.redirect_uri) return sendJson(res, 400, { error: 'invalid_grant' });
-      if (body.resource !== codeRec.resource) return sendJson(res, 400, { error: 'invalid_target' });
-      if (sha256(body.code_verifier || '') !== codeRec.challenge) return sendJson(res, 400, { error: 'invalid_grant', error_description: 'pkce_failed' });
+      const codeName = `auth/codes/${sha256(body.code || '')}.json`;
+      const current = await gcsReadJson(cfg.bucket, codeName);
+      const codeError = authorizationCodeError(current?.data, body);
+      if (codeError === 'invalid_target') return sendJson(res, 400, { error: 'invalid_target' });
+      if (codeError === 'pkce_failed') return sendJson(res, 400, { error: 'invalid_grant', error_description: 'pkce_failed' });
+      if (codeError) return sendJson(res, 400, { error: 'invalid_grant' });
+
+      try {
+        await gcsReplaceJson(cfg.bucket, codeName, { ...current.data, consumed: true, consumed_at: isoNow() }, current.generation);
+      } catch (e) {
+        if (e.message === 'generation_precondition_failed') return sendJson(res, 400, { error: 'invalid_grant', error_description: 'authorization_code_replay' });
+        throw e;
+      }
+
       const accessToken = randomToken(32);
-      await gcsWriteJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`, { revoked: false, expires_at_ms: Date.now()+ACCESS_TOKEN_TTL_MS, scope: codeRec.scope, audience: codeRec.audience, actor_sub: codeRec.actor_sub, issued_at: isoNow() }, 0);
-      return sendJson(res, 200, { access_token: accessToken, token_type: 'Bearer', expires_in: 900, scope: codeRec.scope });
+      await gcsWriteJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`, { revoked: false, expires_at_ms: Date.now()+ACCESS_TOKEN_TTL_MS, scope: current.data.scope, audience: current.data.audience, actor_sub: current.data.actor_sub, issued_at: isoNow() }, 0);
+      return sendJson(res, 200, { access_token: accessToken, token_type: 'Bearer', expires_in: 900, scope: current.data.scope });
     }
     if (req.method === 'POST' && u.pathname === '/revoke') {
       const body = await readBody(req); const name = `auth/tokens/${sha256(body.token || '')}.json`; const cur = await gcsReadJson(cfg.bucket, name);
