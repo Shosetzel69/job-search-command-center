@@ -64,6 +64,13 @@ require_absent "$OPS_AR_POLICY" "$PRODUCT_BUILD_EMAIL" 'N18 product build identi
 require_absent "$PRODUCT_AR_POLICY" "$BUILD_EMAIL" 'N19 ops build identity absent from product artifact repo'
 require_absent "$PRODUCT_AR_POLICY" "$DP_EMAIL" 'N19 ops deployer absent from product artifact repo'
 
+PRODUCT_BUILD_PROJECT_ROLES="$(gcloud projects get-iam-policy "$SHARED" --flatten='bindings[].members' --filter="bindings.members:serviceAccount:$PRODUCT_BUILD_EMAIL" --format='value(bindings.role)')"
+OPS_BUILD_PROJECT_ROLES="$(gcloud projects get-iam-policy "$SHARED" --flatten='bindings[].members' --filter="bindings.members:serviceAccount:$BUILD_EMAIL" --format='value(bindings.role)')"
+for role in roles/artifactregistry.writer roles/artifactregistry.repoAdmin roles/artifactregistry.admin; do
+  require_absent "$PRODUCT_BUILD_PROJECT_ROLES" "$role" "N18 product build has no project-wide Artifact Registry writer/admin: $role"
+  require_absent "$OPS_BUILD_PROJECT_ROLES" "$role" "N19 ops build has no project-wide Artifact Registry writer/admin: $role"
+done
+
 # Routine deployer can update only the two existing ops resources.
 role_permissions_exact jsccOpsServiceDeployerDev 'run.services.get,run.services.update' 'ops service deployer role exact' "$PROJECT"
 role_permissions_exact jsccOpsJobDeployerDev 'run.jobs.get,run.jobs.update' 'ops job deployer role exact' "$PROJECT"
