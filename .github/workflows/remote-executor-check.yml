@@ -38,8 +38,15 @@ jobs:
         with:
           node-version: 22
 
+      - name: Install Remote Executor dependencies
+        run: npm --prefix ops install --ignore-scripts
+
       - name: Run Remote Executor contract tests
         run: node --test ops/test/*.test.mjs
+
+      - name: Validate auth library resolution
+        run: node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
+        working-directory: ops
 
       - name: Validate JavaScript syntax
         run: |
@@ -88,6 +95,13 @@ jobs:
           grep -q 'LOG_LOCATION=' scripts/gcp/deploy_remote_executor_dev.sh
           ! grep -q 'JSCC_OPS_GOOGLE_CLIENT_ID:latest' scripts/gcp/deploy_remote_executor_dev.sh
           ! grep -q 'JSCC_OPS_GOOGLE_CLIENT_SECRET:latest' scripts/gcp/deploy_remote_executor_dev.sh
+          grep -q '"@node-oauth/oauth2-server"' ops/package.json
+          grep -q '"openid-client"' ops/package.json
+          grep -q 'oauth.authorize' ops/src/gateway.mjs
+          grep -q 'oauth.token' ops/src/gateway.mjs
+          grep -q 'oauth.authenticate' ops/src/gateway.mjs
+          grep -q 'oidc.authorizationCodeGrant' ops/src/gateway.mjs
+          ! grep -R -Eq 'createHmac|crypto\.verify|verifyGoogleIdToken|makeSignedClient|makeSignedState|OAUTH_CLIENT_SIGNING_KEY|JSCC_OPS_CLIENT_SIGNING_KEY' ops/src scripts/gcp docs/runbooks/remote-executor-dev.md
 
       - name: Validate IAM CLI compatibility
         run: |
