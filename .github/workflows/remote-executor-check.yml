@@ -67,3 +67,16 @@ jobs:
           grep -q '^PROJECT=jscc-dev$' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'run.jobs.run' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'run.operations.get' scripts/gcp/provision_remote_executor_dev.sh
+          # Existing project/resource IAM policies may contain conditional bindings.
+          # Every unconditional write must declare --condition=None to prevent interactive prompts.
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in [
+              Path("scripts/gcp/bootstrap_remote_executor_dev.sh"),
+              Path("scripts/gcp/provision_remote_executor_dev.sh"),
+          ]:
+              for no, line in enumerate(path.read_text().splitlines(), 1):
+                  if "add-iam-policy-binding" in line and "--condition=" not in line:
+                      raise SystemExit(f"{path}:{no}: unconditional IAM writes are explicitly non-interactive: {line}")
+          print("unconditional IAM writes are explicitly non-interactive")
+          PY
