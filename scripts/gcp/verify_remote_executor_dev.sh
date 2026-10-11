@@ -5,7 +5,26 @@ PROJECT=jscc-dev
 SHARED=jscc-shared
 REGION=europe-west1
 OPS_BUCKET="${OPS_BUCKET:-jscc-dev-ops-state}"
-RUNTIME_BUCKET="${GCP_RUNTIME_BUCKET:?GCP_RUNTIME_BUCKET required}"
+if [[ -n "${GCP_RUNTIME_BUCKET:-}" ]]; then
+  RUNTIME_BUCKET="$GCP_RUNTIME_BUCKET"
+else
+  APP_JSON="$(gcloud run services describe jscc-command-api-dev --project="$PROJECT" --region="$REGION" --format=json)"
+  RUNTIME_BUCKET="$(python3 -c 'import json,sys
+d=json.load(sys.stdin)
+def walk(x):
+    if isinstance(x,dict):
+        if x.get("name")=="GCP_RUNTIME_BUCKET" and isinstance(x.get("value"),str): return x["value"]
+        for v in x.values():
+            r=walk(v)
+            if r: return r
+    elif isinstance(x,list):
+        for v in x:
+            r=walk(v)
+            if r: return r
+    return ""
+print(walk(d))' <<<"$APP_JSON")"
+fi
+[[ -n "$RUNTIME_BUCKET" ]] || { echo "FAIL cannot resolve GCP_RUNTIME_BUCKET" >&2; exit 2; }
 GW_EMAIL="jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com"
 WK_EMAIL="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com"
 DP_EMAIL="jscc-ops-deployer-dev@$PROJECT.iam.gserviceaccount.com"
