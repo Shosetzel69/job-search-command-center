@@ -12,6 +12,8 @@ SIGNING_KEY_VALUE="${OAUTH_CLIENT_SIGNING_KEY:?OAUTH_CLIENT_SIGNING_KEY required
 GATEWAY_IMAGE="${GATEWAY_IMAGE:?digest-pinned GATEWAY_IMAGE required}"
 WORKER_IMAGE="${WORKER_IMAGE:?digest-pinned WORKER_IMAGE required}"
 SOURCE_SHA="${SOURCE_SHA:?SOURCE_SHA required}"
+DEV_BASE_URL="${DEV_BASE_URL:?DEV_BASE_URL required}"
+[[ "$DEV_BASE_URL" == https://* ]]
 [[ "$GATEWAY_IMAGE" == *@sha256:* && "$WORKER_IMAGE" == *@sha256:* ]]
 [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
@@ -22,6 +24,7 @@ for sa in jscc-ops-build; do gcloud iam service-accounts describe "$sa@$SHARED.i
 for sa in jscc-ops-deployer-dev jscc-ops-gateway-dev jscc-diagnostics-dev; do gcloud iam service-accounts describe "$sa@$PROJECT.iam.gserviceaccount.com" --project="$PROJECT" >/dev/null 2>&1 || gcloud iam service-accounts create "$sa" --project="$PROJECT"; done
 
 gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/artifactregistry.writer >/dev/null
+gcloud projects add-iam-policy-binding "$SHARED" --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/logging.logWriter >/dev/null
 
 gcloud storage buckets describe "gs://$OPS_BUCKET" --project="$PROJECT" >/dev/null 2>&1 || gcloud storage buckets create "gs://$OPS_BUCKET" --project="$PROJECT" --location="$REGION" --uniform-bucket-level-access
 cat >/tmp/jscc537-lifecycle.json <<JSON
@@ -36,7 +39,7 @@ put_secret JSCC_OPS_GOOGLE_ALLOWED_SUB "$OWNER_SUB"
 put_secret JSCC_OPS_CLIENT_SIGNING_KEY "$SIGNING_KEY_VALUE"
 for s in JSCC_OPS_GOOGLE_CLIENT_ID JSCC_OPS_GOOGLE_CLIENT_SECRET JSCC_OPS_GOOGLE_ALLOWED_SUB JSCC_OPS_CLIENT_SIGNING_KEY; do gcloud secrets add-iam-policy-binding "$s" --project="$PROJECT" --member="serviceAccount:jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor >/dev/null; done
 
-gcloud run jobs deploy jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --tasks=1 --max-retries=0 --task-timeout=15m --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_IMAGE,WORKER_IMAGE_DIGEST=$WORKER_IMAGE,DIAGNOSTICS_JOB=jscc-diagnostics-dev,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev" --no-cpu-boost
+gcloud run jobs deploy jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --tasks=1 --max-retries=0 --task-timeout=15m --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_IMAGE,WORKER_IMAGE_DIGEST=$WORKER_IMAGE,DIAGNOSTICS_JOB=jscc-diagnostics-dev,DEV_BASE_URL=$DEV_BASE_URL,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev" --no-cpu-boost
 
 cat >/tmp/jscc537-gateway-role.yaml <<'YAML'
 title: JSCC Ops Gateway DEV
@@ -115,5 +118,9 @@ for sa in jscc-ops-gateway-dev jscc-diagnostics-dev; do
   gcloud iam service-accounts add-iam-policy-binding "$sa@$PROJECT.iam.gserviceaccount.com" --project="$PROJECT" --member="$DEPLOYER" --role=roles/iam.serviceAccountUser >/dev/null
 done
 gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="$DEPLOYER" --role=roles/artifactregistry.reader >/dev/null
+
+DEV_PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
+SERVERLESS_AGENT="service-${DEV_PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
+gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="serviceAccount:$SERVERLESS_AGENT" --role=roles/artifactregistry.reader >/dev/null
 
 echo "Dedicated routine deployer configured. Use deploy_remote_executor_dev.sh under impersonation for subsequent deployments."
