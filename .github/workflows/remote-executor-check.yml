@@ -73,6 +73,8 @@ jobs:
           grep -q 'REUSE_GATEWAY_IMMUTABLE_TAG' cloudbuild.ops.yaml
           grep -q 'REUSE_WORKER_IMMUTABLE_TAG' cloudbuild.ops.yaml
           grep -q 'detect-existing-images' cloudbuild.ops.yaml
+          ! grep -Eq 'read[[:space:]]+-r|read[[:space:]]+-s|read[[:space:]]+-p' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q 'BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING' scripts/gcp/bootstrap_remote_executor_dev.sh
 
       - name: Validate IAM commands are non-interactive
         run: |
