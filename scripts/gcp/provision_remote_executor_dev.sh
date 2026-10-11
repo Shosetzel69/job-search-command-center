@@ -8,7 +8,6 @@ RUNTIME_BUCKET="${GCP_RUNTIME_BUCKET:?GCP_RUNTIME_BUCKET required}"
 OWNER_SUB="${GOOGLE_ALLOWED_SUB:?GOOGLE_ALLOWED_SUB required}"
 GOOGLE_CLIENT_ID_VALUE="${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID required}"
 GOOGLE_CLIENT_SECRET_VALUE="${GOOGLE_CLIENT_SECRET:?GOOGLE_CLIENT_SECRET required}"
-SIGNING_KEY_VALUE="${OAUTH_CLIENT_SIGNING_KEY:?OAUTH_CLIENT_SIGNING_KEY required}"
 GATEWAY_IMAGE="${GATEWAY_IMAGE:?digest-pinned GATEWAY_IMAGE required}"
 WORKER_IMAGE="${WORKER_IMAGE:?digest-pinned WORKER_IMAGE required}"
 SOURCE_SHA="${SOURCE_SHA:?SOURCE_SHA required}"
@@ -55,7 +54,6 @@ put_secret(){
 put_secret JSCC_OPS_GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID_VALUE"
 put_secret JSCC_OPS_GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET_VALUE"
 put_secret JSCC_OPS_GOOGLE_ALLOWED_SUB "$OWNER_SUB"
-put_secret JSCC_OPS_CLIENT_SIGNING_KEY "$SIGNING_KEY_VALUE"
 
 matching_secret_version(){
   local n="$1" expected="$2" v actual
@@ -71,9 +69,8 @@ matching_secret_version(){
 GOOGLE_CLIENT_ID_SECRET_VERSION="$(matching_secret_version JSCC_OPS_GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID_VALUE")"
 GOOGLE_CLIENT_SECRET_SECRET_VERSION="$(matching_secret_version JSCC_OPS_GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET_VALUE")"
 GOOGLE_ALLOWED_SUB_SECRET_VERSION="$(matching_secret_version JSCC_OPS_GOOGLE_ALLOWED_SUB "$OWNER_SUB")"
-OAUTH_CLIENT_SIGNING_KEY_SECRET_VERSION="$(matching_secret_version JSCC_OPS_CLIENT_SIGNING_KEY "$SIGNING_KEY_VALUE")"
-[[ -n "$GOOGLE_CLIENT_ID_SECRET_VERSION" && -n "$GOOGLE_CLIENT_SECRET_SECRET_VERSION" && -n "$GOOGLE_ALLOWED_SUB_SECRET_VERSION" && -n "$OAUTH_CLIENT_SIGNING_KEY_SECRET_VERSION" ]] || { echo "cannot resolve pinned Secret Manager versions" >&2; exit 3; }
-for s in JSCC_OPS_GOOGLE_CLIENT_ID JSCC_OPS_GOOGLE_CLIENT_SECRET JSCC_OPS_GOOGLE_ALLOWED_SUB JSCC_OPS_CLIENT_SIGNING_KEY; do gcloud secrets add-iam-policy-binding "$s" --project="$PROJECT" --member="serviceAccount:jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --condition=None >/dev/null; done
+[[ -n "$GOOGLE_CLIENT_ID_SECRET_VERSION" && -n "$GOOGLE_CLIENT_SECRET_SECRET_VERSION" && -n "$GOOGLE_ALLOWED_SUB_SECRET_VERSION" ]] || { echo "cannot resolve pinned Secret Manager versions" >&2; exit 3; }
+for s in JSCC_OPS_GOOGLE_CLIENT_ID JSCC_OPS_GOOGLE_CLIENT_SECRET JSCC_OPS_GOOGLE_ALLOWED_SUB; do gcloud secrets add-iam-policy-binding "$s" --project="$PROJECT" --member="serviceAccount:jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --role=roles/secretmanager.secretAccessor --condition=None >/dev/null; done
 
 DEV_PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)')"
 SERVERLESS_AGENT="service-${DEV_PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
@@ -130,7 +127,7 @@ gcloud storage buckets add-iam-policy-binding "gs://$RUNTIME_BUCKET" --member="s
 gcloud logging views describe jscc-ops-dev --project="$PROJECT" --location="$LOG_LOCATION" --bucket=_Default >/dev/null 2>&1 || gcloud logging views create jscc-ops-dev --project="$PROJECT" --location="$LOG_LOCATION" --bucket=_Default --log-filter='resource.type="cloud_run_job" AND resource.labels.job_name=~"^(jscc-search-dev|jscc-diagnostics-dev)$"' >/dev/null
 gcloud logging views add-iam-policy-binding jscc-ops-dev --project="$PROJECT" --location="$LOG_LOCATION" --bucket=_Default --member="serviceAccount:jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --role=roles/logging.viewAccessor >/dev/null
 
-gcloud run deploy jscc-ops-gateway-dev --project="$PROJECT" --region="$REGION" --image="$GATEWAY_IMAGE" --service-account="jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --min=0 --max=1 --concurrency=20 --timeout=60 --allow-unauthenticated --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_DIGEST,WORKER_IMAGE_DIGEST=$WORKER_DIGEST,DIAGNOSTICS_JOB=jscc-diagnostics-dev" --set-secrets="GOOGLE_CLIENT_ID=JSCC_OPS_GOOGLE_CLIENT_ID:$GOOGLE_CLIENT_ID_SECRET_VERSION,GOOGLE_CLIENT_SECRET=JSCC_OPS_GOOGLE_CLIENT_SECRET:$GOOGLE_CLIENT_SECRET_SECRET_VERSION,GOOGLE_ALLOWED_SUB=JSCC_OPS_GOOGLE_ALLOWED_SUB:$GOOGLE_ALLOWED_SUB_SECRET_VERSION,OAUTH_CLIENT_SIGNING_KEY=JSCC_OPS_CLIENT_SIGNING_KEY:$OAUTH_CLIENT_SIGNING_KEY_SECRET_VERSION"
+gcloud run deploy jscc-ops-gateway-dev --project="$PROJECT" --region="$REGION" --image="$GATEWAY_IMAGE" --service-account="jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --min=0 --max=1 --concurrency=20 --timeout=60 --allow-unauthenticated --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_DIGEST,WORKER_IMAGE_DIGEST=$WORKER_DIGEST,DIAGNOSTICS_JOB=jscc-diagnostics-dev" --set-secrets="GOOGLE_CLIENT_ID=JSCC_OPS_GOOGLE_CLIENT_ID:$GOOGLE_CLIENT_ID_SECRET_VERSION,GOOGLE_CLIENT_SECRET=JSCC_OPS_GOOGLE_CLIENT_SECRET:$GOOGLE_CLIENT_SECRET_SECRET_VERSION,GOOGLE_ALLOWED_SUB=JSCC_OPS_GOOGLE_ALLOWED_SUB:$GOOGLE_ALLOWED_SUB_SECRET_VERSION"
 
 echo "Provisioned #537 DEV resources only. Run verify_remote_executor_dev.sh before connecting ChatGPT."
 
