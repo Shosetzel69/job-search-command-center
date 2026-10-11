@@ -62,6 +62,6 @@ jobs:
           ! grep -q 'spawn(' ops/src/worker.mjs
           grep -q 'COPY ops/src ./ops/src' ops/Dockerfile.worker
           ! grep -q '^COPY \. \.$' ops/Dockerfile.worker
-          grep -q 'GCP_PROJECT.*jscc-dev' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q '^PROJECT=jscc-dev$' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'run.jobs.run' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'run.operations.get' scripts/gcp/provision_remote_executor_dev.sh
