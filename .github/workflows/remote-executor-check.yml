@@ -1,0 +1,67 @@
+name: Validate Remote Executor
+
+on:
+  pull_request:
+    paths:
+      - "ops/**"
+      - "cloudbuild.ops.yaml"
+      - "scripts/gcp/*remote_executor_dev.sh"
+      - "docs/runbooks/remote-executor-dev.md"
+      - "docs/adr/ADR-006-google-cloud-runtime.md"
+      - "ARCHITECTURE.md"
+      - ".github/workflows/remote-executor-check.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ops/**"
+      - "cloudbuild.ops.yaml"
+      - "scripts/gcp/*remote_executor_dev.sh"
+      - "docs/runbooks/remote-executor-dev.md"
+      - "docs/adr/ADR-006-google-cloud-runtime.md"
+      - "ARCHITECTURE.md"
+      - ".github/workflows/remote-executor-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Run Remote Executor contract tests
+        run: node --test ops/test/*.test.mjs
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check ops/src/lib.mjs
+          node --check ops/src/gateway.mjs
+          node --check ops/src/worker.mjs
+
+      - name: Validate DEV scripts
+        run: |
+          bash -n scripts/gcp/provision_remote_executor_dev.sh
+          bash -n scripts/gcp/deploy_remote_executor_dev.sh
+          bash -n scripts/gcp/verify_remote_executor_dev.sh
+
+      - name: Validate security boundaries statically
+        run: |
+          grep -q 'serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com' cloudbuild.ops.yaml
+          ! grep -q 'jscc-build@jscc-shared' cloudbuild.ops.yaml
+          ! grep -q 'runWithOverrides' ops/src/gateway.mjs
+          ! grep -q 'db_health_readonly' ops/src/lib.mjs
+          ! grep -q 'spawn(' ops/src/worker.mjs
+          grep -q 'COPY ops/src ./ops/src' ops/Dockerfile.worker
+          ! grep -q '^COPY \. \.$' ops/Dockerfile.worker
+          grep -q 'GCP_PROJECT.*jscc-dev' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q 'run.jobs.run' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q 'run.operations.get' scripts/gcp/provision_remote_executor_dev.sh
