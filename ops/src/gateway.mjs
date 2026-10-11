@@ -2,7 +2,7 @@ import http from 'node:http';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import * as oidc from 'openid-client';
 import {
-  ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
+  ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, CHATGPT_REDIRECT_URI, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow,
   normalizeExecutionName, operationObject, authenticatedEvidence,
