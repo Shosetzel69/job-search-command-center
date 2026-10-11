@@ -1031,7 +1031,7 @@ Boundary-uri obligatorii:
 - gateway-ul poate executa numai `jscc-diagnostics-dev`; `run.jobs.runWithOverrides` si `run.executions.cancel` sunt interzise;
 - worker-ul este separat si nu poate executa Cloud Run Jobs; accesul la execution metadata, log view si GCS este limitat la resursele/prefixele aprobate;
 - binding-ul operation -> Cloud Run execution este exact si fail-closed, pe `CLOUD_RUN_EXECUTION` + dispatch keyed by execution name + generation preconditions;
-- state/results sunt private, cu lifecycle 14 zile; proiectia publica este schema/allowlist-only si nu contine raw logs, PII, auth material sau signed URLs;
+- state/results sunt private, cu lifecycle 14 zile; proiectia publica automata este strict schema/allowlist-only si nu contine `execution_name`, `root_cause`, `log_excerpt`, raw logs, PII, auth material sau signed URLs; aceste detalii sanitizate sunt disponibile numai prin evidenta autentificata privata;
 - concurrency v1 = 1, worker retry = 0, accepted operations guard = 50/zi, output <= 200 linii si <= 64 KiB;
 - OAuth foloseste Google OIDC owner identity, PKCE S256, nonce/state, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, access token opac de 15 minute si fara refresh token; Authorization Code/PKCE/token semantics sunt delegate bibliotecii vetted `@node-oauth/oauth2-server`, iar Google OIDC/JWT/JWKS validation bibliotecii vetted `openid-client`; implementarea crypto/protocol custom este interzisa.
 
