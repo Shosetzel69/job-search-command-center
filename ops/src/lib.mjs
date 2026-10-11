@@ -133,14 +133,20 @@ export function sanitizeText(input) {
 
 const PUBLIC_ASSERTION_FIELDS = Object.freeze([
   'target_alias','failed_count','succeeded_count','cancelled_count','completed','line_count',
-  'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha','exit_code','test_verdict','coarse_error',
-  'task_count','target_exit_code','target_term_signal','root_cause','task_metadata_available','task_metadata_error','log_excerpt'
+  'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha',
+  'exit_code','test_verdict','coarse_error','task_count','target_exit_code','target_term_signal',
+  'task_metadata_available','task_metadata_error'
 ]);
 
-export function publicAssertions(input) {
+const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
+  ...PUBLIC_ASSERTION_FIELDS,
+  'root_cause','log_excerpt'
+]);
+
+function projectAssertions(input, fields) {
   if (!input || typeof input !== 'object' || Array.isArray(input)) return {};
   const out = {};
-  for (const k of PUBLIC_ASSERTION_FIELDS) {
+  for (const k of fields) {
     if (!Object.hasOwn(input, k)) continue;
     const v = input[k];
     if (v === null || ['string','number','boolean'].includes(typeof v)) out[k] = v;
@@ -148,7 +154,28 @@ export function publicAssertions(input) {
   return out;
 }
 
+export function publicAssertions(input) {
+  return projectAssertions(input, PUBLIC_ASSERTION_FIELDS);
+}
+
+export function authenticatedAssertions(input) {
+  return projectAssertions(input, AUTHENTICATED_ASSERTION_FIELDS);
+}
+
 export function publicEvidence(result) {
+  const allow = [
+    'operation_id','work_item_ref','task','task_class','operation_state','test_verdict','catalog_version',
+    'target_alias','ops_source_sha','target_source_sha','gateway_image_digest','worker_image_digest','started_at',
+    'finished_at','exit_code','coarse_error','sanitizer_version','line_count','byte_count'
+  ];
+  const out = {};
+  for (const k of allow) if (Object.hasOwn(result, k)) out[k] = result[k];
+  if (typeof result.actor_sub_hash === 'string' && result.actor_sub_hash.length > 0) out.actor_bound = true;
+  if (Object.hasOwn(result, 'assertions')) out.assertions = publicAssertions(result.assertions);
+  return out;
+}
+
+export function authenticatedEvidence(result) {
   const allow = [
     'operation_id','work_item_ref','task','task_class','operation_state','test_verdict','execution_name','catalog_version',
     'target_alias','ops_source_sha','target_source_sha','gateway_image_digest','worker_image_digest','started_at',
@@ -157,7 +184,7 @@ export function publicEvidence(result) {
   const out = {};
   for (const k of allow) if (Object.hasOwn(result, k)) out[k] = result[k];
   if (typeof result.actor_sub_hash === 'string' && result.actor_sub_hash.length > 0) out.actor_bound = true;
-  if (Object.hasOwn(result, 'assertions')) out.assertions = publicAssertions(result.assertions);
+  if (Object.hasOwn(result, 'assertions')) out.assertions = authenticatedAssertions(result.assertions);
   return out;
 }
 
