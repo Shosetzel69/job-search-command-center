@@ -21,18 +21,69 @@ steps:
         v="$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
         [[ "$v" == "True" || "$v" == "true" ]]
 
+  - id: detect-existing-images
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        rm -f /workspace/.gateway-exists /workspace/.worker-exists
+        if gcloud artifacts docker images describe "${_GATEWAY_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+          touch /workspace/.gateway-exists
+          echo "REUSE_GATEWAY_TAG=${_GIT_SHA}"
+        fi
+        if gcloud artifacts docker images describe "${_WORKER_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+          touch /workspace/.worker-exists
+          echo "REUSE_WORKER_TAG=${_GIT_SHA}"
+        fi
+
   - id: build-gateway
     name: gcr.io/cloud-builders/docker
-    args: ['build','--pull','-f','ops/Dockerfile.gateway','--build-arg','SOURCE_SHA=${_GIT_SHA}','-t','${_GATEWAY_IMAGE}:${_GIT_SHA}','.']
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.gateway-exists ]]; then
+          echo "SKIP_GATEWAY_BUILD_EXISTING_IMMUTABLE_TAG"
+        else
+          docker build --pull -f ops/Dockerfile.gateway --build-arg "SOURCE_SHA=${_GIT_SHA}" -t "${_GATEWAY_IMAGE}:${_GIT_SHA}" .
+        fi
+
   - id: build-worker
     name: gcr.io/cloud-builders/docker
-    args: ['build','--pull','-f','ops/Dockerfile.worker','--build-arg','SOURCE_SHA=${_GIT_SHA}','-t','${_WORKER_IMAGE}:${_GIT_SHA}','.']
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.worker-exists ]]; then
+          echo "SKIP_WORKER_BUILD_EXISTING_IMMUTABLE_TAG"
+        else
+          docker build --pull -f ops/Dockerfile.worker --build-arg "SOURCE_SHA=${_GIT_SHA}" -t "${_WORKER_IMAGE}:${_GIT_SHA}" .
+        fi
+
   - id: push-gateway
     name: gcr.io/cloud-builders/docker
-    args: ['push','${_GATEWAY_IMAGE}:${_GIT_SHA}']
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.gateway-exists ]]; then
+          echo "REUSE_GATEWAY_IMMUTABLE_TAG"
+        else
+          docker push "${_GATEWAY_IMAGE}:${_GIT_SHA}"
+        fi
+
   - id: push-worker
     name: gcr.io/cloud-builders/docker
-    args: ['push','${_WORKER_IMAGE}:${_GIT_SHA}']
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.worker-exists ]]; then
+          echo "REUSE_WORKER_IMMUTABLE_TAG"
+        else
+          docker push "${_WORKER_IMAGE}:${_GIT_SHA}"
+        fi
   - id: evidence
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
