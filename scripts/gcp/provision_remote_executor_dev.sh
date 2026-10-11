@@ -34,7 +34,17 @@ cat >/tmp/jscc537-lifecycle.json <<JSON
 JSON
 gcloud storage buckets update "gs://$OPS_BUCKET" --lifecycle-file=/tmp/jscc537-lifecycle.json >/dev/null
 
-put_secret(){ local n="$1" v="$2"; gcloud secrets describe "$n" --project="$PROJECT" >/dev/null 2>&1 || gcloud secrets create "$n" --project="$PROJECT" --replication-policy=automatic >/dev/null; printf %s "$v" | gcloud secrets versions add "$n" --project="$PROJECT" --data-file=- >/dev/null; }
+put_secret(){
+  local n="$1" v="$2" current=""
+  if ! gcloud secrets describe "$n" --project="$PROJECT" >/dev/null 2>&1; then
+    gcloud secrets create "$n" --project="$PROJECT" --replication-policy=automatic >/dev/null
+  else
+    current="$(gcloud secrets versions access latest --secret="$n" --project="$PROJECT" 2>/dev/null || true)"
+  fi
+  if [[ "$current" != "$v" ]]; then
+    printf %s "$v" | gcloud secrets versions add "$n" --project="$PROJECT" --data-file=- >/dev/null
+  fi
+}
 put_secret JSCC_OPS_GOOGLE_CLIENT_ID "$GOOGLE_CLIENT_ID_VALUE"
 put_secret JSCC_OPS_GOOGLE_CLIENT_SECRET "$GOOGLE_CLIENT_SECRET_VALUE"
 put_secret JSCC_OPS_GOOGLE_ALLOWED_SUB "$OWNER_SUB"
