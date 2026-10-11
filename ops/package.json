@@ -1,0 +1,11 @@
+{
+  "name": "jscc-remote-executor",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check src/lib.mjs && node --check src/gateway.mjs && node --check src/worker.mjs"
+  }
+}
