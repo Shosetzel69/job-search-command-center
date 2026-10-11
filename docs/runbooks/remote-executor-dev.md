@@ -129,6 +129,16 @@ Use this order so failures remain attributable:
 
 A Remote Executor operation never creates an AgentFlow PASS by itself.
 
+## Trusted ops source admission
+
+Ops images may be built only from:
+- exact protected/reviewed `refs/heads/main`; or
+- an owner-approved immutable tag matching `refs/tags/jscc-ops-approved/*`.
+
+Every build must supply both the exact `SOURCE_SHA` and `TRUSTED_OPS_REF`. Cloud Build independently resolves the remote ref and rejects a SHA mismatch before tests/build/push. Feature-branch HEAD alone is never sufficient build authority.
+
+Use `scripts/gcp/build_remote_executor_dev.sh`; direct ad-hoc `gcloud builds submit` without the trusted-ref substitution fails closed.
+
 ## Routine deployment
 
 Routine deploy requires the same immutable image refs, ops source SHA, DEV runtime bucket and explicit `DEV_BASE_URL`.
