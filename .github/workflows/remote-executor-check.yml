@@ -80,6 +80,11 @@ jobs:
           grep -q 'labels.execution_name' ops/src/worker.mjs
           ! grep -Eq 'read[[:space:]]+-r|read[[:space:]]+-s|read[[:space:]]+-p' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q "replace(/_/g,'-')" ops/src/gateway.mjs
+          grep -q "\\[a-z0-9_-\\]" ops/src/gateway.mjs
+          grep -q 'LOG_LOCATION=' scripts/gcp/deploy_remote_executor_dev.sh
+          ! grep -q 'JSCC_OPS_GOOGLE_CLIENT_ID:latest' scripts/gcp/deploy_remote_executor_dev.sh
+          ! grep -q 'JSCC_OPS_GOOGLE_CLIENT_SECRET:latest' scripts/gcp/deploy_remote_executor_dev.sh
 
       - name: Validate IAM CLI compatibility
         run: |
