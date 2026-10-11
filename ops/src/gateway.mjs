@@ -307,72 +307,144 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code'], code_challenge_methods_supported: ['S256'], scopes_supported: [REQUIRED_SCOPE], token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
     }
     if (req.method === 'POST' && u.pathname === '/register') {
-      if (!cfg.clientSigningKey) return sendJson(res, 503, { error: 'oauth_not_configured' });
       const body = await readBody(req);
       const redirects = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
       try { validateChatGptRedirectUris(redirects); } catch { return sendJson(res, 400, { error: 'invalid_redirect_uris' }); }
-      const clientId = makeSignedClient(redirects, cfg.clientSigningKey);
-      return sendJson(res, 201, { client_id: clientId, redirect_uris: redirects, token_endpoint_auth_method: 'none', grant_types: ['authorization_code'], response_types: ['code'] });
+      return sendJson(res, 201, {
+        client_id: CHATGPT_CLIENT_ID,
+        redirect_uris: redirects,
+        token_endpoint_auth_method: 'none',
+        grant_types: ['authorization_code'],
+        response_types: ['code']
+      });
     }
     if (req.method === 'GET' && u.pathname === '/authorize') {
-      if (!(cfg.googleClientId && cfg.googleClientSecret && cfg.googleAllowedSub && cfg.clientSigningKey)) return sendText(res, 503, 'oauth_not_configured');
+      if (!(cfg.googleClientId && cfg.googleClientSecret && cfg.googleAllowedSub)) return sendText(res, 503, 'oauth_not_configured');
       const q = u.searchParams;
       const clientId = q.get('client_id') || '';
-      const client = parseSignedClient(clientId, cfg.clientSigningKey);
       const redirectUri = q.get('redirect_uri') || '';
-      const state = q.get('state') || '';
+      const clientState = q.get('state') || '';
       const challenge = q.get('code_challenge') || '';
       const method = q.get('code_challenge_method') || '';
       const scope = q.get('scope') || '';
       const resource = q.get('resource') || '';
-      if (!client || !client.redirect_uris.includes(redirectUri)) return sendText(res, 400, 'invalid_client_or_redirect');
+      if (clientId !== CHATGPT_CLIENT_ID || redirectUri !== CHATGPT_REDIRECT_URI) return sendText(res, 400, 'invalid_client_or_redirect');
+      if (q.get('response_type') !== 'code') return sendText(res, 400, 'unsupported_response_type');
       if (method !== 'S256' || !challenge) return sendText(res, 400, 'pkce_s256_required');
-      if (!scope.split(/\s+/).includes(REQUIRED_SCOPE)) return sendText(res, 400, 'required_scope_missing');
+      if (scope !== REQUIRED_SCOPE) return sendText(res, 400, 'required_scope_missing');
       if (resource !== `${issuer}/mcp`) return sendText(res, 400, 'invalid_resource');
-      const nonce = randomToken(24);
-      const upstreamState = makeSignedState({ expires_at_ms: Date.now()+STATE_TTL_MS, client_id: clientId, redirect_uri: redirectUri, client_state: state, scope, challenge, resource, audience: REQUIRED_AUDIENCE, nonce }, cfg.clientSigningKey);
+
+      const upstreamState = oidc.randomState();
+      const nonce = oidc.randomNonce();
+      const googleVerifier = oidc.randomPKCECodeVerifier();
+      const googleChallenge = await oidc.calculatePKCECodeChallenge(googleVerifier);
+      await gcsWriteJson(cfg.bucket, `auth/upstream/${sha256(upstreamState)}.json`, {
+        consumed:false,
+        expires_at_ms:Date.now()+STATE_TTL_MS,
+        client_id:clientId,
+        redirect_uri:redirectUri,
+        client_state:clientState,
+        scope,
+        resource,
+        code_challenge:challenge,
+        code_challenge_method:method,
+        nonce,
+        google_code_verifier:googleVerifier
+      }, 0);
+
       const redirect = `${issuer}/oauth/google/callback`;
-      const gp = new URLSearchParams({ client_id: cfg.googleClientId, redirect_uri: redirect, response_type: 'code', scope: 'openid', state: upstreamState, nonce, prompt: 'select_account' });
-      res.writeHead(302, { location: `https://accounts.google.com/o/oauth2/v2/auth?${gp}`, 'cache-control': 'no-store' }); return res.end();
+      const gc = await googleConfig();
+      const redirectTo = oidc.buildAuthorizationUrl(gc, {
+        redirect_uri:redirect,
+        scope:'openid',
+        state:upstreamState,
+        nonce,
+        code_challenge:googleChallenge,
+        code_challenge_method:'S256',
+        prompt:'select_account'
+      });
+      res.writeHead(302, { location: redirectTo.href, 'cache-control': 'no-store' }); return res.end();
     }
     if (req.method === 'GET' && u.pathname === '/oauth/google/callback') {
-      const upstreamState = u.searchParams.get('state') || '', googleCode = u.searchParams.get('code') || '';
-      if (!(upstreamState && googleCode)) return sendText(res, 400, 'invalid_callback');
-      const st = parseSignedState(upstreamState, cfg.clientSigningKey);
-      if (!st) return sendText(res, 400, 'invalid_or_expired_upstream_state');
+      const upstreamState = u.searchParams.get('state') || '';
+      if (!upstreamState || !u.searchParams.get('code')) return sendText(res, 400, 'invalid_callback');
+      let st;
+      try { st = await consumeJson(cfg.bucket, `auth/upstream/${sha256(upstreamState)}.json`); }
+      catch { return sendText(res, 400, 'invalid_or_expired_upstream_state'); }
+
       const redirect = `${issuer}/oauth/google/callback`;
-      const gt = await googleTokenExchange(googleCode, redirect);
-      if (!gt.id_token) return sendText(res, 400, 'google_id_token_missing');
-      const claims = await verifyGoogleIdToken(gt.id_token, st.nonce, cfg.googleClientId);
-      if (claims.sub !== cfg.googleAllowedSub) return sendText(res, 403, 'unapproved_google_subject');
-      const code = randomToken(32);
-      await gcsWriteJson(cfg.bucket, `auth/codes/${sha256(code)}.json`, { consumed: false, expires_at_ms: Date.now()+AUTH_CODE_TTL_MS, client_id: st.client_id, redirect_uri: st.redirect_uri, scope: st.scope, resource: st.resource, audience: st.audience, challenge: st.challenge, actor_sub: claims.sub }, 0);
-      const out = new URL(st.redirect_uri); out.searchParams.set('code', code); out.searchParams.set('iss', issuer); if (st.client_state) out.searchParams.set('state', st.client_state);
+      const gc = await googleConfig();
+      const currentUrl = new URL(req.url, issuer);
+      let tokens;
+      try {
+        tokens = await oidc.authorizationCodeGrant(gc, currentUrl, {
+          pkceCodeVerifier:st.google_code_verifier,
+          expectedState:upstreamState,
+          expectedNonce:st.nonce,
+          idTokenExpected:true
+        });
+      } catch {
+        return sendText(res, 400, 'google_oidc_validation_failed');
+      }
+      const claims = tokens.claims();
+      if (!claims?.sub || claims.sub !== cfg.googleAllowedSub) return sendText(res, 403, 'unapproved_google_subject');
+
+      const authRequest = makeOAuthRequest({
+        method:'GET',
+        query:{
+          client_id:st.client_id,
+          redirect_uri:st.redirect_uri,
+          response_type:'code',
+          state:st.client_state,
+          scope:st.scope,
+          code_challenge:st.code_challenge,
+          code_challenge_method:st.code_challenge_method
+        }
+      });
+      let code;
+      try {
+        code = await oauth.authorize(authRequest, makeOAuthResponse(), {
+          authorizationCodeLifetime:AUTH_CODE_TTL_MS/1000,
+          authenticateHandler:{ handle:async()=>({ id:claims.sub, audience:REQUIRED_AUDIENCE, resource:st.resource }) }
+        });
+      } catch {
+        return sendText(res, 400, 'authorization_failed');
+      }
+      const out = new URL(st.redirect_uri);
+      out.searchParams.set('code', code.authorizationCode);
+      out.searchParams.set('iss', issuer);
+      if (st.client_state) out.searchParams.set('state', st.client_state);
       res.writeHead(302, { location: out.toString(), 'cache-control': 'no-store' }); return res.end();
     }
     if (req.method === 'POST' && u.pathname === '/token') {
       const body = await readBody(req);
-      const codeName = `auth/codes/${sha256(body.code || '')}.json`;
-      const current = await gcsReadJson(cfg.bucket, codeName);
-      const codeError = authorizationCodeError(current?.data, body);
-      if (codeError === 'invalid_target') return sendJson(res, 400, { error: 'invalid_target' });
-      if (codeError === 'pkce_failed') return sendJson(res, 400, { error: 'invalid_grant', error_description: 'pkce_failed' });
-      if (codeError) return sendJson(res, 400, { error: 'invalid_grant' });
-
+      if (body.resource !== `${issuer}/mcp`) return sendJson(res, 400, { error:'invalid_target' });
+      let token;
       try {
-        await gcsReplaceJson(cfg.bucket, codeName, { ...current.data, consumed: true, consumed_at: isoNow() }, current.generation);
-      } catch (e) {
-        if (e.message === 'generation_precondition_failed') return sendJson(res, 400, { error: 'invalid_grant', error_description: 'authorization_code_replay' });
-        throw e;
+        token = await oauth.token(
+          makeOAuthRequest({ method:'POST', headers:req.headers, body }),
+          makeOAuthResponse(),
+          {
+            accessTokenLifetime:ACCESS_TOKEN_TTL_MS/1000,
+            requireClientAuthentication:{ authorization_code:false }
+          }
+        );
+      } catch {
+        return sendJson(res, 400, { error:'invalid_grant' });
       }
-
-      const accessToken = randomToken(32);
-      await gcsWriteJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`, { revoked: false, expires_at_ms: Date.now()+ACCESS_TOKEN_TTL_MS, scope: current.data.scope, audience: current.data.audience, actor_sub: current.data.actor_sub, issued_at: isoNow() }, 0);
-      return sendJson(res, 200, { access_token: accessToken, token_type: 'Bearer', expires_in: 900, scope: current.data.scope });
+      const expiresAt = new Date(token.accessTokenExpiresAt).getTime();
+      return sendJson(res, 200, {
+        access_token:token.accessToken,
+        token_type:'Bearer',
+        expires_in:Math.max(0, Math.floor((expiresAt-Date.now())/1000)),
+        scope:Array.isArray(token.scope) ? token.scope.join(' ') : String(token.scope || REQUIRED_SCOPE)
+      });
     }
     if (req.method === 'POST' && u.pathname === '/revoke') {
-      const body = await readBody(req); const name = `auth/tokens/${sha256(body.token || '')}.json`; const cur = await gcsReadJson(cfg.bucket, name);
-      if (cur) await gcsReplaceJson(cfg.bucket, name, { ...cur.data, revoked: true, revoked_at: isoNow() }, cur.generation);
+      const body = await readBody(req);
+      const name = `auth/tokens/${sha256(body.token || '')}.json`;
+      const cur = await gcsReadJson(cfg.bucket, name);
+      if (cur) await gcsReplaceJson(cfg.bucket, name, { ...cur.data, revoked:true, revoked_at:isoNow() }, cur.generation);
       res.writeHead(200, { 'cache-control': 'no-store' }); return res.end();
     }
     if (u.pathname === '/mcp') {
