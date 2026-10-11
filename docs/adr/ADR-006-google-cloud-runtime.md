@@ -1,11 +1,11 @@
 # ADR-006 — Google Cloud runtime and immutable container promotion
 
 Status: `ACCEPTED`  
-Version: `v1.1`  
+Version: `v1.2`  
 Applicability: `CURRENT`  
 Applies to: `AGENTFLOW`  
 Effective from: `2026-09-27`  
-Amended: `2026-10-04` — #483 DB migration promotion gate  
+Amended: `2026-10-04` — #483 DB migration promotion gate  \nAmended: `2026-10-11` — #537 DEV engineering operations lineage  
 Supersedes: current GitHub-Actions-as-runtime hosting model after approved cutover
 
 ## Context
@@ -261,3 +261,38 @@ Costs/risks:
 ### #483 promotion observability amendment
 
 Promotion state is environment-owned operational evidence in the existing Cloud Storage runtime boundary. It is not candidate-managed product data and is not a second release authority. The control plane publishes a sanitized step checklist before the first normal promotion mutation; ADMIN UI may read it through the protected Command API boundary. Search run state and promotion state remain separate contracts.
+
+
+## Amendment — #537 DEV engineering operations lineage
+
+The approved Remote Executor adds a separate engineering control-plane lineage without changing the product promotion contract defined by this ADR.
+
+Product lineage remains:
+
+```text
+GitHub -> Cloud Build -> Artifact Registry repository jscc
+       -> immutable product digest -> DEV -> TEST -> PROD
+```
+
+Remote Executor lineage is separate:
+
+```text
+reviewed ops source SHA
+  -> dedicated ops Cloud Build identity
+  -> Artifact Registry repository jscc-ops
+  -> immutable gateway/worker digests
+  -> dedicated DEV ops deploy identity
+  -> jscc-ops-gateway-dev + jscc-diagnostics-dev
+```
+
+Constraints:
+
+- `jscc-ops` is an engineering security boundary, not a second product artifact repository;
+- ops artifacts are DEV-only and are not promoted through the product DEV/TEST/PROD chain;
+- product build/deploy identities have no ops publish/deploy authority;
+- ops build/deploy identities have no product publish/deploy authority;
+- runtime gateway/worker identities are distinct from build/deploy identities;
+- no Render or other validation host becomes part of the target architecture;
+- the approved runtime target remains GCP Cloud Run + Cloud Build + Artifact Registry.
+
+This amendment does not alter Nile persistence, product release identity, DB migration gates, or the canonical product promotion lifecycle.
