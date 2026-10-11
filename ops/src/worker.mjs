@@ -43,10 +43,14 @@ async function inspectRuntimeSnapshot(args) {
   if (!cfg.runtimeBucket) throw new Error('runtime_bucket_not_configured');
   const runId = args.run_id;
   const status = await gcsReadJson(cfg.runtimeBucket, `runs/${runId}/run-status.json`);
-  const jobs = await gcsReadJson(cfg.runtimeBucket, `runs/${runId}/jobs.json`);
-  if (!status && !jobs) throw new Error('runtime_snapshot_not_found');
-  const jobCount = Array.isArray(jobs?.data?.jobs) ? jobs.data.jobs.length : Number(jobs?.data?.results || 0);
-  return { target_alias:runId, run_status: status?.data?.status || status?.data?.state || null, published_jobs: jobCount, status_present:Boolean(status), jobs_present:Boolean(jobs) };
+  if (!status) throw new Error('runtime_snapshot_not_found');
+  const published = Number(status.data.jobs_published ?? status.data.results ?? 0);
+  return {
+    target_alias: runId,
+    run_status: status.data.status || status.data.state || null,
+    published_jobs: Number.isFinite(published) ? published : 0,
+    status_present: true
+  };
 }
 async function runTestSuite(args) {
   if (!cfg.devBaseUrl) throw new Error('dev_base_url_not_configured');
