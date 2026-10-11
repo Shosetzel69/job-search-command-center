@@ -96,6 +96,31 @@ test('public execution evidence exposes only sanitized root-cause and audit corr
 });
 
 
+test('bounded observe evidence exposes sanitized excerpt and degraded task metadata only',()=>{
+  const x=publicEvidence({
+    operation_id:'op-test-1234567890',
+    operation_state:'SUCCEEDED',
+    coarse_error:null,
+    assertions:{
+      target_alias:'jscc-search-dev-rrbgb',
+      line_count:2,
+      log_excerpt:'first line\\nsecond line',
+      task_metadata_available:false,
+      task_metadata_error:'task_read_403',
+      logs:['raw-secret'],
+      output:'raw-secret'
+    }
+  });
+  assert.equal(x.coarse_error,null);
+  assert.deepEqual(x.assertions,{
+    target_alias:'jscc-search-dev-rrbgb',
+    line_count:2,
+    task_metadata_available:false,
+    task_metadata_error:'task_read_403',
+    log_excerpt:'first line\\nsecond line'
+  });
+});
+
 test('bounded audit evidence proves actor binding without exposing identity',()=>{
   const x=publicEvidence({
     operation_id:'op-test-1234567890',
