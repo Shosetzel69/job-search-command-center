@@ -5,8 +5,8 @@ import {
   ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, CHATGPT_REDIRECT_URI, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow,
-  normalizeExecutionName, operationObject, authenticatedEvidence,
-  randomToken, releaseLease, sha256, validateChatGptRedirectUris, validateTaskRequest
+  normalizeExecutionName, operationObject, authenticatedEvidence, authorizationCodeRecordError, logicalTokenError,
+  randomToken, releaseLease, resolveIdempotencyReservation, sha256, validateChatGptRedirectUris, validateTaskRequest
 } from './lib.mjs';
 
 const cfg = envConfig();
@@ -67,7 +67,7 @@ const oauthModel = {
   },
   getAuthorizationCode: async (authorizationCode) => {
     const rec = await gcsReadJson(cfg.bucket, `auth/codes/${sha256(authorizationCode)}.json`);
-    if (!rec || rec.data.consumed || Number(rec.data.expires_at_ms) <= Date.now()) return false;
+    if (authorizationCodeRecordError(rec?.data)) return false;
     return {
       authorizationCode,
       expiresAt:new Date(rec.data.expires_at_ms),
@@ -109,7 +109,7 @@ const oauthModel = {
   },
   getAccessToken: async (accessToken) => {
     const rec = await gcsReadJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`);
-    if (!rec || rec.data.revoked || Number(rec.data.expires_at_ms) <= Date.now()) return false;
+    if (logicalTokenError(rec?.data)) return false;
     return {
       accessToken,
       accessTokenExpiresAt:new Date(rec.data.expires_at_ms),
@@ -230,9 +230,7 @@ async function acceptOperation(auth, toolArgs) {
 
   const returnExisting = async () => {
     const existing = await gcsReadJson(cfg.bucket, idemName);
-    if (!existing) throw new Error('idempotency_reservation_missing');
-    if (existing.data.request_hash !== requestHash) throw new Error('idempotency_conflict');
-    return { operation_id: existing.data.operation_id, duplicate: true };
+    return resolveIdempotencyReservation(existing?.data, requestHash);
   };
 
   const existing = await gcsReadJson(cfg.bucket, idemName);
