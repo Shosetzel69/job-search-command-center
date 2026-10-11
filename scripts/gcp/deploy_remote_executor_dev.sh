@@ -61,6 +61,7 @@ gcloud run deploy jscc-ops-gateway-dev \
   --max=1 \
   --concurrency=20 \
   --timeout=60 \
+  --remove-secrets=OAUTH_CLIENT_SIGNING_KEY \
   --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_DIGEST,WORKER_IMAGE_DIGEST=$WORKER_DIGEST,DIAGNOSTICS_JOB=jscc-diagnostics-dev"
 
 echo "Remote Executor DEV updated through dedicated deployer identity."
