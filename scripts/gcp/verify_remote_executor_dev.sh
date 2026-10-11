@@ -29,7 +29,14 @@ GW_EMAIL="jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com"
 WK_EMAIL="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com"
 DP_EMAIL="jscc-ops-deployer-dev@$PROJECT.iam.gserviceaccount.com"
 BUILD_EMAIL="jscc-ops-build@$SHARED.iam.gserviceaccount.com"
-LOG_LOCATION="$(gcloud logging buckets list --project="$PROJECT" --format='value(location,bucketId)' | awk '$2=="_Default"{print $1; exit}')"
+LOG_LOCATION="$(gcloud logging buckets list --project="$PROJECT" --format=json | python3 -c 'import json,re,sys
+for b in json.load(sys.stdin):
+    name=str(b.get("name",""))
+    m=re.match(r"^projects/[^/]+/locations/([^/]+)/buckets/_Default$",name)
+    if m:
+        print(m.group(1))
+        break
+')"
 [[ -n "$LOG_LOCATION" ]] || { echo "FAIL cannot resolve _Default log bucket location" >&2; exit 2; }
 PRODUCT_BUILD_EMAIL="jscc-build@$SHARED.iam.gserviceaccount.com"
 GW="serviceAccount:$GW_EMAIL"
