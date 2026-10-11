@@ -27,7 +27,7 @@ gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED
 gcloud projects add-iam-policy-binding "$SHARED"   --member="serviceAccount:jscc-ops-build@$SHARED.iam.gserviceaccount.com" --role=roles/logging.logWriter >/dev/null
 
 # Build exact current SHA with the isolated ops build identity.
-gcloud builds submit   --project="$SHARED"   --region="$REGION"   --config=cloudbuild.ops.yaml   --substitutions="_GIT_SHA=$SOURCE_SHA,COMMIT_SHA=$SOURCE_SHA"   .
+gcloud builds submit   --project="$SHARED"   --region="$REGION"   --config=cloudbuild.ops.yaml   --substitutions="_GIT_SHA=$SOURCE_SHA"   .
 
 GATEWAY_DIGEST="$(gcloud artifacts docker images describe "$GATEWAY_REPO:$SOURCE_SHA" --project="$SHARED" --format='value(image_summary.digest)')"
 WORKER_DIGEST="$(gcloud artifacts docker images describe "$WORKER_REPO:$SOURCE_SHA" --project="$SHARED" --format='value(image_summary.digest)')"
