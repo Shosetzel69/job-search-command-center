@@ -81,34 +81,46 @@ fi
 [[ "$DEV_BASE_URL" == https://* ]] || { echo "cannot resolve DEV_BASE_URL" >&2; exit 3; }
 [[ -n "$GCP_RUNTIME_BUCKET" ]] || { echo "cannot resolve GCP_RUNTIME_BUCKET" >&2; exit 3; }
 
-# Reuse already-provisioned Remote Executor OAuth material when available.
-# Prompt only on first bootstrap or after an intentional rotation.
+# Zero-input OAuth bootstrap.
+# Owner subject is derived from the active gcloud identity if not already stored.
+secret_read() {
+  gcloud secrets versions access latest --secret="$1" --project="$PROJECT" 2>/dev/null || true
+}
+
 if [[ -z "${GOOGLE_ALLOWED_SUB:-}" ]]; then
-  GOOGLE_ALLOWED_SUB="$(gcloud secrets versions access latest --secret=JSCC_OPS_GOOGLE_ALLOWED_SUB --project="$PROJECT" 2>/dev/null || true)"
+  GOOGLE_ALLOWED_SUB="$(secret_read JSCC_OPS_GOOGLE_ALLOWED_SUB)"
 fi
 if [[ -z "$GOOGLE_ALLOWED_SUB" ]]; then
-  read -rp "Remote Executor Google owner sub: " GOOGLE_ALLOWED_SUB
+  GOOGLE_ALLOWED_SUB="$(
+    gcloud auth print-identity-token 2>/dev/null | python3 -c 'import base64,json,sys
+t=sys.stdin.read().strip()
+p=t.split(".")[1]
+p += "=" * (-len(p) % 4)
+print(json.loads(base64.urlsafe_b64decode(p))["sub"])'
+  )"
 fi
-[[ -n "$GOOGLE_ALLOWED_SUB" ]] || { echo "Remote Executor Google owner sub is required" >&2; exit 3; }
+[[ -n "$GOOGLE_ALLOWED_SUB" ]] || { echo "BOOTSTRAP_BLOCKED=GOOGLE_OWNER_SUB_UNAVAILABLE" >&2; exit 3; }
 
 if [[ -z "${GOOGLE_CLIENT_ID:-}" ]]; then
-  GOOGLE_CLIENT_ID="$(gcloud secrets versions access latest --secret=JSCC_OPS_GOOGLE_CLIENT_ID --project="$PROJECT" 2>/dev/null || true)"
+  GOOGLE_CLIENT_ID="$(secret_read JSCC_OPS_GOOGLE_CLIENT_ID)"
 fi
 if [[ -z "$GOOGLE_CLIENT_ID" ]]; then
-  read -rp "Remote Executor Google OAuth client ID: " GOOGLE_CLIENT_ID
+  echo "BOOTSTRAP_BLOCKED=OAUTH_CLIENT_ID_MISSING" >&2
+  echo "JSCC_OPS_GOOGLE_CLIENT_ID must exist in Secret Manager; bootstrap is intentionally non-interactive." >&2
+  exit 3
 fi
 
 if [[ -z "${GOOGLE_CLIENT_SECRET:-}" ]]; then
-  GOOGLE_CLIENT_SECRET="$(gcloud secrets versions access latest --secret=JSCC_OPS_GOOGLE_CLIENT_SECRET --project="$PROJECT" 2>/dev/null || true)"
+  GOOGLE_CLIENT_SECRET="$(secret_read JSCC_OPS_GOOGLE_CLIENT_SECRET)"
 fi
 if [[ -z "$GOOGLE_CLIENT_SECRET" ]]; then
-  read -rsp "Remote Executor Google OAuth client secret: " GOOGLE_CLIENT_SECRET
-  echo
+  echo "BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING" >&2
+  echo "JSCC_OPS_GOOGLE_CLIENT_SECRET must exist in Secret Manager; Google does not expose a lost Web OAuth secret for automatic recovery." >&2
+  exit 3
 fi
-[[ -n "$GOOGLE_CLIENT_ID" && -n "$GOOGLE_CLIENT_SECRET" ]]
 
 if [[ -z "${OAUTH_CLIENT_SIGNING_KEY:-}" ]]; then
-  OAUTH_CLIENT_SIGNING_KEY="$(gcloud secrets versions access latest --secret=JSCC_OPS_CLIENT_SIGNING_KEY --project="$PROJECT" 2>/dev/null || true)"
+  OAUTH_CLIENT_SIGNING_KEY="$(secret_read JSCC_OPS_CLIENT_SIGNING_KEY)"
 fi
 OAUTH_CLIENT_SIGNING_KEY="${OAUTH_CLIENT_SIGNING_KEY:-$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))')}"
 
