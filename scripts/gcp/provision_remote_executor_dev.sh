@@ -15,6 +15,8 @@ SOURCE_SHA="${SOURCE_SHA:?SOURCE_SHA required}"
 DEV_BASE_URL="${DEV_BASE_URL:?DEV_BASE_URL required}"
 [[ "$DEV_BASE_URL" == https://* ]]
 [[ "$GATEWAY_IMAGE" == *@sha256:* && "$WORKER_IMAGE" == *@sha256:* ]]
+GATEWAY_DIGEST="${GATEWAY_IMAGE##*@}"
+WORKER_DIGEST="${WORKER_IMAGE##*@}"
 [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
 
 gcloud artifacts repositories describe jscc-ops --project="$SHARED" --location="$REGION" >/dev/null 2>&1 || \
@@ -43,7 +45,7 @@ DEV_PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projec
 SERVERLESS_AGENT="service-${DEV_PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
 gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="serviceAccount:$SERVERLESS_AGENT" --role=roles/artifactregistry.reader >/dev/null
 
-gcloud run jobs deploy jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --tasks=1 --max-retries=0 --task-timeout=15m --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_IMAGE,WORKER_IMAGE_DIGEST=$WORKER_IMAGE,DIAGNOSTICS_JOB=jscc-diagnostics-dev,DEV_BASE_URL=$DEV_BASE_URL,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev" --no-cpu-boost
+gcloud run jobs deploy jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --tasks=1 --max-retries=0 --task-timeout=15m --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_DIGEST,WORKER_IMAGE_DIGEST=$WORKER_DIGEST,DIAGNOSTICS_JOB=jscc-diagnostics-dev,DEV_BASE_URL=$DEV_BASE_URL,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev" --no-cpu-boost
 
 cat >/tmp/jscc537-gateway-role.yaml <<'YAML'
 title: JSCC Ops Gateway DEV
@@ -83,7 +85,7 @@ gcloud storage buckets add-iam-policy-binding "gs://$RUNTIME_BUCKET" --member="s
 gcloud logging views describe jscc-ops-dev --project="$PROJECT" --location=global --bucket=_Default >/dev/null 2>&1 || gcloud logging views create jscc-ops-dev --project="$PROJECT" --location=global --bucket=_Default --log-filter='resource.type="cloud_run_job" AND (resource.labels.job_name="jscc-search-dev" OR resource.labels.job_name="jscc-diagnostics-dev")' >/dev/null
 gcloud logging views add-iam-policy-binding jscc-ops-dev --project="$PROJECT" --location=global --bucket=_Default --member="serviceAccount:jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --role=roles/logging.viewAccessor >/dev/null
 
-gcloud run deploy jscc-ops-gateway-dev --project="$PROJECT" --region="$REGION" --image="$GATEWAY_IMAGE" --service-account="jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --min=0 --max=1 --concurrency=20 --timeout=60 --allow-unauthenticated --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_IMAGE,WORKER_IMAGE_DIGEST=$WORKER_IMAGE,DIAGNOSTICS_JOB=jscc-diagnostics-dev" --set-secrets="GOOGLE_CLIENT_ID=JSCC_OPS_GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=JSCC_OPS_GOOGLE_CLIENT_SECRET:latest,GOOGLE_ALLOWED_SUB=JSCC_OPS_GOOGLE_ALLOWED_SUB:latest,OAUTH_CLIENT_SIGNING_KEY=JSCC_OPS_CLIENT_SIGNING_KEY:latest"
+gcloud run deploy jscc-ops-gateway-dev --project="$PROJECT" --region="$REGION" --image="$GATEWAY_IMAGE" --service-account="jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com" --min=0 --max=1 --concurrency=20 --timeout=60 --allow-unauthenticated --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_DIGEST,WORKER_IMAGE_DIGEST=$WORKER_DIGEST,DIAGNOSTICS_JOB=jscc-diagnostics-dev" --set-secrets="GOOGLE_CLIENT_ID=JSCC_OPS_GOOGLE_CLIENT_ID:latest,GOOGLE_CLIENT_SECRET=JSCC_OPS_GOOGLE_CLIENT_SECRET:latest,GOOGLE_ALLOWED_SUB=JSCC_OPS_GOOGLE_ALLOWED_SUB:latest,OAUTH_CLIENT_SIGNING_KEY=JSCC_OPS_CLIENT_SIGNING_KEY:latest"
 
 echo "Provisioned #537 DEV resources only. Run verify_remote_executor_dev.sh before connecting ChatGPT."
 
