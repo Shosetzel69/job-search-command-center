@@ -114,7 +114,7 @@ async function acceptOperation(auth, toolArgs) {
   if (existing) return returnExisting();
 
   const timeout = taskReq.task_class === 'VERIFY' ? VERIFY_TIMEOUT_MS : OBSERVE_TIMEOUT_MS;
-  const opId = `op-${Date.now().toString(36)}-${randomToken(8).toLowerCase()}`;
+  const opId = `op-${Date.now().toString(36)}-${randomToken(8).toLowerCase().replace(/_/g,'-')}`;
   const reservation = { operation_id: opId, request_hash: requestHash, created_at: isoNow() };
 
   try {
@@ -165,7 +165,7 @@ async function acceptOperation(auth, toolArgs) {
 
 async function getOperation(id) {
   const opId = String(id || '').trim();
-  if (!/^op-[a-z0-9-]{10,100}$/.test(opId)) throw new Error('invalid_operation_id');
+  if (!/^op-[a-z0-9_-]{10,100}$/.test(opId)) throw new Error('invalid_operation_id');
   const rec = await gcsReadJson(cfg.bucket, `operations/${opId}.json`);
   if (!rec) throw new Error('operation_not_found');
   const result = await gcsReadJson(cfg.bucket, `results/${opId}.json`);
