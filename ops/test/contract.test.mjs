@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   REQUIRED_AUDIENCE, REQUIRED_SCOPE, logicalTokenError,
-  CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeExternal, sanitizeText, sha256, assertDailyOperationAllowed, validateChatGptRedirectUris, validateDispatchBinding, validateTaskRequest
+  CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeExternal, sanitizeText, sha256, assertDailyOperationAllowed, assertLeaseAvailable, authorizationCodeRecordError, operationObject, resolveIdempotencyReservation, validateChatGptRedirectUris, validateDispatchBinding, validateTaskRequest
 } from '../src/lib.mjs';
 
 test('N1 unknown task rejected',()=>assert.throws(()=>validateTaskRequest('shell',{command:'id'}),/unknown_task/));
@@ -154,4 +154,43 @@ test('N25 sanitizer exception fails closed with zero external payload',()=>{
 test('N27 daily cap 50 rejects the next accepted operation',()=>{
   assert.equal(assertDailyOperationAllowed(49),50);
   assert.throws(()=>assertDailyOperationAllowed(50),/daily_operation_limit/);
+});
+
+
+test('N11 idempotency reservation returns the same operation and rejects conflicting reuse',()=>{
+  const record={operation_id:'op-test-1234567890',request_hash:'hash-a'};
+  assert.deepEqual(resolveIdempotencyReservation(record,'hash-a'),{operation_id:'op-test-1234567890',duplicate:true});
+  assert.throws(()=>resolveIdempotencyReservation(record,'hash-b'),/idempotency_conflict/);
+});
+
+test('N12 second concurrent diagnostic fails closed',()=>{
+  assert.throws(()=>assertLeaseAvailable({state:'ACTIVE',expires_at_ms:Date.now()+60000}),/diagnostic_already_active/);
+  assert.equal(assertLeaseAvailable({state:'RELEASED',expires_at_ms:Date.now()+60000}),true);
+});
+
+test('N14 audit evidence correlates operation actor SHA and image identities without exposing actor',()=>{
+  const task=validateTaskRequest('run_test_suite',{suite:'dev-health',expected_source_sha:'a'.repeat(40)});
+  const op=operationObject('op-test-1234567890',task,{
+    work_item_ref:'#537',
+    idempotency_key_hash:'idem-hash',
+    actor_sub_hash:'actor-hash',
+    ops_source_sha:'b'.repeat(40),
+    gateway_image_digest:'sha256:'+'c'.repeat(64),
+    worker_image_digest:'sha256:'+'d'.repeat(64)
+  });
+  const out=authenticatedEvidence({...op,execution_name:'jscc-diagnostics-dev-abc123'});
+  assert.equal(out.operation_id,'op-test-1234567890');
+  assert.equal(out.actor_bound,true);
+  assert.equal(out.ops_source_sha,'b'.repeat(40));
+  assert.equal(out.gateway_image_digest,'sha256:'+'c'.repeat(64));
+  assert.equal(out.worker_image_digest,'sha256:'+'d'.repeat(64));
+  assert.equal(out.execution_name,'jscc-diagnostics-dev-abc123');
+  assert.equal('actor_sub_hash' in out,false);
+});
+
+test('N21 authorization code reuse and expiry are rejected',()=>{
+  const valid={consumed:false,expires_at_ms:Date.now()+60000};
+  assert.equal(authorizationCodeRecordError(valid),null);
+  assert.equal(authorizationCodeRecordError({...valid,consumed:true}),'invalid_grant');
+  assert.equal(authorizationCodeRecordError({...valid,expires_at_ms:Date.now()-1}),'invalid_grant');
 });
