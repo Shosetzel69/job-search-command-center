@@ -37,7 +37,7 @@ The preferred one-shot bootstrap script is:
 
 `scripts/gcp/bootstrap_remote_executor_dev.sh`
 
-It builds the exact reviewed branch HEAD with the isolated ops build identity, resolves the existing DEV target facts, prompts only for missing OAuth bootstrap values, and then invokes the idempotent provisioning layer:
+It builds the exact reviewed branch HEAD with the isolated ops build identity, resolves the existing DEV target facts, reuses the dedicated OAuth material from Secret Manager without interactive prompts, and then invokes the idempotent provisioning layer:
 
 `scripts/gcp/provision_remote_executor_dev.sh`
 
@@ -69,6 +69,8 @@ under impersonation of:
 
 ## OAuth callback cutover
 
+Cloud Run can expose both deterministic and hash-based stable service URLs. For #537, use the exact URL returned by `gcloud run services describe jscc-ops-gateway-dev --format='value(status.url)'` and emitted by the bootstrap as `GATEWAY_URL`. Do not mix URL variants in the OAuth flow.
+
 After the first gateway deployment:
 
 1. Read the gateway URL from Cloud Run:
@@ -89,7 +91,9 @@ The gateway OAuth contract is Authorization Code + PKCE S256, Google OIDC, exact
 
 Before connecting ChatGPT, execute:
 
-`GCP_RUNTIME_BUCKET=<dev-runtime-bucket> scripts/gcp/verify_remote_executor_dev.sh`
+`scripts/gcp/verify_remote_executor_dev.sh`
+
+The verifier resolves the existing DEV runtime bucket automatically.
 
 The verification must PASS before live MCP validation. It checks, among other controls:
 
@@ -140,6 +144,22 @@ It cannot update JSCC product services/jobs.
 Rollback uses the previous known-good immutable gateway and worker digests through the routine deploy script. Do not rebuild an old version.
 
 If auth, IAM, execution binding, sanitizer, target environment or image identity becomes ambiguous, fail closed and stop the ATC execution.
+
+## Live bootstrap baseline validated 2026-10-11
+
+The first complete DEV bootstrap passed on source SHA `76a964b346a43101350af5e8ac41942656856adb`.
+
+Validated live evidence:
+- Cloud Build `1f980840-276a-4ed4-b704-25ffd6d61849` — SUCCESS;
+- gateway digest `sha256:d3b6411fe44ba0ae028ea8d6ba09f1179e19e6ee420b20a31eaec0cb541bc60f`;
+- worker digest `sha256:3d30c540fb1fb68774303e3642761ae55d22b61d13ad7308f30a96de8ead654f`;
+- `jscc-diagnostics-dev` deployed;
+- `jscc-ops-gateway-dev` deployed;
+- dedicated logging view IAM updated;
+- routine deployer roles/bindings created;
+- terminal result `REMOTE_EXECUTOR_BOOTSTRAP=PROVISIONED`.
+
+This live result is the operational baseline for subsequent verifier and MCP acceptance evidence.
 
 ## Evidence
 
