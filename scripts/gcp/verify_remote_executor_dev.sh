@@ -91,7 +91,7 @@ BUILD_SOURCE_POLICY="$(gcloud storage buckets get-iam-policy "gs://$OPS_BUILD_SO
 BUILD_SOURCE_DESC="$(gcloud storage buckets describe "gs://$OPS_BUILD_SOURCE_BUCKET" --format=json)"
 require_contains "$BUILD_SOURCE_POLICY" "$BUILD_EMAIL" 'ops build identity can read dedicated Cloud Build source bucket'
 require_contains "$BUILD_SOURCE_POLICY" 'roles/storage.objectViewer' 'ops build source bucket uses objectViewer'
-python3 -c 'import json,sys; d=json.load(sys.stdin); ubla=((d.get("iamConfiguration") or {}).get("uniformBucketLevelAccess") or {}).get("enabled") is True; rules=(d.get("lifecycle") or {}).get("rule") or []; ttl=any((r.get("action") or {}).get("type")=="Delete" and (r.get("condition") or {}).get("age")==1 for r in rules); ok=ubla and ttl; print(("PASS " if ok else "FAIL ")+"dedicated build source bucket UBLA + 1-day lifecycle",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$BUILD_SOURCE_DESC" || fail=1
+python3 -c 'import json,sys; d=json.load(sys.stdin); ubla=(d.get("uniform_bucket_level_access") is True) or (((d.get("iamConfiguration") or {}).get("uniformBucketLevelAccess") or {}).get("enabled") is True); lc=d.get("lifecycle_config") or d.get("lifecycle") or {}; rules=lc.get("rule") or lc.get("rules") or []; ttl=any((r.get("action") or {}).get("type")=="Delete" and int((r.get("condition") or {}).get("age",-1))==1 for r in rules); ok=ubla and ttl; print(("PASS " if ok else "FAIL ")+"dedicated build source bucket UBLA + 1-day lifecycle",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$BUILD_SOURCE_DESC" || fail=1
 require_contains "$OPS_AR_POLICY" "$BUILD_EMAIL" 'ops build identity can publish jscc-ops'
 require_contains "$OPS_AR_POLICY" "$DP_EMAIL" 'ops deployer can read jscc-ops'
 require_absent "$OPS_AR_POLICY" "$PRODUCT_BUILD_EMAIL" 'N18 product build identity absent from jscc-ops repository policy'
@@ -135,7 +135,7 @@ require_contains "$RUNTIME_POLICY" "/run-status.json" 'worker runtime binding li
 require_absent "$RUNTIME_POLICY" "/jobs.json" 'worker runtime binding excludes jobs payloads'
 require_absent "$RUNTIME_POLICY" "$GW_EMAIL" 'N6 gateway has no raw runtime bucket access'
 BUCKET_DESC="$(gcloud storage buckets describe "gs://$OPS_BUCKET" --format=json)"
-python3 -c 'import json,sys; d=json.load(sys.stdin); ages=[r.get("condition",{}).get("age") for r in d.get("lifecycle",{}).get("rule",[]) if r.get("action",{}).get("type")=="Delete"]; ok=14 in ages; print(("PASS " if ok else "FAIL ")+"private ops-state lifecycle is 14 days",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$BUCKET_DESC" || fail=1
+python3 -c 'import json,sys; d=json.load(sys.stdin); lc=d.get("lifecycle_config") or d.get("lifecycle") or {}; rules=lc.get("rule") or lc.get("rules") or []; ages=[int((r.get("condition") or {}).get("age",-1)) for r in rules if (r.get("action") or {}).get("type")=="Delete"]; ok=14 in ages; print(("PASS " if ok else "FAIL ")+"private ops-state lifecycle is 14 days",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$BUCKET_DESC" || fail=1
 
 # Dedicated log view only.
 LOG_POLICY="$(gcloud logging views get-iam-policy jscc-ops-dev --project="$PROJECT" --location="$LOG_LOCATION" --bucket=_Default --format=json)"
@@ -158,7 +158,7 @@ SERVICE_DESC="$(gcloud run services describe jscc-ops-gateway-dev --project="$PR
 require_contains "$JOB_DESC" '"maxRetries": 0' 'worker automatic retry is zero'
 require_contains "$JOB_DESC" "$WK_EMAIL" 'diagnostics job uses dedicated worker identity'
 require_contains "$SERVICE_DESC" "$GW_EMAIL" 'gateway uses dedicated gateway identity'
-require_contains "$SERVICE_DESC" '"maxInstanceCount": 1' 'gateway max instances = 1'
+python3 -c 'import json,sys; d=json.load(sys.stdin); vals=[]; vals.append((d.get("scaling") or {}).get("maxInstanceCount")); vals.append(((d.get("metadata") or {}).get("annotations") or {}).get("run.googleapis.com/maxScale")); vals.append((((((d.get("spec") or {}).get("template") or {}).get("metadata") or {}).get("annotations") or {}).get("autoscaling.knative.dev/maxScale"))); ok=any(str(v)=="1" for v in vals if v is not None); print(("PASS " if ok else "FAIL ")+"gateway max instances = 1",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$SERVICE_DESC" || fail=1
 
 # N29/N30 — no DB/tenant secret role and zero TEST/PROD grants.
 WK_SECRET_BINDINGS="$(gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' --filter="bindings.members:$WK AND bindings.role:roles/secretmanager" --format='value(bindings.role)')"
