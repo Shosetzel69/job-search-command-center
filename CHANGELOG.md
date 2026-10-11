@@ -6,7 +6,7 @@
 
 ### Guvernanta
 
-- #545: adoptata regula `Feature-led closure / Return-to-root` in `GOVERNANCE.md` §2.9, cu referinta AI; blocker-ele nu substituie acceptanta functionala sau gate-urile existente.
+- #545: adoptata regula `Feature-led closure / Return-to-root` si modelul hibrid de urmarire: observatii locale prin puncte si comentarii in root Issue, Issues separate doar pentru obiective independente/dependinte transversale/controale distincte; se pastreaza ATC, review, Functional Acceptance si gate-urile de release.
 
 ### Security
 
