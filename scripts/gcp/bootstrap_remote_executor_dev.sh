@@ -58,12 +58,11 @@ fi
 [[ "$DEV_BASE_URL" == https://* ]] || { echo "cannot resolve DEV_BASE_URL" >&2; exit 3; }
 [[ -n "$GCP_RUNTIME_BUCKET" ]] || { echo "cannot resolve GCP_RUNTIME_BUCKET" >&2; exit 3; }
 
-# Reuse the existing owner subject value as bootstrap input only; the worker never receives Secret Manager access.
+# Remote Executor owner identity is independent from product runtime identity.
 if [[ -z "${GOOGLE_ALLOWED_SUB:-}" ]]; then
-  GOOGLE_ALLOWED_SUB="$(gcloud secrets versions access latest --secret=ALLOWED_GOOGLE_SUB --project="$PROJECT" 2>/dev/null || true)"
+  read -rp "Remote Executor Google owner sub: " GOOGLE_ALLOWED_SUB
 fi
-[[ -n "$GOOGLE_ALLOWED_SUB" ]] || { read -rp "Google owner sub: " GOOGLE_ALLOWED_SUB; }
-[[ -n "$GOOGLE_ALLOWED_SUB" ]]
+[[ -n "$GOOGLE_ALLOWED_SUB" ]] || { echo "Remote Executor Google owner sub is required" >&2; exit 3; }
 
 if [[ -z "${GOOGLE_CLIENT_ID:-}" ]]; then
   read -rp "Remote Executor Google OAuth client ID: " GOOGLE_CLIENT_ID
