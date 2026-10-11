@@ -25,6 +25,8 @@ Remote Executor images use the dedicated Artifact Registry repository:
 
 The ops images are built from an exact reviewed Git SHA by `cloudbuild.ops.yaml` using `jscc-ops-build@jscc-shared.iam.gserviceaccount.com`.
 
+Cloud Build source staging for #537 uses the dedicated UBLA bucket `jscc-shared-ops-cloudbuild-source` with a 1-day lifecycle. The ops build identity has read access to that dedicated staging bucket only; the shared `jscc-shared_cloudbuild` bucket is not modified for #537.
+
 The worker image contains only the Remote Executor implementation. It does not package the JSCC application candidate. `run_test_suite` verifies the already-deployed DEV application through a prepackaged, non-destructive suite.
 
 Do not use the product `jscc-build` identity to publish `jscc-ops` images.
