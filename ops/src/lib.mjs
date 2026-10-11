@@ -182,20 +182,14 @@ export function authenticatedEvidence(result) {
   return out;
 }
 
-export function authorizationCodeError(record, request, now = Date.now()) {
-  if (!record || record.consumed || Number(record.expires_at_ms) <= now) return 'invalid_grant';
-  if (request.client_id !== record.client_id || request.redirect_uri !== record.redirect_uri) return 'invalid_grant';
-  if (request.resource !== record.resource) return 'invalid_target';
-  if (sha256(request.code_verifier || '') !== record.challenge) return 'pkce_failed';
-  return null;
-}
-
-export function logicalTokenError(record, now = Date.now()) {
+export function accessTokenRecordError(record, expectedResource = null, now = Date.now()) {
   if (!record) return 'invalid_token';
   if (record.revoked) return 'revoked_token';
   if (Number(record.expires_at_ms) <= now) return 'expired_token';
   if (record.audience !== REQUIRED_AUDIENCE) return 'wrong_audience';
-  if (!String(record.scope || '').split(/\s+/).includes(REQUIRED_SCOPE)) return 'insufficient_scope';
+  const scopes = Array.isArray(record.scope) ? record.scope : String(record.scope || '').split(/\s+/).filter(Boolean);
+  if (!scopes.includes(REQUIRED_SCOPE)) return 'insufficient_scope';
+  if (expectedResource && record.resource !== expectedResource) return 'wrong_resource';
   return null;
 }
 
