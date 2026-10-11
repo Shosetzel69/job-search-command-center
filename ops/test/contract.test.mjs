@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   REQUIRED_AUDIENCE, REQUIRED_SCOPE, logicalTokenError, makeSignedClient, parseSignedClient,
-  publicEvidence, sanitizeText, sha256, validateGoogleClaims, validateTaskRequest
+  makeSignedState, parseSignedState, publicEvidence, sanitizeText, sha256, validateGoogleClaims, validateTaskRequest
 } from '../src/lib.mjs';
 
 test('N1 unknown task rejected',()=>assert.throws(()=>validateTaskRequest('shell',{command:'id'}),/unknown_task/));
@@ -17,10 +17,10 @@ test('N9 sanitizer redacts tokens email connection strings',()=>{
   const s=sanitizeText('Bearer abc.def user@example.com postgresql://u:p@host/db access_token=secret');
   assert.equal(s.includes('user@example.com'),false);assert.equal(s.includes('postgresql://'),false);assert.equal(s.includes('access_token=secret'),false);
 });
-test('N10 SHA must be exact immutable SHA',()=>assert.throws(()=>validateTaskRequest('run_test_suite',{suite:'ops-contract',expected_source_sha:'main'}),/invalid_source_sha/));
+test('N10 SHA must be exact immutable SHA',()=>assert.throws(()=>validateTaskRequest('run_test_suite',{suite:'dev-health',expected_source_sha:'main'}),/invalid_source_sha/));
 test('N13 operation/test verdict remain distinct in public evidence',()=>{
-  const x=publicEvidence({operation_id:'op-x',operation_state:'SUCCEEDED',test_verdict:'FAIL',private_output:'secret'});
-  assert.equal(x.operation_state,'SUCCEEDED');assert.equal(x.test_verdict,'FAIL');assert.equal('private_output' in x,false);
+  const x=publicEvidence({operation_id:'op-x',operation_state:'SUCCEEDED',test_verdict:'FAIL',ops_source_sha:'a'.repeat(40),target_source_sha:'b'.repeat(40),private_output:'secret'});
+  assert.equal(x.operation_state,'SUCCEEDED');assert.equal(x.test_verdict,'FAIL');assert.equal(x.ops_source_sha,'a'.repeat(40));assert.equal(x.target_source_sha,'b'.repeat(40));assert.equal('private_output' in x,false);
 });
 test('N20 wrong audience rejected',()=>assert.equal(logicalTokenError({revoked:false,expires_at_ms:Date.now()+1000,scope:REQUIRED_SCOPE,audience:'wrong'}),'wrong_audience'));
 test('N21 wrong scope rejected',()=>assert.equal(logicalTokenError({revoked:false,expires_at_ms:Date.now()+1000,scope:'other',audience:REQUIRED_AUDIENCE}),'insufficient_scope'));
@@ -47,4 +47,11 @@ test('N26 nested assertions reject raw logs and output', () => {
     assertions:{target_alias:'jscc-search-dev-abc123',line_count:2,logs:['secret'],output:'secret',private_output:'secret'}
   });
   assert.deepEqual(out.assertions,{target_alias:'jscc-search-dev-abc123',line_count:2});
+});
+
+test('OAuth upstream state is stateless, expiring and tamper evident',()=>{
+  const st=makeSignedState({expires_at_ms:Date.now()+60000,client_id:'c',redirect_uri:'https://example.com/cb',challenge:'x',nonce:'n'},'k');
+  assert.equal(parseSignedState(st,'k').nonce,'n');
+  assert.equal(parseSignedState(st+'x','k'),null);
+  assert.equal(parseSignedState(makeSignedState({expires_at_ms:Date.now()-1,client_id:'c',redirect_uri:'https://example.com/cb',challenge:'x',nonce:'n'},'k'),'k'),null);
 });
