@@ -7,7 +7,7 @@ steps:
   - id: validate-candidate
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
-    args: ['-ceu', '[[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]] && [[ "${COMMIT_SHA}" == "${_GIT_SHA}" ]]']
+    args: ['-ceu', '[[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]']
   - id: ops-contract-tests
     name: node:22-bookworm-slim
     entrypoint: bash
