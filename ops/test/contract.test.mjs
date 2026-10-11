@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  REQUIRED_AUDIENCE, REQUIRED_SCOPE, logicalTokenError,
+  REQUIRED_AUDIENCE, REQUIRED_SCOPE, accessTokenRecordError,
   CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeExternal, sanitizeText, sha256, assertDailyOperationAllowed, assertLeaseAvailable, authorizationCodeRecordError, operationObject, resolveIdempotencyReservation, validateChatGptRedirectUris, validateDispatchBinding, validateTaskRequest
 } from '../src/lib.mjs';
 
@@ -22,11 +22,11 @@ test('N13 operation/test verdict remain distinct in public evidence',()=>{
   const x=publicEvidence({operation_id:'op-x',operation_state:'SUCCEEDED',test_verdict:'FAIL',ops_source_sha:'a'.repeat(40),target_source_sha:'b'.repeat(40),private_output:'secret'});
   assert.equal(x.operation_state,'SUCCEEDED');assert.equal(x.test_verdict,'FAIL');assert.equal(x.ops_source_sha,'a'.repeat(40));assert.equal(x.target_source_sha,'b'.repeat(40));assert.equal('private_output' in x,false);
 });
-test('N20 wrong audience rejected',()=>assert.equal(logicalTokenError({revoked:false,expires_at_ms:Date.now()+1000,scope:REQUIRED_SCOPE,audience:'wrong'}),'wrong_audience'));
-test('N21 wrong scope rejected',()=>assert.equal(logicalTokenError({revoked:false,expires_at_ms:Date.now()+1000,scope:'other',audience:REQUIRED_AUDIENCE}),'insufficient_scope'));
-test('N21 expired/revoked rejected',()=>{
-  assert.equal(logicalTokenError({revoked:false,expires_at_ms:Date.now()-1,scope:REQUIRED_SCOPE,audience:REQUIRED_AUDIENCE}),'expired_token');
-  assert.equal(logicalTokenError({revoked:true,expires_at_ms:Date.now()+1000,scope:REQUIRED_SCOPE,audience:REQUIRED_AUDIENCE}),'revoked_token');
+test('N20 wrong audience rejected',()=>assert.equal(accessTokenRecordError({revoked:false,expires_at_ms:Date.now()+1000,scope:[REQUIRED_SCOPE],audience:'wrong'}),'wrong_audience'));
+test('N20 wrong scope rejected',()=>assert.equal(accessTokenRecordError({revoked:false,expires_at_ms:Date.now()+1000,scope:['other'],audience:REQUIRED_AUDIENCE}),'insufficient_scope'));
+test('N20 expired and revoked tokens rejected',()=>{
+  assert.equal(accessTokenRecordError({revoked:false,expires_at_ms:Date.now()-1,scope:[REQUIRED_SCOPE],audience:REQUIRED_AUDIENCE}),'expired_token');
+  assert.equal(accessTokenRecordError({revoked:true,expires_at_ms:Date.now()+1000,scope:[REQUIRED_SCOPE],audience:REQUIRED_AUDIENCE}),'revoked_token');
 });
 test('N26 public projection is allowlist only',()=>{
   const x=publicEvidence({operation_id:'x',raw_logs:'secret',actor_sub:'id',signed_url:'url',assertions:{a:true}});
