@@ -21,7 +21,7 @@ gcloud run services describe jscc-ops-gateway-dev --project="$PROJECT" --region=
 gcloud run jobs deploy jscc-diagnostics-dev \
   --project="$PROJECT" --region="$REGION" --impersonate-service-account="$DEPLOYER" \
   --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" \
-  --tasks=1 --max-retries=0 --task-timeout=15m --no-cpu-boost \
+  --tasks=1 --max-retries=0 --task-timeout=15m \
   --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_DIGEST,WORKER_IMAGE_DIGEST=$WORKER_DIGEST,DIAGNOSTICS_JOB=jscc-diagnostics-dev,DEV_BASE_URL=$DEV_BASE_URL,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev"
 
 gcloud run deploy jscc-ops-gateway-dev \
