@@ -58,8 +58,8 @@ role_permissions_exact(){
 echo '=== #537 IAM / runtime verification ==='
 
 # Gateway: exactly one Job execution permission plus LRO status read.
-role_permissions_exact jsccOpsGatewayDev 'run.jobs.run' 'gateway run role exact' "$PROJECT"
-role_permissions_exact jsccOpsGatewayLroReaderDev 'run.operations.get' 'gateway LRO role exact' "$PROJECT"
+role_permissions_exact jsccOpsGatewayDev 'run.jobs.run' 'N5/N15 gateway run role exact: run only, no mutation/cancel' "$PROJECT"
+role_permissions_exact jsccOpsGatewayLroReaderDev 'run.operations.get' 'N17 gateway project role exact: LRO-only, no product Service config read' "$PROJECT"
 DIAG_POLICY="$(gcloud run jobs get-iam-policy jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --format=json)"
 SEARCH_POLICY="$(gcloud run jobs get-iam-policy jscc-search-dev --project="$PROJECT" --region="$REGION" --format=json)"
 require_contains "$DIAG_POLICY" "$GW_EMAIL" 'gateway bound to diagnostics job'
@@ -72,7 +72,7 @@ for role in roles/run.admin roles/run.developer roles/run.jobsExecutor roles/run
 done
 
 # Worker: execution metadata only on the two allowlisted Jobs; never Job execution/admin.
-role_permissions_exact jsccDiagnosticsExecutionReaderDev 'run.executions.get,run.tasks.list' 'worker execution-reader role exact' "$PROJECT"
+role_permissions_exact jsccDiagnosticsExecutionReaderDev 'run.executions.get,run.tasks.list' 'N7 worker execution-reader exact: read-only, no Job execution' "$PROJECT"
 WK_PROJECT_ROLES="$(gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' --filter="bindings.members:$WK" --format='value(bindings.role)')"
 for role in roles/run.admin roles/run.developer roles/run.jobsExecutor roles/run.jobsExecutorWithOverrides roles/editor roles/owner roles/viewer roles/logging.viewer; do
   require_absent "$WK_PROJECT_ROLES" "$role" "worker lacks $role"
@@ -165,13 +165,21 @@ require_contains "$JOB_DESC" "$WK_EMAIL" 'diagnostics job uses dedicated worker 
 require_contains "$SERVICE_DESC" "$GW_EMAIL" 'gateway uses dedicated gateway identity'
 python3 -c 'import json,sys; d=json.load(sys.stdin); vals=[]; vals.append((d.get("scaling") or {}).get("maxInstanceCount")); vals.append(((d.get("metadata") or {}).get("annotations") or {}).get("run.googleapis.com/maxScale")); vals.append((((((d.get("spec") or {}).get("template") or {}).get("metadata") or {}).get("annotations") or {}).get("autoscaling.knative.dev/maxScale"))); ok=any(str(v)=="1" for v in vals if v is not None); print(("PASS " if ok else "FAIL ")+"gateway max instances = 1",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$SERVICE_DESC" || fail=1
 
+for forbidden in NILE_DATABASE_URL DATABASE_URL POSTGRES_URL POSTGRESQL_URL; do
+  require_absent "$SERVICE_DESC" "$forbidden" "N28 gateway has no DB credential binding: $forbidden"
+  require_absent "$JOB_DESC" "$forbidden" "N28 worker has no DB credential binding: $forbidden"
+done
+for forbidden in ALLOWED_GOOGLE_SUB GOOGLE_ALLOWED_SUB GOOGLE_ID_TOKEN TENANT_ID PROFILE_ID; do
+  require_absent "$JOB_DESC" "$forbidden" "N29 diagnostics worker/suite has no end-user or tenant auth binding: $forbidden"
+done
+
 # N29/N30 — no DB/tenant secret role and zero TEST/PROD grants.
 WK_SECRET_BINDINGS="$(gcloud projects get-iam-policy "$PROJECT" --flatten='bindings[].members' --filter="bindings.members:$WK AND bindings.role:roles/secretmanager" --format='value(bindings.role)')"
-[[ -z "$WK_SECRET_BINDINGS" ]] && pass 'N29 worker has no project Secret Manager role' || fail_msg 'N29 worker has project Secret Manager role'
+[[ -z "$WK_SECRET_BINDINGS" ]] && pass 'N28/N29 worker has no project Secret Manager role' || fail_msg 'N28/N29 worker has project Secret Manager role'
 for p in jscc-test jscc-prod; do
   policy="$(gcloud projects get-iam-policy "$p" --format=json)"
-  require_absent "$policy" "$GW_EMAIL" "N30 gateway absent from $p"
-  require_absent "$policy" "$WK_EMAIL" "N30 worker absent from $p"
+  require_absent "$policy" "$GW_EMAIL" "N8/N30 gateway absent from $p"
+  require_absent "$policy" "$WK_EMAIL" "N8/N30 worker absent from $p"
   require_absent "$policy" "$DP_EMAIL" "N30 deployer absent from $p"
 done
 
