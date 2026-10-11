@@ -11,7 +11,7 @@ export const OBSERVE_TIMEOUT_MS = 5 * 60 * 1000;
 export const VERIFY_TIMEOUT_MS = 15 * 60 * 1000;
 export const OUTPUT_MAX_LINES = 200;
 export const OUTPUT_MAX_BYTES = 64 * 1024;
-export const DAILY_OPERATION_LIMIT = 20;
+export const DAILY_OPERATION_LIMIT = 50;
 
 export const TASK_CATALOG = Object.freeze({
   describe_execution: Object.freeze({
