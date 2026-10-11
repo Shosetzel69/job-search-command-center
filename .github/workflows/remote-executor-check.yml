@@ -49,6 +49,7 @@ jobs:
 
       - name: Validate DEV scripts
         run: |
+          bash -n scripts/gcp/bootstrap_remote_executor_dev.sh
           bash -n scripts/gcp/provision_remote_executor_dev.sh
           bash -n scripts/gcp/deploy_remote_executor_dev.sh
           bash -n scripts/gcp/verify_remote_executor_dev.sh
@@ -59,6 +60,7 @@ jobs:
           ! grep -q 'jscc-build@jscc-shared' cloudbuild.ops.yaml
           ! grep -q 'runWithOverrides' ops/src/gateway.mjs
           ! grep -q 'db_health_readonly' ops/src/lib.mjs
+          grep -q 'https://chatgpt.com/connector_platform_oauth_redirect' ops/src/lib.mjs
           ! grep -q 'spawn(' ops/src/worker.mjs
           grep -q 'COPY ops/src ./ops/src' ops/Dockerfile.worker
           ! grep -q '^COPY \. \.$' ops/Dockerfile.worker
