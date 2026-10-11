@@ -1,6 +1,6 @@
 import {
   CATALOG_VERSION, TEST_SUITES, envConfig, executionJobName, gcpFetch, gcsReadJson, gcsReplaceJson,
-  gcsWriteJson, isoNow, normalizeExecutionId, publicEvidence, releaseLease, sanitizeText, validateTaskRequest
+  gcsWriteJson, isoNow, normalizeExecutionId, publicEvidence, releaseLease, sanitizeExternal, sanitizeText, validateDispatchBinding, validateTaskRequest
 } from './lib.mjs';
 
 const cfg = envConfig();
@@ -141,11 +141,11 @@ async function main(){
   let dispatch,opId;
   try {
     dispatch=await waitDispatch(); opId=dispatch.operation_id;
-    if (dispatch.execution_name!==ownExecution) throw new Error('execution_binding_mismatch');
-    if (dispatch.catalog_version!==CATALOG_VERSION) throw new Error('catalog_version_mismatch');
-    if (dispatch.ops_source_sha!==cfg.opsSourceSha) throw new Error('ops_source_sha_mismatch');
-    if (dispatch.worker_image_digest!==cfg.workerDigest) throw new Error('worker_digest_mismatch');
-    if (Number(dispatch.expires_at_ms)<=Date.now()) throw new Error('dispatch_expired');
+    validateDispatchBinding(dispatch, ownExecution, {
+      catalog_version:CATALOG_VERSION,
+      ops_source_sha:cfg.opsSourceSha,
+      worker_image_digest:cfg.workerDigest
+    });
     const taskReq=validateTaskRequest(dispatch.task,dispatch.args);
     await updateOperation(opId,{operation_state:'RUNNING',worker_started_at:isoNow()});
     let value;
@@ -154,7 +154,9 @@ async function main(){
     else if(taskReq.task==='inspect_runtime_snapshot') value=await inspectRuntimeSnapshot(taskReq.args);
     else if(taskReq.task==='run_test_suite') value=await runTestSuite(taskReq.args);
     else throw new Error('unknown_task');
-    const text=sanitizeText(typeof value.output==='string'?value.output:'');
+    const external=sanitizeExternal(typeof value.output==='string'?value.output:'');
+    if (!external.ok) throw new Error(external.coarse_error);
+    const text=external.text;
     const result={schema_version:'1.0',operation_id:opId,work_item_ref:dispatch.work_item_ref,task:taskReq.task,task_class:taskReq.task_class,operation_state:'SUCCEEDED',test_verdict:value.test_verdict??null,target_alias:value.target_alias??null,ops_source_sha:cfg.opsSourceSha,target_source_sha:value.target_source_sha??null,gateway_image_digest:process.env.GATEWAY_IMAGE_DIGEST,worker_image_digest:cfg.workerDigest,started_at:workerStartedAt,finished_at:isoNow(),exit_code:value.exit_code??0,sanitizer_version:'1',line_count:text?text.split(/\r?\n/).length:0,byte_count:Buffer.byteLength(text),assertions:publicAssertions(taskReq.task,value),private_details:value,private_output:text};
     await gcsWriteJson(cfg.bucket,`results/${opId}.json`,result,0);
     await gcsWriteJson(cfg.bucket,`public/${opId}.json`,publicEvidence(result),0);
