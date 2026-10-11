@@ -58,6 +58,10 @@ done
 # Separate artifact lineage.
 OPS_AR_POLICY="$(gcloud artifacts repositories get-iam-policy jscc-ops --project="$SHARED" --location="$REGION" --format=json)"
 PRODUCT_AR_POLICY="$(gcloud artifacts repositories get-iam-policy jscc --project="$SHARED" --location="$REGION" --format=json)"
+CLOUDBUILD_SOURCE_BUCKET="${SHARED}_cloudbuild"
+BUILD_SOURCE_POLICY="$(gcloud storage buckets get-iam-policy "gs://$CLOUDBUILD_SOURCE_BUCKET" --format=json)"
+require_contains "$BUILD_SOURCE_POLICY" "$BUILD_EMAIL" 'ops build identity can read Cloud Build source bucket'
+require_contains "$BUILD_SOURCE_POLICY" '/objects/source/' 'ops build source access limited to source prefix'
 require_contains "$OPS_AR_POLICY" "$BUILD_EMAIL" 'ops build identity can publish jscc-ops'
 require_contains "$OPS_AR_POLICY" "$DP_EMAIL" 'ops deployer can read jscc-ops'
 require_absent "$OPS_AR_POLICY" "$PRODUCT_BUILD_EMAIL" 'N18 product build identity absent from jscc-ops repository policy'
