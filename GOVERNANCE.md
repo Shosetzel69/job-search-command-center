@@ -261,12 +261,19 @@ FEATURE (root)
 
 Reguli obligatorii:
 
-- **Root ownership:** feature-ul original ramane obiectivul principal si pastreaza legaturile catre blocker-ele sale (Issue/ATC/Architecture Gate). Fiecare blocker declara ce comportament al root feature-ului impiedica si ce conditie verificabila il deblocheaza.
+- **Root ownership:** feature-ul original ramane obiectivul principal si pastreaza legaturile catre blocker-ele sale (Issue/ATC/Architecture Gate). Fiecare blocker/dependency derivat trebuie sa declare explicit root work item-ul, ce comportament impiedica si conditia verificabila de deblocare. Un blocker fara root identificabil nu poate deveni workstream principal pentru feature. Pentru un Issue de blocker/dependency, trasabilitatea minima este:
+
+```text
+Root feature: #XXX
+Blocked work: #YYY
+```
+
+`Blocked work` identifica work item-ul afectat direct (poate fi root feature-ul sau un task/ATC dependent). Pentru dependinte fara Issue separat, aceleasi referinte se pastreaza in contractul/Issue-ul care le urmareste; nu este necesar un nou artefact procedural.
 - **Minimum compliant unblock:** blocker-ul se remediaza doar pana la nivelul necesar pentru deblocarea feature-ului, respectand integral arhitectura aprobata, securitatea, privacy, testele obligatorii, autorizarea owner-ului si gate-urile AgentFlow. „Minim” nu autorizeaza workaround-uri nesigure sau exceptii tacite.
 - **Scoped stop:** un blocker material opreste executia afectata si foloseste statusul canonic al fazei curente plus `Blocked by`; alte lucrari independente pot continua numai daca nu sunt afectate de acelasi risc/gate. Conditiile cu impact global se trateaza conform controalelor aplicabile, fara exceptii.
 - **Mandatory return:** dupa rezolvarea si verificarea blocker-ului, se inregistreaza explicit `RETURN TO FEATURE: #<root> / blocker #<id> / unblock evidence <ref>`. Development revalideaza Development Analysis, ATC-urile afectate, dependintele si criteriile de acceptare; orice delta materiala urmeaza aprobarea necesara inainte de reluarea implementarii.
 - **No scope creep:** problemele adiacente care nu sunt necesare pentru Functional Acceptance-ul curent se consemneaza separat in backlog / Parking Lot. Descoperirea lor nu extinde automat scope-ul, nu creeaza gate-uri suplimentare pentru root si nu autorizeaza redesign oportunist.
-- **Feature closure:** `ARCHITECTURE_APPROVED`, closure-ul unui blocker, `IMPLEMENTATION_COMPLETE`, `REVIEW_PASS`, `DEV_PASS`, deploy-ul si health checks sunt milestone-uri/dovezi tehnice, nu substitut pentru Functional Acceptance. QA verifica comportamentul de produs si criteriile aprobate, cu evidence pentru mediul si candidate-ul relevante. Root feature-ul primeste `DONE` numai dupa Functional Acceptance **si** toate gate-urile obligatorii aplicabile din `docs/software-delivery-lifecycle.md`; in caz contrar ramane deschis cu statusul canonic corespunzator.
+- **Feature closure / Functional Acceptance:** `ARCHITECTURE_APPROVED`, closure-ul unui blocker, `IMPLEMENTATION_COMPLETE`, `REVIEW_PASS`, `DEV_PASS`, deploy-ul si health checks sunt milestone-uri/dovezi tehnice, nu substitut pentru validarea rezultatului aprobat. Functional Acceptance inseamna verificarea criteriilor functionale deja aprobate pentru **root work item, in mediul prevazut de lifecycle-ul aplicabil**, cu evidence pentru candidatul testat; nu introduce un gate nou. Root feature-ul primeste `DONE` numai dupa aceasta validare **si** dupa toate gate-urile obligatorii aplicabile din `docs/software-delivery-lifecycle.md`; altfel ramane deschis cu statusul canonic corespunzator.
 
 Aceasta regula stabileste prioritatea de produs si obligatia de intoarcere la root; nu modifica separarea de roluri intre Discovery, Architecture, Development si QA, taxonomia Phase/Status, aprobarile explicite sau release lifecycle-ul canonic.
 
