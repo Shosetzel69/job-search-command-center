@@ -77,7 +77,9 @@ jobs:
               Path("scripts/gcp/bootstrap_remote_executor_dev.sh"),
               Path("scripts/gcp/provision_remote_executor_dev.sh"),
           ]:
-              for no, line in enumerate(path.read_text().splitlines(), 1):
+              raw = path.read_text()
+              logical = raw.replace("\\\n", " ")
+              for no, line in enumerate(logical.splitlines(), 1):
                   if "add-iam-policy-binding" in line and "--condition=" not in line:
                       raise SystemExit(f"{path}:{no}: unconditional IAM binding lacks explicit --condition=None")
           print("IAM condition declarations are explicit")
