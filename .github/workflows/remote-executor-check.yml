@@ -64,27 +64,13 @@ jobs:
           ! grep -q 'spawn(' ops/src/worker.mjs
           grep -q 'COPY ops/src ./ops/src' ops/Dockerfile.worker
           ! grep -q '^COPY \. \.$' ops/Dockerfile.worker
-          grep -q '^PROJECT=jscc-dev          grep -q 'run.jobs.run' scripts/gcp/provision_remote_executor_dev.sh
-          grep -q 'run.operations.get' scripts/gcp/provision_remote_executor_dev.sh
-          # Existing project/resource IAM policies may contain conditional bindings.
-          # Every unconditional write must declare --condition=None to prevent interactive prompts.
-          python3 - <<'PY'
-          from pathlib import Path
-          for path in [
-              Path("scripts/gcp/bootstrap_remote_executor_dev.sh"),
-              Path("scripts/gcp/provision_remote_executor_dev.sh"),
-          ]:
-              for no, line in enumerate(path.read_text().splitlines(), 1):
-                  if "add-iam-policy-binding" in line and "--condition=" not in line:
-                      raise SystemExit(f"{path}:{no}: unconditional IAM writes are explicitly non-interactive: {line}")
-          print("unconditional IAM writes are explicitly non-interactive")
-          PY
- scripts/gcp/provision_remote_executor_dev.sh
+          grep -q '^PROJECT=jscc-dev$' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'jscc_ops_build_source_only' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'run.jobs.run' scripts/gcp/provision_remote_executor_dev.sh
           grep -q 'run.operations.get' scripts/gcp/provision_remote_executor_dev.sh
-          # Existing project/resource IAM policies may contain conditional bindings.
-          # Every unconditional write must declare --condition=None to prevent interactive prompts.
+
+      - name: Validate IAM commands are non-interactive
+        run: |
           python3 - <<'PY'
           from pathlib import Path
           for path in [
@@ -93,6 +79,6 @@ jobs:
           ]:
               for no, line in enumerate(path.read_text().splitlines(), 1):
                   if "add-iam-policy-binding" in line and "--condition=" not in line:
-                      raise SystemExit(f"{path}:{no}: unconditional IAM writes are explicitly non-interactive: {line}")
-          print("unconditional IAM writes are explicitly non-interactive")
+                      raise SystemExit(f"{path}:{no}: unconditional IAM binding lacks explicit --condition=None")
+          print("IAM condition declarations are explicit")
           PY
