@@ -159,6 +159,14 @@ export function publicEvidence(result) {
   return out;
 }
 
+export function authorizationCodeError(record, request, now = Date.now()) {
+  if (!record || record.consumed || Number(record.expires_at_ms) <= now) return 'invalid_grant';
+  if (request.client_id !== record.client_id || request.redirect_uri !== record.redirect_uri) return 'invalid_grant';
+  if (request.resource !== record.resource) return 'invalid_target';
+  if (sha256(request.code_verifier || '') !== record.challenge) return 'pkce_failed';
+  return null;
+}
+
 export function logicalTokenError(record, now = Date.now()) {
   if (!record) return 'invalid_token';
   if (record.revoked) return 'revoked_token';
