@@ -1033,7 +1033,7 @@ Boundary-uri obligatorii:
 - binding-ul operation -> Cloud Run execution este exact si fail-closed, pe `CLOUD_RUN_EXECUTION` + dispatch keyed by execution name + generation preconditions;
 - state/results sunt private, cu lifecycle 14 zile; proiectia publica este schema/allowlist-only si nu contine raw logs, PII, auth material sau signed URLs;
 - concurrency v1 = 1, worker retry = 0, accepted operations guard = 50/zi, output <= 200 linii si <= 64 KiB;
-- OAuth foloseste Google OIDC owner identity, PKCE S256, nonce/state, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, access token opac de 15 minute si fara refresh token.
+- OAuth foloseste Google OIDC owner identity, PKCE S256, nonce/state, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, access token opac de 15 minute si fara refresh token; Authorization Code/PKCE/token semantics sunt delegate bibliotecii vetted `@node-oauth/oauth2-server`, iar Google OIDC/JWT/JWKS validation bibliotecii vetted `openid-client`; implementarea crypto/protocol custom este interzisa.
 
 ### Artifact lineage separat
 
