@@ -121,7 +121,7 @@ jobs:
             "N7 worker cannot execute Cloud Run jobs": "run.jobs.run" not in worker and "runWithOverrides" not in worker,
             "N8 DEV-only runtime source boundary": "GCP_PROJECT !== 'jscc-dev'" in Path("ops/src/lib.mjs").read_text(),
             "N15 no run.executions.cancel": "run.executions.cancel" not in provision and "run.executions.cancel" not in gateway,
-            "N16 gateway invocation targets fixed diagnostics job": "DIAGNOSTICS_JOB" in gateway and ":run" in gateway and "runWithOverrides" not in gateway,
+            "N16 gateway invocation targets fixed diagnostics job": "DIAGNOSTICS_JOB=jscc-diagnostics-dev" in provision and "jsccOpsGatewayDev" in provision and ":run" in gateway and "runWithOverrides" not in gateway,
             "N17 gateway runtime has no product Service config API path": "/services/" not in gateway and "run.services.get" not in gateway,
             "N18 product build identity excluded from ops build config": "jscc-ops-build@jscc-shared.iam.gserviceaccount.com" in cloudbuild and "jscc-build@jscc-shared" not in cloudbuild,
             "N19 trusted ops source admission enforced": "_TRUSTED_REF" in cloudbuild and "refs/heads/main|refs/tags/jscc-ops-approved/*" in trusted,
