@@ -1,9 +1,17 @@
 # ATC-537-01: isolated Remote Executor supply chain. DEV only.
 substitutions:
   _GIT_SHA: ""
+  _TRUSTED_REF: ""
   _GATEWAY_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway"
   _WORKER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-diagnostics"
 steps:
+  - id: trusted-source-admission
+    name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args: ['scripts/gcp/verify_trusted_ops_ref.sh']
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
+      - 'TRUSTED_OPS_REF=${_TRUSTED_REF}'
   - id: validate-candidate
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
