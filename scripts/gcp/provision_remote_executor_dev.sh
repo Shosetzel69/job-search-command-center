@@ -45,7 +45,7 @@ DEV_PROJECT_NUMBER="$(gcloud projects describe "$PROJECT" --format='value(projec
 SERVERLESS_AGENT="service-${DEV_PROJECT_NUMBER}@serverless-robot-prod.iam.gserviceaccount.com"
 gcloud artifacts repositories add-iam-policy-binding jscc-ops --project="$SHARED" --location="$REGION" --member="serviceAccount:$SERVERLESS_AGENT" --role=roles/artifactregistry.reader --condition=None >/dev/null
 
-gcloud run jobs deploy jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --tasks=1 --max-retries=0 --task-timeout=15m --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_DIGEST,WORKER_IMAGE_DIGEST=$WORKER_DIGEST,DIAGNOSTICS_JOB=jscc-diagnostics-dev,DEV_BASE_URL=$DEV_BASE_URL,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev" --no-cpu-boost
+gcloud run jobs deploy jscc-diagnostics-dev --project="$PROJECT" --region="$REGION" --image="$WORKER_IMAGE" --service-account="jscc-diagnostics-dev@$PROJECT.iam.gserviceaccount.com" --tasks=1 --max-retries=0 --task-timeout=15m --set-env-vars="GCP_PROJECT=$PROJECT,GCP_REGION=$REGION,OPS_BUCKET=$OPS_BUCKET,GCP_RUNTIME_BUCKET=$RUNTIME_BUCKET,SOURCE_SHA=$SOURCE_SHA,GATEWAY_IMAGE_DIGEST=$GATEWAY_DIGEST,WORKER_IMAGE_DIGEST=$WORKER_DIGEST,DIAGNOSTICS_JOB=jscc-diagnostics-dev,DEV_BASE_URL=$DEV_BASE_URL,LOG_VIEW_RESOURCE=projects/$PROJECT/locations/global/buckets/_Default/views/jscc-ops-dev"
 
 cat >/tmp/jscc537-gateway-role.yaml <<'YAML'
 title: JSCC Ops Gateway DEV
