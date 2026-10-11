@@ -32,9 +32,7 @@ export const TASK_CATALOG = Object.freeze({
 });
 
 export const TEST_SUITES = Object.freeze({
-  'ops-contract': Object.freeze({ command: 'node', args: ['--test', 'ops/test/contract.test.mjs'] }),
-  'project-sanity': Object.freeze({ command: 'node', args: ['scripts/project_sanity.mjs'] }),
-  'role-taxonomy': Object.freeze({ command: 'python3', args: ['scripts/test_role_taxonomy.py'] }),
+  'dev-health': Object.freeze({ kind: 'http_health' }),
 });
 
 export function sha256(value) {
@@ -134,7 +132,7 @@ export function sanitizeText(input) {
 
 const PUBLIC_ASSERTION_FIELDS = Object.freeze([
   'target_alias','failed_count','succeeded_count','cancelled_count','completed','line_count',
-  'run_status','published_jobs','status_present','jobs_present','source_sha','exit_code','test_verdict','coarse_error'
+  'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha','exit_code','test_verdict','coarse_error'
 ]);
 
 export function publicAssertions(input) {
@@ -151,7 +149,7 @@ export function publicAssertions(input) {
 export function publicEvidence(result) {
   const allow = [
     'operation_id','work_item_ref','task','task_class','operation_state','test_verdict',
-    'target_alias','source_sha','gateway_image_digest','worker_image_digest','started_at',
+    'target_alias','ops_source_sha','target_source_sha','gateway_image_digest','worker_image_digest','started_at',
     'finished_at','exit_code','sanitizer_version','line_count','byte_count'
   ];
   const out = {};
@@ -217,6 +215,25 @@ export function parseSignedClient(clientId, signingKey) {
   } catch { return null; }
 }
 
+export function makeSignedState(data, signingKey) {
+  const payload = Buffer.from(JSON.stringify({ ...data, v: 1 })).toString('base64url');
+  const sig = crypto.createHmac('sha256', signingKey).update(`state:${payload}`).digest('base64url');
+  return `jscc537s.${payload}.${sig}`;
+}
+
+export function parseSignedState(value, signingKey, nowMs = Date.now()) {
+  try {
+    const [prefix, payload, sig] = String(value || '').split('.');
+    if (prefix !== 'jscc537s' || !payload || !sig) return null;
+    const expected = crypto.createHmac('sha256', signingKey).update(`state:${payload}`).digest('base64url');
+    if (!timingSafeEqualText(sig, expected)) return null;
+    const decoded = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (decoded.v !== 1 || Number(decoded.expires_at_ms) <= nowMs) return null;
+    if (!decoded.nonce || !decoded.client_id || !decoded.redirect_uri || !decoded.challenge) return null;
+    return decoded;
+  } catch { return null; }
+}
+
 export function envConfig(env = process.env) {
   const required = ['GCP_PROJECT','GCP_REGION','OPS_BUCKET','SOURCE_SHA','GATEWAY_IMAGE_DIGEST','WORKER_IMAGE_DIGEST'];
   for (const key of required) if (!String(env[key] || '').trim()) throw new Error(`missing_env_${key}`);
@@ -228,7 +245,8 @@ export function envConfig(env = process.env) {
     region: env.GCP_REGION,
     bucket: env.OPS_BUCKET,
     runtimeBucket: String(env.GCP_RUNTIME_BUCKET || ''),
-    sourceSha: env.SOURCE_SHA,
+    opsSourceSha: env.SOURCE_SHA,
+    devBaseUrl: String(env.DEV_BASE_URL || '').replace(/\/$/, ''),
     gatewayDigest: env.GATEWAY_IMAGE_DIGEST,
     workerDigest: env.WORKER_IMAGE_DIGEST,
     diagnosticsJob: String(env.DIAGNOSTICS_JOB || 'jscc-diagnostics-dev'),
@@ -362,7 +380,7 @@ export function operationObject(operationId, taskRequest, ctx = {}) {
     catalog_version: CATALOG_VERSION,
     operation_state: 'ACCEPTED',
     test_verdict: null,
-    source_sha: ctx.source_sha,
+    ops_source_sha: ctx.ops_source_sha,
     gateway_image_digest: ctx.gateway_image_digest,
     worker_image_digest: ctx.worker_image_digest,
     accepted_at: now,
