@@ -94,3 +94,17 @@ test('public execution evidence exposes only sanitized root-cause and audit corr
     root_cause:'container exited with code 2'
   });
 });
+
+
+test('bounded audit evidence proves actor binding without exposing identity',()=>{
+  const x=publicEvidence({
+    operation_id:'op-test-1234567890',
+    catalog_version:'1.0',
+    execution_name:'jscc-diagnostics-dev-abc123',
+    actor_sub_hash:'opaque-hash-value'
+  });
+  assert.equal(x.catalog_version,'1.0');
+  assert.equal(x.execution_name,'jscc-diagnostics-dev-abc123');
+  assert.equal(x.actor_bound,true);
+  assert.equal('actor_sub_hash' in x,false);
+});
