@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   REQUIRED_AUDIENCE, REQUIRED_SCOPE, logicalTokenError,
-  CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeText, sha256, validateChatGptRedirectUris, validateTaskRequest
+  CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeExternal, sanitizeText, sha256, assertDailyOperationAllowed, validateChatGptRedirectUris, validateDispatchBinding, validateTaskRequest
 } from '../src/lib.mjs';
 
 test('N1 unknown task rejected',()=>assert.throws(()=>validateTaskRequest('shell',{command:'id'}),/unknown_task/));
@@ -126,4 +126,32 @@ test('bounded audit evidence proves actor binding without exposing identity or e
   assert.equal(x.actor_bound,true);
   assert.equal('actor_sub_hash' in x,false);
   assert.equal(authenticatedEvidence(input).execution_name,'jscc-diagnostics-dev-abc123');
+});
+
+
+test('N22 mismatched CLOUD_RUN_EXECUTION rejected',()=>{
+  const d={execution_name:'jscc-diagnostics-dev-aaaaaa',catalog_version:'537-v1',ops_source_sha:'a'.repeat(40),worker_image_digest:'sha256:x',expires_at_ms:Date.now()+60000};
+  assert.throws(()=>validateDispatchBinding(d,'jscc-diagnostics-dev-bbbbbb',{catalog_version:'537-v1',ops_source_sha:'a'.repeat(40),worker_image_digest:'sha256:x'}),/execution_binding_mismatch/);
+});
+
+test('N23 missing or tampered dispatch rejected',()=>{
+  const expected={catalog_version:'537-v1',ops_source_sha:'a'.repeat(40),worker_image_digest:'sha256:x'};
+  assert.throws(()=>validateDispatchBinding(null,'jscc-diagnostics-dev-aaaaaa',expected),/dispatch_not_found/);
+  const d={execution_name:'jscc-diagnostics-dev-aaaaaa',catalog_version:'537-v1',ops_source_sha:'b'.repeat(40),worker_image_digest:'sha256:x',expires_at_ms:Date.now()+60000};
+  assert.throws(()=>validateDispatchBinding(d,'jscc-diagnostics-dev-aaaaaa',expected),/ops_source_sha_mismatch/);
+});
+
+test('N24 stale execution cannot claim a later operation',()=>{
+  const d={execution_name:'jscc-diagnostics-dev-aaaaaa',catalog_version:'537-v1',ops_source_sha:'a'.repeat(40),worker_image_digest:'sha256:x',expires_at_ms:Date.now()-1};
+  assert.throws(()=>validateDispatchBinding(d,'jscc-diagnostics-dev-aaaaaa',{catalog_version:'537-v1',ops_source_sha:'a'.repeat(40),worker_image_digest:'sha256:x'}),/dispatch_expired/);
+});
+
+test('N25 sanitizer exception fails closed with zero external payload',()=>{
+  const out=sanitizeExternal('secret',()=>{throw new Error('boom')});
+  assert.deepEqual(out,{ok:false,text:'',coarse_error:'sanitizer_failed'});
+});
+
+test('N27 daily cap 50 rejects the next accepted operation',()=>{
+  assert.equal(assertDailyOperationAllowed(49),50);
+  assert.throws(()=>assertDailyOperationAllowed(50),/daily_operation_limit/);
 });
