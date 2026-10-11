@@ -58,10 +58,12 @@ done
 # Separate artifact lineage.
 OPS_AR_POLICY="$(gcloud artifacts repositories get-iam-policy jscc-ops --project="$SHARED" --location="$REGION" --format=json)"
 PRODUCT_AR_POLICY="$(gcloud artifacts repositories get-iam-policy jscc --project="$SHARED" --location="$REGION" --format=json)"
-CLOUDBUILD_SOURCE_BUCKET="${SHARED}_cloudbuild"
-BUILD_SOURCE_POLICY="$(gcloud storage buckets get-iam-policy "gs://$CLOUDBUILD_SOURCE_BUCKET" --format=json)"
-require_contains "$BUILD_SOURCE_POLICY" "$BUILD_EMAIL" 'ops build identity can read Cloud Build source bucket'
-require_contains "$BUILD_SOURCE_POLICY" '/objects/source/' 'ops build source access limited to source prefix'
+OPS_BUILD_SOURCE_BUCKET="${SHARED}-ops-cloudbuild-source"
+BUILD_SOURCE_POLICY="$(gcloud storage buckets get-iam-policy "gs://$OPS_BUILD_SOURCE_BUCKET" --format=json)"
+BUILD_SOURCE_DESC="$(gcloud storage buckets describe "gs://$OPS_BUILD_SOURCE_BUCKET" --format=json)"
+require_contains "$BUILD_SOURCE_POLICY" "$BUILD_EMAIL" 'ops build identity can read dedicated Cloud Build source bucket'
+require_contains "$BUILD_SOURCE_POLICY" 'roles/storage.objectViewer' 'ops build source bucket uses objectViewer'
+python3 -c 'import json,sys; d=json.load(sys.stdin); ubla=((d.get("iamConfiguration") or {}).get("uniformBucketLevelAccess") or {}).get("enabled") is True; rules=(d.get("lifecycle") or {}).get("rule") or []; ttl=any((r.get("action") or {}).get("type")=="Delete" and (r.get("condition") or {}).get("age")==1 for r in rules); ok=ubla and ttl; print(("PASS " if ok else "FAIL ")+"dedicated build source bucket UBLA + 1-day lifecycle",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$BUILD_SOURCE_DESC" || fail=1
 require_contains "$OPS_AR_POLICY" "$BUILD_EMAIL" 'ops build identity can publish jscc-ops'
 require_contains "$OPS_AR_POLICY" "$DP_EMAIL" 'ops deployer can read jscc-ops'
 require_absent "$OPS_AR_POLICY" "$PRODUCT_BUILD_EMAIL" 'N18 product build identity absent from jscc-ops repository policy'
