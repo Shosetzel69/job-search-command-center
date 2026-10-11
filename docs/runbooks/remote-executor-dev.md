@@ -50,7 +50,6 @@ Required environment inputs:
 - `GOOGLE_CLIENT_ID`;
 - `GOOGLE_CLIENT_SECRET`;
 - `GOOGLE_ALLOWED_SUB` — approved durable Google OIDC subject;
-- `OAUTH_CLIENT_SIGNING_KEY` — random high-entropy server-side signing key;
 - `GATEWAY_IMAGE` — immutable `jscc-ops-gateway@sha256:...` reference;
 - `WORKER_IMAGE` — immutable `jscc-diagnostics@sha256:...` reference;
 - `SOURCE_SHA` — exact 40-character reviewed ops source SHA.
@@ -85,7 +84,7 @@ After the first gateway deployment:
 5. Connect the private ChatGPT custom MCP to:
    `<gateway-url>/mcp`.
 
-The gateway OAuth contract is Authorization Code + PKCE S256, Google OIDC, exact owner `sub`, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, 15-minute opaque access token, no refresh token.
+The gateway OAuth contract is Authorization Code + PKCE S256 using `@node-oauth/oauth2-server`, with Google OIDC verification delegated to `openid-client`, exact owner `sub`, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, 15-minute opaque access token, no refresh token. Custom OAuth/OIDC cryptographic protocol code is prohibited.
 
 ## Verification
 
