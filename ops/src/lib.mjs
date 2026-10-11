@@ -150,12 +150,13 @@ export function publicAssertions(input) {
 
 export function publicEvidence(result) {
   const allow = [
-    'operation_id','work_item_ref','task','task_class','operation_state','test_verdict','execution_name',
+    'operation_id','work_item_ref','task','task_class','operation_state','test_verdict','execution_name','catalog_version',
     'target_alias','ops_source_sha','target_source_sha','gateway_image_digest','worker_image_digest','started_at',
     'finished_at','exit_code','sanitizer_version','line_count','byte_count'
   ];
   const out = {};
   for (const k of allow) if (Object.hasOwn(result, k)) out[k] = result[k];
+  if (typeof result.actor_sub_hash === 'string' && result.actor_sub_hash.length > 0) out.actor_bound = true;
   if (Object.hasOwn(result, 'assertions')) out.assertions = publicAssertions(result.assertions);
   return out;
 }
