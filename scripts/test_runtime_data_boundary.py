@@ -93,6 +93,46 @@ print(json.dumps(payload))
             )
             self.assertNotEqual(Path(paths["candidate"]), runtime.resolve())
 
+    def test_manual_scope_validates_without_seed_role_criteria(self):
+        """A bounded DEV USER refresh must not depend on legacy global roles."""
+        code = """
+import json
+import job_search as engine
+import shared_corpus_repository as shared
+
+seed = json.loads(engine.CONFIG_PATH.read_text(encoding="utf-8"))
+seed["target_role_families"] = []
+seed["target_role_subfamilies"] = []
+scope = {
+    "scopes": [{
+        "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+        "role_subfamilies": ["project_management"],
+        "target_regions": [],
+        "target_country_codes": ["RO"],
+        "remote_eligible_country_codes": ["RO"],
+        "work_modes": ["remote"],
+        "contract_types": ["permanent", "contract"],
+    }],
+    "effective_source_ids": [],
+}
+try:
+    engine.load_config(seed)
+except RuntimeError as error:
+    assert "target_role_families" in str(error)
+else:
+    raise AssertionError("global empty role selection should still fail closed")
+effective = shared.shared_collection_config(seed, scope, "a" * 64)
+effective["schema_version"] = seed["schema_version"]
+validated = engine.load_config(effective)
+assert validated["target_role_families"] == ["PROJECT_DELIVERY_MANAGEMENT"]
+assert validated["target_role_subfamilies"] == ["project_management"]
+assert validated["target_country_codes"] == ["RO"]
+print("SCOPED_CONFIG_VALIDATION_PASS")
+"""
+        result = self.run_python(code, {"JSCC_RUNTIME_MODE": ""})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("SCOPED_CONFIG_VALIDATION_PASS", result.stdout)
+
     def test_validate_only_runs_with_external_runtime_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             runtime = Path(tmp)
