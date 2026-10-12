@@ -1,8 +1,8 @@
 # ARCHITECTURE.md — Job Search Command Center
 
-Versiune document: `v1.20`
+Versiune document: `v1.21`
 Versiune aplicatie de referinta: `0.07-dev`
-Ultima actualizare: `2026-10-04`
+Ultima actualizare: `2026-10-11`
 
 ## 1. Rol
 
@@ -1006,3 +1006,47 @@ Contract:
 Workflow-ul `deploy-environment.yml` este manual-only si `dry_run=true` implicit. G3 cere validarea statica/dry-run pentru toate cele trei environments si zero mutatii PROD.
 
 **Gate G3:** automation + CI + dry-run PASS. Dupa G3 se opreste; bootstrap DEV necesita Phase 4 / GO conform planului #161.
+
+
+## Engineering control-plane — Remote Executor (#537)
+
+Status: **APPROVED / DEV-only**.
+
+Remote Executor este o capacitate de engineering separata de runtime-ul produsului si de bridge-ul GitHub:
+
+```text
+ChatGPT private custom MCP
+  -> OAuth 2.1 / Authorization Code + PKCE S256
+  -> jscc-ops-gateway-dev        [Cloud Run Service / control-plane]
+  -> fixed run.jobs.run          [fara overrides/cancel]
+  -> jscc-diagnostics-dev        [Cloud Run Job / verification data-plane]
+```
+
+Boundary-uri obligatorii:
+
+- exista numai in `jscc-dev/europe-west1`; identitatile sale nu au granturi in TEST sau PROD;
+- nu este parte din `command-api` si nu extinde `ai-github-bridge`;
+- catalogul v1 este finit si tipizat: `describe_execution`, `read_execution_logs`, `inspect_runtime_snapshot`, `run_test_suite`; `get_operation` este operatia de control;
+- nu exista shell/Python arbitrar, raw SQL, URL/path arbitrar, DB credential, task mutating, environment selector sau candidate checkout-and-run;
+- gateway-ul poate executa numai `jscc-diagnostics-dev`; `run.jobs.runWithOverrides` si `run.executions.cancel` sunt interzise;
+- worker-ul este separat si nu poate executa Cloud Run Jobs; accesul la execution metadata, log view si GCS este limitat la resursele/prefixele aprobate;
+- binding-ul operation -> Cloud Run execution este exact si fail-closed, pe `CLOUD_RUN_EXECUTION` + dispatch keyed by execution name + generation preconditions;
+- state/results sunt private, cu lifecycle 14 zile; proiectia publica automata este strict schema/allowlist-only si nu contine `execution_name`, `root_cause`, `log_excerpt`, raw logs, PII, auth material sau signed URLs; aceste detalii sanitizate sunt disponibile numai prin evidenta autentificata privata;
+- concurrency v1 = 1, worker retry = 0, accepted operations guard = 50/zi, output <= 200 linii si <= 64 KiB;
+- OAuth foloseste Google OIDC owner identity, PKCE S256, nonce/state, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, access token opac de 15 minute si fara refresh token; Authorization Code/PKCE/token semantics sunt delegate bibliotecii vetted `@node-oauth/oauth2-server`, iar Google OIDC/JWT/JWKS validation bibliotecii vetted `openid-client`; implementarea crypto/protocol custom este interzisa.
+
+### Artifact lineage separat
+
+Remote Executor foloseste repository-ul Artifact Registry `jscc-ops` din `jscc-shared/europe-west1`, cu build/deploy identities dedicate. Aceasta este o **engineering security lineage** separata de repository-ul de produs `jscc`.
+
+```text
+reviewed ops source SHA
+  -> dedicated ops Cloud Build identity
+  -> jscc-ops immutable images
+  -> dedicated DEV ops deploy identity
+  -> jscc-ops-gateway-dev / jscc-diagnostics-dev
+```
+
+Product build/deploy identities nu publica sau promoveaza imagini ops, iar ops identities nu publica sau promoveaza artifactele produsului. Contractul build-once si promovarea DEV -> TEST -> PROD pentru produs raman neschimbate.
+
+Remote Executor produce evidence; nu produce si nu autorizeaza singur `REVIEW_PASS`, `DEV_PASS`, `TEST_PASS`, `PROD_GO` sau alte gate-uri AgentFlow.

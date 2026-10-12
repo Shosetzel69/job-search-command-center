@@ -1,0 +1,157 @@
+name: Validate Remote Executor
+
+on:
+  pull_request:
+    paths:
+      - "ops/**"
+      - "cloudbuild.ops.yaml"
+      - "scripts/gcp/*remote_executor_dev.sh"
+      - "docs/runbooks/remote-executor-dev.md"
+      - "docs/adr/ADR-006-google-cloud-runtime.md"
+      - "ARCHITECTURE.md"
+      - ".github/workflows/remote-executor-check.yml"
+  push:
+    branches: [main]
+    paths:
+      - "ops/**"
+      - "cloudbuild.ops.yaml"
+      - "scripts/gcp/*remote_executor_dev.sh"
+      - "docs/runbooks/remote-executor-dev.md"
+      - "docs/adr/ADR-006-google-cloud-runtime.md"
+      - "ARCHITECTURE.md"
+      - ".github/workflows/remote-executor-check.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Install Remote Executor dependencies
+        run: npm --prefix ops install --ignore-scripts
+
+      - name: Run Remote Executor contract tests
+        run: node --test ops/test/*.test.mjs
+
+      - name: Validate auth library resolution
+        run: node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
+        working-directory: ops
+
+      - name: Validate JavaScript syntax
+        run: |
+          node --check ops/src/lib.mjs
+          node --check ops/src/gateway.mjs
+          node --check ops/src/worker.mjs
+
+      - name: Validate DEV scripts
+        run: |
+          bash -n scripts/gcp/bootstrap_remote_executor_dev.sh
+          bash -n scripts/gcp/provision_remote_executor_dev.sh
+          bash -n scripts/gcp/deploy_remote_executor_dev.sh
+          bash -n scripts/gcp/assert_trusted_ops_source.sh
+          bash -n scripts/gcp/verify_trusted_ops_ref.sh
+          bash -n scripts/gcp/build_remote_executor_dev.sh
+          bash -n scripts/gcp/verify_remote_executor_dev.sh
+
+      - name: Validate security boundaries statically
+        run: |
+          grep -q 'serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com' cloudbuild.ops.yaml
+          ! grep -q 'jscc-build@jscc-shared' cloudbuild.ops.yaml
+          ! grep -q 'runWithOverrides' ops/src/gateway.mjs
+          ! grep -q 'db_health_readonly' ops/src/lib.mjs
+          grep -q 'https://chatgpt.com/connector_platform_oauth_redirect' ops/src/lib.mjs
+          ! grep -q 'spawn(' ops/src/worker.mjs
+          grep -q 'COPY ops/src ./ops/src' ops/Dockerfile.worker
+          ! grep -q '^COPY \. \.$' ops/Dockerfile.worker
+          grep -q '^PROJECT=jscc-dev$' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q 'OPS_BUILD_SOURCE_BUCKET="${SHARED}-ops-cloudbuild-source"' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q -- '--uniform-bucket-level-access' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q -- '--gcs-source-staging-dir=' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q 'run.jobs.run' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q 'run.operations.get' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q 'REUSE_GATEWAY_IMMUTABLE_TAG' cloudbuild.ops.yaml
+          grep -q 'REUSE_WORKER_IMMUTABLE_TAG' cloudbuild.ops.yaml
+          grep -q 'detect-existing-images' cloudbuild.ops.yaml
+          ! grep -q -- '--no-cpu-boost' scripts/gcp/provision_remote_executor_dev.sh
+          ! grep -q -- '--no-cpu-boost' scripts/gcp/deploy_remote_executor_dev.sh
+          grep -q 'LOG_LOCATION=' scripts/gcp/provision_remote_executor_dev.sh
+          grep -Fq 'job_name=~"^(jscc-search-dev|jscc-diagnostics-dev)$"' scripts/gcp/provision_remote_executor_dev.sh
+          grep -q 'labels.execution_name' ops/src/worker.mjs
+          ! grep -Eq 'read[[:space:]]+-r|read[[:space:]]+-s|read[[:space:]]+-p' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q 'BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING' scripts/gcp/bootstrap_remote_executor_dev.sh
+          grep -q "replace(/_/g,'-')" ops/src/gateway.mjs
+          grep -q "\\[a-z0-9_-\\]" ops/src/gateway.mjs
+          grep -q 'LOG_LOCATION=' scripts/gcp/deploy_remote_executor_dev.sh
+          ! grep -q 'JSCC_OPS_GOOGLE_CLIENT_ID:latest' scripts/gcp/deploy_remote_executor_dev.sh
+          ! grep -q 'JSCC_OPS_GOOGLE_CLIENT_SECRET:latest' scripts/gcp/deploy_remote_executor_dev.sh
+          grep -q '"@node-oauth/oauth2-server"' ops/package.json
+          grep -q '"openid-client"' ops/package.json
+          grep -q 'oauth.authorize' ops/src/gateway.mjs
+          grep -q 'oauth.token' ops/src/gateway.mjs
+          grep -q 'oauth.authenticate' ops/src/gateway.mjs
+          grep -q 'oidc.authorizationCodeGrant' ops/src/gateway.mjs
+          ! grep -R -Eq 'createHmac|crypto\.verify|verifyGoogleIdToken|makeSignedClient|makeSignedState|OAUTH_CLIENT_SIGNING_KEY|JSCC_OPS_CLIENT_SIGNING_KEY' ops/src
+          ! grep -Eq -- '--set-secrets=.*OAUTH_CLIENT_SIGNING_KEY|--update-secrets=.*OAUTH_CLIENT_SIGNING_KEY' scripts/gcp/*.sh
+          grep -q -- '--remove-secrets=OAUTH_CLIENT_SIGNING_KEY' scripts/gcp/deploy_remote_executor_dev.sh
+          grep -q 'remove-iam-policy-binding JSCC_OPS_CLIENT_SIGNING_KEY' scripts/gcp/provision_remote_executor_dev.sh
+
+      - name: Execute N5-N8 N15-N19 N28-N30 source-boundary contracts
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          provision = Path("scripts/gcp/provision_remote_executor_dev.sh").read_text()
+          gateway = Path("ops/src/gateway.mjs").read_text()
+          worker = Path("ops/src/worker.mjs").read_text()
+          cloudbuild = Path("cloudbuild.ops.yaml").read_text()
+          trusted = Path("scripts/gcp/verify_trusted_ops_ref.sh").read_text()
+
+          checks = {
+            "N5 gateway has no Cloud Run mutation authority in runtime code": all(x not in gateway for x in ("run.services.update","run.jobs.update","run.jobs.delete","run.services.delete")),
+            "N6 gateway has no raw product runtime or DB read path": all(x not in gateway for x in ("GCP_RUNTIME_BUCKET","runtimeBucket","NILE_DATABASE_URL","DATABASE_URL","POSTGRES_URL","POSTGRESQL_URL")),
+            "N7 worker cannot execute Cloud Run jobs": "run.jobs.run" not in worker and "runWithOverrides" not in worker,
+            "N8 DEV-only runtime source boundary": "GCP_PROJECT !== 'jscc-dev'" in Path("ops/src/lib.mjs").read_text(),
+            "N15 no run.executions.cancel": "run.executions.cancel" not in provision and "run.executions.cancel" not in gateway,
+            "N16 gateway invocation targets fixed diagnostics job": "DIAGNOSTICS_JOB=jscc-diagnostics-dev" in provision and "jsccOpsGatewayDev" in provision and ":run" in gateway and "runWithOverrides" not in gateway,
+            "N17 gateway runtime has no product Service config API path": "/services/" not in gateway and "run.services.get" not in gateway,
+            "N18 product build identity excluded from ops build config": "jscc-ops-build@jscc-shared.iam.gserviceaccount.com" in cloudbuild and "jscc-build@jscc-shared" not in cloudbuild,
+            "N19 trusted ops source admission enforced": "_TRUSTED_REF" in cloudbuild and "refs/heads/main|refs/tags/jscc-ops-approved/*" in trusted,
+            "N28 no DB credential or DB diagnostic path": all(x not in gateway+worker for x in ("NILE_DATABASE_URL","DATABASE_URL","POSTGRES_URL","POSTGRESQL_URL","db_health_readonly")),
+            "N29 worker has no end-user or tenant auth path": all(x not in worker for x in ("GOOGLE_ALLOWED_SUB","GOOGLE_ID_TOKEN","TENANT_ID","PROFILE_ID")),
+            "N30 no TEST/PROD selector in runtime code": all(x not in gateway+worker for x in ("jscc-test","jscc-prod")),
+          }
+          failed=[name for name,ok in checks.items() if not ok]
+          for name,ok in checks.items():
+              print(("PASS " if ok else "FAIL ")+name)
+          if failed:
+              raise SystemExit("source-boundary failures: "+", ".join(failed))
+          PY
+
+      - name: Validate IAM CLI compatibility
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path("scripts/gcp/provision_remote_executor_dev.sh")
+          unsupported = (
+              "gcloud secrets add-iam-policy-binding",
+              "gcloud run jobs add-iam-policy-binding",
+              "gcloud run services add-iam-policy-binding",
+              "gcloud logging views add-iam-policy-binding",
+              "gcloud iam service-accounts add-iam-policy-binding",
+          )
+          for no, line in enumerate(p.read_text().splitlines(), 1):
+              t = line.lstrip()
+              if any(t.startswith(x) for x in unsupported) and "--condition=None" in line:
+                  raise SystemExit(f"{p}:{no}: unsupported --condition=None")
+          print("IAM CLI compatibility PASS")
+          PY

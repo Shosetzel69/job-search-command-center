@@ -1,0 +1,117 @@
+# ATC-537-01: isolated Remote Executor supply chain. DEV only.
+substitutions:
+  _GIT_SHA: ""
+  _TRUSTED_REF: ""
+  _GATEWAY_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway"
+  _WORKER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-diagnostics"
+steps:
+  - id: trusted-source-admission
+    name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args: ['scripts/gcp/verify_trusted_ops_ref.sh']
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
+      - 'TRUSTED_OPS_REF=${_TRUSTED_REF}'
+  - id: validate-candidate
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args: ['-ceu', '[[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]']
+  - id: ops-contract-tests
+    name: node:22-bookworm-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        cd ops
+        npm install --ignore-scripts --no-audit --no-fund
+        node --test test/*.test.mjs
+        node --check src/lib.mjs
+        node --check src/gateway.mjs
+        node --check src/worker.mjs
+        node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
+  - id: registry-immutability
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        v="$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+        [[ "$v" == "True" || "$v" == "true" ]]
+
+  - id: detect-existing-images
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        rm -f /workspace/.gateway-exists /workspace/.worker-exists
+        if gcloud artifacts docker images describe "${_GATEWAY_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+          touch /workspace/.gateway-exists
+          echo "REUSE_GATEWAY_TAG=${_GIT_SHA}"
+        fi
+        if gcloud artifacts docker images describe "${_WORKER_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+          touch /workspace/.worker-exists
+          echo "REUSE_WORKER_TAG=${_GIT_SHA}"
+        fi
+
+  - id: build-gateway
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.gateway-exists ]]; then
+          echo "SKIP_GATEWAY_BUILD_EXISTING_IMMUTABLE_TAG"
+        else
+          docker build --pull -f ops/Dockerfile.gateway --build-arg "SOURCE_SHA=${_GIT_SHA}" -t "${_GATEWAY_IMAGE}:${_GIT_SHA}" .
+        fi
+
+  - id: build-worker
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.worker-exists ]]; then
+          echo "SKIP_WORKER_BUILD_EXISTING_IMMUTABLE_TAG"
+        else
+          docker build --pull -f ops/Dockerfile.worker --build-arg "SOURCE_SHA=${_GIT_SHA}" -t "${_WORKER_IMAGE}:${_GIT_SHA}" .
+        fi
+
+  - id: push-gateway
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.gateway-exists ]]; then
+          echo "REUSE_GATEWAY_IMMUTABLE_TAG"
+        else
+          docker push "${_GATEWAY_IMAGE}:${_GIT_SHA}"
+        fi
+
+  - id: push-worker
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.worker-exists ]]; then
+          echo "REUSE_WORKER_IMMUTABLE_TAG"
+        else
+          docker push "${_WORKER_IMAGE}:${_GIT_SHA}"
+        fi
+  - id: evidence
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        for image in "${_GATEWAY_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}"; do
+          digest="$(gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "OPS_IMAGE=$image@$digest"
+        done
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
