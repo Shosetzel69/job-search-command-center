@@ -2,21 +2,24 @@ import http from 'node:http';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import * as oidc from 'openid-client';
 import {
-  ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, CHATGPT_REDIRECT_URI, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
+  ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, CHATGPT_CLIENT_ID, CHATGPT_REDIRECT_URI, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow,
   normalizeExecutionName, operationObject, authenticatedEvidence, accessTokenRecordError, authorizationCodeRecordError,
-  randomToken, releaseLease, resolveIdempotencyReservation, sha256, validateChatGptRedirectUris, validateTaskRequest
+  randomToken, releaseLease, resolveIdempotencyReservation, sha256, isAllowedChatGptClientId, validateChatGptRedirectUris, validateTaskRequest
 } from './lib.mjs';
 
 const cfg = envConfig();
 const PORT = Number(process.env.PORT || 8080);
-const CHATGPT_CLIENT_ID = 'jscc-ops-chatgpt-private';
-const CHATGPT_CLIENT = Object.freeze({
-  id: CHATGPT_CLIENT_ID,
-  grants: ['authorization_code'],
-  redirectUris: [CHATGPT_REDIRECT_URI],
-});
+
+function chatGptClient(clientId) {
+  if (!isAllowedChatGptClientId(clientId, cfg.legacyChatgptClientId)) return false;
+  return Object.freeze({
+    id: String(clientId),
+    grants: ['authorization_code'],
+    redirectUris: [CHATGPT_REDIRECT_URI],
+  });
+}
 
 const { Request: OAuthRequest, Response: OAuthResponse } = OAuth2Server;
 let googleConfigPromise;
@@ -35,16 +38,15 @@ const oauthModel = {
   generateAuthorizationCode: async () => randomToken(32),
   generateAccessToken: async () => randomToken(32),
   getClient: async (clientId, clientSecret) => {
-    if (clientId !== CHATGPT_CLIENT_ID) return false;
     if (clientSecret) return false;
-    return CHATGPT_CLIENT;
+    return chatGptClient(clientId);
   },
   validateRedirectUri: async (redirectUri, client) => (
-    client?.id === CHATGPT_CLIENT_ID && redirectUri === CHATGPT_REDIRECT_URI
+    Boolean(chatGptClient(client?.id)) && redirectUri === CHATGPT_REDIRECT_URI
   ),
   validateScope: async (_user, client, scope) => {
     const values = Array.isArray(scope) ? scope : String(scope || '').split(/\s+/).filter(Boolean);
-    return client?.id === CHATGPT_CLIENT_ID && values.length === 1 && values[0] === REQUIRED_SCOPE ? values : false;
+    return chatGptClient(client?.id) && values.length === 1 && values[0] === REQUIRED_SCOPE ? values : false;
   },
   verifyScope: async (token, scope) => {
     const required = Array.isArray(scope) ? scope : String(scope || '').split(/\s+/).filter(Boolean);
@@ -68,6 +70,8 @@ const oauthModel = {
   getAuthorizationCode: async (authorizationCode) => {
     const rec = await gcsReadJson(cfg.bucket, `auth/codes/${sha256(authorizationCode)}.json`);
     if (authorizationCodeRecordError(rec?.data)) return false;
+    const client = chatGptClient(rec.data.client_id);
+    if (!client) return false;
     return {
       authorizationCode,
       expiresAt:new Date(rec.data.expires_at_ms),
@@ -75,7 +79,7 @@ const oauthModel = {
       scope:rec.data.scope,
       codeChallenge:rec.data.code_challenge,
       codeChallengeMethod:rec.data.code_challenge_method,
-      client:CHATGPT_CLIENT,
+      client,
       user:rec.data.user,
     };
   },
@@ -110,11 +114,13 @@ const oauthModel = {
   getAccessToken: async (accessToken) => {
     const rec = await gcsReadJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`);
     if (accessTokenRecordError(rec?.data)) return false;
+    const client = chatGptClient(rec.data.client_id);
+    if (!client) return false;
     return {
       accessToken,
       accessTokenExpiresAt:new Date(rec.data.expires_at_ms),
       scope:rec.data.scope,
-      client:CHATGPT_CLIENT,
+      client,
       user:{ id:rec.data.actor_sub, audience:rec.data.audience, resource:rec.data.resource },
     };
   },
@@ -326,7 +332,7 @@ const server = http.createServer(async (req, res) => {
       const method = q.get('code_challenge_method') || '';
       const scope = q.get('scope') || '';
       const resource = q.get('resource') || '';
-      if (clientId !== CHATGPT_CLIENT_ID || redirectUri !== CHATGPT_REDIRECT_URI) return sendText(res, 400, 'invalid_client_or_redirect');
+      if (!chatGptClient(clientId) || redirectUri !== CHATGPT_REDIRECT_URI) return sendText(res, 400, 'invalid_client_or_redirect');
       if (q.get('response_type') !== 'code') return sendText(res, 400, 'unsupported_response_type');
       if (method !== 'S256' || !challenge) return sendText(res, 400, 'pkce_s256_required');
       if (scope !== REQUIRED_SCOPE) return sendText(res, 400, 'required_scope_missing');

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   REQUIRED_AUDIENCE, REQUIRED_SCOPE, accessTokenRecordError,
-  CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeExternal, sanitizeText, sha256, assertDailyOperationAllowed, assertLeaseAvailable, authorizationCodeRecordError, operationObject, resolveIdempotencyReservation, validateChatGptRedirectUris, validateDispatchBinding, validateTaskRequest
+  CHATGPT_CLIENT_ID, CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeExternal, sanitizeText, sha256, assertDailyOperationAllowed, assertLeaseAvailable, authorizationCodeRecordError, isAllowedChatGptClientId, operationObject, resolveIdempotencyReservation, validateChatGptRedirectUris, validateDispatchBinding, validateTaskRequest
 } from '../src/lib.mjs';
 
 test('N1 unknown task rejected',()=>assert.throws(()=>validateTaskRequest('shell',{command:'id'}),/unknown_task/));
@@ -46,6 +46,14 @@ test('DCR accepts only the stable ChatGPT callback',()=>{
   assert.deepEqual(validateChatGptRedirectUris([CHATGPT_REDIRECT_URI]),[CHATGPT_REDIRECT_URI]);
   assert.throws(()=>validateChatGptRedirectUris(['https://attacker.example/callback']),/invalid_redirect_uris/);
   assert.throws(()=>validateChatGptRedirectUris([CHATGPT_REDIRECT_URI,'https://attacker.example/callback']),/invalid_redirect_uris/);
+});
+
+test('OAuth client compatibility allowlist accepts only primary and exact configured legacy client',()=>{
+  const legacy='jscc537.legacy-client-id';
+  assert.equal(isAllowedChatGptClientId(CHATGPT_CLIENT_ID, legacy),true);
+  assert.equal(isAllowedChatGptClientId(legacy, legacy),true);
+  assert.equal(isAllowedChatGptClientId('attacker-client', legacy),false);
+  assert.equal(isAllowedChatGptClientId('jscc537.other-client',''),false);
 });
 
 

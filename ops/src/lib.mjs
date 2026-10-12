@@ -3,6 +3,7 @@ import crypto from 'node:crypto';
 export const CATALOG_VERSION = '537-v1';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
 export const REQUIRED_AUDIENCE = 'urn:jscc:ops:dev';
+export const CHATGPT_CLIENT_ID = 'jscc-ops-chatgpt-private';
 export const CHATGPT_REDIRECT_URI = 'https://chatgpt.com/connector_platform_oauth_redirect';
 export const ACCESS_TOKEN_TTL_MS = 15 * 60 * 1000;
 export const AUTH_CODE_TTL_MS = 5 * 60 * 1000;
@@ -212,6 +213,12 @@ export function validateChatGptRedirectUris(redirectUris) {
   return redirectUris;
 }
 
+export function isAllowedChatGptClientId(clientId, legacyClientId = '') {
+  const id = String(clientId || '').trim();
+  const legacy = String(legacyClientId || '').trim();
+  return id === CHATGPT_CLIENT_ID || (legacy.length > 0 && id === legacy);
+}
+
 export function envConfig(env = process.env) {
   const required = ['GCP_PROJECT','GCP_REGION','OPS_BUCKET','SOURCE_SHA','GATEWAY_IMAGE_DIGEST','WORKER_IMAGE_DIGEST'];
   for (const key of required) if (!String(env[key] || '').trim()) throw new Error(`missing_env_${key}`);
@@ -232,6 +239,7 @@ export function envConfig(env = process.env) {
     googleClientId: String(env.GOOGLE_CLIENT_ID || ''),
     googleClientSecret: String(env.GOOGLE_CLIENT_SECRET || ''),
     googleAllowedSub: String(env.GOOGLE_ALLOWED_SUB || ''),
+    legacyChatgptClientId: String(env.LEGACY_CHATGPT_CLIENT_ID || '').trim(),
   });
 }
 
