@@ -38,7 +38,7 @@ test('GCP runtime adapter protects candidate-managed catalogs and uses atomic co
   assert.match(text, /Cloud Run Job invocation failed/);
   assert.match(text, /heavy-search\.lock/);
   assert.match(text, /GCP_CURRENT_GENERATION/);
-  assert.match(text, /current\.json&ifGenerationMatch/);
+  assert.match(text, /scripts\/gcp_finalize_run\.py/);
   assert.match(text, /trap .*active\.json .*heavy-search\.lock/);
   assert.match(text, /name === 'run-status\.json'/);
   assert.match(text, /activeRunId/);
@@ -54,21 +54,15 @@ test('GCP runtime adapter protects candidate-managed catalogs and uses atomic co
   assert.match(text, /Bounded retrieve scope and request signature are required/);
 });
 
-test('GCP run finalizer records terminal status before publishing a successful corpus', () => {
+test('GCP runner invokes packaged Python finalizer', () => {
   const source = readFileSync(new URL('../src/runtime-gcp.js', import.meta.url), 'utf8');
-  const terminal = source.indexOf('run-completions/');
-  const statusPointer = source.indexOf('latest-run.json');
-  const casPointer = source.indexOf('pointer_url=prefix+');
-  assert.ok(terminal !== -1);
-  assert.ok(statusPointer !== -1);
-  assert.ok(casPointer > terminal);
-  assert.match(source, /ifGenerationMatch=0/);
-  assert.match(source, /ifGenerationMatch="\+expected/);
-  assert.match(source, /ifGenerationMatch="\+generation/);
-  assert.match(source, /cloud_run_execution/);
-  assert.match(source, /if state.get\("status"\) not in \("completed","completed_with_errors"\)/);
-  assert.match(source, /name === 'run-status.json'/);
-  assert.match(source, /latest\.payload\?\.run_id/);
+  const finalizer = readFileSync(new URL('../../scripts/gcp_finalize_run.py', import.meta.url), 'utf8');
+  assert.match(source, /python3 scripts\/gcp_finalize_run\.py/);
+  assert.doesNotMatch(source, /JSON\.stringify\(finalizer\)/);
+  assert.match(finalizer, /run-completions/);
+  assert.match(finalizer, /latest-run\.json/);
+  assert.match(finalizer, /ifGenerationMatch=/);
+  assert.match(finalizer, /cloud_run_execution/);
 });
 
 test('Node server listens on PORT and delegates to the existing secure handler', () => {
