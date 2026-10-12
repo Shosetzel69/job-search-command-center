@@ -1,8 +1,23 @@
 name: Executable task
-description: Development, QA or operational task with bounded context.
+description: Independent Development, QA or operational outcome; local defects belong in the root Issue.
 title: ""
 labels: []
 body:
+  - type: markdown
+    attributes:
+      value: |
+        **Root-first (§2.9):** check existing Issues before creating this one. Local bugs, QA/review findings and remediation belong in the owning Issue as OBS-ID + evidence comments. A new Issue requires an independent deliverable, a cross-feature dependency or a separately governed scope/control. This form does not protect direct API creation.
+  - type: dropdown
+    id: reason_for_separate_issue
+    attributes:
+      label: Why a separate Issue?
+      description: Choose the applicable §2.9 exception. Do not open this form for a local OBS item.
+      options:
+        - Independently approvable outcome (new root)
+        - Cross-feature blocker or shared dependency
+        - Distinct scope or control that cannot be tracked safely in the root
+    validations:
+      required: true
   - type: dropdown
     id: process
     attributes:
@@ -52,7 +67,7 @@ body:
     id: context
     attributes:
       label: Context
-      description: Only the context needed to understand this task. Prefer 3-5 lines.
+      description: Summarize in 3-5 lines. For derived/shared Issues, link affected root(s), justify why OBS-ID is insufficient, and state the verifiable unblock condition.
     validations:
       required: true
 
