@@ -45,6 +45,10 @@ def terminal_failure_status(now: datetime, run_id: str, signature: str | None, s
             current = {}
     except Exception:
         current = {}
+    # The launcher seeds run-status.json from a previous snapshot. Never relabel
+    # that run's counters, timestamps or limitations as this failed run.
+    if current.get("run_id") != run_id:
+        current = {}
     current.update({
         "schema_version": engine.SCHEMA_VERSION,
         "run_id": run_id,
