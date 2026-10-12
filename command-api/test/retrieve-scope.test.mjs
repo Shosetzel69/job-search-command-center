@@ -14,7 +14,6 @@ test('USER scope is bounded to at most two major families and carries selected s
     target_role_families:[
       'PROJECT_DELIVERY_MANAGEMENT',
       'PRODUCT_AGILE',
-      'SERVICE_OPERATIONS_MANAGEMENT',
     ],
     target_role_subfamilies:['project_management','product_owner','service_management'],
     target_regions:['eu'],
@@ -131,4 +130,11 @@ test('canonical scope excludes arbitrary family and requires a canonical subfami
     {role_family:'PRODUCT_AGILE',role_subfamilies:['not_real']},
   ]);
   assert.deepEqual(scopes.map(x => x.role_family), ['PROJECT_DELIVERY_MANAGEMENT']);
+});
+
+
+test('migrated three-family preferences fail closed instead of silently dropping user intent', () => {
+  assert.throws(() => userRefreshScopes({
+    target_role_families:['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE','SERVICE_OPERATIONS_MANAGEMENT'],
+  }), error => error.code === 'ROLE_FAMILY_SELECTION_NEEDS_REVIEW' && error.status === 409);
 });

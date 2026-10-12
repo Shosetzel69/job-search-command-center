@@ -1006,3 +1006,11 @@ Contract:
 Workflow-ul `deploy-environment.yml` este manual-only si `dry_run=true` implicit. G3 cere validarea statica/dry-run pentru toate cele trei environments si zero mutatii PROD.
 
 **Gate G3:** automation + CI + dry-run PASS. Dupa G3 se opreste; bootstrap DEV necesita Phase 4 / GO conform planului #161.
+
+## Role Family v1 — #531 / #535 QA acceptance
+
+The canonical role hierarchy is defined in `shared/role-taxonomy.json` (version `2026.10.08-1`) and exposed through `shared/role-taxonomy-runtime.mjs`. The six major families are Project & Delivery Management, Service & Operations Management, Product & Agile, Business Analysis & Transformation, Customer & Professional Services, and Technical Leadership & Architecture; `UNKNOWN` is an explicit fallback. Family/subfamily selection is consumed by classification, Search Profile preferences, Eligibility, bounded Retrieve/Refresh and Coverage, with frontend options derived from the canonical contract.
+
+Migration 010 adds the v1 persistence model without rewriting applied migrations 001–009 or changing canonical job/source posting identity. Legacy Search Profile selections must retain their full intent. USER Refresh may target at most two major families: if a migrated profile contains more than two, Refresh must return an actionable conflict rather than silently truncate a family; the user must resolve and save the selection before retrying. A separate #534 E2E gate must demonstrate persistence and the Criteria → Search → Refresh/Coverage experience with an existing family and a newly introduced family.
+
+DEV normally uses `SEARCH_MODE=disabled`. A real provider-backed Full Search requires a separately authorized, manual-only `manual-full` exception, not an implicit change of environment mode. TEST and PROD promotion remain independently gated. The PostgreSQL/Nile multiuser integration suite needs isolated runtime/migration/admin DB connections; without all three it is **SKIP**, not evidence of isolation.

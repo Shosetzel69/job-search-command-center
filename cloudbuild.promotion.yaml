@@ -34,6 +34,10 @@ steps:
     args:
       - -ceu
       - |
+        # Required for the Python-JavaScript G1 parity regression.
+        apt-get update
+        apt-get install -y --no-install-recommends python3
+        python3 --version
         cd command-api
         npm install --ignore-scripts --no-audit --no-fund
         node --test test/*.test.mjs

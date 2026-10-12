@@ -27,9 +27,11 @@ cat >"${SEED_DIR}/search-state.json" <<'JSON'
 {"schema_version":"1.0","query_progress":{},"job_first_seen":{},"usage":{}}
 JSON
 
-gcloud storage buckets describe "gs://${RUNTIME_BUCKET}" --project="${PROJECT_ID}" >/dev/null 2>&1 ||   gcloud storage buckets create "gs://${RUNTIME_BUCKET}"     --project="${PROJECT_ID}"     --location="${REGION}"     --default-storage-class=STANDARD     --uniform-bucket-level-access
+gcloud storage buckets describe "gs://${RUNTIME_BUCKET}" --project="${PROJECT_ID}" >/dev/null \
+  || { echo "Runtime bucket must exist before normal promotion: ${RUNTIME_BUCKET}" >&2; exit 5; }
 
-gcloud storage buckets add-iam-policy-binding "gs://${RUNTIME_BUCKET}"   --project="${PROJECT_ID}"   --member="serviceAccount:${RUNTIME_SA}"   --role="roles/storage.objectUser" >/dev/null
+# Bucket creation and runtime-service-account IAM are one-time infrastructure
+# prerequisites. Normal promotion may create missing seed objects only.
 
 while IFS= read -r file; do
   [[ -n "${file}" ]] || continue
