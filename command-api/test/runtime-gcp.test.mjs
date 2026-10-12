@@ -54,6 +54,23 @@ test('GCP runtime adapter protects candidate-managed catalogs and uses atomic co
   assert.match(text, /Bounded retrieve scope and request signature are required/);
 });
 
+test('GCP run finalizer records terminal status before publishing a successful corpus', () => {
+  const source = readFileSync(new URL('../src/runtime-gcp.js', import.meta.url), 'utf8');
+  const terminal = source.indexOf('run-completions/');
+  const statusPointer = source.indexOf('latest-run.json');
+  const casPointer = source.indexOf('pointer_url=prefix+');
+  assert.ok(terminal !== -1);
+  assert.ok(statusPointer !== -1);
+  assert.ok(casPointer > terminal);
+  assert.match(source, /ifGenerationMatch=0/);
+  assert.match(source, /ifGenerationMatch="\+expected/);
+  assert.match(source, /ifGenerationMatch="\+generation/);
+  assert.match(source, /cloud_run_execution/);
+  assert.match(source, /if state.get\("status"\) not in \("completed","completed_with_errors"\)/);
+  assert.match(source, /name === 'run-status.json'/);
+  assert.match(source, /latest\.payload\?\.run_id/);
+});
+
 test('Node server listens on PORT and delegates to the existing secure handler', () => {
   const text = readFileSync(new URL('../src/server.js', import.meta.url), 'utf8');
   assert.match(text, /process\.env\.PORT \|\| 8080/);
