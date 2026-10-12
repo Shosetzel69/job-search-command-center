@@ -185,40 +185,9 @@ export async function hasActiveWorkflowRun(env) {
 }
 
 function fullRunArgs() {
-  // Publication is deliberately separated: terminal status must remain
-  // discoverable when the immutable corpus-pointer CAS rejects a writer.
-  const finalizer = [
-    'import json, os, urllib.error, urllib.parse, urllib.request',
-    'bucket=os.environ["GCP_RUNTIME_BUCKET"]',
-    'run_id=os.environ["JSCC_RUN_ID"]',
-    'generation=os.environ["GCP_CURRENT_GENERATION"]',
-    'state=json.load(open(os.path.join(os.environ["JSCC_RUNTIME_DATA_DIR"],"run-status.json")))',
-    'meta=urllib.request.Request("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",headers={"Metadata-Flavor":"Google"})',
-    'token=json.load(urllib.request.urlopen(meta))["access_token"]',
-    'headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"}',
-    'prefix="https://storage.googleapis.com/upload/storage/v1/b/"+urllib.parse.quote(bucket,safe="")+"/o?uploadType=media&name="',
-    'record={"run_id":run_id,"status":state.get("status"),"completed_at":state.get("completed_at"),"cloud_run_execution":os.environ.get("CLOUD_RUN_EXECUTION"),"artifact_identity":"runs/"+run_id+"/run-status.json"}',
-    'completion_url=prefix+urllib.parse.quote("run-completions/"+run_id+".json",safe="")+"&ifGenerationMatch=0"',
-    'urllib.request.urlopen(urllib.request.Request(completion_url,data=json.dumps(record).encode(),method="POST",headers=headers)).read()',
-    // latest-run is a status pointer, not a source for jobs or corpus updates.
-    'metadata_url="https://storage.googleapis.com/storage/v1/b/"+urllib.parse.quote(bucket,safe="")+"/o/latest-run.json"',
-    'latest_url=prefix+"latest-run.json"',
-    'try:',
-    '    old=json.load(urllib.request.urlopen(urllib.request.Request(metadata_url,headers={"Authorization":"Bearer "+token})))',
-    '    expected=old["generation"]',
-    'except urllib.error.HTTPError as exc:',
-    '    if exc.code!=404: raise',
-    '    expected="0"',
-    'urllib.request.urlopen(urllib.request.Request(latest_url+"&ifGenerationMatch="+expected,data=json.dumps(record).encode(),method="POST",headers=headers)).read()',
-    // A failed execution cannot advance the jobs pointer.
-    'if state.get("status") not in ("completed","completed_with_errors"): raise SystemExit(0)',
-    'payload=json.dumps({"run_id":run_id,"artifact_identity":"runs/"+run_id+"/jobs.json"}).encode()',
-    'pointer_url=prefix+"current.json&ifGenerationMatch="+generation',
-    'urllib.request.urlopen(urllib.request.Request(pointer_url,data=payload,method="POST",headers=headers)).read()',
-  ].join('\n');
   return [
     '-ceu',
-    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 -c ' + JSON.stringify(finalizer) + '; exit ${rc}'
+    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 scripts/gcp_finalize_run.py; exit ${rc}'
   ];
 }
 
