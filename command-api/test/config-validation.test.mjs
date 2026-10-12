@@ -14,7 +14,8 @@ const nomenclatures = JSON.parse(readFileSync(resolve(process.cwd(), '../data/no
 function baseConfig() {
   return {
     schema_version: '1.0',
-    role_groups: {},
+    target_role_families: ['PROJECT_DELIVERY_MANAGEMENT'],
+    target_role_subfamilies: ['project_management'],
     work_modes: { remote: true, hybrid: true, onsite: false },
     contract_types: ['permanent', 'temporary', 'contract', 'freelance'],
     rate_min_eur_day: 100,

@@ -70,7 +70,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
 
     const ownerSeed = {
       config:{
-        role_groups:{ pm:{ enabled:true } },
+        target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+        target_role_subfamilies:['project_management'],
         rate_min_eur_day:999,
         target_regions:['EU'],
         excluded_company_patterns:['owner-secret-company'],
@@ -243,7 +244,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
 
     // ATC-489-05: explicit global-mode exception returns aggregate scopes only.
     const commonRefreshScope = {
-      target_role_families:['PROJECT_MANAGEMENT'],
+      target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+      target_role_subfamilies:['project_management'],
       target_regions:['EU'],
       target_country_codes:['RO'],
       remote_eligible_country_codes:['RO'],
@@ -255,7 +257,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     const adminScopes = await aggregateAdminRefreshScopes(env, { db:runtimeDb });
     assert.equal(adminScopes.active_profile_count, 2);
     const sharedScope = adminScopes.scopes.find(scope =>
-      scope.role_family === 'PROJECT_MANAGEMENT'
+      scope.role_family === 'PROJECT_DELIVERY_MANAGEMENT'
       && scope.target_country_codes.includes('RO')
       && scope.target_regions.includes('EU')
     );
@@ -285,10 +287,10 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
         )
         VALUES (
           $1, 'ATC48903CACHE Technical Project Manager', 'Cache Example', 'Bucharest',
-          ARRAY['RO']::text[], 'remote', 'PROJECT_MANAGEMENT',
+          ARRAY['RO']::text[], 'remote', 'PROJECT_DELIVERY_MANAGEMENT',
           'ACTIVE', $2, $2, '{"description":"Bank governance contract role"}'::jsonb,
-          1, ARRAY['technical_project_manager']::text[], 'mid', 'contract', 'Country',
-          'matched', 1, '2026.09.25-1', repeat('a', 64)
+          1, ARRAY['project_management']::text[], 'mid', 'contract', 'Country',
+          'matched', 1, '2026.10.08-1', repeat('a', 64)
         )
         ON CONFLICT(job_id) DO UPDATE SET
           title=EXCLUDED.title,

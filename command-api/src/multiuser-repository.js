@@ -14,7 +14,6 @@ import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from '
 import { userRefreshScopes } from './retrieve-scope.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
-  'role_groups',
   'target_role_families',
   'target_role_subfamilies',
   'work_modes',
@@ -921,6 +920,7 @@ export function normalizeJobSearchQuery(input = {}) {
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
+    role_subfamily:listValues(source.role_subfamily),
     work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
     contract_type:listValues(source.contract_type).map(x => x.toLowerCase()),
     freshness_hours:freshnessHours,
@@ -1021,6 +1021,12 @@ export async function listProfileJobs(
       where.push(`(j.role_family = ANY(${p}::text[]) OR j.role_family = 'UNKNOWN')`);
     }
 
+    const targetSubfamilies = listValues(preferences.target_role_subfamilies);
+    if (targetSubfamilies.length) {
+      const p = add(targetSubfamilies);
+      where.push(`(cardinality(j.role_subfamily) = 0 OR j.role_subfamily && ${p}::text[])`);
+    }
+
     const disabledModes = Object.entries(jsonObject(preferences.work_modes))
       .filter(([, enabled]) => enabled === false)
       .map(([mode]) => String(mode).toLowerCase());
@@ -1041,6 +1047,10 @@ export async function listProfileJobs(
     if (spec.role_family.length) {
       const p = add(spec.role_family);
       where.push(`j.role_family = ANY(${p}::text[])`);
+    }
+    if (spec.role_subfamily.length) {
+      const p = add(spec.role_subfamily);
+      where.push(`j.role_subfamily && ${p}::text[]`);
     }
     if (spec.work_mode.length) {
       const p = add(spec.work_mode);

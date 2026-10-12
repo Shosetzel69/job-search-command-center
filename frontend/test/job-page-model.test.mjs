@@ -20,7 +20,8 @@ test('canonical job query is bounded, profile-scoped and provider-free', () => {
 test('empty onboarding profile does not qualify for job retrieval', () => {
   assert.equal(isSearchProfileConfigured({}), false);
   assert.equal(isSearchProfileConfigured({
-    rolePm:true,
+    roleFamilies:['PROJECT_DELIVERY_MANAGEMENT'],
+    roleSubfamilies:['project_management'],
     targetRegions:['EU'],
     workRemote:true,
     contractTypes:['contract'],

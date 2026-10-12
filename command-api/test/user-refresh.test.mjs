@@ -22,7 +22,8 @@ const baseEnv = {
 };
 const user = { user_id:'user-1', profile_id:'profile-1', role:'USER', status:'ACTIVE' };
 const scope = { scopes:[{
-  role_family:'PROJECT_MANAGEMENT',
+  role_family:'PROJECT_DELIVERY_MANAGEMENT',
+  role_subfamilies:['project_management'],
   target_regions:['EU'],
   target_country_codes:['RO'],
   remote_eligible_country_codes:['RO'],

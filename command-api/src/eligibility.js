@@ -1,4 +1,5 @@
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
+import { normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
 
 export const ELIGIBILITY_STATES = Object.freeze({
   ELIGIBLE:'ELIGIBLE',
@@ -6,13 +7,6 @@ export const ELIGIBILITY_STATES = Object.freeze({
   UNKNOWN:'UNKNOWN',
 });
 
-const FAMILY_TO_GROUP = Object.freeze({
-  PROJECT_MANAGEMENT:'pm',
-  DELIVERY:'delivery',
-  SERVICE_MANAGEMENT:'service',
-  SCRUM_AGILE:'scrum',
-  PROGRAM_PMO:'program',
-});
 
 function values(input) {
   if (Array.isArray(input)) return input.map(x => String(x ?? '').trim()).filter(Boolean);
@@ -64,20 +58,11 @@ function excludedCountries(preferences, nomenclatures) {
 }
 
 function normalizeFamilySet(preferences) {
-  const explicit = new Set(values(preferences.target_role_families).map(x => x.toUpperCase()));
-  if (explicit.size) return explicit;
-  const result = new Set();
-  const groups = preferences.role_groups || {};
-  for (const [family, group] of Object.entries(FAMILY_TO_GROUP)) {
-    if (groups?.[group]?.enabled !== false) result.add(family);
-  }
-  return result;
+  return new Set(normalizeRoleFamilies(preferences?.target_role_families));
 }
 
 function roleRestricted(preferences) {
-  if (values(preferences.target_role_families).length) return true;
-  const groups = preferences.role_groups || {};
-  return Object.values(FAMILY_TO_GROUP).some(group => groups?.[group]?.enabled === false);
+  return normalizeRoleFamilies(preferences?.target_role_families).length > 0;
 }
 
 function geographicDecision(row, preferences, nomenclatures) {
@@ -177,8 +162,8 @@ export function evaluateEligibility(row, preferences = {}, nomenclatures) {
     }
   }
 
-  const targetSubfamilies = new Set(values(preferences.target_role_subfamilies));
-  if (targetSubfamilies.size) {
+  const targetSubfamilies = new Set(normalizeRoleSubfamilies(preferences.target_role_subfamilies, family));
+  if (family !== 'UNKNOWN' && targetSubfamilies.size) {
     const subfamilies = values(row.role_subfamily);
     if (!subfamilies.length) unknown.push('ROLE_SUBFAMILY_UNKNOWN');
     else if (!subfamilies.some(code => targetSubfamilies.has(code))) {
