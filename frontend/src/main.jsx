@@ -150,8 +150,6 @@ function preferencePatchFromCriteria(criteria){return{
   freshness:Number(criteria.freshness),
   fitThreshold:Number(criteria.fitThreshold),
   keepReposts:criteria.keepReposts!==false,
-  rateMin:Number(criteria.rateMin),
-  rateMax:Number(criteria.rateMax),
   immediateStart:criteria.immediateStart===true,
   exclusions:[...(criteria.exclusions||[])],
   targetRegions:[...(criteria.targetRegions||[])],
