@@ -273,8 +273,8 @@ def validate_geography_config(config: dict[str, Any]) -> None:
         raise RuntimeError("Geographic inclusion/exclusion overlap")
 
 
-def load_config() -> dict[str, Any]:
-    config = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
+def load_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
+    config = json.loads(CONFIG_PATH.read_text(encoding="utf-8")) if config is None else dict(config)
     if config.get("schema_version") != SCHEMA_VERSION:
         raise RuntimeError(f"Unsupported search config schema: {config.get('schema_version')}")
     families = config.get("target_role_families")
