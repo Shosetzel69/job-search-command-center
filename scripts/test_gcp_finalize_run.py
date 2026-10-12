@@ -39,7 +39,10 @@ class FakeGCS:
 
 class FinalizerTests(unittest.TestCase):
     def run_case(self, state, reject=None):
-        with tempfile.TemporaryDirectory() as tmp:
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        tmp = directory.name
+        if True:
             run_id = "run-00000000-0000-4000-8000-000000000001"
             Path(tmp, "run-status.json").write_text(json.dumps({
                 "run_id": run_id, "status": state, "completed_at": "2026-10-12T12:04:12Z"
