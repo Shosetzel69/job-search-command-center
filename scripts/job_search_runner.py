@@ -291,14 +291,14 @@ def main() -> int:
             config = engine.load_config()
         config = shared_corpus.apply_collection_policy(config)
         shared_corpus.persist_run_started(
-        run_id,
-        now,
-        {
-            "request_signature": request_signature,
-            "retrieve_scope": retrieve_scope,
-            "trigger": os.environ.get("RUN_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME") or "unknown",
-            "source_sha": (os.environ.get("SOURCE_SHA") or "").strip().lower() or None,
-        },
+            run_id,
+            now,
+            {
+                "request_signature": request_signature,
+                "retrieve_scope": retrieve_scope,
+                "trigger": os.environ.get("RUN_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME") or "unknown",
+                "source_sha": (os.environ.get("SOURCE_SHA") or "").strip().lower() or None,
+            },
         )
         code = orchestration.run(
             config,
