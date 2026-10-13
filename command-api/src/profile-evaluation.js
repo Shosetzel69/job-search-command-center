@@ -229,7 +229,6 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       url,
       description,
       date_posted:posted,
-    age_basis:posted ? 'posted_at' : 'unknown',
       age_basis:posted ? 'posted_at' : 'unknown',
       source:row.source_name || payload.source || 'Nespecificata',
       verified_at:payload.verified_at || null,
