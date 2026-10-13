@@ -463,7 +463,15 @@ function App(){
       setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results||normalized.length)});
       if(!append)jobQueryRef.current=buildJobsPath({filters:filterState,limit:25,prefetch:25});
       return payload;
-    }catch(error){setJobPage(current=>({...current,loading:false,loadingMore:false}));throw error;}
+    }catch(error){
+      if(append && error.status===400 && /^STALE_CURSOR/.test(error.message||'')){
+        // Exactly one clean restart: second attempt is append:false, so no retry loop.
+        setJobs([]);
+        return loadJobsPage(token,criteria,filterState,{cursor:null,append:false});
+      }
+      setJobPage(current=>({...current,loading:false,loadingMore:false}));
+      throw error;
+    }
   },[]);
 
   const loadData=useCallback(async(token,role)=>{setDataState({status:'loading',error:null});try{
