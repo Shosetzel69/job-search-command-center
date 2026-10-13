@@ -285,6 +285,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     url,
     description,
     date_posted:posted,
+    age_basis:posted ? 'posted_at' : 'unknown',
     source:row.source_name || payload.source || 'Nespecificata',
     verified_at:payload.verified_at || null,
     archived_at:row.archived_at || null,
