@@ -74,10 +74,10 @@ async function commandApi(path,token,options={}) {
   return payload;
 }
 
-function ageHours(value,fallback=0) {
-  if(!value) return Number.isFinite(Number(fallback))?Number(fallback):0;
+function ageHours(value,fallback=null) {
+  if(!value) return fallback == null ? null : (Number.isFinite(Number(fallback)) ? Number(fallback) : null);
   const ms=Date.now()-new Date(value).getTime();
-  return Number.isFinite(ms)?Math.max(0,Math.floor(ms/3600000)):Number(fallback)||0;
+  return Number.isFinite(ms) && ms>=0 ? Math.floor(ms/3600000) : null;
 }
 
 function normalizeMode(value) {
@@ -126,7 +126,7 @@ function normalizeSource(source){const method=source.collection_method||sourceCo
   id:source.id||null,category:source.category||'Altele',name:source.name||'Sursa',url:source.url||'#',active:source.active===true,collectionMethod:method,connectorAvailable:source.connector_available??Boolean(method),validationStatus:source.validation_status||(source.active?'validated':'pending'),approvalStatus:source.approval_status||(source.active?'approved':'pending'),lastValidatedAt:source.last_validated_at||null,validationReason:source.validation_reason||null,
 };}
 const jobKey=job=>String(job.id||`${job.title}|${job.company}|${job.date_posted||''}`);
-function publishedLabel(job){if(job.isApplication)return job.date_posted?`aplicat ${job.date_posted}`:'aplicat';const age=ageHours(job.date_posted,job.age);if(age<1)return'sub 1h';if(age<24)return`${age}h`;const days=Math.floor(age/24),hours=age%24;return hours?`${days}z ${hours}h`:`${days}z`;}
+function publishedLabel(job){if(job.isApplication)return job.date_posted?`aplicat ${job.date_posted}`:'aplicat';const age=ageHours(job.date_posted,job.age);if(age===null)return'data publicării necunoscută';if(age<1)return'sub 1h';if(age<24)return`${age}h`;const days=Math.floor(age/24),hours=age%24;return hours?`${days}z ${hours}h`:`${days}z`;}
 function formatRunTime(value){if(!value)return'—';try{return new Intl.DateTimeFormat('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Bucharest'}).format(new Date(value));}catch{return value;}}
 function geographyConflicts(criteria){const targetR=new Set(criteria.targetRegions||[]),excludedR=new Set(criteria.excludedRegions||[]),targetC=new Set(criteria.targetCountries||[]),excludedC=new Set(criteria.excludedCountries||[]);for(const x of targetR)if(excludedR.has(x))return true;for(const x of targetC)if(excludedC.has(x))return true;for(const r of targetR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of targetR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;return false;}
 function hasTargetGeography(criteria){return Boolean(criteria?.targetRegions?.length||criteria?.targetCountries?.length);}
