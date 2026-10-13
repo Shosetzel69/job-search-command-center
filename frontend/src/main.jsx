@@ -75,7 +75,9 @@ async function commandApi(path,token,options={}) {
 }
 
 function ageHours(value,fallback=null) {
-  if(!value) return fallback == null ? null : (Number.isFinite(Number(fallback)) ? Number(fallback) : null);
+  // API age is relative to the immutable first-page/cursor anchor.
+  if(fallback != null && Number.isFinite(Number(fallback))) return Number(fallback);
+  if(!value) return null;
   const ms=Date.now()-new Date(value).getTime();
   return Number.isFinite(ms) && ms>=0 ? Math.floor(ms/3600000) : null;
 }
