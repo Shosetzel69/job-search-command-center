@@ -1165,93 +1165,7 @@ export async function listProfileJobs(
                  CROSS JOIN LATERAL (
                    SELECT CASE WHEN candidate.raw_type = 'string' THEN
                      regexp_match(candidate.raw_date,
-                       '^([0-9]{4})-([0-9]{2})-([0-9]{2})(T([0-9]{2}):([0-9]{2})(:([0-9]{2})([.]([0-9]{1,6}))?)?(Z|([+-])([0-9]{2}):([0-9]{2})))?
-           ON state.tenant_id = $1 AND state.job_id = j.job_id
-         LEFT JOIN profile_job_evaluation eval
-           ON eval.tenant_id = $1
-          AND eval.search_profile_id = $3
-          AND eval.job_id = j.job_id
-        WHERE ${where.join('\n          AND ')}
-        ORDER BY COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) DESC, j.job_id ASC
-        LIMIT ${limitParam}::integer`,
-      params,
-    );
-
-    const rows = rowsResult.rows || [];
-    const jobs = [];
-    let excluded = 0;
-    let inspected = 0;
-    let cacheHits = 0;
-    let evaluationsComputed = 0;
-    let pageEndIndex = -1;
-
-    const resolveRow = async row => {
-      if (evaluationCacheValid(row, foundation)) {
-        cacheHits += 1;
-        const evaluation = cachedEvaluation(row);
-        return {
-          evaluation,
-          job:evaluation.eligible ? materializeCachedJob(row, evaluation, preferences, anchor) : null,
-        };
-      }
-      evaluationsComputed += 1;
-      const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
-      await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
-      return { evaluation, job:evaluation.job };
-    };
-
-    for (let index = 0; index < rows.length; index += 1) {
-      const resolved = await resolveRow(rows[index]);
-      inspected += 1;
-      pageEndIndex = index;
-      if (!resolved.evaluation.eligible) {
-        excluded += 1;
-        continue;
-      }
-      if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
-      jobs.push(resolved.job);
-      if (jobs.length >= spec.limit) break;
-    }
-
-    let prefetched = 0;
-    if (pageEndIndex >= 0 && spec.prefetch > 0) {
-      for (let index = pageEndIndex + 1; index < rows.length && prefetched < spec.prefetch; index += 1) {
-        await resolveRow(rows[index]);
-        prefetched += 1;
-      }
-    }
-
-    const exhaustedWindow = rows.length < candidateLimit;
-    const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
-    const hasMore = Boolean(cursorRow)
-      && (!exhaustedWindow || pageEndIndex < rows.length - 1);
-    const nextCursor = hasMore ? encodeJobCursor({ ...cursorRow, anchor }) : null;
-
-    return {
-      schema_version:'2.0',
-      generated_at:anchor.toISOString(),
-      search_profile_id:foundation.search_profile_id,
-      profile_version:foundation.profile_version,
-      fit_algorithm_version:FIT_ALGORITHM_VERSION,
-      bounded:true,
-      limit:spec.limit,
-      next_cursor:nextCursor,
-      freshness_hours:Number(preferences.freshness_hours ?? 24),
-      collection_freshness_hours:Number(preferences.collection_freshness_hours ?? preferences.freshness_hours ?? 24),
-      criteria:{ fit_threshold:Number(preferences.fit_threshold ?? 80) },
-      records_inspected:inspected,
-      candidate_window:rows.length,
-      excluded_count:excluded,
-      cache_hits:cacheHits,
-      evaluations_computed:evaluationsComputed,
-      prefetched,
-      results:jobs.length,
-      jobs,
-    };
-  }, { env, db });
-}
-
-)
+                       '^([0-9]{4})-([0-9]{2})-([0-9]{2})(T([0-9]{2}):([0-9]{2})(:([0-9]{2})([.]([0-9]{1,6}))?)?(Z|([+-])([0-9]{2}):([0-9]{2})))?$')
                      ELSE NULL END AS m
                  ) parts
                ) valid
@@ -1323,11 +1237,11 @@ export async function listProfileJobs(
     const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
     const hasMore = Boolean(cursorRow)
       && (!exhaustedWindow || pageEndIndex < rows.length - 1);
-    const nextCursor = hasMore ? encodeJobCursor(cursorRow) : null;
+    const nextCursor = hasMore ? encodeJobCursor({ ...cursorRow, anchor }) : null;
 
     return {
       schema_version:'2.0',
-      generated_at:now.toISOString(),
+      generated_at:anchor.toISOString(),
       search_profile_id:foundation.search_profile_id,
       profile_version:foundation.profile_version,
       fit_algorithm_version:FIT_ALGORITHM_VERSION,
