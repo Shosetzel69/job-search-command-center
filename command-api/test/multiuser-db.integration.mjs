@@ -421,6 +421,60 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
         assert.equal(winner, item.expected, item.name + ' JS parser agrees with SQL');
       }
     }
+    // C4: last_seen_at microseconds must not skip rows at a cursor page boundary.
+    const microJobs = [
+      { job_id:'77777777-7777-4777-8777-777777777777', posting_id:'88888888-8888-4888-8888-888888888888', seen:'2026-10-05T10:00:00.000100Z', suffix:'a' },
+      { job_id:'77777777-7777-4777-8777-777777777778', posting_id:'88888888-8888-4888-8888-888888888889', seen:'2026-10-05T10:00:00.000900Z', suffix:'b' },
+    ];
+    for (const micro of microJobs) {
+      await adminDb.query(
+        `INSERT INTO canonical_jobs(
+          job_id,title,company,location,country_codes,work_mode,role_family,
+          lifecycle_status,first_seen_at,last_seen_at,payload,
+          job_version,role_subfamily,seniority,contract_type,remote_scope,
+          classification_status,classification_confidence,classification_version,
+          evaluation_basis_hash
+        ) VALUES (
+          $1,'ATC535F1ACURSOR Technical Project Manager','Cursor Example','Bucharest',
+          ARRAY['RO']::text[],'remote','PROJECT_DELIVERY_MANAGEMENT',
+          'ACTIVE',$2::timestamptz,$2::timestamptz,
+          '{"description":"Bank governance contract role"}'::jsonb,
+          1,ARRAY['project_management']::text[],'mid','contract','Country',
+          'matched',1,'2026.10.08-1',repeat('b',64)
+        ) ON CONFLICT(job_id) DO UPDATE SET last_seen_at=EXCLUDED.last_seen_at`,
+        [micro.job_id,micro.seen],
+      );
+      await adminDb.query(
+        `INSERT INTO source_postings(
+          posting_id,job_id,source_id,source_name,external_job_id,
+          canonical_url,identity_kind,identity_value,posted_at,
+          lifecycle_status,first_seen_at,last_seen_at,seen_run_id,payload
+        ) VALUES (
+          $1,$2,'integration-atc-535-c4','Integration',$3,
+          'https://example.test/f1a-cursor','EXTERNAL_ID',$3,NULL,
+          'ACTIVE',$4::timestamptz,$4::timestamptz,'integration-atc-535-c4','{}'::jsonb
+        ) ON CONFLICT(source_id,identity_kind,identity_value)
+          DO UPDATE SET last_seen_at=EXCLUDED.last_seen_at`,
+        [micro.posting_id,micro.job_id,micro.suffix,micro.seen],
+      );
+    }
+    const c4First=await listProfileJobs(
+      user,cacheConfigB,jobNomenclatures,{ limit:1,prefetch:0,q:'ATC535F1ACURSOR' },env,
+      { db:runtimeDb,now:f1aAnchor },
+    );
+    assert.equal(c4First.results,1);
+    assert.equal(c4First.jobs[0].id,microJobs[0].job_id);
+    assert.equal(c4First.jobs[0].age,null);
+    assert.ok(c4First.next_cursor,'first C4 row must expose continuation');
+    const c4Second=await listProfileJobs(
+      user,cacheConfigB,jobNomenclatures,
+      { limit:1,prefetch:0,q:'ATC535F1ACURSOR',cursor:c4First.next_cursor },env,
+      { db:runtimeDb,now:new Date('2026-10-05T13:00:00.000Z') },
+    );
+    assert.equal(c4Second.results,1);
+    assert.equal(c4Second.jobs[0].id,microJobs[1].job_id);
+    assert.equal(c4Second.jobs[0].age,null);
+    assert.equal(c4Second.generated_at,c4First.generated_at,'cursor v2 preserves anchor');
     assert.ok(await nomenclatureReferenceCount('regions', 'EU', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('countries', 'RO', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('work_modes', 'remote', env, { db:runtimeDb }) >= 1);
