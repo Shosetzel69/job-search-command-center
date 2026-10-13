@@ -1,5 +1,6 @@
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
+import { canonicalPostedDate, postedAgeHours } from './posted-date.mjs';
 
 export const FIT_ALGORITHM_VERSION = 'fit-v1';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
@@ -190,8 +191,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   if (!['contract','freelance'].includes(type) && !/contract|freelance|b2b/i.test(text)) risks.push('Forma B2B nu este confirmata');
   if (!risks.length) risks.push('Conditiile contractuale trebuie confirmate');
 
-  const posted = row.posted_at || payload.date_posted || payload.posted_at || null;
-  const age = posted ? Math.max(0, Math.floor((now.getTime() - new Date(posted).getTime()) / 3600000)) : 0;
+  const posted = canonicalPostedDate(row, now);
+  const age = postedAgeHours(posted, now);
   const threshold = Number(preferences.fit_threshold ?? 80);
   const url = row.canonical_url || payload.final_url || payload.source_url || payload.url || null;
   const modeLabel = workMode === 'remote' ? 'Remote' : workMode === 'hybrid' ? 'Hybrid' : workMode === 'onsite' ? 'Onsite' : 'N/A';
@@ -228,6 +229,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       url,
       description,
       date_posted:posted,
+      age_basis:posted ? 'posted_at' : 'unknown',
       source:row.source_name || payload.source || 'Nespecificata',
       verified_at:payload.verified_at || null,
       archived_at:row.archived_at || null,
@@ -250,8 +252,8 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
   const description = String(payload.description || '');
   const text = title + ' ' + description;
   const repost = Boolean(row.repost_of_posting_id || payload.reposted || payload.repost);
-  const posted = row.posted_at || payload.date_posted || payload.posted_at || null;
-  const age = posted ? Math.max(0, Math.floor((now.getTime() - new Date(posted).getTime()) / 3600000)) : 0;
+  const posted = canonicalPostedDate(row, now);
+  const age = postedAgeHours(posted, now);
   const score = cached.score == null ? null : Number(cached.score);
   const threshold = Number(preferences.fit_threshold ?? 80);
   const url = row.canonical_url || payload.final_url || payload.source_url || payload.url || null;
@@ -283,6 +285,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     url,
     description,
     date_posted:posted,
+    age_basis:posted ? 'posted_at' : 'unknown',
     source:row.source_name || payload.source || 'Nespecificata',
     verified_at:payload.verified_at || null,
     archived_at:row.archived_at || null,

@@ -353,6 +353,7 @@ test('ATC-489-03 migration rebuilds derived evaluation cache with Search Profile
 test('bounded jobs cursor is opaque, deterministic and rejects malformed input', () => {
   const row = {
     sort_at:new Date('2026-10-05T10:00:00Z'),
+    anchor:new Date('2026-10-05T12:00:00Z'),
     job_id:'11111111-1111-4111-8111-111111111111',
   };
   const encoded = encodeJobCursor(row);
@@ -360,14 +361,15 @@ test('bounded jobs cursor is opaque, deterministic and rejects malformed input',
   assert.deepEqual(decodeJobCursor(encoded), {
     sort_at:'2026-10-05T10:00:00.000Z',
     job_id:row.job_id,
+    as_of:'2026-10-05T12:00:00.000Z',
   });
-  assert.throws(() => decodeJobCursor('not-a-valid-cursor'), /Invalid jobs cursor/);
+  assert.throws(() => decodeJobCursor('not-a-valid-cursor'), /STALE_CURSOR/);
   const malformedUuidCursor = Buffer.from(JSON.stringify({
     v:1,
     sort_at:'2026-10-05T10:00:00.000Z',
     job_id:'------------------------------------',
   }), 'utf8').toString('base64url');
-  assert.throws(() => decodeJobCursor(malformedUuidCursor), /Invalid jobs cursor/);
+  assert.throws(() => decodeJobCursor(malformedUuidCursor), /STALE_CURSOR/);
 });
 
 test('bounded jobs query caps page/prefetch and keeps temporary filters view-only', () => {

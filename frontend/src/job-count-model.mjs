@@ -10,7 +10,7 @@ export function jobViewPopulation(jobs = [], filters = {}, ageHours) {
   const workModes = Array.isArray(filters.workModes) ? filters.workModes : [];
   const noWorkModePresentationFilter = allCanonicalWorkModesSelected(workModes);
   return jobs.filter(job =>
-    ageHours(job.date_posted, job.age) <= freshness
+    (ageHours(job.date_posted, job.age) === null || (Number.isFinite(ageHours(job.date_posted, job.age)) && ageHours(job.date_posted, job.age) <= freshness))
     && (noWorkModePresentationFilter || workModes.includes(job.mode))
   );
 }
@@ -20,7 +20,7 @@ export function jobViewCounts(population = [], threshold = 80, ageHours) {
     all: population.length,
     high: population.filter(job => job.fit !== null && job.fit !== undefined && job.fit >= threshold).length,
     b2b: population.filter(job => job.b2b).length,
-    new24h: population.filter(job => ageHours(job.date_posted, job.age) <= 24).length,
+    new24h: population.filter(job => (ageHours(job.date_posted, job.age) !== null && Number.isFinite(ageHours(job.date_posted, job.age)) && ageHours(job.date_posted, job.age) <= 24)).length,
     reposts: population.filter(job => job.repost).length,
     remote: population.filter(job => job.mode === 'Remote').length,
   };

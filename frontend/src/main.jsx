@@ -17,6 +17,7 @@ import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, reme
 import { environmentBadge, releaseVersionLabel } from './environment-marker.mjs';
 import { reviewRowsForFilters } from './review-selection.mjs';
 import { jobCountScopeLabel, jobViewCounts, jobViewPopulation } from './job-count-model.mjs';
+import { filterAndSortJobRows } from './job-row-filters.mjs';
 
 const DATA_SCHEMA = '1.0';
 const APP_VERSION = releaseVersionLabel(__APP_VERSION__);
@@ -74,10 +75,12 @@ async function commandApi(path,token,options={}) {
   return payload;
 }
 
-function ageHours(value,fallback=0) {
-  if(!value) return Number.isFinite(Number(fallback))?Number(fallback):0;
+function ageHours(value,fallback=null) {
+  // API age is relative to the immutable first-page/cursor anchor.
+  if(fallback != null && Number.isFinite(Number(fallback))) return Number(fallback);
+  if(!value) return null;
   const ms=Date.now()-new Date(value).getTime();
-  return Number.isFinite(ms)?Math.max(0,Math.floor(ms/3600000)):Number(fallback)||0;
+  return Number.isFinite(ms) && ms>=0 ? Math.floor(ms/3600000) : null;
 }
 
 function normalizeMode(value) {
@@ -126,7 +129,7 @@ function normalizeSource(source){const method=source.collection_method||sourceCo
   id:source.id||null,category:source.category||'Altele',name:source.name||'Sursa',url:source.url||'#',active:source.active===true,collectionMethod:method,connectorAvailable:source.connector_available??Boolean(method),validationStatus:source.validation_status||(source.active?'validated':'pending'),approvalStatus:source.approval_status||(source.active?'approved':'pending'),lastValidatedAt:source.last_validated_at||null,validationReason:source.validation_reason||null,
 };}
 const jobKey=job=>String(job.id||`${job.title}|${job.company}|${job.date_posted||''}`);
-function publishedLabel(job){if(job.isApplication)return job.date_posted?`aplicat ${job.date_posted}`:'aplicat';const age=ageHours(job.date_posted,job.age);if(age<1)return'sub 1h';if(age<24)return`${age}h`;const days=Math.floor(age/24),hours=age%24;return hours?`${days}z ${hours}h`:`${days}z`;}
+function publishedLabel(job){if(job.isApplication)return job.date_posted?`aplicat ${job.date_posted}`:'aplicat';const age=ageHours(job.date_posted,job.age);if(age===null)return'data publicării necunoscută';if(age<1)return'sub 1h';if(age<24)return`${age}h`;const days=Math.floor(age/24),hours=age%24;return hours?`${days}z ${hours}h`:`${days}z`;}
 function formatRunTime(value){if(!value)return'—';try{return new Intl.DateTimeFormat('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Bucharest'}).format(new Date(value));}catch{return value;}}
 function geographyConflicts(criteria){const targetR=new Set(criteria.targetRegions||[]),excludedR=new Set(criteria.excludedRegions||[]),targetC=new Set(criteria.targetCountries||[]),excludedC=new Set(criteria.excludedCountries||[]);for(const x of targetR)if(excludedR.has(x))return true;for(const x of targetC)if(excludedC.has(x))return true;for(const r of targetR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of targetR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;return false;}
 function hasTargetGeography(criteria){return Boolean(criteria?.targetRegions?.length||criteria?.targetCountries?.length);}
@@ -461,7 +464,15 @@ function App(){
       setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results||normalized.length)});
       if(!append)jobQueryRef.current=buildJobsPath({filters:filterState,limit:25,prefetch:25});
       return payload;
-    }catch(error){setJobPage(current=>({...current,loading:false,loadingMore:false}));throw error;}
+    }catch(error){
+      if(append && error.status===400 && /^STALE_CURSOR/.test(error.message||'')){
+        // Exactly one clean restart: second attempt is append:false, so no retry loop.
+        setJobs([]);
+        return loadJobsPage(token,criteria,filterState,{cursor:null,append:false});
+      }
+      setJobPage(current=>({...current,loading:false,loadingMore:false}));
+      throw error;
+    }
   },[]);
 
   const loadData=useCallback(async(token,role)=>{setDataState({status:'loading',error:null});try{
@@ -502,7 +513,7 @@ function App(){
   const jobPopulation=useMemo(()=>jobViewPopulation(activeJobs,filters,ageHours),[activeJobs,filters.freshness,filters.workModes]);
   const reviewRows=useMemo(()=>reviewRowsForFilters(activeJobs,filters,ageHours,threshold),[activeJobs,filters.freshness,filters.workModes,threshold]);
   const baseRows=useMemo(()=>view==='applications'?applications:view==='review'?reviewRows:jobPopulation,[view,applications,reviewRows,jobPopulation]);
-  const filteredRows=useMemo(()=>{if(view==='applications')return[...baseRows];const q=filters.search.trim().toLowerCase();const rows=baseRows.filter(job=>{const quick=filters.quick==='all'||(filters.quick==='high'&&job.fit!==null&&job.fit>=threshold)||(filters.quick==='b2b'&&job.b2b);const kpi=kpiFilter==='all'||(kpiFilter==='new'&&ageHours(job.date_posted,job.age)<=24)||(kpiFilter==='high'&&job.fit!==null&&job.fit>=threshold)||(kpiFilter==='repost'&&job.repost)||(kpiFilter==='remote'&&job.mode==='Remote');const text=(job.title+' '+job.company+' '+job.description+' '+job.source+' '+job.location+' '+(job.countries||[]).join(' ')).toLowerCase();return quick&&kpi&&(!q||text.includes(q));});return[...rows].sort(filters.sort==='fit-asc'?(a,b)=>(a.fit??Number.MAX_SAFE_INTEGER)-(b.fit??Number.MAX_SAFE_INTEGER)||a.age-b.age:(a,b)=>(b.fit??-1)-(a.fit??-1)||a.age-b.age);},[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
+  const filteredRows=useMemo(()=>filterAndSortJobRows(baseRows,{view,filters,threshold,kpiFilter,ageHours}),[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
   const canonicalCounts=useMemo(()=>jobViewCounts(jobPopulation,threshold,ageHours),[jobPopulation,threshold]);
   const quickCounts=useMemo(()=>({all:canonicalCounts.all,high:canonicalCounts.high,b2b:canonicalCounts.b2b}),[canonicalCounts]);
   const metrics=useMemo(()=>({jobs:canonicalCounts.new24h,high:canonicalCounts.high,reposts:canonicalCounts.reposts,remote:canonicalCounts.remote,threshold,scope:jobCountScopeLabel(filters.freshness)}),[canonicalCounts,threshold,filters.freshness]);
