@@ -17,6 +17,7 @@ import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, reme
 import { environmentBadge, releaseVersionLabel } from './environment-marker.mjs';
 import { reviewRowsForFilters } from './review-selection.mjs';
 import { jobCountScopeLabel, jobViewCounts, jobViewPopulation } from './job-count-model.mjs';
+import { filterAndSortJobRows } from './job-row-filters.mjs';
 
 const DATA_SCHEMA = '1.0';
 const APP_VERSION = releaseVersionLabel(__APP_VERSION__);
@@ -512,7 +513,7 @@ function App(){
   const jobPopulation=useMemo(()=>jobViewPopulation(activeJobs,filters,ageHours),[activeJobs,filters.freshness,filters.workModes]);
   const reviewRows=useMemo(()=>reviewRowsForFilters(activeJobs,filters,ageHours,threshold),[activeJobs,filters.freshness,filters.workModes,threshold]);
   const baseRows=useMemo(()=>view==='applications'?applications:view==='review'?reviewRows:jobPopulation,[view,applications,reviewRows,jobPopulation]);
-  const filteredRows=useMemo(()=>{if(view==='applications')return[...baseRows];const q=filters.search.trim().toLowerCase();const rows=baseRows.filter(job=>{const quick=filters.quick==='all'||(filters.quick==='high'&&job.fit!==null&&job.fit>=threshold)||(filters.quick==='b2b'&&job.b2b);const kpi=kpiFilter==='all'||(kpiFilter==='new'&&ageHours(job.date_posted,job.age)<=24)||(kpiFilter==='high'&&job.fit!==null&&job.fit>=threshold)||(kpiFilter==='repost'&&job.repost)||(kpiFilter==='remote'&&job.mode==='Remote');const text=(job.title+' '+job.company+' '+job.description+' '+job.source+' '+job.location+' '+(job.countries||[]).join(' ')).toLowerCase();return quick&&kpi&&(!q||text.includes(q));});return[...rows].sort(filters.sort==='fit-asc'?(a,b)=>(a.fit??Number.MAX_SAFE_INTEGER)-(b.fit??Number.MAX_SAFE_INTEGER)||a.age-b.age:(a,b)=>(b.fit??-1)-(a.fit??-1)||a.age-b.age);},[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
+  const filteredRows=useMemo(()=>filterAndSortJobRows(baseRows,{view,filters,threshold,kpiFilter,ageHours}),[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
   const canonicalCounts=useMemo(()=>jobViewCounts(jobPopulation,threshold,ageHours),[jobPopulation,threshold]);
   const quickCounts=useMemo(()=>({all:canonicalCounts.all,high:canonicalCounts.high,b2b:canonicalCounts.b2b}),[canonicalCounts]);
   const metrics=useMemo(()=>({jobs:canonicalCounts.new24h,high:canonicalCounts.high,reposts:canonicalCounts.reposts,remote:canonicalCounts.remote,threshold,scope:jobCountScopeLabel(filters.freshness)}),[canonicalCounts,threshold,filters.freshness]);
