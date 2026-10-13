@@ -27,6 +27,7 @@ import { backfillSearchProfileFoundations } from '../src/db/search-profile-backf
 import { withTenantTransaction } from '../src/db/tenant-gateway.js';
 import { deleteNomenclatureValue } from '../src/nomenclature-governance.js';
 import { readFile } from 'node:fs/promises';
+import { parsePostedDate } from '../src/posted-date.mjs';
 
 const { Pool } = pg;
 
@@ -363,6 +364,63 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal(cacheRow.rows[0].fit_algorithm_version, 'fit-v1');
     assert.equal(cacheRow.rows[0].eligibility_state, 'ELIGIBLE');
 
+    // #535 / F-1a: real PostgreSQL ↔ JavaScript parity on both cached and fresh read paths.
+    const f1aAnchor = new Date('2026-10-05T12:00:00.000Z');
+    const f1aCases = [
+      {
+        name:'posting payload only',
+        posting:{ date_posted:'2026-10-05T11:00Z' }, canonical:{},
+        expected:'2026-10-05T11:00:00.000Z',
+      },
+      {
+        name:'invalid posting falls back to canonical job date',
+        posting:{ date_posted:'2026-02-30', posted_at:'٢٠٢٦-10-05' },
+        canonical:{ date_posted:'2026-10-05T10:30:00.0004Z' },
+        expected:'2026-10-05T10:30:00.000Z',
+      },
+      {
+        name:'zero future tolerance is applied after millisecond truncation',
+        posting:{ date_posted:'2026-10-05T12:00:00.0004Z' },
+        canonical:{ date_posted:'2026-10-05T10:30Z' },
+        expected:'2026-10-05T12:00:00.000Z',
+      },
+      {
+        name:'future +1ms skips to valid lower priority job payload',
+        posting:{ posted_at:'2026-10-05T12:00:00.001Z' },
+        canonical:{ date_posted:'2026-10-05T10:30Z' },
+        expected:'2026-10-05T10:30:00.000Z',
+      },
+      {
+        name:'no valid posting timestamp remains unknown',
+        posting:{ date_posted:'2026-02-30', posted_at:'not a date' },
+        canonical:{ date_posted:'2026-10-05T12:00:00.001Z', posted_at:123456 },
+        expected:null,
+      },
+    ];
+    for (const item of f1aCases) {
+      await adminDb.query(
+        'UPDATE source_postings SET posted_at=NULL, payload=$2::jsonb WHERE posting_id=$1',
+        [lazyPostingId, JSON.stringify(item.posting)],
+      );
+      await adminDb.query(
+        'UPDATE canonical_jobs SET payload=$2::jsonb WHERE job_id=$1',
+        [lazyJobId, JSON.stringify({ ...item.canonical, description:'Bank governance contract role' })],
+      );
+      const actual = await listProfileJobs(
+        user, cacheConfigB, jobNomenclatures, cacheQuery, env,
+        { db:runtimeDb, now:f1aAnchor },
+      );
+      assert.equal(actual.results, 1, item.name);
+      assert.equal(actual.jobs[0].date_posted, item.expected, item.name);
+      assert.equal(actual.jobs[0].age,
+        item.expected == null ? null : Math.floor((f1aAnchor.getTime() - new Date(item.expected).getTime()) / 3600000),
+        item.name);
+      assert.equal(actual.jobs[0].age_basis, item.expected == null ? 'unknown' : 'posted_at');
+      if (item.expected != null) {
+        const winner = parsePostedDate(item.expected, f1aAnchor);
+        assert.equal(winner, item.expected, item.name + ' JS parser agrees with SQL');
+      }
+    }
     assert.ok(await nomenclatureReferenceCount('regions', 'EU', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('countries', 'RO', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('work_modes', 'remote', env, { db:runtimeDb }) >= 1);
