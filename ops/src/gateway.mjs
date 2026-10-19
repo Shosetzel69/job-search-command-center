@@ -1,3 +1,4 @@
+import { validateNileProbeArguments } from './nile-policy.mjs';
 import http from 'node:http';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import * as oidc from 'openid-client';
@@ -301,6 +302,20 @@ async function getOperation(id) {
   return result ? authenticatedEvidence({ ...rec.data, ...result.data }) : authenticatedEvidence(rec.data);
 }
 
+// Dedicated MUTATE endpoint remains fail-closed until trusted grant storage,
+// conditional quota reservations, distinct worker and provider IAM are verified.
+// A work item, authorization ID or client request alone never authorizes a DB write.
+function acceptNileProbePreflight(toolArgs) {
+  if (!toolArgs || typeof toolArgs !== 'object' || Array.isArray(toolArgs) ||
+      Object.keys(toolArgs).some(k => !['work_item_ref','idempotency_key','authorization_id','expected_probe_sha'].includes(k))) {
+    throw new Error('invalid_probe_arguments');
+  }
+  if (toolArgs.work_item_ref !== '#531') throw new Error('invalid_work_item_ref');
+  if (typeof toolArgs.idempotency_key !== 'string' || !/^[A-Za-z0-9._:-]{12,128}$/.test(toolArgs.idempotency_key)) throw new Error('invalid_idempotency_key');
+  validateNileProbeArguments({authorization_id:toolArgs.authorization_id,expected_probe_sha:toolArgs.expected_probe_sha});
+  throw new Error('nile_probe_not_activated');
+}
+
 const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, base(req));
@@ -460,6 +475,32 @@ const server = http.createServer(async (req, res) => {
       if (body.method === 'tools/list') return sendJson(res, 200, { jsonrpc: '2.0', id, result: { tools: [
         { name: 'auth_check', description: 'Return non-sensitive authentication metadata.', inputSchema: { type:'object',properties:{},additionalProperties:false } },
         { name: 'run_operation', description: 'Run an allowlisted DEV diagnostic or verification operation.', inputSchema: { type:'object', required:['work_item_ref','idempotency_key','task','args'], additionalProperties:false, properties:{ work_item_ref:{type:'string'}, idempotency_key:{type:'string'}, task:{type:'string',enum:Object.keys(TASK_CATALOG)}, args:{type:'object'} } } },
+        { name: 'run_nile_probe', description: 'Fixed DEV Nile concurrency probe; unavailable until independent grants and worker isolation are activated.', inputSchema: { type:'object',required:['work_item_ref','idempotency_key','authorization_id','expected_probe_sha'],additionalProperties:false,properties:{work_item_ref:{type:'string',enum:['#531']},idempotency_key:{type:'string'},authorization_id:{type:'string'},expected_probe_sha:{type:'string',pattern:'^[0-9a-f]{40} description: 'Read sanitized operation state/evidence.', inputSchema: { type:'object',required:['operation_id'],additionalProperties:false,properties:{operation_id:{type:'string'}} } }
+      ] } });
+      if (body.method === 'tools/call' && body.params?.name === 'auth_check') return sendJson(res, 200, { jsonrpc:'2.0', id, result:{content:[{type:'text',text:JSON.stringify({authenticated:true,scope:REQUIRED_SCOPE,audience:REQUIRED_AUDIENCE,token_ttl_class:'short',gcp_credential_exposed:false,privileged:true,project:cfg.project})}]}});
+      if (body.method === 'tools/call' && body.params?.name === 'run_operation') {
+        try { const out = await acceptOperation(auth, body.params.arguments || {}); return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}]}}); }
+        catch (e) { return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:e.message})}]}}); }
+      }
+      if (body.method === 'tools/call' && body.params?.name === 'run_nile_probe') {
+        try { acceptNileProbePreflight(body.params.arguments || {}); }
+        catch (e) { return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:e.message})}]}}); }
+      }
+      if (body.method === 'tools/call' && body.params?.name === 'get_operation') {
+        try { const out = await getOperation(body.params.arguments?.operation_id); return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}]}}); }
+        catch (e) { return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:e.message})}]}}); }
+      }
+      return sendJson(res, 200, { jsonrpc:'2.0', id, error:{code:-32601,message:'Method not found'} });
+    }
+    return sendText(res, 404, 'not found');
+  } catch (e) {
+    console.error(JSON.stringify({ event:'gateway_error', error:String(e?.message || 'unknown') }));
+    return sendJson(res, 500, { error:'internal_error' });
+  }
+});
+
+server.listen(PORT, () => console.log(JSON.stringify({ event:'startup', component:'jscc-ops-gateway-dev', project:cfg.project, region:cfg.region, catalog_version:CATALOG_VERSION })));
+}}} },
         { name: 'get_operation', description: 'Read sanitized operation state/evidence.', inputSchema: { type:'object',required:['operation_id'],additionalProperties:false,properties:{operation_id:{type:'string'}} } }
       ] } });
       if (body.method === 'tools/call' && body.params?.name === 'auth_check') return sendJson(res, 200, { jsonrpc:'2.0', id, result:{content:[{type:'text',text:JSON.stringify({authenticated:true,scope:REQUIRED_SCOPE,audience:REQUIRED_AUDIENCE,token_ttl_class:'short',gcp_credential_exposed:false,privileged:true,project:cfg.project})}]}});
