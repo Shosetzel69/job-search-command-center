@@ -1,3 +1,4 @@
+import { inspectNileAuthorization } from './nile-admission.mjs';
 import { validateNileProbeArguments } from './nile-policy.mjs';
 import http from 'node:http';
 import OAuth2Server from '@node-oauth/oauth2-server';
@@ -305,7 +306,7 @@ async function getOperation(id) {
 // Dedicated MUTATE endpoint remains fail-closed until trusted grant storage,
 // conditional quota reservations, distinct worker and provider IAM are verified.
 // A work item, authorization ID or client request alone never authorizes a DB write.
-function acceptNileProbePreflight(toolArgs) {
+async function acceptNileProbePreflight(toolArgs, auth) {
   if (!toolArgs || typeof toolArgs !== 'object' || Array.isArray(toolArgs) ||
       Object.keys(toolArgs).some(k => !['work_item_ref','idempotency_key','authorization_id','expected_probe_sha'].includes(k))) {
     throw new Error('invalid_probe_arguments');
@@ -313,7 +314,7 @@ function acceptNileProbePreflight(toolArgs) {
   if (toolArgs.work_item_ref !== '#531') throw new Error('invalid_work_item_ref');
   if (typeof toolArgs.idempotency_key !== 'string' || !/^[A-Za-z0-9._:-]{12,128}$/.test(toolArgs.idempotency_key)) throw new Error('invalid_idempotency_key');
   validateNileProbeArguments({authorization_id:toolArgs.authorization_id,expected_probe_sha:toolArgs.expected_probe_sha});
-  throw new Error('nile_probe_not_activated');
+  // No grant reader, revocation/IAM proof or atomic reservation backend is configured.\n  // The trusted adapter fails closed before any dispatch.\n  await inspectNileAuthorization({\n    request:{authorization_id:toolArgs.authorization_id,expected_probe_sha:toolArgs.expected_probe_sha},\n    actor:auth?.record?.actor_sub,nowMs:Date.now()\n  });\n  throw new Error('nile_probe_not_activated');
 }
 
 const server = http.createServer(async (req, res) => {
@@ -483,7 +484,7 @@ const server = http.createServer(async (req, res) => {
         catch (e) { return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:e.message})}]}}); }
       }
       if (body.method === 'tools/call' && body.params?.name === 'run_nile_probe') {
-        try { acceptNileProbePreflight(body.params.arguments || {}); }
+        try { await acceptNileProbePreflight(body.params.arguments || {}, auth); }
         catch (e) { return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:e.message})}]}}); }
       }
       if (body.method === 'tools/call' && body.params?.name === 'get_operation') {
