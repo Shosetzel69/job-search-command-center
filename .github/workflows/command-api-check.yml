@@ -105,16 +105,18 @@ jobs:
       - name: Validate shared role taxonomy gate
         run: python3 scripts/role_taxonomy.py validate
 
-      - name: Guard full search manual-only trigger
+      - name: Guard retired source-repository full search
         run: |
           python3 - <<'PY'
           from pathlib import Path
           workflow = Path('.github/workflows/job-search-full.yml').read_text(encoding='utf-8')
-          assert 'workflow_dispatch:' in workflow, 'Full search must expose workflow_dispatch'
-          assert '\n  push:' not in workflow, 'Full search must not run on push'
-          assert '\n  schedule:' not in workflow, 'Full search scheduler is disabled in Package 1/2A'
-          assert 'run_trigger:' in workflow and 'manual-ui' in workflow, 'Canonical manual trigger is missing'
-          print('Full search remains manual-only in Package 2A')
+          assert 'workflow_dispatch:' in workflow, 'Retired workflow keeps an explicit manual tombstone'
+          assert '\n  push:' not in workflow, 'Retired full search must not run on push'
+          assert '\n  schedule:' not in workflow, 'Retired full search must not be scheduled'
+          assert 'contents: read' in workflow and 'contents: write' not in workflow
+          assert 'secrets.' not in workflow
+          assert 'GITHUB_SOURCE_REPO_SEARCH_RETIRED' in workflow
+          print('Source-repository full search is retired fail-closed; GCP Cloud Run Search Job is canonical')
           PY
 
       - name: Run search logic regression tests

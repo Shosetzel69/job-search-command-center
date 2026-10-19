@@ -15,20 +15,20 @@ const buildTrigger = readFileSync(resolve(ROOT, 'command-api/BUILD_TRIGGER.md'),
 const environmentRunbook = readFileSync(resolve(ROOT, 'docs/environment-provisioning-runbook.md'), 'utf8');
 const deliveryLifecycle = readFileSync(resolve(ROOT, 'docs/software-delivery-lifecycle.md'), 'utf8');
 
-test('legacy environment workflow cannot dispatch Command API bootstrap/deploy', () => {
+test('legacy environment workflow exposes read-only operations only', () => {
   assert.match(environmentWorkflow, /options: \[validate, status, isolation-test, prod-preflight\]/);
-  assert.match(environmentWorkflow, /CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED/);
-  const guard = environmentWorkflow.indexOf('CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED');
-  const live = environmentWorkflow.indexOf('  live-environment:');
-  assert.ok(guard >= 0 && live > guard);
+  assert.match(environmentWorkflow, /live-readonly:/);
+  assert.doesNotMatch(environmentWorkflow, /live-environment:/);
+  assert.doesNotMatch(environmentWorkflow, /id-token:\s*write/);
+  assert.doesNotMatch(environmentWorkflow, /npm run env:deploy|npm run env:bootstrap/);
 });
 
-test('legacy PROD cutover exposes verify-only and fails closed before mutation', () => {
+test('legacy PROD cutover exposes verify-only and contains no mutation job', () => {
   assert.match(prodWorkflow, /options: \[verify-deployed-status\]/);
-  const block = prodWorkflow.indexOf('Block retired Cloudflare Command API promotion');
-  const legacyGuard = prodWorkflow.indexOf('Guard immutable candidate, TEST gate and rollback readiness');
-  assert.ok(block >= 0 && legacyGuard > block);
-  assert.match(prodWorkflow, /CLOUDFLARE_COMMAND_API_DEPLOY_RETIRED/);
+  assert.match(prodWorkflow, /post-deploy verification only|already-deployed PROD/);
+  assert.doesNotMatch(prodWorkflow, /prod-promotion:/);
+  assert.doesNotMatch(prodWorkflow, /id-token:\s*write/);
+  assert.doesNotMatch(prodWorkflow, /secrets\./);
 });
 
 test('legacy CLI and provisioning exports fail closed before Cloudflare mutation', () => {

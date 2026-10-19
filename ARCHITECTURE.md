@@ -35,7 +35,7 @@ Principii:
 
 - frontend static React;
 - operatiile privilegiate trec prin Cloudflare Worker;
-- full search ruleaza separat de request-ul HTTP; runtime-ul curent foloseste GitHub Actions, iar target-ul aprobat pentru hosting este Cloud Run Jobs conform ADR-006;
+- full search ruleaza separat de request-ul HTTP pe Cloud Run Search Jobs conform ADR-006; workflow-ul source-repo `job-search-full.yml` este pastrat numai ca tombstone fail-closed;
 - search engine este independent de UI;
 - Source Registry este separat de connectorii operationali;
 - geografia este separata de FIT/scoring;
@@ -56,7 +56,7 @@ Principii:
 |---|---|
 | `frontend` | autentificare, joburi, filtre locale, criterii, aplicari, Administrare |
 | `Cloudflare Worker / Command API` | auth, autorizare, protectie date, comenzi, configuratie, source governance, nomenclatoare |
-| `GitHub Actions` | runtime/orchestration curent tranzitoriu; dupa cutover nu mai este dependency critica pentru PROD |
+| `GitHub Actions` | CI, secret scanning, verificari read-only si control-plane auxiliar; nu executa heavy search din source repo si nu este calea canonica de deployment |
 | `Cloud Build` | target CI/build; construieste o singura imagine per Git SHA |
 | `Artifact Registry` | registry Docker comun; artifact immutable promovat DEV -> TEST -> PROD |
 | `Cloud Run Service` | target hosting pentru aplicatie/API |
@@ -67,7 +67,7 @@ Principii:
 | `connectors` | transport/provider specific, fara FIT |
 | `data/*.json` | persistenta runtime/versionata curenta si compatibilitate tranzitorie in timpul migrarii |
 | `Nile / PostgreSQL` | target persistent pentru stare tranzactionala, multiuser/tenant, operational history si domeniile migrate incremental |
-| `ai-github-bridge` | infrastructura separata de engineering/governance pentru operatii GitHub allowlisted sub identitati GitHub App distincte; expune REST controlat si Remote MCP stateless |
+| `ai-github-bridge` | infrastructura separata de engineering/governance pentru operatii GitHub allowlisted sub identitati GitHub App distincte; expune REST controlat si Remote MCP stateless, fara deployment dispatch |
 
 ## 4. Frontend
 
@@ -296,23 +296,21 @@ Pentru artefactele tranzitorii de run din faza de migrare, Cloud Storage este en
 
 ## 8. GitHub Actions
 
-Full search: `.github/workflows/job-search-full.yml`.
+Heavy search canonical ruleaza pe Cloud Run Search Jobs. `.github/workflows/job-search-full.yml` este un tombstone manual fail-closed, cu `contents: read`, fara provider secrets si fara publicare runtime.
 
-Trigger operational curent:
+GitHub Actions ramane folosit pentru:
 
-- `workflow_dispatch` only.
+- CI si regresii;
+- `gitleaks` required status check;
+- verificari environment read-only;
+- TEST source validation / controlled TEST search pe runtime-ul izolat;
+- evidence si sanity snapshot.
 
-Nu exista `push` sau `schedule` pe workflow-ul greu.
+Mutatiile de deployment Cloudflare din `deploy-environment.yml` si `prod-cutover.yml` sunt retrase. Promovarea aplicatiei urmeaza control-plane-ul GCP aprobat (`cloudbuild.promotion.yaml`, Artifact Registry, Cloud Run si DB Migration Job).
 
-Schedulerul lightweight ramane separat de full search, dar ADR-005 ii schimba ownership-ul: schedulerul este global/system-owned si configurabil numai de ADMIN.
+`finalize-source-registry.yml` este un tombstone fail-closed fara trigger automat si fara write; orice corectie a registrului intra prin PR protejat.
 
-Package 2B (#86/#97-#101) trebuie rebaselined fata de aceasta regula. Nu exista scheduler per profil si profilurile nu declanseaza provider retrieval. Cand automation este OFF sau not due, nu se apeleaza provideri.
-
-Publicarea rezultatelor:
-
-- fara force push;
-- retry maximum 3 la modificari concurente non-data;
-- conflict pe fisiere canonice de rezultate => fail explicit.
+Schedulerul retrieval ramane global/system-owned si configurabil numai de ADMIN; profilurile nu declanseaza provider retrieval separat.
 
 ## 9. Search engine
 

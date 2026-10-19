@@ -62,9 +62,8 @@ Tools curente:
 - `get_issue`;
 - `create_issue`;
 - `update_issue`;
-- `dispatch_environment_deploy` pentru workflow-ul canonic #198, numai DEV/TEST.
 
-Issue #143 a validat live identitatea `jobsearch-claude-agent[bot]` pentru create/update/close. Remote MCP nu permite write pe files/branches/PR. #204 adauga numai dispatch-ul strict allowlisted al `deploy-environment.yml` pentru DEV/TEST; PROD ramane in afara acestui tool.
+Issue #143 a validat live identitatea `jobsearch-claude-agent[bot]` pentru create/update/close. Remote MCP nu permite write pe files/branches/PR. Capabilitatea de deployment dispatch introdusa istoric prin #204 este retrasa prin #501; promovarea mediilor ramane in control-plane-ul GCP aprobat.
 
 Detalii: `docs/ai-github-bridge.md`, `docs/adr/ADR-002-ai-github-bridge.md`.
 

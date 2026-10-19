@@ -1,90 +1,24 @@
-name: Full job search
+name: Full job search (retired source-repository runtime)
 
 on:
   workflow_dispatch:
     inputs:
-      run_trigger:
-        description: Canonical run trigger
-        required: false
-        default: manual-ui
-        type: choice
-        options:
-          - manual-ui
-          - admin-ui
-          - scheduled
-          - system
       source_sha:
-        description: Immutable source commit SHA accepted by the Worker
+        description: Legacy immutable source commit SHA; retained only for an explicit fail-closed tombstone
         required: true
         type: string
 
-concurrency:
-  group: full-job-search
-  cancel-in-progress: false
-
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  collect-filter-publish-data:
+  retired:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    env:
-      JOBSPIPE_API_KEY: ${{ secrets.JOBSPIPE_API_KEY }}
-      APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-      RUN_TRIGGER: ${{ inputs.run_trigger || 'manual-ui' }}
-      SOURCE_SHA: ${{ inputs.source_sha }}
-      RUNTIME_REF: ${{ github.ref_name }}
-      PUBLISH_BRANCH: ${{ github.ref_name }}
+    timeout-minutes: 5
     steps:
-      - name: Validate source identity
+      - name: Reject retired GitHub source-repository runtime
+        shell: bash
         run: |
-          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-fA-F]{40}$ ]]; then
-            echo "source_sha must be a full immutable commit SHA" >&2
-            exit 1
-          fi
-
-      - name: Check out exact source commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.source_sha }}
-          fetch-depth: 0
-
-      - name: Verify source checkout and load runtime data snapshot
-        run: |
-          actual="$(git rev-parse HEAD)"
-          if [ "${actual,,}" != "${SOURCE_SHA,,}" ]; then
-            echo "Checked-out source SHA does not match requested source_sha" >&2
-            exit 1
-          fi
-          git fetch origin "$RUNTIME_REF"
-          runtime_sha="$(git rev-parse "origin/$RUNTIME_REF")"
-          echo "PUBLISH_BASE_SHA=$runtime_sha" >> "$GITHUB_ENV"
-          git checkout "origin/$RUNTIME_REF" -- data
-
-      - name: Validate search engine syntax
-        run: python3 -m py_compile scripts/job_search.py scripts/job_search_optimized.py scripts/job_search_apify.py scripts/job_search_runner.py scripts/source_orchestration.py scripts/job_search_web.py scripts/web_browser.py scripts/web_transport.py scripts/test_publish_concurrency.py
-
-      - name: Install browser fallback
-        run: |
-          python3 -m pip install --disable-pip-version-check -r requirements-search.txt
-          python3 -m playwright install --with-deps chromium
-
-      - name: Collect, normalize, filter and score
-        id: search
-        continue-on-error: true
-        run: python3 scripts/job_search_runner.py
-
-      - name: Validate published JSON contract
-        if: always()
-        run: python3 scripts/job_search_runner.py --validate-only
-
-      - name: Save results and run status safely
-        if: always()
-        run: bash scripts/publish_results.sh
-
-      - name: Mark total collection failure
-        if: steps.search.outcome != 'success'
-        run: |
-          echo "All configured collection queries failed. Run status was persisted."
+          set -euo pipefail
+          echo "GITHUB_SOURCE_REPO_SEARCH_RETIRED: heavy search runs on the GCP Cloud Run Search Job; this workflow cannot publish runtime data or access provider secrets." >&2
           exit 1
