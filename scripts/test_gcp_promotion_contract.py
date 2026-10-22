@@ -75,6 +75,12 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"', PROMOTE)
         self.assertIn('verify-existing seed mode is only supported for TEST promotion', PROMOTE)
 
+    def test_normal_promotion_seed_requires_existing_bucket_and_never_mutates_bucket_iam(self):
+        self.assertIn("Runtime bucket must exist before normal promotion", SEED)
+        self.assertIn("gcloud storage cp", SEED)
+        self.assertNotIn("gcloud storage buckets create", SEED)
+        self.assertNotIn("add-iam-policy-binding", SEED)
+
     def test_cloud_run_service_uses_supported_deploy_command(self):
         self.assertIn('gcloud run deploy "${SERVICE_NAME}"', PROMOTE)
         self.assertNotIn('gcloud run services deploy', PROMOTE)
