@@ -1,5 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# DEV-01B guardrails release: legacy promotion is not an authorized deploy route.
+# A new independently approved exact-SHA image-only route is required.
+echo "JSCC541_DEV01B_LEGACY_PROMOTION_BLOCKED" >&2
+exit 86
 
 ENVIRONMENT="${1:-}"
 CANDIDATE_SHA="${2:-}"
@@ -141,7 +145,7 @@ gcloud run jobs deploy "${JOB_NAME}" \
   --service-account="${RUNTIME_SA}" \
   --cpu=2 --memory=4Gi --tasks=1 --parallelism=1 --max-retries=1 --task-timeout=45m \
   --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},RUN_TRIGGER=gcp-system,GCP_RUNTIME_BUCKET=${RUNTIME_BUCKET}" \
-  --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest" \
+  --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:1" \
   --add-volume="mount-path=/runtime,type=cloud-storage,bucket=${RUNTIME_BUCKET},readonly=false" \
   --command="/bin/bash" \
   --args="-ceu,run_dir='/runtime/runs/'\"\${CLOUD_RUN_EXECUTION:?CLOUD_RUN_EXECUTION is required}\"; mkdir -p \"\${run_dir}\"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp '/runtime/seed/'\"\${f}\" \"\${run_dir}/\${f}\"; done; export JSCC_RUNTIME_DATA_DIR=\"\${run_dir}\"; exec python3 scripts/job_search_runner.py --validate-only"
@@ -159,7 +163,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --service-account="${RUNTIME_SA}" \
   --allow-unauthenticated \
   --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},RUNTIME_DATA_SHA=${CANDIDATE_SHA},SEARCH_MODE=${SEARCH_MODE},JSCC_RUNTIME_BACKEND=gcp,GCP_PROJECT_ID=${PROJECT_ID},GCP_RUNTIME_BUCKET=${RUNTIME_BUCKET},GCP_SEARCH_JOB=${JOB_NAME},GCP_REGION=${REGION},FRONTEND_ORIGIN=${frontend_origin},SERVICE_ORIGIN=${frontend_origin},SEARCH_CONFIG_PATH=data/search-config.json,SOURCES_PATH=data/sources.json,SOURCE_CATEGORIES_PATH=data/source-categories.json,NOMENCLATURES_PATH=data/nomenclatures.json,APPLICATIONS_PATH=data/applications.json" \
-  --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest,ALLOWED_GOOGLE_SUB=ALLOWED_GOOGLE_SUB:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest"
+  --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:1,ALLOWED_GOOGLE_SUB=ALLOWED_GOOGLE_SUB:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest"
 status_pass service
 
 reported_service_url="$(gcloud run services describe "${SERVICE_NAME}" \
