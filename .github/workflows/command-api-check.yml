@@ -117,6 +117,9 @@ jobs:
           print('Full search remains manual-only in Package 2A')
           PY
 
+      - name: Install M01 test dependency
+        run: python3 -m pip install PyYAML==6.0.2
+
       - name: Run search logic regression tests
         run: python3 -m unittest discover -s scripts -p "test_*.py"
 

@@ -1,0 +1,21 @@
+# ATC-539-M01-DEV-CI-R2 SOURCE_ONLY. DO NOT RUN: separate execution approval required.
+# A separate future contract must approve actual build/publish/deploy operations.
+substitutions:
+  _GIT_SHA: ""
+  _TARGET: "dev"
+
+steps:
+  - id: authorization-stop
+    name: python:3.12-slim
+    entrypoint: python3
+    args:
+      - -c
+      - |
+        import sys
+        print("JSCC539_M01_R2_NOT_AUTHORIZED_FOR_CLOUD_BUILD_EXECUTION", file=sys.stderr)
+        sys.exit(86)
+
+# No image build, registry push, migration, seed, IAM or deployment steps.
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ci-m01@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
