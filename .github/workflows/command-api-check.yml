@@ -248,7 +248,63 @@ jobs:
           JSCC_MAX_USERS: "50"
           BOOTSTRAP_ADMIN_GOOGLE_SUB: owner-sub
         run: |
-          npm run db:migrate
+          # DEV-01B: verify that the released db:migrate path remains disabled.
+          # npm normalizes nonzero script exits; direct Node must return exactly 86.
+          set +e
+          direct_refusal="$(node scripts/db-migrate.mjs 2>&1)"
+          direct_rc=$?
+          npm_refusal="$(npm run db:migrate 2>&1)"
+          npm_rc=$?
+          set -e
+          test "$direct_rc" -eq 86
+          test "$npm_rc" -ne 0
+          [[ "$direct_refusal" == *JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED* ]]
+          [[ "$npm_refusal" == *JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED* ]]
+
+          # Test-only migration on GitHub-hosted ephemeral Postgres at localhost.
+          # Never introduce a migration override in the production image.
+          node --input-type=module <<'NODE'
+          import { strict as assert } from 'node:assert';
+
+          assert.equal(process.env.CI, 'true');
+          assert.equal(process.env.GITHUB_ACTIONS, 'true');
+          assert.equal(process.env.APP_ENV, 'dev');
+          const principals = {
+            NILE_DATABASE_URL: 'jscc_runtime',
+            NILE_MIGRATION_DATABASE_URL: 'jscc_migration',
+            JSCC_INTEGRATION_DATABASE_URL: 'jscc_runtime',
+            JSCC_TEST_ADMIN_DATABASE_URL: 'postgres',
+          };
+          for (const [name, principal] of Object.entries(principals)) {
+            const url = new URL(process.env[name] || '');
+            assert.equal(url.protocol, 'postgresql:');
+            assert.equal(url.hostname, 'localhost');
+            assert.equal(url.port, '5432');
+            assert.equal(url.pathname, '/jobsearch_dev');
+            assert.equal(decodeURIComponent(url.username), principal);
+            assert.equal(url.search, '');
+            assert.equal(url.hash, '');
+          }
+
+          // Import migration/backfill code only after confirming an isolated CI DB.
+          const { migrate } = await import('./src/db/migrations.js');
+          const { backfillSearchProfileFoundations } = await import('./src/db/search-profile-backfill.js');
+          const { closeMigrationPool, getMigrationPool } = await import('./src/db/pool.js');
+          const {
+            backfillCanonicalJobClassification,
+            backfillSearchProfilePreferences,
+          } = await import('./src/db/atc-489-02-backfill.js');
+          const db = getMigrationPool();
+          try {
+            await migrate({ db });
+            await backfillSearchProfileFoundations(process.env, { db });
+            await backfillSearchProfilePreferences(process.env, { db });
+            await backfillCanonicalJobClassification(process.env, { db });
+            console.log('JSCC541_DEV01B_LOCAL_CI_MIGRATION_PASS');
+          } finally {
+            await closeMigrationPool();
+          }
+          NODE
           npm run db:nile-tenant-probe
           npm run db:provision-runtime
           npm run db:privilege-readiness

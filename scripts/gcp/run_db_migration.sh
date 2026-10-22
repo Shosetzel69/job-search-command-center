@@ -5,19 +5,24 @@ ACTION="${1:-}"
 ENVIRONMENT="${2:-}"
 CANDIDATE_SHA="${3:-}"
 SERVICE_DIGEST="${4:-}"
-MODE="${5:-migrate}"
+MODE="${5:-refuse}"
 
 [[ "${ACTION}" == "deploy" || "${ACTION}" == "execute" ]] || { echo "action must be deploy or execute" >&2; exit 2; }
-[[ "${MODE}" == "migrate" || "${MODE}" == "schema" || "${MODE}" == "privilege" ]] || { echo "mode must be migrate, schema or privilege" >&2; exit 2; }
+[[ "${MODE}" == "refuse" || "${MODE}" == "schema" || "${MODE}" == "privilege" ]] || { echo "mode must be refuse, schema or privilege (migration denied for this release)" >&2; exit 2; }
 [[ "${CANDIDATE_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "candidate SHA must be a full lowercase 40-character SHA" >&2; exit 2; }
 [[ "${SERVICE_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "service digest must be immutable sha256" >&2; exit 2; }
 
 source "$(dirname "$0")/environment.sh" "${ENVIRONMENT}"
 
 migration_script="$(cat <<'EOS'
-case "${DB_MIGRATION_MODE:-migrate}" in
+case "${DB_MIGRATION_MODE:-refuse}" in
+  refuse)
+    echo "JSCC541_DEV01B_MIGRATION_REFUSED" >&2
+    exit 86
+    ;;
   migrate)
-    npm --prefix command-api run db:migrate
+    echo "JSCC541_DEV01B_MIGRATION_DENIED" >&2
+    exit 86
     ;;
   schema)
     npm --prefix command-api run db:readiness
@@ -135,8 +140,8 @@ if [[ "${ACTION}" == "deploy" ]]; then
     --parallelism=1 \
     --max-retries=0 \
     --task-timeout=10m \
-    --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true,DB_MIGRATION_MODE=migrate" \
-    --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:latest,NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:latest" \
+    --set-env-vars="APP_ENV=${ENVIRONMENT},SOURCE_SHA=${CANDIDATE_SHA},JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true,DB_MIGRATION_MODE=refuse" \
+    --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:1,NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:1" \
     --command="/bin/bash" \
     --args="-ceu,echo ${payload} | base64 -d | bash"
 else

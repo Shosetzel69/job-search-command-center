@@ -1,7 +1,12 @@
-import { migrate } from '../src/db/migrations.js';
-import { backfillSearchProfileFoundations } from '../src/db/search-profile-backfill.js';
-import { closeMigrationPool, getMigrationPool } from '../src/db/pool.js';
-import { backfillCanonicalJobClassification, backfillSearchProfilePreferences } from '../src/db/atc-489-02-backfill.js';
+// DEV-01B guardrails-only image: do not initialize any imported DB modules.
+// This entrypoint is disabled until a separately approved migration release.
+process.stderr.write('JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED\n');
+process.exit(86);
+
+const { migrate } = await import('../src/db/migrations.js');
+const { backfillSearchProfileFoundations } = await import('../src/db/search-profile-backfill.js');
+const { closeMigrationPool, getMigrationPool } = await import('../src/db/pool.js');
+const { backfillCanonicalJobClassification, backfillSearchProfilePreferences } = await import('../src/db/atc-489-02-backfill.js');
 
 const db = getMigrationPool();
 

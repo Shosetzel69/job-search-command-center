@@ -75,6 +75,12 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn('bash "${ROOT}/scripts/gcp/verify_runtime_seed.sh" "${ENVIRONMENT}"', PROMOTE)
         self.assertIn('verify-existing seed mode is only supported for TEST promotion', PROMOTE)
 
+    def test_normal_promotion_seed_requires_existing_bucket_and_never_mutates_bucket_iam(self):
+        self.assertIn("Runtime bucket must exist before normal promotion", SEED)
+        self.assertIn("gcloud storage cp", SEED)
+        self.assertNotIn("gcloud storage buckets create", SEED)
+        self.assertNotIn("add-iam-policy-binding", SEED)
+
     def test_cloud_run_service_uses_supported_deploy_command(self):
         self.assertIn('gcloud run deploy "${SERVICE_NAME}"', PROMOTE)
         self.assertNotIn('gcloud run services deploy', PROMOTE)
@@ -181,15 +187,16 @@ class GcpPromotionContractTests(unittest.TestCase):
     def test_migration_job_uses_exact_candidate_service_digest_and_environment_secret(self):
         self.assertIn('MIGRATION_JOB_NAME="jscc-db-migrate-${env_name}"', ENV)
         self.assertIn('--image="${SERVICE_IMAGE_REPO}@${SERVICE_DIGEST}"', MIGRATE)
-        self.assertIn('NILE_DATABASE_URL=NILE_DATABASE_URL:latest', MIGRATE)
-        self.assertIn('NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:latest', MIGRATE)
+        self.assertIn('NILE_DATABASE_URL=NILE_DATABASE_URL:1', MIGRATE)
+        self.assertIn('NILE_MIGRATION_DATABASE_URL=NILE_DATABASE_URL:1', MIGRATE)
         self.assertIn('JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE=true', MIGRATE)
         self.assertIn('gcloud run jobs execute "${MIGRATION_JOB_NAME}"', MIGRATE)
         self.assertIn('--update-env-vars="DB_MIGRATION_MODE=${MODE}"', MIGRATE)
         self.assertIn('--wait', MIGRATE)
 
     def test_migration_execution_verifies_candidate_manifest_and_required_schema(self):
-        self.assertIn('npm --prefix command-api run db:migrate', MIGRATE)
+        self.assertNotIn('npm --prefix command-api run db:migrate', MIGRATE)
+        self.assertIn('JSCC541_DEV01B_MIGRATION_DENIED', MIGRATE)
         self.assertIn('npm --prefix command-api run db:readiness', MIGRATE)
         self.assertIn('npm --prefix command-api run db:privilege-readiness', MIGRATE)
         self.assertIn("SELECT version, name, checksum FROM schema_migrations ORDER BY version", MIGRATE)
@@ -228,6 +235,22 @@ class GcpPromotionContractTests(unittest.TestCase):
         self.assertIn("DEPRECATED", LEGACY)
         self.assertIn('promote.sh" dev', LEGACY)
         self.assertNotIn("gcloud run jobs deploy", LEGACY)
+
+    def test_dev01b_legacy_release_is_blocked_before_side_effects(self):
+        self.assertLess(PROMOTE.index("JSCC541_DEV01B_LEGACY_PROMOTION_BLOCKED"), PROMOTE.index("ENVIRONMENT="))
+        self.assertIn("exit 86", PROMOTE.split("ENVIRONMENT=", 1)[0])
+        self.assertIn("NILE_DATABASE_URL=NILE_DATABASE_URL:1", PROMOTE)
+        self.assertNotIn("NILE_DATABASE_URL:latest", PROMOTE)
+        self.assertIn("JSCC541_DEV01B_PROMOTION_PIPELINE_BLOCKED_BEFORE_BUILD", BUILD)
+        self.assertLess(BUILD.index("JSCC541_DEV01B_PROMOTION_PIPELINE_BLOCKED_BEFORE_BUILD"), BUILD.index("- id: build-job-if-missing"))
+        self.assertIn("exit 86", BUILD.split("        [[ ", 1)[0])
+        self.assertLess(DB_MIGRATE.index("JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED"),
+                        DB_MIGRATE.index("const db = getMigrationPool()"))
+        self.assertIn("process.exit(86)", DB_MIGRATE)
+        self.assertNotIn("\nimport ", DB_MIGRATE)
+        self.assertIn('case "${DB_MIGRATION_MODE:-refuse}" in', MIGRATE)
+        self.assertIn("DB_MIGRATION_MODE=refuse", MIGRATE)
+        self.assertNotIn("NILE_DATABASE_URL:latest", MIGRATE)
 
 if __name__=="__main__":
     unittest.main()
