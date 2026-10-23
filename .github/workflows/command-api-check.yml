@@ -24,6 +24,10 @@ on:
       - "config/environments.json"
       - "config/prod-baseline-migration-332.json"
       - "config/provenance/prod-baseline-332/**"
+      - "cloudbuild.m01.candidate.dev.yaml"
+      - "m01_r8_gate.py"
+      - "m01_r8_provenance.py"
+      - "test_m01_r8.py"
       - "package.json"
   pull_request:
     paths:
@@ -47,6 +51,10 @@ on:
       - "config/environments.json"
       - "config/prod-baseline-migration-332.json"
       - "config/provenance/prod-baseline-332/**"
+      - "cloudbuild.m01.candidate.dev.yaml"
+      - "m01_r8_gate.py"
+      - "m01_r8_provenance.py"
+      - "test_m01_r8.py"
       - "package.json"
   workflow_dispatch:
 
@@ -122,6 +130,11 @@ jobs:
 
       - name: Run search logic regression tests
         run: python3 -m unittest discover -s scripts -p "test_*.py"
+      - name: Run M01 R8 offline source contract tests
+        run: |
+          python3 -B -m unittest -v test_m01_r8.py
+          python3 -O -B -m unittest -v test_m01_r8.py
+          python3 -OO -B -m unittest -v test_m01_r8.py
 
       - name: Verify backup restore refuses PROD
         run: |

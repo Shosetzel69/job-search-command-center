@@ -1,0 +1,25 @@
+# R8 SOURCE_ONLY CANDIDATE. NEVER SUBMIT without separate owner execution gate.
+# Existing cloudbuild.m01.dev.yaml exit-86 remains unchanged in repository.
+substitutions:
+  _GIT_SHA: ""
+steps:
+  - id: build-service-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull
+      - --build-arg
+      - "GIT_SHA=${_GIT_SHA}"
+      - -f
+      - Dockerfile.service
+      - -t
+      - "europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}"
+      - .
+images:
+  - "europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}"
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ci-m01@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_STANDARD_2
+  requestedVerifyOption: VERIFIED
+timeout: 900s
