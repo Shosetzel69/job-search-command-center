@@ -4,13 +4,6 @@ import { evaluateEligibility } from './eligibility.js';
 export const FIT_ALGORITHM_VERSION = 'fit-v1';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
-const FAMILY_TO_GROUP = Object.freeze({
-  PROJECT_MANAGEMENT:'pm',
-  DELIVERY:'delivery',
-  SERVICE_MANAGEMENT:'service',
-  SCRUM_AGILE:'scrum',
-  PROGRAM_PMO:'program',
-});
 
 function values(input) {
   if (Array.isArray(input)) return input.map(x => String(x || '').trim()).filter(Boolean);
@@ -80,12 +73,6 @@ function mode(row, payload) {
   return 'unknown';
 }
 
-function roleEnabled(row, preferences) {
-  const family = String(row.role_family || 'UNKNOWN');
-  if (family === 'UNKNOWN') return true;
-  const group = FAMILY_TO_GROUP[family];
-  return group ? preferences.role_groups?.[group]?.enabled !== false : true;
-}
 
 function geographicEligibility({ countryCodes, remoteScope, remote }, preferences, nomenclatures) {
   const { membership } = geographyIndex(nomenclatures);
