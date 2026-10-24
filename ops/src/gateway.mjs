@@ -475,9 +475,13 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && u.pathname === '/revoke') {
       const body = await readBody(req);
-      const name = `auth/tokens/${sha256(body.token || '')}.json`;
+      const isRefresh = body.token_type_hint === 'refresh_token';
+      const name = `${isRefresh ? 'auth/refresh' : 'auth/tokens'}/${sha256(body.token || '')}.json`;
       const cur = await gcsReadJson(cfg.bucket, name);
-      if (cur) await gcsReplaceJson(cfg.bucket, name, { ...cur.data, revoked:true, revoked_at:isoNow() }, cur.generation);
+      if (cur) {
+        try { await gcsReplaceJson(cfg.bucket, name, { ...cur.data, revoked:true, revoked_at:isoNow() }, cur.generation); }
+        catch(e) { if(e.message !== 'generation_precondition_failed') throw e; }
+      }
       res.writeHead(200, { 'cache-control': 'no-store' }); return res.end();
     }
     if (u.pathname === '/mcp') {
