@@ -189,6 +189,7 @@ jobs:
           set -euo pipefail
           docker inspect jscc-nile-feasibility > "$RUNNER_TEMP/nile-inspect.json"
           docker image inspect "$EXP_IMAGE" > "$RUNNER_TEMP/nile-image.json"
+          if ! (
           jq -e --arg image "$EXP_IMAGE" --arg db "$EXP_DB" --arg user "$EXP_BOOT_USER" \
             --slurpfile img "$RUNNER_TEMP/nile-image.json" '
               length == 1 and
@@ -203,6 +204,35 @@ jobs:
               (.[0].HostConfig.PortBindings["5432/tcp"] == [{"HostIp":"127.0.0.1","HostPort":"55432"}]) and
               ((.[0].NetworkSettings.Ports | keys) == ["5432/tcp"])
             ' "$RUNNER_TEMP/nile-inspect.json" >/dev/null
+          ); then
+            if jq -r --arg image "$EXP_IMAGE" --arg db "$EXP_DB" --arg user "$EXP_BOOT_USER" \
+              --slurpfile img "$RUNNER_TEMP/nile-image.json" '
+                (if type == "array" then . else [] end) as $containers |
+                ($containers[0] | if type == "object" then . else {} end) as $c |
+                [
+                  ["D01_SINGLE_CONTAINER", ($containers | length) == 1],
+                  ["D02_RUNNING", $c.State.Running == true],
+                  ["D03_IMAGE_REFERENCE", $c.Config.Image == $image],
+                  ["D04_IMAGE_ID", $c.Image == $img[0][0].Id],
+                  ["D05_NO_BINDS", ($c.HostConfig.Binds == null or $c.HostConfig.Binds == [])],
+                  ["D06_NO_MOUNTS", ($c.Mounts | length) == 0],
+                  ["D07_DB_ENV", try (([$c.Config.Env[] | select(. == ("NILE_TESTING_DB_NAME="+$db))] | length) == 1) catch false],
+                  ["D08_USER_ENV", try (([$c.Config.Env[] | select(. == ("NILE_TESTING_DB_USER="+$user))] | length) == 1) catch false],
+                  ["D09_NETWORK_PORT", $c.NetworkSettings.Ports["5432/tcp"] == [{"HostIp":"127.0.0.1","HostPort":"55432"}]],
+                  ["D10_HOST_PORT", $c.HostConfig.PortBindings["5432/tcp"] == [{"HostIp":"127.0.0.1","HostPort":"55432"}]],
+                  ["D11_SINGLE_PORT", try (($c.NetworkSettings.Ports | keys) == ["5432/tcp"]) catch false]
+                ] |
+                .[] | select(.[1] != true) | .[0]
+              ' "$RUNNER_TEMP/nile-inspect.json" > "$RUNNER_TEMP/r11-diagnostic-ids"; then
+              while IFS= read -r id; do
+                echo "R11_PRE_SQL_FAILED:$id" >&2
+              done < "$RUNNER_TEMP/r11-diagnostic-ids"
+            else
+              echo 'R11_PRE_SQL_DIAGNOSTIC_ERROR' >&2
+            fi
+            echo 'R11_PRE_SQL_ADMISSION=FAIL' >&2
+            exit 1
+          fi
           test "$(docker image inspect "$EXP_IMAGE" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
           echo 'NILE_EXPERIMENT_PRE_SQL_CONTAINER_ADMISSION=PASS'
           for i in $(seq 1 45); do
