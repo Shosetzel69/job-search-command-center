@@ -1,0 +1,533 @@
+name: Nile ephemeral feasibility experiment (manual only)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  nile-feasibility:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CI: 'true'
+      EXP_IMAGE: ghcr.io/niledatabase/testingcontainer@sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869
+      EXP_DB: jobsearch_dev
+      EXP_BOOT_USER: 00000000-0000-0000-0000-000000000000
+      EXP_BOOT_PASSWORD: password
+    steps:
+      - name: Check trusted run identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_ACTIONS" = true
+          test "$CI" = true
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_REPOSITORY" = Shosetzel69/job-search-command-center
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          test -z "${NILE_DATABASE_URL:-}"
+          test -z "${NILE_MIGRATION_DATABASE_URL:-}"
+          test -z "${NILE_TEST_DATABASE_URL:-}"
+          test -z "${JSCC_INTEGRATION_DATABASE_URL:-}"
+          test -z "${JSCC_TEST_ADMIN_DATABASE_URL:-}"
+
+      - name: Checkout exact main revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Verify checked-out default-branch SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+
+      - name: Node.js for isolated synthetic probe
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '24'
+
+      - name: Install existing pg dependency (no lifecycle scripts)
+        working-directory: command-api
+        shell: bash
+        run: npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: Pull and start exactly one isolated Nile container
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(docker info --format '{{.OSType}}')" = linux
+          docker pull --platform linux/amd64 "$EXP_IMAGE"
+          test "$(docker image inspect "$EXP_IMAGE" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
+          docker run --rm -d --name jscc-nile-feasibility \
+            --platform linux/amd64 \
+            -e "NILE_TESTING_DB_NAME=$EXP_DB" \
+            -e "NILE_TESTING_DB_USER=$EXP_BOOT_USER" \
+            -e "NILE_TESTING_DB_PASSWORD=$EXP_BOOT_PASSWORD" \
+            -p 127.0.0.1:55432:5432 \
+            "$EXP_IMAGE"
+
+      - name: Fail-closed pre-SQL image and port readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker inspect jscc-nile-feasibility > "$RUNNER_TEMP/nile-inspect.json"
+          docker image inspect "$EXP_IMAGE" > "$RUNNER_TEMP/nile-image.json"
+          jq -e --arg image "$EXP_IMAGE" --arg db "$EXP_DB" --arg user "$EXP_BOOT_USER" \
+            --slurpfile img "$RUNNER_TEMP/nile-image.json" '
+              length == 1 and
+              .[0].State.Running == true and
+              .[0].Config.Image == $image and
+              .[0].Image == $img[0][0].Id and
+              (.[0].HostConfig.Binds == null or .[0].HostConfig.Binds == []) and
+              ((.[0].Mounts | length) == 0) and
+              ([.[0].Config.Env[] | select(. == ("NILE_TESTING_DB_NAME="+$db))] | length) == 1 and
+              ([.[0].Config.Env[] | select(. == ("NILE_TESTING_DB_USER="+$user))] | length) == 1 and
+              (.[0].NetworkSettings.Ports["5432/tcp"] == [{"HostIp":"127.0.0.1","HostPort":"55432"}]) and
+              (.[0].HostConfig.PortBindings["5432/tcp"] == [{"HostIp":"127.0.0.1","HostPort":"55432"}]) and
+              ((.[0].NetworkSettings.Ports | keys) == ["5432/tcp"])
+            ' "$RUNNER_TEMP/nile-inspect.json" >/dev/null
+          test "$(docker image inspect "$EXP_IMAGE" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
+          echo 'NILE_EXPERIMENT_PRE_SQL_CONTAINER_ADMISSION=PASS'
+          for i in $(seq 1 45); do
+            if docker logs jscc-nile-feasibility 2>&1 | grep -q 'Database has been created and is ready'; then
+              echo 'NILE_EXPERIMENT_CONTAINER_READY=PASS'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'NILE_EXPERIMENT_CONTAINER_READY=FAIL'
+          exit 1
+
+      - name: Synthetic Phase A, conditional Phase B and evidence
+        working-directory: command-api
+        shell: bash
+        env:
+          PGCONNECT_TIMEOUT: '5'
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import pg from 'pg';
+          import assert from 'node:assert/strict';
+          const {Client,Pool} = pg;
+          const db = 'jobsearch_dev';
+          // All probes remain restricted to the single disposable synthetic database.
+          const host = 'localhost';
+          const port = '55432';
+          const bootstrap = '00000000-0000-0000-0000-000000000000';
+          const password = 'password';
+          const principals = Object.freeze({
+            migration:'11111111-1111-4111-8111-111111111111',
+            runtime:'22222222-2222-4222-8222-222222222222',
+            admin:'33333333-3333-4333-8333-333333333333'
+          });
+          const evidence = { phaseA:'NOT_STARTED', phaseB:'NOT_STARTED', securityParity:'BLOCKED', probes:{} };
+          const strErr = e => ({sqlstate: e?.code || 'UNCLASSIFIED', class: e?.name || 'Error'});
+          const sqlIdent = s => '"' + s.replaceAll('"','""') + '"';
+          const urlFor = user => `postgresql://${encodeURIComponent(user)}:${encodeURIComponent(password)}@${host}:${port}/${db}`;
+          function admit(value, user) {
+            assert.equal(process.env.CI,'true');
+            assert.equal(process.env.GITHUB_ACTIONS,'true');
+            assert.equal(process.env.GITHUB_REF,'refs/heads/main');
+            assert.equal(process.env.GITHUB_EVENT_NAME,'workflow_dispatch');
+            assert.equal(process.env.GITHUB_REPOSITORY,'Shosetzel69/job-search-command-center');
+            const url = new URL(value);
+            assert.equal(url.protocol,'postgresql:');
+            assert.equal(url.hostname,host);
+            assert.equal(url.port,port);
+            assert.equal(url.pathname,`/${db}`);
+            assert.equal(decodeURIComponent(url.username),user);
+            assert.equal(url.search,''); assert.equal(url.hash,'');
+            assert.equal(decodeURIComponent(url.password),password);
+            return value;
+          }
+          function guardNegatives(value,user) {
+            const bad = [
+              value.replace('@localhost:', '@example.org:'),
+              value.replace(':55432/', ':5432/'),
+              value.replace(`/${db}`, '/test'),
+              value.replace(encodeURIComponent(user), encodeURIComponent(user === bootstrap ? principals.runtime : bootstrap)),
+              value+'?sslmode=require',
+              ''
+            ];
+            for (const candidate of bad) assert.throws(() => admit(candidate,user));
+            const originalCI=process.env.CI, originalActions=process.env.GITHUB_ACTIONS;
+            try { process.env.CI='false'; assert.throws(() => admit(value,user)); } finally { process.env.CI=originalCI; }
+            try { process.env.GITHUB_ACTIONS='false'; assert.throws(() => admit(value,user)); } finally { process.env.GITHUB_ACTIONS=originalActions; }
+          }
+          const authzDenied = e => e?.code === '42501';
+          const requireDenied = (err, purpose) => {
+            assert.ok(authzDenied(err), `${purpose}: expected SQLSTATE 42501, got ${err?.code || 'NONE'}`);
+            return { status:'DENIED_AS_EXPECTED', sqlstate:err.code };
+          };
+          const checkDenied = async (fn, purpose) => {
+            let error; try { await fn(); } catch(e) { error=e; }
+            return requireDenied(error,purpose);
+          };
+          const isNativeTenantMismatch = error => {
+            // Nile's documented provider diagnostic for multi-tenant writes.
+            // No generic tenant/constraint regex, no SQLSTATE guess, no error-free success.
+            const message=String(error?.message || '').trim();
+            const detail=String(error?.detail || '').trim();
+            return message === 'Multiple tenant IDs specified in write query' &&
+              detail === 'Writes to tenant-aware tables must specify exactly one tenant ID';
+          };
+          const checkNileTenantRefusal = async (fn) => {
+            let error; try { await fn(); } catch(e) { error=e; }
+            assert.ok(error, 'NILE_TENANT_MISMATCH_WRITE_WAS_ALLOWED');
+            assert.ok(isNativeTenantMismatch(error), 'NILE_NATIVE_TENANT_REFUSAL_UNCLASSIFIED_BLOCKED');
+            return {status:'NILE_NATIVE_TENANT_REFUSAL_OBSERVED',sqlstate:error.code || 'UNSPECIFIED'};
+          };
+          // An unrelated constraint error mentioning 'tenant' must NOT pass.
+          assert.equal(isNativeTenantMismatch({code:'23505',message:'duplicate key violates unique constraint jscc_exp_native_tenant_pkey'}),false);
+          assert.equal(isNativeTenantMismatch({code:'23502',message:'null value in column tenant_id violates not-null constraint'}),false);
+          assert.equal(isNativeTenantMismatch({code:'42501',message:'permission denied for table jscc_exp_native_tenant'}),false);
+          const queryIdentity = async (client, user) => {
+            const row=(await client.query('SELECT current_database() AS db, current_user AS usr')).rows[0];
+            assert.equal(row.db,db); assert.equal(row.usr,user); return row;
+          };
+          const getRoleDetails = async (client, user) => {
+            const result = await client.query('SELECT rolname, rolsuper, rolcreatedb, rolcreaterole, rolinherit FROM pg_roles WHERE rolname=$1',[user]);
+            assert.equal(result.rows.length,1); return result.rows[0];
+          };
+
+          let bootstrapClient;
+          const clients=[];
+          try {
+            // PHASE A: only a known synthetic bootstrap identity; no app migration or runtime proof.
+            assert.equal(process.env.EXP_BOOT_USER,bootstrap);
+            const bootURL = admit(urlFor(bootstrap),bootstrap);
+            guardNegatives(bootURL,bootstrap);
+            bootstrapClient = new Client({connectionString:bootURL,connectionTimeoutMillis:8000});
+            await bootstrapClient.connect();
+            const identity = (await bootstrapClient.query('SELECT current_database() AS db, current_user AS usr')).rows[0];
+            assert.equal(identity.db,db); assert.equal(identity.usr,bootstrap);
+            evidence.phaseA='DIAGNOSTIC_CONNECTED';
+            const names=Object.values(principals);
+            const roleStatus={};
+            for (const [role,user] of Object.entries(principals)) {
+              try {
+                // Synthetic role only; an unsupported CREATE ROLE must block Phase B.
+                await bootstrapClient.query(`CREATE ROLE ${sqlIdent(user)} LOGIN PASSWORD 'password'`);
+                roleStatus[role]='CREATED';
+              } catch (e) { roleStatus[role]=strErr(e); }
+            }
+            evidence.probes.P04_CREATE_ROLE=roleStatus;
+            evidence.phaseA='DIAGNOSTIC_COMPLETE';
+            if (!Object.values(roleStatus).every(x=>x==='CREATED')) {
+              evidence.phaseB='BLOCKED_MISSING_DISTINCT_PRINCIPALS';
+              throw new Error('PHASE_B_BLOCKED_UNSUPPORTED_ROLE_PROVISIONING');
+            }
+            // Bootstrap only: explicitly provision synthetic test privileges, never runtime CREATE.
+            // Any unsupported statement fails closed; do not fabricate Nile identity capabilities.
+            await bootstrapClient.query(`GRANT CONNECT ON DATABASE ${sqlIdent(db)} TO ${Object.values(principals).map(sqlIdent).join(', ')}`);
+            await bootstrapClient.query(`GRANT USAGE ON SCHEMA public TO ${Object.values(principals).map(sqlIdent).join(', ')}`);
+            await bootstrapClient.query(`GRANT CREATE ON SCHEMA public TO ${sqlIdent(principals.admin)}, ${sqlIdent(principals.migration)}`);
+            // Admin's PostgreSQL ownership transfer needs membership in target owner role.
+            await bootstrapClient.query(`GRANT ${sqlIdent(principals.migration)} TO ${sqlIdent(principals.admin)}`);
+            evidence.probes.P04_BOOTSTRAP='SYNTHETIC_ROLE_GRANTS_ATTEMPTED';
+            // PHASE B: local synthetic environment bindings; NOT JSCC production consumers.
+            const bindings={
+              NILE_TEST_DATABASE_URL:principals.admin,
+              JSCC_INTEGRATION_DATABASE_URL:principals.runtime,
+              NILE_MIGRATION_DATABASE_URL:principals.migration,
+              JSCC_TEST_ADMIN_DATABASE_URL:principals.admin,
+              NILE_DATABASE_URL:principals.runtime
+            };
+            const pools={};
+            const originalEnv={};
+            try {
+              for(const [name,user] of Object.entries(bindings)) {
+                assert.equal(process.env[name],undefined,`${name} inherited unexpectedly`);
+                originalEnv[name]=process.env[name];
+                process.env[name]=admit(urlFor(user),user);
+              }
+              // Negative environment injection: each missing/wrong input must fail.
+              for(const [name,user] of Object.entries(bindings)) {
+                const valid=process.env[name];
+                guardNegatives(valid,user);
+                delete process.env[name];
+                assert.throws(()=>admit(process.env[name],user));
+                process.env[name]='postgresql://evil:evil@example.org:5432/real';
+                assert.throws(()=>admit(process.env[name],user));
+                process.env[name]=valid;
+              }
+              for (const [name,user] of Object.entries(bindings)) {
+                const verified=admit(process.env[name],user);
+                pools[name]=new Pool({connectionString:verified,max:1,connectionTimeoutMillis:8000});
+                clients.push(pools[name]);
+                await queryIdentity(pools[name],user);
+              }
+              const clientURL=admit(process.env.NILE_TEST_DATABASE_URL,principals.admin);
+              const evidenceClient=new Client({connectionString:clientURL,connectionTimeoutMillis:8000});
+              clients.push(evidenceClient);
+              await evidenceClient.connect();
+              await queryIdentity(evidenceClient,principals.admin);
+              evidence.probes.EFFECTIVE_TEST_BINDINGS='ONLY_THIS_EXPERIMENT_FIVE_ENV_URLS_AND_TEST_POOL_CLIENT_PROVEN; ACTUAL_JSCC_CONFIG_POOL_CONSUMERS_NOT_TESTED';
+              evidence.phaseB='ROLE_BOUND_TEST_CONNECTIONS_VERIFIED';
+              const run=pools.JSCC_INTEGRATION_DATABASE_URL;
+              const adm=pools.JSCC_TEST_ADMIN_DATABASE_URL;
+              const migr=pools.NILE_MIGRATION_DATABASE_URL;
+              for (const [role,user] of Object.entries(principals)) {
+                const session=role==='runtime'?run:role==='migration'?migr:adm;
+                await queryIdentity(session,user);
+                const details=await getRoleDetails(session,user);
+                assert.equal(details.rolsuper,false,`${role} unexpectedly superuser`);
+                if(role==='runtime') {
+                  assert.equal(details.rolcreatedb,false);
+                  assert.equal(details.rolcreaterole,false);
+                }
+              }
+              const admRights=await adm.query("SELECT has_schema_privilege(current_user,'public','CREATE') AS schema_create, has_database_privilege(current_user,current_database(),'CONNECT') AS db_connect");
+              assert.equal(admRights.rows[0].schema_create,true,'synthetic admin lacks confirmed schema CREATE');
+              assert.equal(admRights.rows[0].db_connect,true,'synthetic admin lacks CONNECT');
+              const migrRights=await migr.query("SELECT has_schema_privilege(current_user,'public','CREATE') AS schema_create, has_database_privilege(current_user,current_database(),'CONNECT') AS db_connect");
+              assert.equal(migrRights.rows[0].schema_create,true,'synthetic migration lacks confirmed schema CREATE');
+              assert.equal(migrRights.rows[0].db_connect,true,'synthetic migration lacks CONNECT');
+              const admMembership=await adm.query(`SELECT pg_has_role($1::name,$2::name,'member') AS member`,[principals.admin,principals.migration]);
+              assert.equal(admMembership.rows[0].member,true,'synthetic admin missing migration ownership membership');
+              evidence.probes.P04_ROLE_PREFLIGHT='ADMIN_MIGRATION_POSITIVE_RIGHTS_AND_MEMBERSHIP_VERIFIED';
+              const membership=await adm.query(`SELECT pg_has_role($1::name,$2::name,'member') AS member`,[principals.runtime,principals.admin]);
+              assert.equal(membership.rows[0].member,false);
+              const membership2=await adm.query(`SELECT pg_has_role($1::name,$2::name,'member') AS member`,[principals.runtime,principals.migration]);
+              assert.equal(membership2.rows[0].member,false);
+              evidence.probes.P01='THREE_ACTUAL_CONNECTIONS_NONMEMBER; OWNER_PROOF_PENDING';
+              const priv=await run.query("SELECT has_schema_privilege(current_user,'public','CREATE') AS schema_create, has_database_privilege(current_user,current_database(),'CREATE') AS db_create");
+              assert.equal(priv.rows[0].schema_create,false);
+              assert.equal(priv.rows[0].db_create,false);
+              evidence.probes.P02='RUNTIME_CREATE_PRIVILEGES_DENIED';
+              // Admin must create/own object successfully before ALTER-negative.
+              await adm.query('CREATE TABLE public.jscc_exp_owner_table (id integer)');
+              const owner=await adm.query("SELECT pg_get_userbyid(relowner) AS owner FROM pg_class WHERE oid='public.jscc_exp_owner_table'::regclass");
+              assert.equal(owner.rows[0].owner,principals.admin);
+              evidence.probes.P01='THREE_SESSIONS_NONMEMBER_AND_ADMIN_TABLE_OWNER';
+              evidence.probes.P03_CREATE=await checkDenied(()=>run.query('CREATE TABLE public.jscc_exp_runtime_must_fail (id integer)'),'runtime CREATE TABLE');
+              evidence.probes.P03_ALTER=await checkDenied(()=>run.query('ALTER TABLE public.jscc_exp_owner_table ADD COLUMN runtime_added integer'),'runtime ALTER TABLE');
+              const objectExists=await adm.query("SELECT to_regclass('public.jscc_exp_runtime_must_fail') AS object");
+              assert.equal(objectExists.rows[0].object,null);
+              evidence.probes.P03='STRICT_AUTHORIZATION_DENIALS_SQLSTATE_42501';
+              // P04: positive grant, query privilege, revoke, query denial.
+              await adm.query(`GRANT SELECT ON public.jscc_exp_owner_table TO ${sqlIdent(principals.runtime)}`);
+              const g=await run.query("SELECT has_table_privilege(current_user,'public.jscc_exp_owner_table','SELECT') AS allowed");
+              assert.equal(g.rows[0].allowed,true);
+              await adm.query(`REVOKE SELECT ON public.jscc_exp_owner_table FROM ${sqlIdent(principals.runtime)}`);
+              const rev=await run.query("SELECT has_table_privilege(current_user,'public.jscc_exp_owner_table','SELECT') AS allowed");
+              assert.equal(rev.rows[0].allowed,false);
+              evidence.probes.P04_GRANT_REVOKE='EFFECTIVE_PRIVILEGE_TOGGLE_VERIFIED';
+              // Owner transfer is a separate mandatory P04 capability.
+              await adm.query(`ALTER TABLE public.jscc_exp_owner_table OWNER TO ${sqlIdent(principals.migration)}`);
+              const newOwner=await adm.query("SELECT pg_get_userbyid(relowner) AS owner FROM pg_class WHERE oid='public.jscc_exp_owner_table'::regclass");
+              assert.equal(newOwner.rows[0].owner,principals.migration);
+              evidence.probes.P04_OWNER_TRANSFER='VERIFIED';
+              // Confirm owner transfer without treating the new owner as admin.
+              // Nile-native tenant isolation: deliberately NO PostgreSQL RLS policy.
+              // Both tenants are synthetic; verify real provider filtering and session reset.
+              const ta='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+              const tb='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+              await adm.query("INSERT INTO tenants(id,name) VALUES($1,$2),($3,$4)", [ta,'jscc-exp-A',tb,'jscc-exp-B']);
+              await adm.query('CREATE TABLE public.jscc_exp_native_tenant (tenant_id uuid NOT NULL, id integer NOT NULL, note text, PRIMARY KEY(tenant_id,id))');
+              await adm.query(`GRANT SELECT,INSERT,UPDATE,DELETE ON public.jscc_exp_native_tenant TO ${sqlIdent(principals.runtime)}`);
+              // Synthetic rows are created without a tenant context by admitted admin.
+              await adm.query('INSERT INTO public.jscc_exp_native_tenant(tenant_id,id,note) VALUES($1,1,$2),($3,1,$4)',[ta,'A',tb,'B']);
+              // Each admitted tenant session proves complete positive CRUD as well
+              // as negative cross-tenant access; a failing assertion blocks the run.
+              const isolationClient=await run.connect();
+              try {
+                const expected=async(tenant,own,other) => {
+                  await isolationClient.query('BEGIN');
+                  await isolationClient.query("SELECT set_config('nile.tenant_id',$1,true)",[tenant]);
+                  try {
+                    const visible=await isolationClient.query('SELECT tenant_id::text AS tenant,id,note FROM public.jscc_exp_native_tenant ORDER BY id');
+                    assert.ok(visible.rows.every(x=>x.tenant===tenant));
+                    assert.ok(visible.rows.some(x=>x.id===1));
+                    const positive=await isolationClient.query('INSERT INTO public.jscc_exp_native_tenant(tenant_id,id,note) VALUES($1,20,$2)',[tenant,own+'-insert']);
+                    assert.equal(positive.rowCount,1);
+                    const afterInsert=await isolationClient.query('SELECT note FROM public.jscc_exp_native_tenant WHERE tenant_id=$1 AND id=20',[tenant]);
+                    assert.equal(afterInsert.rows[0].note,own+'-insert');
+                    const update=await isolationClient.query('UPDATE public.jscc_exp_native_tenant SET note=$1 WHERE tenant_id=$2 AND id=20',[own+'-update',tenant]);
+                    assert.equal(update.rowCount,1);
+                    const afterUpdate=await isolationClient.query('SELECT note FROM public.jscc_exp_native_tenant WHERE tenant_id=$1 AND id=20',[tenant]);
+                    assert.equal(afterUpdate.rows[0].note,own+'-update');
+                    const crossUpdate=await isolationClient.query('UPDATE public.jscc_exp_native_tenant SET note=$1 WHERE tenant_id=$2',['unsafe',other]);
+                    assert.equal(crossUpdate.rowCount,0);
+                    const crossDelete=await isolationClient.query('DELETE FROM public.jscc_exp_native_tenant WHERE tenant_id=$1',[other]);
+                    assert.equal(crossDelete.rowCount,0);
+                    // A tenant-routing error aborts a PostgreSQL transaction;
+                    // use a SAVEPOINT to recover and verify the unaffected rows.
+                    await isolationClient.query('SAVEPOINT negative_cross_insert');
+                    await checkNileTenantRefusal(()=>isolationClient.query('INSERT INTO public.jscc_exp_native_tenant(tenant_id,id,note) VALUES($1,30,$2)',[other,'unsafe']));
+                    await isolationClient.query('ROLLBACK TO SAVEPOINT negative_cross_insert');
+                    const afterNegative=await isolationClient.query('SELECT tenant_id::text AS tenant,id,note FROM public.jscc_exp_native_tenant ORDER BY id');
+                    assert.ok(afterNegative.rows.every(x=>x.tenant===tenant));
+                    assert.equal(afterNegative.rows.find(x=>x.id===1)?.note,own);
+                    assert.equal(afterNegative.rows.find(x=>x.id===20)?.note,own+'-update');
+                    assert.ok(!afterNegative.rows.some(x=>x.id===30));
+                    const del=await isolationClient.query('DELETE FROM public.jscc_exp_native_tenant WHERE tenant_id=$1 AND id=20',[tenant]);
+                    assert.equal(del.rowCount,1);
+                    const afterDelete=await isolationClient.query('SELECT count(*)::int AS n FROM public.jscc_exp_native_tenant WHERE tenant_id=$1 AND id=20',[tenant]);
+                    assert.equal(afterDelete.rows[0].n,0);
+                    await isolationClient.query('ROLLBACK');
+                    const reset=await isolationClient.query("SELECT current_setting('nile.tenant_id',true) AS tenant");
+                    assert.ok(!reset.rows[0].tenant || reset.rows[0].tenant==='');
+                  } catch(e) { await isolationClient.query('ROLLBACK').catch(()=>{}); throw e; }
+                };
+                await expected(ta,'A',tb);
+                await expected(tb,'B',ta);
+                // Authoritative unrestricted readback after negative tests.
+                const all=await adm.query('SELECT tenant_id::text AS tenant,id,note FROM public.jscc_exp_native_tenant ORDER BY tenant_id,id');
+                assert.equal(all.rows.length,2);
+                assert.deepEqual(all.rows.map(r=>[r.tenant,r.id,r.note]),[[ta,1,'A'],[tb,1,'B']]);
+                evidence.probes.P05='TWO_TENANTS_POSITIVE_NEGATIVE_CRUD_AND_SESSION_RESET_VERIFIED';
+              } finally {
+                await isolationClient.query('ROLLBACK').catch(()=>{});
+                isolationClient.release();
+              }
+              evidence.phaseB='P01_P05_SYNTHETIC_PROBES_COMPLETED';
+              evidence.securityParity='SYNTHETIC_CAPABILITY_PASS_ONLY';
+              evidence.fullJsccParity='BLOCKED_NOT_TESTED';
+              evidence.nileOnlyCiReady='NO';
+                        } finally {
+              for(const [name,value] of Object.entries(originalEnv)) {
+                if(value===undefined) delete process.env[name]; else process.env[name]=value;
+              }
+              // Cleanup is mandatory acceptance evidence, not silent best-effort.
+              // Ownership of the original table now belongs to migration.
+              const cleanupErrors=[];
+              const cleanup=async (name, pool, statement) => {
+                if(!pool) { cleanupErrors.push({name,code:'NO_ADMITTED_POOL'}); return; }
+                try { await pool.query(statement); }
+                catch(e) {cleanupErrors.push({name,...strErr(e)});}
+              };
+              await cleanup('TENANT_TABLE',pools.JSCC_TEST_ADMIN_DATABASE_URL,'DROP TABLE IF EXISTS public.jscc_exp_native_tenant');
+              for (const [name,id] of [
+                ['TENANT_A','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
+                ['TENANT_B','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb']
+              ]) {
+                try {
+                  const removed=await pools.JSCC_TEST_ADMIN_DATABASE_URL.query(
+                    'DELETE FROM tenants WHERE id=$1',[id]);
+                  assert.ok(removed.rowCount===0||removed.rowCount===1,name+'_UNEXPECTED_DELETE_COUNT');
+                  const post=await pools.JSCC_TEST_ADMIN_DATABASE_URL.query(
+                    'SELECT id FROM tenants WHERE id=$1',[id]);
+                  assert.equal(post.rowCount,0,name+'_STILL_PRESENT');
+                } catch(e) { cleanupErrors.push({name,...strErr(e)}); }
+              }
+              await cleanup('OWNER_TABLE',pools.NILE_MIGRATION_DATABASE_URL,'DROP TABLE IF EXISTS public.jscc_exp_owner_table');
+              // Only inspect through a trusted, still admitted local pool.
+              try {
+                const check=await pools.NILE_MIGRATION_DATABASE_URL.query(
+                  "SELECT to_regclass('public.jscc_exp_native_tenant') AS tenant_table, to_regclass('public.jscc_exp_owner_table') AS owner_table");
+                assert.equal(check.rows[0].tenant_table,null);
+                assert.equal(check.rows[0].owner_table,null);
+                const residual=await pools.JSCC_TEST_ADMIN_DATABASE_URL.query(
+                  "SELECT COUNT(*)::int AS n FROM tenants WHERE id IN ('aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')");
+                assert.equal(residual.rows[0].n,0);
+              } catch(e) { cleanupErrors.push({name:'POST_CLEANUP_READBACK',...strErr(e)}); }
+              evidence.probes.CLEANUP=cleanupErrors.length?{status:'FAIL',errors:cleanupErrors}:'OBJECTS_ABSENT_VERIFIED';
+              if(cleanupErrors.length) throw new Error('SYNTHETIC_CLEANUP_FAILED');
+            }
+          } catch(e) {
+            evidence.error=e.message?.slice(0,120)||'ERROR';
+            evidence.securityParity='BLOCKED_SECURITY_PARITY';
+            evidence.fullJsccParity='BLOCKED_NOT_TESTED';
+            evidence.nileOnlyCiReady='NO';
+            process.exitCode=1;
+          } finally {
+            for(const p of clients) await p.end().catch(()=>{});
+            // Unconditional role lifecycle verification: Phase-A failures included.
+            // Synthetic bootstrap identity is the only actor permitted to revoke
+            // synthetic grants / drop synthetic roles. Any residue is non-green.
+            const roleCleanup=[];
+            if (bootstrapClient) {
+              // Bootstrap fallback is for disposal only, never for PASS evidence.
+              for (const objectName of ['jscc_exp_owner_table','jscc_exp_native_tenant','jscc_exp_runtime_must_fail']) {
+                try {
+                  const before=await bootstrapClient.query(
+                    'SELECT to_regclass($1) AS object',[`public.${objectName}`]);
+                  if(before.rows[0].object!==null) {
+                    await bootstrapClient.query(`DROP TABLE IF EXISTS public.${sqlIdent(objectName)}`);
+                  }
+                  const after=await bootstrapClient.query(
+                    'SELECT to_regclass($1) AS object',[`public.${objectName}`]);
+                  assert.equal(after.rows[0].object,null,`CLEANUP_OBJECT_RESIDUE_${objectName}`);
+                } catch(e) {roleCleanup.push({objectName,...strErr(e)});}
+              }
+              for(const [name,id] of [
+                ['TENANT_A','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'],
+                ['TENANT_B','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb']
+              ]) {
+                try {
+                  await bootstrapClient.query('DELETE FROM tenants WHERE id=$1',[id]);
+                  const remaining=await bootstrapClient.query('SELECT id FROM tenants WHERE id=$1',[id]);
+                  assert.equal(remaining.rowCount,0,`${name}_RESIDUE`);
+                } catch(e) {roleCleanup.push({name,...strErr(e)});}
+              }
+              const created=Object.values(principals);
+              const all=created.map(sqlIdent).join(', ');
+              // Explicitly reverse only grants made by this experiment, without
+              // REASSIGN OWNED / DROP OWNED and without unrelated-object mutation.
+              const grantsToReverse=[
+                `REVOKE ${sqlIdent(principals.migration)} FROM ${sqlIdent(principals.admin)}`,
+                `REVOKE CREATE ON SCHEMA public FROM ${sqlIdent(principals.admin)}, ${sqlIdent(principals.migration)}`,
+                `REVOKE USAGE ON SCHEMA public FROM ${all}`,
+                `REVOKE CONNECT ON DATABASE ${sqlIdent(db)} FROM ${all}`
+              ];
+              for(const statement of grantsToReverse) {
+                try { await bootstrapClient.query(statement); }
+                catch(e) {roleCleanup.push({grant:'EXACT_GRANT_REVOCATION',...strErr(e)});}
+              }
+              for (const [role,user] of Object.entries(principals).reverse()) {
+                try {
+                  const exists=await bootstrapClient.query('SELECT 1 FROM pg_roles WHERE rolname=$1',[user]);
+                  if(exists.rowCount) await bootstrapClient.query(`DROP ROLE ${sqlIdent(user)}`);
+                  const absent=await bootstrapClient.query('SELECT 1 FROM pg_roles WHERE rolname=$1',[user]);
+                  assert.equal(absent.rowCount,0,'ROLE_CLEANUP_RESIDUE_'+role);
+                } catch(e) {roleCleanup.push({role,...strErr(e)});}
+              }
+              evidence.probes.ROLE_CLEANUP=roleCleanup.length?
+                {status:'FAIL',errors:roleCleanup}:'ALL_SYNTHETIC_OBJECTS_TENANTS_AND_ROLES_ABSENT';
+              if(roleCleanup.length) {
+                evidence.securityParity='BLOCKED_SECURITY_PARITY';
+                evidence.error='SYNTHETIC_ROLE_OR_OBJECT_CLEANUP_FAILED';
+                process.exitCode=1;
+              }
+            }
+            await bootstrapClient?.end().catch(()=>{process.exitCode=1;});
+            console.log('NILE_FEASIBILITY_RESULT='+JSON.stringify(evidence));
+          }
+          NODE
+
+      - name: Always remove ephemeral container
+        if: always()
+        shell: bash
+        run: |
+          NAME=jscc-nile-feasibility
+          # Already absent is acceptable; Docker inspection failures are not.
+          docker info >/dev/null 2>&1 || {
+            echo 'NILE_CONTAINER_DISPOSAL_BLOCKED:DOCKER_UNAVAILABLE' >&2
+            exit 1
+          }
+          ids="$(docker ps -aq --no-trunc --filter "name=^/${NAME}$")" || {
+            echo 'NILE_CONTAINER_DISPOSAL_BLOCKED:LIST_FAILED' >&2
+            exit 1
+          }
+          if [ -n "$ids" ]; then
+            docker rm -f "$NAME" >/dev/null || {
+              echo 'NILE_CONTAINER_DISPOSAL_BLOCKED:REMOVE_FAILED' >&2
+              exit 1
+            }
+          fi
+          remaining="$(docker ps -aq --no-trunc --filter "name=^/${NAME}$")" || {
+            echo 'NILE_CONTAINER_DISPOSAL_BLOCKED:POSTCHECK_FAILED' >&2
+            exit 1
+          }
+          if [ -n "$remaining" ]; then
+            echo 'NILE_CONTAINER_DISPOSAL_BLOCKED:STILL_PRESENT' >&2
+            exit 1
+          fi
+          echo 'NILE_CONTAINER_DISPOSAL=VERIFIED_ABSENT'
