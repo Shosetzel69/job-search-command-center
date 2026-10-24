@@ -95,7 +95,15 @@ const oauthModel = {
   generateRefreshToken: async () => randomToken(48),
   saveToken: async (token, client, user) => {
     const expiresAt = token.accessTokenExpiresAt || new Date(Date.now() + ACCESS_TOKEN_TTL_MS);
+    const familyId=client.id===CLAUDE_ID ? (user.refresh_family || randomToken(24)) : null;
+    if (familyId) {
+      const familyKey=`auth/families/${sha256(familyId)}.json`;
+      if (!user.refresh_family) await gcsWriteJson(cfg.bucket,familyKey,{revoked:false,created_at:isoNow()},0);
+      const family=await gcsReadJson(cfg.bucket,familyKey);
+      if (!family || family.data.revoked) throw new Error('refresh_family_revoked');
+    }
     const record = {
+      ...(familyId ? {refresh_family:familyId} : {}),
       revoked:false,
       expires_at_ms:new Date(expiresAt).getTime(),
       scope:token.scope,
@@ -123,8 +131,18 @@ const oauthModel = {
   },
   getRefreshToken: async refreshToken => {
     const rec=await gcsReadJson(cfg.bucket,`auth/refresh/${sha256(refreshToken)}.json`);
-    if (!rec?.data || rec.data.revoked || rec.data.rotated || rec.data.expires_at_ms<=Date.now() || rec.data.client_id!==CLAUDE_ID) return false;
-    return {refreshToken,refreshTokenExpiresAt:new Date(rec.data.expires_at_ms),scope:rec.data.scope,client:oauthClient(CLAUDE_ID),user:{id:rec.data.actor_sub,audience:rec.data.audience,resource:rec.data.resource}};
+    if (!rec?.data || rec.data.client_id!==CLAUDE_ID || !rec.data.refresh_family) return false;
+    const familyKey=`auth/families/${sha256(rec.data.refresh_family)}.json`;
+    const family=await gcsReadJson(cfg.bucket,familyKey);
+    if (!family || family.data.revoked) return false;
+    if (rec.data.rotated) {
+      try { await gcsReplaceJson(cfg.bucket,familyKey,{...family.data,revoked:true,reuse_detected_at:isoNow()},family.generation); }
+      catch(e) { if(e.message!=='generation_precondition_failed') throw e; }
+      authReject('/token','refresh_token_reuse_family_revoked');
+      return false;
+    }
+    if (rec.data.revoked || rec.data.expires_at_ms<=Date.now()) return false;
+    return {refreshToken,refreshTokenExpiresAt:new Date(rec.data.expires_at_ms),scope:rec.data.scope,client:oauthClient(CLAUDE_ID),user:{id:rec.data.actor_sub,audience:rec.data.audience,resource:rec.data.resource,refresh_family:rec.data.refresh_family}};
   },
   revokeToken: async token => {
     if (!token?.refreshToken) return false;
@@ -139,6 +157,11 @@ const oauthModel = {
     if (accessTokenRecordError(rec?.data)) return false;
     const client = oauthClient(rec.data.client_id);
     if (!client) return false;
+    if (client.id===CLAUDE_ID) {
+      if (!rec.data.refresh_family) return false;
+      const family=await gcsReadJson(cfg.bucket,`auth/families/${sha256(rec.data.refresh_family)}.json`);
+      if (!family || family.data.revoked) return false;
+    }
     return {
       accessToken,
       accessTokenExpiresAt:new Date(rec.data.expires_at_ms),
