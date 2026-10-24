@@ -15,7 +15,7 @@ class GateError(ValueError): pass
 
 def run(args,cwd=None,check=True,timeout=300,env=None):
     p=subprocess.run(args,cwd=cwd,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=timeout)
-    if check and p.returncode: raise GateError(f'{args[0]} failed ({p.returncode}): {p.stderr[-1000:]}')
+    if check and p.returncode: raise GateError(f'command_failed_{args[0]}_{p.returncode}')
     return p
 
 def manifest_validate(m,action):
@@ -175,7 +175,7 @@ def execute(m,action,repo,patch,ev):
                 result['pr_url']=pr.stdout.strip();result['steps'].append('pr_created')
         result['status']='PASS'
     except Exception as e:
-        result['status']='FAIL';result['error']=str(e)
+        result['status']='FAIL';result['error_code']=type(e).__name__
     finally:
         if wt and wt.exists():run(['git','worktree','remove','--force',str(wt)],repo,check=False)
         ev.mkdir(exist_ok=True,parents=True)
