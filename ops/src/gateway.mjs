@@ -1,6 +1,7 @@
 import http from 'node:http';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import * as oidc from 'openid-client';
+import { CLAUDE_ID, CLAUDE_REDIRECT, CLAUDE_SCOPES, REFRESH_TTL_MS, knownClient, normalizeRegistration, allowedScopes, safeAuthReason } from './claude-oauth.mjs';
 import {
   ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, CATALOG_VERSION, CHATGPT_CLIENT_ID, CHATGPT_REDIRECT_URI, TASK_CATALOG, OBSERVE_TIMEOUT_MS, REQUIRED_AUDIENCE,
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
@@ -12,13 +13,14 @@ import {
 const cfg = envConfig();
 const PORT = Number(process.env.PORT || 8080);
 
+function oauthClient(clientId) {
+  return knownClient(clientId, CHATGPT_CLIENT_ID, CHATGPT_REDIRECT_URI, cfg.legacyChatgptClientId);
+}
 function chatGptClient(clientId) {
-  if (!isAllowedChatGptClientId(clientId, cfg.legacyChatgptClientId)) return false;
-  return Object.freeze({
-    id: String(clientId),
-    grants: ['authorization_code'],
-    redirectUris: [CHATGPT_REDIRECT_URI],
-  });
+  return isAllowedChatGptClientId(clientId, cfg.legacyChatgptClientId) ? oauthClient(clientId) : false;
+}
+function authReject(route, reason) {
+  console.warn(JSON.stringify({event:'oauth_rejection',route,reason:safeAuthReason(reason)}));
 }
 
 const { Request: OAuthRequest, Response: OAuthResponse } = OAuth2Server;
@@ -39,14 +41,14 @@ const oauthModel = {
   generateAccessToken: async () => randomToken(32),
   getClient: async (clientId, clientSecret) => {
     if (clientSecret) return false;
-    return chatGptClient(clientId);
+    return oauthClient(clientId);
   },
   validateRedirectUri: async (redirectUri, client) => (
-    Boolean(chatGptClient(client?.id)) && redirectUri === CHATGPT_REDIRECT_URI
+    Boolean(oauthClient(client?.id)) && oauthClient(client?.id).redirectUris.includes(redirectUri)
   ),
   validateScope: async (_user, client, scope) => {
     const values = Array.isArray(scope) ? scope : String(scope || '').split(/\s+/).filter(Boolean);
-    return chatGptClient(client?.id) && values.length === 1 && values[0] === REQUIRED_SCOPE ? values : false;
+    return oauthClient(client?.id) && allowedScopes(client?.id,values) ? values : false;
   },
   verifyScope: async (token, scope) => {
     const required = Array.isArray(scope) ? scope : String(scope || '').split(/\s+/).filter(Boolean);
@@ -70,7 +72,7 @@ const oauthModel = {
   getAuthorizationCode: async (authorizationCode) => {
     const rec = await gcsReadJson(cfg.bucket, `auth/codes/${sha256(authorizationCode)}.json`);
     if (authorizationCodeRecordError(rec?.data)) return false;
-    const client = chatGptClient(rec.data.client_id);
+    const client = oauthClient(rec.data.client_id);
     if (!client) return false;
     return {
       authorizationCode,
@@ -90,9 +92,18 @@ const oauthModel = {
     await gcsReplaceJson(cfg.bucket, name, { ...rec.data, consumed:true, consumed_at:isoNow() }, rec.generation);
     return true;
   },
+  generateRefreshToken: async () => randomToken(48),
   saveToken: async (token, client, user) => {
     const expiresAt = token.accessTokenExpiresAt || new Date(Date.now() + ACCESS_TOKEN_TTL_MS);
+    const familyId=client.id===CLAUDE_ID ? (user.refresh_family || randomToken(24)) : null;
+    if (familyId) {
+      const familyKey=`auth/families/${sha256(familyId)}.json`;
+      if (!user.refresh_family) await gcsWriteJson(cfg.bucket,familyKey,{revoked:false,created_at:isoNow()},0);
+      const family=await gcsReadJson(cfg.bucket,familyKey);
+      if (!family || family.data.revoked) throw new Error('refresh_family_revoked');
+    }
     const record = {
+      ...(familyId ? {refresh_family:familyId} : {}),
       revoked:false,
       expires_at_ms:new Date(expiresAt).getTime(),
       scope:token.scope,
@@ -102,20 +113,72 @@ const oauthModel = {
       client_id:client.id,
       issued_at:isoNow(),
     };
+    // Refresh credentials are persisted first; a partial failure never issues a usable
+    // access token. Access verification also checks the token family revocation marker.
+    if (client.id === CLAUDE_ID && token.refreshToken) {
+      await gcsWriteJson(cfg.bucket, `auth/refresh/${sha256(token.refreshToken)}.json`, {
+        ...record, expires_at_ms:new Date(token.refreshTokenExpiresAt || Date.now()+REFRESH_TTL_MS).getTime(),
+        revoked:false, rotated:false
+      }, 0);
+    }
     await gcsWriteJson(cfg.bucket, `auth/tokens/${sha256(token.accessToken)}.json`, record, 0);
     return {
       accessToken:token.accessToken,
       accessTokenExpiresAt:new Date(expiresAt),
+      ...(client.id === CLAUDE_ID && token.refreshToken ? {refreshToken:token.refreshToken,refreshTokenExpiresAt:token.refreshTokenExpiresAt || new Date(Date.now()+REFRESH_TTL_MS)} : {}),
       scope:token.scope,
       client,
       user,
     };
   },
+  getRefreshToken: async refreshToken => {
+    const rec=await gcsReadJson(cfg.bucket,`auth/refresh/${sha256(refreshToken)}.json`);
+    if (!rec?.data || rec.data.client_id!==CLAUDE_ID || !rec.data.refresh_family) return false;
+    const familyKey=`auth/families/${sha256(rec.data.refresh_family)}.json`;
+    const family=await gcsReadJson(cfg.bucket,familyKey);
+    if (!family || family.data.revoked) return false;
+    if (rec.data.rotated) {
+      try { await gcsReplaceJson(cfg.bucket,familyKey,{...family.data,revoked:true,reuse_detected_at:isoNow()},family.generation); }
+      catch(e) { if(e.message!=='generation_precondition_failed') throw e; }
+      authReject('/token','refresh_token_reuse_family_revoked');
+      return false;
+    }
+    if (rec.data.revoked || rec.data.expires_at_ms<=Date.now()) return false;
+    return {refreshToken,refreshTokenExpiresAt:new Date(rec.data.expires_at_ms),scope:rec.data.scope,client:oauthClient(CLAUDE_ID),user:{id:rec.data.actor_sub,audience:rec.data.audience,resource:rec.data.resource,refresh_family:rec.data.refresh_family}};
+  },
+  revokeToken: async token => {
+    if (!token?.refreshToken) return false;
+    const name=`auth/refresh/${sha256(token.refreshToken)}.json`;
+    const rec=await gcsReadJson(cfg.bucket,name);
+    if (!rec || rec.data.rotated || rec.data.revoked) return false;
+    try { await gcsReplaceJson(cfg.bucket,name,{...rec.data,rotated:true,rotated_at:isoNow()},rec.generation);return true; }
+    catch(e) {
+      if (e.message==='generation_precondition_failed') {
+        const latest=await gcsReadJson(cfg.bucket,name);
+        if (latest?.data?.rotated && latest.data.refresh_family) {
+          const familyKey=`auth/families/${sha256(latest.data.refresh_family)}.json`;
+          const family=await gcsReadJson(cfg.bucket,familyKey);
+          if (family && !family.data.revoked) {
+            try { await gcsReplaceJson(cfg.bucket,familyKey,{...family.data,revoked:true,reuse_detected_at:isoNow()},family.generation); }
+            catch(err) { if (err.message!=='generation_precondition_failed') throw err; }
+          }
+          authReject('/token','concurrent_refresh_replay_family_revoked');
+        }
+        return false;
+      }
+      throw e;
+    }
+  },
   getAccessToken: async (accessToken) => {
     const rec = await gcsReadJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`);
     if (accessTokenRecordError(rec?.data)) return false;
-    const client = chatGptClient(rec.data.client_id);
+    const client = oauthClient(rec.data.client_id);
     if (!client) return false;
+    if (client.id===CLAUDE_ID) {
+      if (!rec.data.refresh_family) return false;
+      const family=await gcsReadJson(cfg.bucket,`auth/families/${sha256(rec.data.refresh_family)}.json`);
+      if (!family || family.data.revoked) return false;
+    }
     return {
       accessToken,
       accessTokenExpiresAt:new Date(rec.data.expires_at_ms),
@@ -130,7 +193,8 @@ const oauth = new OAuth2Server({
   model:oauthModel,
   authorizationCodeLifetime:AUTH_CODE_TTL_MS / 1000,
   accessTokenLifetime:ACCESS_TOKEN_TTL_MS / 1000,
-  requireClientAuthentication:{ authorization_code:false },
+  refreshTokenLifetime:REFRESH_TTL_MS/1000,
+  requireClientAuthentication:{ authorization_code:false,refresh_token:false },
 });
 
 function makeOAuthRequest({ method='GET', headers={}, query={}, body={} } = {}) {
@@ -308,22 +372,26 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/health') return sendJson(res, 200, { ok: true, component: 'jscc-ops-gateway-dev', privileged: true, project: cfg.project, catalog_version: CATALOG_VERSION });
     if (req.method === 'GET' && u.pathname === '/.well-known/oauth-protected-resource') return sendJson(res, 200, { resource: `${issuer}/mcp`, authorization_servers: [issuer], scopes_supported: [REQUIRED_SCOPE], bearer_methods_supported: ['header'] });
     if (req.method === 'GET' && (u.pathname === '/.well-known/oauth-authorization-server' || u.pathname === '/.well-known/openid-configuration')) {
-      return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code'], code_challenge_methods_supported: ['S256'], scopes_supported: [REQUIRED_SCOPE], token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
+      return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code','refresh_token'], code_challenge_methods_supported: ['S256'], scopes_supported: CLAUDE_SCOPES, token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
     }
     if (req.method === 'POST' && u.pathname === '/register') {
-      const body = await readBody(req);
-      const redirects = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
-      try { validateChatGptRedirectUris(redirects); } catch { return sendJson(res, 400, { error: 'invalid_redirect_uris' }); }
-      return sendJson(res, 201, {
-        client_id: CHATGPT_CLIENT_ID,
-        redirect_uris: redirects,
-        token_endpoint_auth_method: 'none',
-        grant_types: ['authorization_code'],
-        response_types: ['code']
+      let body;
+      try { body = await readBody(req); } catch(e) { authReject('/register',e.message);return sendJson(res,400,{error:'invalid_request'}); }
+      let registration;
+      try { registration = normalizeRegistration(body,CHATGPT_REDIRECT_URI); }
+      catch(e) { authReject('/register',e.message); return sendJson(res,400,{error:'invalid_client_metadata',error_description:safeAuthReason(e.message)}); }
+      return sendJson(res,201,{
+        client_id:registration.id || CHATGPT_CLIENT_ID,
+        redirect_uris:[registration.redirect],
+        token_endpoint_auth_method:'none',
+        grant_types:registration.grants,
+        response_types:['code'],
+        code_challenge_methods_supported:['S256'],
+        ...(registration.id===CLAUDE_ID?{scope:CLAUDE_SCOPES.join(' ')}:{})
       });
     }
     if (req.method === 'GET' && u.pathname === '/authorize') {
-      if (!(cfg.googleClientId && cfg.googleClientSecret && cfg.googleAllowedSub)) return sendText(res, 503, 'oauth_not_configured');
+      if (!(cfg.googleClientId && cfg.googleClientSecret && cfg.googleAllowedSub)) {authReject('/authorize','oauth_not_configured');return sendText(res,503,'oauth_not_configured');}
       const q = u.searchParams;
       const clientId = q.get('client_id') || '';
       const redirectUri = q.get('redirect_uri') || '';
@@ -332,11 +400,11 @@ const server = http.createServer(async (req, res) => {
       const method = q.get('code_challenge_method') || '';
       const scope = q.get('scope') || '';
       const resource = q.get('resource') || '';
-      if (!chatGptClient(clientId) || redirectUri !== CHATGPT_REDIRECT_URI) return sendText(res, 400, 'invalid_client_or_redirect');
-      if (q.get('response_type') !== 'code') return sendText(res, 400, 'unsupported_response_type');
-      if (method !== 'S256' || !challenge) return sendText(res, 400, 'pkce_s256_required');
-      if (scope !== REQUIRED_SCOPE) return sendText(res, 400, 'required_scope_missing');
-      if (resource !== `${issuer}/mcp`) return sendText(res, 400, 'invalid_resource');
+      if (!oauthClient(clientId) || !oauthClient(clientId).redirectUris.includes(redirectUri)) { authReject('/authorize','invalid_client_or_redirect');return sendText(res,400,'invalid_client_or_redirect'); }
+      if (q.get('response_type') !== 'code') {authReject('/authorize','unsupported_response_type');return sendText(res,400,'unsupported_response_type');}
+      if (method !== 'S256' || !challenge) {authReject('/authorize','pkce_s256_required');return sendText(res,400,'pkce_s256_required');}
+      if (!allowedScopes(clientId,scope.split(/\s+/).filter(Boolean)) || !scope.split(/\s+/).includes(REQUIRED_SCOPE)) {authReject('/authorize','invalid_scope');return sendText(res,400,'invalid_scope');}
+      if (resource !== `${issuer}/mcp`) {authReject('/authorize','invalid_resource');return sendText(res,400,'invalid_resource');}
 
       const upstreamState = oidc.randomState();
       const nonce = oidc.randomNonce();
@@ -371,10 +439,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/oauth/google/callback') {
       const upstreamState = u.searchParams.get('state') || '';
-      if (!upstreamState || !u.searchParams.get('code')) return sendText(res, 400, 'invalid_callback');
+      if (!upstreamState || !u.searchParams.get('code')) {authReject('/authorize','invalid_callback');return sendText(res,400,'invalid_callback');}
       let st;
       try { st = await consumeJson(cfg.bucket, `auth/upstream/${sha256(upstreamState)}.json`); }
-      catch { return sendText(res, 400, 'invalid_or_expired_upstream_state'); }
+      catch {authReject('/authorize','invalid_or_expired_upstream_state');return sendText(res,400,'invalid_or_expired_upstream_state');}
 
       const redirect = `${issuer}/oauth/google/callback`;
       const gc = await googleConfig();
@@ -388,10 +456,10 @@ const server = http.createServer(async (req, res) => {
           idTokenExpected:true
         });
       } catch {
-        return sendText(res, 400, 'google_oidc_validation_failed');
+        authReject('/authorize','google_oidc_validation_failed');return sendText(res,400,'google_oidc_validation_failed');
       }
       const claims = tokens.claims();
-      if (!claims?.sub || claims.sub !== cfg.googleAllowedSub) return sendText(res, 403, 'unapproved_google_subject');
+      if (!claims?.sub || claims.sub !== cfg.googleAllowedSub) {authReject('/authorize','unapproved_google_subject');return sendText(res,403,'unapproved_google_subject');}
 
       const authRequest = makeOAuthRequest({
         method:'GET',
@@ -412,7 +480,7 @@ const server = http.createServer(async (req, res) => {
           authenticateHandler:{ handle:async()=>({ id:claims.sub, audience:REQUIRED_AUDIENCE, resource:st.resource }) }
         });
       } catch {
-        return sendText(res, 400, 'authorization_failed');
+        authReject('/authorize','authorization_failed');return sendText(res,400,'authorization_failed');
       }
       const out = new URL(st.redirect_uri);
       out.searchParams.set('code', code.authorizationCode);
@@ -421,8 +489,9 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(302, { location: out.toString(), 'cache-control': 'no-store' }); return res.end();
     }
     if (req.method === 'POST' && u.pathname === '/token') {
-      const body = await readBody(req);
-      if (body.resource !== `${issuer}/mcp`) return sendJson(res, 400, { error:'invalid_target' });
+      let body;
+      try { body = await readBody(req); } catch(e) {authReject('/token',e.message);return sendJson(res,400,{error:'invalid_request'});}
+      if (body.resource !== `${issuer}/mcp` && !(body.grant_type==='refresh_token' && !body.resource)) { authReject('/token','invalid_target'); return sendJson(res,400,{error:'invalid_target'}); }
       let token;
       try {
         token = await oauth.token(
@@ -430,10 +499,12 @@ const server = http.createServer(async (req, res) => {
           makeOAuthResponse(),
           {
             accessTokenLifetime:ACCESS_TOKEN_TTL_MS/1000,
-            requireClientAuthentication:{ authorization_code:false }
+            requireClientAuthentication:{ authorization_code:false,refresh_token:false },
+            refreshTokenLifetime:REFRESH_TTL_MS/1000
           }
         );
-      } catch {
+      } catch(e) {
+        authReject('/token',e?.name === 'InvalidClientError' ? 'invalid_client' : e?.name === 'InvalidScopeError' ? 'invalid_scope' : e?.name === 'InvalidGrantError' ? 'invalid_grant' : 'token_exchange_failed');
         return sendJson(res, 400, { error:'invalid_grant' });
       }
       const expiresAt = new Date(token.accessTokenExpiresAt).getTime();
@@ -441,14 +512,19 @@ const server = http.createServer(async (req, res) => {
         access_token:token.accessToken,
         token_type:'Bearer',
         expires_in:Math.max(0, Math.floor((expiresAt-Date.now())/1000)),
-        scope:Array.isArray(token.scope) ? token.scope.join(' ') : String(token.scope || REQUIRED_SCOPE)
+        scope:Array.isArray(token.scope) ? token.scope.join(' ') : String(token.scope || REQUIRED_SCOPE),
+        ...(token.refreshToken?{refresh_token:token.refreshToken}:{})
       });
     }
     if (req.method === 'POST' && u.pathname === '/revoke') {
       const body = await readBody(req);
-      const name = `auth/tokens/${sha256(body.token || '')}.json`;
+      const isRefresh = body.token_type_hint === 'refresh_token';
+      const name = `${isRefresh ? 'auth/refresh' : 'auth/tokens'}/${sha256(body.token || '')}.json`;
       const cur = await gcsReadJson(cfg.bucket, name);
-      if (cur) await gcsReplaceJson(cfg.bucket, name, { ...cur.data, revoked:true, revoked_at:isoNow() }, cur.generation);
+      if (cur) {
+        try { await gcsReplaceJson(cfg.bucket, name, { ...cur.data, revoked:true, revoked_at:isoNow() }, cur.generation); }
+        catch(e) { if(e.message !== 'generation_precondition_failed') throw e; }
+      }
       res.writeHead(200, { 'cache-control': 'no-store' }); return res.end();
     }
     if (u.pathname === '/mcp') {
