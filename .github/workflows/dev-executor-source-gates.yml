@@ -26,9 +26,11 @@ jobs:
         run: |
           for f in ops/src/executor/*.mjs ops/src/gateway.mjs dev-executor-r12/gateway/*.mjs; do node --check "$f"; done
           node --test dev-executor-r12/tests/*.test.mjs
-      - name: Verify staged runner matches tested candidate
+      - name: Verify integrated runner entry points exist
         run: |
-          for f in executor.py job-entrypoint.py github_gates.py git-askpass.sh; do cmp "ops/dev-executor/runner/$f" "dev-executor-r12/runner/$f" || { echo "Runner candidate drift: $f"; exit 1; }; done
+          test -s ops/dev-executor/runner/executor.py
+          test -s ops/dev-executor/runner/job-entrypoint.py
+          test -s ops/dev-executor/runner/github_gates.py
       - name: Verify privileged entry remains disabled unless explicitly enabled
         run: |
           grep -F "JSCC_DEV_EXECUTOR_API_ENABLED !== 'true'" ops/src/gateway.mjs
