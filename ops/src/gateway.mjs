@@ -335,7 +335,8 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code','refresh_token'], code_challenge_methods_supported: ['S256'], scopes_supported: CLAUDE_SCOPES, token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
     }
     if (req.method === 'POST' && u.pathname === '/register') {
-      const body = await readBody(req);
+      let body;
+      try { body = await readBody(req); } catch(e) { authReject('/register',e.message);return sendJson(res,400,{error:'invalid_request'}); }
       let registration;
       try { registration = normalizeRegistration(body,CHATGPT_REDIRECT_URI); }
       catch(e) { authReject('/register',e.message); return sendJson(res,400,{error:'invalid_client_metadata',error_description:safeAuthReason(e.message)}); }
@@ -448,8 +449,9 @@ const server = http.createServer(async (req, res) => {
       res.writeHead(302, { location: out.toString(), 'cache-control': 'no-store' }); return res.end();
     }
     if (req.method === 'POST' && u.pathname === '/token') {
-      const body = await readBody(req);
-      if (body.resource !== `${issuer}/mcp` && !(body.grant_type==='refresh_token' && !body.resource)) return sendJson(res, 400, { error:'invalid_target' });
+      let body;
+      try { body = await readBody(req); } catch(e) {authReject('/token',e.message);return sendJson(res,400,{error:'invalid_request'});}
+      if (body.resource !== `${issuer}/mcp` && !(body.grant_type==='refresh_token' && !body.resource)) { authReject('/token','invalid_target'); return sendJson(res,400,{error:'invalid_target'}); }
       let token;
       try {
         token = await oauth.token(
@@ -461,7 +463,8 @@ const server = http.createServer(async (req, res) => {
             refreshTokenLifetime:REFRESH_TTL_MS/1000
           }
         );
-      } catch {
+      } catch(e) {
+        authReject('/token',e?.name === 'InvalidClientError' ? 'invalid_client' : e?.name === 'InvalidScopeError' ? 'invalid_scope' : e?.name === 'InvalidGrantError' ? 'invalid_grant' : 'token_exchange_failed');
         return sendJson(res, 400, { error:'invalid_grant' });
       }
       const expiresAt = new Date(token.accessTokenExpiresAt).getTime();
