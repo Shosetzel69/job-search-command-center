@@ -1,7 +1,7 @@
 import importlib.util, os, pathlib, sys, unittest
 from unittest.mock import patch
 ROOT=pathlib.Path(__file__).resolve().parents[1]
-sys.path.insert(0,str(ROOT/'runner'))
+sys.path.insert(0,os.environ.get('JSCC_TEST_RUNNER_PATH',str(ROOT/'runner')))
 import github_gates as g
 SHA='a'*40
 class GitHubGatesTest(unittest.TestCase):
