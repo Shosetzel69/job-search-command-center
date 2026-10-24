@@ -437,10 +437,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && u.pathname === '/oauth/google/callback') {
       const upstreamState = u.searchParams.get('state') || '';
-      if (!upstreamState || !u.searchParams.get('code')) return sendText(res, 400, 'invalid_callback');
+      if (!upstreamState || !u.searchParams.get('code')) {authReject('/authorize','invalid_callback');return sendText(res,400,'invalid_callback');}
       let st;
       try { st = await consumeJson(cfg.bucket, `auth/upstream/${sha256(upstreamState)}.json`); }
-      catch { return sendText(res, 400, 'invalid_or_expired_upstream_state'); }
+      catch {authReject('/authorize','invalid_or_expired_upstream_state');return sendText(res,400,'invalid_or_expired_upstream_state');}
 
       const redirect = `${issuer}/oauth/google/callback`;
       const gc = await googleConfig();
@@ -454,10 +454,10 @@ const server = http.createServer(async (req, res) => {
           idTokenExpected:true
         });
       } catch {
-        return sendText(res, 400, 'google_oidc_validation_failed');
+        authReject('/authorize','google_oidc_validation_failed');return sendText(res,400,'google_oidc_validation_failed');
       }
       const claims = tokens.claims();
-      if (!claims?.sub || claims.sub !== cfg.googleAllowedSub) return sendText(res, 403, 'unapproved_google_subject');
+      if (!claims?.sub || claims.sub !== cfg.googleAllowedSub) {authReject('/authorize','unapproved_google_subject');return sendText(res,403,'unapproved_google_subject');}
 
       const authRequest = makeOAuthRequest({
         method:'GET',
@@ -478,7 +478,7 @@ const server = http.createServer(async (req, res) => {
           authenticateHandler:{ handle:async()=>({ id:claims.sub, audience:REQUIRED_AUDIENCE, resource:st.resource }) }
         });
       } catch {
-        return sendText(res, 400, 'authorization_failed');
+        authReject('/authorize','authorization_failed');return sendText(res,400,'authorization_failed');
       }
       const out = new URL(st.redirect_uri);
       out.searchParams.set('code', code.authorizationCode);
