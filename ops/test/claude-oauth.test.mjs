@@ -27,7 +27,7 @@ test('refresh-token family protection remains enforced in gateway source',async(
  const {readFile}=await import('node:fs/promises');
  const source=await readFile(new URL('../src/gateway.mjs',import.meta.url),'utf8');
  assert.match(source,/refresh_token_reuse_family_revoked/);
- assert.match(source,/auth\\/families\\//);
+ assert.ok(source.includes('auth/families/'));
  assert.match(source,/family\.data\.revoked/);
  assert.match(source,/authReject\('\/token'/);
 });
