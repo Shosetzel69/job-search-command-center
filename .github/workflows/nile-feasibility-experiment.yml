@@ -55,7 +55,118 @@ jobs:
       - name: Install existing pg dependency (no lifecycle scripts)
         working-directory: command-api
         shell: bash
-        run: npm ci --ignore-scripts --no-audit --no-fund
+        run: |
+          set -euo pipefail
+          PREFIX="$RUNNER_TEMP/jscc555-r9-pg"
+          mkdir -p "$PREFIX" node_modules
+          printf '%s\\n' '{"name":"jscc555-r9","version":"1.0.0","private":true,"dependencies":{"pg":"8.16.3"}}' > "$PREFIX/package.json"
+          base64 --decode > "$PREFIX/package-lock.json" <<'LOCK'
+          ewogICJuYW1lIjogImpzY2M1NTUtcjkiLAogICJ2ZXJzaW9uIjogIjEuMC4wIiwKICAibG9ja2Zp
+          bGVWZXJzaW9uIjogMywKICAicmVxdWlyZXMiOiB0cnVlLAogICJwYWNrYWdlcyI6IHsKICAgICIi
+          OiB7CiAgICAgICJuYW1lIjogImpzY2M1NTUtcjkiLAogICAgICAidmVyc2lvbiI6ICIxLjAuMCIs
+          CiAgICAgICJkZXBlbmRlbmNpZXMiOiB7CiAgICAgICAgInBnIjogIjguMTYuMyIKICAgICAgfQog
+          ICAgfSwKICAgICJub2RlX21vZHVsZXMvcGciOiB7CiAgICAgICJ2ZXJzaW9uIjogIjguMTYuMyIs
+          CiAgICAgICJyZXNvbHZlZCI6ICJodHRwczovL3JlZ2lzdHJ5Lm5wbWpzLm9yZy9wZy8tL3BnLTgu
+          MTYuMy50Z3oiLAogICAgICAiaW50ZWdyaXR5IjogInNoYTUxMi1lbnhjMWgwakEvYXE1b1NETXZx
+          eVczcTg5cmE2WElJRFpnQ1g5dmtNcm56NURGVHcvTnkzTGkybEZRK3B0M0w2TUNnbS81bzJvOEhX
+          OWhpSmppK3h2dz09IiwKICAgICAgImxpY2Vuc2UiOiAiTUlUIiwKICAgICAgImRlcGVuZGVuY2ll
+          cyI6IHsKICAgICAgICAicGctY29ubmVjdGlvbi1zdHJpbmciOiAiXjIuOS4xIiwKICAgICAgICAi
+          cGctcG9vbCI6ICJeMy4xMC4xIiwKICAgICAgICAicGctcHJvdG9jb2wiOiAiXjEuMTAuMyIsCiAg
+          ICAgICAgInBnLXR5cGVzIjogIjIuMi4wIiwKICAgICAgICAicGdwYXNzIjogIjEuMC41IgogICAg
+          ICB9LAogICAgICAiZW5naW5lcyI6IHsKICAgICAgICAibm9kZSI6ICI+PSAxNi4wLjAiCiAgICAg
+          IH0sCiAgICAgICJvcHRpb25hbERlcGVuZGVuY2llcyI6IHsKICAgICAgICAicGctY2xvdWRmbGFy
+          ZSI6ICJeMS4yLjciCiAgICAgIH0sCiAgICAgICJwZWVyRGVwZW5kZW5jaWVzIjogewogICAgICAg
+          ICJwZy1uYXRpdmUiOiAiPj0zLjAuMSIKICAgICAgfSwKICAgICAgInBlZXJEZXBlbmRlbmNpZXNN
+          ZXRhIjogewogICAgICAgICJwZy1uYXRpdmUiOiB7CiAgICAgICAgICAib3B0aW9uYWwiOiB0cnVl
+          CiAgICAgICAgfQogICAgICB9CiAgICB9LAogICAgIm5vZGVfbW9kdWxlcy9wZy1jbG91ZGZsYXJl
+          IjogewogICAgICAidmVyc2lvbiI6ICIxLjQuMSIsCiAgICAgICJyZXNvbHZlZCI6ICJodHRwczov
+          L3JlZ2lzdHJ5Lm5wbWpzLm9yZy9wZy1jbG91ZGZsYXJlLy0vcGctY2xvdWRmbGFyZS0xLjQuMS50
+          Z3oiLAogICAgICAiaW50ZWdyaXR5IjogInNoYTUxMi02UFFic0ZXWmNwOUVtSkV3eTVjR1EyTGEr
+          QU1XcFA0NmxnYmI4WCtVL1hzSElVd2VZRE5DcGV1S2NrNVJ4TDJNZFZGaTdrcmJiRWk1blg0Wmg3
+          SmhyUT09IiwKICAgICAgImxpY2Vuc2UiOiAiTUlUIiwKICAgICAgIm9wdGlvbmFsIjogdHJ1ZQog
+          ICAgfSwKICAgICJub2RlX21vZHVsZXMvcGctY29ubmVjdGlvbi1zdHJpbmciOiB7CiAgICAgICJ2
+          ZXJzaW9uIjogIjIuMTQuMSIsCiAgICAgICJyZXNvbHZlZCI6ICJodHRwczovL3JlZ2lzdHJ5Lm5w
+          bWpzLm9yZy9wZy1jb25uZWN0aW9uLXN0cmluZy8tL3BnLWNvbm5lY3Rpb24tc3RyaW5nLTIuMTQu
+          MS50Z3oiLAogICAgICAiaW50ZWdyaXR5IjogInNoYTUxMi1xUjNrR05QQkxwQ050ejBldmJLQTBZ
+          L01SRlh3U1NkVCtwVEp2WXAvYlhUY1JlWmJ2WDFrekYwSXlUYzFRbnhxRjdBWmJPZUJoTkw4UjVt
+          WVFaVi9NQT09IiwKICAgICAgImxpY2Vuc2UiOiAiTUlUIgogICAgfSwKICAgICJub2RlX21vZHVs
+          ZXMvcGctaW50OCI6IHsKICAgICAgInZlcnNpb24iOiAiMS4wLjEiLAogICAgICAicmVzb2x2ZWQi
+          OiAiaHR0cHM6Ly9yZWdpc3RyeS5ucG1qcy5vcmcvcGctaW50OC8tL3BnLWludDgtMS4wLjEudGd6
+          IiwKICAgICAgImludGVncml0eSI6ICJzaGE1MTItV0N0YWJTNnQzYzhTa3BEQlVsYjFrak9zN2w2
+          NnhzR2RLcElQWnNnNHdSK0IzK3U5VUF1bTJvZFNzRjl0bnZ4ZzgwaDRaeExXTXk0cFJqT3NGSXFR
+          cHc9PSIsCiAgICAgICJsaWNlbnNlIjogIklTQyIsCiAgICAgICJlbmdpbmVzIjogewogICAgICAg
+          ICJub2RlIjogIj49NC4wLjAiCiAgICAgIH0KICAgIH0sCiAgICAibm9kZV9tb2R1bGVzL3BnLXBv
+          b2wiOiB7CiAgICAgICJ2ZXJzaW9uIjogIjMuMTQuMCIsCiAgICAgICJyZXNvbHZlZCI6ICJodHRw
+          czovL3JlZ2lzdHJ5Lm5wbWpzLm9yZy9wZy1wb29sLy0vcGctcG9vbC0zLjE0LjAudGd6IiwKICAg
+          ICAgImludGVncml0eSI6ICJzaGE1MTItZ0t0UGtGZFFQVTNEa3Nvb1ZMaTlMc2paeHJzQlVaSXBh
+          KzdhVngrTFY1cE5oMEt6UDRabGV1ZDJwbytDb25yeGJ1WEdCSjZIZmVyNmhkZ3BJQnBCYXc9PSIs
+          CiAgICAgICJsaWNlbnNlIjogIk1JVCIsCiAgICAgICJwZWVyRGVwZW5kZW5jaWVzIjogewogICAg
+          ICAgICJwZyI6ICI+PTguMCIKICAgICAgfQogICAgfSwKICAgICJub2RlX21vZHVsZXMvcGctcHJv
+          dG9jb2wiOiB7CiAgICAgICJ2ZXJzaW9uIjogIjEuMTYuMSIsCiAgICAgICJyZXNvbHZlZCI6ICJo
+          dHRwczovL3JlZ2lzdHJ5Lm5wbWpzLm9yZy9wZy1wcm90b2NvbC8tL3BnLXByb3RvY29sLTEuMTYu
+          MS50Z3oiLAogICAgICAiaW50ZWdyaXR5IjogInNoYTUxMi1wOVZPRk1pSEIvWmJKQVRldGJnKzk5
+          UHhzc1RWU1FSbnl1UFNRNjdtTjErMUtCT2paYVo4M1pRemx0bnhQaEp3U3NDM253VmpKMTBEVkps
+          ZXJiRnpMZz09IiwKICAgICAgImxpY2Vuc2UiOiAiTUlUIgogICAgfSwKICAgICJub2RlX21vZHVs
+          ZXMvcGctdHlwZXMiOiB7CiAgICAgICJ2ZXJzaW9uIjogIjIuMi4wIiwKICAgICAgInJlc29sdmVk
+          IjogImh0dHBzOi8vcmVnaXN0cnkubnBtanMub3JnL3BnLXR5cGVzLy0vcGctdHlwZXMtMi4yLjAu
+          dGd6IiwKICAgICAgImludGVncml0eSI6ICJzaGE1MTItcVRBQWxyRXNsOHM0T2lFUVk2OXdEdmNN
+          SWRRTjZ3ZHo1b2pRaU95NllSTXV5bnhlbk9OME81b0NwSkk2bHNoYzZzY2dBWThxdkoyT24vcCtD
+          WFkwR0E9PSIsCiAgICAgICJsaWNlbnNlIjogIk1JVCIsCiAgICAgICJkZXBlbmRlbmNpZXMiOiB7
+          CiAgICAgICAgInBnLWludDgiOiAiMS4wLjEiLAogICAgICAgICJwb3N0Z3Jlcy1hcnJheSI6ICJ+
+          Mi4wLjAiLAogICAgICAgICJwb3N0Z3Jlcy1ieXRlYSI6ICJ+MS4wLjAiLAogICAgICAgICJwb3N0
+          Z3Jlcy1kYXRlIjogIn4xLjAuNCIsCiAgICAgICAgInBvc3RncmVzLWludGVydmFsIjogIl4xLjEu
+          MCIKICAgICAgfSwKICAgICAgImVuZ2luZXMiOiB7CiAgICAgICAgIm5vZGUiOiAiPj00IgogICAg
+          ICB9CiAgICB9LAogICAgIm5vZGVfbW9kdWxlcy9wZ3Bhc3MiOiB7CiAgICAgICJ2ZXJzaW9uIjog
+          IjEuMC41IiwKICAgICAgInJlc29sdmVkIjogImh0dHBzOi8vcmVnaXN0cnkubnBtanMub3JnL3Bn
+          cGFzcy8tL3BncGFzcy0xLjAuNS50Z3oiLAogICAgICAiaW50ZWdyaXR5IjogInNoYTUxMi1GZFc5
+          ci9qUVpoU2VvaHMxWjNzSTF5eEZRTkZ2TWNubWZ1ajRXQk1VVHhPckF5TE1hVGNFMWFBTUJpVGxi
+          TU5hWHZCQ1F1VmkwUjdoZDh1ZERTUDd1Zz09IiwKICAgICAgImxpY2Vuc2UiOiAiTUlUIiwKICAg
+          ICAgImRlcGVuZGVuY2llcyI6IHsKICAgICAgICAic3BsaXQyIjogIl40LjEuMCIKICAgICAgfQog
+          ICAgfSwKICAgICJub2RlX21vZHVsZXMvcG9zdGdyZXMtYXJyYXkiOiB7CiAgICAgICJ2ZXJzaW9u
+          IjogIjIuMC4wIiwKICAgICAgInJlc29sdmVkIjogImh0dHBzOi8vcmVnaXN0cnkubnBtanMub3Jn
+          L3Bvc3RncmVzLWFycmF5Ly0vcG9zdGdyZXMtYXJyYXktMi4wLjAudGd6IiwKICAgICAgImludGVn
+          cml0eSI6ICJzaGE1MTItVnBaclVxVTVBNjllUXlXMmM1Q0ExanRMZWNDc04yVS9iRDZWaWxyRkRX
+          cTUrNVVJRVZPN25helMzVEVjSGYxenVQWU8vc3FHdlV2VzYyZzg2UlhadUE9PSIsCiAgICAgICJs
+          aWNlbnNlIjogIk1JVCIsCiAgICAgICJlbmdpbmVzIjogewogICAgICAgICJub2RlIjogIj49NCIK
+          ICAgICAgfQogICAgfSwKICAgICJub2RlX21vZHVsZXMvcG9zdGdyZXMtYnl0ZWEiOiB7CiAgICAg
+          ICJ2ZXJzaW9uIjogIjEuMC4xIiwKICAgICAgInJlc29sdmVkIjogImh0dHBzOi8vcmVnaXN0cnku
+          bnBtanMub3JnL3Bvc3RncmVzLWJ5dGVhLy0vcG9zdGdyZXMtYnl0ZWEtMS4wLjEudGd6IiwKICAg
+          ICAgImludGVncml0eSI6ICJzaGE1MTItNSs1SHFYbnNaUEU2NUlKWlNNa1p0VVJBUlplbGVsMm9Y
+          VUVPOHJIODNWUy9oeEg1dnYxdUhxdVBnNXdaczh5TUFmZHY5NzFJVStrY1BVY3ppN05WQlE9PSIs
+          CiAgICAgICJsaWNlbnNlIjogIk1JVCIsCiAgICAgICJlbmdpbmVzIjogewogICAgICAgICJub2Rl
+          IjogIj49MC4xMC4wIgogICAgICB9CiAgICB9LAogICAgIm5vZGVfbW9kdWxlcy9wb3N0Z3Jlcy1k
+          YXRlIjogewogICAgICAidmVyc2lvbiI6ICIxLjAuNyIsCiAgICAgICJyZXNvbHZlZCI6ICJodHRw
+          czovL3JlZ2lzdHJ5Lm5wbWpzLm9yZy9wb3N0Z3Jlcy1kYXRlLy0vcG9zdGdyZXMtZGF0ZS0xLjAu
+          Ny50Z3oiLAogICAgICAiaW50ZWdyaXR5IjogInNoYTUxMi1zdURtakxWUWc3OG5NSzJVWjQ1NGhB
+          RytPQVcrSFFQWjZuKytUTkRVWCtMMCt1VWxMeXdub3hKS0RvdTUxWm0relRDanJDbDBOcTZKOUM1
+          aFA5dksvUT09IiwKICAgICAgImxpY2Vuc2UiOiAiTUlUIiwKICAgICAgImVuZ2luZXMiOiB7CiAg
+          ICAgICAgIm5vZGUiOiAiPj0wLjEwLjAiCiAgICAgIH0KICAgIH0sCiAgICAibm9kZV9tb2R1bGVz
+          L3Bvc3RncmVzLWludGVydmFsIjogewogICAgICAidmVyc2lvbiI6ICIxLjIuMCIsCiAgICAgICJy
+          ZXNvbHZlZCI6ICJodHRwczovL3JlZ2lzdHJ5Lm5wbWpzLm9yZy9wb3N0Z3Jlcy1pbnRlcnZhbC8t
+          L3Bvc3RncmVzLWludGVydmFsLTEuMi4wLnRneiIsCiAgICAgICJpbnRlZ3JpdHkiOiAic2hhNTEy
+          LTlaaFhLTS9ydzM1ME4xb3Z1V0hiR3huR2gvU05KNGNueEhpTTByeEU0Vk40MXdzZzhQOHpXbjlo
+          di9idUswMFJQNFd2bE95ci9SQkRpcHR5eFZia1pRPT0iLAogICAgICAibGljZW5zZSI6ICJNSVQi
+          LAogICAgICAiZGVwZW5kZW5jaWVzIjogewogICAgICAgICJ4dGVuZCI6ICJeNC4wLjAiCiAgICAg
+          IH0sCiAgICAgICJlbmdpbmVzIjogewogICAgICAgICJub2RlIjogIj49MC4xMC4wIgogICAgICB9
+          CiAgICB9LAogICAgIm5vZGVfbW9kdWxlcy9zcGxpdDIiOiB7CiAgICAgICJ2ZXJzaW9uIjogIjQu
+          Mi4wIiwKICAgICAgInJlc29sdmVkIjogImh0dHBzOi8vcmVnaXN0cnkubnBtanMub3JnL3NwbGl0
+          Mi8tL3NwbGl0Mi00LjIuMC50Z3oiLAogICAgICAiaW50ZWdyaXR5IjogInNoYTUxMi1VY2pjSk9X
+          a25yTmtGNlBMWDgzcWNITTZLSGdWS05rVjYyWThhNXVZRFZ2OXlkR1FWd0FITUtxSGRKamUxVlRX
+          cGxqRzBXWXBDRGhyQ2RBT1lINFRXZz09IiwKICAgICAgImxpY2Vuc2UiOiAiSVNDIiwKICAgICAg
+          ImVuZ2luZXMiOiB7CiAgICAgICAgIm5vZGUiOiAiPj0gMTAueCIKICAgICAgfQogICAgfSwKICAg
+          ICJub2RlX21vZHVsZXMveHRlbmQiOiB7CiAgICAgICJ2ZXJzaW9uIjogIjQuMC4yIiwKICAgICAg
+          InJlc29sdmVkIjogImh0dHBzOi8vcmVnaXN0cnkubnBtanMub3JnL3h0ZW5kLy0veHRlbmQtNC4w
+          LjIudGd6IiwKICAgICAgImludGVncml0eSI6ICJzaGE1MTItTEtZVTFpQVhKWFVnQVhuOVVSaml1
+          K01XaHlVWEhzdmZwN21jdVltOWRTVUtLMC9DanRyVXdGQXhEODIvbUNXYnRMc0dqRklhZDB3SXNv
+          ZDR6clRBRVE9PSIsCiAgICAgICJsaWNlbnNlIjogIk1JVCIsCiAgICAgICJlbmdpbmVzIjogewog
+          ICAgICAgICJub2RlIjogIj49MC40IgogICAgICB9CiAgICB9CiAgfQp9Cg==
+          LOCK
+          echo 'e2f1b764d58183c00792a2dc1ee9a0c5d54482f805ff347f21bcea565f363606  '"$PREFIX/package-lock.json" | sha256sum --check --status
+          npm ci --prefix "$PREFIX" --ignore-scripts --no-audit --no-fund
+          test ! -e node_modules/pg && test ! -L node_modules/pg
+          ln -s "$PREFIX/node_modules/pg" node_modules/pg
+          node --input-type=module -e "import pg from 'pg'; if (typeof pg.Pool !== 'function' || typeof pg.Client !== 'function') process.exit(1)"
+          node -e "if (require('$PREFIX/node_modules/pg/package.json').version !== '8.16.3') process.exit(1)"
 
       - name: Pull and start exactly one isolated Nile container
         shell: bash
