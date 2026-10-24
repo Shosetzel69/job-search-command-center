@@ -43,3 +43,11 @@ test('OAuth discovery and rejection diagnostic contracts are present',async()=>{
  assert.ok(gateway.includes("refresh_family_revoked"));
  assert.ok(gateway.includes("concurrent_refresh_replay_family_revoked"));
 });
+
+test('access credentials are persisted only after refresh record',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const source=await readFile(new URL('../src/gateway.mjs',import.meta.url),'utf8');
+ const save=source.slice(source.indexOf('saveToken: async'),source.indexOf('getRefreshToken: async'));
+ assert.ok(save.indexOf('auth/refresh/')>=0);
+ assert.ok(save.indexOf('auth/tokens/')>save.indexOf('auth/refresh/'));
+});
