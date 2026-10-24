@@ -150,7 +150,22 @@ const oauthModel = {
     const rec=await gcsReadJson(cfg.bucket,name);
     if (!rec || rec.data.rotated || rec.data.revoked) return false;
     try { await gcsReplaceJson(cfg.bucket,name,{...rec.data,rotated:true,rotated_at:isoNow()},rec.generation);return true; }
-    catch(e) { if(e.message==='generation_precondition_failed') return false;throw e; }
+    catch(e) {
+      if (e.message==='generation_precondition_failed') {
+        const latest=await gcsReadJson(cfg.bucket,name);
+        if (latest?.data?.rotated && latest.data.refresh_family) {
+          const familyKey=`auth/families/${sha256(latest.data.refresh_family)}.json`;
+          const family=await gcsReadJson(cfg.bucket,familyKey);
+          if (family && !family.data.revoked) {
+            try { await gcsReplaceJson(cfg.bucket,familyKey,{...family.data,revoked:true,reuse_detected_at:isoNow()},family.generation); }
+            catch(err) { if (err.message!=='generation_precondition_failed') throw err; }
+          }
+          authReject('/token','concurrent_refresh_replay_family_revoked');
+        }
+        return false;
+      }
+      throw e;
+    }
   },
   getAccessToken: async (accessToken) => {
     const rec = await gcsReadJson(cfg.bucket, `auth/tokens/${sha256(accessToken)}.json`);
