@@ -113,13 +113,15 @@ const oauthModel = {
       client_id:client.id,
       issued_at:isoNow(),
     };
-    await gcsWriteJson(cfg.bucket, `auth/tokens/${sha256(token.accessToken)}.json`, record, 0);
+    // Refresh credentials are persisted first; a partial failure never issues a usable
+    // access token. Access verification also checks the token family revocation marker.
     if (client.id === CLAUDE_ID && token.refreshToken) {
       await gcsWriteJson(cfg.bucket, `auth/refresh/${sha256(token.refreshToken)}.json`, {
         ...record, expires_at_ms:new Date(token.refreshTokenExpiresAt || Date.now()+REFRESH_TTL_MS).getTime(),
         revoked:false, rotated:false
       }, 0);
     }
+    await gcsWriteJson(cfg.bucket, `auth/tokens/${sha256(token.accessToken)}.json`, record, 0);
     return {
       accessToken:token.accessToken,
       accessTokenExpiresAt:new Date(expiresAt),
