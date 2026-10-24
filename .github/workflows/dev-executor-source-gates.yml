@@ -1,0 +1,35 @@
+name: DEV Executor source gates
+on:
+  pull_request:
+    paths:
+      - 'ops/src/executor/**'
+      - 'ops/src/gateway.mjs'
+      - 'ops/dev-executor/**'
+      - 'dev-executor-r12/**'
+      - '.github/workflows/dev-executor-source-gates.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline-source-gates:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate Python runner and gateway adapter
+        run: |
+          python3 -m compileall -q ops/dev-executor/runner dev-executor-r12/gateway
+          python3 -m unittest discover -s dev-executor-r12/tests -p 'test_*.py' -v
+      - name: Validate Node modules and offline tests
+        run: |
+          for f in ops/src/executor/*.mjs ops/src/gateway.mjs dev-executor-r12/gateway/*.mjs; do node --check "$f"; done
+          node --test dev-executor-r12/tests/*.test.mjs
+      - name: Verify staged runner matches tested candidate
+        run: |
+          for f in executor.py job-entrypoint.py github_gates.py git-askpass.sh; do cmp "ops/dev-executor/runner/$f" "dev-executor-r12/runner/$f" || { echo "Runner candidate drift: $f"; exit 1; }; done
+      - name: Verify privileged entry remains disabled unless explicitly enabled
+        run: |
+          grep -F "JSCC_DEV_EXECUTOR_API_ENABLED !== 'true'" ops/src/gateway.mjs
+          grep -F "JSCC_DEV_ENABLE_" ops/dev-executor/runner/executor.py
