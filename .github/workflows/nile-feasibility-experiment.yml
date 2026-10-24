@@ -59,7 +59,7 @@ jobs:
           set -euo pipefail
           PREFIX="$RUNNER_TEMP/jscc555-r9-pg"
           mkdir -p "$PREFIX" node_modules
-          printf '%s\\n' '{"name":"jscc555-r9","version":"1.0.0","private":true,"dependencies":{"pg":"8.16.3"}}' > "$PREFIX/package.json"
+          printf '%s\n' '{"name":"jscc555-r9","version":"1.0.0","private":true,"dependencies":{"pg":"8.16.3"}}' > "$PREFIX/package.json"
           base64 --decode > "$PREFIX/package-lock.json" <<'LOCK'
           ewogICJuYW1lIjogImpzY2M1NTUtcjkiLAogICJ2ZXJzaW9uIjogIjEuMC4wIiwKICAibG9ja2Zp
           bGVWZXJzaW9uIjogMywKICAicmVxdWlyZXMiOiB0cnVlLAogICJwYWNrYWdlcyI6IHsKICAgICIi
