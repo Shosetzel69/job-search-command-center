@@ -332,7 +332,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && u.pathname === '/health') return sendJson(res, 200, { ok: true, component: 'jscc-ops-gateway-dev', privileged: true, project: cfg.project, catalog_version: CATALOG_VERSION });
     if (req.method === 'GET' && u.pathname === '/.well-known/oauth-protected-resource') return sendJson(res, 200, { resource: `${issuer}/mcp`, authorization_servers: [issuer], scopes_supported: [REQUIRED_SCOPE], bearer_methods_supported: ['header'] });
     if (req.method === 'GET' && (u.pathname === '/.well-known/oauth-authorization-server' || u.pathname === '/.well-known/openid-configuration')) {
-      return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code','refresh_token'], code_challenge_methods_supported: ['S256'], scopes_supported: [REQUIRED_SCOPE], token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
+      return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code','refresh_token'], code_challenge_methods_supported: ['S256'], scopes_supported: CLAUDE_SCOPES, token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
     }
     if (req.method === 'POST' && u.pathname === '/register') {
       const body = await readBody(req);
@@ -350,7 +350,7 @@ const server = http.createServer(async (req, res) => {
       });
     }
     if (req.method === 'GET' && u.pathname === '/authorize') {
-      if (!(cfg.googleClientId && cfg.googleClientSecret && cfg.googleAllowedSub)) return sendText(res, 503, 'oauth_not_configured');
+      if (!(cfg.googleClientId && cfg.googleClientSecret && cfg.googleAllowedSub)) {authReject('/authorize','oauth_not_configured');return sendText(res,503,'oauth_not_configured');}
       const q = u.searchParams;
       const clientId = q.get('client_id') || '';
       const redirectUri = q.get('redirect_uri') || '';
@@ -362,7 +362,7 @@ const server = http.createServer(async (req, res) => {
       if (!oauthClient(clientId) || !oauthClient(clientId).redirectUris.includes(redirectUri)) { authReject('/authorize','invalid_client_or_redirect');return sendText(res,400,'invalid_client_or_redirect'); }
       if (q.get('response_type') !== 'code') {authReject('/authorize','unsupported_response_type');return sendText(res,400,'unsupported_response_type');}
       if (method !== 'S256' || !challenge) {authReject('/authorize','pkce_s256_required');return sendText(res,400,'pkce_s256_required');}
-      if (!allowedScopes(clientId,scope.split(/\\s+/).filter(Boolean)) || !scope.split(/\\s+/).includes(REQUIRED_SCOPE)) {authReject('/authorize','invalid_scope');return sendText(res,400,'invalid_scope');}
+      if (!allowedScopes(clientId,scope.split(/\s+/).filter(Boolean)) || !scope.split(/\s+/).includes(REQUIRED_SCOPE)) {authReject('/authorize','invalid_scope');return sendText(res,400,'invalid_scope');}
       if (resource !== `${issuer}/mcp`) {authReject('/authorize','invalid_resource');return sendText(res,400,'invalid_resource');}
 
       const upstreamState = oidc.randomState();
