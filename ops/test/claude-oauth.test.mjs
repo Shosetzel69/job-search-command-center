@@ -31,3 +31,15 @@ test('refresh-token family protection remains enforced in gateway source',async(
  assert.match(source,/family\.data\.revoked/);
  assert.match(source,/authReject\('\/token'/);
 });
+
+test('OAuth discovery and rejection diagnostic contracts are present',async()=>{
+ const {readFile}=await import('node:fs/promises');
+ const gateway=await readFile(new URL('../src/gateway.mjs',import.meta.url),'utf8');
+ assert.ok(gateway.includes("grant_types_supported: ['authorization_code','refresh_token']"));
+ assert.ok(gateway.includes("requireClientAuthentication:{ authorization_code:false,refresh_token:false }"));
+ assert.ok(gateway.includes("authReject('/register'"));
+ assert.ok(gateway.includes("authReject('/authorize'"));
+ assert.ok(gateway.includes("authReject('/token'"));
+ assert.ok(gateway.includes("refresh_family_revoked"));
+ assert.ok(gateway.includes("concurrent_refresh_replay_family_revoked"));
+});
