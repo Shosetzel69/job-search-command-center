@@ -22,7 +22,7 @@ jobs:
         run: |
           python3 -m compileall -q ops/dev-executor/runner dev-executor-r12/gateway
           python3 -m unittest discover -s dev-executor-r12/tests -p 'test_*.py' -v
-          PYTHONPATH=ops/dev-executor/runner python3 -m unittest discover -s dev-executor-r12/tests -p 'test_github_gates.py' -v
+          JSCC_TEST_RUNNER_PATH=ops/dev-executor/runner python3 -m unittest discover -s dev-executor-r12/tests -p 'test_github_gates.py' -v
       - name: Validate Node modules and offline tests
         run: |
           for f in ops/src/executor/*.mjs ops/src/gateway.mjs dev-executor-r12/gateway/*.mjs; do node --check "$f"; done
