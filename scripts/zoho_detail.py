@@ -43,7 +43,7 @@ def extract_detail(html, expected_title=None):
         idx = lower.index("job description")
     except ValueError as exc:
         if parser.meta_description and len(parser.meta_description.strip()) >= 80:
-            return {"description": parser.meta_description.strip(),
+            return {"description": parser.meta_description.strip(), "description_completeness": "summary", "description_provenance": "html_meta_description",
                     "location": "", "date_posted": None, "industry": None,
                     "job_title": expected_title or "Untitled",
                     "employment_type": None, "country": None}
@@ -63,7 +63,7 @@ def extract_detail(html, expected_title=None):
             pass
     m = DATE.search(" ".join(lines[:idx]))
     date_opened = meta.get("Date Opened")
-    result = {"description": description, "location": ", ".join(filter(None,(meta.get("City"),meta.get("State/Province")))), "date_posted": (m.group(1) if m else date_opened), "industry": meta.get("Industry")}
+    result = {"description": description, "description_completeness": "partial", "description_provenance": "visible_html_section", "location": ", ".join(filter(None,(meta.get("City"),meta.get("State/Province")))), "date_posted": (m.group(1) if m else date_opened), "industry": meta.get("Industry")}
     result["job_title"] = expected_title or lines[0]
     result["employment_type"] = meta.get("Job Type") or next((s.split("|")[0].strip() for s in lines[:idx] if "|" in s and "time" in s.lower()), None)
     result["country"] = meta.get("Country")
