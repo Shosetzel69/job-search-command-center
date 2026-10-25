@@ -76,3 +76,31 @@ class ZohoIntegrationTests(unittest.TestCase):
             results, _, _ = orchestration.collect_api_sources(cfg, {"usage": {}}, NOW, [row])
         self.assertEqual(row["records"], 0)
         self.assertEqual(results[0].total_available, 1)
+
+    def test_mocked_postgresql_persistence_and_replay(self):
+        """Exercise actual persist_collection transaction flow without touching DEV DB."""
+        from unittest.mock import MagicMock
+        row = item()
+        result = engine.CollectionResult(
+            "zoho_recruit:osf-global.zohorecruit.com", "public_postings",
+            True, [dict(RECORD)], 1)
+        orchestration.tag_collection_records(row, [result])
+        orchestration.record_results(row, [result])
+        connection = MagicMock()
+        cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = ("jobsearch_dev",)
+        cursor.rowcount = 0
+        connector = MagicMock(return_value=connection)
+        env = {"APP_ENV": "dev", "NILE_DATABASE_URL": "postgresql://localhost/jobsearch_dev"}
+        with patch.object(corpus, "_upsert_posting", return_value=("synthetic-id", True)) as upsert:
+            first = corpus.persist_collection([result], [row], run_id="osf-mock-01",
+                now=NOW, env=env, connect=connector, advance_lifecycle=False)
+            second = corpus.persist_collection([result], [row], run_id="osf-mock-02",
+                now=NOW, env=env, connect=connector, advance_lifecycle=False)
+        self.assertEqual(first["status"], "persisted")
+        self.assertEqual(first["records_projected"], 1)
+        self.assertEqual(second["records_projected"], 1)
+        self.assertEqual(upsert.call_count, 2)
+        self.assertEqual(upsert.call_args_list[0].args[1].identity_value,
+                         upsert.call_args_list[1].args[1].identity_value)
+        self.assertTrue(first["lifecycle_suppressed_targeted"])
