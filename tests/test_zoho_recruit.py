@@ -89,3 +89,12 @@ class PaginationSafetyTests(unittest.TestCase):
         ).encode()
         with self.assertRaisesRegex(ValueError, "pagination required"):
             zoho.collect(BOARD, "Acme", opener=lambda req,timeout:Resp(links,req.full_url))
+
+class PrescreenTests(unittest.TestCase):
+    def test_conservative_scope(self):
+        rows = [{"job_title":"IT Project Manager"}, {"job_title":"Android Developer"},
+                {"job_title":"Technology Consultant"}, {"job_title":"Delivery Manager"}]
+        picked = zoho.prefilter_public_metadata(rows, role_family="PROJECT_MANAGEMENT")
+        self.assertEqual([r["job_title"] for r in picked],
+                         ["IT Project Manager","Technology Consultant","Delivery Manager"])
+        self.assertEqual(len(zoho.prefilter_public_metadata(rows)), 4)
