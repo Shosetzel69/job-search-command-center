@@ -114,6 +114,39 @@ def collect(board_url, company_name, opener=None):
     # Reject a saturated page rather than marking an incomplete retrieval successful.
     if len(summaries) == 100:
         raise ValueError("Zoho public careers page reached 100 postings; pagination required")
+    if not summaries:
+        # Some modern Zoho tenants publish an embedded JSON jobs list, not portal links.
+        # Only emit records if the public description field is present; classify its
+        # completeness conservatively (the listing cannot prove full detail parity).
+        from zoho_public_jobs import embedded_jobs, visible_description_length
+        from html import unescape
+        from zoho_public_jobs import _PlainText
+        modern_url = "https://" + tenant + "/jobs/Careers"
+        modern = embedded_jobs(_fetch(modern_url, tenant, opener))
+        if modern and not all(row["description_available"] for row in modern):
+            raise ValueError("modern Zoho list lacks descriptions; detail fetch required")
+        records = []
+        for row in modern:
+            text_parser = _PlainText()
+            text_parser.feed(row["description"] or "")
+            plain = " ".join("".join(text_parser.parts).split())
+            if not plain:
+                raise ValueError("empty modern Zoho job description")
+            place = ", ".join(x for x in (row.get("city"), row.get("state"), row.get("country")) if x)
+            records.append({
+                "id": f"zoho_recruit:{tenant}:{row['jobid']}",
+                "job_title": row["job_title"], "company": company_name.strip(),
+                "description": plain,
+                "description_completeness": "partial",
+                "description_provenance": "public_modern_jobs_json",
+                "location": place or None,
+                "countries": [row["country"]] if row.get("country") else [],
+                "remote": None, "work_arrangement": None,
+                "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
+                "date_posted": row.get("date_opened"), "source_url": board,
+                "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
+            })
+        return records
     if len(summaries) + 1 > MAX_REQUESTS_PER_SOURCE:
         raise ValueError('Zoho request budget exceeded')
     records = []
