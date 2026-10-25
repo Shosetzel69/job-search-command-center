@@ -4,6 +4,8 @@
 
 ### Sources / JSCC #544
 
+- DEV-staged Zoho Recruit sources: OSF Digital, HR Plus, MADIFF, Matritel and MyEmployment registered with public career routes. Shared defaults remain inactive; the runtime opt-in `APP_ENV=dev` plus `JSCC_DEV_ZOHO_ENABLED=1` allows only DEV collection. TEST/PROD cannot enable these routes through that override. Listing checks pass for all five; full-detail verification and deployed DEV persistence remain outstanding for newly added tenants.
+
 - OSF Digital Zoho Recruit public-only HTTP collector staged under ATC-542-01: public tenant-bound detail pages, embedded job description field extraction, explicit summary/partial provenance, ISO publication dates, stable job identity and bounded HTTP requests. OSF source and route remain **inactive** until independent review and separately authorized activation. CollectionResult orchestration and corpus projection tests added; runtime PostgreSQL evidence remains pending.
 
 
