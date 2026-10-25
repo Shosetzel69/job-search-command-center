@@ -128,12 +128,13 @@ def collect(board_url, company_name, opener=None, role_family=None):
         selected = prefilter_public_metadata(metadata, role_family=role_family)
         selected_ids = {item["jobid"] for item in selected}
         available_ids = {item["jobid"] for item in summaries}
-        if selected_ids - available_ids:
-            raise ValueError("Zoho relevant jobs lack public detail links; cannot report complete retrieval")
+        missing_selected = [row for row in selected if row["jobid"] not in available_ids]
         summaries = [item for item in summaries if item["jobid"] in selected_ids]
-    # A capped public portal page is not evidence that all open jobs were enumerated.
-    # Reject a saturated page rather than marking an incomplete retrieval successful.
-    if len(summaries) == 100:
+    else:
+        missing_selected = []
+    # A capped public board is usable only if all relevant metadata records
+    # have been accounted for through detail links or explicit missing records.
+    if len(summaries) == 100 and not missing_selected:
         raise ValueError("Zoho public careers page reached 100 postings; pagination required")
     if not summaries:
         # Some modern Zoho tenants publish an embedded JSON jobs list, not portal links.
@@ -174,7 +175,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
                 "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
             })
         return records
-    if len(summaries) + 1 > MAX_REQUESTS_PER_SOURCE:
+    if len(summaries) + 2 > MAX_REQUESTS_PER_SOURCE:
         raise ValueError('Zoho request budget exceeded')
     records = []
     for item in summaries:
@@ -191,6 +192,19 @@ def collect(board_url, company_name, opener=None, role_family=None):
             "countries": [detail["country"]] if detail.get("country") else [], "remote": None, "work_arrangement": None,
             "employment_statuses": [detail["employment_type"]] if detail["employment_type"] else [],
             "date_posted": detail["date_posted"], "source_url": board,
+            "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
+        })
+    for row in missing_selected:
+        records.append({
+            "id": f"zoho_recruit:{tenant}:{row['jobid']}",
+            "job_title": row["job_title"], "company": company_name.strip(),
+            "description": "", "description_completeness": "missing",
+            "description_provenance": "public_listing_metadata_only",
+            "location": ", ".join(x for x in (row.get("city"),row.get("country")) if x) or None,
+            "countries": [row["country"]] if row.get("country") else [],
+            "remote": None, "work_arrangement": None,
+            "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
+            "date_posted": row.get("date_opened"), "source_url": board,
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
     return records
