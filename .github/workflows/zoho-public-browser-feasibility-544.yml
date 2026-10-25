@@ -30,6 +30,9 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_RUN_ATTEMPT}" = "1"
+          # This workflow must only run on its first-ever dispatch; later
+          # new dispatches increment GITHUB_RUN_NUMBER and fail closed.
+          test "${GITHUB_RUN_NUMBER}" = "1"
           test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
           test "${GITHUB_REF}" = "refs/heads/main"
           # SECURITY GATE: Network containment F-02 and governance F-05 remain
