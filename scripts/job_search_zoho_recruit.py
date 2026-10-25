@@ -102,6 +102,17 @@ def _fetch(url, tenant, opener):
         raise ValueError("oversized Zoho public HTML")
     return body.decode("utf-8", errors="strict")
 
+# Conservative title prefilter for an explicitly requested project-management collection.
+# Other scopes and unknown titles are deliberately retained.
+_PM_TITLE = re.compile(r"\\b(?:project manager|program(?:me)? manager|delivery manager|service manager|scrum master|agile project manager|technical project manager|pmo)\\b", re.I)
+_NON_PM_TITLE = re.compile(r"\\b(?:android developer|ios developer|frontend developer|front.end developer|backend developer|back.end developer|devops engineer|software engineer|data engineer|qa engineer)\\b", re.I)
+
+def prefilter_public_metadata(rows, *, role_family=None):
+    if str(role_family or "").upper() not in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}:
+        return list(rows)
+    return [row for row in rows if _PM_TITLE.search(str(row.get("job_title") or ""))
+            or not _NON_PM_TITLE.search(str(row.get("job_title") or ""))]
+
 def collect(board_url, company_name, opener=None):
     opener = opener or _safe_opener
     board = validate_board(board_url)
