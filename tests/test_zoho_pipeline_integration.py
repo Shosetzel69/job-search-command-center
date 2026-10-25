@@ -105,6 +105,34 @@ class ZohoIntegrationTests(unittest.TestCase):
                          upsert.call_args_list[1].args[1].identity_value)
         self.assertTrue(first["lifecycle_suppressed_targeted"])
 
+
+    def test_missing_description_preserved_in_projection_and_mocked_persistence(self):
+        from unittest.mock import MagicMock
+        row = item()
+        missing = dict(RECORD, id="zoho_recruit:osf-global.zohorecruit.com:999999999",
+                       job_title="IT Project Manager", description="",
+                       description_completeness="missing",
+                       description_provenance="public_listing_metadata_only")
+        result = engine.CollectionResult(
+            "zoho_recruit:osf-global.zohorecruit.com", "public_postings",
+            True, [missing], 1)
+        orchestration.tag_collection_records(row, [result])
+        orchestration.record_results(row, [result])
+        postings, skipped, _, _ = corpus.project_collection([result])
+        self.assertEqual(skipped, 0)
+        self.assertEqual(len(postings), 1)
+        connection = MagicMock()
+        cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
+        cursor.fetchone.return_value = ("jobsearch_dev",)
+        connector = MagicMock(return_value=connection)
+        env = {"APP_ENV":"dev", "NILE_DATABASE_URL":"postgresql://localhost/jobsearch_dev"}
+        with patch.object(corpus, "_upsert_posting", return_value=("missing-synthetic", True)) as upsert:
+            output = corpus.persist_collection([result], [row], run_id="zoho-missing-mock",
+                now=NOW, env=env, connect=connector, advance_lifecycle=False)
+        self.assertEqual(output["records_projected"], 1)
+        self.assertEqual(output["status"], "persisted")
+        self.assertEqual(upsert.call_count, 1)
+
     def test_activation_confined_to_dev_opt_in(self):
         from unittest.mock import patch
         src = {"name":"OSF Digital","id":"src-zoho-osf-digital",
