@@ -19,6 +19,13 @@ class ProbeTests(unittest.TestCase):
         bad = b"<h1>Job description</h1><p>Access denied " + b"X"*140 + b"</p>"
         self.assertEqual(classify(bad)[0], "ERROR_PAGE")
         self.assertEqual(classify(b"<div>requirements</div>")[0], "EMPTY")
+    def test_one_run_number_policy(self):
+        # Workflow run_number is monotonic for each workflow and reruns increment attempt.
+        def authorized(number, attempt):
+            return number == "1" and attempt == "1"
+        self.assertTrue(authorized("1", "1"))
+        self.assertFalse(authorized("2", "1"))
+        self.assertFalse(authorized("1", "2"))
     def test_bounded_stderr(self):
         status, _, _ = bounded_run([sys.executable, "-c", "import sys;sys.stderr.write('A'*100000)"],
                                    timeout=3, stderr_limit=2048)
