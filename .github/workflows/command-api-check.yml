@@ -120,6 +120,9 @@ jobs:
       - name: Run search logic regression tests
         run: python3 -m unittest discover -s scripts -p "test_*.py"
 
+      - name: Run Zoho source and pipeline integration regression tests
+        run: PYTHONPATH=scripts python3 -m unittest discover -s tests -p "test_zoho*.py" -v
+
       - name: Verify backup restore refuses PROD
         run: |
           set +e
