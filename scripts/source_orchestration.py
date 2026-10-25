@@ -588,7 +588,7 @@ def collect_ats(item):
     if connector == "ashby":
         return ashby.collect(route["board_name"], company)
     if connector == "zoho_recruit":
-        return zoho_recruit.collect(route["career_url"], company)
+        return zoho_recruit.collect_result(route["career_url"], company)
     if connector == "recruitee":
         return recruitee.collect(route["subdomain"], company)
     if connector == "bamboohr":
