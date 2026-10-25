@@ -1,5 +1,6 @@
 """Parse public Zoho Recruit job detail HTML without private APIs."""
 import re
+import json
 from html.parser import HTMLParser
 
 HEADINGS = {"Job Information", "Job Description", "Requirements", "Competencies", "Skill Set", "Education"}
@@ -29,9 +30,66 @@ class Text(HTMLParser):
         if not self.skip:
             self.parts.append(data)
 
+
+def embedded_full_description(html):
+    """Read the public Zoho JS data literal; reject malformed/unbounded documents."""
+    match = re.search(r'\bdata\s*=\s*(\{.*?\})\s*;', html, re.S)
+    if not match:
+        return None
+    raw = match.group(1).replace('\\-', '-')
+    raw = re.sub(r'\\x([0-9a-fA-F]{2})', lambda x: '\\u00' + x.group(1), raw)
+    try:
+        payload = json.loads(raw)
+    except (ValueError, TypeError):
+        return None
+    entries = payload.get("jobDescriptionDetails")
+    if not isinstance(entries, list):
+        return None
+    parts = []
+    for entry in entries[:12]:
+        if not isinstance(entry, dict):
+            continue
+        rich = entry.get("richText")
+        if not isinstance(rich, dict) or rich.get("fieldLabel") != "Job Description":
+            continue
+        body = rich.get("value")
+        if not isinstance(body, str) or not body.strip():
+            continue
+        parser = Text()
+        parser.feed(body)
+        text = " ".join("".join(parser.parts).split())
+        if text:
+            parts.append(text)
+    if not parts:
+        return None
+    result = "\n".join(parts)
+    return {"description": result, "description_completeness": "full",
+            "description_provenance": "public_embedded_jobDescriptionDetails",
+            "date_posted": normalize_date(payload.get("postedOn")),
+            "country": payload.get("country"), "location": payload.get("location") or "",
+            "employment_type": payload.get("jobType"),
+            "job_title": payload.get("jobTitle"), "industry": None}
+
+
+def normalize_date(value):
+    from datetime import datetime
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return datetime.strptime(raw, fmt).date().isoformat()
+        except ValueError:
+            pass
+    return None
+
 def extract_detail(html, expected_title=None):
     if not isinstance(html, str) or len(html) > 3_145_728:
         raise ValueError("invalid or oversized Zoho detail")
+    full = embedded_full_description(html)
+    if full:
+        full["job_title"] = expected_title or full["job_title"]
+        return full
     parser = Text()
     parser.feed(html)
     lines = [" ".join(line.split()) for line in "".join(parser.parts).splitlines()]
