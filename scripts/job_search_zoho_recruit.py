@@ -113,7 +113,7 @@ def prefilter_public_metadata(rows, *, role_family=None):
     return [row for row in rows if _PM_TITLE.search(str(row.get("job_title") or ""))
             or not _NON_PM_TITLE.search(str(row.get("job_title") or ""))]
 
-def collect(board_url, company_name, opener=None):
+def collect(board_url, company_name, opener=None, role_family=None):
     opener = opener or _safe_opener
     board = validate_board(board_url)
     if not isinstance(company_name, str) or not company_name.strip():
@@ -121,6 +121,16 @@ def collect(board_url, company_name, opener=None):
     tenant = urlsplit(board).hostname
     started = time.monotonic()
     summaries = enumerate_board(_fetch(board, tenant, opener), board)
+    if str(role_family or "").upper() in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}:
+        # Enumerate the complete public metadata before any detail HTTP requests.
+        from zoho_public_jobs import embedded_jobs
+        metadata = embedded_jobs(_fetch("https://" + tenant + "/jobs/Careers", tenant, opener))
+        selected = prefilter_public_metadata(metadata, role_family=role_family)
+        selected_ids = {item["jobid"] for item in selected}
+        available_ids = {item["jobid"] for item in summaries}
+        if selected_ids - available_ids:
+            raise ValueError("Zoho relevant jobs lack public detail links; cannot report complete retrieval")
+        summaries = [item for item in summaries if item["jobid"] in selected_ids]
     # A capped public portal page is not evidence that all open jobs were enumerated.
     # Reject a saturated page rather than marking an incomplete retrieval successful.
     if len(summaries) == 100:
@@ -185,10 +195,10 @@ def collect(board_url, company_name, opener=None):
     return records
 
 
-def collect_result(board_url, company_name, opener=None):
+def collect_result(board_url, company_name, opener=None, role_family=None):
     """Adapt public postings to the JSCC canonical CollectionResult boundary."""
     import job_search as engine
-    records = collect(board_url, company_name, opener=opener)
+    records = collect(board_url, company_name, opener=opener, role_family=role_family)
     tenant = urlsplit(validate_board(board_url)).hostname
     return [engine.CollectionResult(f"zoho_recruit:{tenant}", "public_postings", True, records, len(records))]
 
