@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "count": 162,
+  "count": 166,
   "sources": [
     {
       "id": "src-db8da20e",
@@ -2262,6 +2262,62 @@
       "approval_status": "pending",
       "last_validated_at": "2026-10-25",
       "validation_reason": "ATC-542-01: activation gated by independent review and end-to-end validation",
+      "policy_excluded": false
+    },
+    {
+      "id": "src-zoho-hr-plus",
+      "category": "Servicii IT si consultanta",
+      "name": "HR Plus",
+      "url": "https://hr-plus.zohorecruit.com/careers",
+      "active": false,
+      "collection_method": "zoho_recruit",
+      "connector_available": true,
+      "validation_status": "pending",
+      "approval_status": "pending",
+      "last_validated_at": "2026-10-25",
+      "validation_reason": "Owner-authorized DEV-only activation; pending end-to-end evidence",
+      "policy_excluded": false
+    },
+    {
+      "id": "src-zoho-madiffpl",
+      "category": "Servicii IT si consultanta",
+      "name": "MADIFF",
+      "url": "https://madiffpl.zohorecruit.com/careers",
+      "active": false,
+      "collection_method": "zoho_recruit",
+      "connector_available": true,
+      "validation_status": "pending",
+      "approval_status": "pending",
+      "last_validated_at": "2026-10-25",
+      "validation_reason": "Owner-authorized DEV-only activation; pending end-to-end evidence",
+      "policy_excluded": false
+    },
+    {
+      "id": "src-zoho-matritel",
+      "category": "Servicii IT si consultanta",
+      "name": "Matritel",
+      "url": "https://matritel.zohorecruit.com/careers",
+      "active": false,
+      "collection_method": "zoho_recruit",
+      "connector_available": true,
+      "validation_status": "pending",
+      "approval_status": "pending",
+      "last_validated_at": "2026-10-25",
+      "validation_reason": "Owner-authorized DEV-only activation; pending end-to-end evidence",
+      "policy_excluded": false
+    },
+    {
+      "id": "src-zoho-myemployment",
+      "category": "Servicii IT si consultanta",
+      "name": "MyEmployment",
+      "url": "https://myemployment.zohorecruit.com/careers",
+      "active": false,
+      "collection_method": "zoho_recruit",
+      "connector_available": true,
+      "validation_status": "pending",
+      "approval_status": "pending",
+      "last_validated_at": "2026-10-25",
+      "validation_reason": "Owner-authorized DEV-only activation; pending end-to-end evidence",
       "policy_excluded": false
     }
   ]
