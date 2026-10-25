@@ -136,7 +136,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
     # have been accounted for through detail links or explicit missing records.
     if len(summaries) == 100 and not missing_selected:
         raise ValueError("Zoho public careers page reached 100 postings; pagination required")
-    if not summaries:
+    if not summaries and not missing_selected:
         # Some modern Zoho tenants publish an embedded JSON jobs list, not portal links.
         # Only emit records if the public description field is present; classify its
         # completeness conservatively (the listing cannot prove full detail parity).
