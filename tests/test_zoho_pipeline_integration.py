@@ -37,7 +37,7 @@ def item():
 class ZohoIntegrationTests(unittest.TestCase):
     def test_nonempty_orchestration_projection_and_idempotent_identity(self):
         row = item()
-        def adapter(url, company):
+        def adapter(url, company, role_family=None):
             self.assertEqual(company, "OSF Digital")
             return [engine.CollectionResult("zoho_recruit:osf-global.zohorecruit.com", "public_postings", True, [dict(RECORD)], 1)]
         with patch.object(orchestration.zoho_recruit, "collect_result", side_effect=adapter):
