@@ -106,8 +106,11 @@ def main():
     if not browser:
         print("BROWSER_MISSING")
         return 1
-    version = subprocess.run([browser, "--version"], capture_output=True, text=True, timeout=5)
-    print("BROWSER_VERSION", (version.stdout or "unknown").strip()[:120])
+    version_status, version_out, _ = bounded_run([browser, "--version"], timeout=5, stdout_limit=2048, stderr_limit=2048)
+    if version_status != "OK":
+        print("BROWSER_VERSION_ERROR")
+        return 1
+    print("BROWSER_VERSION", version_out.decode("utf-8", "replace").strip()[:120])
     failures = 0
     for name, url in PAGES:
         with tempfile.TemporaryDirectory(prefix="zoho-544-") as profile:
