@@ -104,3 +104,19 @@ class ZohoIntegrationTests(unittest.TestCase):
         self.assertEqual(upsert.call_args_list[0].args[1].identity_value,
                          upsert.call_args_list[1].args[1].identity_value)
         self.assertTrue(first["lifecycle_suppressed_targeted"])
+
+    def test_activation_confined_to_dev_opt_in(self):
+        from unittest.mock import patch
+        src = {"name":"OSF Digital","id":"src-zoho-osf-digital",
+               "url":"https://osf-global.zohorecruit.com/careers",
+               "active":False}
+        for app_env, opt_in, expected in [
+            ("dev","1",True),("dev","0",False),
+            ("test","1",False),("prod","1",False),("", "1", False)]:
+            with self.subTest(app_env=app_env, opt_in=opt_in):
+                with patch.dict("os.environ", {"APP_ENV":app_env,
+                                               "JSCC_DEV_OSF_ENABLED":opt_in}):
+                    items = orchestration.build_plan({"sources":[src]})
+                osf = items[0]
+                self.assertEqual(osf["active"], expected)
+                self.assertEqual(osf["status"] == "pending", expected)
