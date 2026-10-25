@@ -2252,16 +2252,16 @@
     },
     {
       "id": "src-zoho-osf-digital",
-      "category": "Companii IT si servicii",
+      "category": "Servicii IT si consultanta",
       "name": "OSF Digital",
       "url": "https://osf-global.zohorecruit.com/careers",
-      "active": true,
+      "active": false,
       "collection_method": "zoho_recruit",
       "connector_available": true,
-      "validation_status": "validated",
-      "approval_status": "approved",
+      "validation_status": "pending",
+      "approval_status": "pending",
       "last_validated_at": "2026-10-25",
-      "validation_reason": "Public detail URLs validated in DEV; meta descriptions are summaries",
+      "validation_reason": "ATC-542-01: activation gated by independent review and end-to-end validation",
       "policy_excluded": false
     }
   ]
