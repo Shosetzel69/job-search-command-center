@@ -278,8 +278,9 @@ def _dev_osf_override(source, route):
     """Owner-authorized OSF activation confined to DEV runtime and explicit opt-in."""
     import os
     return (os.environ.get("APP_ENV", "").strip().lower() == "dev"
-            and os.environ.get("JSCC_DEV_OSF_ENABLED") == "1"
-            and source.get("name") == "OSF Digital"
+            and (os.environ.get("JSCC_DEV_ZOHO_ENABLED") == "1"
+                 or (source.get("name") == "OSF Digital" and os.environ.get("JSCC_DEV_OSF_ENABLED") == "1"))
+            and source.get("name") in {"OSF Digital", "HR Plus", "MADIFF", "Matritel", "MyEmployment"}
             and route is not None
             and route.get("connector") == "zoho_recruit")
 
