@@ -1,5 +1,6 @@
 import os
 import signal
+import tempfile
 import sys
 import unittest
 from unittest.mock import patch
@@ -45,6 +46,22 @@ class ProbeTests(unittest.TestCase):
         script = "import subprocess,time;subprocess.Popen(['sleep','10']);time.sleep(10)"
         status, _, _ = bounded_run([sys.executable, "-c", script], timeout=0.3)
         self.assertEqual(status, "TIMEOUT")
+    def test_process_group_descendant_cleanup(self):
+        with tempfile.TemporaryDirectory() as directory:
+            marker = os.path.join(directory, "childpid")
+            script = ("import subprocess,time; p=subprocess.Popen(['sleep','15']);"
+                      "open(" + repr(marker) + ",'w').write(str(p.pid));time.sleep(15)")
+            status, _, _ = bounded_run([sys.executable, "-c", script], timeout=0.6)
+            self.assertEqual(status, "TIMEOUT")
+            if os.path.exists(marker):
+                with open(marker) as file:
+                    pid = int(file.read())
+                try:
+                    with open("/proc/%s/stat" % pid) as file:
+                        state = file.read().split()[2]
+                    self.assertEqual(state, "Z", "descendant still runnable")
+                except FileNotFoundError:
+                    pass
     def test_nonzero_exit(self):
         status, _, _ = bounded_run([sys.executable, "-c", "raise SystemExit(3)"], timeout=3)
         self.assertEqual(status, "BROWSER_EXIT")
