@@ -334,7 +334,8 @@
     "OSF Digital": {
       "connector": "zoho_recruit",
       "career_url": "https://osf-global.zohorecruit.com/careers",
-      "enabled": true
+      "enabled": false,
+      "disabled_reason": "ATC-542-01 review and activation pending"
     }
   }
 }
