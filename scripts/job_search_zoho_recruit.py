@@ -113,10 +113,12 @@ def collect(board_url, company_name, opener=None):
         records.append({
             "id": f"zoho_recruit:{tenant}:{item['jobid']}",
             "job_title": detail["job_title"], "company": company_name.strip(),
-            "description": detail["description"], "location": detail["location"],
+            "description": detail["description"],
+            "description_completeness": detail["description_completeness"],
+            "description_provenance": detail["description_provenance"], "location": detail["location"],
             "countries": [detail["country"]] if detail.get("country") else [], "remote": None, "work_arrangement": None,
             "employment_statuses": [detail["employment_type"]] if detail["employment_type"] else [],
-            "date_posted": detail["date_posted"], "source_url": item["source_url"],
+            "date_posted": detail["date_posted"], "source_url": board,
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
     return records
@@ -145,7 +147,7 @@ def collect_public_metadata(board_url, company_name, opener=None):
              "description_chars":r["description_chars"],
              "description_quality_check":r["description_chars"] >= 80,
              "date_opened":r["date_opened"], "state":r["state"],
-             "details_complete":bool(r["description_available"] and r["description_chars"] >= 80)}
+             "details_complete":False, "description_completeness": "partial" if r["description_available"] else "missing"}
             for r in raw]
 
 
