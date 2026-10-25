@@ -121,7 +121,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
     tenant = urlsplit(board).hostname
     started = time.monotonic()
     summaries = enumerate_board(_fetch(board, tenant, opener), board)
-    if str(role_family or "").upper() in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}:
+    if summaries and str(role_family or "").upper() in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}:
         # Enumerate the complete public metadata before any detail HTTP requests.
         from zoho_public_jobs import embedded_jobs
         metadata = embedded_jobs(_fetch("https://" + tenant + "/jobs/Careers", tenant, opener))
@@ -149,6 +149,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
                 return []
             raise ValueError("unrecognized modern Zoho jobs payload")
         modern = embedded_jobs(modern_html)
+        modern = prefilter_public_metadata(modern, role_family=role_family)
         if modern and not all(row["description_available"] for row in modern):
             raise ValueError("modern Zoho list lacks descriptions; detail fetch required")
         records = []
