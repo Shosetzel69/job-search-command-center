@@ -134,3 +134,21 @@ class ScopedMetadataTests(unittest.TestCase):
             return Resp(body, req.full_url)
         with self.assertRaisesRegex(ValueError, "lack public detail links"):
             zoho.collect(BOARD, "Acme", opener=mocked, role_family="PROJECT_MANAGEMENT")
+
+class ScopedModernOnlyTests(unittest.TestCase):
+
+    def test_scoped_modern_only_tenant(self):
+        import json
+        from html import escape
+        items=[
+            {"id":"866885000000930001","Posting_Title":"IT Project Manager",
+             "Job_Description":"<p>Manage milestones and risks.</p>"},
+            {"id":"866885000000930002","Posting_Title":"Android Developer",
+             "Job_Description":"<p>Build Android apps.</p>"},
+        ]
+        html=('<input id="jobs" value="'+escape(json.dumps(items),quote=True)+'">').encode()
+        def mocked(req,timeout):
+            return Resp(b"<html>Modern careers</html>" if req.full_url.endswith("/careers") else html,req.full_url)
+        rows=zoho.collect(BOARD,"Modern",opener=mocked,role_family="PROJECT_MANAGEMENT")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(rows[0]["job_title"],"IT Project Manager")
