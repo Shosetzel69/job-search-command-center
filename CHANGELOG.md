@@ -2,6 +2,11 @@
 
 ## [Unreleased]
 
+### Sources / JSCC #544
+
+- OSF Digital Zoho Recruit public-only HTTP collector staged under ATC-542-01: public tenant-bound detail pages, embedded job description field extraction, explicit summary/partial provenance, ISO publication dates, stable job identity and bounded HTTP requests. OSF source and route remain **inactive** until independent review and separately authorized activation. CollectionResult orchestration and corpus projection tests added; runtime PostgreSQL evidence remains pending.
+
+
 > App version: `0.10.0` — bounded Coverage per Role Family with selective corpus refresh.
 
 ### Guvernanta
