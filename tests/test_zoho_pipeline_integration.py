@@ -120,3 +120,19 @@ class ZohoIntegrationTests(unittest.TestCase):
                 osf = items[0]
                 self.assertEqual(osf["active"], expected)
                 self.assertEqual(osf["status"] == "pending", expected)
+
+    def test_all_five_zoho_sources_dev_only(self):
+        from unittest.mock import patch
+        for name, tenant in [
+            ("OSF Digital", "osf-global"), ("HR Plus", "hr-plus"),
+            ("MADIFF", "madiffpl"), ("Matritel", "matritel"),
+            ("MyEmployment", "myemployment")]:
+            src = {"name": name, "id": "src-zoho-" + tenant,
+                   "url": "https://" + tenant + ".zohorecruit.com/careers",
+                   "active": False}
+            for env, expected in [("dev", True), ("test", False), ("prod", False)]:
+                with self.subTest(source=name, env=env), patch.dict(
+                    "os.environ", {"APP_ENV": env, "JSCC_DEV_ZOHO_ENABLED": "1"}
+                ):
+                    plan = orchestration.build_plan({"sources": [src]})
+                    self.assertEqual(plan[0]["status"] == "pending", expected)
