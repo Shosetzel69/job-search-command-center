@@ -121,6 +121,8 @@ class ZohoIntegrationTests(unittest.TestCase):
         postings, skipped, _, _ = corpus.project_collection([result])
         self.assertEqual(skipped, 0)
         self.assertEqual(len(postings), 1)
+        self.assertEqual(postings[0].payload["description_completeness"], "missing")
+        self.assertEqual(postings[0].payload["description"], "")
         connection = MagicMock()
         cursor = connection.__enter__.return_value.cursor.return_value.__enter__.return_value
         cursor.fetchone.return_value = ("jobsearch_dev",)
