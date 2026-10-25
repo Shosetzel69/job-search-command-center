@@ -134,6 +134,7 @@ test('owner-activated registry keeps only explicitly non-operational sources ina
     'Eightfold',
     'Head Hunting IT',
     'Oyster',
+    'OSF Digital',
   ]);
 
   const oyster = inactive.find(source => source.name === 'Oyster');
@@ -141,7 +142,7 @@ test('owner-activated registry keeps only explicitly non-operational sources ina
   assert.equal(oyster.approval_status, 'pending');
 
   const pending = catalog.sources.filter(source => source.name !== 'Monster' && source.approval_status === 'pending');
-  assert.deepEqual(pending.map(source => source.name), ['Landing.Jobs', 'Upwork', 'Oyster']);
+  assert.deepEqual(pending.map(source => source.name), ['Landing.Jobs', 'Upwork', 'Oyster', 'OSF Digital']);
   assert.equal(catalog.sources.filter(source => source.active === true).length, 147);
 });
 
