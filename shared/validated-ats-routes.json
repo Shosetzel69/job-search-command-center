@@ -330,6 +330,11 @@
       "connector": "workable",
       "subdomain": "floatjobs",
       "enabled": true
+    },
+    "OSF Digital": {
+      "connector": "zoho_recruit",
+      "career_url": "https://osf-global.zohorecruit.com/careers",
+      "enabled": true
     }
   }
 }
