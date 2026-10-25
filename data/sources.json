@@ -1,6 +1,6 @@
 {
   "schema_version": "1.0",
-  "count": 161,
+  "count": 162,
   "sources": [
     {
       "id": "src-db8da20e",
@@ -2248,6 +2248,20 @@
       "approval_status": "approved",
       "last_validated_at": "2026-09-22T20:06:59Z",
       "validation_reason": "Package 2C route/source validated; approval and activation remain pending.",
+      "policy_excluded": false
+    },
+    {
+      "id": "src-zoho-osf-digital",
+      "category": "Companii IT si servicii",
+      "name": "OSF Digital",
+      "url": "https://osf-global.zohorecruit.com/careers",
+      "active": true,
+      "collection_method": "zoho_recruit",
+      "connector_available": true,
+      "validation_status": "validated",
+      "approval_status": "approved",
+      "last_validated_at": "2026-10-25",
+      "validation_reason": "Public detail URLs validated in DEV; meta descriptions are summaries",
       "policy_excluded": false
     }
   ]
