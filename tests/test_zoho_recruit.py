@@ -49,3 +49,33 @@ class TestZoho(unittest.TestCase):
         class Redirect(Resp):
             def geturl(self): return "https://evil.com/"
         with self.assertRaises(ValueError): zoho.collect(BOARD,"Acme",opener=lambda req,timeout:Redirect(LIST,req.full_url))
+
+
+class ModernZohoTests(unittest.TestCase):
+    def test_modern_public_jobs_with_description(self):
+        import json
+        from html import escape
+        items = [{"id": "866885000000930001",
+                  "Posting_Title": "IT Project Manager",
+                  "Job_Type": "Full time", "Date_Opened": "2026-09-02",
+                  "Job_Description": "<p>Plan deliveries and control risks.</p>"}]
+        modern = ('<input id="jobs" value="' + escape(json.dumps(items), quote=True) + '">').encode()
+        def mock(req, timeout):
+            return Resp(b"<html>Modern careers</html>" if req.full_url.endswith("/careers") else modern, req.full_url)
+        rows = zoho.collect(BOARD, "MyEmployment", opener=mock)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_title"], "IT Project Manager")
+        self.assertEqual(rows[0]["description_completeness"], "partial")
+        self.assertEqual(rows[0]["description_provenance"], "public_modern_jobs_json")
+        self.assertNotIn("<p>", rows[0]["description"])
+
+    def test_modern_without_description_rejected(self):
+        import json
+        from html import escape
+        modern = ('<input id="jobs" value="' + escape(json.dumps([
+            {"id": "300725000052438066", "Posting_Title": "Android Developer"}
+        ]), quote=True) + '">').encode()
+        def mock(req, timeout):
+            return Resp(b"<html>Modern careers</html>" if req.full_url.endswith("/careers") else modern, req.full_url)
+        with self.assertRaisesRegex(ValueError, "lacks descriptions"):
+            zoho.collect(BOARD, "MADIFF", opener=mock)
