@@ -336,6 +336,30 @@
       "career_url": "https://osf-global.zohorecruit.com/careers",
       "enabled": false,
       "disabled_reason": "ATC-542-01 review and activation pending"
+    },
+    "HR Plus": {
+      "connector": "zoho_recruit",
+      "career_url": "https://hr-plus.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "Enable via explicit DEV-only JSCC_DEV_ZOHO_ENABLED opt-in"
+    },
+    "MADIFF": {
+      "connector": "zoho_recruit",
+      "career_url": "https://madiffpl.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "Enable via explicit DEV-only JSCC_DEV_ZOHO_ENABLED opt-in"
+    },
+    "Matritel": {
+      "connector": "zoho_recruit",
+      "career_url": "https://matritel.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "Enable via explicit DEV-only JSCC_DEV_ZOHO_ENABLED opt-in"
+    },
+    "MyEmployment": {
+      "connector": "zoho_recruit",
+      "career_url": "https://myemployment.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "Enable via explicit DEV-only JSCC_DEV_ZOHO_ENABLED opt-in"
     }
   }
 }
