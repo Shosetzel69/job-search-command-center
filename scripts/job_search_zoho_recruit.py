@@ -123,7 +123,7 @@ def collect(board_url, company_name, opener=None):
         from zoho_public_jobs import _PlainText
         modern_url = "https://" + tenant + "/jobs/Careers"
         modern_html = _fetch(modern_url, tenant, opener)
-        if not re.search(r'<input\\b[^>]*(?:id|name)\\s*=\\s*["\\\']jobs["\\\']', modern_html, re.I):
+        if not re.search(r"""<input\b[^>]*(?:id|name)\s*=\s*["']jobs["']""", modern_html, re.I):
             if "PortalDetail.na" not in modern_html and "jobid=" not in modern_html:
                 return []
             raise ValueError("unrecognized modern Zoho jobs payload")
