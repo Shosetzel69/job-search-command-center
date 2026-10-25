@@ -584,7 +584,7 @@ def record_results(item, results):
     } for result in results]
 
 
-def collect_ats(item):
+def collect_ats(item, role_family=None):
     route = item.get("connector_config") or {}
     connector = item["connector"]
     company = item["source"]
@@ -600,7 +600,7 @@ def collect_ats(item):
     if connector == "ashby":
         return ashby.collect(route["board_name"], company)
     if connector == "zoho_recruit":
-        return zoho_recruit.collect_result(route["career_url"], company)
+        return zoho_recruit.collect_result(route["career_url"], company, role_family=role_family)
     if connector == "recruitee":
         return recruitee.collect(route["subdomain"], company)
     if connector == "bamboohr":
@@ -657,7 +657,10 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
             emit_source_started(run_id, item)
         try:
             if connector in ats_connectors:
-                results = collect_ats(item)
+                scopes = (config.get('_jscc_retrieve_scope') or {}).get('scopes') or []
+                families = {str(scope.get('role_family') or '').upper() for scope in scopes if isinstance(scope, dict)}
+                family = 'PROJECT_MANAGEMENT' if families == {'PROJECT_MANAGEMENT'} else None
+                results = collect_ats(item, role_family=family)
             elif connector == "traefik":
                 results = traefik.collect(item["url"], item["source"])
             elif connector == "jobicy":
