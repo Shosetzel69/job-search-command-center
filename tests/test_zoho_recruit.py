@@ -101,6 +101,27 @@ class PrescreenTests(unittest.TestCase):
 
 
 class ScopedMetadataTests(unittest.TestCase):
+
+    def test_scoped_detail_fetch_only_for_candidates(self):
+        import json
+        from html import escape
+        listing = b'<a href="/recruit/PortalDetail.na?jobid=123456&digest=tok_1&widgetid=123456">IT Project Manager</a><a href="/recruit/PortalDetail.na?jobid=234567&digest=tok_2&widgetid=123456">Android Developer</a>'
+        modern = ('<input id="jobs" value="' + escape(json.dumps([
+            {"id":"123456","Posting_Title":"IT Project Manager","Publish":True},
+            {"id":"234567","Posting_Title":"Android Developer","Publish":True}
+        ]), quote=True) + '">').encode()
+        calls=[]
+        def mocked(req,timeout):
+            calls.append(req.full_url)
+            if req.full_url.endswith("/careers"): body=listing
+            elif req.full_url.endswith("/jobs/Careers"): body=modern
+            else: body=DETAIL
+            return Resp(body,req.full_url)
+        rows=zoho.collect(BOARD,"Acme",opener=mocked,role_family="PROJECT_MANAGEMENT")
+        self.assertEqual(len(rows),1)
+        self.assertEqual(sum("/recruit/PortalDetail.na" in x for x in calls),1)
+        self.assertTrue(rows[0]["id"].endswith("123456"))
+
     def test_relevant_missing_public_detail_link_fails_closed(self):
         import json
         from html import escape
