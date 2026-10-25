@@ -1,0 +1,70 @@
+name: Zoho public browser feasibility 544 (temporary)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-browser-smoke:
+    if: github.repository == 'Shosetzel69/job-search-command-center' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Check runner browser and bounded public pages
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import html
+          import re
+          import shutil
+          import subprocess
+          from html.parser import HTMLParser
+
+          class Visible(HTMLParser):
+              def __init__(self):
+                  super().__init__(convert_charrefs=True)
+                  self.parts = []
+                  self.skip = 0
+              def handle_starttag(self, tag, attrs):
+                  if tag in ("script", "style", "noscript"):
+                      self.skip += 1
+                  if tag in ("p", "br", "div", "li", "h1", "h2", "h3"):
+                      self.parts.append(" ")
+              def handle_endtag(self, tag):
+                  if tag in ("script", "style", "noscript") and self.skip:
+                      self.skip -= 1
+              def handle_data(self, value):
+                  if not self.skip:
+                      self.parts.append(value)
+
+          chrome = next((shutil.which(n) for n in ("google-chrome", "chromium", "chromium-browser") if shutil.which(n)), None)
+          if not chrome:
+              raise SystemExit("BROWSER_MISSING")
+          pages = (
+              ("OSF", "https://osf-global.zohorecruit.com/jobs/Careers/67512000083366008/Back-End-Architect?source=CareerSite"),
+              ("MADIFF", "https://madiffpl.zohorecruit.com/jobs/careers/300725000052385018/Senior-DevOps-Engineers?source=CareerSite"),
+          )
+          for name, url in pages:
+              argv = [chrome, "--headless", "--disable-gpu", "--disable-extensions",
+                      "--no-first-run", "--virtual-time-budget=12000", "--dump-dom", url]
+              try:
+                  p = subprocess.run(argv, capture_output=True, text=True, timeout=45, check=False)
+              except subprocess.TimeoutExpired:
+                  print(name + ": TIMEOUT")
+                  continue
+              if p.returncode != 0:
+                  print(name + ": BROWSER_EXIT_" + str(p.returncode))
+                  continue
+              body = p.stdout[:3_145_728]
+              parser = Visible()
+              parser.feed(body)
+              visible = " ".join("".join(parser.parts).split())
+              lower = visible.lower()
+              error = any(s in lower for s in ("page not found", "page is currently unavailable", "access denied"))
+              description = any(s in lower for s in ("job description", "responsibilities", "requirements"))
+              print(name + ": body_chars=" + str(len(visible)) +
+                    " description_marker=" + str(description) + " error_page=" + str(error))
+          PY
