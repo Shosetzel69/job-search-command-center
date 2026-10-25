@@ -24,7 +24,7 @@ class TestZoho(unittest.TestCase):
         self.assertTrue(rows[0]["id"].endswith(":123456"))
         self.assertIn("Public role description", rows[0]["description"])
         self.assertIn("Python skills", rows[0]["description"])
-        self.assertIn("digest=PUBLIC_TOKEN", rows[0]["source_url"])
+        self.assertNotIn("digest=", rows[0]["source_url"])
     def test_second_tenant(self):
         rows = zoho.collect("https://beta.zohorecruit.com/careers","Other",opener=opener)
         self.assertIn("beta.zohorecruit.com",rows[0]["id"])
