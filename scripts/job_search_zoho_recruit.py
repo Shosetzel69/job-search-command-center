@@ -1,5 +1,6 @@
 """Public-only Zoho Recruit collector; isolate tenant and sanitize request URLs."""
 import re
+import time
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin, urlsplit, urlencode
 from urllib.request import Request, urlopen, HTTPRedirectHandler, build_opener
@@ -7,6 +8,8 @@ from zoho_detail import extract_detail
 
 MAX_BYTES = 3 * 1024 * 1024
 MAX_POSTINGS = 500
+MAX_REQUESTS_PER_SOURCE = 101
+MAX_ELAPSED_SECONDS = 180
 HOST = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.zohorecruit\.com$")
 JOB_ID = re.compile(r"^[0-9]{5,30}$")
 
@@ -105,9 +108,14 @@ def collect(board_url, company_name, opener=None):
     if not isinstance(company_name, str) or not company_name.strip():
         raise ValueError("company_name is required")
     tenant = urlsplit(board).hostname
+    started = time.monotonic()
     summaries = enumerate_board(_fetch(board, tenant, opener), board)
+    if len(summaries) + 1 > MAX_REQUESTS_PER_SOURCE:
+        raise ValueError('Zoho request budget exceeded')
     records = []
     for item in summaries:
+        if time.monotonic() - started > MAX_ELAPSED_SECONDS:
+            raise TimeoutError("Zoho source collection exceeded wall-time budget")
         detail = extract_detail(_fetch(item["source_url"], tenant, opener),
                                 expected_title=item["job_title"] or None)
         records.append({
