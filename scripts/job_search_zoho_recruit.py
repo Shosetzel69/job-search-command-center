@@ -122,7 +122,12 @@ def collect(board_url, company_name, opener=None):
         from html import unescape
         from zoho_public_jobs import _PlainText
         modern_url = "https://" + tenant + "/jobs/Careers"
-        modern = embedded_jobs(_fetch(modern_url, tenant, opener))
+        modern_html = _fetch(modern_url, tenant, opener)
+        if not re.search(r'<input\\b[^>]*(?:id|name)\\s*=\\s*["\\\']jobs["\\\']', modern_html, re.I):
+            if "PortalDetail.na" not in modern_html and "jobid=" not in modern_html:
+                return []
+            raise ValueError("unrecognized modern Zoho jobs payload")
+        modern = embedded_jobs(modern_html)
         if modern and not all(row["description_available"] for row in modern):
             raise ValueError("modern Zoho list lacks descriptions; detail fetch required")
         records = []
