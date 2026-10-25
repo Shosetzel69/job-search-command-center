@@ -15,6 +15,10 @@ class ProbeTests(unittest.TestCase):
             (b"<p>Job description</p>", "EMPTY"),
         ):
             self.assertEqual(classify(raw)[0], expected)
+    def test_no_false_positive_on_error_or_small_page(self):
+        bad = b"<h1>Job description</h1><p>Access denied " + b"X"*140 + b"</p>"
+        self.assertEqual(classify(bad)[0], "ERROR_PAGE")
+        self.assertEqual(classify(b"<div>requirements</div>")[0], "EMPTY")
     def test_bounded_stderr(self):
         status, _, _ = bounded_run([sys.executable, "-c", "import sys;sys.stderr.write('A'*100000)"],
                                    timeout=3, stderr_limit=2048)
