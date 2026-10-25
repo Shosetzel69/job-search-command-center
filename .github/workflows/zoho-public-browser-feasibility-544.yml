@@ -1,0 +1,46 @@
+name: Zoho public browser feasibility 544 (temporary)
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: zoho-544-single-probe
+  cancel-in-progress: false
+
+jobs:
+  public-browser-smoke:
+    if: github.repository == 'Shosetzel69/job-search-command-center' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 6
+    steps:
+      - name: Read only checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Run deterministic negative tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s experiments/zoho544 -p 'test_*.py' -v
+      - name: Validate one permitted experimental run
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          # This workflow must only run on its first-ever dispatch; later
+          # new dispatches increment GITHUB_RUN_NUMBER and fail closed.
+          test "${GITHUB_RUN_NUMBER}" = "1"
+          test "${GITHUB_EVENT_NAME}" = "workflow_dispatch"
+          test "${GITHUB_REF}" = "refs/heads/main"
+          # SECURITY GATE: Network containment F-02 and governance F-05 remain
+          # unsatisfied. This fails closed until a reviewed controlled egress
+          # mechanism is implemented and separately authorized.
+          echo "BLOCKED_EGRESS_AND_ARCHITECTURE_GATE"
+          exit 1
+      - name: Probe public browser pages
+        if: success()
+        shell: bash
+        run: python3 experiments/zoho544/browser_probe.py
