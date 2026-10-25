@@ -3,7 +3,7 @@ import signal
 import sys
 import unittest
 from unittest.mock import patch
-from browser_probe import classify, bounded_run
+from browser_probe import classify, bounded_run, result_code
 
 class ProbeTests(unittest.TestCase):
     def test_good_and_bad_dom(self):
@@ -19,6 +19,12 @@ class ProbeTests(unittest.TestCase):
         bad = b"<h1>Job description</h1><p>Access denied " + b"X"*140 + b"</p>"
         self.assertEqual(classify(bad)[0], "ERROR_PAGE")
         self.assertEqual(classify(b"<div>requirements</div>")[0], "EMPTY")
+    def test_both_tenant_outcomes_fail_closed(self):
+        ok = "DETAIL_CANDIDATE"
+        self.assertEqual(result_code([ok, ok]), 0)
+        for outcomes in ([ok], [], ["ERROR_PAGE", ok], [ok, "TIMEOUT"],
+                         ["UNSUPPORTED", "EMPTY"], [ok, ok, ok]):
+            self.assertEqual(result_code(outcomes), 1, outcomes)
     def test_one_run_number_policy(self):
         # Workflow run_number is monotonic for each workflow and reruns increment attempt.
         def authorized(number, attempt):
