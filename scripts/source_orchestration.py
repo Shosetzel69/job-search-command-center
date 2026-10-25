@@ -11,6 +11,7 @@ import diagnostics
 import job_search as engine
 import job_search_apify as apify
 import job_search_ashby as ashby
+import job_search_zoho_recruit as zoho_recruit
 import job_search_bamboohr as bamboohr
 import job_search_breezyhr as breezyhr
 import job_search_eightfold_public as eightfold_public
@@ -586,6 +587,8 @@ def collect_ats(item):
         return greenhouse.collect(route["board_token"], company)
     if connector == "ashby":
         return ashby.collect(route["board_name"], company)
+    if connector == "zoho_recruit":
+        return zoho_recruit.collect(route["career_url"], company)
     if connector == "recruitee":
         return recruitee.collect(route["subdomain"], company)
     if connector == "bamboohr":
@@ -609,7 +612,7 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
-    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable", "softgarden", "eightfold_public"}
+    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable", "softgarden", "eightfold_public", "zoho_recruit"}
     for item in plan:
         if item["status"] != "pending" or item["connector"] == "web":
             continue
