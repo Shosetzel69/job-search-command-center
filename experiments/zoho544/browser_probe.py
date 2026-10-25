@@ -101,6 +101,10 @@ def bounded_run(argv, timeout=TIMEOUT, stdout_limit=LIMIT_OUT, stderr_limit=LIMI
         for stream in outputs:
             stream.close()
 
+def result_code(statuses):
+    """Both required tenants must yield meaningful public detail candidates."""
+    return 0 if len(statuses) == len(PAGES) and all(s == "DETAIL_CANDIDATE" for s in statuses) else 1
+
 def main():
     browser = next((shutil.which(n) for n in ("google-chrome", "chromium", "chromium-browser") if shutil.which(n)), None)
     if not browser:
@@ -111,7 +115,7 @@ def main():
         print("BROWSER_VERSION_ERROR")
         return 1
     print("BROWSER_VERSION", version_out.decode("utf-8", "replace").strip()[:120])
-    failures = 0
+    outcomes = []
     for name, url in PAGES:
         with tempfile.TemporaryDirectory(prefix="zoho-544-") as profile:
             args = [browser, "--headless", "--disable-gpu", "--disable-extensions",
@@ -125,10 +129,10 @@ def main():
         else:
             chars = 0
         print(f"TENANT={name} STATUS={status} VISIBLE_CHARS={chars} EXIT={returncode}")
-        if status != "DETAIL_CANDIDATE":
-            failures += 1
-    print("RESULT=" + ("PASS_CANDIDATE" if failures == 0 else "FAIL"))
-    return int(failures != 0)
+        outcomes.append(status)
+    code = result_code(outcomes)
+    print("RESULT=" + ("PASS_CANDIDATE" if code == 0 else "FAIL"))
+    return code
 
 if __name__ == "__main__":
     raise SystemExit(main())
