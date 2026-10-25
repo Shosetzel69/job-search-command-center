@@ -110,6 +110,10 @@ def collect(board_url, company_name, opener=None):
     tenant = urlsplit(board).hostname
     started = time.monotonic()
     summaries = enumerate_board(_fetch(board, tenant, opener), board)
+    # A capped public portal page is not evidence that all open jobs were enumerated.
+    # Reject a saturated page rather than marking an incomplete retrieval successful.
+    if len(summaries) == 100:
+        raise ValueError("Zoho public careers page reached 100 postings; pagination required")
     if len(summaries) + 1 > MAX_REQUESTS_PER_SOURCE:
         raise ValueError('Zoho request budget exceeded')
     records = []
