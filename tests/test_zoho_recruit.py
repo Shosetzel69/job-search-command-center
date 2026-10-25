@@ -132,8 +132,11 @@ class ScopedMetadataTests(unittest.TestCase):
         def mocked(req, timeout):
             body = b'<a href="/recruit/PortalDetail.na?jobid=111111&digest=abc&widgetid=123456">Software Engineer</a>' if req.full_url.endswith("/careers") else html
             return Resp(body, req.full_url)
-        with self.assertRaisesRegex(ValueError, "lack public detail links"):
-            zoho.collect(BOARD, "Acme", opener=mocked, role_family="PROJECT_MANAGEMENT")
+        records = zoho.collect(BOARD, "Acme", opener=mocked, role_family="PROJECT_MANAGEMENT")
+        missing = [row for row in records if row["description_completeness"] == "missing"]
+        self.assertEqual(len(missing), 1)
+        self.assertEqual(missing[0]["job_title"], "IT Project Manager")
+        self.assertEqual(missing[0]["description"], "")
 
 class ScopedModernOnlyTests(unittest.TestCase):
 
