@@ -7,6 +7,7 @@ import { EVALUATION_VERSION, FIT_ALGORITHM_VERSION, evaluateSharedJob, materiali
 import { evaluateEligibility } from '../src/eligibility.js';
 import { classifyCanonicalJob } from '../../shared/job-classification.mjs';
 import {
+  createSession,
   decodeJobCursor,
   deterministicTenantEntityUuid,
   encodeJobCursor,
@@ -44,6 +45,92 @@ test('session hash is deterministic SHA-256 and raw token is never the persisted
   assert.equal(hash.length, 64);
   assert.equal(hash, sessionHash(raw));
   assert.notEqual(hash, raw);
+});
+
+test('Google login issues an opaque session with Nile-compatible per-user row locking', async () => {
+  const userId = '11111111-1111-4111-8111-111111111111';
+  const profileId = '22222222-2222-4222-8222-222222222222';
+  const queries = [];
+  let inserted = null;
+  const db = {
+    async query(sql, params = []) {
+      queries.push(sql);
+      if (sql.includes('FROM app_user a')) return {
+        rows:[{ user_id:userId, profile_id:profileId, role:'USER', status:'ACTIVE',
+          provisioned_at:'2026-10-01T00:00:00Z', deletion_started_at:null }],
+      };
+      if (sql.startsWith('SELECT id, name FROM tenants')) return { rows:[{ id:profileId, name:'test' }] };
+      if (sql === 'SELECT user_id FROM app_user WHERE user_id=$1 FOR UPDATE') {
+        assert.deepEqual(params, [userId]);
+        return { rows:[{ user_id:userId }] };
+      }
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql) || sql.startsWith('DELETE FROM user_session')) return { rows:[] };
+      if (sql.startsWith('INSERT INTO user_session')) {
+        inserted = params;
+        return { rows:[] };
+      }
+      throw new Error('Unexpected Google-login SQL: ' + sql);
+    },
+    async connect() { return { query:(...args) => this.query(...args), release() {} }; },
+  };
+  const issued = await createSession({ user_id:userId }, { APP_ENV:'dev' }, {
+    db, now:new Date('2026-10-26T00:00:00Z'),
+  });
+  assert.equal(issued.rawToken.length, 43);
+  assert.equal(inserted[0], sessionHash(issued.rawToken));
+  assert.equal(inserted[1], userId);
+  assert.ok(queries.includes('SELECT user_id FROM app_user WHERE user_id=$1 FOR UPDATE'));
+  assert.ok(queries.includes('COMMIT'));
+  assert.equal(queries.some(sql => sql.includes('pg_advisory_xact_lock')), false);
+});
+
+test('Google session issuance fails closed if account is deactivated after initial readiness read', async () => {
+  const userId = '11111111-1111-4111-8111-111111111111';
+  const profileId = '22222222-2222-4222-8222-222222222222';
+  let locked = false;
+  const queries = [];
+  const db = {
+    async query(sql, params = []) {
+      queries.push(sql);
+      if (sql.includes('FROM app_user a')) return {
+        rows:[{ user_id:userId, profile_id:profileId, role:'USER',
+          status:locked ? 'DEACTIVATED' : 'ACTIVE',
+          provisioned_at:'2026-10-01T00:00:00Z', deletion_started_at:null }],
+      };
+      if (sql.startsWith('SELECT id, name FROM tenants')) return { rows:[{ id:profileId, name:'test' }] };
+      if (sql === 'SELECT user_id FROM app_user WHERE user_id=$1 FOR UPDATE') {
+        assert.deepEqual(params, [userId]);
+        locked = true;
+        return { rows:[{ user_id:userId }] };
+      }
+      if (['BEGIN', 'COMMIT', 'ROLLBACK'].includes(sql)) return { rows:[] };
+      throw new Error('Unexpected SQL during deactivation race: ' + sql);
+    },
+    async connect() { return { query:(...args) => this.query(...args), release() {} }; },
+  };
+  await assert.rejects(
+    createSession({ user_id:userId }, { APP_ENV:'dev' }, { db }),
+    error => error?.status === 403 && /deactivated/.test(error.message),
+  );
+  assert.ok(queries.includes('ROLLBACK'));
+  assert.equal(queries.some(sql => sql.startsWith('INSERT INTO user_session')), false);
+});
+
+test('account provision and lifecycle paths consistently avoid unsupported advisory locks', async () => {
+  const source = await readFile(new URL('../src/multiuser-repository.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(source, /pg_advisory_xact_lock/);
+  assert.match(source, /SELECT singleton FROM system_bootstrap WHERE singleton=true FOR UPDATE/);
+  assert.match(source, /SELECT user_id FROM app_user WHERE user_id=\$1 FOR UPDATE/);
+  const functions = ['createSession', 'setAccountStatus', 'startAccountDeletion', 'finalizeAccountDeletion'];
+  for (const name of functions) {
+    const declaration = name === 'startAccountDeletion' || name === 'finalizeAccountDeletion'
+      ? 'async function ' + name : 'export async function ' + name;
+    const start = source.indexOf(declaration);
+    assert.ok(start >= 0, name + ' must exist');
+    const block = source.slice(start, source.indexOf('\n}', start) + 2);
+    assert.match(block, /await lockAccountLifecycle\(tx,/, name + ' must share the per-user lifecycle lock');
+  }
+  assert.match(source, /await lockSharedAccountProvisioning\(tx\)/);
 });
 
 test('tenant-local Search/Candidate Profile ids are stable, distinct and not the tenant id', () => {
