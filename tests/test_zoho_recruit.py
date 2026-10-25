@@ -98,3 +98,18 @@ class PrescreenTests(unittest.TestCase):
         self.assertEqual([r["job_title"] for r in picked],
                          ["IT Project Manager","Technology Consultant","Delivery Manager"])
         self.assertEqual(len(zoho.prefilter_public_metadata(rows)), 4)
+
+
+class ScopedMetadataTests(unittest.TestCase):
+    def test_relevant_missing_public_detail_link_fails_closed(self):
+        import json
+        from html import escape
+        html = ('<input id="jobs" value="' + escape(json.dumps([
+            {"id":"123456789", "Posting_Title":"IT Project Manager",
+             "Publish": True, "Job_Description":""}
+        ]), quote=True) + '">').encode()
+        def mocked(req, timeout):
+            body = b'<a href="/recruit/PortalDetail.na?jobid=111111&digest=abc&widgetid=123456">Software Engineer</a>' if req.full_url.endswith("/careers") else html
+            return Resp(body, req.full_url)
+        with self.assertRaisesRegex(ValueError, "lack public detail links"):
+            zoho.collect(BOARD, "Acme", opener=mocked, role_family="PROJECT_MANAGEMENT")
