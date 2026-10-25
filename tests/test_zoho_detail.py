@@ -36,3 +36,23 @@ class ModernFieldsTests(unittest.TestCase):
         self.assertEqual(d["employment_type"], "Full Time")
         self.assertEqual(d["date_posted"], "10/21/2026")
         self.assertIn("PM skills.", d["description"])
+
+
+class EmbeddedPublicDetailTests(unittest.TestCase):
+    def test_full_richtext_and_date(self):
+        import json
+        payload = {"jobTitle":"Data Engineer", "postedOn":"14.10.2026",
+                   "country":"India", "jobType":"Full time",
+                   "jobDescriptionDetails":[{"richText":{"fieldLabel":"Job Description",
+                   "value":"<p>Responsible for migrations.</p><p>Validate reconciliations.</p>"}}]}
+        html = "<script>data=" + json.dumps(payload) + ";</script>"
+        result = extract_detail(html)
+        self.assertEqual(result["description_completeness"], "full")
+        self.assertEqual(result["date_posted"], "2026-10-14")
+        self.assertIn("Validate reconciliations.", result["description"])
+
+    def test_meta_summary_not_full(self):
+        html = '<meta name="description" content="' + ('Public short preview ' * 8) + '"><h1>Engineer</h1>'
+        result = extract_detail(html)
+        self.assertEqual(result["description_completeness"], "summary")
+        self.assertEqual(result["description_provenance"], "html_meta_description")
