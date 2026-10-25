@@ -274,6 +274,16 @@ def aggregate_source_results(plan):
     }
 
 
+def _dev_osf_override(source, route):
+    """Owner-authorized OSF activation confined to DEV runtime and explicit opt-in."""
+    import os
+    return (os.environ.get("APP_ENV", "").strip().lower() == "dev"
+            and os.environ.get("JSCC_DEV_OSF_ENABLED") == "1"
+            and source.get("name") == "OSF Digital"
+            and route is not None
+            and route.get("connector") == "zoho_recruit")
+
+
 def build_plan(catalog):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("sources"), list):
         raise ValueError("Source catalog must contain a sources array")
@@ -282,6 +292,7 @@ def build_plan(catalog):
     catalog_names = {str(source.get("name") or "") for source in catalog["sources"]}
     for source in catalog["sources"]:
         route = ATS_ROUTES.get(source.get("name"))
+        dev_osf_enabled = _dev_osf_override(source, route)
         alias_target = PROVIDER_ALIASES.get(source.get("name"))
         connector = connector_for(source)
         deferred = None if connector else deferred_provider(source)
@@ -302,7 +313,7 @@ def build_plan(catalog):
                 "source_id": source.get("id") or source.get("url"), "url": source.get("url"),
                 "connector": "deferred" if deferred else connector,
                 "collection_method": "deferred" if deferred else connector,
-                "active": source.get("active") is not False and not excluded_by_policy, "status": "pending",
+                "active": (source.get("active") is not False or dev_osf_enabled) and not excluded_by_policy, "status": "pending",
                 "outcome": None, "source_execution_id": None,
                 "records": 0, "error": None, "failure_reason": None,
                 "error_code": None, "failure_stage": None, "http_status": None,
@@ -316,7 +327,7 @@ def build_plan(catalog):
                         failure_reason=reason, provider_alias=alias_target)
         if route:
             item["connector_config"] = route
-            if route.get("enabled") is False:
+            if route.get("enabled") is False and not dev_osf_enabled:
                 item["active"] = False
                 reason = route.get("disabled_reason") or "ATS route disabled"
                 item.update(status="inactive", outcome=disabled_route_outcome(reason),
