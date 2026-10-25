@@ -79,3 +79,13 @@ class ModernZohoTests(unittest.TestCase):
             return Resp(b"<html>Modern careers</html>" if req.full_url.endswith("/careers") else modern, req.full_url)
         with self.assertRaisesRegex(ValueError, "lacks descriptions"):
             zoho.collect(BOARD, "MADIFF", opener=mock)
+
+class PaginationSafetyTests(unittest.TestCase):
+
+    def test_capped_portal_board_fails_closed(self):
+        links = "".join(
+            '<a href="/recruit/PortalDetail.na?jobid={0}&digest=token_{0}&widgetid=123456">Role</a>'.format(100000+i)
+            for i in range(100)
+        ).encode()
+        with self.assertRaisesRegex(ValueError, "pagination required"):
+            zoho.collect(BOARD, "Acme", opener=lambda req,timeout:Resp(links,req.full_url))
