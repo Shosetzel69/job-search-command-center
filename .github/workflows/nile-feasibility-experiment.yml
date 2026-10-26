@@ -198,6 +198,8 @@ jobs:
               .[0].Image == $img[0][0].Id and
               (.[0].HostConfig.Binds == null or .[0].HostConfig.Binds == []) and
               ((.[0].HostConfig.Mounts == null or .[0].HostConfig.Mounts == []) and
+              (.[0].HostConfig.VolumesFrom == null or .[0].HostConfig.VolumesFrom == []) and
+              (.[0].HostConfig.Tmpfs == null or .[0].HostConfig.Tmpfs == {}) and
               (($img[0][0].Config.Volumes | keys) == ["/var/lib/postgresql/data"]) and
               ((.[0].Mounts | length) == 1) and
               (.[0].Mounts[0].Type == "volume") and
@@ -223,7 +225,9 @@ jobs:
                   ["D03_IMAGE_REFERENCE", $c.Config.Image == $image],
                   ["D04_IMAGE_ID", $c.Image == $img[0][0].Id],
                   ["D05_NO_BINDS", ($c.HostConfig.Binds == null or $c.HostConfig.Binds == [])],
-                  ["D06_IMAGE_ANONYMOUS_VOLUME", ($c.HostConfig.Mounts == null or $c.HostConfig.Mounts == []) and
+                  ["D06_IMAGE_ANONYMOUS_VOLUME", try (($c.HostConfig.Mounts == null or $c.HostConfig.Mounts == []) and
+                    ($c.HostConfig.VolumesFrom == null or $c.HostConfig.VolumesFrom == []) and
+                    ($c.HostConfig.Tmpfs == null or $c.HostConfig.Tmpfs == {}) and
                     (($img[0][0].Config.Volumes | keys) == ["/var/lib/postgresql/data"]) and
                     (($c.Mounts | length) == 1) and
                     ($c.Mounts[0].Type == "volume") and
@@ -231,7 +235,7 @@ jobs:
                     ($c.Mounts[0].Driver == "local") and
                     ($c.Mounts[0].RW == true) and
                     ($c.Mounts[0].Mode == "") and
-                    ($c.Mounts[0].Name | type == "string" and test("^[0-9a-f]{64}$"))],
+                    ($c.Mounts[0].Name | type == "string" and test("^[0-9a-f]{64}$"))) catch false],
                   ["D07_DB_ENV", try (([$c.Config.Env[] | select(. == ("NILE_TESTING_DB_NAME="+$db))] | length) == 1) catch false],
                   ["D08_USER_ENV", try (([$c.Config.Env[] | select(. == ("NILE_TESTING_DB_USER="+$user))] | length) == 1) catch false],
                   ["D09_NETWORK_PORT", $c.NetworkSettings.Ports["5432/tcp"] == [{"HostIp":"127.0.0.1","HostPort":"55432"}]],
@@ -249,6 +253,15 @@ jobs:
             echo 'R11_PRE_SQL_ADMISSION=FAIL' >&2
             exit 1
           fi
+          VOLUME_NAME="$(jq -er '.[0].Mounts[0].Name' "$RUNNER_TEMP/nile-inspect.json")"
+          # The image-declared volume must be newly generated and owned exclusively by this container.
+          docker volume inspect "$VOLUME_NAME" > "$RUNNER_TEMP/nile-volume.json"
+          jq -e 'length == 1 and .[0].Driver == "local" and
+            (.[0].Labels | type == "object" and has("com.docker.volume.anonymous")) and
+            (.[0].Options == null or .[0].Options == {})' "$RUNNER_TEMP/nile-volume.json" >/dev/null
+          USERS="$(docker ps -aq --no-trunc --filter "volume=$VOLUME_NAME")"
+          test "$USERS" = "$(jq -r '.[0].Id' "$RUNNER_TEMP/nile-inspect.json")"
+          printf '%s\\n' "$VOLUME_NAME" > "$RUNNER_TEMP/jscc-nile-volume-name"
           test "$(docker image inspect "$EXP_IMAGE" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
           echo 'NILE_EXPERIMENT_PRE_SQL_CONTAINER_ADMISSION=PASS'
           for i in $(seq 1 45); do
@@ -674,7 +687,7 @@ jobs:
             exit 1
           }
           if [ -n "$ids" ]; then
-            docker rm -f "$NAME" >/dev/null || {
+            docker rm -fv "$NAME" >/dev/null || {
               echo 'NILE_CONTAINER_DISPOSAL_BLOCKED:REMOVE_FAILED' >&2
               exit 1
             }
@@ -686,5 +699,23 @@ jobs:
           if [ -n "$remaining" ]; then
             echo 'NILE_CONTAINER_DISPOSAL_BLOCKED:STILL_PRESENT' >&2
             exit 1
+          fi
+          if [ -f "$RUNNER_TEMP/jscc-nile-volume-name" ]; then
+            VOLUME_NAME="$(cat "$RUNNER_TEMP/jscc-nile-volume-name")"
+            if docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
+              echo 'NILE_VOLUME_DISPOSAL_BLOCKED:STILL_PRESENT' >&2
+              exit 1
+            fi
+            echo 'NILE_VOLUME_DISPOSAL=VERIFIED_ABSENT'
+          else
+            # If admission failed before recording the name, inspect the container's
+            # previously captured metadata; absence of both is permissible pre-start.
+            if [ -f "$RUNNER_TEMP/nile-inspect.json" ]; then
+              VOLUME_NAME="$(jq -r '.[0].Mounts[0].Name // empty' "$RUNNER_TEMP/nile-inspect.json")"
+              if [ -n "$VOLUME_NAME" ] && docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
+                echo 'NILE_VOLUME_DISPOSAL_BLOCKED:UNTRACKED_RESIDUE' >&2
+                exit 1
+              fi
+            fi
           fi
           echo 'NILE_CONTAINER_DISPOSAL=VERIFIED_ABSENT'
