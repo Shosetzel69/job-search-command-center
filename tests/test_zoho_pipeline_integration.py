@@ -112,6 +112,44 @@ class ZohoIntegrationTests(unittest.TestCase):
         self.assertEqual(row["records"], 0)
         self.assertNotIn("digest=", str(results))
 
+    def test_r3_failing_zoho_tenant_does_not_abort_healthy_tenant(self):
+        import io
+        bad = item()
+        good = item()
+        good.update(source="HR Plus", source_id="src-zoho-hr-plus",
+                    url="https://hr-plus.zohorecruit.com/careers",
+                    connector_config={"career_url": "https://hr-plus.zohorecruit.com/careers"})
+        portal = (b'<a href="/recruit/PortalDetail.na?jobid=234567'
+                  b'&digest=pub_1&widgetid=234567">Operations Manager</a>')
+        detail = (b'<h1>Operations Manager</h1><h3>Job Description</h3>'
+                  b'<p>Lead workforce projects.</p>')
+        class Page(io.BytesIO):
+            def __init__(self, data, url):
+                super().__init__(data)
+                self.url = url
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+            def geturl(self): return self.url
+        def mock_opener(req, timeout):
+            url = req.full_url
+            if "osf-global.zohorecruit.com" in url:
+                body = b"<html><h1>Sign in</h1></html>"
+            elif url.endswith("/careers"):
+                body = portal
+            else:
+                body = detail
+            return Page(body, url)
+        with patch.object(orchestration.zoho_recruit, "_safe_opener", side_effect=mock_opener):
+            results, _, _ = orchestration.collect_api_sources(
+                {}, {"usage": {}}, NOW, [bad, good])
+        self.assertEqual(len(results), 2)
+        self.assertFalse(results[0].ok)
+        self.assertTrue(results[1].ok)
+        self.assertEqual(bad["status"], "failed")
+        self.assertEqual(good["status"], "completed")
+        self.assertEqual(good["records"], 1)
+        self.assertEqual(results[1].records[0]["_jscc_source_id"], "src-zoho-hr-plus")
+
     def test_scope_removes_nonmatching_family(self):
         row = item()
         cfg = {"_jscc_retrieve_scope": {"scopes": [{"role_family": "PROJECT_MANAGEMENT"}]}}
