@@ -53,7 +53,7 @@ class EmbeddedPublicDetailTests(unittest.TestCase):
 
     def test_meta_summary_not_full(self):
         html = '<meta name="description" content="' + ('Public short preview ' * 8) + '"><h1>Engineer</h1>'
-        result = extract_detail(html)
+        result = extract_detail(html, expected_title="Engineer")
         self.assertEqual(result["description_completeness"], "summary")
         self.assertEqual(result["description_provenance"], "html_meta_description")
 
@@ -67,3 +67,54 @@ class DateSafetyTests(unittest.TestCase):
         from zoho_detail import normalize_date
         self.assertIsNone(normalize_date('31/02/2026'))
         self.assertIsNone(normalize_date(''))
+
+class R4DetailGateTests(unittest.TestCase):
+    def test_long_generic_signin_meta_is_not_a_job(self):
+        login = ('<meta name="description" content="' +
+                 'Zoho Recruit secure sign in. Please sign in to continue. ' * 3 +
+                 '"><h1>Sign in</h1><input type="password">')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            extract_detail(login, expected_title="IT Project Manager")
+
+    def test_access_denied_meta_even_with_job_heading_is_rejected(self):
+        html = ('<meta name="description" content="' +
+                'Access denied. Your session expired. Authenticate to continue. ' * 3 +
+                '"><h1>IT Project Manager</h1>')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_consent_meta_even_with_job_heading_is_rejected(self):
+        html = ('<meta name="description" content="' +
+                'Cookie consent required. Accept cookies to continue viewing. ' * 3 +
+                '"><h1>IT Project Manager</h1>')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_changed_widget_meta_without_job_heading_is_rejected(self):
+        html = ('<meta name="description" content="' +
+                'Explore our latest vacancies and interesting career opportunities. ' * 3 +
+                '"><h1>Careers</h1>')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_summary_requires_job_heading_even_if_title_in_body(self):
+        html = ('<meta name="description" content="' +
+                'Interesting roles in software consulting, delivery and projects. ' * 3 +
+                '"><p>IT Project Manager</p>')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_plain_title_heading_and_job_specific_summary_accepted(self):
+        html = ('<meta name="description" content="' +
+                'Lead delivery, plan projects and coordinate technical workstreams. ' * 3 +
+                '"><h1><span>IT Project Manager</span></h1>')
+        result = extract_detail(html, expected_title="IT Project Manager")
+        self.assertEqual(result["description_completeness"], "summary")
+        self.assertEqual(result["job_title"], "IT Project Manager")
+
+    def test_no_expected_title_disallows_summary(self):
+        html = ('<meta name="description" content="' +
+                'Lead delivery and coordinate technical workstreams. ' * 3 +
+                '"><h1>IT Project Manager</h1>')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            extract_detail(html)
