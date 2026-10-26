@@ -712,7 +712,7 @@ jobs:
               echo 'NILE_VOLUME_DISPOSAL_BLOCKED:INVALID_RECORDED_NAME' >&2
               exit 1
             fi
-            VOLUME_LIST="$(docker volume ls -q --no-trunc)" || {
+            VOLUME_LIST="$(docker volume ls -q)" || {
               echo 'NILE_VOLUME_DISPOSAL_BLOCKED:VOLUME_LIST_FAILED' >&2
               exit 1
             }
