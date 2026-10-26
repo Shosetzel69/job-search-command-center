@@ -168,6 +168,12 @@ jobs:
           node --input-type=module -e "import pg from 'pg'; if (typeof pg.Pool !== 'function' || typeof pg.Client !== 'function') process.exit(1)"
           node -e "if (require('$PREFIX/node_modules/pg/package.json').version !== '8.16.3') process.exit(1)"
 
+      - name: D06 exact-workflow negative regression (offline, no SQL)
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s test -p 'test_nile_d06_workflow.py' -v
+
       - name: Pull and start exactly one isolated Nile container
         shell: bash
         run: |
