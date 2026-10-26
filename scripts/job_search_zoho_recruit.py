@@ -113,6 +113,20 @@ def prefilter_public_metadata(rows, *, role_family=None):
     return [row for row in rows if _PM_TITLE.search(str(row.get("job_title") or ""))
             or not _NON_PM_TITLE.search(str(row.get("job_title") or ""))]
 
+def mark_careers_board_fallback(records, board):
+    """Retain explicit navigation and field-quality signals in persisted payloads."""
+    for record in records:
+        if record.get("source_url") != board:
+            raise ValueError("Zoho public job URL differs from validated careers board")
+        record["source_url_kind"] = "careers_board_fallback"
+        record["source_url_label"] = "Careers board (not a direct job link)"
+        record["missing_fields"] = sorted(
+            field for field in ("date_posted", "location", "remote", "work_arrangement")
+            if record.get(field) is None or record.get(field) == ""
+        )
+    return records
+
+
 def collect(board_url, company_name, opener=None, role_family=None):
     opener = opener or _safe_opener
     board = validate_board(board_url)
@@ -182,7 +196,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
                 "date_posted": normalize_date(row.get("date_opened")), "source_url": board,
                 "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
             })
-        return records
+        return mark_careers_board_fallback(records, board)
     if len(summaries) + 2 > MAX_REQUESTS_PER_SOURCE:
         raise ValueError('Zoho request budget exceeded')
     records = []
@@ -215,7 +229,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
             "date_posted": normalize_date(row.get("date_opened")), "source_url": board,
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
-    return records
+    return mark_careers_board_fallback(records, board)
 
 
 def collect_result(board_url, company_name, opener=None, role_family=None):
