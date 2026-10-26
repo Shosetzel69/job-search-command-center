@@ -25,6 +25,10 @@ class TestZoho(unittest.TestCase):
         self.assertIn("Public role description", rows[0]["description"])
         self.assertIn("Python skills", rows[0]["description"])
         self.assertNotIn("digest=", rows[0]["source_url"])
+        self.assertEqual(rows[0]["source_url_kind"], "careers_board_fallback")
+        self.assertEqual(rows[0]["source_url_label"], "Careers board (not a direct job link)")
+        self.assertIn("remote", rows[0]["missing_fields"])
+        self.assertNotIn("digest=", str(rows[0]))
     def test_second_tenant(self):
         rows = zoho.collect("https://beta.zohorecruit.com/careers","Other",opener=opener)
         self.assertIn("beta.zohorecruit.com",rows[0]["id"])
@@ -68,6 +72,9 @@ class ModernZohoTests(unittest.TestCase):
         self.assertEqual(rows[0]["description_completeness"], "partial")
         self.assertEqual(rows[0]["description_provenance"], "public_modern_jobs_json")
         self.assertEqual(rows[0]["date_posted"], "2026-09-02")
+        self.assertEqual(rows[0]["source_url_kind"], "careers_board_fallback")
+        self.assertEqual(rows[0]["source_url"], BOARD)
+        self.assertIn("remote", rows[0]["missing_fields"])
         self.assertNotIn("<p>", rows[0]["description"])
 
     def test_modern_without_description_rejected(self):
@@ -138,6 +145,9 @@ class ScopedMetadataTests(unittest.TestCase):
         self.assertEqual(len(missing), 1)
         self.assertEqual(missing[0]["job_title"], "IT Project Manager")
         self.assertEqual(missing[0]["description"], "")
+        self.assertEqual(missing[0]["source_url_kind"], "careers_board_fallback")
+        self.assertEqual(missing[0]["source_url_label"], "Careers board (not a direct job link)")
+        self.assertEqual(missing[0]["source_url"], BOARD)
 
 class ScopedModernOnlyTests(unittest.TestCase):
 
@@ -238,3 +248,41 @@ class R3ListingConsistencyTests(unittest.TestCase):
         self.assertEqual(zoho.collect(BOARD, "Acme",
                          opener=self.mock_pages(portal, modern),
                          role_family="PROJECT_MANAGEMENT"), [])
+
+class R4DetailAndEmptyBoardTests(unittest.TestCase):
+    @staticmethod
+    def opener_with_detail(detail):
+        def mocked(req, timeout):
+            if req.full_url.endswith("/careers"):
+                body = LIST
+            else:
+                body = detail
+            return Resp(body, req.full_url)
+        return mocked
+
+    def test_detail_login_meta_does_not_become_job_description(self):
+        html = (b'<meta name="description" content="' +
+                b'Zoho Recruit secure sign in. Please sign in to continue. ' * 3 +
+                b'"><h1>Sign in</h1><input type="password">')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            zoho.collect(BOARD, "Acme", opener=self.opener_with_detail(html))
+
+    def test_detail_access_denied_with_job_title_rejected(self):
+        html = (b'<meta name="description" content="' +
+                b'Access denied. Authentication required to view jobs. ' * 3 +
+                b'"><h1>Engineer</h1>')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            zoho.collect(BOARD, "Acme", opener=self.opener_with_detail(html))
+
+    def test_login_board_and_empty_hint_modern_fails_closed(self):
+        with self.assertRaisesRegex(ValueError, "empty state not established"):
+            R3ListingConsistencyTests.mock_pages(
+                b"<html><h1>Sign in</h1></html>",
+                b"<html><h1>No current openings</h1></html>"
+            ) and zoho.collect(
+                BOARD, "Acme",
+                opener=R3ListingConsistencyTests.mock_pages(
+                    b"<html><h1>Sign in</h1></html>",
+                    b"<html><h1>No current openings</h1></html>"
+                )
+            )
