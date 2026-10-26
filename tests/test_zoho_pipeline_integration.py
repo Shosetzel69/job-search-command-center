@@ -68,6 +68,50 @@ class ZohoIntegrationTests(unittest.TestCase):
         self.assertEqual(row["outcome"], "failed")
         self.assertEqual(row["error_code"], "TIMEOUT")
 
+    def test_unsupported_html_is_provider_failure_not_success_empty(self):
+        import io
+        row = item()
+        class Page(io.BytesIO):
+            def __init__(self, content, url):
+                super().__init__(content)
+                self.url = url
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+            def geturl(self): return self.url
+        def mock_opener(req, timeout):
+            return Page(b"<html><h1>Sign in</h1></html>", req.full_url)
+        with patch.object(orchestration.zoho_recruit, "_safe_opener", side_effect=mock_opener):
+            results, _, _ = orchestration.collect_api_sources({}, {"usage": {}}, NOW, [row])
+        self.assertFalse(results[0].ok)
+        self.assertEqual(row["status"], "failed")
+        self.assertEqual(row["outcome"], "failed")
+        self.assertNotEqual(row["outcome"], "success_empty")
+        self.assertEqual(row["records"], 0)
+
+    def test_discordant_scoped_listing_isolated_and_marked_failed(self):
+        import io, json
+        from html import escape
+        row = item()
+        config = {"_jscc_retrieve_scope": {"scopes": [{"role_family": "PROJECT_MANAGEMENT"}]}}
+        board = (b'<a href="/recruit/PortalDetail.na?jobid=123456'
+                 b'&digest=tok_1&widgetid=123456">IT Project Manager</a>')
+        modern = ('<input id="jobs" value="' + escape(json.dumps([]), quote=True) + '">').encode()
+        class Page(io.BytesIO):
+            def __init__(self, content, url):
+                super().__init__(content)
+                self.url = url
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+            def geturl(self): return self.url
+        def mock_opener(req, timeout):
+            return Page(board if req.full_url.endswith("/careers") else modern, req.full_url)
+        with patch.object(orchestration.zoho_recruit, "_safe_opener", side_effect=mock_opener):
+            results, _, _ = orchestration.collect_api_sources(config, {"usage": {}}, NOW, [row])
+        self.assertFalse(results[0].ok)
+        self.assertEqual(row["status"], "failed")
+        self.assertEqual(row["records"], 0)
+        self.assertNotIn("digest=", str(results))
+
     def test_scope_removes_nonmatching_family(self):
         row = item()
         cfg = {"_jscc_retrieve_scope": {"scopes": [{"role_family": "PROJECT_MANAGEMENT"}]}}
