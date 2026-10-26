@@ -13,8 +13,14 @@ class Text(HTMLParser):
         self.parts = []
         self.skip = 0
         self.meta_description = None
+        self.headings = []
+        self._heading_tag = None
+        self._heading_parts = []
     def handle_starttag(self, tag, attrs):
         fields = dict(attrs)
+        if tag in {"h1", "h2"}:
+            self._heading_tag = tag
+            self._heading_parts = []
         if tag == "meta" and fields.get("name", "").lower() == "description":
             self.meta_description = fields.get("content")
         if tag in {"script", "style", "noscript"}:
@@ -22,6 +28,10 @@ class Text(HTMLParser):
         if tag in {"p", "br", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td", "tr"}:
             self.parts.append("\n")
     def handle_endtag(self, tag):
+        if self._heading_tag == tag:
+            self.headings.append(" ".join("".join(self._heading_parts).split()))
+            self._heading_tag = None
+            self._heading_parts = []
         if tag in {"script", "style", "noscript"} and self.skip:
             self.skip -= 1
         if tag in {"p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6", "td", "tr"}:
@@ -29,6 +39,8 @@ class Text(HTMLParser):
     def handle_data(self, data):
         if not self.skip:
             self.parts.append(data)
+            if self._heading_tag is not None:
+                self._heading_parts.append(data)
 
 
 def embedded_full_description(html):
@@ -110,8 +122,24 @@ def extract_detail(html, expected_title=None):
     try:
         idx = lower.index("job description")
     except ValueError as exc:
-        if parser.meta_description and len(parser.meta_description.strip()) >= 80:
-            return {"description": parser.meta_description.strip(), "description_completeness": "summary", "description_provenance": "html_meta_description",
+        meta = (parser.meta_description or "").strip()
+        # A generic sign-in/consent/widget shell must not become the description
+        # of the job identified by the portal link. Require an exact visible
+        # heading for that job and reject common access-control indicators.
+        context = " ".join(lines) + " " + meta
+        auth_marker = re.search(
+            r"\\b(?:sign[ -]?in|log[ -]?in|login|password|access denied|"
+            r"unauthorized|forbidden|session expired|authentication required|"
+            r"verify your identity|captcha|cookie consent|consent required|"
+            r"accept cookies|security check|single sign-on|sso)\\b",
+            context, re.I,
+        )
+        title = " ".join(str(expected_title or "").split()).casefold()
+        exact_heading = bool(title and any(
+            heading.casefold() == title for heading in parser.headings
+        ))
+        if meta and len(meta) >= 80 and exact_heading and not auth_marker:
+            return {"description": meta, "description_completeness": "summary", "description_provenance": "html_meta_description",
                     "location": "", "date_posted": None, "industry": None,
                     "job_title": expected_title or "Untitled",
                     "employment_type": None, "country": None}
