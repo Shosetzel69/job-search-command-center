@@ -4,7 +4,7 @@ import time
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin, urlsplit, urlencode
 from urllib.request import Request, urlopen, HTTPRedirectHandler, build_opener
-from zoho_detail import extract_detail
+from zoho_detail import extract_detail, normalize_date
 
 MAX_BYTES = 3 * 1024 * 1024
 MAX_POSTINGS = 500
@@ -171,7 +171,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
                 "countries": [row["country"]] if row.get("country") else [],
                 "remote": None, "work_arrangement": None,
                 "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
-                "date_posted": row.get("date_opened"), "source_url": board,
+                "date_posted": normalize_date(row.get("date_opened")), "source_url": board,
                 "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
             })
         return records
@@ -204,7 +204,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
             "countries": [row["country"]] if row.get("country") else [],
             "remote": None, "work_arrangement": None,
             "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
-            "date_posted": row.get("date_opened"), "source_url": board,
+            "date_posted": normalize_date(row.get("date_opened")), "source_url": board,
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
     return records
