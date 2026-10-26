@@ -310,8 +310,19 @@ async function verifyAccountReadyForSession(db, userId) {
   return row;
 }
 
-function lifecycleLockKey(userId) {
-  return `jscc-account-lifecycle:${String(userId)}`;
+// Coordinate account status/deletion and session issuance on the same
+// persisted user row rather than a provider-specific advisory lock.
+async function lockAccountLifecycle(tx, userId) {
+  await tx.query('SELECT user_id FROM app_user WHERE user_id=$1 FOR UPDATE', [userId]);
+}
+
+// Serialize first-login account creation and capacity admission by locking the
+// shared bootstrap singleton row. Fail closed if baseline migration is missing.
+async function lockSharedAccountProvisioning(tx) {
+  const result = await tx.query('SELECT singleton FROM system_bootstrap WHERE singleton=true FOR UPDATE');
+  if (result.rows?.length !== 1) {
+    throw httpError('Account provisioning coordination is unavailable', 503);
+  }
 }
 
 function legacyApplicationId(item) {
@@ -387,7 +398,7 @@ export async function ownerBootstrapPending(subject, env = process.env, { db = g
 }
 
 async function assertAdmissionAllowed(tx, env) {
-  await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-admission'))`);
+  // Caller already holds the shared provisioning singleton FOR UPDATE.
   const policyResult = await tx.query(
     'SELECT admission_enabled, max_users, warning_percent FROM account_capacity_policy WHERE singleton = true',
   );
@@ -438,8 +449,8 @@ async function createOrLoadSharedAccount(subject, payload, env, db) {
 
   try {
     return await withTransaction(async tx => {
-      stage = 'advisory-lock';
-      await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-provision'))`);
+      stage = 'provisioning-row-lock';
+      await lockSharedAccountProvisioning(tx);
 
       stage = 'identity-read';
       const existing = await accountStateForIdentity(tx, subject);
@@ -554,7 +565,7 @@ async function finalizeSharedProvisioning(row, bootstrapPending, bootstrapSeed, 
   const system = bootstrapPending ? bootstrapSystemConfig(bootstrapSeed) : null;
 
   return withTransaction(async tx => {
-    await tx.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-account-provision'))`);
+    await lockSharedAccountProvisioning(tx);
     const state = await accountStateForUser(tx, String(row.user_id));
     if (!state) throw httpError('Provisioning account disappeared', 409);
     if (state.deletion_started_at) throw httpError('Account deletion is in progress', 403);
@@ -660,7 +671,7 @@ export async function createSession(authContext, env = process.env, { db = getPo
   const expiresAt = new Date(now.getTime() + 60 * 60 * 1000);
 
   await withTransaction(async tx => {
-    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lifecycleLockKey(authContext.user_id)]);
+    await lockAccountLifecycle(tx, authContext.user_id);
     const row = await accountStateForUser(tx, authContext.user_id);
     assertSharedAccountReady(row);
     await tx.query('DELETE FROM user_session WHERE expires_at <= now() OR revoked_at IS NOT NULL AND revoked_at < now() - interval \'1 day\'');
@@ -1380,7 +1391,7 @@ export async function setAccountStatus(authContext, userId, status, env = proces
   }
 
   return withTransaction(async tx => {
-    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lifecycleLockKey(userId)]);
+    await lockAccountLifecycle(tx, userId);
     const current = await accountStateForUser(tx, userId);
     if (!current) throw httpError('Account not found', 404);
     if (status === 'ACTIVE' && current.deletion_started_at) {
@@ -1399,7 +1410,7 @@ export async function setAccountStatus(authContext, userId, status, env = proces
 
 async function startAccountDeletion(userId, actorKind, env, db) {
   return withTransaction(async tx => {
-    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lifecycleLockKey(userId)]);
+    await lockAccountLifecycle(tx, userId);
     const target = await resolveAccountDeletionTarget(tx, userId);
     if (target.result === 'NOT_FOUND') return target;
 
@@ -1427,7 +1438,7 @@ async function startAccountDeletion(userId, actorKind, env, db) {
 
 async function finalizeAccountDeletion(target, env, db) {
   return withTransaction(async tx => {
-    await tx.query('SELECT pg_advisory_xact_lock(hashtext($1))', [lifecycleLockKey(target.user_id)]);
+    await lockAccountLifecycle(tx, target.user_id);
     const current = await resolveAccountDeletionTarget(tx, target.user_id);
     if (current.result === 'NOT_FOUND') return { result:'DELETED' };
     if (!current.deletion_started_at) throw httpError('Account deletion progress marker is missing', 409);
