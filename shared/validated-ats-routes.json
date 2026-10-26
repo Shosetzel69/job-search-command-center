@@ -335,31 +335,31 @@
       "connector": "zoho_recruit",
       "career_url": "https://osf-global.zohorecruit.com/careers",
       "enabled": false,
-      "disabled_reason": "ATC-542-01 review and activation pending"
+      "disabled_reason": "OSF-only DEV pilot approved; separate merge and deploy approval pending"
     },
     "HR Plus": {
       "connector": "zoho_recruit",
       "career_url": "https://hr-plus.zohorecruit.com/careers",
       "enabled": false,
-      "disabled_reason": "Enable via explicit DEV-only JSCC_DEV_ZOHO_ENABLED opt-in"
+      "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"
     },
     "MADIFF": {
       "connector": "zoho_recruit",
       "career_url": "https://madiffpl.zohorecruit.com/careers",
       "enabled": false,
-      "disabled_reason": "Enable via explicit DEV-only JSCC_DEV_ZOHO_ENABLED opt-in"
+      "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"
     },
     "Matritel": {
       "connector": "zoho_recruit",
       "career_url": "https://matritel.zohorecruit.com/careers",
       "enabled": false,
-      "disabled_reason": "Enable via explicit DEV-only JSCC_DEV_ZOHO_ENABLED opt-in"
+      "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"
     },
     "MyEmployment": {
       "connector": "zoho_recruit",
       "career_url": "https://myemployment.zohorecruit.com/careers",
       "enabled": false,
-      "disabled_reason": "Enable via explicit DEV-only JSCC_DEV_ZOHO_ENABLED opt-in"
+      "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"
     }
   }
 }
