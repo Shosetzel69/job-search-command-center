@@ -276,10 +276,7 @@ class R4DetailAndEmptyBoardTests(unittest.TestCase):
 
     def test_login_board_and_empty_hint_modern_fails_closed(self):
         with self.assertRaisesRegex(ValueError, "empty state not established"):
-            R3ListingConsistencyTests.mock_pages(
-                b"<html><h1>Sign in</h1></html>",
-                b"<html><h1>No current openings</h1></html>"
-            ) and zoho.collect(
+            zoho.collect(
                 BOARD, "Acme",
                 opener=R3ListingConsistencyTests.mock_pages(
                     b"<html><h1>Sign in</h1></html>",
