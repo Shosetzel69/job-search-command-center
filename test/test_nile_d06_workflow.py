@@ -143,5 +143,45 @@ class D06CleanupRecordTest(unittest.TestCase):
                     else:
                         self.assertNotIn("NILE_VOLUME_DISPOSAL=VERIFIED_ABSENT", result.stdout)
 
+
+    def test_unrecorded_volume_cleanup_fails_closed(self):
+        import os
+        import tempfile
+        cleanup = TEXT.split("      - name: Always remove ephemeral container", 1)[1]
+        fallback = cleanup.split('          else\n            # If admission failed before recording the name, inspect the container', 1)[1]
+        fallback = '            # If admission failed before recording the name, inspect the container' + fallback
+        fallback = fallback.split('          fi\n          echo \x27NILE_CONTAINER_DISPOSAL=VERIFIED_ABSENT\x27', 1)[0]
+        # Extract commands as authored, retaining the inner file-presence branch.
+        script = 'if [ -f "$RUNNER_TEMP/nile-inspect.json" ]; then\n' + '\n'.join(
+            line[12:] if line.startswith('            ') else line
+            for line in fallback.splitlines()[2:-1]) + '\nfi\n'
+        with tempfile.TemporaryDirectory() as temp:
+            root = pathlib.Path(temp)
+            (root / 'docker').write_text(
+                '#!/bin/sh\n'
+                'if [ "$1" = volume ] && [ "$2" = ls ] && [ "$3" = -q ] && [ "$#" = 3 ]; then\n'
+                ' [ "$MOCK_FAIL" = 1 ] && exit 125\n'
+                ' [ -n "$MOCK_VOLUMES" ] && printf "%s\n" "$MOCK_VOLUMES"\n'
+                ' exit 0\n'
+                'fi\nexit 125\n')
+            (root / 'docker').chmod(0o755)
+            data_file = root / 'nile-inspect.json'
+            volume = "a"*64
+            for case, content, listing, cli_fail, expect_success in [
+                ("absent", json.dumps([{"Mounts":[{"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume}]}]), "", "0", True),
+                ("present", json.dumps([{"Mounts":[{"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume}]}]), volume, "0", False),
+                ("api_fail", json.dumps([{"Mounts":[{"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume}]}]), "", "1", False),
+                ("malformed", "{malformed", "", "0", False),
+                ("no_volume", json.dumps([{"Mounts":[]}]), "", "0", False),
+            ]:
+                with self.subTest(case=case):
+                    data_file.write_text(content)
+                    env=dict(os.environ,RUNNER_TEMP=temp,PATH=temp+os.pathsep+os.environ["PATH"],MOCK_VOLUMES=listing,MOCK_FAIL=cli_fail)
+                    result=subprocess.run(["bash","-e","-c",script],env=env,text=True,capture_output=True)
+                    self.assertEqual(result.returncode==0,expect_success,
+                                     f"{case}: {result.stdout} {result.stderr}")
+                    if not expect_success:
+                        self.assertNotIn("NILE_VOLUME_DISPOSAL=VERIFIED_ABSENT",result.stdout)
+
 if __name__ == "__main__":
     unittest.main()
