@@ -725,11 +725,23 @@ jobs:
             # If admission failed before recording the name, inspect the container's
             # previously captured metadata; absence of both is permissible pre-start.
             if [ -f "$RUNNER_TEMP/nile-inspect.json" ]; then
-              VOLUME_NAME="$(jq -r '.[0].Mounts[0].Name // empty' "$RUNNER_TEMP/nile-inspect.json")"
-              if [ -n "$VOLUME_NAME" ] && docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
+              VOLUME_NAME="$(jq -er 'if length == 1 then (.[0].Mounts // [] | map(select(.Type == "volume" and .Destination == "/var/lib/postgresql/data")) | if length == 1 then .[0].Name else error("VOLUME_ID_AMBIGUOUS") end) else error("INVALID_CONTAINER_INSPECT") end' "$RUNNER_TEMP/nile-inspect.json")" || {
+                echo 'NILE_VOLUME_DISPOSAL_BLOCKED:UNTRACKED_ID_UNREADABLE' >&2
+                exit 1
+              }
+              if ! [[ "$VOLUME_NAME" =~ ^[0-9a-f]{64}$ ]]; then
+                echo 'NILE_VOLUME_DISPOSAL_BLOCKED:UNTRACKED_ID_INVALID' >&2
+                exit 1
+              fi
+              VOLUME_LIST="$(docker volume ls -q)" || {
+                echo 'NILE_VOLUME_DISPOSAL_BLOCKED:UNTRACKED_VOLUME_LIST_FAILED' >&2
+                exit 1
+              }
+              if grep -Fxq -- "$VOLUME_NAME" <<< "$VOLUME_LIST"; then
                 echo 'NILE_VOLUME_DISPOSAL_BLOCKED:UNTRACKED_RESIDUE' >&2
                 exit 1
               fi
+              echo 'NILE_VOLUME_DISPOSAL=VERIFIED_ABSENT'
             fi
           fi
           echo 'NILE_CONTAINER_DISPOSAL=VERIFIED_ABSENT'
