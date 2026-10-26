@@ -80,5 +80,26 @@ class D06ExactWorkflowTest(unittest.TestCase):
                 if label != "positive":
                     self.assertTrue(diag_ids, label)
 
+
+class D06CleanupRecordTest(unittest.TestCase):
+    def test_actual_workflow_record_line_writes_newline_not_literal_slash_n(self):
+        import os
+        import tempfile
+        line = next(line.strip() for line in TEXT.splitlines()
+                    if line.strip().startswith("printf ") and "jscc-nile-volume-name" in line)
+        with tempfile.TemporaryDirectory() as temp:
+            env = dict(os.environ, VOLUME_NAME="a" * 64, RUNNER_TEMP=temp)
+            run = subprocess.run(["bash", "-e", "-c", line], env=env, capture_output=True, text=True)
+            self.assertEqual(run.returncode, 0, run.stderr)
+            self.assertEqual((pathlib.Path(temp) / "jscc-nile-volume-name").read_bytes(),
+                             (("a" * 64) + "\n").encode("ascii"))
+
+    def test_cleanup_volume_list_contract_present(self):
+        cleanup = TEXT.split("      - name: Always remove ephemeral container", 1)[1]
+        self.assertIn('[[ "$VOLUME_NAME" =~ ^[0-9a-f]{64}$ ]]', cleanup)
+        self.assertIn('VOLUME_LIST="$(docker volume ls -q --no-trunc)"', cleanup)
+        self.assertIn('grep -Fxq -- "$VOLUME_NAME" <<< "$VOLUME_LIST"', cleanup)
+        self.assertIn("NILE_VOLUME_DISPOSAL_BLOCKED:VOLUME_LIST_FAILED", cleanup)
+
 if __name__ == "__main__":
     unittest.main()
