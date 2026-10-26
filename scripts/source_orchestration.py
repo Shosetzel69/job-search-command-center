@@ -275,14 +275,16 @@ def aggregate_source_results(plan):
 
 
 def _dev_osf_override(source, route):
-    """Owner-authorized OSF activation confined to DEV runtime and explicit opt-in."""
+    """Option A: one exact OSF source; broad Zoho DEV flag is deliberately inert."""
     import os
     return (os.environ.get("APP_ENV", "").strip().lower() == "dev"
-            and (os.environ.get("JSCC_DEV_ZOHO_ENABLED") == "1"
-                 or (source.get("name") == "OSF Digital" and os.environ.get("JSCC_DEV_OSF_ENABLED") == "1"))
-            and source.get("name") in {"OSF Digital", "HR Plus", "MADIFF", "Matritel", "MyEmployment"}
+            and os.environ.get("JSCC_DEV_OSF_ENABLED") == "1"
+            and source.get("name") == "OSF Digital"
+            and source.get("id") == "src-zoho-osf-digital"
+            and source.get("url") == "https://osf-global.zohorecruit.com/careers"
             and route is not None
-            and route.get("connector") == "zoho_recruit")
+            and route.get("connector") == "zoho_recruit"
+            and route.get("career_url") == "https://osf-global.zohorecruit.com/careers")
 
 
 def build_plan(catalog):
