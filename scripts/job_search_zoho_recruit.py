@@ -120,13 +120,18 @@ def collect(board_url, company_name, opener=None, role_family=None):
         raise ValueError("company_name is required")
     tenant = urlsplit(board).hostname
     started = time.monotonic()
-    summaries = enumerate_board(_fetch(board, tenant, opener), board)
+    board_html = _fetch(board, tenant, opener)
+    summaries = enumerate_board(board_html, board)
     if summaries and str(role_family or "").upper() in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}:
-        # Enumerate the complete public metadata before any detail HTTP requests.
+        # Do not silently drop a relevant portal job when the modern listing is
+        # stale, blocked or inconsistent. Unknown titles must remain in scope.
         from zoho_public_jobs import embedded_jobs
         metadata = embedded_jobs(_fetch("https://" + tenant + "/jobs/Careers", tenant, opener))
         selected = prefilter_public_metadata(metadata, role_family=role_family)
         selected_ids = {item["jobid"] for item in selected}
+        relevant_portal = prefilter_public_metadata(summaries, role_family=role_family)
+        if any(item["jobid"] not in selected_ids for item in relevant_portal):
+            raise ValueError("inconsistent Zoho public listing surfaces; relevant portal posting missing from metadata")
         available_ids = {item["jobid"] for item in summaries}
         missing_selected = [row for row in selected if row["jobid"] not in available_ids]
         summaries = [item for item in summaries if item["jobid"] in selected_ids]
@@ -146,9 +151,12 @@ def collect(board_url, company_name, opener=None, role_family=None):
         modern_url = "https://" + tenant + "/jobs/Careers"
         modern_html = _fetch(modern_url, tenant, opener)
         if not re.search(r"""<input\b[^>]*(?:id|name)\s*=\s*["']jobs["']""", modern_html, re.I):
-            if "PortalDetail.na" not in modern_html and "jobid=" not in modern_html:
+            # Unknown HTML (login page, access denied, JS shell, changed widget)
+            # must never be interpreted as a genuine empty job board.
+            empty_hint = r"\b(?:no (?:current )?(?:job )?openings|no jobs? (?:available|found)|no (?:open )?positions|currently no vacancies)\b"
+            if re.search(empty_hint, board_html, re.I) and re.search(empty_hint, modern_html, re.I):
                 return []
-            raise ValueError("unrecognized modern Zoho jobs payload")
+            raise ValueError("unrecognized Zoho public board; empty state not established")
         modern = embedded_jobs(modern_html)
         modern = prefilter_public_metadata(modern, role_family=role_family)
         if modern and not all(row["description_available"] for row in modern):
