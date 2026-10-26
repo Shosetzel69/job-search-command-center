@@ -148,13 +148,15 @@ class D06CleanupRecordTest(unittest.TestCase):
         import os
         import tempfile
         cleanup = TEXT.split("      - name: Always remove ephemeral container", 1)[1]
-        fallback = cleanup.split('          else\n            # If admission failed before recording the name, inspect the container', 1)[1]
-        fallback = '            # If admission failed before recording the name, inspect the container' + fallback
-        fallback = fallback.split('          fi\n          echo \x27NILE_CONTAINER_DISPOSAL=VERIFIED_ABSENT\x27', 1)[0]
-        # Extract commands as authored, retaining the inner file-presence branch.
-        script = 'if [ -f "$RUNNER_TEMP/nile-inspect.json" ]; then\n' + '\n'.join(
-            line[12:] if line.startswith('            ') else line
-            for line in fallback.splitlines()[2:-1]) + '\nfi\n'
+        # Extract the exact inner file-present shell branch; preserve matching fi.
+        start = cleanup.index('            if [ -f "$RUNNER_TEMP/nile-inspect.json" ]; then')
+        end = cleanup.index("\n            fi", start) + len("\n            fi")
+        script = "\n".join(
+            line[12:] if line.startswith("            ") else line
+            for line in cleanup[start:end].splitlines()
+        ) + "\n"
+        syntax = subprocess.run(["bash", "-n", "-c", script], capture_output=True, text=True)
+        self.assertEqual(syntax.returncode, 0, syntax.stderr)
         with tempfile.TemporaryDirectory() as temp:
             root = pathlib.Path(temp)
             (root / 'docker').write_text(
