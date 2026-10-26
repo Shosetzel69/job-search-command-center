@@ -118,3 +118,15 @@ class R4DetailGateTests(unittest.TestCase):
                 '"><h1>IT Project Manager</h1>')
         with self.assertRaisesRegex(ValueError, "lacks Job Description"):
             extract_detail(html)
+
+    def test_login_page_with_job_description_heading_cannot_be_partial(self):
+        html = ('<h1>Sign in</h1><h2>Job Description</h2>'
+                '<p>Enter your credentials to proceed.</p>')
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_password_form_with_job_description_heading_cannot_be_partial(self):
+        html = ('<h1>IT Project Manager</h1><h2>Job Description</h2>'
+                '<p>Restricted content</p><input type="password" name="pwd">')
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="IT Project Manager")
