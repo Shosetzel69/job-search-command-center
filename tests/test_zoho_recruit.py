@@ -311,3 +311,33 @@ class R5CollectorDetailGateTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["description_completeness"], "partial")
         self.assertEqual(records[0]["source_url_kind"], "careers_board_fallback")
+
+
+    def test_modern_public_listing_login_description_fails(self):
+        import json
+        from html import escape
+        jobs = [{"id": "123456", "Posting_Title": "IT Project Manager",
+                 "Job_Description": "<p>Please sign in to view this vacancy.</p>"}]
+        modern = ('<input id="jobs" value="' +
+                  escape(json.dumps(jobs), quote=True) + '">').encode()
+        def opening(req, timeout):
+            return Resp(b"<html>Modern careers</html>"
+                        if req.full_url.endswith("/careers") else modern,
+                        req.full_url)
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            zoho.collect(BOARD, "Acme", opener=opening)
+
+    def test_modern_public_listing_security_job_not_filtered(self):
+        import json
+        from html import escape
+        jobs = [{"id": "123456", "Posting_Title": "Identity Security Engineer",
+                 "Job_Description": "<p>Implement SSO, login and cookie consent features.</p>"}]
+        modern = ('<input id="jobs" value="' +
+                  escape(json.dumps(jobs), quote=True) + '">').encode()
+        def opening(req, timeout):
+            return Resp(b"<html>Modern careers</html>"
+                        if req.full_url.endswith("/careers") else modern,
+                        req.full_url)
+        records = zoho.collect(BOARD, "Acme", opener=opening)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["description_completeness"], "partial")
