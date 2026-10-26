@@ -4,6 +4,10 @@
 
 ### Sources / JSCC #544
 
+- **R4 / Option A enforcement (DEV OSF only):** Zoho job detail meta summaries are accepted only with a matching visible h1/h2 job title and no login, access-denied or consent markers; generic provider/auth pages fail the source instead of contaminating the corpus. The formerly broad `JSCC_DEV_ZOHO_ENABLED` flag is inert, and only the exact OSF Digital registry identity can opt in with `APP_ENV=dev` and `JSCC_DEV_OSF_ENABLED=1`. HR Plus, MADIFF, Matritel and MyEmployment remain explicitly outside pilot authorization.
+- Every retained Zoho record now carries `source_url_kind="careers_board_fallback"`, `source_url_label="Careers board (not a direct job link)"` and `missing_fields`, in addition to `description_completeness` and `description_provenance`. These fields survive `SharedPosting.payload` projection and mocked persistence. UI consumers **must show the fallback label rather than presenting the board URL as a direct application link**; actual deployed UI treatment remains an acceptance test, not a completed implementation claim.
+- R4 regression tests cover blocked/consent/changed-widget detail pages, safe job-specific summary admission, double-sided empty listing hints, OSF-only opt-in against broad-flag and identity spoofing, and persisted fallback metadata. No merge/deploy/activation or TEST/PROD changes are implied.
+
 - R3: Fail-closed validation for public Zoho board responses. Unsupported/login-like public HTML can no longer be counted as `success_empty` without explicit empty-board evidence; contradictory portal and modern metadata that omit an in-scope portal posting now fail the source rather than silently dropping the job. Synthetic collector and orchestration regressions added. OSF Digital pilot DEV-only board-link fallback accepted by owner; no merge/deploy/source activation implied.
 
 
