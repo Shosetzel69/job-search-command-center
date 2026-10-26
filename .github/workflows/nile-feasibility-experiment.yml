@@ -725,7 +725,7 @@ jobs:
             # If admission failed before recording the name, inspect the container's
             # previously captured metadata; absence of both is permissible pre-start.
             if [ -f "$RUNNER_TEMP/nile-inspect.json" ]; then
-              VOLUME_NAME="$(jq -er 'if length == 1 then (.[0].Mounts // [] | map(select(.Type == "volume" and .Destination == "/var/lib/postgresql/data")) | if length == 1 then .[0].Name else error("VOLUME_ID_AMBIGUOUS") end) else error("INVALID_CONTAINER_INSPECT") end' "$RUNNER_TEMP/nile-inspect.json")" || {
+              VOLUME_NAME="$(jq -er 'if length == 1 then (.[0].Mounts | if type == "array" and length == 1 and .[0].Type == "volume" and .[0].Destination == "/var/lib/postgresql/data" then .[0].Name else error("VOLUME_MOUNTS_AMBIGUOUS") end) else error("INVALID_CONTAINER_INSPECT") end' "$RUNNER_TEMP/nile-inspect.json")" || {
                 echo 'NILE_VOLUME_DISPOSAL_BLOCKED:UNTRACKED_ID_UNREADABLE' >&2
                 exit 1
               }
