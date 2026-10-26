@@ -175,6 +175,22 @@ class D06CleanupRecordTest(unittest.TestCase):
                 ("api_fail", json.dumps([{"Mounts":[{"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume}]}]), "", "1", False),
                 ("malformed", "{malformed", "", "0", False),
                 ("no_volume", json.dumps([{"Mounts":[]}]), "", "0", False),
+                ("extra_volume_residue", json.dumps([{"Mounts":[
+                    {"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume},
+                    {"Type":"volume","Destination":"/extra","Name":"b"*64}
+                ]}]), "b"*64, "0", False),
+                ("extra_volume_both_absent", json.dumps([{"Mounts":[
+                    {"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume},
+                    {"Type":"volume","Destination":"/extra","Name":"b"*64}
+                ]}]), "", "0", False),
+                ("duplicate_id", json.dumps([{"Mounts":[
+                    {"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume},
+                    {"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume}
+                ]}]), "", "0", False),
+                ("additional_bind", json.dumps([{"Mounts":[
+                    {"Type":"volume","Destination":"/var/lib/postgresql/data","Name":volume},
+                    {"Type":"bind","Destination":"/extra","Name":""}
+                ]}]), "", "0", False),
             ]:
                 with self.subTest(case=case):
                     data_file.write_text(content)
