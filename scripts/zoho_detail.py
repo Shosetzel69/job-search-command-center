@@ -72,15 +72,25 @@ def embedded_full_description(html):
 
 
 def normalize_date(value):
+    """Normalize explicit public dates; never guess ambiguous slash-formats."""
     from datetime import datetime
     raw = str(value or "").strip()
-    if not raw:
-        return None
-    for fmt in ("%d.%m.%Y", "%d/%m/%Y", "%Y-%m-%d"):
+    fmt = None
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}", raw):
+        fmt = "%Y-%m-%d"
+    elif re.fullmatch(r"\d{1,2}\.\d{1,2}\.\d{4}", raw):
+        fmt = "%d.%m.%Y"
+    elif re.fullmatch(r"\d{1,2}/\d{1,2}/\d{4}", raw):
+        first, second, _ = (int(part) for part in raw.split("/"))
+        if first > 12 and 1 <= second <= 12:
+            fmt = "%d/%m/%Y"
+        elif second > 12 and 1 <= first <= 12:
+            fmt = "%m/%d/%Y"
+    if fmt:
         try:
             return datetime.strptime(raw, fmt).date().isoformat()
         except ValueError:
-            pass
+            return None
     return None
 
 def extract_detail(html, expected_title=None):
@@ -121,7 +131,7 @@ def extract_detail(html, expected_title=None):
             pass
     m = DATE.search(" ".join(lines[:idx]))
     date_opened = meta.get("Date Opened")
-    result = {"description": description, "description_completeness": "partial", "description_provenance": "visible_html_section", "location": ", ".join(filter(None,(meta.get("City"),meta.get("State/Province")))), "date_posted": (m.group(1) if m else date_opened), "industry": meta.get("Industry")}
+    result = {"description": description, "description_completeness": "partial", "description_provenance": "visible_html_section", "location": ", ".join(filter(None,(meta.get("City"),meta.get("State/Province")))), "date_posted": normalize_date(m.group(1) if m else date_opened), "industry": meta.get("Industry")}
     result["job_title"] = expected_title or lines[0]
     result["employment_type"] = meta.get("Job Type") or next((s.split("|")[0].strip() for s in lines[:idx] if "|" in s and "time" in s.lower()), None)
     result["country"] = meta.get("Country")
