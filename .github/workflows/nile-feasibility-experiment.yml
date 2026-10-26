@@ -197,7 +197,15 @@ jobs:
               .[0].Config.Image == $image and
               .[0].Image == $img[0][0].Id and
               (.[0].HostConfig.Binds == null or .[0].HostConfig.Binds == []) and
-              ((.[0].Mounts | length) == 0) and
+              ((.[0].HostConfig.Mounts == null or .[0].HostConfig.Mounts == []) and
+              (($img[0][0].Config.Volumes | keys) == ["/var/lib/postgresql/data"]) and
+              ((.[0].Mounts | length) == 1) and
+              (.[0].Mounts[0].Type == "volume") and
+              (.[0].Mounts[0].Destination == "/var/lib/postgresql/data") and
+              (.[0].Mounts[0].Driver == "local") and
+              (.[0].Mounts[0].RW == true) and
+              (.[0].Mounts[0].Mode == "") and
+              (.[0].Mounts[0].Name | type == "string" and test("^[0-9a-f]{64}$"))) and
               ([.[0].Config.Env[] | select(. == ("NILE_TESTING_DB_NAME="+$db))] | length) == 1 and
               ([.[0].Config.Env[] | select(. == ("NILE_TESTING_DB_USER="+$user))] | length) == 1 and
               (.[0].NetworkSettings.Ports["5432/tcp"] == [{"HostIp":"127.0.0.1","HostPort":"55432"}]) and
@@ -215,7 +223,15 @@ jobs:
                   ["D03_IMAGE_REFERENCE", $c.Config.Image == $image],
                   ["D04_IMAGE_ID", $c.Image == $img[0][0].Id],
                   ["D05_NO_BINDS", ($c.HostConfig.Binds == null or $c.HostConfig.Binds == [])],
-                  ["D06_NO_MOUNTS", ($c.Mounts | length) == 0],
+                  ["D06_IMAGE_ANONYMOUS_VOLUME", ($c.HostConfig.Mounts == null or $c.HostConfig.Mounts == []) and
+                    (($img[0][0].Config.Volumes | keys) == ["/var/lib/postgresql/data"]) and
+                    (($c.Mounts | length) == 1) and
+                    ($c.Mounts[0].Type == "volume") and
+                    ($c.Mounts[0].Destination == "/var/lib/postgresql/data") and
+                    ($c.Mounts[0].Driver == "local") and
+                    ($c.Mounts[0].RW == true) and
+                    ($c.Mounts[0].Mode == "") and
+                    ($c.Mounts[0].Name | type == "string" and test("^[0-9a-f]{64}$"))],
                   ["D07_DB_ENV", try (([$c.Config.Env[] | select(. == ("NILE_TESTING_DB_NAME="+$db))] | length) == 1) catch false],
                   ["D08_USER_ENV", try (([$c.Config.Env[] | select(. == ("NILE_TESTING_DB_USER="+$user))] | length) == 1) catch false],
                   ["D09_NETWORK_PORT", $c.NetworkSettings.Ports["5432/tcp"] == [{"HostIp":"127.0.0.1","HostPort":"55432"}]],
