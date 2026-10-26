@@ -156,6 +156,31 @@ class ZohoIntegrationTests(unittest.TestCase):
         self.assertEqual(good["records"], 1)
         self.assertEqual(results[1].records[0]["_jscc_source_id"], "src-zoho-hr-plus")
 
+    def test_r4_login_detail_never_reaches_corpus_projection(self):
+        import io
+        row = item()
+        board = (b'<a href="/recruit/PortalDetail.na?jobid=123456'
+                 b'&digest=tok_1&widgetid=123456">IT Project Manager</a>')
+        gated = (b'<meta name="description" content="' +
+                 b'Zoho Recruit sign in. Please sign in to view this job. ' * 3 +
+                 b'"><h1>Sign in</h1><input type="password">')
+        class Page(io.BytesIO):
+            def __init__(self, body, url):
+                super().__init__(body)
+                self.url = url
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+            def geturl(self): return self.url
+        def mock_opener(req, timeout):
+            return Page(board if req.full_url.endswith("/careers") else gated, req.full_url)
+        with patch.object(orchestration.zoho_recruit, "_safe_opener", side_effect=mock_opener):
+            results, _, _ = orchestration.collect_api_sources({}, {"usage": {}}, NOW, [row])
+        self.assertFalse(results[0].ok)
+        self.assertEqual(row["status"], "failed")
+        self.assertEqual(row["records"], 0)
+        projected, _, _, _ = corpus.project_collection(results)
+        self.assertEqual(projected, [])
+
     def test_scope_removes_nonmatching_family(self):
         row = item()
         cfg = {"_jscc_retrieve_scope": {"scopes": [{"role_family": "PROJECT_MANAGEMENT"}]}}
