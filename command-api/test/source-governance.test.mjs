@@ -141,6 +141,16 @@ test('owner-activated registry keeps only explicitly non-operational sources ina
     'MyEmployment',
   ]);
 
+  // #544 Option A: only OSF may be admitted by its separate DEV opt-in.
+  // All four other Zoho catalogs explicitly remain outside the pilot.
+  for (const provider of ['HR Plus', 'MADIFF', 'Matritel', 'MyEmployment']) {
+    const source = catalog.sources.find(entry => entry.name === provider);
+    assert.equal(source?.active, false, provider + ' must remain inactive');
+    assert.equal(source?.approval_status, 'pending', provider + ' approval must remain pending');
+    assert.match(source?.validation_reason || '', /Outside Option A OSF-only pilot/,
+                 provider + ' must not advertise owner-authorized activation');
+  }
+
   const oyster = inactive.find(source => source.name === 'Oyster');
   assert.equal(oyster.validation_status, 'validating');
   assert.equal(oyster.approval_status, 'pending');
