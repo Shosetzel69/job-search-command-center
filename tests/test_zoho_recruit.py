@@ -67,6 +67,7 @@ class ModernZohoTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"], "IT Project Manager")
         self.assertEqual(rows[0]["description_completeness"], "partial")
         self.assertEqual(rows[0]["description_provenance"], "public_modern_jobs_json")
+        self.assertEqual(rows[0]["date_posted"], "2026-09-02")
         self.assertNotIn("<p>", rows[0]["description"])
 
     def test_modern_without_description_rejected(self):
