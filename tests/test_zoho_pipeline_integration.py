@@ -21,6 +21,9 @@ RECORD = {
     "location": "India", "countries": ["India"],
     "date_posted": "2026-10-14",
     "source_url": "https://osf-global.zohorecruit.com/careers",
+    "source_url_kind": "careers_board_fallback",
+    "source_url_label": "Careers board (not a direct job link)",
+    "missing_fields": ["remote", "work_arrangement"],
     "sources": [{"provider": "Zoho Recruit", "tenant": "osf-global.zohorecruit.com"}],
 }
 
@@ -49,6 +52,9 @@ class ZohoIntegrationTests(unittest.TestCase):
         self.assertEqual(len(postings), 1)
         self.assertEqual(skipped, 0)
         self.assertNotIn("digest=", str(postings))
+        self.assertEqual(postings[0].payload["source_url_kind"], "careers_board_fallback")
+        self.assertEqual(postings[0].payload["source_url_label"], "Careers board (not a direct job link)")
+        self.assertIn("remote", postings[0].payload["missing_fields"])
         again, _, _, _ = corpus.project_collection(results)
         self.assertEqual(postings[0].identity_value, again[0].identity_value)
 
@@ -186,6 +192,8 @@ class ZohoIntegrationTests(unittest.TestCase):
         self.assertEqual(upsert.call_args_list[0].args[1].identity_value,
                          upsert.call_args_list[1].args[1].identity_value)
         self.assertTrue(first["lifecycle_suppressed_targeted"])
+        self.assertEqual(upsert.call_args.args[1].payload["source_url_kind"], "careers_board_fallback")
+        self.assertIn("remote", upsert.call_args.args[1].payload["missing_fields"])
 
 
     def test_missing_description_preserved_in_projection_and_mocked_persistence(self):
@@ -233,18 +241,46 @@ class ZohoIntegrationTests(unittest.TestCase):
                 self.assertEqual(osf["active"], expected)
                 self.assertEqual(osf["status"] == "pending", expected)
 
-    def test_all_five_zoho_sources_dev_only(self):
+    def test_option_a_only_osf_can_activate_even_with_broad_flag(self):
         from unittest.mock import patch
-        for name, tenant in [
-            ("OSF Digital", "osf-global"), ("HR Plus", "hr-plus"),
-            ("MADIFF", "madiffpl"), ("Matritel", "matritel"),
-            ("MyEmployment", "myemployment")]:
-            src = {"name": name, "id": "src-zoho-" + tenant,
+        tenants = [
+            ("OSF Digital", "osf-global", "src-zoho-osf-digital"),
+            ("HR Plus", "hr-plus", "src-zoho-hr-plus"),
+            ("MADIFF", "madiffpl", "src-zoho-madiffpl"),
+            ("Matritel", "matritel", "src-zoho-matritel"),
+            ("MyEmployment", "myemployment", "src-zoho-myemployment"),
+        ]
+        cases = [
+            ("dev", "0", "1"),  # legacy broad flag must not enable anything
+            ("dev", "1", "0"),  # only OSF permitted
+            ("dev", "1", "1"),  # broad flag cannot expand OSF-only scope
+            ("test", "1", "1"),
+            ("prod", "1", "1"),
+            ("", "1", "1"),
+        ]
+        for name, tenant, source_id in tenants:
+            src = {"name": name, "id": source_id,
                    "url": "https://" + tenant + ".zohorecruit.com/careers",
                    "active": False}
-            for env, expected in [("dev", True), ("test", False), ("prod", False)]:
-                with self.subTest(source=name, env=env), patch.dict(
-                    "os.environ", {"APP_ENV": env, "JSCC_DEV_ZOHO_ENABLED": "1"}
+            for env, osf_opt, broad_opt in cases:
+                expected = env == "dev" and name == "OSF Digital" and osf_opt == "1"
+                with self.subTest(source=name, env=env, osf=osf_opt, broad=broad_opt), patch.dict(
+                    "os.environ", {"APP_ENV": env,
+                                   "JSCC_DEV_OSF_ENABLED": osf_opt,
+                                   "JSCC_DEV_ZOHO_ENABLED": broad_opt},
+                    clear=True,
                 ):
                     plan = orchestration.build_plan({"sources": [src]})
+                    self.assertEqual(plan[0]["active"], expected)
                     self.assertEqual(plan[0]["status"] == "pending", expected)
+
+    def test_spoofed_osf_catalog_identity_cannot_activate(self):
+        from unittest.mock import patch
+        src = {"name": "OSF Digital", "id": "src-zoho-incorrect",
+               "url": "https://osf-global.zohorecruit.com/careers",
+               "active": False}
+        with patch.dict("os.environ", {"APP_ENV": "dev",
+                                       "JSCC_DEV_OSF_ENABLED": "1"}, clear=True):
+            plan = orchestration.build_plan({"sources": [src]})
+        self.assertEqual(plan[0]["status"], "inactive")
+        self.assertFalse(plan[0]["active"])
