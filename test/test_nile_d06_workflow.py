@@ -97,9 +97,51 @@ class D06CleanupRecordTest(unittest.TestCase):
     def test_cleanup_volume_list_contract_present(self):
         cleanup = TEXT.split("      - name: Always remove ephemeral container", 1)[1]
         self.assertIn('[[ "$VOLUME_NAME" =~ ^[0-9a-f]{64}$ ]]', cleanup)
-        self.assertIn('VOLUME_LIST="$(docker volume ls -q --no-trunc)"', cleanup)
+        self.assertIn('VOLUME_LIST="$(docker volume ls -q)"', cleanup)
         self.assertIn('grep -Fxq -- "$VOLUME_NAME" <<< "$VOLUME_LIST"', cleanup)
         self.assertIn("NILE_VOLUME_DISPOSAL_BLOCKED:VOLUME_LIST_FAILED", cleanup)
+
+
+    def test_execute_real_cleanup_volume_check_with_mock_docker(self):
+        import os
+        import tempfile
+        cleanup = TEXT.split("      - name: Always remove ephemeral container", 1)[1]
+        start = cleanup.index('          if [ -f "$RUNNER_TEMP/jscc-nile-volume-name" ]; then')
+        end = cleanup.index("          echo 'NILE_CONTAINER_DISPOSAL=VERIFIED_ABSENT'", start)
+        actual = "\n".join(line[10:] if line.startswith("          ") else line
+                           for line in cleanup[start:end].splitlines())
+        with tempfile.TemporaryDirectory() as temp:
+            temp_path = pathlib.Path(temp)
+            docker = temp_path / "docker"
+            docker.write_text('#!/bin/sh\n'
+                              'if [ "$1" = volume ] && [ "$2" = ls ] && [ "$3" = -q ] && [ "$#" = 3 ]; then\n'
+                              '  [ "$MOCK_FAIL" = 1 ] && exit 125\n'
+                              '  [ -n "$MOCK_VOLUMES" ] && printf "%s\n" "$MOCK_VOLUMES"\n'
+                              '  exit 0\n'
+                              'fi\n'
+                              'exit 125\n')
+            docker.chmod(0o755)
+            record = temp_path / "jscc-nile-volume-name"
+            volume = "a" * 64
+            for label, saved, existing, fail, expected_success in [
+                ("absent", volume, "", "0", True),
+                ("still_present", volume, volume, "0", False),
+                ("docker_error", volume, "", "1", False),
+                ("corrupt_record", volume + r"\n", "", "0", False),
+            ]:
+                with self.subTest(case=label):
+                    record.write_text(saved)
+                    env = dict(os.environ, RUNNER_TEMP=temp,
+                               PATH=temp + os.pathsep + os.environ["PATH"],
+                               MOCK_VOLUMES=existing, MOCK_FAIL=fail)
+                    result = subprocess.run(["bash", "-e", "-c", actual],
+                                            env=env, text=True, capture_output=True)
+                    self.assertEqual(result.returncode == 0, expected_success,
+                                     result.stdout + result.stderr)
+                    if expected_success:
+                        self.assertIn("NILE_VOLUME_DISPOSAL=VERIFIED_ABSENT", result.stdout)
+                    else:
+                        self.assertNotIn("NILE_VOLUME_DISPOSAL=VERIFIED_ABSENT", result.stdout)
 
 if __name__ == "__main__":
     unittest.main()
