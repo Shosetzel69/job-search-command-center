@@ -2275,7 +2275,7 @@
       "validation_status": "pending",
       "approval_status": "pending",
       "last_validated_at": "2026-10-25",
-      "validation_reason": "Owner-authorized DEV-only activation; pending end-to-end evidence",
+      "validation_reason": "Outside Option A OSF-only pilot; activation not authorized",
       "policy_excluded": false
     },
     {
@@ -2289,7 +2289,7 @@
       "validation_status": "pending",
       "approval_status": "pending",
       "last_validated_at": "2026-10-25",
-      "validation_reason": "Owner-authorized DEV-only activation; pending end-to-end evidence",
+      "validation_reason": "Outside Option A OSF-only pilot; activation not authorized",
       "policy_excluded": false
     },
     {
@@ -2303,7 +2303,7 @@
       "validation_status": "pending",
       "approval_status": "pending",
       "last_validated_at": "2026-10-25",
-      "validation_reason": "Owner-authorized DEV-only activation; pending end-to-end evidence",
+      "validation_reason": "Outside Option A OSF-only pilot; activation not authorized",
       "policy_excluded": false
     },
     {
@@ -2317,7 +2317,7 @@
       "validation_status": "pending",
       "approval_status": "pending",
       "last_validated_at": "2026-10-25",
-      "validation_reason": "Owner-authorized DEV-only activation; pending end-to-end evidence",
+      "validation_reason": "Outside Option A OSF-only pilot; activation not authorized",
       "policy_excluded": false
     }
   ]
