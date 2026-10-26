@@ -105,15 +105,38 @@ def normalize_date(value):
             return None
     return None
 
+# Explicit provider-gateway instructions, not generic words such as "security",
+# "login", "SSO" or "cookies" that may appear in a real security job description.
+_ACCESS_GATEWAY_PROMPT = re.compile(
+    r"\b(?:please\s+|you\s+(?:must|need\s+to|are\s+required\s+to)\s+)"
+    r"(?:sign[\s-]?in|log[\s-]?in)\s+to\s+(?:view|see|read|access|continue|apply|proceed)\b"
+    r"|\b(?:sign[\s-]?in|log[\s-]?in)\s+to\s+(?:view|access)\s+(?:this|the)\s+"
+    r"(?:job|vacancy|position|posting)\b"
+    r"|\b(?:please\s+)?(?:accept|allow)\s+(?:all\s+)?cookies\s+(?:to|before)\s+"
+    r"(?:view|access|continue|proceed)\b"
+    r"|\b(?:cookie\s+)?consent\s+(?:is\s+)?required\s+(?:to|before)\s+"
+    r"(?:view|access|continue|proceed)\b"
+    r"|\b(?:access\s+denied|session\s+expired|authentication\s+required)"
+    r"\s*(?:[.!]|$)",
+    re.I,
+)
+
+
+def reject_access_gateway_text(text):
+    """Fail the source, never allow an access/consent message as job content."""
+    if _ACCESS_GATEWAY_PROMPT.search(str(text or "")):
+        raise ValueError("Zoho detail lacks Job Description; access gateway detected")
+
+
 def extract_detail(html, expected_title=None):
     if not isinstance(html, str) or len(html) > 3_145_728:
         raise ValueError("invalid or oversized Zoho detail")
-    full = embedded_full_description(html)
-    if full:
-        full["job_title"] = expected_title or full["job_title"]
-        return full
+    # Evaluate access and consent evidence BEFORE trusting any path: embedded JS,
+    # visible Job Description sections or a long <meta name="description"> summary.
     parser = Text()
     parser.feed(html)
+    reject_access_gateway_text(" ".join(parser.parts))
+    reject_access_gateway_text(parser.meta_description)
     # A login form or access/consent heading may coexist with a template
     # "Job Description" heading. Reject the access shell before any partial
     # HTML section is accepted as real job content.
@@ -128,6 +151,11 @@ def extract_detail(html, expected_title=None):
     )
     if access_heading or password_form:
         raise ValueError("Zoho detail lacks Job Description; access gateway detected")
+    full = embedded_full_description(html)
+    if full:
+        reject_access_gateway_text(full.get("description"))
+        full["job_title"] = expected_title or full["job_title"]
+        return full
     lines = [" ".join(line.split()) for line in "".join(parser.parts).splitlines()]
     lines = [x for x in lines if x and x != "\u200b"]
     if not lines:
@@ -161,6 +189,7 @@ def extract_detail(html, expected_title=None):
     start = idx + 1
     finish = next((k for k in range(start, len(lines)) if lines[k] in {"Apply Now", "Apply", "Similar Jobs"}), len(lines))
     description = "\n".join(lines[start:finish]).strip()
+    reject_access_gateway_text(description)
     if not description:
         raise ValueError("empty Zoho job description")
     meta = {}
