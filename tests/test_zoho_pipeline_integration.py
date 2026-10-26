@@ -181,6 +181,39 @@ class ZohoIntegrationTests(unittest.TestCase):
         projected, _, _, _ = corpus.project_collection(results)
         self.assertEqual(projected, [])
 
+    def test_r5_auth_prompts_inside_job_description_fail_source_without_projection(self):
+        import io
+        row_templates = [
+            b'<h1>IT Project Manager</h1><h2>Job Description</h2>'
+            b'<p>Please sign in to view this vacancy.</p>',
+            b'<h1>IT Project Manager</h1><h2>Job Description</h2>'
+            b'<p>Please accept cookies to continue viewing this job.</p>',
+        ]
+        board = (b'<a href="/recruit/PortalDetail.na?jobid=123456'
+                 b'&digest=tok_1&widgetid=123456">IT Project Manager</a>')
+        class Page(io.BytesIO):
+            def __init__(self, data, url):
+                super().__init__(data)
+                self.url = url
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+            def geturl(self): return self.url
+        for gated in row_templates:
+            with self.subTest(detail=gated):
+                row = item()
+                def opening(req, timeout):
+                    return Page(board if req.full_url.endswith("/careers") else gated,
+                                req.full_url)
+                with patch.object(orchestration.zoho_recruit, "_safe_opener", side_effect=opening):
+                    results, _, _ = orchestration.collect_api_sources(
+                        {}, {"usage": {}}, NOW, [row])
+                self.assertEqual(row["outcome"], "failed")
+                self.assertEqual(row["records"], 0)
+                self.assertFalse(results[0].ok)
+                postings, _, _, _ = corpus.project_collection(results)
+                self.assertEqual(postings, [])
+                self.assertNotIn("tok_1", str(results))
+
     def test_scope_removes_nonmatching_family(self):
         row = item()
         cfg = {"_jscc_retrieve_scope": {"scopes": [{"role_family": "PROJECT_MANAGEMENT"}]}}
