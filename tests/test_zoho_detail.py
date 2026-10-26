@@ -5,13 +5,13 @@ class DetailTests(unittest.TestCase):
         text='<h1>Engineer</h1><p>Full time | OSF Digital | India</p><h3>Posted On 14.10.2026</h3><h3>Job Information</h3><p>City</p><p>Hyderabad</p><p>State/Province</p><p>Telangana</p><h3>Job Description</h3><div>Build scalable systems.</div><h3>Requirements</h3><p>Python</p>'
         d=extract_detail(text)
         self.assertIn('Build scalable systems',d["description"])
-        self.assertEqual(d["date_posted"],"14.10.2026")
+        self.assertEqual(d["date_posted"],"2026-10-14")
         self.assertEqual(d["location"],"Hyderabad, Telangana")
         self.assertEqual(d["employment_type"],"Full time")
     def test_hr_plus(self):
         text='<h1>Operations Officer</h1><p>Full time | HR Plus Consultancy | Kuwait</p><p>Posted On 19/10/2026</p><h2>Job Description</h2><p>Admin role</p>'
         d=extract_detail(text)
-        self.assertEqual(d["date_posted"],"19/10/2026")
+        self.assertEqual(d["date_posted"],"2026-10-19")
         self.assertIn("Admin role",d["description"])
     def test_missing_description(self):
         with self.assertRaises(ValueError): extract_detail("<h1>Job</h1>")
@@ -34,7 +34,7 @@ class ModernFieldsTests(unittest.TestCase):
         d=extract_detail(html)
         self.assertEqual(d["country"], "Romania")
         self.assertEqual(d["employment_type"], "Full Time")
-        self.assertEqual(d["date_posted"], "10/21/2026")
+        self.assertEqual(d["date_posted"], "2026-10-21")
         self.assertIn("PM skills.", d["description"])
 
 
@@ -56,3 +56,14 @@ class EmbeddedPublicDetailTests(unittest.TestCase):
         result = extract_detail(html)
         self.assertEqual(result["description_completeness"], "summary")
         self.assertEqual(result["description_provenance"], "html_meta_description")
+
+
+class DateSafetyTests(unittest.TestCase):
+    def test_ambiguous_slash_date_is_unknown(self):
+        from zoho_detail import normalize_date
+        self.assertIsNone(normalize_date('10/11/2026'))
+
+    def test_impossible_and_empty_dates_are_unknown(self):
+        from zoho_detail import normalize_date
+        self.assertIsNone(normalize_date('31/02/2026'))
+        self.assertIsNone(normalize_date(''))
