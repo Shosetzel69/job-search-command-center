@@ -114,6 +114,20 @@ def extract_detail(html, expected_title=None):
         return full
     parser = Text()
     parser.feed(html)
+    # A login form or access/consent heading may coexist with a template
+    # "Job Description" heading. Reject the access shell before any partial
+    # HTML section is accepted as real job content.
+    access_heading = re.search(
+        r"\b(?:sign[ -]?in|log[ -]?in|login|access denied|unauthorized|"
+        r"authentication required|consent required|session expired)\b",
+        " ".join(parser.headings), re.I,
+    )
+    password_form = re.search(
+        r"<input\b[^>]*\btype\s*=\s*['\"]?password\b",
+        html, re.I,
+    )
+    if access_heading or password_form:
+        raise ValueError("Zoho detail lacks Job Description; access gateway detected")
     lines = [" ".join(line.split()) for line in "".join(parser.parts).splitlines()]
     lines = [x for x in lines if x and x != "\u200b"]
     if not lines:
