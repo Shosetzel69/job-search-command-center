@@ -156,3 +156,85 @@ class ScopedModernOnlyTests(unittest.TestCase):
         rows=zoho.collect(BOARD,"Modern",opener=mocked,role_family="PROJECT_MANAGEMENT")
         self.assertEqual(len(rows),1)
         self.assertEqual(rows[0]["job_title"],"IT Project Manager")
+
+class R3ListingConsistencyTests(unittest.TestCase):
+    """R2-B01/B02: provider failure must not masquerade as a valid empty scope."""
+
+    @staticmethod
+    def json_jobs(rows):
+        import json
+        from html import escape
+        return ('<input id="jobs" value="' + escape(json.dumps(rows), quote=True) + '">').encode()
+
+    @staticmethod
+    def mock_pages(board, modern):
+        def opening(req, timeout):
+            if req.full_url.endswith("/careers"):
+                body = board
+            elif req.full_url.endswith("/jobs/Careers"):
+                body = modern
+            else:
+                body = DETAIL
+            return Resp(body, req.full_url)
+        return opening
+
+    def test_login_pages_cannot_be_success_empty(self):
+        blocked = b"<html><h1>Sign in</h1></html>"
+        with self.assertRaisesRegex(ValueError, "empty state not established"):
+            zoho.collect(BOARD, "Acme", opener=self.mock_pages(blocked, blocked),
+                         role_family="PROJECT_MANAGEMENT")
+
+    def test_unsupported_provider_shell_cannot_be_success_empty(self):
+        shell = b"<html><body><main>JS careers loader</main></body></html>"
+        with self.assertRaisesRegex(ValueError, "empty state not established"):
+            zoho.collect(BOARD, "Acme", opener=self.mock_pages(shell, shell))
+
+    def test_explicit_empty_state_remains_success_empty(self):
+        body = b"<html><p>No openings</p></html>"
+        self.assertEqual(zoho.collect(BOARD, "Acme",
+                         opener=self.mock_pages(body, body)), [])
+
+    def test_authoritative_modern_empty_payload_is_empty(self):
+        shell = b"<html><div>Modern careers</div></html>"
+        self.assertEqual(zoho.collect(BOARD, "Acme",
+                         opener=self.mock_pages(shell, self.json_jobs([]))), [])
+
+    def test_portal_pm_posting_not_silently_dropped_by_empty_metadata(self):
+        portal = (b'<a href="/recruit/PortalDetail.na?jobid=123456'
+                  b'&digest=tok_1&widgetid=123456">IT Project Manager</a>')
+        with self.assertRaisesRegex(ValueError, "inconsistent Zoho public listing surfaces"):
+            zoho.collect(BOARD, "Acme",
+                         opener=self.mock_pages(portal, self.json_jobs([])),
+                         role_family="PROJECT_MANAGEMENT")
+
+    def test_portal_pm_posting_not_dropped_by_unrelated_metadata(self):
+        portal = (b'<a href="/recruit/PortalDetail.na?jobid=123456'
+                  b'&digest=tok_1&widgetid=123456">IT Project Manager</a>')
+        modern = self.json_jobs([
+            {"id": "234567", "Posting_Title": "Android Developer", "Publish": True},
+        ])
+        with self.assertRaisesRegex(ValueError, "inconsistent Zoho public listing surfaces"):
+            zoho.collect(BOARD, "Acme",
+                         opener=self.mock_pages(portal, modern),
+                         role_family="PROJECT_MANAGEMENT")
+
+    def test_same_id_conflicting_role_titles_is_not_silently_excluded(self):
+        portal = (b'<a href="/recruit/PortalDetail.na?jobid=123456'
+                  b'&digest=tok_1&widgetid=123456">IT Project Manager</a>')
+        modern = self.json_jobs([
+            {"id": "123456", "Posting_Title": "Android Developer", "Publish": True},
+        ])
+        with self.assertRaisesRegex(ValueError, "inconsistent Zoho public listing surfaces"):
+            zoho.collect(BOARD, "Acme",
+                         opener=self.mock_pages(portal, modern),
+                         role_family="PROJECT_MANAGEMENT")
+
+    def test_irrelevant_portal_posting_cannot_override_pm_metadata_scope(self):
+        portal = (b'<a href="/recruit/PortalDetail.na?jobid=234567'
+                  b'&digest=tok_1&widgetid=123456">Android Developer</a>')
+        modern = self.json_jobs([
+            {"id": "234567", "Posting_Title": "Android Developer", "Publish": True}
+        ])
+        self.assertEqual(zoho.collect(BOARD, "Acme",
+                         opener=self.mock_pages(portal, modern),
+                         role_family="PROJECT_MANAGEMENT"), [])
