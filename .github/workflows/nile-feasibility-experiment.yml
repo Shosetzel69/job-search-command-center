@@ -267,7 +267,7 @@ jobs:
             (.[0].Options == null or .[0].Options == {})' "$RUNNER_TEMP/nile-volume.json" >/dev/null
           USERS="$(docker ps -aq --no-trunc --filter "volume=$VOLUME_NAME")"
           test "$USERS" = "$(jq -r '.[0].Id' "$RUNNER_TEMP/nile-inspect.json")"
-          printf '%s\\n' "$VOLUME_NAME" > "$RUNNER_TEMP/jscc-nile-volume-name"
+          printf '%s\n' "$VOLUME_NAME" > "$RUNNER_TEMP/jscc-nile-volume-name"
           test "$(docker image inspect "$EXP_IMAGE" --format '{{.Os}}/{{.Architecture}}')" = linux/amd64
           echo 'NILE_EXPERIMENT_PRE_SQL_CONTAINER_ADMISSION=PASS'
           for i in $(seq 1 45); do
@@ -708,7 +708,15 @@ jobs:
           fi
           if [ -f "$RUNNER_TEMP/jscc-nile-volume-name" ]; then
             VOLUME_NAME="$(cat "$RUNNER_TEMP/jscc-nile-volume-name")"
-            if docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
+            if ! [[ "$VOLUME_NAME" =~ ^[0-9a-f]{64}$ ]]; then
+              echo 'NILE_VOLUME_DISPOSAL_BLOCKED:INVALID_RECORDED_NAME' >&2
+              exit 1
+            fi
+            VOLUME_LIST="$(docker volume ls -q --no-trunc)" || {
+              echo 'NILE_VOLUME_DISPOSAL_BLOCKED:VOLUME_LIST_FAILED' >&2
+              exit 1
+            }
+            if grep -Fxq -- "$VOLUME_NAME" <<< "$VOLUME_LIST"; then
               echo 'NILE_VOLUME_DISPOSAL_BLOCKED:STILL_PRESENT' >&2
               exit 1
             fi
