@@ -4,7 +4,7 @@ import time
 from html.parser import HTMLParser
 from urllib.parse import parse_qs, urljoin, urlsplit, urlencode
 from urllib.request import Request, urlopen, HTTPRedirectHandler, build_opener
-from zoho_detail import extract_detail, normalize_date
+from zoho_detail import extract_detail, normalize_date, reject_access_gateway_text
 
 MAX_BYTES = 3 * 1024 * 1024
 MAX_POSTINGS = 500
@@ -182,6 +182,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
             plain = " ".join("".join(text_parser.parts).split())
             if not plain:
                 raise ValueError("empty modern Zoho job description")
+            reject_access_gateway_text(plain)
             place = ", ".join(x for x in (row.get("city"), row.get("state"), row.get("country")) if x)
             records.append({
                 "id": f"zoho_recruit:{tenant}:{row['jobid']}",
