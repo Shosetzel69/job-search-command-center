@@ -130,3 +130,86 @@ class R4DetailGateTests(unittest.TestCase):
                 '<p>Restricted content</p><input type="password" name="pwd">')
         with self.assertRaisesRegex(ValueError, "access gateway"):
             extract_detail(html, expected_title="IT Project Manager")
+
+
+class R5AccessGatewayTests(unittest.TestCase):
+    """R4-01: negative examples must fail at EVERY description admission path."""
+
+    def test_matching_title_and_description_heading_with_signin_body_fails(self):
+        html = ('<h1>IT Project Manager</h1><h2>Job Description</h2>'
+                '<p>Please sign in to view this vacancy.</p>')
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_matching_title_and_description_heading_with_cookie_consent_fails(self):
+        html = ('<h1>IT Project Manager</h1><h2>Job Description</h2>'
+                '<p>Please accept cookies to continue viewing this job.</p>')
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_matching_title_and_description_heading_with_access_denied_fails(self):
+        html = ('<h1>IT Project Manager</h1><h2>Job Description</h2>'
+                '<p>Access denied.</p>')
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_embedded_full_payload_cannot_bypass_auth_shell(self):
+        import json
+        payload = {
+            "jobTitle": "IT Project Manager",
+            "jobDescriptionDetails": [{
+                "richText": {
+                    "fieldLabel": "Job Description",
+                    "value": "<p>Plan roadmaps and coordinate projects.</p>"
+                }
+            }]
+        }
+        html = "<script>data=" + json.dumps(payload) + ";</script><h1>Sign in</h1>"
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_embedded_full_payload_containing_access_prompt_fails(self):
+        import json
+        payload = {
+            "jobTitle": "IT Project Manager",
+            "jobDescriptionDetails": [{
+                "richText": {
+                    "fieldLabel": "Job Description",
+                    "value": "<p>Please sign in to view this vacancy.</p>"
+                }
+            }]
+        }
+        html = "<script>data=" + json.dumps(payload) + ";</script>"
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_matching_title_meta_login_prompt_still_rejected(self):
+        html = ('<h1>IT Project Manager</h1>'
+                '<meta name="description" content="Please sign in to view this vacancy. '
+                'Please sign in to view this vacancy. Please sign in to view this vacancy.">')
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="IT Project Manager")
+
+    def test_legitimate_security_job_with_login_sso_cookie_words_is_not_blocked(self):
+        html = ('<h1>Identity Security Engineer</h1><h2>Job Description</h2>'
+                '<p>Implement sign in workflows, SSO, access control and cookie consent banners. '
+                'Design login integration and monitor authentication failures.</p>')
+        result = extract_detail(html, expected_title="Identity Security Engineer")
+        self.assertEqual(result["description_completeness"], "partial")
+        self.assertIn("SSO", result["description"])
+
+    def test_legitimate_embedded_security_job_is_not_blocked(self):
+        import json
+        payload = {
+            "jobTitle": "Identity Security Engineer",
+            "jobDescriptionDetails": [{
+                "richText": {
+                    "fieldLabel": "Job Description",
+                    "value": "<p>Build login, SSO, cookie-consent and identity access controls.</p>"
+                }
+            }]
+        }
+        html = "<script>data=" + json.dumps(payload) + ";</script>"
+        result = extract_detail(html, expected_title="Identity Security Engineer")
+        self.assertEqual(result["description_completeness"], "full")
+        self.assertIn("identity access controls", result["description"])
