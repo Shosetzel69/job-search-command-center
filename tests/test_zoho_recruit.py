@@ -283,3 +283,31 @@ class R4DetailAndEmptyBoardTests(unittest.TestCase):
                     b"<html><h1>No current openings</h1></html>"
                 )
             )
+
+
+class R5CollectorDetailGateTests(unittest.TestCase):
+    @staticmethod
+    def opener_for_detail(html):
+        def opening(req, timeout):
+            return Resp(LIST if req.full_url.endswith("/careers") else html, req.full_url)
+        return opening
+
+    def test_visible_signin_description_rejects_entire_source(self):
+        detail = (b'<h1>Engineer</h1><h2>Job Description</h2>'
+                  b'<p>Please sign in to view this vacancy.</p>')
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            zoho.collect(BOARD, "Acme", opener=self.opener_for_detail(detail))
+
+    def test_visible_consent_description_rejects_entire_source(self):
+        detail = (b'<h1>Engineer</h1><h2>Job Description</h2>'
+                  b'<p>Please accept cookies to continue viewing this job.</p>')
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            zoho.collect(BOARD, "Acme", opener=self.opener_for_detail(detail))
+
+    def test_security_role_remains_collectable(self):
+        detail = (b'<h1>Engineer</h1><h2>Job Description</h2>'
+                  b'<p>Implement SSO, sign in interfaces and cookie consent flows.</p>')
+        records = zoho.collect(BOARD, "Acme", opener=self.opener_for_detail(detail))
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]["description_completeness"], "partial")
+        self.assertEqual(records[0]["source_url_kind"], "careers_board_fallback")
