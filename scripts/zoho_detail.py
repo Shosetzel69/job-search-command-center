@@ -128,10 +128,10 @@ def extract_detail(html, expected_title=None):
         # heading for that job and reject common access-control indicators.
         context = " ".join(lines) + " " + meta
         auth_marker = re.search(
-            r"\\b(?:sign[ -]?in|log[ -]?in|login|password|access denied|"
+            r"\b(?:sign[ -]?in|log[ -]?in|login|password|access denied|"
             r"unauthorized|forbidden|session expired|authentication required|"
             r"verify your identity|captcha|cookie consent|consent required|"
-            r"accept cookies|security check|single sign-on|sso)\\b",
+            r"accept cookies|security check|single sign-on|sso)\b",
             context, re.I,
         )
         title = " ".join(str(expected_title or "").split()).casefold()
