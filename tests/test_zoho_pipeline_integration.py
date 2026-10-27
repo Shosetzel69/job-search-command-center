@@ -214,6 +214,49 @@ class ZohoIntegrationTests(unittest.TestCase):
                 self.assertEqual(postings, [])
                 self.assertNotIn("tok_1", str(results))
 
+    def test_r6_standalone_login_and_consent_fail_source_without_corpus_projection(self):
+        import io
+        import json
+        from html import escape
+        portal_board = (b'<a href="/recruit/PortalDetail.na?jobid=123456'
+                        b'&digest=tok_1&widgetid=123456">IT Project Manager</a>')
+        modern_board = b"<html>Modern careers</html>"
+        class Page(io.BytesIO):
+            def __init__(self, body, url):
+                super().__init__(body)
+                self.url = url
+            def __enter__(self): return self
+            def __exit__(self, *args): self.close()
+            def geturl(self): return self.url
+        for surface in ("portal", "modern"):
+            for phrase in ("Sign in to continue.", "Log in to continue.",
+                           "Accept cookies to continue."):
+                with self.subTest(surface=surface, phrase=phrase):
+                    row = item()
+                    if surface == "portal":
+                        board = portal_board
+                        detail = ('<h1>IT Project Manager</h1><h2>Job Description</h2>'
+                                  '<p>' + phrase + '</p>').encode()
+                    else:
+                        board = modern_board
+                        jobs = [{"id": "123456", "Posting_Title": "IT Project Manager",
+                                 "Job_Description": "<p>" + phrase + "</p>"}]
+                        detail = ('<input id="jobs" value="' +
+                                  escape(json.dumps(jobs), quote=True) + '">').encode()
+                    def opening(req, timeout):
+                        return Page(board if req.full_url.endswith("/careers") else detail,
+                                    req.full_url)
+                    with patch.object(orchestration.zoho_recruit, "_safe_opener", side_effect=opening):
+                        results, _, _ = orchestration.collect_api_sources(
+                            {}, {"usage": {}}, NOW, [row])
+                    self.assertEqual(row["status"], "failed")
+                    self.assertEqual(row["outcome"], "failed")
+                    self.assertEqual(row["records"], 0)
+                    self.assertFalse(results[0].ok)
+                    projected, _, _, _ = corpus.project_collection(results)
+                    self.assertEqual(projected, [])
+                    self.assertNotIn("tok_1", str(results))
+
     def test_scope_removes_nonmatching_family(self):
         row = item()
         cfg = {"_jscc_retrieve_scope": {"scopes": [{"role_family": "PROJECT_MANAGEMENT"}]}}
