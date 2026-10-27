@@ -122,9 +122,29 @@ _ACCESS_GATEWAY_PROMPT = re.compile(
 )
 
 
+# A whole standalone CTA is stronger evidence of a provider gateway than
+# the presence of "login", "SSO" or "cookies" in legitimate requirements.
+# Accept a sequence of such terse messages, but not arbitrary role prose.
+_STANDALONE_GATEWAY_CTA = re.compile(
+    r"(?:(?:please\s+)?(?:sign[\s-]?in|log[\s-]?in|login)"
+    r"(?:\s+to\s+(?:continue|proceed|view|access|apply|see|read)"
+    r"(?:\s+(?:this|the)\s+(?:job|vacancy|position|posting|page|application|content))?"
+    r"|\s+(?:required|first))?"
+    r"|(?:please\s+)?(?:accept|allow)\s+(?:all\s+)?cookies"
+    r"(?:\s+to\s+(?:continue|proceed|view|access))?"
+    r"|(?:cookie\s+)?consent\s+(?:is\s+)?required(?:\s+to\s+continue)?"
+    r"|(?:access\s+denied|session\s+expired|authentication\s+required))"
+    r"(?:\s*[.!:]\s*|\s+)*",
+    re.I,
+)
+
+
 def reject_access_gateway_text(text):
-    """Fail the source, never allow an access/consent message as job content."""
-    if _ACCESS_GATEWAY_PROMPT.search(str(text or "")):
+    """Fail closed on provider gateway prose, without banning security jobs."""
+    normalized = " ".join(str(text or "").split())
+    if (_ACCESS_GATEWAY_PROMPT.search(normalized)
+            or (0 < len(normalized) <= 240
+                and _STANDALONE_GATEWAY_CTA.fullmatch(normalized))):
         raise ValueError("Zoho detail lacks Job Description; access gateway detected")
 
 
