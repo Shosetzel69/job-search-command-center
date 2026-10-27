@@ -27,6 +27,7 @@ import { backfillSearchProfileFoundations } from '../src/db/search-profile-backf
 import { withTenantTransaction } from '../src/db/tenant-gateway.js';
 import { deleteNomenclatureValue } from '../src/nomenclature-governance.js';
 import { readFile } from 'node:fs/promises';
+import { parsePostedDate } from '../src/posted-date.mjs';
 
 const { Pool } = pg;
 
@@ -70,7 +71,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
 
     const ownerSeed = {
       config:{
-        role_groups:{ pm:{ enabled:true } },
+        target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+        target_role_subfamilies:['project_management'],
         rate_min_eur_day:999,
         target_regions:['EU'],
         excluded_company_patterns:['owner-secret-company'],
@@ -243,7 +245,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
 
     // ATC-489-05: explicit global-mode exception returns aggregate scopes only.
     const commonRefreshScope = {
-      target_role_families:['PROJECT_MANAGEMENT'],
+      target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
+      target_role_subfamilies:['project_management'],
       target_regions:['EU'],
       target_country_codes:['RO'],
       remote_eligible_country_codes:['RO'],
@@ -255,7 +258,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     const adminScopes = await aggregateAdminRefreshScopes(env, { db:runtimeDb });
     assert.equal(adminScopes.active_profile_count, 2);
     const sharedScope = adminScopes.scopes.find(scope =>
-      scope.role_family === 'PROJECT_MANAGEMENT'
+      scope.role_family === 'PROJECT_DELIVERY_MANAGEMENT'
       && scope.target_country_codes.includes('RO')
       && scope.target_regions.includes('EU')
     );
@@ -285,10 +288,10 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
         )
         VALUES (
           $1, 'ATC48903CACHE Technical Project Manager', 'Cache Example', 'Bucharest',
-          ARRAY['RO']::text[], 'remote', 'PROJECT_MANAGEMENT',
+          ARRAY['RO']::text[], 'remote', 'PROJECT_DELIVERY_MANAGEMENT',
           'ACTIVE', $2, $2, '{"description":"Bank governance contract role"}'::jsonb,
-          1, ARRAY['technical_project_manager']::text[], 'mid', 'contract', 'Country',
-          'matched', 1, '2026.09.25-1', repeat('a', 64)
+          1, ARRAY['project_management']::text[], 'mid', 'contract', 'Country',
+          'matched', 1, '2026.10.08-1', repeat('a', 64)
         )
         ON CONFLICT(job_id) DO UPDATE SET
           title=EXCLUDED.title,
@@ -361,6 +364,117 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal(cacheRow.rows[0].fit_algorithm_version, 'fit-v1');
     assert.equal(cacheRow.rows[0].eligibility_state, 'ELIGIBLE');
 
+    // #535 / F-1a: real PostgreSQL ↔ JavaScript parity on both cached and fresh read paths.
+    const f1aAnchor = new Date('2026-10-05T12:00:00.000Z');
+    const f1aCases = [
+      {
+        name:'posting payload only',
+        posting:{ date_posted:'2026-10-05T11:00Z' }, canonical:{},
+        expected:'2026-10-05T11:00:00.000Z',
+      },
+      {
+        name:'invalid posting falls back to canonical job date',
+        posting:{ date_posted:'2026-02-30', posted_at:'٢٠٢٦-10-05' },
+        canonical:{ date_posted:'2026-10-05T10:30:00.0004Z' },
+        expected:'2026-10-05T10:30:00.000Z',
+      },
+      {
+        name:'zero future tolerance is applied after millisecond truncation',
+        posting:{ date_posted:'2026-10-05T12:00:00.0004Z' },
+        canonical:{ date_posted:'2026-10-05T10:30Z' },
+        expected:'2026-10-05T12:00:00.000Z',
+      },
+      {
+        name:'future +1ms skips to valid lower priority job payload',
+        posting:{ posted_at:'2026-10-05T12:00:00.001Z' },
+        canonical:{ date_posted:'2026-10-05T10:30Z' },
+        expected:'2026-10-05T10:30:00.000Z',
+      },
+      {
+        name:'no valid posting timestamp remains unknown',
+        posting:{ date_posted:'2026-02-30', posted_at:'not a date' },
+        canonical:{ date_posted:'2026-10-05T12:00:00.001Z', posted_at:123456 },
+        expected:null,
+      },
+    ];
+    for (const item of f1aCases) {
+      await adminDb.query(
+        'UPDATE source_postings SET posted_at=NULL, payload=$2::jsonb WHERE posting_id=$1',
+        [lazyPostingId, JSON.stringify(item.posting)],
+      );
+      await adminDb.query(
+        'UPDATE canonical_jobs SET payload=$2::jsonb WHERE job_id=$1',
+        [lazyJobId, JSON.stringify({ ...item.canonical, description:'Bank governance contract role' })],
+      );
+      const actual = await listProfileJobs(
+        user, cacheConfigB, jobNomenclatures, cacheQuery, env,
+        { db:runtimeDb, now:f1aAnchor },
+      );
+      assert.equal(actual.results, 1, item.name);
+      assert.equal(actual.jobs[0].date_posted, item.expected, item.name);
+      assert.equal(actual.jobs[0].age,
+        item.expected == null ? null : Math.floor((f1aAnchor.getTime() - new Date(item.expected).getTime()) / 3600000),
+        item.name);
+      assert.equal(actual.jobs[0].age_basis, item.expected == null ? 'unknown' : 'posted_at');
+      if (item.expected != null) {
+        const winner = parsePostedDate(item.expected, f1aAnchor);
+        assert.equal(winner, item.expected, item.name + ' JS parser agrees with SQL');
+      }
+    }
+    // C4: last_seen_at microseconds must not skip rows at a cursor page boundary.
+    const microJobs = [
+      { job_id:'77777777-7777-4777-8777-777777777777', posting_id:'88888888-8888-4888-8888-888888888888', seen:'2026-10-05T10:00:00.000100Z', suffix:'a' },
+      { job_id:'77777777-7777-4777-8777-777777777778', posting_id:'88888888-8888-4888-8888-888888888889', seen:'2026-10-05T10:00:00.000900Z', suffix:'b' },
+    ];
+    for (const micro of microJobs) {
+      await adminDb.query(
+        `INSERT INTO canonical_jobs(
+          job_id,title,company,location,country_codes,work_mode,role_family,
+          lifecycle_status,first_seen_at,last_seen_at,payload,
+          job_version,role_subfamily,seniority,contract_type,remote_scope,
+          classification_status,classification_confidence,classification_version,
+          evaluation_basis_hash
+        ) VALUES (
+          $1,'ATC535F1ACURSOR Technical Project Manager','Cursor Example','Bucharest',
+          ARRAY['RO']::text[],'remote','PROJECT_DELIVERY_MANAGEMENT',
+          'ACTIVE',$2::timestamptz,$2::timestamptz,
+          '{"description":"Bank governance contract role"}'::jsonb,
+          1,ARRAY['project_management']::text[],'mid','contract','Country',
+          'matched',1,'2026.10.08-1',repeat('b',64)
+        ) ON CONFLICT(job_id) DO UPDATE SET last_seen_at=EXCLUDED.last_seen_at`,
+        [micro.job_id,micro.seen],
+      );
+      await adminDb.query(
+        `INSERT INTO source_postings(
+          posting_id,job_id,source_id,source_name,external_job_id,
+          canonical_url,identity_kind,identity_value,posted_at,
+          lifecycle_status,first_seen_at,last_seen_at,seen_run_id,payload
+        ) VALUES (
+          $1,$2,'integration-atc-535-c4','Integration',$3,
+          'https://example.test/f1a-cursor','EXTERNAL_ID',$3,NULL,
+          'ACTIVE',$4::timestamptz,$4::timestamptz,'integration-atc-535-c4','{}'::jsonb
+        ) ON CONFLICT(source_id,identity_kind,identity_value)
+          DO UPDATE SET last_seen_at=EXCLUDED.last_seen_at`,
+        [micro.posting_id,micro.job_id,micro.suffix,micro.seen],
+      );
+    }
+    const c4First=await listProfileJobs(
+      user,cacheConfigB,jobNomenclatures,{ limit:1,prefetch:0,q:'ATC535F1ACURSOR' },env,
+      { db:runtimeDb,now:f1aAnchor },
+    );
+    assert.equal(c4First.results,1);
+    assert.equal(c4First.jobs[0].id,microJobs[0].job_id);
+    assert.equal(c4First.jobs[0].age,null);
+    assert.ok(c4First.next_cursor,'first C4 row must expose continuation');
+    const c4Second=await listProfileJobs(
+      user,cacheConfigB,jobNomenclatures,
+      { limit:1,prefetch:0,q:'ATC535F1ACURSOR',cursor:c4First.next_cursor },env,
+      { db:runtimeDb,now:new Date('2026-10-05T13:00:00.000Z') },
+    );
+    assert.equal(c4Second.results,1);
+    assert.equal(c4Second.jobs[0].id,microJobs[1].job_id);
+    assert.equal(c4Second.jobs[0].age,null);
+    assert.equal(c4Second.generated_at,c4First.generated_at,'cursor v2 preserves anchor');
     assert.ok(await nomenclatureReferenceCount('regions', 'EU', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('countries', 'RO', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('work_modes', 'remote', env, { db:runtimeDb }) >= 1);

@@ -1,12 +1,9 @@
 import { getPool } from './pool.js';
-
-const FAMILY_TO_GROUP = Object.freeze({
-  PROJECT_MANAGEMENT:'pm',
-  DELIVERY:'delivery',
-  SERVICE_MANAGEMENT:'service',
-  SCRUM_AGILE:'scrum',
-  PROGRAM_PMO:'program',
-});
+import {
+  normalizeRoleFamilies,
+  normalizeRoleSubfamilies,
+  roleSubfamiliesForFamily,
+} from '../../../shared/role-taxonomy-runtime.mjs';
 
 function list(value, { upper = false, lower = false } = {}) {
   const source = Array.isArray(value) ? value : [];
@@ -18,15 +15,12 @@ function list(value, { upper = false, lower = false } = {}) {
 }
 
 function roleFamilies(row) {
-  const explicit = list(row.target_role_families, { upper:true });
-  if (explicit.length) return explicit;
-  const groups = row.role_groups && typeof row.role_groups === 'object' && !Array.isArray(row.role_groups)
-    ? row.role_groups
-    : {};
-  return Object.entries(FAMILY_TO_GROUP)
-    .filter(([, group]) => groups?.[group]?.enabled !== false)
-    .map(([family]) => family)
-    .sort();
+  return normalizeRoleFamilies(row.target_role_families).sort();
+}
+
+function roleSubfamilies(row, family) {
+  const explicit = normalizeRoleSubfamilies(row.target_role_subfamilies, family);
+  return (explicit.length ? explicit : roleSubfamiliesForFamily(family)).sort();
 }
 
 function workModes(value) {
@@ -37,6 +31,7 @@ function workModes(value) {
 function scopeKey(scope) {
   return JSON.stringify([
     scope.role_family,
+    scope.role_subfamilies,
     scope.target_regions,
     scope.target_country_codes,
     scope.remote_eligible_country_codes,
@@ -59,7 +54,7 @@ export async function aggregateAdminRefreshScopes(
   const result = await db.query(
     `SELECT
         COALESCE(pref.preferences->'target_role_families', '[]'::jsonb) AS target_role_families,
-        COALESCE(pref.preferences->'role_groups', '{}'::jsonb) AS role_groups,
+        COALESCE(pref.preferences->'target_role_subfamilies', '[]'::jsonb) AS target_role_subfamilies,
         COALESCE(pref.preferences->'target_regions', '[]'::jsonb) AS target_regions,
         COALESCE(pref.preferences->'target_country_codes', '[]'::jsonb) AS target_country_codes,
         COALESCE(pref.preferences->'remote_eligible_country_codes', '[]'::jsonb) AS remote_eligible_country_codes,
@@ -89,7 +84,11 @@ export async function aggregateAdminRefreshScopes(
       contract_types:list(row.contract_types, { lower:true }),
     };
     for (const roleFamily of roleFamilies(row)) {
-      const scope = { role_family:roleFamily, ...shared };
+      const scope = {
+        role_family:roleFamily,
+        role_subfamilies:roleSubfamilies(row, roleFamily),
+        ...shared,
+      };
       const key = scopeKey(scope);
       const current = aggregate.get(key);
       if (current) current.active_profile_count += 1;

@@ -14,7 +14,6 @@ import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from '
 import { userRefreshScopes } from './retrieve-scope.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
-  'role_groups',
   'target_role_families',
   'target_role_subfamilies',
   'work_modes',
@@ -883,7 +882,9 @@ export function encodeJobCursor(row) {
     : new Date(row?.sort_at || 0).toISOString();
   const jobId = String(row?.job_id || '');
   if (!jobId) throw httpError('Cannot encode job cursor without job_id', 500);
-  return Buffer.from(JSON.stringify({ v:1, sort_at:sortAt, job_id:jobId }), 'utf8').toString('base64url');
+  const anchor = row?.anchor instanceof Date ? row.anchor.toISOString() : row?.anchor;
+  if (!anchor || !Number.isFinite(Date.parse(anchor))) throw httpError('Cannot encode cursor without as-of anchor', 500);
+  return Buffer.from(JSON.stringify({ v:2, sort_at:sortAt, job_id:jobId, as_of:anchor }), 'utf8').toString('base64url');
 }
 
 export function decodeJobCursor(raw) {
@@ -892,10 +893,12 @@ export function decodeJobCursor(raw) {
     const parsed = JSON.parse(Buffer.from(String(raw), 'base64url').toString('utf8'));
     const date = new Date(parsed?.sort_at);
     const jobId = String(parsed?.job_id || '');
-    if (parsed?.v !== 1 || Number.isNaN(date.getTime()) || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(jobId)) throw new Error('invalid');
-    return Object.freeze({ sort_at:date.toISOString(), job_id:jobId });
+    const anchor = new Date(parsed?.as_of);
+    if (parsed?.v !== 2 || Number.isNaN(date.getTime()) || Number.isNaN(anchor.getTime())
+      || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(jobId)) throw new Error('stale');
+    return Object.freeze({ sort_at:date.toISOString(), job_id:jobId, as_of:anchor.toISOString() });
   } catch {
-    throw httpError('Invalid jobs cursor', 400);
+    throw httpError('STALE_CURSOR: restart pagination', 400);
   }
 }
 
@@ -921,6 +924,7 @@ export function normalizeJobSearchQuery(input = {}) {
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
+    role_subfamily:listValues(source.role_subfamily),
     work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
     contract_type:listValues(source.contract_type).map(x => x.toLowerCase()),
     freshness_hours:freshnessHours,
@@ -1002,10 +1006,12 @@ export async function listProfileJobs(
   { db = getPool(env), now = new Date() } = {},
 ) {
   const spec = normalizeJobSearchQuery(query);
+  const anchor = spec.cursor ? new Date(spec.cursor.as_of) : new Date(now);
+  if (!Number.isFinite(anchor.getTime())) throw httpError('STALE_CURSOR', 400);
 
   return withTenantTransaction(authContext, async tx => {
     const foundation = await resolveActiveSearchProfileTx(tx);
-    const params = [tx.tenantId, now, foundation.search_profile_id];
+    const params = [tx.tenantId, anchor, foundation.search_profile_id];
     const where = [
       `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`,
     ];
@@ -1019,6 +1025,12 @@ export async function listProfileJobs(
     if (targetFamilies.length) {
       const p = add(targetFamilies);
       where.push(`(j.role_family = ANY(${p}::text[]) OR j.role_family = 'UNKNOWN')`);
+    }
+
+    const targetSubfamilies = listValues(preferences.target_role_subfamilies);
+    if (targetSubfamilies.length) {
+      const p = add(targetSubfamilies);
+      where.push(`(cardinality(j.role_subfamily) = 0 OR j.role_subfamily && ${p}::text[])`);
     }
 
     const disabledModes = Object.entries(jsonObject(preferences.work_modes))
@@ -1042,6 +1054,10 @@ export async function listProfileJobs(
       const p = add(spec.role_family);
       where.push(`j.role_family = ANY(${p}::text[])`);
     }
+    if (spec.role_subfamily.length) {
+      const p = add(spec.role_subfamily);
+      where.push(`j.role_subfamily && ${p}::text[]`);
+    }
     if (spec.work_mode.length) {
       const p = add(spec.work_mode);
       where.push(`lower(COALESCE(j.work_mode, 'unknown')) = ANY(${p}::text[])`);
@@ -1056,15 +1072,15 @@ export async function listProfileJobs(
     }
     if (spec.freshness_hours != null) {
       const p = add(spec.freshness_hours);
-      where.push(`COALESCE(sp.posted_at, j.last_seen_at) >= $2 - (${p}::integer * interval '1 hour')`);
+      where.push(`COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) >= $2 - (${p}::integer * interval '1 hour')`);
     }
     if (spec.cursor) {
       const at = add(spec.cursor.sort_at);
       const id = add(spec.cursor.job_id);
       where.push(`(
-        COALESCE(sp.posted_at, j.last_seen_at) < ${at}::timestamptz
+        COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) < ${at}::timestamptz
         OR (
-          COALESCE(sp.posted_at, j.last_seen_at) = ${at}::timestamptz
+          COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) = ${at}::timestamptz
           AND j.job_id > ${id}::uuid
         )
       )`);
@@ -1083,9 +1099,10 @@ export async function listProfileJobs(
               j.classification_confidence, j.classification_version,
               j.lifecycle_status, j.payload, j.last_seen_at,
               sp.source_name, sp.canonical_url, sp.posted_at,
+              publication.effective_posted_at,
               sp.repost_of_posting_id, sp.payload AS posting_payload,
               state.seen_at, state.archived_at,
-              COALESCE(sp.posted_at, j.last_seen_at) AS sort_at,
+              COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) AS sort_at,
               eval.eligibility_state AS cached_eligibility_state,
               eval.eligibility_reason_code AS cached_eligibility_reason_code,
               eval.eligible AS cached_eligible,
@@ -1105,6 +1122,61 @@ export async function listProfileJobs(
                      last_seen_at DESC, posting_id ASC
             LIMIT 1
          ) sp ON true
+         LEFT JOIN LATERAL (
+           SELECT COALESCE(
+             CASE WHEN date_trunc('milliseconds', sp.posted_at) <= $2
+               THEN date_trunc('milliseconds', sp.posted_at) ELSE NULL END,
+             (
+               SELECT date_trunc('milliseconds', valid.posted_utc)
+               FROM (
+                 SELECT candidate.ord, CASE
+                   WHEN parts.m IS NOT NULL
+                    AND (parts.m)[1]::int BETWEEN 1 AND 9999
+                    AND (parts.m)[2]::int BETWEEN 1 AND 12
+                    AND (parts.m)[3]::int BETWEEN 1 AND
+                      CASE (parts.m)[2]::int
+                        WHEN 2 THEN CASE WHEN (parts.m)[1]::int % 400 = 0 OR
+                          ((parts.m)[1]::int % 4 = 0 AND (parts.m)[1]::int % 100 <> 0)
+                          THEN 29 ELSE 28 END
+                        WHEN 4 THEN 30 WHEN 6 THEN 30 WHEN 9 THEN 30 WHEN 11 THEN 30
+                        ELSE 31 END
+                    AND COALESCE((parts.m)[5]::int, 0) BETWEEN 0 AND 23
+                    AND COALESCE((parts.m)[6]::int, 0) BETWEEN 0 AND 59
+                    AND COALESCE((parts.m)[8]::int, 0) BETWEEN 0 AND 59
+                    AND COALESCE((parts.m)[13]::int, 0) BETWEEN 0 AND 23
+                    AND COALESCE((parts.m)[14]::int, 0) BETWEEN 0 AND 59
+                   THEN make_timestamptz(
+                     (parts.m)[1]::int, (parts.m)[2]::int, (parts.m)[3]::int,
+                     COALESCE((parts.m)[5]::int, 0),
+                     COALESCE((parts.m)[6]::int, 0),
+                     COALESCE((parts.m)[8]::int, 0)
+                       + COALESCE(('0.' || (parts.m)[10])::double precision, 0),
+                     'UTC'
+                   ) - (CASE WHEN (parts.m)[12] = '-' THEN -1 ELSE 1 END)
+                     * (COALESCE((parts.m)[13]::int, 0) * 60
+                       + COALESCE((parts.m)[14]::int, 0)) * interval '1 minute'
+                   ELSE NULL END AS posted_utc
+                 FROM (VALUES
+                   (1, sp.payload ->> 'date_posted', jsonb_typeof(sp.payload -> 'date_posted')),
+                   (2, sp.payload ->> 'posted_at', jsonb_typeof(sp.payload -> 'posted_at')),
+                   (3, j.payload ->> 'date_posted', jsonb_typeof(j.payload -> 'date_posted')),
+                   (4, j.payload ->> 'posted_at', jsonb_typeof(j.payload -> 'posted_at'))
+                 ) AS candidate(ord, raw_date, raw_type)
+                 CROSS JOIN LATERAL (
+                   SELECT CASE WHEN candidate.raw_type = 'string' THEN
+                     regexp_match(candidate.raw_date,
+                       '^([0-9]{4})-([0-9]{2})-([0-9]{2})(T([0-9]{2}):([0-9]{2})(:([0-9]{2})([.]([0-9]{1,6}))?)?(Z|([+-])([0-9]{2}):([0-9]{2})))?$')
+                     ELSE NULL END AS m
+                 ) parts
+               ) valid
+               WHERE valid.posted_utc IS NOT NULL
+                 AND date_trunc('milliseconds', valid.posted_utc) <= $2
+                 AND EXTRACT(YEAR FROM valid.posted_utc) BETWEEN 1 AND 9999
+               ORDER BY valid.ord
+               LIMIT 1
+             )
+           ) AS effective_posted_at
+         ) publication ON true
          LEFT JOIN profile_job_state state
            ON state.tenant_id = $1 AND state.job_id = j.job_id
          LEFT JOIN profile_job_evaluation eval
@@ -1112,7 +1184,7 @@ export async function listProfileJobs(
           AND eval.search_profile_id = $3
           AND eval.job_id = j.job_id
         WHERE ${where.join('\n          AND ')}
-        ORDER BY COALESCE(sp.posted_at, j.last_seen_at) DESC, j.job_id ASC
+        ORDER BY COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) DESC, j.job_id ASC
         LIMIT ${limitParam}::integer`,
       params,
     );
@@ -1131,12 +1203,12 @@ export async function listProfileJobs(
         const evaluation = cachedEvaluation(row);
         return {
           evaluation,
-          job:evaluation.eligible ? materializeCachedJob(row, evaluation, preferences, now) : null,
+          job:evaluation.eligible ? materializeCachedJob(row, evaluation, preferences, anchor) : null,
         };
       }
       evaluationsComputed += 1;
-      const evaluation = evaluateSharedJob(row, preferences, nomenclatures, now);
-      await persistEvaluationTx(tx, foundation, row, evaluation, now);
+      const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
+      await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
       return { evaluation, job:evaluation.job };
     };
 
@@ -1165,11 +1237,11 @@ export async function listProfileJobs(
     const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
     const hasMore = Boolean(cursorRow)
       && (!exhaustedWindow || pageEndIndex < rows.length - 1);
-    const nextCursor = hasMore ? encodeJobCursor(cursorRow) : null;
+    const nextCursor = hasMore ? encodeJobCursor({ ...cursorRow, anchor }) : null;
 
     return {
       schema_version:'2.0',
-      generated_at:now.toISOString(),
+      generated_at:anchor.toISOString(),
       search_profile_id:foundation.search_profile_id,
       profile_version:foundation.profile_version,
       fit_algorithm_version:FIT_ALGORITHM_VERSION,

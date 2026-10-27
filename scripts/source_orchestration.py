@@ -355,6 +355,14 @@ def _posting_matches_scope(posting, scope):
     if posting.role_family != str(scope.get("role_family") or "").strip().upper():
         return False
 
+    role_subfamilies = {
+        str(value).strip()
+        for value in (scope.get("role_subfamilies") or [])
+        if str(value).strip()
+    }
+    if role_subfamilies and not (set(posting.role_subfamily or []) & role_subfamilies):
+        return False
+
     work_modes = {str(value).strip().casefold() for value in (scope.get("work_modes") or []) if str(value).strip()}
     if work_modes and posting.work_mode != "unknown" and posting.work_mode not in work_modes:
         return False

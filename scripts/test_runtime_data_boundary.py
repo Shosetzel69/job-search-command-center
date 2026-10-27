@@ -93,6 +93,94 @@ print(json.dumps(payload))
             )
             self.assertNotEqual(Path(paths["candidate"]), runtime.resolve())
 
+    def test_manual_scope_validates_without_seed_role_criteria(self):
+        """A bounded DEV USER refresh must not depend on legacy global roles."""
+        code = """
+import json
+import job_search as engine
+import shared_corpus_repository as shared
+
+seed = json.loads(engine.CONFIG_PATH.read_text(encoding="utf-8"))
+seed["target_role_families"] = []
+seed["target_role_subfamilies"] = []
+scope = {
+    "scopes": [{
+        "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+        "role_subfamilies": ["project_management"],
+        "target_regions": [],
+        "target_country_codes": ["RO"],
+        "remote_eligible_country_codes": ["RO"],
+        "work_modes": ["remote"],
+        "contract_types": ["permanent", "contract"],
+    }],
+    "effective_source_ids": [],
+}
+try:
+    engine.load_config(seed)
+except RuntimeError as error:
+    assert "target_role_families" in str(error)
+else:
+    raise AssertionError("global empty role selection should still fail closed")
+effective = shared.shared_collection_config(seed, scope, "a" * 64)
+effective["schema_version"] = seed["schema_version"]
+validated = engine.load_config(effective)
+assert validated["target_role_families"] == ["PROJECT_DELIVERY_MANAGEMENT"]
+assert validated["target_role_subfamilies"] == ["project_management"]
+assert validated["target_country_codes"] == ["RO"]
+print("SCOPED_CONFIG_VALIDATION_PASS")
+"""
+        result = self.run_python(code, {"JSCC_RUNTIME_MODE": ""})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("SCOPED_CONFIG_VALIDATION_PASS", result.stdout)
+
+    def test_runner_env_scope_and_stale_failure_status(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            runtime = Path(tmp)
+            seed = json.loads((ROOT / "data/search-config.json").read_text())
+            seed["target_role_families"] = []
+            seed["target_role_subfamilies"] = []
+            (runtime / "search-config.json").write_text(json.dumps(seed))
+            prior = {"run_id": "previous", "status": "completed",
+                     "started_at": "2001-01-01", "jobs_published": 55,
+                     "limitations": ["previous-only"]}
+            scope = {"scopes": [{"role_family": "PROJECT_DELIVERY_MANAGEMENT",
+                     "role_subfamilies": ["project_management"],
+                     "target_country_codes": ["RO"], "work_modes": ["remote"],
+                     "contract_types": ["permanent"]}]}
+            code = """
+import json, os
+from unittest.mock import patch
+import job_search_runner as runner
+import source_orchestration as orchestration
+import shared_corpus_repository as shared
+def stop(config, now, **kw):
+    assert config["target_role_families"] == ["PROJECT_DELIVERY_MANAGEMENT"]
+    assert kw["run_id"] == "new-run"
+    raise RuntimeError("test-stop")
+with patch.object(shared, "apply_collection_policy", side_effect=lambda c: c), patch.object(shared, "persist_run_started") as begin, patch.object(shared, "persist_operational_run"), patch.object(runner, "append_run_history"), patch.object(runner, "stamp_jobs_provenance"), patch.object(runner, "validate_history"), patch.object(orchestration, "run", side_effect=stop) as invoke:
+    assert runner.main() == 2
+    expected = 1 if os.environ.get("JSCC_RETRIEVE_SCOPE_JSON") else 0
+    assert invoke.call_count == expected
+    assert begin.call_count == expected
+status = json.loads(runner.engine.STATUS_PATH.read_text())
+assert status["run_id"] == "new-run"
+assert status["status"] == "failed"
+assert status["jobs_published"] == 0
+assert status["started_at"] != "2001-01-01"
+assert "previous-only" not in status["limitations"]
+"""
+            for scoped in (True, False):
+                (runtime / "run-status.json").write_text(json.dumps(prior))
+                result = self.run_python(code, {
+                    "JSCC_RUNTIME_MODE": "container",
+                    "JSCC_RUNTIME_DATA_DIR": str(runtime),
+                    "JSCC_RUN_ID": "new-run",
+                    "JSCC_REQUEST_SIGNATURE": "a" * 64 if scoped else "",
+                    "JSCC_RETRIEVE_SCOPE_JSON": json.dumps(scope) if scoped else "",
+                    "NILE_DATABASE_URL": "",
+                })
+                self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_validate_only_runs_with_external_runtime_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             runtime = Path(tmp)
