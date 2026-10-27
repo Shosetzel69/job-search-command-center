@@ -7,6 +7,30 @@ HEADINGS = {"Job Information", "Job Description", "Requirements", "Competencies"
 LABELS = {"Industry", "City", "State/Province", "Zip/Postal Code", "Country", "Job Type", "Date Opened"}
 DATE = re.compile(r"(?:Posted On)\s*([0-9]{1,2}[./-][0-9]{1,2}[./-][0-9]{4})", re.I)
 
+# A public Zoho careers link can say "Full time" rather than the actual role.
+_GENERIC_JOB_TITLES = frozenset({
+    "full time", "full-time", "fulltime", "part time", "part-time",
+    "parttime", "contract", "contractor", "temporary", "permanent",
+    "internship", "intern", "freelance", "fixed-term", "fixed term",
+    "seasonal", "careers", "jobs", "vacancies", "open positions",
+    "job details", "overview", "about us", "contact us", "apply",
+    "apply now", "similar jobs",
+}) | frozenset(value.casefold() for value in HEADINGS | LABELS)
+
+
+def validated_job_title(value, *, job_type=None):
+    title = " ".join(value.split()) if isinstance(value, str) else ""
+    if not title or title.casefold() in _GENERIC_JOB_TITLES:
+        return None
+    if re.match(r"^(?:full[\s-]?time|part[\s-]?time|contract|temporary|permanent|"
+                r"internship|freelance)\s*[|·]\s*.+$", title, re.I):
+        return None
+    employment = " ".join(job_type.split()) if isinstance(job_type, str) else ""
+    if employment and title.casefold() == employment.casefold():
+        return None
+    return title
+
+
 class Text(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -14,6 +38,7 @@ class Text(HTMLParser):
         self.skip = 0
         self.meta_description = None
         self.headings = []
+        self.h1_headings = []
         self._heading_tag = None
         self._heading_parts = []
     def handle_starttag(self, tag, attrs):
@@ -29,7 +54,10 @@ class Text(HTMLParser):
             self.parts.append("\n")
     def handle_endtag(self, tag):
         if self._heading_tag == tag:
-            self.headings.append(" ".join("".join(self._heading_parts).split()))
+            heading = " ".join("".join(self._heading_parts).split())
+            self.headings.append(heading)
+            if tag == "h1":
+                self.h1_headings.append(heading)
             self._heading_tag = None
             self._heading_parts = []
         if tag in {"script", "style", "noscript"} and self.skip:
@@ -181,7 +209,14 @@ def extract_detail(html, expected_title=None):
     full = embedded_full_description(html)
     if full:
         reject_access_gateway_text(full.get("description"))
-        full["job_title"] = expected_title or full["job_title"]
+        # Structured public jobTitle takes precedence over the portal anchor.
+        job_type = full.get("employment_type")
+        full["job_title"] = (
+            validated_job_title(full.get("job_title"), job_type=job_type)
+            or validated_job_title(expected_title, job_type=job_type)
+        )
+        if not full["job_title"]:
+            raise ValueError("Zoho detail lacks a valid job title")
         return full
     lines = [" ".join(line.split()) for line in "".join(parser.parts).splitlines()]
     lines = [x for x in lines if x and x != "\u200b"]
@@ -197,14 +232,14 @@ def extract_detail(html, expected_title=None):
         # heading for that job and reject common access-control indicators.
         # The shared gateway detector already checked visible HTML and meta.
         # Do not blacklist "SSO", "login" or "cookie consent" as job skills.
-        title = " ".join(str(expected_title or "").split()).casefold()
+        title = validated_job_title(expected_title)
         exact_heading = bool(title and any(
-            heading.casefold() == title for heading in parser.headings
+            heading.casefold() == title.casefold() for heading in parser.headings
         ))
         if meta and len(meta) >= 80 and exact_heading:
             return {"description": meta, "description_completeness": "summary", "description_provenance": "html_meta_description",
                     "location": "", "date_posted": None, "industry": None,
-                    "job_title": expected_title or "Untitled",
+                    "job_title": title,
                     "employment_type": None, "country": None}
         raise ValueError("Zoho detail lacks Job Description") from exc
     start = idx + 1
@@ -224,7 +259,17 @@ def extract_detail(html, expected_title=None):
     m = DATE.search(" ".join(lines[:idx]))
     date_opened = meta.get("Date Opened")
     result = {"description": description, "description_completeness": "partial", "description_provenance": "visible_html_section", "location": ", ".join(filter(None,(meta.get("City"),meta.get("State/Province")))), "date_posted": normalize_date(m.group(1) if m else date_opened), "industry": meta.get("Industry")}
-    result["job_title"] = expected_title or lines[0]
+    # Partial HTML has no structured jobTitle. A portal anchor and arbitrary
+    # body text are insufficient proof: require exactly one genuine H1 role
+    # heading before the Job Description section.
+    title_headings = [
+        validated_job_title(heading)
+        for heading in parser.h1_headings
+        if heading.casefold() in lower[:idx]
+    ]
+    if len(title_headings) != 1 or title_headings[0] is None:
+        raise ValueError("Zoho detail lacks a valid job title")
+    result["job_title"] = title_headings[0]
     result["employment_type"] = meta.get("Job Type") or next((s.split("|")[0].strip() for s in lines[:idx] if "|" in s and "time" in s.lower()), None)
     result["country"] = meta.get("Country")
     return result
