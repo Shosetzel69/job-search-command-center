@@ -20,6 +20,9 @@ def validated_job_title(value, *, job_type=None):
     title = " ".join(value.split()) if isinstance(value, str) else ""
     if not title or title.casefold() in _GENERIC_JOB_TITLES:
         return None
+    if re.match(r"^(?:full[\\s-]?time|part[\\s-]?time|contract|temporary|permanent|"
+                r"internship|freelance)\\s*[|·]\\s*.+$", title, re.I):
+        return None
     employment = " ".join(job_type.split()) if isinstance(job_type, str) else ""
     if employment and title.casefold() == employment.casefold():
         return None
