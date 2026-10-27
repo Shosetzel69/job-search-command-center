@@ -389,3 +389,53 @@ class OSFPartialAndSummaryTitleRegressionTests(unittest.TestCase):
         result_html = OSFRealTitleRegressionTests.embedded("Permanent-remote", "Permanent-remote")
         with self.assertRaisesRegex(ValueError, "valid job title"):
             extract_detail(result_html, expected_title="Full time")
+
+class R7_01PartialHTMLTitleEvidenceTests(unittest.TestCase):
+    """Independent R7-01: never infer a role from the first visible text line."""
+
+    def test_missing_title_heading_fails(self):
+        html = '<h2>Job Description</h2><p>Build production integrations.</p>'
+        for anchor in (None, 'Full time', 'Integration Developer'):
+            with self.subTest(anchor=anchor):
+                with self.assertRaisesRegex(ValueError, 'valid job title'):
+                    extract_detail(html, expected_title=anchor)
+
+    def test_metadata_first_page_without_title_fails(self):
+        variants = (
+            '<p>Country</p><p>Romania</p><h2>Job Description</h2><p>Plan deliveries.</p>',
+            '<h2>Job Information</h2><p>Full time</p><h2>Job Description</h2><p>Plan deliveries.</p>',
+            '<h2>Requirements</h2><h2>Job Description</h2><p>Plan deliveries.</p>',
+            '<h1>Careers</h1><h2>Job Description</h2><p>Plan deliveries.</p>',
+            '<h1>Job Information</h1><h2>Job Description</h2><p>Plan deliveries.</p>',
+        )
+        for html in variants:
+            with self.subTest(html=html):
+                with self.assertRaisesRegex(ValueError, 'valid job title'):
+                    extract_detail(html, expected_title='Full time')
+
+    def test_h2_job_title_without_h1_is_insufficient(self):
+        html = '<h2>Integration Developer</h2><h2>Job Description</h2><p>Deliver integrations.</p>'
+        with self.assertRaisesRegex(ValueError, 'valid job title'):
+            extract_detail(html, expected_title='Integration Developer')
+
+    def test_title_heading_after_description_is_insufficient(self):
+        html = '<h2>Job Description</h2><p>Build integrations.</p><h1>Integration Developer</h1>'
+        with self.assertRaisesRegex(ValueError, 'valid job title'):
+            extract_detail(html, expected_title='Full time')
+
+    def test_valid_h1_without_trusted_anchor_passes(self):
+        html = '<p>Country</p><p>Romania</p><h1>Integration Developer</h1><h2>Job Description</h2><p>Deliver integrations.</p>'
+        result = extract_detail(html, expected_title='Full time')
+        self.assertEqual(result['job_title'], 'Integration Developer')
+        self.assertEqual(result['description_completeness'], 'partial')
+
+    def test_only_one_job_title_h1_is_allowed(self):
+        html = '<h1>Integration Developer</h1><h1>Solution Architect</h1><h2>Job Description</h2><p>Deliver integrations.</p>'
+        with self.assertRaisesRegex(ValueError, 'valid job title'):
+            extract_detail(html, expected_title='Full time')
+
+    def test_html_with_genuine_title_does_not_regress(self):
+        html = '<h1>Identity Security Engineer</h1><h2>Job Description</h2><p>Implement SSO and login integrations.</p>'
+        result = extract_detail(html, expected_title='Full time')
+        self.assertEqual(result['job_title'], 'Identity Security Engineer')
+        self.assertIn('SSO', result['description'])
