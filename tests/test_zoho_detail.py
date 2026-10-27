@@ -347,3 +347,39 @@ class OSFRealTitleRegressionTests(unittest.TestCase):
         html = self.embedded("Integration Developer") + "<h1>Sign in</h1>"
         with self.assertRaisesRegex(ValueError, "access gateway"):
             extract_detail(html, expected_title="Full time")
+
+class OSFPartialAndSummaryTitleRegressionTests(unittest.TestCase):
+    """A public job-type anchor must not become title in fallback detail paths."""
+
+    def test_html_section_generic_anchor_uses_genuine_heading(self):
+        html = ('<h1>Integration Developer</h1><h2>Job Description</h2>'
+                '<p>Build production integrations.</p>')
+        result = extract_detail(html, expected_title="Full time")
+        self.assertEqual(result["job_title"], "Integration Developer")
+        self.assertEqual(result["description_completeness"], "partial")
+
+    def test_partial_placeholder_title_fails_closed(self):
+        html = ('<h1>Full time</h1><h2>Job Description</h2>'
+                '<p>Build production integrations.</p>')
+        with self.assertRaisesRegex(ValueError, "valid job title"):
+            extract_detail(html, expected_title="Full time")
+
+    def test_summary_placeholder_heading_fails_closed(self):
+        html = ('<h1>Full time</h1><meta name="description" content="'
+                + ("Deliver enterprise integrations and maintain systems. " * 3)
+                + '">')
+        with self.assertRaisesRegex(ValueError, "lacks Job Description"):
+            extract_detail(html, expected_title="Full time")
+
+    def test_legitimate_summary_heading_remains_accepted(self):
+        html = ('<h1>Integration Developer</h1><meta name="description" content="'
+                + ("Deliver enterprise integrations and maintain systems. " * 3)
+                + '">')
+        result = extract_detail(html, expected_title="Integration Developer")
+        self.assertEqual(result["job_title"], "Integration Developer")
+        self.assertEqual(result["description_completeness"], "summary")
+
+    def test_embedded_unknown_employment_type_is_not_job_title(self):
+        result_html = OSFRealTitleRegressionTests.embedded("Permanent-remote", "Permanent-remote")
+        with self.assertRaisesRegex(ValueError, "valid job title"):
+            extract_detail(result_html, expected_title="Full time")
