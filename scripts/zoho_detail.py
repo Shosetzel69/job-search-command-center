@@ -12,8 +12,10 @@ _GENERIC_JOB_TITLES = frozenset({
     "full time", "full-time", "fulltime", "part time", "part-time",
     "parttime", "contract", "contractor", "temporary", "permanent",
     "internship", "intern", "freelance", "fixed-term", "fixed term",
-    "seasonal",
-})
+    "seasonal", "careers", "jobs", "vacancies", "open positions",
+    "job details", "overview", "about us", "contact us", "apply",
+    "apply now", "similar jobs",
+}) | frozenset(value.casefold() for value in HEADINGS | LABELS)
 
 
 def validated_job_title(value, *, job_type=None):
@@ -36,6 +38,7 @@ class Text(HTMLParser):
         self.skip = 0
         self.meta_description = None
         self.headings = []
+        self.h1_headings = []
         self._heading_tag = None
         self._heading_parts = []
     def handle_starttag(self, tag, attrs):
@@ -51,7 +54,10 @@ class Text(HTMLParser):
             self.parts.append("\n")
     def handle_endtag(self, tag):
         if self._heading_tag == tag:
-            self.headings.append(" ".join("".join(self._heading_parts).split()))
+            heading = " ".join("".join(self._heading_parts).split())
+            self.headings.append(heading)
+            if tag == "h1":
+                self.h1_headings.append(heading)
             self._heading_tag = None
             self._heading_parts = []
         if tag in {"script", "style", "noscript"} and self.skip:
@@ -253,9 +259,17 @@ def extract_detail(html, expected_title=None):
     m = DATE.search(" ".join(lines[:idx]))
     date_opened = meta.get("Date Opened")
     result = {"description": description, "description_completeness": "partial", "description_provenance": "visible_html_section", "location": ", ".join(filter(None,(meta.get("City"),meta.get("State/Province")))), "date_posted": normalize_date(m.group(1) if m else date_opened), "industry": meta.get("Industry")}
-    result["job_title"] = validated_job_title(expected_title) or validated_job_title(lines[0])
-    if not result["job_title"]:
+    # Partial HTML has no structured jobTitle. A portal anchor and arbitrary
+    # body text are insufficient proof: require exactly one genuine H1 role
+    # heading before the Job Description section.
+    title_headings = [
+        validated_job_title(heading)
+        for heading in parser.h1_headings
+        if heading.casefold() in lower[:idx]
+    ]
+    if len(title_headings) != 1 or title_headings[0] is None:
         raise ValueError("Zoho detail lacks a valid job title")
+    result["job_title"] = title_headings[0]
     result["employment_type"] = meta.get("Job Type") or next((s.split("|")[0].strip() for s in lines[:idx] if "|" in s and "time" in s.lower()), None)
     result["country"] = meta.get("Country")
     return result
