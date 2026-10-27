@@ -341,3 +341,64 @@ class R5CollectorDetailGateTests(unittest.TestCase):
         records = zoho.collect(BOARD, "Acme", opener=opening)
         self.assertEqual(len(records), 1)
         self.assertEqual(records[0]["description_completeness"], "partial")
+
+
+class R6GatewayCollectionTests(unittest.TestCase):
+    """R5-01 must reject records before any corpus-facing collection result."""
+
+    @staticmethod
+    def portal_opening(description):
+        def opening(req, timeout):
+            content = LIST if req.full_url.endswith("/careers") else description
+            return Resp(content, req.full_url)
+        return opening
+
+    @staticmethod
+    def modern_opening(description):
+        import json
+        from html import escape
+        jobs = [{"id": "123456", "Posting_Title": "IT Project Manager",
+                 "Job_Description": "<p>" + description + "</p>"}]
+        payload = ('<input id="jobs" value="' +
+                   escape(json.dumps(jobs), quote=True) + '">').encode()
+        def opening(req, timeout):
+            return Resp(b"<html>Modern careers</html>"
+                        if req.full_url.endswith("/careers") else payload,
+                        req.full_url)
+        return opening
+
+    def test_portal_short_gateway_phrases_fail(self):
+        for phrase in ("Sign in to continue.", "Log in to continue.",
+                       "Accept cookies to continue."):
+            with self.subTest(phrase=phrase):
+                html = (b'<h1>Engineer</h1><h2>Job Description</h2><p>' +
+                        phrase.encode() + b'</p>')
+                with self.assertRaisesRegex(ValueError, "access gateway"):
+                    zoho.collect(BOARD, "Acme", opener=self.portal_opening(html))
+
+    def test_embedded_short_gateway_fails_collector(self):
+        import json
+        payload = {
+            "jobTitle": "Engineer",
+            "jobDescriptionDetails": [{
+                "richText": {"fieldLabel": "Job Description",
+                             "value": "<p>Log in to continue.</p>"}
+            }],
+        }
+        detail = ("<script>data=" + json.dumps(payload) + ";</script>").encode()
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            zoho.collect(BOARD, "Acme", opener=self.portal_opening(detail))
+
+    def test_modern_short_gateway_phrases_fail(self):
+        for phrase in ("Sign in to continue.", "Log in to continue.",
+                       "Accept cookies to continue."):
+            with self.subTest(phrase=phrase):
+                with self.assertRaisesRegex(ValueError, "access gateway"):
+                    zoho.collect(BOARD, "Acme", opener=self.modern_opening(phrase))
+
+    def test_modern_security_requirements_survive(self):
+        text = "Build login, SSO, sign in interfaces and cookie-consent features."
+        records = zoho.collect(BOARD, "Acme", opener=self.modern_opening(text))
+        self.assertEqual(len(records), 1)
+        self.assertIn("SSO", records[0]["description"])
+        self.assertEqual(records[0]["source_url_kind"], "careers_board_fallback")
