@@ -142,9 +142,16 @@ _STANDALONE_GATEWAY_CTA = re.compile(
 def reject_access_gateway_text(text):
     """Fail closed on provider gateway prose, without banning security jobs."""
     normalized = " ".join(str(text or "").split())
-    if (_ACCESS_GATEWAY_PROMPT.search(normalized)
-            or (0 < len(normalized) <= 240
-                and _STANDALONE_GATEWAY_CTA.fullmatch(normalized))):
+    # A provider can repeat two or more terse notices. Every sentence
+    # must independently be a gateway command; free-form security-role prose
+    # (including words such as login/SSO) must not trigger this check.
+    fragments = [part.strip() for part in re.split(r"[.!:]+", normalized) if part.strip()]
+    standalone_gateway = (
+        0 < len(normalized) <= 240
+        and bool(fragments)
+        and all(_STANDALONE_GATEWAY_CTA.fullmatch(part) for part in fragments)
+    )
+    if _ACCESS_GATEWAY_PROMPT.search(normalized) or standalone_gateway:
         raise ValueError("Zoho detail lacks Job Description; access gateway detected")
 
 
@@ -188,19 +195,13 @@ def extract_detail(html, expected_title=None):
         # A generic sign-in/consent/widget shell must not become the description
         # of the job identified by the portal link. Require an exact visible
         # heading for that job and reject common access-control indicators.
-        context = " ".join(lines) + " " + meta
-        auth_marker = re.search(
-            r"\b(?:sign[ -]?in|log[ -]?in|login|password|access denied|"
-            r"unauthorized|forbidden|session expired|authentication required|"
-            r"verify your identity|captcha|cookie consent|consent required|"
-            r"accept cookies|security check|single sign-on|sso)\b",
-            context, re.I,
-        )
+        # The shared gateway detector already checked visible HTML and meta.
+        # Do not blacklist "SSO", "login" or "cookie consent" as job skills.
         title = " ".join(str(expected_title or "").split()).casefold()
         exact_heading = bool(title and any(
             heading.casefold() == title for heading in parser.headings
         ))
-        if meta and len(meta) >= 80 and exact_heading and not auth_marker:
+        if meta and len(meta) >= 80 and exact_heading:
             return {"description": meta, "description_completeness": "summary", "description_provenance": "html_meta_description",
                     "location": "", "date_posted": None, "industry": None,
                     "job_title": expected_title or "Untitled",
