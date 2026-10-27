@@ -364,6 +364,12 @@ class OSFPartialAndSummaryTitleRegressionTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "valid job title"):
             extract_detail(html, expected_title="Full time")
 
+    def test_partial_employment_label_with_company_is_rejected(self):
+        html = ('<h1>Full time | OSF Digital</h1><h2>Job Description</h2>'
+                '<p>Build production integrations.</p>')
+        with self.assertRaisesRegex(ValueError, "valid job title"):
+            extract_detail(html, expected_title="Full time")
+
     def test_summary_placeholder_heading_fails_closed(self):
         html = ('<h1>Full time</h1><meta name="description" content="'
                 + ("Deliver enterprise integrations and maintain systems. " * 3)
