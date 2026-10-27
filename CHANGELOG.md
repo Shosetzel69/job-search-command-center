@@ -2,6 +2,24 @@
 
 ## [Unreleased]
 
+### Sources / JSCC #544
+
+- **R6 / independent R5 defect R5-01:** Reject short standalone login/access/consent calls-to-action (`Sign in to continue.`, `Log in to continue.`, `Login required.` and analogous short variants), including repeated prompts. The bounded, whole-message detector supplements rather than replaces targeted access-gateway patterns; legitimate security job descriptions mentioning SSO, login and cookie-consent engineering are permitted. Shared validation still applies to Zoho HTML partial, embedded full, meta summaries and modern public list descriptions. Added parser, collector and orchestration-to-corpus negative/positive regressions; failed sources produce no projected postings and no opaque token in diagnostics. Owner-approved OSF-only DEV scope, source governance and careers-board fallback controls remain unchanged.
+
+- **R5 (independent R4 finding R4-01):** Gate authentication/consent content **before admitting any Zoho job description**, including public `jobDescriptionDetails` payloads, visible HTML sections, HTML meta summaries and modern `/jobs/Careers` listing descriptions. Explicit provider access prompts cause a source failure rather than a persisted vacancy or false successful-empty result. Narrow, action-oriented access patterns avoid rejecting legitimate security roles that mention SSO/login/cookie-consent skills. Added negative parser, collector and orchestrator-to-corpus tests and positive security-role controls. R3-02/03/04 closure remains unchanged; owner-approved OSF-only DEV scope, labeled board fallback, and no merge/deploy remain in force.
+
+- **R4 / Option A enforcement (DEV OSF only):** Zoho job detail meta summaries are accepted only with a matching visible h1/h2 job title and no login, access-denied or consent markers; generic provider/auth pages fail the source instead of contaminating the corpus. The formerly broad `JSCC_DEV_ZOHO_ENABLED` flag is inert, and only the exact OSF Digital registry identity can opt in with `APP_ENV=dev` and `JSCC_DEV_OSF_ENABLED=1`. HR Plus, MADIFF, Matritel and MyEmployment remain explicitly outside pilot authorization.
+- Every retained Zoho record now carries `source_url_kind="careers_board_fallback"`, `source_url_label="Careers board (not a direct job link)"` and `missing_fields`, in addition to `description_completeness` and `description_provenance`. These fields survive `SharedPosting.payload` projection and mocked persistence. UI consumers **must show the fallback label rather than presenting the board URL as a direct application link**; actual deployed UI treatment remains an acceptance test, not a completed implementation claim.
+- R4 regression tests cover blocked/consent/changed-widget detail pages, safe job-specific summary admission, double-sided empty listing hints, OSF-only opt-in against broad-flag and identity spoofing, and persisted fallback metadata. No merge/deploy/activation or TEST/PROD changes are implied.
+
+- R3: Fail-closed validation for public Zoho board responses. Unsupported/login-like public HTML can no longer be counted as `success_empty` without explicit empty-board evidence; contradictory portal and modern metadata that omit an in-scope portal posting now fail the source rather than silently dropping the job. Synthetic collector and orchestration regressions added. OSF Digital pilot DEV-only board-link fallback accepted by owner; no merge/deploy/source activation implied.
+
+
+- DEV-staged Zoho Recruit sources: OSF Digital, HR Plus, MADIFF, Matritel and MyEmployment registered with public career routes. Shared defaults remain inactive; the runtime opt-in `APP_ENV=dev` plus `JSCC_DEV_ZOHO_ENABLED=1` allows only DEV collection. TEST/PROD cannot enable these routes through that override. Listing checks pass for all five; full-detail verification and deployed DEV persistence remain outstanding for newly added tenants.
+
+- OSF Digital Zoho Recruit public-only HTTP collector staged under ATC-542-01: public tenant-bound detail pages, embedded job description field extraction, explicit summary/partial provenance, ISO publication dates, stable job identity and bounded HTTP requests. OSF source and route remain **inactive** until independent review and separately authorized activation. CollectionResult orchestration and corpus projection tests added; runtime PostgreSQL evidence remains pending.
+
+
 > App version: `0.10.0` — bounded Coverage per Role Family with selective corpus refresh.
 
 ### Guvernanta

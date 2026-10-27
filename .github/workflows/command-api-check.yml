@@ -136,6 +136,9 @@ jobs:
           python3 -O -B -m unittest -v test_m01_r8.py
           python3 -OO -B -m unittest -v test_m01_r8.py
 
+      - name: Run Zoho source and pipeline integration regression tests
+        run: PYTHONPATH=scripts python3 -m unittest discover -s tests -p "test_zoho*.py" -v
+
       - name: Verify backup restore refuses PROD
         run: |
           set +e

@@ -11,6 +11,7 @@ import diagnostics
 import job_search as engine
 import job_search_apify as apify
 import job_search_ashby as ashby
+import job_search_zoho_recruit as zoho_recruit
 import job_search_bamboohr as bamboohr
 import job_search_breezyhr as breezyhr
 import job_search_eightfold_public as eightfold_public
@@ -273,6 +274,19 @@ def aggregate_source_results(plan):
     }
 
 
+def _dev_osf_override(source, route):
+    """Option A: one exact OSF source; broad Zoho DEV flag is deliberately inert."""
+    import os
+    return (os.environ.get("APP_ENV", "").strip().lower() == "dev"
+            and os.environ.get("JSCC_DEV_OSF_ENABLED") == "1"
+            and source.get("name") == "OSF Digital"
+            and source.get("id") == "src-zoho-osf-digital"
+            and source.get("url") == "https://osf-global.zohorecruit.com/careers"
+            and route is not None
+            and route.get("connector") == "zoho_recruit"
+            and route.get("career_url") == "https://osf-global.zohorecruit.com/careers")
+
+
 def build_plan(catalog):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("sources"), list):
         raise ValueError("Source catalog must contain a sources array")
@@ -281,6 +295,7 @@ def build_plan(catalog):
     catalog_names = {str(source.get("name") or "") for source in catalog["sources"]}
     for source in catalog["sources"]:
         route = ATS_ROUTES.get(source.get("name"))
+        dev_osf_enabled = _dev_osf_override(source, route)
         alias_target = PROVIDER_ALIASES.get(source.get("name"))
         connector = connector_for(source)
         deferred = None if connector else deferred_provider(source)
@@ -301,7 +316,7 @@ def build_plan(catalog):
                 "source_id": source.get("id") or source.get("url"), "url": source.get("url"),
                 "connector": "deferred" if deferred else connector,
                 "collection_method": "deferred" if deferred else connector,
-                "active": source.get("active") is not False and not excluded_by_policy, "status": "pending",
+                "active": (source.get("active") is not False or dev_osf_enabled) and not excluded_by_policy, "status": "pending",
                 "outcome": None, "source_execution_id": None,
                 "records": 0, "error": None, "failure_reason": None,
                 "error_code": None, "failure_stage": None, "http_status": None,
@@ -315,7 +330,7 @@ def build_plan(catalog):
                         failure_reason=reason, provider_alias=alias_target)
         if route:
             item["connector_config"] = route
-            if route.get("enabled") is False:
+            if route.get("enabled") is False and not dev_osf_enabled:
                 item["active"] = False
                 reason = route.get("disabled_reason") or "ATS route disabled"
                 item.update(status="inactive", outcome=disabled_route_outcome(reason),
@@ -571,7 +586,7 @@ def record_results(item, results):
     } for result in results]
 
 
-def collect_ats(item):
+def collect_ats(item, role_family=None):
     route = item.get("connector_config") or {}
     connector = item["connector"]
     company = item["source"]
@@ -586,6 +601,8 @@ def collect_ats(item):
         return greenhouse.collect(route["board_token"], company)
     if connector == "ashby":
         return ashby.collect(route["board_name"], company)
+    if connector == "zoho_recruit":
+        return zoho_recruit.collect_result(route["career_url"], company, role_family=role_family)
     if connector == "recruitee":
         return recruitee.collect(route["subdomain"], company)
     if connector == "bamboohr":
@@ -609,7 +626,7 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
     collection = []
     metadata = {}
     mode = str(config.get("jobspipe_mode") or ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
-    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable", "softgarden", "eightfold_public"}
+    ats_connectors = {"smartrecruiters", "workday", "greenhouse", "ashby", "recruitee", "bamboohr", "lever", "breezyhr", "pinpoint", "workable", "softgarden", "eightfold_public", "zoho_recruit"}
     for item in plan:
         if item["status"] != "pending" or item["connector"] == "web":
             continue
@@ -642,7 +659,10 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
             emit_source_started(run_id, item)
         try:
             if connector in ats_connectors:
-                results = collect_ats(item)
+                scopes = (config.get('_jscc_retrieve_scope') or {}).get('scopes') or []
+                families = {str(scope.get('role_family') or '').upper() for scope in scopes if isinstance(scope, dict)}
+                family = 'PROJECT_MANAGEMENT' if families == {'PROJECT_MANAGEMENT'} else None
+                results = collect_ats(item, role_family=family)
             elif connector == "traefik":
                 results = traefik.collect(item["url"], item["source"])
             elif connector == "jobicy":

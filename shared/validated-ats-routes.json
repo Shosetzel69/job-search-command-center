@@ -330,6 +330,36 @@
       "connector": "workable",
       "subdomain": "floatjobs",
       "enabled": true
+    },
+    "OSF Digital": {
+      "connector": "zoho_recruit",
+      "career_url": "https://osf-global.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "OSF-only DEV pilot approved; separate merge and deploy approval pending"
+    },
+    "HR Plus": {
+      "connector": "zoho_recruit",
+      "career_url": "https://hr-plus.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"
+    },
+    "MADIFF": {
+      "connector": "zoho_recruit",
+      "career_url": "https://madiffpl.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"
+    },
+    "Matritel": {
+      "connector": "zoho_recruit",
+      "career_url": "https://matritel.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"
+    },
+    "MyEmployment": {
+      "connector": "zoho_recruit",
+      "career_url": "https://myemployment.zohorecruit.com/careers",
+      "enabled": false,
+      "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"
     }
   }
 }
