@@ -283,3 +283,67 @@ class R6StandaloneGatewayTests(unittest.TestCase):
         out = extract_detail(html, expected_title="Identity Security Engineer")
         self.assertEqual(out["description_completeness"], "summary")
         self.assertEqual(out["description"], text)
+
+class OSFRealTitleRegressionTests(unittest.TestCase):
+    """Public OSF links say Full time while embedded detail has the job title."""
+
+    @staticmethod
+    def embedded(title, job_type="Full time"):
+        import json
+        return "<script>data=" + json.dumps({
+            "jobTitle": title, "jobType": job_type,
+            "jobDescriptionDetails": [{"richText": {
+                "fieldLabel": "Job Description",
+                "value": "<p>Deliver software integrations and maintain systems.</p>",
+            }}],
+        }) + ";</script>"
+
+    def test_real_osf_portal_employment_label_cannot_override_title(self):
+        for title in (
+            "Back-End Developer, Sales",
+            "Salesforce Business Analyst - English & Spanish",
+            "Integration Developer",
+        ):
+            with self.subTest(title=title):
+                result = extract_detail(self.embedded(title),
+                                        expected_title="Full time")
+                self.assertEqual(result["job_title"], title)
+                self.assertEqual(result["employment_type"], "Full time")
+                self.assertEqual(result["description_completeness"], "full")
+
+    def test_empty_or_generic_embedded_and_portal_titles_fail_closed(self):
+        for title in ("", None, "Full time", "Part-time", "Contract"):
+            with self.subTest(title=title):
+                with self.assertRaisesRegex(ValueError, "valid job title"):
+                    extract_detail(self.embedded(title),
+                                   expected_title="Full time")
+
+    def test_legitimate_portal_title_fallback(self):
+        result = extract_detail(self.embedded(None),
+                                expected_title="Integration Developer")
+        self.assertEqual(result["job_title"], "Integration Developer")
+
+    def test_embedded_title_wins_when_both_sources_have_titles(self):
+        result = extract_detail(self.embedded("Integration Developer"),
+                                expected_title="Generic Consultant")
+        self.assertEqual(result["job_title"], "Integration Developer")
+
+    def test_security_engineer_title_and_legitimate_auth_requirements(self):
+        import json
+        payload = {
+            "jobTitle": "Identity Security Engineer",
+            "jobType": "Full time",
+            "jobDescriptionDetails": [{"richText": {
+                "fieldLabel": "Job Description",
+                "value": "<p>Implement login, SSO and cookie consent protections.</p>"
+            }}],
+        }
+        html = "<script>data=" + json.dumps(payload) + ";</script>"
+        result = extract_detail(html, expected_title="Full time")
+        self.assertEqual(result["job_title"], "Identity Security Engineer")
+        self.assertIn("SSO", result["description"])
+
+    def test_auth_gateway_still_rejected(self):
+        html = self.embedded("Integration Developer") + "<h1>Sign in</h1>"
+        with self.assertRaisesRegex(ValueError, "access gateway"):
+            extract_detail(html, expected_title="Full time")
