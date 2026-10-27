@@ -213,3 +213,73 @@ class R5AccessGatewayTests(unittest.TestCase):
         result = extract_detail(html, expected_title="Identity Security Engineer")
         self.assertEqual(result["description_completeness"], "full")
         self.assertIn("identity access controls", result["description"])
+
+
+class R6StandaloneGatewayTests(unittest.TestCase):
+    """R5-01: content-context checks rather than exact previous review wording."""
+
+    def test_short_login_ctas_under_valid_job_heading_fail(self):
+        variants = (
+            "Sign in to continue.",
+            "Log in to continue.",
+            "Login to proceed.",
+            "Sign-in to view this job.",
+            "Log-in to access the page.",
+            "Please log in.",
+            "Login required.",
+            "Sign in to continue. Log in to continue.",
+            "Accept cookies to continue.",
+            "Cookie consent required.",
+        )
+        for prompt in variants:
+            with self.subTest(prompt=prompt), self.assertRaisesRegex(ValueError, "access gateway"):
+                extract_detail(
+                    "<h1>IT Project Manager</h1><h2>Job Description</h2>"
+                    "<p>" + prompt + "</p>",
+                    expected_title="IT Project Manager",
+                )
+
+    def test_short_ctas_in_embedded_full_descriptions_fail(self):
+        import json
+        for phrase in ("Sign in to continue.", "Log in to continue.", "Accept cookies to continue."):
+            with self.subTest(phrase=phrase), self.assertRaisesRegex(ValueError, "access gateway"):
+                payload = {
+                    "jobTitle": "IT Project Manager",
+                    "jobDescriptionDetails": [
+                        {"richText": {"fieldLabel": "Job Description",
+                                      "value": "<p>" + phrase + "</p>"}}
+                    ],
+                }
+                extract_detail("<script>data=" + json.dumps(payload) + ";</script>",
+                               expected_title="IT Project Manager")
+
+    def test_meta_only_repeated_login_ctas_fail(self):
+        for phrase in ("Sign in to continue. ", "Log in to continue. "):
+            html = ('<h1>IT Project Manager</h1>'
+                    '<meta name="description" content="' + phrase * 4 + '">')
+            with self.subTest(phrase=phrase), self.assertRaisesRegex(ValueError, "access gateway"):
+                extract_detail(html, expected_title="IT Project Manager")
+
+    def test_valid_security_engineering_requirements_survive(self):
+        examples = (
+            "Implement a secure sign in to continue onboarding user journey.",
+            "Build login components and SSO integration for enterprise platforms.",
+            "Write and test the Sign in to continue button in React.",
+            "Design cookie consent required indicators and authentication workflows.",
+        )
+        for text in examples:
+            with self.subTest(text=text):
+                html = ('<h1>Identity Security Engineer</h1><h2>Job Description</h2>'
+                        '<p>' + text + '</p>')
+                out = extract_detail(html, expected_title="Identity Security Engineer")
+                self.assertEqual(out["description"], text)
+                self.assertEqual(out["description_completeness"], "partial")
+
+    def test_security_meta_not_filtered(self):
+        text = ("Implement SSO authentication, test login flows and build cookie consent "
+                "features for enterprise identity platforms.")
+        html = ('<h1>Identity Security Engineer</h1>'
+                '<meta name="description" content="' + text + '">')
+        out = extract_detail(html, expected_title="Identity Security Engineer")
+        self.assertEqual(out["description_completeness"], "summary")
+        self.assertEqual(out["description"], text)
