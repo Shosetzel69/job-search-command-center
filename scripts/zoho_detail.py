@@ -181,7 +181,20 @@ def extract_detail(html, expected_title=None):
     full = embedded_full_description(html)
     if full:
         reject_access_gateway_text(full.get("description"))
-        full["job_title"] = expected_title or full["job_title"]
+        # Public portal anchors can be job-type labels ("Full time"), not role titles.
+        # Prefer the structured jobTitle when it is a genuine title; never publish
+        # employment-type placeholders as titles.
+        def valid_title(value):
+            title = " ".join(value.split()) if isinstance(value, str) else ""
+            generic = {"full time", "full-time", "fulltime", "part time",
+                       "part-time", "parttime", "contract", "contractor",
+                       "temporary", "permanent", "internship", "freelance"}
+            return title if title and title.casefold() not in generic else None
+
+        full["job_title"] = valid_title(full.get("job_title")) or valid_title(expected_title)
+        if not full["job_title"]:
+            raise ValueError("Zoho detail lacks a valid job title")
+
         return full
     lines = [" ".join(line.split()) for line in "".join(parser.parts).splitlines()]
     lines = [x for x in lines if x and x != "\u200b"]
