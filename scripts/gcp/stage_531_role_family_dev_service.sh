@@ -53,7 +53,8 @@ gcloud run services update "${service}" \
   --project="${project}" --region="${region}" \
   --image="${image}" --tag="rf531" --no-traffic
 
-gcloud run services describe "${service}" --project="${project}" --region="${region}" --format=json \
+# The tag is testable while the production DEV route remains on its prior revision.
+tag_url="$(gcloud run services describe "${service}" --project="${project}" --region="${region}" --format=json \
  | python3 -c '
 import json,sys
 d=json.load(sys.stdin)
@@ -62,6 +63,29 @@ assert len(matches)==1, "Tagged revision not found"
 assert int(matches[0].get("percent") or 0)==0, "Candidate unexpectedly serving traffic"
 url=matches[0].get("url","")
 assert url.startswith("https://") and ".run.app" in url, "Tagged revision URL missing"
-print("JSCC531_STAGED_0_PERCENT_TRAFFIC_PASS")
-print("JSCC531_TAGGED_REVISION_URL="+url)
-'
+print(url)
+')"
+echo "JSCC531_STAGED_0_PERCENT_TRAFFIC_PASS"
+echo "JSCC531_TAGGED_REVISION_URL=${tag_url}"
+
+# Health and database identity only; no tenant mutation or E2E login requests.
+health_json="$(curl --fail --silent --show-error "${tag_url}/health")"
+HEALTH_JSON="${health_json}" python3 - "${candidate}" <<'PY'
+import json,os,sys
+v=json.loads(os.environ["HEALTH_JSON"])
+assert v.get("status")=="ok",v
+assert v.get("environment")=="dev",v
+assert v.get("source_sha")==sys.argv[1],v
+assert v.get("runtime_backend")=="gcp",v
+assert v.get("search_mode")=="disabled",v
+print("JSCC531_TAGGED_HEALTH_PASS")
+PY
+db_health_json="$(curl --fail --silent --show-error "${tag_url}/health/db")"
+DB_HEALTH_JSON="${db_health_json}" python3 - <<'PY'
+import json,os
+v=json.loads(os.environ["DB_HEALTH_JSON"])
+assert v.get("status")=="ok",v
+assert v.get("environment")=="dev",v
+assert v.get("database")=="jobsearch_dev",v
+print("JSCC531_TAGGED_NILE_DB_HEALTH_PASS")
+PY
