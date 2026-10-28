@@ -1,5 +1,5 @@
 # #531 W02-5 — temporary execution-only wrapper. NEVER run against managed Nile.
-# The source candidate is pinned to 088e1e18374b50ae7765e04a1d65ac9e5d43d637; this workflow exists only on an ops branch.
+# The source candidate is pinned to ea1e8dd3f8a66ba2881903a7a0ae61c222850f13; this workflow exists only on an ops branch.
 name: W02-5 disposable Nile harness (temporary, no 29-ID suite)
 
 on:
@@ -45,7 +45,7 @@ jobs:
       - name: Checkout immutable R4 reviewed candidate, not orchestration branch
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: 088e1e18374b50ae7765e04a1d65ac9e5d43d637
+          ref: ea1e8dd3f8a66ba2881903a7a0ae61c222850f13
           persist-credentials: false
           fetch-depth: 1
 
@@ -53,9 +53,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = '088e1e18374b50ae7765e04a1d65ac9e5d43d637'
+          test "$(git rev-parse HEAD)" = 'ea1e8dd3f8a66ba2881903a7a0ae61c222850f13'
           test "$(git status --porcelain)" = ''
-          echo 'W025_SOURCE_SHA=088e1e18374b50ae7765e04a1d65ac9e5d43d637'
+          echo 'W025_SOURCE_SHA=ea1e8dd3f8a66ba2881903a7a0ae61c222850f13'
 
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -116,7 +116,7 @@ jobs:
           set -euo pipefail
           node --input-type=module <<'NODE'
           import {randomBytes} from 'node:crypto';
-          import {admitNileCi} from './scripts/nile-ci-local-admission.mjs';
+          import {admitNileCi,NILE_NATIVE_BACKEND_PORT} from './scripts/nile-ci-local-admission.mjs';
           admitNileCi();
           const {default:pg}=await import('pg');
           const c=new pg.Client({connectionString:process.env.NILE_TEST_DATABASE_URL,connectionTimeoutMillis:10000});
@@ -132,7 +132,7 @@ jobs:
               db_matches:r.db_name==='jobsearch_dev',
               principal_present:typeof r.principal==='string'&&!!r.principal.trim(),
               pid_positive:Number.isInteger(Number(r.backend_pid))&&Number(r.backend_pid)>0,
-              port_matches:Number(r.server_port)===5432,
+              port_matches:Number(r.server_port)===NILE_NATIVE_BACKEND_PORT,
               challenge_matches:r.challenge===challenge,
             };
             const diagnostic={
@@ -190,5 +190,5 @@ jobs:
         run: |
           set -euo pipefail
           echo 'W025_HARNESS_READY=PASS'
-          echo 'W025_SOURCE_REVIEW_SHA=088e1e18374b50ae7765e04a1d65ac9e5d43d637'
+          echo 'W025_SOURCE_REVIEW_SHA=ea1e8dd3f8a66ba2881903a7a0ae61c222850f13'
           echo 'W025_FULL_29_ID_SUITE=NOT_AUTHORIZED_NOT_RUN'
