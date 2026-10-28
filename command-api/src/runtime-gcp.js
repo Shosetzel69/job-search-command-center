@@ -138,6 +138,15 @@ async function runtimeObjectForRead(env, path) {
   if (name === 'run-status.json') {
     const runId = await activeRunId(env);
     if (runId) return `runs/${runId}/${name}`;
+    // Completed attempts are visible independently of corpus publication.
+    const marker = await objectMetadata(env, 'latest-run.json');
+    if (marker) {
+      const latest = await readObjectJson(env, 'latest-run.json');
+      const latestId = String(latest.payload?.run_id || '').trim();
+      if (/^run-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(latestId)) {
+        return `runs/${latestId}/${name}`;
+      }
+    }
   }
   const pointer = await objectMetadata(env, 'current.json');
   if (pointer) {
@@ -176,19 +185,9 @@ export async function hasActiveWorkflowRun(env) {
 }
 
 function fullRunArgs() {
-  const publishPointer = [
-    'import json, os, urllib.parse, urllib.request',
-    'meta=urllib.request.Request("http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",headers={"Metadata-Flavor":"Google"})',
-    'token=json.load(urllib.request.urlopen(meta))["access_token"]',
-    'bucket=os.environ["GCP_RUNTIME_BUCKET"]; run_id=os.environ["JSCC_RUN_ID"]; generation=os.environ["GCP_CURRENT_GENERATION"]',
-    'body=json.dumps({"run_id":run_id,"artifact_identity":"runs/"+run_id+"/jobs.json"}).encode()',
-    'url="https://storage.googleapis.com/upload/storage/v1/b/"+urllib.parse.quote(bucket,safe="")+"/o?uploadType=media&name=current.json&ifGenerationMatch="+generation',
-    'put=urllib.request.Request(url,data=body,method="POST",headers={"Authorization":"Bearer "+token,"Content-Type":"application/json"})',
-    'urllib.request.urlopen(put).read()',
-  ].join('; ');
   return [
     '-ceu',
-    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 -c ' + JSON.stringify(publishPointer) + '; exit ${rc}'
+    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 scripts/gcp_finalize_run.py; exit ${rc}'
   ];
 }
 

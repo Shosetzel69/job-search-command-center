@@ -12,7 +12,7 @@ export function reviewRowsForFilters(jobs, { freshness, workModes }, ageHours, t
     const fit = Number(job?.fit);
     const reviewByCurrentThreshold = !Number.isFinite(fit) || fit < threshold;
     return reviewByCurrentThreshold
-      && ageHours(job.date_posted, job.age) <= freshness
+      && (ageHours(job.date_posted, job.age) === null || (Number.isFinite(ageHours(job.date_posted, job.age)) && ageHours(job.date_posted, job.age) <= freshness))
       && (noWorkModePresentationFilter || allowedModes.has(job.mode));
   });
 }

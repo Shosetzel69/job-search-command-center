@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { activeCodes, assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
+import { ROLE_FAMILY_CODES, familyForSubfamily, normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
 import { CANDIDATE_MANAGED_DATA_FILES, OPERATIONAL_DATA_FILES, PROTECTED_DATA_FILES } from '../../shared/runtime-data.mjs';
 import {
   applySourceAction,
@@ -234,7 +235,7 @@ function assertGeographyNoConflict(patch, nomenclatures) {
 }
 
 const SUPPORTED_CONFIG_PATCH_KEYS = new Set([
-  'rolePm','roleDelivery','roleService','roleScrum','roleProgram',
+  'roleFamilies','roleSubfamilies',
   'workRemote','workHybrid','workOnsite','keepReposts','immediateStart',
   'contractTypes','freshness','fitThreshold','rateMin','rateMax','exclusions',
   'targetRegions','targetCountries','excludedRegions','excludedCountries',
@@ -252,7 +253,28 @@ function validateUserConfigPatch(input, nomenclatures) {
     throw Object.assign(new Error(`Unsupported preference field: ${unsupportedKeys.join(', ')}`), { status:400 });
   }
   const output = {};
-  const booleanKeys = ['rolePm','roleDelivery','roleService','roleScrum','roleProgram','workRemote','workHybrid','workOnsite','keepReposts','immediateStart','jobspipeEnabled'];
+  if ('roleFamilies' in input) {
+    const raw = uniqueStrings(input.roleFamilies, { max:ROLE_FAMILY_CODES.length, maxLength:80, uppercase:true });
+    const normalized = normalizeRoleFamilies(raw);
+    if (normalized.length !== raw.length) {
+      const unsupported = raw.filter(value => !ROLE_FAMILY_CODES.includes(value));
+      throw Object.assign(new Error(`Unsupported Role Family: ${unsupported.join(', ')}`), { status:400 });
+    }
+    if (normalized.length > 2) {
+      throw Object.assign(new Error('Selecteaza maximum doua familii de roluri pentru Retrieve.'), { status:400 });
+    }
+    output.roleFamilies = normalized;
+  }
+  if ('roleSubfamilies' in input) {
+    const raw = uniqueStrings(input.roleSubfamilies, { max:100, maxLength:80 });
+    const normalized = normalizeRoleSubfamilies(raw);
+    if (normalized.length !== raw.length) {
+      const unsupported = raw.filter(value => !familyForSubfamily(value));
+      throw Object.assign(new Error(`Unsupported Role Subfamily: ${unsupported.join(', ')}`), { status:400 });
+    }
+    output.roleSubfamilies = normalized;
+  }
+  const booleanKeys = ['workRemote','workHybrid','workOnsite','keepReposts','immediateStart','jobspipeEnabled'];
   for (const key of booleanKeys) if (key in input) {
     if (typeof input[key] !== 'boolean') throw Object.assign(new Error(`${key} must be boolean`), { status: 400 });
     output[key] = input[key];
@@ -311,12 +333,9 @@ function validateUserConfigPatch(input, nomenclatures) {
 }
 
 function applyUserConfigPatch(config, patch) {
-  const groups = config.role_groups || {};
-  const mapping = { rolePm:'pm', roleDelivery:'delivery', roleService:'service', roleScrum:'scrum', roleProgram:'program' };
-  for (const [inputKey, groupKey] of Object.entries(mapping)) {
-    if (inputKey in patch && groups[groupKey]) groups[groupKey].enabled = patch[inputKey];
-  }
-  config.role_groups = groups;
+  if ('roleFamilies' in patch) config.target_role_families = [...patch.roleFamilies];
+  if ('roleSubfamilies' in patch) config.target_role_subfamilies = [...patch.roleSubfamilies];
+  delete config.role_groups;
   config.work_modes ||= {};
   if ('workRemote' in patch) config.work_modes.remote = patch.workRemote;
   if ('workHybrid' in patch) config.work_modes.hybrid = patch.workHybrid;
@@ -364,6 +383,30 @@ function validateEffectiveSearchConfig(config, nomenclatures) {
   for (const region of excludedRegions) for (const country of excludedCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Regiunea exclusa si tara exclusa se suprapun.'), { status: 400 });
   for (const region of targetRegions) for (const country of excludedCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea inclusa si o tara exclusa.'), { status: 400 });
   for (const region of excludedRegions) for (const country of targetCountries) if (membership.get(region)?.has(country)) throw Object.assign(new Error('Exista un conflict intre regiunea exclusa si o tara inclusa.'), { status: 400 });
+  const rawFamilies = Array.isArray(config.target_role_families) ? config.target_role_families : [];
+  const families = normalizeRoleFamilies(rawFamilies);
+  if (!families.length || families.length !== rawFamilies.length) {
+    throw Object.assign(new Error('Selecteaza cel putin o familie de roluri valida.'), { status:400 });
+  }
+  if (families.length > 2) {
+    throw Object.assign(new Error('Selecteaza maximum doua familii de roluri pentru Retrieve.'), { status:400 });
+  }
+  const rawSubfamilies = Array.isArray(config.target_role_subfamilies) ? config.target_role_subfamilies : [];
+  const subfamilies = normalizeRoleSubfamilies(rawSubfamilies);
+  if (!subfamilies.length || subfamilies.length !== rawSubfamilies.length) {
+    throw Object.assign(new Error('Selecteaza cel putin o subfamilie valida pentru fiecare familie.'), { status:400 });
+  }
+  for (const subfamily of subfamilies) {
+    const owner = familyForSubfamily(subfamily);
+    if (!families.includes(owner)) {
+      throw Object.assign(new Error(`Subfamilia ${subfamily} nu apartine unei familii selectate.`), { status:400 });
+    }
+  }
+  for (const family of families) {
+    if (!subfamilies.some(subfamily => familyForSubfamily(subfamily) === family)) {
+      throw Object.assign(new Error(`Familia ${family} necesita cel putin o subfamilie selectata.`), { status:400 });
+    }
+  }
   const configuredContractTypes = config.contract_types == null ? [...allowedContractTypes] : config.contract_types;
   if (!Array.isArray(configuredContractTypes)) throw Object.assign(new Error('contract_types must be a list'), { status:400 });
   for (const value of configuredContractTypes) if (!allowedContractTypes.has(String(value).toLowerCase())) throw Object.assign(new Error(`Unsupported contract type: ${value}`), { status:400 });

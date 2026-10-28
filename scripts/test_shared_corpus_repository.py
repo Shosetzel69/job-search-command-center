@@ -30,7 +30,8 @@ class FakeCursor:
 class SharedCorpusProjectionTests(unittest.TestCase):
     def test_shared_collection_envelope_is_profile_independent(self):
         config = {
-            "role_groups": {"owner": {"enabled": True, "titles": ["Owner-only title"]}},
+            "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],
+            "target_role_subfamilies": ["project_management"],
             "target_country_codes": ["RO"],
             "excluded_country_codes": ["DE"],
             "work_modes": {"remote": False},
@@ -40,10 +41,20 @@ class SharedCorpusProjectionTests(unittest.TestCase):
             "source_strategy": "shared",
         }
         shared = repository.shared_collection_config(config)
-        titles = shared["role_groups"]["shared_canonical_roles"]["titles"]
-        self.assertIn("Project Manager", titles)
-        self.assertIn("Scrum Master", titles)
-        self.assertNotIn("Owner-only title", titles)
+        self.assertEqual(
+            shared["target_role_families"],
+            [
+                "PROJECT_DELIVERY_MANAGEMENT",
+                "SERVICE_OPERATIONS_MANAGEMENT",
+                "PRODUCT_AGILE",
+                "BUSINESS_ANALYSIS_TRANSFORMATION",
+                "CUSTOMER_PROFESSIONAL_SERVICES",
+                "TECHNICAL_LEADERSHIP_ARCHITECTURE",
+            ],
+        )
+        self.assertIn("project_management", shared["target_role_subfamilies"])
+        self.assertIn("product_owner", shared["target_role_subfamilies"])
+        self.assertNotIn("role_groups", shared)
         self.assertEqual(shared["target_country_codes"], [])
         self.assertEqual(shared["excluded_country_codes"], [])
         self.assertNotIn("work_modes", shared)
@@ -71,7 +82,7 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         self.assertNotIn("remote", apify_specs[0][1])
 
     def test_external_id_precedes_url_and_personal_fields_are_not_persisted(self):
-        with patch.object(repository, "_role_family", return_value=("PROJECT_MANAGEMENT", "matched")):
+        with patch.object(repository, "_role_family", return_value=("PROJECT_DELIVERY_MANAGEMENT", "matched")):
             posting = repository.prepare_posting({
                 "_jscc_source_id": "src-1",
                 "_jscc_source_name": "Example",
@@ -103,10 +114,10 @@ class SharedCorpusProjectionTests(unittest.TestCase):
             "remote_scope": "EU",
             "description": "Bank governance delivery",
         })
-        self.assertEqual(posting.role_family, "PROJECT_MANAGEMENT")
+        self.assertEqual(posting.role_family, "PROJECT_DELIVERY_MANAGEMENT")
         self.assertEqual(
             posting.role_subfamily,
-            ("project_manager", "technical_project_manager"),
+            ("project_management",),
         )
         self.assertEqual(posting.contract_type, "contract")
         self.assertEqual(posting.remote_scope, "EU")
@@ -192,7 +203,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
             location="Bucharest",
             country_codes=("RO",),
             work_mode="hybrid",
-            role_family="PROJECT_MANAGEMENT",
+            role_family="PROJECT_DELIVERY_MANAGEMENT",
             posted_at=NOW,
             repost_of_external_job_id=None,
             payload={},

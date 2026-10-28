@@ -1,0 +1,179 @@
+{
+  "schema_version": "1.0",
+  "dataset_id": "jscc-role-family-v1-dev-qa",
+  "environment": "dev",
+  "provenance": "SYNTHETIC",
+  "source_id": "jscc-dev-qa-role-family-v1",
+  "source_name": "JSCC QA — SYNTHETIC (NOT REAL JOBS)",
+  "description": "Controlled DEV-only fake job postings for Criteria, Search, Classification, Eligibility and Refresh QA. Never publish in TEST or PROD.",
+  "cases": [
+    {
+      "id": "qa-001",
+      "title": "Project Manager",
+      "expected_role_family": "PROJECT_DELIVERY_MANAGEMENT",
+      "expected_classification_status": "matched",
+      "work_mode": "remote",
+      "contract_type": "contract",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-002",
+      "title": "Program Manager",
+      "expected_role_family": "PROJECT_DELIVERY_MANAGEMENT",
+      "expected_classification_status": "matched",
+      "work_mode": "hybrid",
+      "contract_type": "permanent",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-003",
+      "title": "PMO Manager",
+      "expected_role_family": "PROJECT_DELIVERY_MANAGEMENT",
+      "expected_classification_status": "matched",
+      "work_mode": "onsite",
+      "contract_type": "contract",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-004",
+      "title": "IT Service Manager",
+      "expected_role_family": "SERVICE_OPERATIONS_MANAGEMENT",
+      "expected_classification_status": "matched",
+      "work_mode": "hybrid",
+      "contract_type": "permanent",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-005",
+      "title": "Scrum Master",
+      "expected_role_family": "PRODUCT_AGILE",
+      "expected_classification_status": "matched",
+      "work_mode": "remote",
+      "contract_type": "contract",
+      "country_codes": [
+        "DE"
+      ],
+      "location": "Berlin, Germany"
+    },
+    {
+      "id": "qa-006",
+      "title": "Product Owner",
+      "expected_role_family": "PRODUCT_AGILE",
+      "expected_classification_status": "matched",
+      "work_mode": "remote",
+      "contract_type": "contract",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-007",
+      "title": "Senior Business Analyst",
+      "expected_role_family": "BUSINESS_ANALYSIS_TRANSFORMATION",
+      "expected_classification_status": "matched",
+      "work_mode": "hybrid",
+      "contract_type": "contract",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-008",
+      "title": "Customer Success Manager",
+      "expected_role_family": "CUSTOMER_PROFESSIONAL_SERVICES",
+      "expected_classification_status": "matched",
+      "work_mode": "remote",
+      "contract_type": "permanent",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-009",
+      "title": "Technical Customer Success Manager",
+      "expected_role_family": "CUSTOMER_PROFESSIONAL_SERVICES",
+      "expected_classification_status": "matched",
+      "work_mode": "remote",
+      "contract_type": "contract",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-010",
+      "title": "Solution Architect",
+      "expected_role_family": "TECHNICAL_LEADERSHIP_ARCHITECTURE",
+      "expected_classification_status": "matched",
+      "work_mode": "remote",
+      "contract_type": "contract",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-011",
+      "title": "Enterprise Architect",
+      "expected_role_family": "TECHNICAL_LEADERSHIP_ARCHITECTURE",
+      "expected_classification_status": "matched",
+      "work_mode": "hybrid",
+      "contract_type": "contract",
+      "country_codes": [
+        "DE"
+      ],
+      "location": "Berlin, Germany"
+    },
+    {
+      "id": "qa-012",
+      "title": "Business Analyst / Product Owner",
+      "expected_role_family": "UNKNOWN",
+      "expected_classification_status": "conflict",
+      "work_mode": "remote",
+      "contract_type": "contract",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    },
+    {
+      "id": "qa-013",
+      "title": "Technical Lead Project Manager",
+      "expected_role_family": "UNKNOWN",
+      "expected_classification_status": "conflict",
+      "work_mode": "remote",
+      "contract_type": "contract",
+      "country_codes": [
+        "DE"
+      ],
+      "location": "Berlin, Germany"
+    },
+    {
+      "id": "qa-014",
+      "title": "Cafeteria Shift Supervisor",
+      "expected_role_family": "UNKNOWN",
+      "expected_classification_status": "unknown",
+      "work_mode": "onsite",
+      "contract_type": "permanent",
+      "country_codes": [
+        "RO"
+      ],
+      "location": "Bucharest, Romania"
+    }
+  ]
+}
