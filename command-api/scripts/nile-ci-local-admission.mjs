@@ -66,6 +66,39 @@ export function admitNileCi({
   return Object.freeze({container_id:c.Id,image:TEST_IMAGE,database:'jobsearch_dev',port:CI_PORT});
 }
 
+
+/**
+ * S03: prove a live native DB session through an actual SQL round trip.
+ * The per-process nonce is assigned by the CI orchestrator. Evidence is emitted
+ * only after the database confirms its identity, port and server-side nonce.
+ */
+export async function attestNativeDatabase(db,{env=process.env}={}){
+  const run=String(env.W025_NATIVE_RUN_ID||'');
+  const challenge=String(env.W025_NATIVE_CHALLENGE||'');
+  if(!['migration','provider','tenant','multiuser','role_family'].includes(run)
+      || !/^[a-f0-9]{32}$/.test(challenge))deny('native challenge absent');
+  if(!db||typeof db.query!=='function')deny('native SQL client missing');
+  let result;
+  try{
+    result=await db.query(
+      'SELECT current_database()::text AS db_name, current_user::text AS principal, pg_backend_pid()::int AS backend_pid, inet_server_port()::int AS server_port, $1::text AS challenge',
+      [challenge]);
+  }catch(error){deny('native SQL readback failed: '+String(error?.code||'query_error'));}
+  if(result?.rows?.length!==1)deny('native readback cardinality');
+  const row=result.rows[0];
+  if(row.db_name!=='jobsearch_dev' ||
+     typeof row.principal!=='string' || !row.principal.trim() ||
+     !Number.isInteger(Number(row.backend_pid)) || Number(row.backend_pid)<=0 ||
+     Number(row.server_port)!==5432 || row.challenge!==challenge)
+    deny('native SQL identity mismatch');
+  const attestation=Object.freeze({
+    run,challenge,db_name:row.db_name,principal:row.principal,
+    backend_pid:Number(row.backend_pid),server_port:Number(row.server_port)
+  });
+  console.log('W025_NATIVE_DB_READBACK='+JSON.stringify(attestation));
+  return attestation;
+}
+
 if(process.argv[1] && import.meta.url===new URL('file://'+process.argv[1]).href) {
   const result=admitNileCi();
   console.log('W025_ADMISSION=PASS',JSON.stringify(result));
