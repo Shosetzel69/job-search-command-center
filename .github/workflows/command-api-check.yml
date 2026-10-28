@@ -65,19 +65,6 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: jobsearch_dev
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d jobsearch_dev"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -237,97 +224,23 @@ jobs:
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Provision ephemeral PostgreSQL roles
-        working-directory: command-api
-        run: |
-          node --input-type=module - <<'NODE'
-          import pg from 'pg';
-          const { Client } = pg;
-          const client = new Client({ connectionString:'postgresql://postgres:postgres@localhost:5432/jobsearch_dev' });
-          await client.connect();
-          await client.query("CREATE ROLE jscc_migration LOGIN PASSWORD 'migration' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE");
-          await client.query("CREATE ROLE jscc_runtime LOGIN PASSWORD 'runtime' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT");
-          await client.query('ALTER DATABASE jobsearch_dev OWNER TO jscc_migration');
-          await client.query('ALTER SCHEMA public OWNER TO jscc_migration');
-          await client.end();
-          NODE
-
       - name: Validate ADR-008 tenant boundary
         working-directory: command-api
         run: npm run check:tenant-boundary
 
-      - name: Run Multiuser PostgreSQL integration tests
+      - name: Assert retired migrations are still disabled (E86)
         working-directory: command-api
-        env:
-          APP_ENV: dev
-          NILE_DATABASE_URL: postgresql://jscc_runtime:runtime@localhost:5432/jobsearch_dev
-          NILE_MIGRATION_DATABASE_URL: postgresql://jscc_migration:migration@localhost:5432/jobsearch_dev
-          JSCC_INTEGRATION_DATABASE_URL: postgresql://jscc_runtime:runtime@localhost:5432/jobsearch_dev
-          JSCC_TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jobsearch_dev
-          JSCC_MAX_USERS: "50"
-          BOOTSTRAP_ADMIN_GOOGLE_SUB: owner-sub
         run: |
-          # DEV-01B: verify that the released db:migrate path remains disabled.
-          # npm normalizes nonzero script exits; direct Node must return exactly 86.
           set +e
-          direct_refusal="$(node scripts/db-migrate.mjs 2>&1)"
+          node scripts/db-migrate.mjs > /tmp/w025_direct.out 2>&1
           direct_rc=$?
-          npm_refusal="$(npm run db:migrate 2>&1)"
+          npm run db:migrate > /tmp/w025_npm.out 2>&1
           npm_rc=$?
           set -e
           test "$direct_rc" -eq 86
           test "$npm_rc" -ne 0
-          [[ "$direct_refusal" == *JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED* ]]
-          [[ "$npm_refusal" == *JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED* ]]
-
-          # Test-only migration on GitHub-hosted ephemeral Postgres at localhost.
-          # Never introduce a migration override in the production image.
-          node --input-type=module <<'NODE'
-          import { strict as assert } from 'node:assert';
-
-          assert.equal(process.env.CI, 'true');
-          assert.equal(process.env.GITHUB_ACTIONS, 'true');
-          assert.equal(process.env.APP_ENV, 'dev');
-          const principals = {
-            NILE_DATABASE_URL: 'jscc_runtime',
-            NILE_MIGRATION_DATABASE_URL: 'jscc_migration',
-            JSCC_INTEGRATION_DATABASE_URL: 'jscc_runtime',
-            JSCC_TEST_ADMIN_DATABASE_URL: 'postgres',
-          };
-          for (const [name, principal] of Object.entries(principals)) {
-            const url = new URL(process.env[name] || '');
-            assert.equal(url.protocol, 'postgresql:');
-            assert.equal(url.hostname, 'localhost');
-            assert.equal(url.port, '5432');
-            assert.equal(url.pathname, '/jobsearch_dev');
-            assert.equal(decodeURIComponent(url.username), principal);
-            assert.equal(url.search, '');
-            assert.equal(url.hash, '');
-          }
-
-          // Import migration/backfill code only after confirming an isolated CI DB.
-          const { migrate } = await import('./src/db/migrations.js');
-          const { backfillSearchProfileFoundations } = await import('./src/db/search-profile-backfill.js');
-          const { closeMigrationPool, getMigrationPool } = await import('./src/db/pool.js');
-          const {
-            backfillCanonicalJobClassification,
-            backfillSearchProfilePreferences,
-          } = await import('./src/db/atc-489-02-backfill.js');
-          const db = getMigrationPool();
-          try {
-            await migrate({ db });
-            await backfillSearchProfileFoundations(process.env, { db });
-            await backfillSearchProfilePreferences(process.env, { db });
-            await backfillCanonicalJobClassification(process.env, { db });
-            console.log('JSCC541_DEV01B_LOCAL_CI_MIGRATION_PASS');
-          } finally {
-            await closeMigrationPool();
-          }
-          NODE
-          npm run db:nile-tenant-probe
-          npm run db:provision-runtime
-          npm run db:privilege-readiness
-          node --test test/multiuser-db.integration.mjs
+          grep -q JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED /tmp/w025_direct.out
+          grep -q JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED /tmp/w025_npm.out
 
       - name: Run Command API unit tests
         working-directory: command-api
@@ -339,59 +252,79 @@ jobs:
 
 
   nile-contract-evidence:
-    name: Nile provider contract evidence
+    name: Nile-only native provider CI
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    env:
+      APP_ENV: dev
+      NILE_TESTING_DB_NAME: jobsearch_dev
+      JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE: "true"
+      NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      NILE_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      NILE_MIGRATION_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      JSCC_INTEGRATION_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      JSCC_TEST_ADMIN_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
     steps:
-      - name: Check out repository
+      - name: Check out exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
+        with:
+          persist-credentials: false
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-
-      - name: Install Command API dependencies
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
-
-      - name: Start official Nile testing container
+      - name: Start official immutable Nile testing image
+        id: nile
+        shell: bash
         run: |
-          docker pull ghcr.io/niledatabase/testingcontainer:latest
-          docker run --rm -d \
-            --name jscc-nile-test \
-            -p 55432:5432 \
-            ghcr.io/niledatabase/testingcontainer:latest
-
-          ready=0
+          set -euo pipefail
+          image=ghcr.io/niledatabase/testingcontainer@sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869
+          docker pull "$image"
+          docker buildx imagetools inspect "$image" | grep -F 'sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869'
+          id="$(docker run -d --name "w025-nile-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -e NILE_TESTING_DB_NAME=jobsearch_dev -p 127.0.0.1:55432:5432 "$image")"
+          echo "W025_NILE_CONTAINER_ID=$id" >> "$GITHUB_ENV"
           for i in $(seq 1 90); do
-            if docker logs jscc-nile-test 2>&1 | grep -q "Database has been created and is ready"; then
-              ready=1
-              break
+            if docker logs "$id" 2>&1 | grep -q 'Database has been created and is ready'; then
+              exit 0
             fi
             sleep 2
           done
-          if [ "$ready" -ne 1 ]; then
-            docker logs jscc-nile-test
-            exit 1
+          docker logs "$id"
+          exit 1
+      - name: Admit exact runner container and all database bindings
+        working-directory: command-api
+        run: node scripts/nile-ci-local-admission.mjs
+      - name: Migrations 001-010 and migration idempotence
+        working-directory: command-api
+        run: node scripts/db-nile-migrate-evidence.mjs
+      - name: Existing official Nile provider behavior
+        working-directory: command-api
+        run: node scripts/db-nile-contract-evidence.mjs
+      - name: Run admission, tenant, multiuser and role-family regression
+        working-directory: command-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/nile-ci-local-admission.test.mjs
+          node --test test/nile-native-isolation.integration.mjs
+          node --test test/multiuser-db.integration.mjs
+          node --test test/nile-role-family.integration.mjs
+          node --test test/role-family-review.test.mjs
+          npm test
+      - name: Nile container diagnostic and cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${W025_NILE_CONTAINER_ID:-}" ]; then
+            docker logs "$W025_NILE_CONTAINER_ID" || true
+            docker rm -f "$W025_NILE_CONTAINER_ID"
+            ! docker inspect "$W025_NILE_CONTAINER_ID" >/dev/null 2>&1
           fi
-
-      - name: Apply migrations on official Nile testing container
-        working-directory: command-api
-        env:
-          NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
-        run: npm run db:nile-migrate-evidence
-
-      - name: Collect Nile provider contract evidence
-        working-directory: command-api
-        env:
-          NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
-        run: npm run db:nile-contract-evidence
-
-      - name: Show Nile container logs
-        if: always()
-        run: docker logs jscc-nile-test || true
-
-      - name: Stop Nile testing container
-        if: always()
-        run: docker stop jscc-nile-test || true
