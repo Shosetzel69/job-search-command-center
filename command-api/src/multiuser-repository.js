@@ -1041,7 +1041,9 @@ export async function listProfileJobs(
     const targetSubfamilies = listValues(preferences.target_role_subfamilies);
     if (targetSubfamilies.length) {
       const p = add(targetSubfamilies);
-      where.push(`(cardinality(j.role_subfamily) = 0 OR j.role_subfamily && ${p}::text[])`);
+      // Conflicted canonical classifications can be UNKNOWN with nonempty member codes.
+      // A subfamily mismatch is explicit only for a known role family.
+      where.push(`(j.role_family = 'UNKNOWN' OR cardinality(j.role_subfamily) = 0 OR j.role_subfamily && ${p}::text[])`);
     }
 
     const disabledModes = Object.entries(jsonObject(preferences.work_modes))
