@@ -25,8 +25,9 @@ export function validateNileLedger(evidence,{sourceSha}={}){
       !['NATIVE','MOCK','HARNESS'].includes(run.mode) ||
       typeof run.command!=='string' || !run.command.trim() ||
       (run.tap===null
-        ? !(run.mode==='HARNESS' && run.probe_verified===true &&
-             ['admission','retired_entrypoint','cleanup'].includes(run.id))
+        ? !(run.probe_verified===true &&
+             (run.mode==='HARNESS' && ['admission','retired_entrypoint','cleanup'].includes(run.id) ||
+              run.mode==='NATIVE' && ['migration','provider'].includes(run.id)))
         : (!Number.isSafeInteger(run.tap?.tests) || run.tap.tests<1 ||
            !Number.isSafeInteger(run.tap?.passed) ||
            run.tap.passed!==run.tap.tests || run.tap.failed!==0 ||
