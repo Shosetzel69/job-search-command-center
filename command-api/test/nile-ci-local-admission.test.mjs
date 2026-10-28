@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {admitNileCi,attestNativeDatabase,verifyTarget,CI_USER,TEST_IMAGE,TARGET_KEYS} from '../scripts/nile-ci-local-admission.mjs';
+import {admitNileCi,attestNativeDatabase,verifyTarget,CI_USER,TEST_IMAGE,TARGET_KEYS,NILE_NATIVE_BACKEND_PORT} from '../scripts/nile-ci-local-admission.mjs';
 import {validateNileLedger} from '../scripts/nile-ci-test-gate.mjs';
 const url='postgresql://'+CI_USER+':password@127.0.0.1:55432/jobsearch_dev';
 const valid=()=>Object.fromEntries([
@@ -74,7 +74,7 @@ test('W025-S03 rejects forged or absent native SQL provenance and broken TAP out
     observed_ids:[id],...(isNative?{
       native_container_id:imageId,native_db_observed:true,native_challenge:challenge,
       native_db_readback:{run:run_id,challenge,db_name:'jobsearch_dev',principal:'synthetic',
-       backend_pid:123,server_port:5432}
+       backend_pid:123,server_port:NILE_NATIVE_BACKEND_PORT}
     }:{})};
   }),
   results:ids.map(id=>({id,status:'PASS',sha,run_id:id.toLowerCase()}))
@@ -112,4 +112,27 @@ test('W025-S03 live readback requires valid challenge and real SQL identity',asy
  }};
  await assert.rejects(attestNativeDatabase(db,{env}),/ADMISSION_DENIED/);
  assert.equal(calls,1);
+});
+
+test('W025-NILE-PORT actual pinned 5421 backend accepted; 5432 gateway and other ports denied',async()=>{
+ const env={W025_NATIVE_RUN_ID:'migration',W025_NATIVE_CHALLENGE:'c'.repeat(32)};
+ const row={db_name:'jobsearch_dev',principal:'Nile runtime SQL principal',backend_pid:456,
+  server_port:NILE_NATIVE_BACKEND_PORT,challenge:env.W025_NATIVE_CHALLENGE};
+ assert.equal(NILE_NATIVE_BACKEND_PORT,5421,'pinned provider-native SQL backend contract changed');
+ let queries=0;
+ const db={query:async(sql,args)=>{
+  queries++;
+  assert.match(sql,/inet_server_port\(\)/);
+  assert.deepEqual(args,[env.W025_NATIVE_CHALLENGE]);
+  return {rows:[row]};
+ }};
+ const attested=await attestNativeDatabase(db,{env});
+ assert.equal(attested.server_port,5421);
+ assert.equal(attested.run,'migration');
+ assert.equal(queries,1);
+ for(const port of [5432,5444,55432,null]){
+  await assert.rejects(attestNativeDatabase({query:async()=>({rows:[{...row,server_port:port}]})},{env}),/ADMISSION_DENIED/,
+   'unexpected backend port '+port+' must not be accepted');
+ }
+ await assert.rejects(attestNativeDatabase({query:async()=>({rows:[{...row,challenge:'forged'}]})},{env}),/ADMISSION_DENIED/);
 });
