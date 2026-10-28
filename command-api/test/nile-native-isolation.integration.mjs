@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {admitNileCi} from '../scripts/nile-ci-local-admission.mjs';
+import {admitNileCi,attestNativeDatabase} from '../scripts/nile-ci-local-admission.mjs';
 admitNileCi();
 const {default:pg}=await import('pg');
 const url=process.env.NILE_TEST_DATABASE_URL;
@@ -11,6 +11,7 @@ const refusal=e=>e?.code==='0A000' && /^Multiple tenant IDs specified/.test(Stri
 test('W025 Nile tenant-native T01-T05',async t=>{
  const c=new pg.Client({connectionString:url,connectionTimeoutMillis:10000});
  await c.connect();
+ await attestNativeDatabase(c);
  const context=async()=>{
   const r=await c.query("SELECT current_setting('nile.tenant_id',true) AS t");
   assert.ok(!r.rows[0].t,'tenant context leaked beyond transaction');
