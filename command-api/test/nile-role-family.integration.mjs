@@ -7,7 +7,7 @@ const [{default:pg}, repository, backfill, classification, taxonomy, eligibility
  import('../src/db/atc-489-02-backfill.js'),import('../../shared/job-classification.mjs'),
  import('../../shared/role-taxonomy-runtime.mjs'),import('../src/eligibility.js')
 ]);
-const {randomUUID}=await import('node:crypto');
+const {randomUUID,createHash}=await import('node:crypto');
 const {readFile}=await import('node:fs/promises');
 const {Pool}=pg;
 const env={...process.env,APP_ENV:'dev'};
@@ -106,15 +106,30 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    const check=await db.query('SELECT count(*)::integer AS count FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',[seeded.map(j=>j.id)]);
    assert.equal(Number(check.rows[0].count),seeded.length);
   });
-  await t.test('W025-R05 independent coverage scope family/subfamily identity',async()=>{
-   const columns=(await db.query("SELECT column_name FROM information_schema.columns WHERE table_name='coverage_scope_state'")).rows.map(r=>r.column_name);
-   assert.ok(columns.includes('role_subfamilies'));
-   const a={role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamilies:['project_management']};
-   const b={role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamilies:['delivery_management']};
-   assert.notDeepEqual(a,b);
-   // Real schema checks: distinct canonical family/subfamily combinations are admissible.
-   const constraints=await db.query("SELECT pg_get_constraintdef(oid) AS definition FROM pg_constraint WHERE conrelid='coverage_scope_state'::regclass");
-   assert.ok(constraints.rows.some(r=>r.definition.includes('PROJECT_DELIVERY_MANAGEMENT')));
+  await t.test('W025-R05 persisted independent scope family/subfamily states',async()=>{
+   const column=(await db.query("SELECT column_name FROM information_schema.columns WHERE table_name='coverage_scope_state'")).rows.map(r=>r.column_name);
+   assert.ok(column.includes('role_subfamilies'));
+   const scopes=[
+    {role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamilies:['project_management'],target_country_codes:['RO']},
+    {role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamilies:['delivery_management'],target_country_codes:['RO']}
+   ];
+   const key=x=>createHash('sha256').update(JSON.stringify(x)).digest('hex');
+   const ids=scopes.map(key);
+   assert.notEqual(ids[0],ids[1]);
+   for(let i=0;i<scopes.length;i++){
+    await db.query(`INSERT INTO coverage_scope_state(scope_key,role_family,role_subfamilies,scope,corpus_volume)
+      VALUES($1,$2,$3,$4::jsonb,$5)`,
+      [ids[i],scopes[i].role_family,scopes[i].role_subfamilies,JSON.stringify(scopes[i]),i+1]);
+   }
+   const rows=(await db.query('SELECT scope_key,role_family,role_subfamilies,corpus_volume FROM coverage_scope_state WHERE scope_key=ANY($1::text[]) ORDER BY scope_key',[ids])).rows;
+   assert.equal(rows.length,2);
+   for(let i=0;i<scopes.length;i++){
+    const item=rows.find(x=>x.scope_key===ids[i]);
+    assert.ok(item);
+    assert.equal(item.role_family,scopes[i].role_family);
+    assert.deepEqual(item.role_subfamilies,scopes[i].role_subfamilies);
+    assert.equal(Number(item.corpus_volume),i+1);
+   }
   });
  }finally{await db.end();}
 });
