@@ -308,6 +308,7 @@ jobs:
         run: |
           node --input-type=module <<'NODE'
           import {spawnSync} from 'node:child_process';
+          import {randomBytes} from 'node:crypto';
           import {writeFileSync} from 'node:fs';
           const sha=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).stdout.trim();
           if(!/^[a-f0-9]{40}$/.test(sha))throw Error('checkout SHA unresolved');
@@ -317,9 +318,28 @@ jobs:
             runs:[],results:[]};
           let good=true;
           const run=(runId,mode,command,args,expected=[],kind='tap')=>{
-            const child=spawnSync(command,args,{encoding:'utf8',env:process.env,timeout:180000});
+            const challenge=mode==='NATIVE'?randomBytes(16).toString('hex'):null;
+            const childEnv=mode==='NATIVE'?{
+              ...process.env,W025_NATIVE_RUN_ID:runId,W025_NATIVE_CHALLENGE:challenge
+            }:process.env;
+            const child=spawnSync(command,args,{encoding:'utf8',env:childEnv,timeout:180000});
             const output=(child.stdout||'')+'\n'+(child.stderr||'');
             process.stdout.write(output);
+            let sqlReadback=null;
+            if(mode==='NATIVE'){
+              const matches=[...output.matchAll(/(?:^|\n)(?:# )?W025_NATIVE_DB_READBACK=(\{[^\n]+\})/g)];
+              if(matches.length===1){
+                try{
+                  const row=JSON.parse(matches[0][1]);
+                  if(row.run===runId && row.challenge===challenge &&
+                     row.db_name==='jobsearch_dev' &&
+                     typeof row.principal==='string' && row.principal.trim() &&
+                     Number.isInteger(row.backend_pid) && row.backend_pid>0 &&
+                     row.server_port===5432)sqlReadback=row;
+                }catch{/* malformed or spoofed evidence is a hard failure */}
+              }
+              if(!sqlReadback)good=false;
+            }
             const subtests=[...output.matchAll(/^\s*# Subtest: (?:W025[- ]([A-Z][0-9]{1,2})|([DG]1):)/gm)]
               .map(m=>m[1]||m[2]);
             const pick=name=>Number(new RegExp('^# '+name+' (\\d+)$','m').exec(output)?.[1]??-1);
@@ -344,11 +364,23 @@ jobs:
             evidence.runs.push({id:runId,mode,command:[command,...args].join(' '),
               exit_code,checkout_sha:sha,tap:kind==='migration'||kind==='provider'?null:tap,
               probe_verified:(kind==='migration'||kind==='provider')?exit_code===0:undefined,observed_ids:observed,
-              ...(mode==='NATIVE'?{native_container_id:id,native_db_observed:true}:{})});
+              ...(mode==='NATIVE'?{native_container_id:id,native_db_observed:Boolean(sqlReadback),
+                native_challenge:challenge,native_db_readback:sqlReadback}:{})});
             for(const x of observed)evidence.results.push({id:x,status:'PASS',sha,run_id:runId});
           };
           run('migration','NATIVE','node',['scripts/db-nile-migrate-evidence.mjs'],['M01','M02'],'migration');
-          run('provider','NATIVE','node',['scripts/db-nile-contract-evidence.mjs'],[],'provider');
+          const providerWrapper=[
+            "import {spawnSync} from 'node:child_process';",
+            "import {admitNileCi,attestNativeDatabase} from './scripts/nile-ci-local-admission.mjs';",
+            "admitNileCi();",
+            "const child=spawnSync(process.execPath,['scripts/db-nile-contract-evidence.mjs'],{env:process.env,encoding:'utf8',timeout:150000});",
+            "process.stdout.write(child.stdout||'');process.stderr.write(child.stderr||'');",
+            "if(child.status!==0)throw Error('Nile provider contract evidence failed');",
+            "const {default:pg}=await import('pg');",
+            "const pool=new pg.Pool({connectionString:process.env.NILE_TEST_DATABASE_URL,max:1});",
+            "try{await attestNativeDatabase(pool);}finally{await pool.end();}"
+          ].join('\\n');
+          run('provider','NATIVE','node',['--input-type=module','-e',providerWrapper],[],'provider');
           run('admission_unit','HARNESS','node',['--test','test/nile-ci-local-admission.test.mjs'],['H02'],'unit_admission');
           run('tenant','NATIVE','node',['--test','test/nile-native-isolation.integration.mjs'],['T01','T02','T03','T04','T05']);
           run('multiuser','NATIVE','node',['--test','test/multiuser-db.integration.mjs'],['U01','U02','U03','U04','U05','F01','F02','U06','L01','L02']);
