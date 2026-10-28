@@ -44,7 +44,10 @@ class OrchestrationTests(unittest.TestCase):
         ]}
         plan = orchestration.build_plan(catalog)
         alias = next(item for item in plan if item["source_id"] == "rie")
-        self.assertEqual(alias["outcome"], "provider_alias")
+        self.assertEqual(alias["status"], "skipped")
+        self.assertEqual(alias["outcome"], "skipped")
+        self.assertEqual(alias["provider_alias"], "We Work Remotely")
+        orchestration.finalize_source_outcomes(plan, "alias-unit")
 
     def test_access_control_sources_are_policy_excluded(self):
         for name in ("Arc.dev", "Welcome to the Jungle", "CGI"):
@@ -405,8 +408,56 @@ class OrchestrationTests(unittest.TestCase):
         plan = orchestration.build_plan(catalog)
         remotehunt = next(item for item in plan if item["source"] == "RemoteHunt")
         self.assertEqual(remotehunt["status"], "skipped")
-        self.assertEqual(remotehunt["outcome"], "provider_alias")
+        self.assertEqual(remotehunt["outcome"], "skipped")
         self.assertEqual(remotehunt["provider_alias"], "We Work Remotely")
+        orchestration.finalize_source_outcomes(plan, "alias-remotehunt")
+
+    def test_provider_alias_run_finalizes_and_persists_without_collecting_aliases(self):
+        catalog = copy.deepcopy(CATALOG)
+        catalog["sources"].extend([
+            {"id": "wwr", "name": "We Work Remotely", "url": "https://weworkremotely.com/", "active": False},
+            {"id": "rie", "name": "Remote in Europe", "url": "https://remoteineurope.com/", "active": False},
+            {"id": "rh", "name": "RemoteHunt", "url": "https://remotehunt.com/", "active": False},
+        ])
+        orchestration.SOURCES_PATH.write_text(json.dumps(catalog))
+        evidence = {
+            "status": "persisted", "records_projected": 2, "records_skipped": 0,
+            "postings_created": 2, "postings_updated": 0, "lifecycle_advanced": 0,
+        }
+        with patch.object(orchestration.shared_corpus, "persist_collection", return_value=evidence) as persist:
+            code, status = self.run_search()
+
+        self.assertEqual(code, 0)
+        self.assertEqual(status["status"], "completed_with_errors")
+        self.assertEqual(status["sources_skipped"], 2)
+        self.assertEqual(status["source_outcome_counts"]["skipped"], 2)
+        self.assertNotIn("provider_alias", status["source_outcome_counts"])
+        outcomes = {item["source"]: item["outcome"] for item in status["source_results"]}
+        self.assertEqual(outcomes["JobsPipe"], "success")
+        self.assertEqual(outcomes["Jobicy"], "success")
+        self.assertEqual(outcomes["Unimplemented"], "failed")
+        self.assertEqual(outcomes["Inactive"], "disabled_config")
+        self.assertEqual(outcomes["We Work Remotely"], "disabled_config")
+        self.assertEqual(outcomes["Remote in Europe"], "skipped")
+        self.assertEqual(outcomes["RemoteHunt"], "skipped")
+        for source in ("Remote in Europe", "RemoteHunt"):
+            alias = next(item for item in status["source_results"] if item["source"] == source)
+            self.assertEqual(alias["provider_alias"], "We Work Remotely")
+            self.assertIsNone(alias["error_code"])
+            self.assertIsNone(alias["failure_stage"])
+        self.apify.assert_called_once()
+        self.jobicy.assert_called_once()
+        persist.assert_called_once()
+        _, persisted_plan = persist.call_args.args[:2]
+        self.assertEqual(len([item for item in persisted_plan if item["outcome"] == "skipped"]), 2)
+        self.assertEqual(status["shared_corpus"], evidence)
+        history = json.loads(runner.HISTORY_PATH.read_text())["runs"][0]
+        self.assertEqual(history["source_outcome_counts"], status["source_outcome_counts"])
+
+    def test_unknown_source_outcome_remains_fail_closed(self):
+        item = {"source_id": "unknown", "status": "skipped", "outcome": "noncanonical_test_value"}
+        with self.assertRaisesRegex(ValueError, "Unsupported source outcome"):
+            orchestration.finalize_source_outcomes([item], "unknown-outcome")
 
     def test_spoofed_hosts_and_connector_flags_are_not_trusted(self):
         for url in ("https://jobicy.com.evil.example/", "https://jobicy.com@evil.example/", "http://jobicy.com/", "https://jobicy.com:444/"):
