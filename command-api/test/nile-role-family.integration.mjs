@@ -43,13 +43,19 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    const expected=backfill.migrateRoleCriteria(input);
    assert.deepEqual(expected.target_role_families,['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE']);
    assert.deepEqual(backfill.migrateRoleCriteria(expected),expected);
-   await db.query('BEGIN');
-   try {
-    await db.query("SET LOCAL nile.tenant_id = '"+ctx.profile_id+"'");
-    await db.query('UPDATE search_profile_preferences SET preferences=$3::jsonb WHERE tenant_id=$1 AND search_profile_id=$2',
+   const {withTenantTransaction}=await import('../src/db/tenant-gateway.js');
+   await withTenantTransaction(ctx,async tx=>{
+    const updated=await tx.query(
+      'UPDATE search_profile_preferences SET preferences=$3::jsonb WHERE tenant_id=$1 AND search_profile_id=$2',
       [ctx.profile_id,foundation.search_profile_id,JSON.stringify(input)]);
-    await db.query('COMMIT');
-   } catch(e){await db.query('ROLLBACK').catch(()=>{});throw e;}
+    assert.equal(updated.rowCount,1,'legacy preferences must update in authenticated tenant transaction');
+   },{env,db});
+   await withTenantTransaction(ctx,async tx=>{
+    const r=await tx.query(
+      'SELECT preferences FROM search_profile_preferences WHERE tenant_id=$1 AND search_profile_id=$2',
+      [ctx.profile_id,foundation.search_profile_id]);
+    assert.deepEqual(r.rows[0]?.preferences,input,'legacy preferences lost after commit');
+   },{env,db});
    const first=await backfill.backfillSearchProfilePreferences(env,{db});
    assert.ok(first.processed>=1);
    const stored=await repository.effectiveConfig(ctx,env,{db});
@@ -84,34 +90,89 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    }
    assert.equal(roles.length,6);
   });
-  await t.test('W025-R03 inclusion, exclusion, UNKNOWN retention and immutable canonical decisions',async()=>{
-   const prefs={...await repository.effectiveConfig(ctx,env,{db}),target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management']};
+  await t.test('W025-R03 selected family included, explicit mismatch excluded, both UNKNOWN persisted',async()=>{
+   const prefs={...await repository.effectiveConfig(ctx,env,{db}),
+    target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management']};
    await repository.savePreferences(ctx,prefs,env,{db});
-   const actual=await repository.listProfileJobs(ctx,prefs,nomenclatures,{limit:50,prefetch:0,q:'W025'},env,{db});
-   const families=new Set(actual.jobs.map(j=>j.role_family));
-   assert.ok(!families.has('SERVICE_OPERATIONS_MANAGEMENT'));
-   const direct=await db.query('SELECT job_id,role_family FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',[seeded.map(j=>j.id)]);
-   for(const job of seeded)assert.equal(direct.rows.find(r=>r.job_id===job.id).role_family,job.expected);
+   const stored=await repository.effectiveConfig(ctx,env,{db});
+   assert.deepEqual(stored.target_role_families,prefs.target_role_families);
+   assert.deepEqual(stored.target_role_subfamilies,prefs.target_role_subfamilies);
+   const actual=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:50,prefetch:0,q:'W025'},env,{db});
+   assert.equal(actual.bounded,true);
+   const returned=new Set(actual.jobs.map(j=>j.id));
+   const selected=seeded.filter(j=>j.expected==='PROJECT_DELIVERY_MANAGEMENT');
    const unknown=seeded.filter(j=>j.expected==='UNKNOWN');
+   const rejected=seeded.filter(j=>j.expected!=='PROJECT_DELIVERY_MANAGEMENT' && j.expected!=='UNKNOWN');
+   assert.equal(selected.length,1);
    assert.equal(unknown.length,2);
-   // UNKNOWN must survive the SQL hard-prefilter; eligibility may retain tri-state UNKNOWN.
-   assert.ok(actual.jobs.some(j=>unknown.some(u=>u.id===j.id)));
-  });
-  await t.test('W025-R04 bounded cursor pagination, stable unique IDs and canonical preservation',async()=>{
-   const prefs=await repository.effectiveConfig(ctx,env,{db});
-   const seen=[];
-   let cursor=null;
-   for(let i=0;i<12;i++){
-    const page=await repository.listProfileJobs(ctx,prefs,nomenclatures,{limit:2,prefetch:0,q:'W025',...(cursor?{cursor}:{})},env,{db});
-    assert.ok(page.jobs.length<=2);
-    seen.push(...page.jobs.map(j=>j.id));
-    cursor=page.next_cursor;
-    if(!cursor)break;
+   for(const job of selected)assert.ok(returned.has(job.id),'selected project job filtered out: '+job.title);
+   for(const job of unknown)assert.ok(returned.has(job.id),'UNKNOWN silently filtered: '+job.title);
+   for(const job of rejected)assert.ok(!returned.has(job.id),'explicit role mismatch leaked: '+job.title);
+   assert.deepEqual([...returned].sort(),[...selected,...unknown].map(j=>j.id).sort());
+   const persisted=await db.query(
+     'SELECT job_id,eligibility_state,eligibility_reason_code,profile_version FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])',
+     [ctx.profile_id,foundation.search_profile_id,[...selected,...unknown].map(j=>j.id)]);
+   assert.equal(persisted.rows.length,selected.length+unknown.length);
+   for(const job of selected){
+    const row=persisted.rows.find(r=>r.job_id===job.id);
+    assert.ok(row);assert.equal(row.eligibility_state,'ELIGIBLE');
    }
-   assert.equal(new Set(seen).size,seen.length);
-   assert.ok(seen.length>=2);
-   const check=await db.query('SELECT count(*)::integer AS count FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',[seeded.map(j=>j.id)]);
-   assert.equal(Number(check.rows[0].count),seeded.length);
+   for(const job of unknown){
+    const row=persisted.rows.find(r=>r.job_id===job.id);
+    assert.ok(row);assert.equal(row.eligibility_state,'UNKNOWN');
+    assert.equal(row.eligibility_reason_code,'ROLE_FAMILY_UNKNOWN');
+   }
+   const direct=await db.query('SELECT job_id,role_family,role_subfamily FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
+     [seeded.map(j=>j.id)]);
+   assert.equal(direct.rows.length,seeded.length);
+   for(const job of seeded){
+    const row=direct.rows.find(r=>r.job_id===job.id);
+    assert.equal(row.role_family,job.expected);
+    assert.deepEqual(row.role_subfamily,job.predicted.role_subfamily);
+   }
+  });
+  await t.test('W025-R04 two or more pages, exact expected set/order and no canonical mutation',async()=>{
+   const prefs={...await repository.effectiveConfig(ctx,env,{db}),
+    target_role_families:['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE'],
+    target_role_subfamilies:['project_management','agile_scrum']};
+   await repository.savePreferences(ctx,prefs,env,{db});
+   const stored=await repository.effectiveConfig(ctx,env,{db});
+   assert.deepEqual(stored.target_role_families,prefs.target_role_families);
+   const expectedRows=seeded.filter(j=>stored.target_role_families.includes(j.expected)||j.expected==='UNKNOWN');
+   assert.ok(expectedRows.length>=4,'fixture must exercise multiple pages');
+   const expectedIDs=new Set(expectedRows.map(j=>j.id));
+   const before=(await db.query('SELECT job_id,role_family,role_subfamily,job_version FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
+     [seeded.map(j=>j.id)])).rows;
+   const seen=[];
+   let cursor=null,pages=0,exhausted=false;
+   for(let i=0;i<12;i++){
+    const page=await repository.listProfileJobs(ctx,stored,nomenclatures,
+      {limit:2,prefetch:0,q:'W025',...(cursor?{cursor}:{})},env,{db});
+    assert.equal(page.bounded,true);assert.equal(page.limit,2);
+    assert.ok(page.jobs.length<=2,'page overflow');
+    if(!page.jobs.length && page.next_cursor)assert.fail('empty page with continuation');
+    seen.push(...page.jobs.map(j=>j.id));
+    pages++;
+    cursor=page.next_cursor;
+    if(!cursor){exhausted=true;break;}
+   }
+   assert.equal(exhausted,true,'cursor never reached exhaustion');
+   assert.ok(pages>=2,'must actually fetch at least two pages');
+   assert.equal(new Set(seen).size,seen.length,'duplicate job ID');
+   assert.deepEqual(new Set(seen),expectedIDs,'pagination skipped or included unexpected jobs');
+   const ordered=(await db.query(
+     `SELECT j.job_id FROM canonical_jobs j
+      JOIN source_postings sp ON sp.job_id=j.job_id
+      WHERE j.job_id=ANY($1::uuid[])
+      ORDER BY COALESCE(date_trunc('milliseconds',sp.posted_at),
+        date_trunc('milliseconds',j.last_seen_at)) DESC,j.job_id ASC`,
+     [seen])).rows.map(r=>r.job_id);
+   assert.deepEqual(seen,ordered,'cursor order mismatch');
+   const after=(await db.query('SELECT job_id,role_family,role_subfamily,job_version FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
+     [seeded.map(j=>j.id)])).rows;
+   const stable=rows=>rows.map(r=>({...r,role_subfamily:[...r.role_subfamily]})).sort((a,b)=>a.job_id.localeCompare(b.job_id));
+   assert.deepEqual(stable(after),stable(before),'selection mutated canonical corpus');
   });
   await t.test('W025-R05 persisted independent scope family/subfamily states',async()=>{
    const column=(await db.query("SELECT column_name FROM information_schema.columns WHERE table_name='coverage_scope_state'")).rows.map(r=>r.column_name);
