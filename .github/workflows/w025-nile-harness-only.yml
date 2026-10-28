@@ -1,0 +1,150 @@
+# #531 W02-5 — temporary execution-only wrapper. NEVER run against managed Nile.
+# The source candidate is pinned to 088e1e18374b50ae7765e04a1d65ac9e5d43d637; this workflow exists only on an ops branch.
+name: W02-5 disposable Nile harness (temporary, no 29-ID suite)
+
+on:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  first-gate-only:
+    name: H01/H02 + migrations 001-010 + cleanup only
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ops/531-w025-harness-088e1e' && github.repository == 'Shosetzel69/job-search-command-center' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    concurrency:
+      group: w025-first-gate-${{ github.ref }}
+      cancel-in-progress: false
+    env:
+      APP_ENV: dev
+      CI: "true"
+      NILE_TESTING_DB_NAME: jobsearch_dev
+      JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE: "true"
+      NILE_TEST_DATABASE_URL: "postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev"
+      NILE_DATABASE_URL: "postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev"
+      NILE_MIGRATION_DATABASE_URL: "postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev"
+      JSCC_INTEGRATION_DATABASE_URL: "postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev"
+      JSCC_TEST_ADMIN_DATABASE_URL: "postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev"
+    steps:
+      - name: Assert exact orchestration identity and allowed gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_REF" = 'refs/heads/ops/531-w025-harness-088e1e'
+          test "$GITHUB_REPOSITORY" = 'Shosetzel69/job-search-command-center'
+          test "$GITHUB_ACTIONS" = true
+          test "$RUNNER_OS" = Linux
+          test "$CI" = true
+          test "$APP_ENV" = dev
+          echo 'W025_GATE_MODE=HARNESS_ONLY'
+
+      - name: Checkout immutable R4 reviewed candidate, not orchestration branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 088e1e18374b50ae7765e04a1d65ac9e5d43d637
+          persist-credentials: false
+          fetch-depth: 1
+
+      - name: Confirm exact reviewed checkout SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '088e1e18374b50ae7765e04a1d65ac9e5d43d637'
+          test "$(git status --porcelain)" = ''
+          echo 'W025_SOURCE_SHA=088e1e18374b50ae7765e04a1d65ac9e5d43d637'
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+
+      - name: Install candidate locked dependencies
+        working-directory: command-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+
+      - name: H02 negative admission before any ephemeral container exists
+        working-directory: command-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test test/nile-ci-local-admission.test.mjs
+          set +e
+          CI=false node scripts/db-nile-migrate-evidence.mjs > "$RUNNER_TEMP/w025-preimport-denial.log" 2>&1
+          status=$?
+          set -e
+          test "$status" -ne 0
+          grep -q W025_NILE_ADMISSION_DENIED "$RUNNER_TEMP/w025-preimport-denial.log"
+          echo 'W025_H02_NEGATIVE_ADMISSION=PASS'
+
+      - name: Start exactly one official pinned disposable Nile container
+        shell: bash
+        run: |
+          set -euo pipefail
+          image='ghcr.io/niledatabase/testingcontainer@sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869'
+          name="w025-harness-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "W025_NILE_CONTAINER_NAME=$name" >> "$GITHUB_ENV"
+          docker pull "$image"
+          docker buildx imagetools inspect "$image" | grep -F 'sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869'
+          cid="$(docker run -d --name "$name" -e NILE_TESTING_DB_NAME=jobsearch_dev -p 127.0.0.1:55432:5432 "$image")"
+          test "$cid" != ''
+          echo "W025_NILE_CONTAINER_ID=$cid" >> "$GITHUB_ENV"
+          ready=0
+          for i in $(seq 1 90); do
+            if docker logs "$cid" 2>&1 | grep -q 'Database has been created and is ready'; then
+              ready=1
+              break
+            fi
+            sleep 2
+          done
+          test "$ready" -eq 1
+          echo 'W025_EPHEMERAL_CONTAINER_READY=PASS'
+
+      - name: H01 positive live container admission and M01/M02 native migrations
+        working-directory: command-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/nile-ci-local-admission.mjs | tee "$RUNNER_TEMP/w025-admission.log"
+          grep -q '^W025_ADMISSION=PASS ' "$RUNNER_TEMP/w025-admission.log"
+          export W025_NATIVE_RUN_ID=migration
+          W025_NATIVE_CHALLENGE="$(openssl rand -hex 16)"
+          export W025_NATIVE_CHALLENGE
+          node scripts/db-nile-migrate-evidence.mjs | tee "$RUNNER_TEMP/w025-migration.log"
+          grep -q '^W025_NATIVE_DB_READBACK=' "$RUNNER_TEMP/w025-migration.log"
+          grep -q '^W025_MIGRATIONS_FIRST=PASS$' "$RUNNER_TEMP/w025-migration.log"
+          grep -q '^W025_MIGRATIONS_IDEMPOTENCE=PASS$' "$RUNNER_TEMP/w025-migration.log"
+          echo 'W025_H01_M01_M02=PASS'
+
+      - name: H03 always remove disposable container and prove no residue
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          name="${W025_NILE_CONTAINER_NAME:-}"
+          if [ -n "$name" ]; then
+            cid="$(docker ps -aq --filter "name=^/${name}$")"
+            if [ -n "$cid" ]; then
+              docker logs --tail 60 "$cid" || true
+              docker rm -f "$cid"
+            fi
+            if docker container inspect "$name" >/dev/null 2>&1; then
+              echo 'W025_H03_CLEANUP=FAIL' >&2
+              exit 1
+            fi
+          fi
+          echo 'W025_H03_CLEANUP=PASS'
+
+      - name: Summarize bounded first gate evidence
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'W025_HARNESS_READY=PASS'
+          echo 'W025_SOURCE_REVIEW_SHA=088e1e18374b50ae7765e04a1d65ac9e5d43d637'
+          echo 'W025_FULL_29_ID_SUITE=NOT_AUTHORIZED_NOT_RUN'
