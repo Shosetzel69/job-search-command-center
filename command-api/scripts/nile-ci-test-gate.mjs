@@ -1,6 +1,7 @@
 // W02-5 mandatory test gate. This program consumes process-bound structured evidence,
 // never unauthenticated PASS lines from an arbitrary test log.
 import {readFileSync} from 'node:fs';
+import {NILE_NATIVE_BACKEND_PORT} from './nile-ci-local-admission.mjs';
 const IDS=Object.freeze('H01 H02 H03 M01 M02 T01 T02 T03 T04 T05 U01 U02 U03 U04 U05 F01 F02 U06 L01 L02 R01 R02 R03 R04 R05 D1 G1 M04 E86'.split(' '));
 const EXPECTED=new Set(IDS);
 const NATIVE=new Set('M01 M02 T01 T02 T03 T04 T05 U01 U02 U03 U04 U05 F01 F02 U06 L01 L02 R01 R02 R03 R04 R05'.split(' '));
@@ -43,7 +44,7 @@ export function validateNileLedger(evidence,{sourceSha}={}){
        live.db_name!=='jobsearch_dev' ||
        typeof live.principal!=='string' || !live.principal.trim() ||
        !Number.isSafeInteger(live.backend_pid) || live.backend_pid<=0 ||
-       live.server_port!==5432)
+       live.server_port!==NILE_NATIVE_BACKEND_PORT)
       deny('native SQL session readback absent or not bound to suite challenge');
   }
   runs.set(run.id,run);
