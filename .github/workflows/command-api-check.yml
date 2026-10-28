@@ -269,6 +269,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
@@ -308,7 +309,8 @@ jobs:
           node --input-type=module <<'NODE'
           import {spawnSync} from 'node:child_process';
           import {writeFileSync} from 'node:fs';
-          const sha=process.env.GITHUB_SHA;
+          const sha=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).stdout.trim();
+          if(!/^[a-f0-9]{40}$/.test(sha))throw Error('checkout SHA unresolved');
           const id=process.env.W025_NILE_CONTAINER_ID;
           const evidence={source_sha:sha,checkout_sha:sha,
             native_container:{verified:true,id,database:'jobsearch_dev',cleaned_up:false},
@@ -399,4 +401,4 @@ jobs:
       - name: Exact SHA mandatory 29-ID source and native gate
         if: always()
         working-directory: command-api
-        run: node scripts/nile-ci-test-gate.mjs /tmp/w025-nile-process-evidence.json "$GITHUB_SHA"
+        run: node scripts/nile-ci-test-gate.mjs /tmp/w025-nile-process-evidence.json "$(git rev-parse HEAD)"
