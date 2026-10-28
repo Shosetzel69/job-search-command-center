@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import {admitNileCi} from '../scripts/nile-ci-local-admission.mjs';
+import {admitNileCi,attestNativeDatabase} from '../scripts/nile-ci-local-admission.mjs';
 // Admission always precedes loading any database module.
 admitNileCi();
 const {default:pg}=await import('pg');
@@ -53,6 +53,7 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
   };
 
   try {
+  await attestNativeDatabase(runtimeDb);
   let ownerPayload, ownerA, ownerB, ownerFoundationA, user, userFoundation, restoredFoundation, lazyPostingId, lazyJobId, jobNomenclatures, cacheQuery, cacheConfigB, f1aAnchor, originalOwnerUserId, originalOwnerProfileId;
     await t.test('W025-U01 native preserved assertions',async()=>{
     const ownerSeed = {
