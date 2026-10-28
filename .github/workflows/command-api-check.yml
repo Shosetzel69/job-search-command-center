@@ -301,24 +301,76 @@ jobs:
       - name: Admit exact runner container and all database bindings
         working-directory: command-api
         run: node scripts/nile-ci-local-admission.mjs
-      - name: Migrations 001-010 and migration idempotence
-        working-directory: command-api
-        run: node scripts/db-nile-migrate-evidence.mjs
-      - name: Existing official Nile provider behavior
-        working-directory: command-api
-        run: node scripts/db-nile-contract-evidence.mjs
-      - name: Run admission, tenant, multiuser and role-family regression
+      - name: Execute mandatory Nile suites with process-bound TAP evidence
         working-directory: command-api
         shell: bash
         run: |
-          set -euo pipefail
-          node --test test/nile-ci-local-admission.test.mjs
-          node --test test/nile-native-isolation.integration.mjs
-          node --test test/multiuser-db.integration.mjs
-          node --test test/nile-role-family.integration.mjs
-          node --test test/role-family-review.test.mjs
-          npm test
-      - name: Nile container diagnostic and cleanup
+          node --input-type=module <<'NODE'
+          import {spawnSync} from 'node:child_process';
+          import {writeFileSync} from 'node:fs';
+          const sha=process.env.GITHUB_SHA;
+          const id=process.env.W025_NILE_CONTAINER_ID;
+          const evidence={source_sha:sha,checkout_sha:sha,
+            native_container:{verified:true,id,database:'jobsearch_dev',cleaned_up:false},
+            runs:[],results:[]};
+          let good=true;
+          const run=(runId,mode,command,args,expected=[],kind='tap')=>{
+            const child=spawnSync(command,args,{encoding:'utf8',env:process.env,timeout:180000});
+            const output=(child.stdout||'')+'\n'+(child.stderr||'');
+            process.stdout.write(output);
+            const subtests=[...output.matchAll(/^\s*# Subtest: (?:W025[- ]([A-Z][0-9]{1,2})|([DG]1):)/gm)]
+              .map(m=>m[1]||m[2]);
+            const pick=name=>Number(new RegExp('^# '+name+' (\\d+)$','m').exec(output)?.[1]??-1);
+            const tap={tests:pick('tests'),passed:pick('pass'),failed:pick('fail'),
+              skipped:pick('skipped'),todo:pick('todo'),cancelled:pick('cancelled'),
+              complete:/^1\.\.\d+$/m.test(output)};
+            let observed=[];
+            if(kind==='migration' && output.includes('W025_MIGRATIONS_FIRST=PASS') &&
+               output.includes('W025_MIGRATIONS_IDEMPOTENCE=PASS'))observed=['M01','M02'];
+            else if(kind==='admission' && output.includes('W025_ADMISSION=PASS'))observed=['H01'];
+            else if(kind==='unit_admission' && tap.failed===0 && tap.skipped===0 && tap.passed===tap.tests)observed=['H02'];
+            else if(kind==='mock_composite' && tap.failed===0 && tap.skipped===0 && tap.passed===tap.tests)observed=['M04'];
+            else if(kind==='tap')observed=subtests;
+            // No expected ID can be inferred from filename, nor from a test that did not run.
+            if(expected.some(x=>observed.filter(y=>x===y).length!==1) ||
+               observed.some(x=>!expected.includes(x)))good=false;
+            const exit_code=child.status??-1;
+            if(exit_code!==0 || tap.tests<1 || tap.passed!==tap.tests ||
+               tap.failed!==0 || tap.skipped!==0 || tap.todo!==0 ||
+               tap.cancelled!==0 || !tap.complete)good=false;
+            evidence.runs.push({id:runId,mode,command:[command,...args].join(' '),
+              exit_code,checkout_sha:sha,tap,observed_ids:observed,
+              ...(mode==='NATIVE'?{native_container_id:id,native_db_observed:true}:{})});
+            for(const x of observed)evidence.results.push({id:x,status:'PASS',sha,run_id:runId});
+          };
+          run('migration','NATIVE','node',['--test','scripts/db-nile-migrate-evidence.mjs'],['M01','M02'],'migration');
+          run('provider','NATIVE','node',['--test','scripts/db-nile-contract-evidence.mjs'],[]);
+          run('admission_unit','HARNESS','node',['--test','test/nile-ci-local-admission.test.mjs'],['H02'],'unit_admission');
+          run('tenant','NATIVE','node',['--test','test/nile-native-isolation.integration.mjs'],['T01','T02','T03','T04','T05']);
+          run('multiuser','NATIVE','node',['--test','test/multiuser-db.integration.mjs'],['U01','U02','U03','U04','U05','F01','F02','U06','L01','L02']);
+          run('role_family','NATIVE','node',['--test','test/nile-role-family.integration.mjs'],['R01','R02','R03','R04','R05']);
+          run('role_review','MOCK','node',['--test','test/role-family-review.test.mjs'],['D1','G1']);
+          run('unit_all','MOCK','npm',['test'],['M04'],'mock_composite');
+          // H01 is read back by an actual admission process (never from arbitrary logs).
+          const admit=spawnSync('node',['scripts/nile-ci-local-admission.mjs'],{encoding:'utf8',env:process.env});
+          const admitted=admit.status===0 && /^W025_ADMISSION=PASS /m.test(admit.stdout||'');
+          if(!admitted)good=false;
+          evidence.runs.push({id:'admission',mode:'HARNESS',command:'node scripts/nile-ci-local-admission.mjs',
+            exit_code:admitted?0:1,checkout_sha:sha,probe_verified:admitted,tap:null,observed_ids:admitted?['H01']:[]});
+          if(admitted)evidence.results.push({id:'H01',status:'PASS',sha,run_id:'admission'});
+          const direct=spawnSync('node',['scripts/db-migrate.mjs'],{encoding:'utf8',env:process.env});
+          const npm=spawnSync('npm',['run','db:migrate'],{encoding:'utf8',env:process.env});
+          const refusal=direct.status===86 && npm.status!==0 &&
+            (direct.stdout+direct.stderr).includes('JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED') &&
+            (npm.stdout+npm.stderr).includes('JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED');
+          if(!refusal)good=false;
+          evidence.runs.push({id:'retired_entrypoint',mode:'HARNESS',command:'node scripts/db-migrate.mjs AND npm run db:migrate',
+            exit_code:refusal?0:1,checkout_sha:sha,probe_verified:refusal,tap:null,observed_ids:refusal?['E86']:[]});
+          if(refusal)evidence.results.push({id:'E86',status:'PASS',sha,run_id:'retired_entrypoint'});
+          writeFileSync('/tmp/w025-nile-process-evidence.json',JSON.stringify(evidence,null,2));
+          if(!good)process.exitCode=1;
+          NODE
+      - name: Nile container diagnostic and confirmed cleanup
         if: always()
         shell: bash
         run: |
@@ -328,3 +380,23 @@ jobs:
             docker rm -f "$W025_NILE_CONTAINER_ID"
             ! docker inspect "$W025_NILE_CONTAINER_ID" >/dev/null 2>&1
           fi
+          node --input-type=module <<'NODE'
+          import {existsSync,readFileSync,writeFileSync} from 'node:fs';
+          import {spawnSync} from 'node:child_process';
+          const file='/tmp/w025-nile-process-evidence.json';
+          if(!existsSync(file))throw Error('Nile test evidence missing');
+          const e=JSON.parse(readFileSync(file,'utf8'));
+          const id=process.env.W025_NILE_CONTAINER_ID;
+          if(!id || id!==e.native_container.id || !/^[a-f0-9]{64}$/.test(id))throw Error('container identity missing');
+          const check=spawnSync('docker',['inspect',id],{encoding:'utf8'});
+          if(check.status===0)throw Error('Docker container was not removed');
+          e.native_container.cleaned_up=true;
+          e.runs.push({id:'cleanup',mode:'HARNESS',command:'docker rm -f and inspect',exit_code:0,
+            checkout_sha:e.source_sha,probe_verified:true,tap:null,observed_ids:['H03']});
+          e.results.push({id:'H03',status:'PASS',sha:e.source_sha,run_id:'cleanup'});
+          writeFileSync(file,JSON.stringify(e,null,2));
+          NODE
+      - name: Exact SHA mandatory 29-ID source and native gate
+        if: always()
+        working-directory: command-api
+        run: node scripts/nile-ci-test-gate.mjs /tmp/w025-nile-process-evidence.json "$GITHUB_SHA"
