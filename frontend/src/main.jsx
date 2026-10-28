@@ -354,7 +354,7 @@ function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
       <p className="mt-1 text-sm text-slate-600">Aceste criterii definesc urmatoarea actualizare bounded si setul de joburi eligibile pentru Search Profile. Salvarea singura nu porneste Retrieve.</p>
     </section>
     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-      <CriteriaCard title="Roluri urmarite" scope="RETRIEVE" note="Selecteaza familia si subfamiliile care definesc scope-ul de cautare.">
+      <CriteriaCard title="Jobs Families" scope="RETRIEVE" note="Selecteaza familia de joburi si subfamiliile care definesc scope-ul de cautare.">
         {ROLE_FAMILIES.map(family=>{
           const familySelected=draft.roleFamilies.includes(family.code);
           const selectedSubs=new Set(draft.roleSubfamilies);
@@ -415,7 +415,7 @@ function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
 }
 
 function OnboardingPanel({onStart}) {
-  return <section className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm"><div className="max-w-2xl"><span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">Configurare initiala</span><h2 className="mt-3 font-display text-xl font-bold text-slate-950">Defineste Search Profile-ul inainte de prima lista de joburi</h2><p className="mt-2 text-sm leading-6 text-slate-600">JSCC nu porneste automat un Retrieve pentru un profil nou. Alege familia de roluri, geografia, modul de lucru si tipul de contract; apoi sistemul va reutiliza mai intai corpusul partajat existent.</p><button type="button" onClick={onStart} className="mt-5 min-h-11 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">Configureaza criteriile</button></div></section>;
+  return <section className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm"><div className="max-w-2xl"><span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">Configurare initiala</span><h2 className="mt-3 font-display text-xl font-bold text-slate-950">Defineste Search Profile-ul inainte de prima lista de joburi</h2><p className="mt-2 text-sm leading-6 text-slate-600">JSCC nu porneste automat un Retrieve pentru un profil nou. Alege familia de joburi, geografia, modul de lucru si tipul de contract; apoi sistemul va reutiliza mai intai corpusul partajat existent.</p><button type="button" onClick={onStart} className="mt-5 min-h-11 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">Configureaza criteriile</button></div></section>;
 }
 
 function App(){

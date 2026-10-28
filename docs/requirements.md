@@ -33,7 +33,7 @@ Baseline-ul stabilizat foloseste Full Search manual-only. Salvarea configuratiei
 ### 2.1 Obiective
 
 - colectarea controlata a joburilor relevante;
-- prioritizarea familiilor de roluri configurate per profil;
+- prioritizarea familiilor de joburi configurate per profil;
 - mod de lucru configurabil per profil;
 - selectie geografica pe regiuni si tari;
 - evaluare FIT, argumente pro si riscuri;
