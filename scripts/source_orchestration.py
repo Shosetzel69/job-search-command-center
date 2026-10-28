@@ -326,7 +326,7 @@ def build_plan(catalog):
             item.update(status="inactive", outcome="excluded_policy", error=reason, failure_reason=reason)
         elif alias_target and alias_target in catalog_names:
             reason = f"Provider alias of {alias_target}; canonical provider already planned"
-            item.update(status="skipped", outcome="provider_alias", error=reason,
+            item.update(status="skipped", outcome="skipped", error=reason,
                         failure_reason=reason, provider_alias=alias_target)
         if route:
             item["connector_config"] = route
