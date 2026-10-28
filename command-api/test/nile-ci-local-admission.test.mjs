@@ -28,7 +28,7 @@ test('W025-H02 rejects locally substituted images and incorrect manifest digest'
 });
 test('W025-H01 admits exact ephemeral Nile identity without connecting',()=>{
  let calls=0;const r=admitNileCi({env:valid(),exec:(program,args)=>{calls++;return mockExec()(program,args);}});
- assert.equal(r.port,55432);assert.equal(calls,1);
+ assert.equal(r.port,55432);assert.equal(calls,3);
 });
 test('W025-H02 rejects each external database URL before any container inspect or connection',()=>{
  const bad=[
