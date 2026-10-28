@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {admitNileCi,verifyTarget,CI_USER,TEST_IMAGE,TARGET_KEYS} from '../scripts/nile-ci-local-admission.mjs';
+import {admitNileCi,attestNativeDatabase,verifyTarget,CI_USER,TEST_IMAGE,TARGET_KEYS} from '../scripts/nile-ci-local-admission.mjs';
+import {validateNileLedger} from '../scripts/nile-ci-test-gate.mjs';
 const url='postgresql://'+CI_USER+':password@127.0.0.1:55432/jobsearch_dev';
 const valid=()=>Object.fromEntries([
  ['CI','true'],['GITHUB_ACTIONS','true'],['GITHUB_REPOSITORY','Shosetzel69/job-search-command-center'],
@@ -56,4 +57,59 @@ test('W025-H02 rejects altered runner, env, container, image, missing target',()
    {...record()[0],State:{Running:false,Status:'exited'}},
  ]) assert.throws(()=>admitNileCi({env:valid(),exec:()=>JSON.stringify([c])}),/ADMISSION_DENIED/);
  for(const key of TARGET_KEYS) assert.throws(()=>admitNileCi({env:{...valid(),[key]:undefined},exec:()=>JSON.stringify(record())}),/ADMISSION_DENIED/);
+});
+
+test('W025-S03 rejects forged or absent native SQL provenance and broken TAP outcomes',()=>{
+ const sha='a'.repeat(40),imageId='b'.repeat(64),challenge='c'.repeat(32);
+ const ids='H01 H02 H03 M01 M02 T01 T02 T03 T04 T05 U01 U02 U03 U04 U05 F01 F02 U06 L01 L02 R01 R02 R03 R04 R05 D1 G1 M04 E86'.split(' ');
+ const native=new Set('M01 M02 T01 T02 T03 T04 T05 U01 U02 U03 U04 U05 F01 F02 U06 L01 L02 R01 R02 R03 R04 R05'.split(' '));
+ const mock=new Set(['D1','G1','M04']);
+ const tap={tests:1,passed:1,failed:0,skipped:0,todo:0,cancelled:0,complete:true};
+ const evidence={
+  source_sha:sha,checkout_sha:sha,
+  native_container:{verified:true,id:imageId,database:'jobsearch_dev',cleaned_up:true},
+  runs:ids.map(id=>{
+   const run_id=id.toLowerCase(),isNative=native.has(id),mode=isNative?'NATIVE':mock.has(id)?'MOCK':'HARNESS';
+   return {id:run_id,mode,command:'node --test native-evidence',exit_code:0,checkout_sha:sha,tap:{...tap},
+    observed_ids:[id],...(isNative?{
+      native_container_id:imageId,native_db_observed:true,native_challenge:challenge,
+      native_db_readback:{run:run_id,challenge,db_name:'jobsearch_dev',principal:'synthetic',
+       backend_pid:123,server_port:5432}
+    }:{})};
+  }),
+  results:ids.map(id=>({id,status:'PASS',sha,run_id:id.toLowerCase()}))
+ };
+ assert.equal(validateNileLedger(evidence,{sourceSha:sha}).passed,29);
+ const find=id=>evidence.runs.find(r=>r.id===id.toLowerCase());
+ for(const broken of [
+  ()=>(find('R03').native_db_readback=null),
+  ()=>(find('R03').native_challenge='d'.repeat(32)),
+  ()=>(find('T02').native_db_observed=false),
+  ()=>(find('R04').native_db_readback.server_port=5444),
+  ()=>(find('R04').tap.skipped=1),
+  ()=>(find('R05').exit_code=1),
+  ()=>(evidence.native_container.cleaned_up=false),
+  ()=>(evidence.results.push({...evidence.results[0]})),
+ ]){
+  const snapshot=structuredClone(evidence);
+  broken();
+  assert.throws(()=>validateNileLedger(evidence,{sourceSha:sha}),/W025_GATE_FAIL/);
+  Object.assign(evidence,snapshot);
+ }
+});
+test('W025-S03 live readback requires valid challenge and real SQL identity',async()=>{
+ const env={W025_NATIVE_RUN_ID:'tenant',W025_NATIVE_CHALLENGE:'a'.repeat(32)};
+ let calls=0;
+ await assert.rejects(
+  attestNativeDatabase({query:async()=>{calls++;throw Error('should not query');}},
+    {env:{...env,W025_NATIVE_CHALLENGE:'invalid'}}),/ADMISSION_DENIED/);
+ assert.equal(calls,0);
+ const db={query:async(_sql,args)=>{
+  calls++;
+  assert.deepEqual(args,[env.W025_NATIVE_CHALLENGE]);
+  return {rows:[{db_name:'wrong_database',principal:'user',backend_pid:123,server_port:5432,
+     challenge:args[0]}]};
+ }};
+ await assert.rejects(attestNativeDatabase(db,{env}),/ADMISSION_DENIED/);
+ assert.equal(calls,1);
 });
