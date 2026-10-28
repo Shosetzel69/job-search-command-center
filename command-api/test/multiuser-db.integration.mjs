@@ -1,6 +1,6 @@
-const assert from 'node:assert/strict';
-const test from 'node:test';
-const {admitNileCi} from '../scripts/nile-ci-local-admission.mjs';
+import assert from 'node:assert/strict';
+import test from 'node:test';
+import {admitNileCi} from '../scripts/nile-ci-local-admission.mjs';
 // Admission always precedes loading any database module.
 admitNileCi();
 const {default:pg}=await import('pg');
