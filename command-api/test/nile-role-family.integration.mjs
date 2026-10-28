@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {admitNileCi} from '../scripts/nile-ci-local-admission.mjs';
+import {admitNileCi,attestNativeDatabase} from '../scripts/nile-ci-local-admission.mjs';
 admitNileCi();
 const [{default:pg}, repository, backfill, classification, taxonomy, eligibility]=await Promise.all([
  import('pg'),import('../src/multiuser-repository.js'),
@@ -28,6 +28,7 @@ const seeded=[];
 const nomenclatures=JSON.parse(await readFile(new URL('../../data/nomenclatures.json',import.meta.url),'utf8'));
 test('W025 Nile 010 role families native functional contract',async t=>{
  try{
+  await attestNativeDatabase(db);
   ctx=await repository.resolveOrProvisionGoogleIdentity({
    sub:'w025-role-family-user',email:'w025-role-family@example.test',email_verified:true
   },env,{db});
