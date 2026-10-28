@@ -79,7 +79,7 @@ test('DEV provisioning errors expose the failing shared-transaction stage withou
   const query = async text => {
     queries.push(text);
     if (text === 'BEGIN' || text === 'ROLLBACK') return { rows:[] };
-    if (text.includes("pg_advisory_xact_lock(hashtext('jscc-account-provision'))")) return { rows:[{}] };
+    if (text === 'SELECT singleton FROM system_bootstrap WHERE singleton=true FOR UPDATE') return { rows:[{ singleton:true }] };
     if (text.includes('FROM user_identity i')) return { rows:[] };
     if (text.includes('FROM system_bootstrap')) return { rows:[{ owner_bootstrapped_at:null }] };
     if (text.includes('INSERT INTO app_user')) {
@@ -137,7 +137,7 @@ test('DEV owner bootstrap preflight exposes its database stage', async () => {
 test('non-DEV provisioning errors keep their original message', async () => {
   const query = async text => {
     if (text === 'BEGIN' || text === 'ROLLBACK') return { rows:[] };
-    if (text.includes("pg_advisory_xact_lock(hashtext('jscc-account-provision'))")) return { rows:[{}] };
+    if (text === 'SELECT singleton FROM system_bootstrap WHERE singleton=true FOR UPDATE') return { rows:[{ singleton:true }] };
     if (text.includes('FROM user_identity i')) return { rows:[] };
     if (text.includes('FROM system_bootstrap')) return { rows:[{ owner_bootstrapped_at:null }] };
     if (text.includes('INSERT INTO app_user')) throw new Error('provider write failed');
