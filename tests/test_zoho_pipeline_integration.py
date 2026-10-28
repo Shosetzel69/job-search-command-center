@@ -257,14 +257,26 @@ class ZohoIntegrationTests(unittest.TestCase):
                     self.assertEqual(projected, [])
                     self.assertNotIn("tok_1", str(results))
 
-    def test_scope_removes_nonmatching_family(self):
+    def test_scope_preserves_unknown_and_excludes_explicit_other_family(self):
         row = item()
-        cfg = {"_jscc_retrieve_scope": {"scopes": [{"role_family": "PROJECT_MANAGEMENT"}]}}
+        cfg = {"_jscc_retrieve_scope": {"scopes": [{
+            "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+            "role_subfamilies": ["project_management"],
+        }]}}
+        # An unclassified Data Engineer is UNKNOWN under the six-family taxonomy.
+        # An explicitly classified Service Manager is a known non-PM mismatch.
+        unknown = dict(RECORD)
+        service = {**RECORD, "id": "zoho-service-contrast", "job_title": "IT Service Manager"}
+        unclassified = corpus.prepare_posting(unknown, source_hint="OSF Digital")
+        explicit = corpus.prepare_posting(service, source_hint="OSF Digital")
+        self.assertEqual(unclassified.role_family, "UNKNOWN")
+        self.assertEqual(explicit.role_family, "SERVICE_OPERATIONS_MANAGEMENT")
         with patch.object(orchestration.zoho_recruit, "collect_result", return_value=[
-                engine.CollectionResult("zoho_recruit:osf-global.zohorecruit.com", "public_postings", True, [dict(RECORD)], 1)]):
+                engine.CollectionResult("zoho_recruit:osf-global.zohorecruit.com", "public_postings", True, [unknown, service], 2)]):
             results, _, _ = orchestration.collect_api_sources(cfg, {"usage": {}}, NOW, [row])
-        self.assertEqual(row["records"], 0)
-        self.assertEqual(results[0].total_available, 1)
+        self.assertEqual(row["records"], 1)
+        self.assertEqual([item["id"] for item in results[0].records], [RECORD["id"]])
+        self.assertEqual(results[0].total_available, 2)
 
     def test_mocked_postgresql_persistence_and_replay(self):
         """Exercise actual persist_collection transaction flow without touching DEV DB."""
