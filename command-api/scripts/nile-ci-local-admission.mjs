@@ -41,7 +41,23 @@ export function admitNileCi({
   const c=data[0];
   if(c.Id?.slice(0,env.W025_NILE_CONTAINER_ID.length)!==env.W025_NILE_CONTAINER_ID) deny('container ID mismatch');
   if(!c.State?.Running || c.State?.Status!=='running') deny('container not running');
-  if(c.Config?.Image!==TEST_IMAGE) deny('non-pinned image');
+  if(c.Config?.Image!==TEST_IMAGE) deny('non-pinned image reference');
+  // A configured reference is not the image the container is actually running.
+  // Attest both the image object Docker resolved and the registry-pinned manifest.
+  const expectedDigest=TEST_IMAGE.split('@')[1];
+  let local, remote;
+  try {
+    const imageInfo=JSON.parse(exec('docker',['image','inspect',TEST_IMAGE]));
+    if(!Array.isArray(imageInfo)||imageInfo.length!==1) deny('local image cardinality');
+    local=imageInfo[0];
+    remote=exec('docker',['buildx','imagetools','inspect',TEST_IMAGE]);
+  } catch { deny('pinned image attestation unavailable'); }
+  if(!/^sha256:[a-f0-9]{64}$/.test(String(local?.Id||''))
+      || c.Image!==local.Id
+      || !Array.isArray(local.RepoDigests)
+      || !local.RepoDigests.includes(TEST_IMAGE)) deny('running image ID or pinned reference mismatch');
+  const manifestDigest=/^Digest:\s*(sha256:[a-f0-9]{64})\s*$/m.exec(String(remote||''))?.[1];
+  if(manifestDigest!==expectedDigest) deny('registry manifest digest mismatch');
   if(c.Config?.Env?.includes('NILE_TESTING_DB_NAME=jobsearch_dev')!==true) deny('container database override');
   const binds=c.NetworkSettings?.Ports?.['5432/tcp'];
   if(!Array.isArray(binds)||binds.length!==1
