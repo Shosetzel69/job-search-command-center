@@ -1,5 +1,5 @@
 // #531 W02-5: explicit CI admission before loading any database module.
-import {admitNileCi} from './nile-ci-local-admission.mjs';
+import {admitNileCi,attestNativeDatabase} from './nile-ci-local-admission.mjs';
 // Never accept a local, non-CI, or incomplete runner invocation: fail before importing pg.
 admitNileCi();
 const [{default:pg},{migrate,loadMigrations}]=await Promise.all([
@@ -9,6 +9,7 @@ const url=String(process.env.NILE_TEST_DATABASE_URL||'').trim();
 if(!url)throw new Error('NILE_TEST_DATABASE_URL is required');
 const db=new pg.Pool({connectionString:url,max:2,connectionTimeoutMillis:10000,idleTimeoutMillis:30000});
 try {
+  await attestNativeDatabase(db);
   const items=await loadMigrations();
   const expected=Array.from({length:10},(_,i)=>String(i+1).padStart(3,'0'));
   if(items.length!==10||items.some((m,i)=>m.version!==expected[i]))throw new Error('W025_M01 invalid migration inventory');
