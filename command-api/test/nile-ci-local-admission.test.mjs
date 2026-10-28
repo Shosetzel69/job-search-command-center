@@ -8,12 +8,26 @@ const valid=()=>Object.fromEntries([
  ['JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE','true'],['W025_NILE_CONTAINER_ID','a'.repeat(64)],
  ...TARGET_KEYS.map(k=>[k,url]),
 ]);
-const record=()=>[{Id:'a'.repeat(64),State:{Running:true,Status:'running'},
+const record=()=>[{Id:'a'.repeat(64),Image:'sha256:'+'1'.repeat(64),State:{Running:true,Status:'running'},
  Config:{Image:TEST_IMAGE,Env:['NILE_TESTING_DB_NAME=jobsearch_dev']},
  HostConfig:{PortBindings:{'5432/tcp':[{'HostIp':'127.0.0.1','HostPort':'55432'}]}},
  NetworkSettings:{Ports:{'5432/tcp':[{'HostIp':'127.0.0.1','HostPort':'55432'}]}}}];
+const mockExec=(container=record()[0])=>(program,args)=>{
+ if(args[0]==='inspect')return JSON.stringify([container]);
+ if(args[0]==='image')return JSON.stringify([{Id:'sha256:'+'1'.repeat(64),RepoDigests:[TEST_IMAGE]}]);
+ if(args[0]==='buildx')return 'Digest: '+TEST_IMAGE.split('@')[1];
+ throw Error('unexpected docker command');
+};
+test('W025-H02 rejects locally substituted images and incorrect manifest digest',()=>{
+ const swapped={...record()[0],Image:'sha256:'+'2'.repeat(64)};
+ assert.throws(()=>admitNileCi({env:valid(),exec:mockExec(swapped)}),/ADMISSION_DENIED/);
+ assert.throws(()=>admitNileCi({env:valid(),exec:(program,args)=>{
+  if(args[0]==='buildx')return 'Digest: sha256:'+'f'.repeat(64);
+  return mockExec()(program,args);
+ }}),/ADMISSION_DENIED/);
+});
 test('W025-H01 admits exact ephemeral Nile identity without connecting',()=>{
- let calls=0;const r=admitNileCi({env:valid(),exec:()=>{calls++;return JSON.stringify(record());}});
+ let calls=0;const r=admitNileCi({env:valid(),exec:(program,args)=>{calls++;return mockExec()(program,args);}});
  assert.equal(r.port,55432);assert.equal(calls,1);
 });
 test('W025-H02 rejects each external database URL before any container inspect or connection',()=>{
