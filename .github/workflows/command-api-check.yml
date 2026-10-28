@@ -379,7 +379,7 @@ jobs:
             "const {default:pg}=await import('pg');",
             "const pool=new pg.Pool({connectionString:process.env.NILE_TEST_DATABASE_URL,max:1});",
             "try{await attestNativeDatabase(pool);}finally{await pool.end();}"
-          ].join('\\n');
+          ].join('\n');
           run('provider','NATIVE','node',['--input-type=module','-e',providerWrapper],[],'provider');
           run('admission_unit','HARNESS','node',['--test','test/nile-ci-local-admission.test.mjs'],['H02'],'unit_admission');
           run('tenant','NATIVE','node',['--test','test/nile-native-isolation.integration.mjs'],['T01','T02','T03','T04','T05']);
