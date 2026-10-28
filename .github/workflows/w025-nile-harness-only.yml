@@ -109,6 +109,46 @@ jobs:
           test "$ready" -eq 1
           echo 'W025_EPHEMERAL_CONTAINER_READY=PASS'
 
+      - name: Diagnose Nile SQL identity mismatches without weakening admission
+        working-directory: command-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import {randomBytes} from 'node:crypto';
+          import {admitNileCi} from './scripts/nile-ci-local-admission.mjs';
+          admitNileCi();
+          const {default:pg}=await import('pg');
+          const c=new pg.Client({connectionString:process.env.NILE_TEST_DATABASE_URL,connectionTimeoutMillis:10000});
+          const challenge=randomBytes(16).toString('hex');
+          try{
+            await c.connect();
+            const res=await c.query(
+              'SELECT current_database()::text AS db_name, current_user::text AS principal, pg_backend_pid()::int AS backend_pid, inet_server_port()::int AS server_port, $1::text AS challenge',
+              [challenge]);
+            const r=res.rows?.[0]||{};
+            const checks={
+              row_count:res.rows?.length??0,
+              db_matches:r.db_name==='jobsearch_dev',
+              principal_present:typeof r.principal==='string'&&!!r.principal.trim(),
+              pid_positive:Number.isInteger(Number(r.backend_pid))&&Number(r.backend_pid)>0,
+              port_matches:Number(r.server_port)===5432,
+              challenge_matches:r.challenge===challenge,
+            };
+            const diagnostic={
+              ...checks,
+              server_port:r.server_port==null?null:Number(r.server_port),
+              backend_pid_type:typeof r.backend_pid,
+              principal_is_synthetic:r.principal==='00000000-0000-0000-0000-000000000000',
+            };
+            console.log('W025_SQL_IDENTITY_DIAGNOSTIC='+JSON.stringify(diagnostic));
+            if(res.rows?.length!==1||Object.values(checks).some(v=>v===false)) {
+              throw Error('W025_SQL_IDENTITY_PROBE_REFUSAL: source admission remains unchanged');
+            }
+            console.log('W025_SQL_IDENTITY_PROBE=PASS');
+          }finally{await c.end();}
+          NODE
+
       - name: H01 positive live container admission and M01/M02 native migrations
         working-directory: command-api
         shell: bash
