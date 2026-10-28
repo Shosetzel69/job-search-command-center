@@ -367,7 +367,11 @@ def tag_collection_records(item, results):
 
 
 def _posting_matches_scope(posting, scope):
-    if posting.role_family != str(scope.get("role_family") or "").strip().upper():
+    # A conflicted/undetermined family can carry nonempty member codes from
+    # multiple families. Keep UNKNOWN for canonical persistence and later
+    # tri-state eligibility; reject explicit mismatches for known families.
+    unknown_family = posting.role_family == "UNKNOWN"
+    if not unknown_family and posting.role_family != str(scope.get("role_family") or "").strip().upper():
         return False
 
     role_subfamilies = {
@@ -375,7 +379,7 @@ def _posting_matches_scope(posting, scope):
         for value in (scope.get("role_subfamilies") or [])
         if str(value).strip()
     }
-    if role_subfamilies and not (set(posting.role_subfamily or []) & role_subfamilies):
+    if not unknown_family and role_subfamilies and not (set(posting.role_subfamily or []) & role_subfamilies):
         return False
 
     work_modes = {str(value).strip().casefold() for value in (scope.get("work_modes") or []) if str(value).strip()}
@@ -669,7 +673,11 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
             if connector in ats_connectors:
                 scopes = (config.get('_jscc_retrieve_scope') or {}).get('scopes') or []
                 families = {str(scope.get('role_family') or '').upper() for scope in scopes if isinstance(scope, dict)}
-                family = 'PROJECT_MANAGEMENT' if families == {'PROJECT_MANAGEMENT'} else None
+                # The Zoho adapter's established PM metadata cross-listing check
+                # accepts the legacy marker. Translate single canonical PM scopes,
+                # without widening this provider-specific filter to mixed families.
+                pm_family_only = families == {'PROJECT_DELIVERY_MANAGEMENT'}
+                family = 'PROJECT_MANAGEMENT' if pm_family_only else None
                 results = collect_ats(item, role_family=family)
             elif connector == "traefik":
                 results = traefik.collect(item["url"], item["source"])
