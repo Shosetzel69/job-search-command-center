@@ -1051,7 +1051,7 @@ Product build/deploy identities nu publica sau promoveaza imagini ops, iar ops i
 
 Remote Executor produce evidence; nu produce si nu autorizeaza singur `REVIEW_PASS`, `DEV_PASS`, `TEST_PASS`, `PROD_GO` sau alte gate-uri AgentFlow.
 
-## Role Family v1 — #531 / #535 QA acceptance
+## Jobs Family v1 — #531 / #535 QA acceptance
 
 The canonical role hierarchy is defined in `shared/role-taxonomy.json` (version `2026.10.08-1`) and exposed through `shared/role-taxonomy-runtime.mjs`. The six major families are Project & Delivery Management, Service & Operations Management, Product & Agile, Business Analysis & Transformation, Customer & Professional Services, and Technical Leadership & Architecture; `UNKNOWN` is an explicit fallback. Family/subfamily selection is consumed by classification, Search Profile preferences, Eligibility, bounded Retrieve/Refresh and Coverage, with frontend options derived from the canonical contract.
 

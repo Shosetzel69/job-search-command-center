@@ -616,7 +616,7 @@ Invariants:
 
 `POST /admin/refresh` is the ADMIN-only global refresh control.
 
-A narrowly allowlisted Cross-Tenant Refresh Scope Aggregator reads active Search Profile selection scope and returns only deduplicated aggregate scope data: Role Family, target regions/countries, remote-eligible countries, work modes, contract types, and `active_profile_count`. It never returns tenant/search-profile/user identity, email, Candidate Profile evidence, Applications, FIT/evaluation state, or arbitrary preferences JSON.
+A narrowly allowlisted Cross-Tenant Refresh Scope Aggregator reads active Search Profile selection scope and returns only deduplicated aggregate scope data: Jobs Family, target regions/countries, remote-eligible countries, work modes, contract types, and `active_profile_count`. It never returns tenant/search-profile/user identity, email, Candidate Profile evidence, Applications, FIT/evaluation state, or arbitrary preferences JSON.
 
 ADMIN Refresh uses the same global corpus freshness and heavy-search coalescing authority as USER Refresh. Canonical outcomes remain `REUSED_CORPUS | JOINED_EXISTING_RUN | STARTED_RUN | BLOCKED_BY_POLICY`.
 
