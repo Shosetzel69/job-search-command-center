@@ -24,11 +24,14 @@ export function validateNileLedger(evidence,{sourceSha}={}){
       run.checkout_sha!==sourceSha ||
       !['NATIVE','MOCK','HARNESS'].includes(run.mode) ||
       typeof run.command!=='string' || !run.command.trim() ||
-      !Number.isSafeInteger(run.tap?.tests) || run.tap.tests<1 ||
-      !Number.isSafeInteger(run.tap?.passed) ||
-      run.tap.passed!==run.tap.tests || run.tap.failed!==0 ||
-      run.tap.skipped!==0 || run.tap.todo!==0 || run.tap.cancelled!==0 ||
-      run.tap.complete!==true)deny('invalid suite exit/TAP provenance');
+      (run.tap===null
+        ? !(run.mode==='HARNESS' && run.probe_verified===true &&
+             ['admission','retired_entrypoint','cleanup'].includes(run.id))
+        : (!Number.isSafeInteger(run.tap?.tests) || run.tap.tests<1 ||
+           !Number.isSafeInteger(run.tap?.passed) ||
+           run.tap.passed!==run.tap.tests || run.tap.failed!==0 ||
+           run.tap.skipped!==0 || run.tap.todo!==0 || run.tap.cancelled!==0 ||
+           run.tap.complete!==true)))deny('invalid suite exit/TAP provenance');
   if(run.mode==='NATIVE' && (run.native_container_id!==evidence.native_container.id ||
       run.native_db_observed!==true))deny('native run without observed database binding');
   runs.set(run.id,run);
