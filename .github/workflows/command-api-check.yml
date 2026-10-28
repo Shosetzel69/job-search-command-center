@@ -320,9 +320,14 @@ jobs:
           let good=true;
           const run=(runId,mode,command,args,expected=[],kind='tap')=>{
             const challenge=mode==='NATIVE'?randomBytes(16).toString('hex'):null;
-            const childEnv=mode==='NATIVE'?{
-              ...process.env,W025_NATIVE_RUN_ID:runId,W025_NATIVE_CHALLENGE:challenge
-            }:process.env;
+            // Node.js 24 defaults to spec output; the ledger accepts only complete TAP.
+            // Force TAP only for node:test suites (including npm test), never infer PASS from spec.
+            const needsTap=['tap','unit_admission','mock_composite'].includes(kind);
+            const childEnv={
+              ...process.env,
+              ...(needsTap?{NODE_OPTIONS:[process.env.NODE_OPTIONS,'--test-reporter=tap'].filter(Boolean).join(' ')}:{}),
+              ...(mode==='NATIVE'?{W025_NATIVE_RUN_ID:runId,W025_NATIVE_CHALLENGE:challenge}:{})
+            };
             const child=spawnSync(command,args,{encoding:'utf8',env:childEnv,timeout:180000});
             const output=(child.stdout||'')+'\n'+(child.stderr||'');
             process.stdout.write(output);
