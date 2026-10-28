@@ -25,9 +25,9 @@ const {
   updateApplication,
 } = await import('../src/multiuser-repository.js');
 const { aggregateAdminRefreshScopes } = await import('../src/db/cross-tenant-refresh-scope-aggregator.js');
-import { backfillSearchProfileFoundations } = await import('../src/db/search-profile-backfill.js');
-import { withTenantTransaction } = await import('../src/db/tenant-gateway.js');
-import { deleteNomenclatureValue } = await import('../src/nomenclature-governance.js');
+const { backfillSearchProfileFoundations } = await import('../src/db/search-profile-backfill.js');
+const { withTenantTransaction } = await import('../src/db/tenant-gateway.js');
+const { deleteNomenclatureValue } = await import('../src/nomenclature-governance.js');
 import { readFile } from 'node:fs/promises';
 import { parsePostedDate } from '../src/posted-date.mjs';
 
