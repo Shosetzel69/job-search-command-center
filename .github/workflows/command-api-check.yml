@@ -441,7 +441,7 @@ jobs:
 
   w025-harness-only:
     name: W02-5 owner-authorized disposable harness only
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ops/531-w025-harness-088e1e' && github.repository == 'Shosetzel69/job-search-command-center'
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ops/531-w025-harness-088e1e' && github.repository == 'Shosetzel69/job-search-command-center' && github.actor == 'Shosetzel69'
     permissions:
       contents: read
     uses: ./.github/workflows/w025-nile-harness-only.yml
