@@ -132,6 +132,20 @@ test('W025 Nile 010 role families native functional contract',async t=>{
     assert.equal(row.role_family,job.expected);
     assert.deepEqual(row.role_subfamily,job.predicted.role_subfamily);
    }
+   // Negative regression: a known selected family with an explicit nonmatching
+   // subfamily stays excluded; conflicted UNKNOWN jobs still remain visible.
+   assert.ok(!selected[0].predicted.role_subfamily.includes('delivery_management'),
+     'fixture must distinguish project_management from delivery_management');
+   const restricted={...stored,target_role_subfamilies:['delivery_management']};
+   await repository.savePreferences(ctx,restricted,env,{db});
+   const restrictedConfig=await repository.effectiveConfig(ctx,env,{db});
+   const restrictedPage=await repository.listProfileJobs(ctx,restrictedConfig,nomenclatures,
+     {limit:50,prefetch:0,q:'W025'},env,{db});
+   const restrictedIds=new Set(restrictedPage.jobs.map(j=>j.id));
+   assert.ok(!restrictedIds.has(selected[0].id),
+     'known family with explicitly mismatched subfamily must stay excluded');
+   assert.deepEqual([...restrictedIds].sort(),unknown.map(j=>j.id).sort(),
+     'UNKNOWN conflict jobs must survive subfamily filter despite nonempty member codes');
   });
   await t.test('W025-R04 two or more pages, exact expected set/order and no canonical mutation',async()=>{
    const prefs={...await repository.effectiveConfig(ctx,env,{db}),
