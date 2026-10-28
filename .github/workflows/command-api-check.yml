@@ -63,6 +63,7 @@ permissions:
 
 jobs:
   validate:
+    if: github.event_name != 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -252,6 +253,7 @@ jobs:
 
 
   nile-contract-evidence:
+    if: github.event_name != 'workflow_dispatch'
     name: Nile-only native provider CI
     runs-on: ubuntu-latest
     timeout-minutes: 25
@@ -436,3 +438,10 @@ jobs:
         if: always()
         working-directory: command-api
         run: node scripts/nile-ci-test-gate.mjs /tmp/w025-nile-process-evidence.json "$(git rev-parse HEAD)"
+
+  w025-harness-only:
+    name: W02-5 owner-authorized disposable harness only
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ops/531-w025-harness-088e1e' && github.repository == 'Shosetzel69/job-search-command-center'
+    permissions:
+      contents: read
+    uses: ./.github/workflows/w025-nile-harness-only.yml
