@@ -51,7 +51,9 @@ fi
 [[ "${JSCC531_STAGE_SHA:-}" == "${candidate}" ]] || { echo "Stage requires JSCC531_STAGE_SHA=exact candidate SHA" >&2; exit 86; }
 gcloud run services update "${service}" \
   --project="${project}" --region="${region}" \
-  --image="${image}" --tag="rf531" --no-traffic
+  --image="${image}" \
+  --update-env-vars="SOURCE_SHA=${candidate},RUNTIME_DATA_SHA=${candidate}" \
+  --tag="rf531" --no-traffic
 
 # The tag is testable while the production DEV route remains on its prior revision.
 tag_url="$(gcloud run services describe "${service}" --project="${project}" --region="${region}" --format=json \
