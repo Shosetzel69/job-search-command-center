@@ -139,7 +139,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
 
   if (eligibility.state === 'INELIGIBLE') {
     const compatibilityReasons = {
-      ROLE_FAMILY_EXCLUDED:'role family disabled',
+      ROLE_FAMILY_EXCLUDED:'jobs family disabled',
       COMPANY_EXCLUDED:'excluded company',
       ROLE_EXCLUDED:'excluded role',
       HARD_EXCLUSION_MATCH:'deep ERP implementation',

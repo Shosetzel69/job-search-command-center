@@ -287,7 +287,7 @@ def load_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     role_taxonomy.validate_taxonomy(taxonomy)
     valid_families = set(role_taxonomy.CANONICAL_FAMILIES) - {"UNKNOWN"}
     if any(str(value).strip().upper() not in valid_families for value in families):
-        raise RuntimeError("Unsupported target Role Family")
+        raise RuntimeError("Unsupported target Jobs Family")
     member_owner = {
         member["code"]: family
         for family in valid_families
@@ -295,7 +295,7 @@ def load_config(config: dict[str, Any] | None = None) -> dict[str, Any]:
     }
     selected_families = {str(value).strip().upper() for value in families}
     if any(member_owner.get(str(value).strip()) not in selected_families for value in subfamilies):
-        raise RuntimeError("Role Subfamily must belong to a selected Role Family")
+        raise RuntimeError("Role Subfamily must belong to a selected Jobs Family")
     if not isinstance(config.get("work_modes"), dict):
         raise RuntimeError("work_modes must be an object")
     for key in ("remote", "hybrid", "onsite"):
