@@ -388,7 +388,7 @@ Package 2C activeaza surse numai dupa `implementat + testat + validat + aprobat`
 
 Target-ul persistent separa trei domenii:
 
-- **shared/product** — canonical jobs, source postings, lifecycle, dedup/repost, role-family classification, Source Registry, source categories, nomenclatures;
+- **shared/product** — canonical jobs, source postings, lifecycle, dedup/repost, Jobs Families classification, Source Registry, source categories, nomenclatures;
 - **personal/profile-owned** — professional profile content, search preferences, FIT/evaluations, seen/archive state, applications, notes, UI preferences; physical storage is tenant-aware with `tenant_id = logical profile_id`;
 - **global account/tenant metadata** — `app_user`, `user_identity`, `user_session`, Nile `tenants` row si minimal `profile` mapping (`profile_id == tenants.id`), fara personal workspace payload;
 - **system/operational** — collection policy, scheduler config/state, runs, source diagnostics si provider/collector state.

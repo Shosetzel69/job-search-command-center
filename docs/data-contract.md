@@ -486,7 +486,7 @@ Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/index
 - Source Posting;
 - shared job lifecycle;
 - dedup/repost relationships;
-- role-family classification;
+- Jobs Families classification;
 - Source Registry / source categories;
 - nomenclatures.
 
@@ -534,7 +534,7 @@ Cross-source merge este conservator. Un requisition id nou nu este automat repos
 ### Shared corpus PostgreSQL schema — ATC-275-03
 
 Implementarea shared-domain foloseste doua tabele:
-- `canonical_jobs` — identitatea canonica, title/company/location/country codes/work mode, role-family canonica si lifecycle;
+- `canonical_jobs` — identitatea canonica, title/company/location/country codes/work mode, familia canonica de joburi si lifecycle;
 - `source_postings` — posting-ul unei surse, cu `source_id`, `external_job_id`/canonical URL, identity precedence, provenance si relatie optionala de repost.
 
 Invarianti:
