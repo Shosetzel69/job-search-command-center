@@ -43,6 +43,13 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    const expected=backfill.migrateRoleCriteria(input);
    assert.deepEqual(expected.target_role_families,['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE']);
    assert.deepEqual(backfill.migrateRoleCriteria(expected),expected);
+   await db.query('BEGIN');
+   try {
+    await db.query("SET LOCAL nile.tenant_id = '"+ctx.profile_id+"'");
+    await db.query('UPDATE search_profile_preferences SET preferences=$3::jsonb WHERE tenant_id=$1 AND search_profile_id=$2',
+      [ctx.profile_id,foundation.search_profile_id,JSON.stringify(input)]);
+    await db.query('COMMIT');
+   } catch(e){await db.query('ROLLBACK').catch(()=>{});throw e;}
    const first=await backfill.backfillSearchProfilePreferences(env,{db});
    assert.ok(first.processed>=1);
    const stored=await repository.effectiveConfig(ctx,env,{db});
