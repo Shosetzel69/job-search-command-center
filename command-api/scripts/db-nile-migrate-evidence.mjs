@@ -1,6 +1,7 @@
 // #531 W02-5: explicit CI admission before loading any database module.
 import {admitNileCi} from './nile-ci-local-admission.mjs';
-if(process.env.CI==='true'||process.env.GITHUB_ACTIONS==='true') admitNileCi();
+// Never accept a local, non-CI, or incomplete runner invocation: fail before importing pg.
+admitNileCi();
 const [{default:pg},{migrate,loadMigrations}]=await Promise.all([
   import('pg'), import('../src/db/migrations.js')
 ]);
