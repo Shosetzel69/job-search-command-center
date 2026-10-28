@@ -11,7 +11,7 @@ permissions:
 jobs:
   first-gate-only:
     name: H01/H02 + migrations 001-010 + cleanup only
-    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ops/531-w025-harness-088e1e' && github.repository == 'Shosetzel69/job-search-command-center' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/ops/531-w025-harness-088e1e' && github.repository == 'Shosetzel69/job-search-command-center' && github.actor == 'Shosetzel69' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     concurrency:
@@ -35,6 +35,7 @@ jobs:
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF" = 'refs/heads/ops/531-w025-harness-088e1e'
           test "$GITHUB_REPOSITORY" = 'Shosetzel69/job-search-command-center'
+          test "$GITHUB_ACTOR" = 'Shosetzel69'
           test "$GITHUB_ACTIONS" = true
           test "$RUNNER_OS" = Linux
           test "$CI" = true
@@ -61,12 +62,15 @@ jobs:
         with:
           node-version: 24
 
-      - name: Install candidate locked dependencies
+      - name: Install candidate pinned dependencies (no lockfile exists)
         working-directory: command-api
         shell: bash
         run: |
           set -euo pipefail
-          npm ci --ignore-scripts --no-audit --no-fund
+          test -f package.json
+          test ! -f package-lock.json
+          test ! -f npm-shrinkwrap.json
+          npm install --ignore-scripts --no-audit --no-fund --no-package-lock
 
       - name: H02 negative admission before any ephemeral container exists
         working-directory: command-api
