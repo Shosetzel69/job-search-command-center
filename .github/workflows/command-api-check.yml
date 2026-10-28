@@ -309,6 +309,7 @@ jobs:
           node --input-type=module <<'NODE'
           import {spawnSync} from 'node:child_process';
           import {randomBytes} from 'node:crypto';
+          import {NILE_NATIVE_BACKEND_PORT} from './scripts/nile-ci-local-admission.mjs';
           import {writeFileSync} from 'node:fs';
           const sha=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).stdout.trim();
           if(!/^[a-f0-9]{40}$/.test(sha))throw Error('checkout SHA unresolved');
@@ -335,7 +336,7 @@ jobs:
                      row.db_name==='jobsearch_dev' &&
                      typeof row.principal==='string' && row.principal.trim() &&
                      Number.isInteger(row.backend_pid) && row.backend_pid>0 &&
-                     row.server_port===5432)sqlReadback=row;
+                     row.server_port===NILE_NATIVE_BACKEND_PORT)sqlReadback=row;
                 }catch{/* malformed or spoofed evidence is a hard failure */}
               }
               if(!sqlReadback)good=false;
