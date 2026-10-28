@@ -13,7 +13,18 @@ test('W025 T01–T05 official native Nile tenant isolation', async()=>{
  await c.connect();
  const readback=async()=>await c.query('SELECT tenant_id::text AS tenant,id,note FROM '+id+' ORDER BY tenant_id,id');
  const context=async()=>{const r=await c.query("SELECT current_setting('nile.tenant_id',true) AS t");assert.ok(!r.rows[0].t);};
- const inTenant=async(own,fn)=>{await c.query('BEGIN');try{await c.query("SET LOCAL nile.tenant_id = '"+own+"'");return await fn();}finally{await c.query('ROLLBACK');}};
+ const inTenant=async(own,fn,{commit=false}={})=>{
+  await c.query('BEGIN');
+  try {
+    await c.query("SET LOCAL nile.tenant_id = '"+own+"'");
+    const result=await fn();
+    await c.query(commit?'COMMIT':'ROLLBACK');
+    return result;
+  } catch(e) {
+    await c.query('ROLLBACK').catch(()=>{});
+    throw e;
+  }
+ };
  try{
   await c.query('CREATE TABLE '+id+'(tenant_id uuid NOT NULL,id integer NOT NULL,note text NOT NULL,PRIMARY KEY(tenant_id,id))');
   await c.query('INSERT INTO tenants(id,name) VALUES($1,$2)',[A,'w025-native-A']);
@@ -31,6 +42,19 @@ test('W025 T01–T05 official native Nile tenant isolation', async()=>{
     assert.equal((await c.query('DELETE FROM '+id+' WHERE tenant_id=$1 AND id=21',[own])).rowCount,1);
    });
    await context();
+   const residue=await c.query('SELECT count(*)::integer AS count FROM '+id+' WHERE tenant_id=$1 AND id=21',[own]);
+   assert.equal(Number(residue.rows[0].count),0,'rollback left tenant-scoped probe residue');
+   await inTenant(own,async()=>{
+    assert.equal((await c.query('INSERT INTO '+id+'(tenant_id,id,note) VALUES($1,31,$2)',[own,'committed'])).rowCount,1);
+   },{commit:true});
+   await context();
+   const committed=await c.query('SELECT count(*)::integer AS count FROM '+id+' WHERE tenant_id=$1 AND id=31',[own]);
+   assert.equal(Number(committed.rows[0].count),1,'tenant commit not persisted');
+   await inTenant(own,async()=>{
+    assert.equal((await c.query('DELETE FROM '+id+' WHERE tenant_id=$1 AND id=31',[own])).rowCount,1);
+   },{commit:true});
+   await context();
+   assert.equal(Number((await c.query('SELECT count(*)::integer AS count FROM '+id+' WHERE tenant_id=$1 AND id=31',[own])).rows[0].count),0);
    for(const [kind,sql,params] of [
     ['INSERT','INSERT INTO '+id+'(tenant_id,id,note) VALUES($1,22,$2)',[other,'unsafe']],
     ['UPDATE','UPDATE '+id+' SET note=$1 WHERE tenant_id=$2',['unsafe',other]],
