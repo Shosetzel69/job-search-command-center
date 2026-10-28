@@ -12,8 +12,7 @@ const {readFile}=await import('node:fs/promises');
 const {Pool}=pg;
 const env={...process.env,APP_ENV:'dev'};
 const db=new Pool({connectionString:env.NILE_TEST_DATABASE_URL,max:5});
-const userId=randomUUID(),tenantId=randomUUID(),searchId=randomUUID(),candidateId=randomUUID();
-const ctx={user_id:userId,profile_id:tenantId,role:'USER',status:'ACTIVE'};
+let ctx;
 const roles=['PROJECT_DELIVERY_MANAGEMENT','SERVICE_OPERATIONS_MANAGEMENT','PRODUCT_AGILE','BUSINESS_ANALYSIS_TRANSFORMATION','CUSTOMER_PROFESSIONAL_SERVICES','TECHNICAL_LEADERSHIP_ARCHITECTURE'];
 const jobs=[
  ['Technical Project Manager','PROJECT_DELIVERY_MANAGEMENT'],
@@ -27,23 +26,18 @@ const jobs=[
 ];
 const seeded=[];
 const nomenclatures=JSON.parse(await readFile(new URL('../../data/nomenclatures.json',import.meta.url),'utf8'));
-const scopeRow=async(scope,family,members)=>db.query(
- `INSERT INTO coverage_scope_state(scope_key,role_family,role_subfamilies,status) VALUES($1,$2,$3,$4)`,
- [scope,family,members,'STALE']);
 test('W025 Nile 010 role families native functional contract',async t=>{
  try{
-  await db.query('INSERT INTO app_user(user_id,role,status) VALUES($1,$2,$3)',[userId,'USER','ACTIVE']);
-  await db.query('INSERT INTO profile(profile_id,user_id,provisioned_at) VALUES($1,$2,now())',[tenantId,userId]);
-  await db.query('INSERT INTO tenants(id,name) VALUES($1,$2)',[tenantId,'w025-role-family']);
-  await db.query('BEGIN');
-  try{
-   await db.query("SET LOCAL nile.tenant_id = '"+tenantId+"'");
-   await db.query('INSERT INTO candidate_profile(tenant_id,candidate_profile_id) VALUES($1,$2)',[tenantId,candidateId]);
-   await db.query("INSERT INTO search_profile(tenant_id,search_profile_id,candidate_profile_id,name,status,profile_version,onboarding_state) VALUES($1,$2,$3,'Default','ACTIVE',1,'COMPLETE')",[tenantId,searchId,candidateId]);
-   await db.query('INSERT INTO profile_preferences(tenant_id,preferences) VALUES($1,$2::jsonb)',[tenantId,JSON.stringify({target_role_families:['PROJECT_MANAGEMENT','SCRUM_AGILE']})]);
-   await db.query("INSERT INTO search_profile_preferences(tenant_id,search_profile_id,preferences) VALUES($1,$2,'{}'::jsonb)",[tenantId,searchId]);
-   await db.query('COMMIT');
-  }catch(e){await db.query('ROLLBACK');throw e;}
+  ctx=await repository.resolveOrProvisionGoogleIdentity({
+   sub:'w025-role-family-user',email:'w025-role-family@example.test',email_verified:true
+  },env,{db});
+  const foundation=await repository.resolveActiveSearchProfile(ctx,env,{db});
+  await repository.savePreferences(ctx,{
+   target_role_families:['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE'],
+   target_role_subfamilies:['project_management','agile_scrum'],
+   work_modes:{remote:true,hybrid:false,onsite:false},contract_types:['contract'],
+   target_country_codes:['RO'],remote_eligible_country_codes:['RO']
+  },env,{db});
   await t.test('W025-R01 legacy backfill persists deterministic canonical 2-family selection',async()=>{
    const input={target_role_families:['PROJECT_MANAGEMENT','SCRUM_AGILE']};
    const expected=backfill.migrateRoleCriteria(input);
@@ -63,7 +57,7 @@ test('W025 Nile 010 role families native functional contract',async t=>{
   });
   await t.test('W025-R02 canonical classifier persists six-family, conflict and unknown outcomes',async()=>{
    for(let index=0;index<jobs.length;index++){
-    const [title,expected]=jobs[index],jobId=randomUUID(),postingId=randomUUID();
+    const [baseTitle,expected]=jobs[index],title='W025 '+baseTitle,jobId=randomUUID(),postingId=randomUUID();
     const predicted=classification.classifyCanonicalJob({title,country_codes:['RO'],work_mode:'remote',payload:{contract_type:'contract'}});
     assert.equal(predicted.role_family,expected,title);
     await db.query(`INSERT INTO canonical_jobs(job_id,title,company,location,country_codes,work_mode,role_family,lifecycle_status,first_seen_at,last_seen_at,payload,job_version,role_subfamily,seniority,contract_type,remote_scope,classification_status,classification_confidence,classification_version,evaluation_basis_hash)
