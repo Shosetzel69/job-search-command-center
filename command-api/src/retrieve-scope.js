@@ -58,7 +58,7 @@ export function userRefreshScopes(preferences) {
   };
   const families = orderedFamilies(p);
   if (families.length > 2) {
-    const error = new Error('Refresh requires at most two role families. Review and save your migrated role selections before refreshing.');
+    const error = new Error('Refresh requires at most two jobs families. Review and save your migrated role selections before refreshing.');
     error.code = 'ROLE_FAMILY_SELECTION_NEEDS_REVIEW';
     error.status = 409;
     throw error;

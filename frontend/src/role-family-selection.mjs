@@ -2,7 +2,7 @@ import { ROLE_FAMILIES } from '../../shared/role-taxonomy-runtime.mjs';
 
 // Preserve all migrated selections until the user explicitly resolves them.
 export function selectRoleFamily(criteria, family, checked, limit=2) {
-  if (!ROLE_FAMILIES.some(item => item.code === family?.code)) throw new Error('Invalid Role Family');
+  if (!ROLE_FAMILIES.some(item => item.code === family?.code)) throw new Error('Invalid Jobs Family');
   const families = Array.isArray(criteria?.roleFamilies) ? criteria.roleFamilies : [];
   const members = Array.isArray(criteria?.roleSubfamilies) ? criteria.roleSubfamilies : [];
   if (checked) {

@@ -258,10 +258,10 @@ function validateUserConfigPatch(input, nomenclatures) {
     const normalized = normalizeRoleFamilies(raw);
     if (normalized.length !== raw.length) {
       const unsupported = raw.filter(value => !ROLE_FAMILY_CODES.includes(value));
-      throw Object.assign(new Error(`Unsupported Role Family: ${unsupported.join(', ')}`), { status:400 });
+      throw Object.assign(new Error(`Unsupported Jobs Family: ${unsupported.join(', ')}`), { status:400 });
     }
     if (normalized.length > 2) {
-      throw Object.assign(new Error('Selecteaza maximum doua familii de roluri pentru Retrieve.'), { status:400 });
+      throw Object.assign(new Error('Selecteaza maximum doua familii de joburi pentru Retrieve.'), { status:400 });
     }
     output.roleFamilies = normalized;
   }
@@ -386,10 +386,10 @@ function validateEffectiveSearchConfig(config, nomenclatures) {
   const rawFamilies = Array.isArray(config.target_role_families) ? config.target_role_families : [];
   const families = normalizeRoleFamilies(rawFamilies);
   if (!families.length || families.length !== rawFamilies.length) {
-    throw Object.assign(new Error('Selecteaza cel putin o familie de roluri valida.'), { status:400 });
+    throw Object.assign(new Error('Selecteaza cel putin o familie de joburi valida.'), { status:400 });
   }
   if (families.length > 2) {
-    throw Object.assign(new Error('Selecteaza maximum doua familii de roluri pentru Retrieve.'), { status:400 });
+    throw Object.assign(new Error('Selecteaza maximum doua familii de joburi pentru Retrieve.'), { status:400 });
   }
   const rawSubfamilies = Array.isArray(config.target_role_subfamilies) ? config.target_role_subfamilies : [];
   const subfamilies = normalizeRoleSubfamilies(rawSubfamilies);
