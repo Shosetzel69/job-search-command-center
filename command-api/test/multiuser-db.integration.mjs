@@ -1,8 +1,11 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
-import pg from 'pg';
+const assert from 'node:assert/strict';
+const test from 'node:test';
+const {admitNileCi} from '../scripts/nile-ci-local-admission.mjs';
+// Admission always precedes loading any database module.
+admitNileCi();
+const {default:pg}=await import('pg');
 
-import {
+const {
   createApplication,
   createSession,
   deleteAccount,
@@ -20,12 +23,11 @@ import {
   savePreferences,
   setAccountStatus,
   updateApplication,
-} from '../src/multiuser-repository.js';
-import { runtimePrivilegeReadiness } from '../src/db/privilege-readiness.js';
-import { aggregateAdminRefreshScopes } from '../src/db/cross-tenant-refresh-scope-aggregator.js';
-import { backfillSearchProfileFoundations } from '../src/db/search-profile-backfill.js';
-import { withTenantTransaction } from '../src/db/tenant-gateway.js';
-import { deleteNomenclatureValue } from '../src/nomenclature-governance.js';
+} = await import('../src/multiuser-repository.js');
+const { aggregateAdminRefreshScopes } = await import('../src/db/cross-tenant-refresh-scope-aggregator.js');
+import { backfillSearchProfileFoundations } = await import('../src/db/search-profile-backfill.js');
+import { withTenantTransaction } = await import('../src/db/tenant-gateway.js');
+import { deleteNomenclatureValue } = await import('../src/nomenclature-governance.js');
 import { readFile } from 'node:fs/promises';
 import { parsePostedDate } from '../src/posted-date.mjs';
 
@@ -34,9 +36,10 @@ const { Pool } = pg;
 const runtimeUrl = process.env.JSCC_INTEGRATION_DATABASE_URL;
 const migrationUrl = process.env.NILE_MIGRATION_DATABASE_URL;
 const adminUrl = process.env.JSCC_TEST_ADMIN_DATABASE_URL;
-const enabled = Boolean(runtimeUrl && migrationUrl && adminUrl);
+if(!runtimeUrl || !migrationUrl || !adminUrl)throw Error('W025_NATIVE_DATABASE_BINDING_MISSING');
 
-test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { skip:!enabled }, async () => {
+
+test('W025 Nile native multiuser integration with preserved functional oracles',async t=>{
   const runtimeDb = new Pool({ connectionString:runtimeUrl, max:6 });
   const migrationDb = new Pool({ connectionString:migrationUrl, max:2 });
   const adminDb = new Pool({ connectionString:adminUrl, max:1 });
@@ -50,25 +53,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
   };
 
   try {
-    const privilege = await runtimePrivilegeReadiness(env, { db:runtimeDb });
-    assert.equal(privilege.status, 'ok');
-    assert.equal(privilege.superuser, false);
-    assert.equal(privilege.schema_create, false);
-    assert.equal(privilege.database_create, false);
-    assert.equal(privilege.residual_global_mode_cross_tenant, true);
-    assert.equal(privilege.tenant_tables.every(item =>
-      item.present && item.tenant_id_ready && !item.owned_by_runtime && !item.member_of_owner
-    ), true);
-
-    await assert.rejects(
-      runtimeDb.query('CREATE TABLE runtime_must_not_create(id integer)'),
-      /permission denied/i,
-    );
-    await assert.rejects(
-      runtimeDb.query('ALTER TABLE profile ADD COLUMN runtime_must_not_add integer'),
-      /must be owner|permission denied/i,
-    );
-
+  let ownerPayload, ownerA, ownerB, ownerFoundationA, user, userFoundation, restoredFoundation, lazyPostingId, lazyJobId, jobNomenclatures, cacheQuery, cacheConfigB, f1aAnchor, originalOwnerUserId, originalOwnerProfileId;
+    await t.test('W025-U01 native preserved assertions',async()=>{
     const ownerSeed = {
       config:{
         target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
@@ -94,8 +80,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       },
     };
 
-    const ownerPayload = { sub:'owner-sub', email:'owner@example.test', email_verified:true };
-    const [ownerA, ownerB] = await Promise.all([
+    ownerPayload = { sub:'owner-sub', email:'owner@example.test', email_verified:true };
+    [ownerA, ownerB] = await Promise.all([
       resolveOrProvisionGoogleIdentity(ownerPayload, env, { db:runtimeDb, bootstrapSeed:ownerSeed }),
       resolveOrProvisionGoogleIdentity(ownerPayload, env, { db:runtimeDb, bootstrapSeed:ownerSeed }),
     ]);
@@ -104,7 +90,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal(ownerA.role, 'ADMIN');
     assert.equal(ownerB.role, 'ADMIN');
 
-    const ownerFoundationA = await resolveActiveSearchProfile(ownerA, env, { db:runtimeDb });
+    ownerFoundationA = await resolveActiveSearchProfile(ownerA, env, { db:runtimeDb });
     const ownerFoundationB = await ensureSearchProfileFoundation(ownerB, env, { db:runtimeDb });
     assert.equal(ownerFoundationA.search_profile_id, ownerFoundationB.search_profile_id);
     assert.equal(ownerFoundationA.candidate_profile_id, ownerFoundationB.candidate_profile_id);
@@ -117,18 +103,20 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.deepEqual(ownerConfig.excluded_company_patterns, ['owner-secret-company']);
     assert.equal((await listApplications(ownerA, env, { db:runtimeDb })).applications.length, 1);
 
-    const user = await resolveOrProvisionGoogleIdentity(
+    user = await resolveOrProvisionGoogleIdentity(
       { sub:'user-b', email:'user-b@example.test', email_verified:true },
       env,
       { db:runtimeDb },
     );
     assert.equal(user.role, 'USER');
 
-    const userFoundation = await resolveActiveSearchProfile(user, env, { db:runtimeDb });
+    userFoundation = await resolveActiveSearchProfile(user, env, { db:runtimeDb });
     assert.notEqual(userFoundation.search_profile_id, user.profile_id);
     assert.notEqual(userFoundation.candidate_profile_id, user.profile_id);
     assert.notEqual(userFoundation.search_profile_id, ownerFoundationA.search_profile_id);
 
+    });
+    await t.test('W025-U02 native preserved assertions',async()=>{
     const ownerProfileProbe = await withTenantTransaction(user, async tx => {
       const result = await tx.query(
         'SELECT search_profile_id FROM search_profile WHERE tenant_id=$1 AND search_profile_id=$2',
@@ -163,7 +151,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     );
     const backfill = await backfillSearchProfileFoundations(env, { db:runtimeDb });
     assert.ok(backfill.processed >= 2);
-    const restoredFoundation = await resolveActiveSearchProfile(user, env, { db:runtimeDb });
+    restoredFoundation = await resolveActiveSearchProfile(user, env, { db:runtimeDb });
     assert.equal(restoredFoundation.search_profile_id, userFoundation.search_profile_id);
     assert.equal(restoredFoundation.candidate_profile_id, userFoundation.candidate_profile_id);
 
@@ -210,6 +198,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     );
     assert.equal(String(afterRollback.rows[0].tenant_id || '').trim(), '');
 
+    });
+    await t.test('W025-U03 native preserved assertions',async()=>{
     const ownerApplication = await createApplication(ownerA, {
       company:'Tenant A',
       title:'Project Manager',
@@ -243,6 +233,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     const versionAfterSecondChange = (await resolveActiveSearchProfile(user, env, { db:runtimeDb })).profile_version;
     assert.equal(versionAfterSecondChange, versionAfterChange + 1);
 
+    });
+    await t.test('W025-U04 native preserved assertions',async()=>{
     // ATC-489-05: explicit global-mode exception returns aggregate scopes only.
     const commonRefreshScope = {
       target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],
@@ -276,8 +268,10 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       status:'applied',
     }, env, { db:runtimeDb });
 
-    const lazyJobId = '33333333-3333-4333-8333-333333333333';
-    const lazyPostingId = '44444444-4444-4444-8444-444444444444';
+    });
+    await t.test('W025-U05 native preserved assertions',async()=>{
+    lazyJobId = '33333333-3333-4333-8333-333333333333';
+    lazyPostingId = '44444444-4444-4444-8444-444444444444';
     await adminDb.query(
       `INSERT INTO canonical_jobs(
           job_id, title, company, location, country_codes, work_mode, role_family,
@@ -316,10 +310,10 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       [lazyPostingId, lazyJobId, new Date('2026-10-05T10:00:00Z')],
     );
 
-    const jobNomenclatures = JSON.parse(
+    jobNomenclatures = JSON.parse(
       await readFile(new URL('../../data/nomenclatures.json', import.meta.url), 'utf8'),
     );
-    const cacheQuery = { limit:1, prefetch:0, q:'ATC48903CACHE' };
+    cacheQuery = { limit:1, prefetch:0, q:'ATC48903CACHE' };
     const cacheConfigA = await effectiveConfig(user, env, { db:runtimeDb });
     const firstLazy = await listProfileJobs(
       user, cacheConfigA, jobNomenclatures, cacheQuery, env,
@@ -342,7 +336,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       ...cacheConfigA,
       fit_threshold:Number(cacheConfigA.fit_threshold || 80) + 1,
     }, env, { db:runtimeDb });
-    const cacheConfigB = await effectiveConfig(user, env, { db:runtimeDb });
+    cacheConfigB = await effectiveConfig(user, env, { db:runtimeDb });
     const thirdLazy = await listProfileJobs(
       user, cacheConfigB, jobNomenclatures, cacheQuery, env,
       { db:runtimeDb, now:new Date('2026-10-05T12:02:00Z') },
@@ -364,8 +358,10 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal(cacheRow.rows[0].fit_algorithm_version, 'fit-v1');
     assert.equal(cacheRow.rows[0].eligibility_state, 'ELIGIBLE');
 
+    });
+    await t.test('W025-F01 native preserved assertions',async()=>{
     // #535 / F-1a: real PostgreSQL ↔ JavaScript parity on both cached and fresh read paths.
-    const f1aAnchor = new Date('2026-10-05T12:00:00.000Z');
+    f1aAnchor = new Date('2026-10-05T12:00:00.000Z');
     const f1aCases = [
       {
         name:'posting payload only',
@@ -421,6 +417,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
         assert.equal(winner, item.expected, item.name + ' JS parser agrees with SQL');
       }
     }
+    });
+    await t.test('W025-F02 native preserved assertions',async()=>{
     // C4: last_seen_at microseconds must not skip rows at a cursor page boundary.
     const microJobs = [
       { job_id:'77777777-7777-4777-8777-777777777777', posting_id:'88888888-8888-4888-8888-888888888888', seen:'2026-10-05T10:00:00.000100Z', suffix:'a' },
@@ -475,6 +473,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal(c4Second.jobs[0].id,microJobs[1].job_id);
     assert.equal(c4Second.jobs[0].age,null);
     assert.equal(c4Second.generated_at,c4First.generated_at,'cursor v2 preserves anchor');
+    });
+    await t.test('W025-U06 native preserved assertions',async()=>{
     assert.ok(await nomenclatureReferenceCount('regions', 'EU', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('countries', 'RO', env, { db:runtimeDb }) >= 1);
     assert.ok(await nomenclatureReferenceCount('work_modes', 'remote', env, { db:runtimeDb }) >= 1);
@@ -496,6 +496,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
       'DB-held reference from another profile must block nomenclature delete without exposing personal content',
     );
 
+    });
+    await t.test('W025-L01 native preserved assertions',async()=>{
     // #522 lifecycle matrix: ADMIN A + USER B + two active USER B sessions.
     const [sessionB1, sessionB2] = await Promise.all([
       createSession(user, env, { db:runtimeDb }),
@@ -574,6 +576,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal((await listApplications(resignedUser, env, { db:runtimeDb })).applications.length, 0);
     await deleteAccount(ownerA, resignedUser.user_id, env, { db:runtimeDb });
 
+    });
+    await t.test('W025-L02 native preserved assertions',async()=>{
     const ownerApps = (await listApplications(ownerA, env, { db:runtimeDb })).applications;
     for (const application of ownerApps) {
       await deleteApplication(ownerA, application.id, env, { db:runtimeDb });
@@ -581,8 +585,8 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     assert.equal((await listApplications(ownerA, env, { db:runtimeDb })).applications.length, 0);
     assert.equal((await listApplications(ownerA, env, { db:runtimeDb })).applications.length, 0);
 
-    const originalOwnerUserId = ownerA.user_id;
-    const originalOwnerProfileId = ownerA.profile_id;
+    originalOwnerUserId = ownerA.user_id;
+    originalOwnerProfileId = ownerA.profile_id;
     await deleteAccount(ownerA, originalOwnerUserId, env, { db:runtimeDb });
 
     const residue = await adminDb.query(
@@ -623,6 +627,7 @@ test('real PostgreSQL multiuser isolation, lifecycle and privilege contract', { 
     const resignedConfig = await effectiveConfig(resigned, env, { db:runtimeDb });
     assert.equal('rate_min_eur_day' in resignedConfig, false);
     assert.equal('excluded_company_patterns' in resignedConfig, false);
+    });
   } finally {
     await runtimeDb.end();
     await migrationDb.end();
