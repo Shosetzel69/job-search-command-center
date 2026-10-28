@@ -182,7 +182,7 @@ test('legacy configuration splits profile preferences from system collection pol
   assert.deepEqual(merged.search_country_codes, ['RO']);
 });
 
-test('Role Family v1 preference migration preserves legacy intent and is idempotent', () => {
+test('Jobs Family v1 preference migration preserves legacy intent and is idempotent', () => {
   const legacy = {
     role_groups:{
       pm:{ enabled:true },
