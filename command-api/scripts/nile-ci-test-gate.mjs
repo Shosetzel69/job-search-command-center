@@ -33,8 +33,19 @@ export function validateNileLedger(evidence,{sourceSha}={}){
            run.tap.passed!==run.tap.tests || run.tap.failed!==0 ||
            run.tap.skipped!==0 || run.tap.todo!==0 || run.tap.cancelled!==0 ||
            run.tap.complete!==true)))deny('invalid suite exit/TAP provenance');
-  if(run.mode==='NATIVE' && (run.native_container_id!==evidence.native_container.id ||
-      run.native_db_observed!==true))deny('native run without observed database binding');
+  if(run.mode==='NATIVE'){
+    const live=run.native_db_readback;
+    if(run.native_container_id!==evidence.native_container.id ||
+       run.native_db_observed!==true ||
+       !/^[a-f0-9]{32}$/.test(String(run.native_challenge||'')) ||
+       !live || live.run!==run.id ||
+       live.challenge!==run.native_challenge ||
+       live.db_name!=='jobsearch_dev' ||
+       typeof live.principal!=='string' || !live.principal.trim() ||
+       !Number.isSafeInteger(live.backend_pid) || live.backend_pid<=0 ||
+       live.server_port!==5432)
+      deny('native SQL session readback absent or not bound to suite challenge');
+  }
   runs.set(run.id,run);
  }
  const results=new Map();
