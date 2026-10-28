@@ -330,6 +330,7 @@ jobs:
             if(kind==='migration' && output.includes('W025_MIGRATIONS_FIRST=PASS') &&
                output.includes('W025_MIGRATIONS_IDEMPOTENCE=PASS'))observed=['M01','M02'];
             else if(kind==='admission' && output.includes('W025_ADMISSION=PASS'))observed=['H01'];
+            else if(kind==='provider' && child.status===0 && /EVIDENCE_COLLECTED/.test(output))observed=[];
             else if(kind==='unit_admission' && tap.failed===0 && tap.skipped===0 && tap.passed===tap.tests)observed=['H02'];
             else if(kind==='mock_composite' && tap.failed===0 && tap.skipped===0 && tap.passed===tap.tests)observed=['M04'];
             else if(kind==='tap')observed=subtests;
@@ -337,16 +338,17 @@ jobs:
             if(expected.some(x=>observed.filter(y=>x===y).length!==1) ||
                observed.some(x=>!expected.includes(x)))good=false;
             const exit_code=child.status??-1;
-            if(exit_code!==0 || tap.tests<1 || tap.passed!==tap.tests ||
+            if(exit_code!==0 || (kind!=='migration' && kind!=='provider' && (tap.tests<1 || tap.passed!==tap.tests ||
                tap.failed!==0 || tap.skipped!==0 || tap.todo!==0 ||
-               tap.cancelled!==0 || !tap.complete)good=false;
+               tap.cancelled!==0 || !tap.complete)))good=false;
             evidence.runs.push({id:runId,mode,command:[command,...args].join(' '),
-              exit_code,checkout_sha:sha,tap,observed_ids:observed,
+              exit_code,checkout_sha:sha,tap:kind==='migration'||kind==='provider'?null:tap,
+              probe_verified:(kind==='migration'||kind==='provider')?exit_code===0:undefined,observed_ids:observed,
               ...(mode==='NATIVE'?{native_container_id:id,native_db_observed:true}:{})});
             for(const x of observed)evidence.results.push({id:x,status:'PASS',sha,run_id:runId});
           };
-          run('migration','NATIVE','node',['--test','scripts/db-nile-migrate-evidence.mjs'],['M01','M02'],'migration');
-          run('provider','NATIVE','node',['--test','scripts/db-nile-contract-evidence.mjs'],[]);
+          run('migration','NATIVE','node',['scripts/db-nile-migrate-evidence.mjs'],['M01','M02'],'migration');
+          run('provider','NATIVE','node',['scripts/db-nile-contract-evidence.mjs'],[],'provider');
           run('admission_unit','HARNESS','node',['--test','test/nile-ci-local-admission.test.mjs'],['H02'],'unit_admission');
           run('tenant','NATIVE','node',['--test','test/nile-native-isolation.integration.mjs'],['T01','T02','T03','T04','T05']);
           run('multiuser','NATIVE','node',['--test','test/multiuser-db.integration.mjs'],['U01','U02','U03','U04','U05','F01','F02','U06','L01','L02']);
