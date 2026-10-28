@@ -526,6 +526,93 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(len(scoped[0].records), 1)
         self.assertEqual(scoped[0].records[0]["id"], "pm")
 
+    def test_targeted_unknown_conflict_persists_without_known_family_leak(self):
+        # Regression B02: Python classifier retains conflict member codes even
+        # when the canonical family is UNKNOWN; scoped collection must not discard it.
+        pm = record("Jobicy", "pm")
+        ambiguous = record("Jobicy", "ambiguous")
+        ambiguous["title"] = "Business Analyst / Product Owner"
+        unresolved = record("Jobicy", "unresolved")
+        unresolved["title"] = "Unrecognizable Galactic Position"
+        service = record("Jobicy", "service")
+        service["title"] = "IT Service Manager"
+        delivery = record("Jobicy", "delivery")
+        delivery["title"] = "Delivery Manager"
+        for row in (pm, ambiguous, unresolved, service, delivery):
+            row["country_codes"] = ["RO"]
+        ambiguous_posting = orchestration.shared_corpus.prepare_posting(ambiguous, source_hint="Jobicy")
+        self.assertEqual(ambiguous_posting.role_family, "UNKNOWN")
+        self.assertTrue(ambiguous_posting.role_subfamily, "conflict must retain nonempty member codes")
+
+        self.jobicy.return_value = [engine.CollectionResult(
+            "jobicy", "target", True, [pm, ambiguous, unresolved, service, delivery], 5
+        )]
+        catalog = copy.deepcopy(CATALOG)
+        catalog["sources"][1]["id"] = "jobicy"
+        orchestration.SOURCES_PATH.write_text(json.dumps(catalog))
+        scope = {
+            "scopes": [{
+                "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+                "role_subfamilies": ["project_management"],
+                "target_country_codes": ["RO"],
+                "work_modes": ["remote"],
+                "contract_types": [],
+            }],
+            "effective_source_ids": ["jobicy"],
+        }
+        with patch.object(orchestration.shared_corpus, "persist_collection", return_value={
+            "status": "persisted", "records_projected": 3, "records_skipped": 0,
+            "postings_created": 3, "postings_updated": 0, "lifecycle_advanced": 0,
+            "complete_sources": 0,
+        }) as persist:
+            code = orchestration.run(
+                CONFIG, NOW, run_id="unknown-scope-regression",
+                retrieve_scope=scope, request_signature="f" * 64,
+            )
+        self.assertEqual(code, 0)
+        collection = persist.call_args.args[0]
+        saved = [row for result in collection if result.ok for row in result.records]
+        self.assertEqual({row["id"] for row in saved}, {"pm", "ambiguous", "unresolved"})
+        self.assertTrue(all(row.get("_jscc_source_id") == "jobicy" for row in saved))
+        self.assertFalse(persist.call_args.kwargs["advance_lifecycle"])
+
+    def test_zoho_canonical_project_scope_preserves_metadata_consistency_prefilter(self):
+        # Regression B03: convert the canonical scoped PM request into Zoho's
+        # existing legacy marker. No marker for mixed/non-PM collection.
+        from job_search_zoho_recruit import prefilter_public_metadata
+        item = {
+            "source": "OSF Digital", "source_id": "src-zoho-osf-digital",
+            "connector": "zoho_recruit", "status": "pending",
+            "connector_config": {"career_url": "https://osf-global.zohorecruit.com/careers"},
+        }
+        empty = [engine.CollectionResult("zoho_recruit", "board", True, [], 0)]
+        scope = {"role_family": "PROJECT_DELIVERY_MANAGEMENT",
+                 "role_subfamilies": ["project_management"]}
+        with patch.object(orchestration.zoho_recruit, "collect_result", return_value=empty) as zoho, \
+             patch.object(orchestration, "record_results"):
+            orchestration.collect_api_sources(
+                {"jobspipe_mode": "disabled", "_jscc_retrieve_scope": {"scopes": [scope]}},
+                {}, NOW, [dict(item)]
+            )
+            self.assertEqual(zoho.call_args.kwargs["role_family"], "PROJECT_MANAGEMENT")
+            zoho.reset_mock()
+            orchestration.collect_api_sources(
+                {"jobspipe_mode": "disabled", "_jscc_retrieve_scope": {"scopes": [
+                    scope, {"role_family": "PRODUCT_AGILE", "role_subfamilies": ["agile_scrum"]}
+                ]}}, {}, NOW, [dict(item)]
+            )
+            self.assertIsNone(zoho.call_args.kwargs["role_family"])
+
+        listings = [
+            {"job_title": "Technical Project Manager"},
+            {"job_title": "Backend Developer"},
+            {"job_title": "Unrecognized Specialized Position"},
+        ]
+        included = prefilter_public_metadata(listings, role_family="PROJECT_MANAGEMENT")
+        self.assertEqual([row["job_title"] for row in included],
+                         ["Technical Project Manager", "Unrecognized Specialized Position"])
+        self.assertEqual(prefilter_public_metadata(listings, role_family=None), listings)
+
     def test_targeted_run_filters_source_plan_and_suppresses_lifecycle_aging(self):
         catalog = copy.deepcopy(CATALOG)
         catalog["sources"][0]["id"] = "jobs"
