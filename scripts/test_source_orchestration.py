@@ -691,6 +691,47 @@ class OrchestrationTests(unittest.TestCase):
                          ["Technical Project Manager", "Unrecognized Specialized Position"])
         self.assertEqual(prefilter_public_metadata(listings, role_family=None), listings)
 
+    def test_sa_b01_signed_empty_source_set_never_collects_unrestricted_providers(self):
+        catalog = copy.deepcopy(CATALOG)
+        catalog["sources"][0]["id"] = "src-jobs"
+        catalog["sources"][1]["id"] = "src-jobicy"
+        orchestration.SOURCES_PATH.write_text(json.dumps(catalog))
+        scope = {
+            "scopes": [{
+                "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+                "role_subfamilies": ["project_management"],
+                "target_country_codes": ["RO"],
+                "work_modes": ["remote"], "contract_types": [],
+            }],
+            "effective_source_ids": [],
+            "source_catalog_generation": "123",
+        }
+        with patch.object(orchestration.shared_corpus, "persist_collection") as persist:
+            result = orchestration.run(
+                CONFIG, NOW, run_id="run-empty-explicit-sources",
+                retrieve_scope=scope, request_signature="e" * 64,
+            )
+        self.assertEqual(result, 0)
+        self.apify.assert_not_called()
+        self.jobicy.assert_not_called()
+        self.direct.assert_not_called()
+        persist.assert_not_called()
+        status = json.loads(engine.STATUS_PATH.read_text())
+        self.assertEqual(status["sources_configured"], 0)
+        self.assertEqual(status["sources_attempted"], 0)
+        self.assertEqual(status["source_results"], [])
+        self.assertEqual(status["retrieve_scope"]["effective_source_ids"], [])
+
+    def test_sa_b01_missing_source_id_array_is_not_legacy_unbounded(self):
+        with self.assertRaisesRegex(ValueError, "explicit source ID array"):
+            orchestration.run(
+                CONFIG, NOW, run_id="run-invalid-source-scope",
+                retrieve_scope={"scopes": [{"role_family": "PROJECT_DELIVERY_MANAGEMENT"}]},
+                request_signature="d" * 64,
+            )
+        self.apify.assert_not_called()
+        self.jobicy.assert_not_called()
+
     def test_targeted_run_filters_source_plan_and_suppresses_lifecycle_aging(self):
         catalog = copy.deepcopy(CATALOG)
         catalog["sources"][0]["id"] = "jobs"
