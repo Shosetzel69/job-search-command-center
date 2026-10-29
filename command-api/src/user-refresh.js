@@ -2,7 +2,7 @@ import { BUILD_IDENTITY } from './build-identity.generated.js';
 import { assertEnvironmentConfig, manualSearchExecutionMode } from './environment-config.js';
 import { activeWorkflowRun, dispatchWorkflow } from './runtime-backend.js';
 import { sharedCorpusRefreshState, userRefreshScope } from './multiuser-repository.js';
-import { buildRetrieveRequest, equivalentActiveRun } from './retrieve-scope.js';
+import { buildRetrieveRequest, equivalentActiveRun, loadSourceCatalogForRefresh } from './retrieve-scope.js';
 import { coverageStateForScopes } from './coverage.js';
 
 export const USER_REFRESH_OUTCOMES = Object.freeze([
@@ -75,6 +75,7 @@ export async function userRefresh(
     getActive = activeWorkflowRun,
     dispatch = dispatchWorkflow,
     buildRequest = buildRetrieveRequest,
+    readCatalog = loadSourceCatalogForRefresh,
     buildIdentity = BUILD_IDENTITY,
   } = {},
 ) {
@@ -83,12 +84,15 @@ export async function userRefresh(
   }
 
   const runtime = assertEnvironmentConfig(env, buildIdentity);
+  const sourceCatalog = await readCatalog(env, runtime);
+  const catalogOption = sourceCatalog ? {sourceCatalog} : {};
   const scope = await readScope(authContext, env);
   const initialState = await readState(env);
   const initialCoverage = await readCoverage(scope?.scopes, env);
   let request = buildRequest({
     scopes:initialCoverage.refresh_scopes,
     collectionFreshnessHours:initialState.collection_freshness_hours,
+    ...catalogOption,
   });
 
   let decision = decideUserRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun:null, request });
@@ -102,6 +106,7 @@ export async function userRefresh(
   request = buildRequest({
     scopes:currentCoverage.refresh_scopes,
     collectionFreshnessHours:currentState.collection_freshness_hours,
+    ...catalogOption,
   });
   decision = decideUserRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, request });
   if (decision.outcome !== 'STARTED_RUN') return decision;
