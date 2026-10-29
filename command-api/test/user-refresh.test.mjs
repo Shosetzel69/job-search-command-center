@@ -281,3 +281,36 @@ test('USER refresh enablement is system-owned collection policy', async () => {
   assert.match(repository, /collection_freshness_hours/);
   assert.match(repository, /FROM search_runs/);
 });
+test('SA-B01/B02 USER refresh: explicit empty DEV sources blocks; a changed generation is re-signed', async () => {
+  const empty = await userRefresh(user,baseEnv,deps({
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
+    readCatalog:async()=>({catalog:{schema_version:'1.0',sources:[]},generation:'7'}),
+    dispatch:async()=>{throw Error('empty source set must never dispatch')},
+  }));
+  assert.equal(empty.outcome,'BLOCKED_BY_POLICY');
+  assert.equal(empty.reason,'NO_ACTIVE_SOURCES');
+  let reads=0,captured=null;
+  const sourceCatalog={schema_version:'1.0',sources:[
+    {id:'src-hr',name:'HR Plus',active:true,policy_excluded:false},
+  ]};
+  const result=await userRefresh(user,baseEnv,deps({
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
+    readCatalog:async()=>{
+      reads++;
+      return {catalog:sourceCatalog,generation:reads===1?'7':'8'};
+    },
+    dispatch:async(_env,_runtime,_origin,_checkActive,_mode,request)=>{
+      captured=request;
+      return {name:'mock-operation',run_id:'run-test'};
+    },
+  }));
+  assert.equal(result.outcome,'STARTED_RUN');
+  assert.equal(reads,2);
+  assert.equal(captured.retrieve_scope.source_catalog_generation,'8');
+  assert.deepEqual(captured.retrieve_scope.effective_source_ids,['src-hr']);
+  const old=buildRetrieveRequest({scopes:scope.scopes,
+    collectionFreshnessHours:24,sourceCatalog,sourceCatalogGeneration:'7'});
+  assert.notEqual(old.request_signature,captured.request_signature);
+});
