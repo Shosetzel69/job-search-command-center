@@ -107,7 +107,11 @@ def _source_route(source):
 
 def _dev_zoho_admin_enabled(source, route):
     if (str(os.environ.get("APP_ENV") or "").lower() != "dev"
-            or route is None or route.get("connector") != "zoho_recruit"):
+            or route is None or route.get("connector") != "zoho_recruit"
+            or route.get("disabled_reason") in {
+                "connector_requires_credentials", "invalid_public_zoho_board",
+                "zoho_route_url_mismatch",
+            }):
         return False
     if (source.get("active") is not True
             or source.get("validation_status") != "validated"
