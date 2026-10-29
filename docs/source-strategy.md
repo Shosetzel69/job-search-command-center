@@ -54,6 +54,9 @@ Reguli:
 
 ## 3. Administrarea registrului - Package 2A
 
+**#585 (DEV-only candidate; not yet merged or deployed):** catalogul operațional din UI este separat de `data/sources.json` din Git. La prima modificare ADMIN, GCS `seed/sources.json` se creeaza atomic din catalogul curent; ulterior actualizarea foloseste generatia obiectului. Cloud Run Job primeste o copie stabila in directorul rularii; PHP/JS route dinamic este limitat la domenii Zoho publice strict valide (`https://<tenant>.zohorecruit.com/careers`). `active=true` fara `validated+approved` nu poate activa o ruta, iar TEST/PROD pastreaza regulile anterioare. Colectarea efectiva are loc la urmatorul Retrieve, nu la click pe activare. Validarea tehnica si controlul de calitate ramân preconditii operationale, nu sunt automatizate de actiunea manuala `Marcheaza validata`.
+
+
 Zona `Administrare -> Surse` separa catalogul de guvernanta operationala.
 
 Flux:
