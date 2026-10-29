@@ -151,4 +151,48 @@ test('GCP source snapshot must be copied into each run before collector starts',
   assert.match(text, /data\/sources\.json/);
   assert.match(text, /JSCC_RUNTIME_DATA_DIR/);
   assert.match(text, /devSourcesEnabled\(env\)/);
+  assert.match(text, /gcp_source_snapshot\.py/);
+  assert.match(text, /JSCC_SOURCE_CATALOG_GENERATION/);
+});
+
+test('SA-B01/B02: dispatch rejects empty bounded source IDs and missing DEV source generation before GCS calls', async () => {
+  const { dispatchWorkflow } = await import('../src/runtime-gcp.js');
+  const validScope = {scopes:[{role_family:'PROJECT_DELIVERY_MANAGEMENT'}],
+    effective_source_ids:['src-hr'],source_catalog_generation:'12'};
+  const runtime={sourceSha:SHA};
+  const signature='b'.repeat(64);
+  await assert.rejects(dispatchWorkflow(gcp,runtime,'manual-ui',true,'policy',{
+    request_signature:signature,retrieve_scope:{...validScope,effective_source_ids:[]},
+  }),/nonempty signed scopes and source IDs/);
+  await assert.rejects(dispatchWorkflow(gcp,runtime,'manual-ui',true,'policy',{
+    request_signature:signature,retrieve_scope:{...validScope,source_catalog_generation:undefined},
+  }),/signed source catalog generation/);
+  await assert.rejects(dispatchWorkflow(gcp,runtime,'manual-ui',true,'policy',{
+    request_signature:signature,retrieve_scope:{...validScope,source_catalog_generation:'01'},
+  }),/signed source catalog generation/);
+});
+
+test('SA-B02: registry read checks media generation rather than accepting a newer GCS object', async () => {
+  const { readRuntimeJson } = await import('../src/runtime-gcp.js');
+  const originalFetch=globalThis.fetch;
+  const paths=[];
+  try {
+    globalThis.fetch=async (input) => {
+      const url=new URL(String(input));
+      if(url.hostname==='metadata.google.internal')
+        return new Response(JSON.stringify({access_token:'fake-token'}),{status:200});
+      paths.push(url.search);
+      if(!url.search) return new Response(JSON.stringify({generation:'123'}),{status:200});
+      assert.equal(url.searchParams.get('generation'),'123');
+      assert.equal(url.searchParams.get('alt'),'media');
+      return new Response('stale generation', {status:404});
+    };
+    await assert.rejects(
+      readRuntimeJson(gcp,{sourceSha:SHA},'data/sources.json'),
+      error=>error.status===409 && /changed during versioned read/.test(error.message),
+    );
+    assert.equal(paths.length,2);
+  } finally {
+    globalThis.fetch=originalFetch;
+  }
 });
