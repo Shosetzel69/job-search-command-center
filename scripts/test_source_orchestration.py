@@ -63,6 +63,70 @@ class OrchestrationTests(unittest.TestCase):
         plan = orchestration.build_plan(catalog)
         self.assertEqual([item["outcome"] for item in plan], ["deferred_provider", "deferred_provider", "deferred_provider"])
 
+    def test_dev_admin_zoho_activation_is_operational_and_no_implicit_pilot_expansion(self):
+        import os
+        catalog = json.loads((engine.ROOT / "data/sources.json").read_text(encoding="utf-8"))
+        labels = ("HR Plus", "MADIFF", "Matritel", "MyEmployment")
+        selected = [copy.deepcopy(next(row for row in catalog["sources"] if row["name"] == label))
+                    for label in labels]
+        with patch.dict(os.environ, {"APP_ENV": "dev", "JSCC_DEV_OSF_ENABLED": "0"}):
+            original = orchestration.build_plan({"sources": selected})
+            self.assertTrue(all(item["status"] == "inactive" for item in original))
+            self.assertTrue(all(item["records"] == 0 for item in original))
+            for source in selected:
+                source.update(validation_status="validated", approval_status="approved", active=True)
+            admitted = orchestration.build_plan({"sources": selected})
+            self.assertEqual([item["source"] for item in admitted], list(labels))
+            for item in admitted:
+                self.assertEqual(item["status"], "pending")
+                self.assertTrue(item["active"])
+                self.assertEqual(item["connector"], "zoho_recruit")
+                self.assertEqual(item["connector_config"]["career_url"], next(
+                    row["url"] for row in selected if row["name"] == item["source"]))
+            with patch.object(orchestration.zoho_recruit, "collect_result", return_value=[
+                    engine.CollectionResult("zoho_recruit", "public", True, [], 0)]) as collect:
+                results, _, _ = orchestration.collect_api_sources(
+                    {"jobspipe_mode": "disabled"}, {"usage": {}}, NOW, [admitted[0]])
+                self.assertTrue(results[0].ok)
+                self.assertEqual(collect.call_args.args[0], selected[0]["url"])
+            selected[0]["active"] = False
+            self.assertEqual(orchestration.build_plan({"sources": [selected[0]]})[0]["status"], "inactive")
+            selected[1]["approval_status"] = "pending"
+            self.assertEqual(orchestration.build_plan({"sources": [selected[1]]})[0]["status"], "inactive")
+        for env_name in ("test", "prod"):
+            with patch.dict(os.environ, {"APP_ENV": env_name, "JSCC_DEV_OSF_ENABLED": "1"}):
+                no_promotion = orchestration.build_plan({"sources": selected})
+            self.assertTrue(all(item["status"] == "inactive" for item in no_promotion))
+
+    def test_dynamic_public_zoho_route_for_new_admin_source_requires_dev_governance(self):
+        import os
+        source = {
+            "id": "src-new-public-board", "name": "New Public Employer",
+            "url": "https://new-tenant.zohorecruit.com/careers",
+            "active": True, "validation_status": "validated", "approval_status": "approved",
+        }
+        with patch.dict(os.environ, {"APP_ENV": "dev"}):
+            ready = orchestration.build_plan({"sources": [source]})[0]
+            self.assertEqual(ready["connector"], "zoho_recruit")
+            self.assertEqual(ready["status"], "pending")
+            self.assertEqual(ready["connector_config"]["career_url"], source["url"])
+            for invalid in [
+                "http://new-tenant.zohorecruit.com/careers",
+                "https://new-tenant.zohorecruit.com/private",
+                "https://new-tenant.zohorecruit.com/careers?token=secret",
+                "https://evil@new-tenant.zohorecruit.com/careers",
+                "https://new-tenant.zohorecruit.com:444/careers",
+            ]:
+                with self.subTest(invalid=invalid):
+                    bad = orchestration.build_plan({"sources": [{**source, "url":invalid}]})[0]
+                    self.assertEqual(bad["status"], "inactive")
+            for field, value in [("active", False), ("validation_status", "pending"),
+                                 ("approval_status", "pending")]:
+                blocked = orchestration.build_plan({"sources": [{**source, field:value}]})[0]
+                self.assertEqual(blocked["status"], "inactive", field)
+        with patch.dict(os.environ, {"APP_ENV": "prod"}):
+            self.assertEqual(orchestration.build_plan({"sources": [source]})[0]["status"], "inactive")
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
