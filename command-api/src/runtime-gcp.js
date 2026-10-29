@@ -236,8 +236,12 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
   const scoped = ['manual-ui','admin-ui'].includes(runTrigger);
   const requestSignature = String(retrieveRequest?.request_signature || '').trim().toLowerCase();
   const retrieveScope = retrieveRequest?.retrieve_scope;
-  if (scoped && (!/^[0-9a-f]{64}$/.test(requestSignature) || !retrieveScope || !Array.isArray(retrieveScope.scopes) || !retrieveScope.scopes.length
-      || !Array.isArray(retrieveScope.effective_source_ids) || retrieveScope.effective_source_ids.length === 0)) {
+  if (scoped && (!/^[0-9a-f]{64}$/.test(requestSignature) || !retrieveScope
+      || !Array.isArray(retrieveScope.scopes) || !retrieveScope.scopes.length)) {
+    throw runtimeError('Bounded retrieve scope and request signature are required', 400);
+  }
+  if (scoped && (!Array.isArray(retrieveScope.effective_source_ids)
+      || retrieveScope.effective_source_ids.length === 0)) {
     throw runtimeError('Bounded Retrieve requires nonempty signed scopes and source IDs', 400);
   }
   if (scoped && devSourcesEnabled(env)
