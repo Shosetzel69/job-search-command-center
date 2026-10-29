@@ -302,6 +302,39 @@ jobs:
       - name: Admit exact runner container and all database bindings
         working-directory: command-api
         run: node scripts/nile-ci-local-admission.mjs
+      - name: Verify live Nile SQL readiness before native test suites
+        working-directory: command-api
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {randomBytes} from 'node:crypto';
+          import pg from 'pg';
+          import {admitNileCi,attestNativeDatabase} from './scripts/nile-ci-local-admission.mjs';
+          // Readiness does not replace independent per-suite native attestations.
+          admitNileCi();
+          let consecutive=0;
+          for(let attempt=1;attempt<=45;attempt++){
+            const pool=new pg.Pool({connectionString:process.env.NILE_TEST_DATABASE_URL,max:1,connectionTimeoutMillis:3000});
+            try{
+              await attestNativeDatabase(pool,{env:{...process.env,
+                W025_NATIVE_RUN_ID:'migration',
+                W025_NATIVE_CHALLENGE:randomBytes(16).toString('hex')
+              }});
+              consecutive++;
+              if(consecutive===3){
+                console.log('W025_SQL_READINESS=PASS attempts='+attempt);
+                break;
+              }
+            }catch(error){
+              consecutive=0;
+              console.error('W025_SQL_READINESS_RETRY attempt='+attempt+' reason='+String(error?.message||'unknown').slice(0,160));
+            }finally{
+              await pool.end();
+            }
+            if(attempt<45) await new Promise(resolve=>setTimeout(resolve,2000));
+          }
+          if(consecutive!==3) throw Error('W025_SQL_READINESS_FAIL: no three consecutive verified native SQL sessions');
+          NODE
       - name: Execute mandatory Nile suites with process-bound TAP evidence
         working-directory: command-api
         shell: bash
