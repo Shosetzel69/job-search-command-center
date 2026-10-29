@@ -79,6 +79,7 @@ function request(overrides={}) {
 function deps(overrides={}) {
   return {
     readScope:async()=>scope,
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage(),
     getActive:async()=>null,
@@ -107,6 +108,7 @@ test('equivalent active Retrieve coalesces USER refresh with same run_id', async
   const req=request();
   let dispatches = 0;
   const result = await userRefresh(user, baseEnv, deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     getActive:async()=>({run_id:'run-live',request_signature:req.request_signature}),
@@ -120,6 +122,7 @@ test('equivalent active Retrieve coalesces USER refresh with same run_id', async
 test('non-equivalent active Retrieve blocks instead of starting second heavy run', async () => {
   let dispatches = 0;
   const result = await userRefresh(user, baseEnv, deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     getActive:async()=>({run_id:'run-other',request_signature:'0'.repeat(64)}),
@@ -133,6 +136,7 @@ test('non-equivalent active Retrieve blocks instead of starting second heavy run
 test('stale shared corpus starts exactly one bounded Retrieve and returns run_id', async () => {
   const calls = [];
   const result = await userRefresh(user, baseEnv, deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     dispatch:async(...args)=>{
@@ -154,6 +158,7 @@ test('completed Retrieve between lock check and dispatch is reused', async () =>
   let reads = 0;
   let dispatches = 0;
   const result = await userRefresh(user, baseEnv, deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>{
       reads += 1;
@@ -170,6 +175,7 @@ test('dispatch race 409 joins only the same signed run', async () => {
   const req=request();
   let activeReads=0;
   const result = await userRefresh(user, baseEnv, deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     getActive:async()=>{
@@ -187,6 +193,7 @@ test('empty USER scope fails closed before lock or dispatch', async () => {
   let activeReads=0,dispatches=0;
   const result = await userRefresh(user, baseEnv, deps({
     readScope:async()=>({scopes:[]}),
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('INSUFFICIENT', []),
     getActive:async()=>{activeReads+=1;return null;},
@@ -202,6 +209,7 @@ test('USER refresh policy disables before lock or dispatch interaction', async (
   let activeReads = 0;
   let dispatches = 0;
   const result = await userRefresh(user, baseEnv, deps({
+    readCatalog:async()=>null,
     readState:async()=>state({ user_refresh_enabled:false }),
     getActive:async()=>{ activeReads += 1; return null; },
     dispatch:async()=>{ dispatches += 1; },
@@ -214,6 +222,7 @@ test('USER refresh policy disables before lock or dispatch interaction', async (
 
 test('PROD USER refresh is blocked even when general search mode is live', async () => {
   const result = await userRefresh(user, { ...baseEnv, APP_ENV:'prod', GCP_PROJECT_ID:'jscc-prod', SEARCH_MODE:'live' }, deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     dispatch:async()=>{ throw new Error('must not dispatch'); },
