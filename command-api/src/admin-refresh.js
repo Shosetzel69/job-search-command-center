@@ -3,7 +3,7 @@ import { assertEnvironmentConfig, manualSearchExecutionMode } from './environmen
 import { activeWorkflowRun, dispatchWorkflow } from './runtime-backend.js';
 import { sharedCorpusRefreshState } from './multiuser-repository.js';
 import { aggregateAdminRefreshScopes } from './db/cross-tenant-refresh-scope-aggregator.js';
-import { buildRetrieveRequest, equivalentActiveRun } from './retrieve-scope.js';
+import { buildRetrieveRequest, equivalentActiveRun, loadSourceCatalogForRefresh } from './retrieve-scope.js';
 import { coverageStateForScopes } from './coverage.js';
 
 export const ADMIN_REFRESH_OUTCOMES = Object.freeze([
@@ -82,6 +82,7 @@ export async function adminRefresh(
     getActive = activeWorkflowRun,
     dispatch = dispatchWorkflow,
     buildRequest = buildRetrieveRequest,
+    readCatalog = loadSourceCatalogForRefresh,
     buildIdentity = BUILD_IDENTITY,
   } = {},
 ) {
@@ -93,12 +94,15 @@ export async function adminRefresh(
   }
 
   const runtime = assertEnvironmentConfig(env, buildIdentity);
+  const sourceCatalog = await readCatalog(env, runtime);
+  const catalogOption = sourceCatalog ? {sourceCatalog} : {};
   const aggregate = await aggregateScopes(env);
   const initialState = await readState(env);
   const initialCoverage = await readCoverage(aggregate?.scopes, env);
   let request = buildRequest({
     scopes:initialCoverage.refresh_scopes,
     collectionFreshnessHours:initialState.collection_freshness_hours,
+    ...catalogOption,
   });
 
   let decision = decideAdminRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun:null, aggregate, request });
@@ -112,6 +116,7 @@ export async function adminRefresh(
   request = buildRequest({
     scopes:currentCoverage.refresh_scopes,
     collectionFreshnessHours:currentState.collection_freshness_hours,
+    ...catalogOption,
   });
   decision = decideAdminRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, aggregate, request });
   if (decision.outcome !== 'STARTED_RUN') return decision;
