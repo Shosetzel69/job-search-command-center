@@ -595,7 +595,16 @@ export default {
         const result = await mutateSources(env, catalog => {
           const index = catalog.sources.findIndex(item => item.id === id);
           if (index < 0) throw Object.assign(new Error('Sursa nu a fost gasita.'), { status: 404 });
-          const next = normalizeSource({ ...catalog.sources[index], ...patch }, { legacyApproved:true });
+          const prior = catalog.sources[index];
+          const next = normalizeSource({ ...prior, ...patch }, { legacyApproved:true });
+          // A changed source identity cannot silently inherit an old approval.
+          // The ADMIN must validate, approve and activate the new public route.
+          if (next.url !== prior.url || next.name !== prior.name) {
+            next.validation_status = 'pending';
+            next.approval_status = 'pending';
+            next.active = false;
+            next.validation_reason = 'Identitatea sursei a fost schimbata; revalidare necesara.';
+          }
           if (patch.url && catalog.sources.some((item, i) => i !== index && sameUrl(item.url, patch.url))) {
             throw Object.assign(new Error('Exista deja o sursa cu acest URL.'), { status: 409 });
           }
