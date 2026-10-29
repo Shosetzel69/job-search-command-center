@@ -127,6 +127,20 @@ class OrchestrationTests(unittest.TestCase):
         with patch.dict(os.environ, {"APP_ENV": "prod"}):
             self.assertEqual(orchestration.build_plan({"sources": [source]})[0]["status"], "inactive")
 
+    def test_admin_zoho_never_enables_credential_gated_route(self):
+        import os
+        item = {"name": "Credential Zoho", "id": "src-credential-test",
+                "url": "https://credential-tenant.zohorecruit.com/careers",
+                "active": True, "validation_status": "validated",
+                "approval_status": "approved"}
+        route = {"connector": "zoho_recruit", "career_url": item["url"],
+                 "enabled": False, "disabled_reason": "connector_requires_credentials"}
+        with patch.dict(os.environ, {"APP_ENV":"dev"}), patch.dict(
+                orchestration.ATS_ROUTES, {"Credential Zoho": route}):
+            result = orchestration.build_plan({"sources":[item]})[0]
+        self.assertEqual(result["status"], "inactive")
+        self.assertEqual(result["outcome"], "blocked_credentials")
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
