@@ -93,6 +93,24 @@ print(json.dumps(payload))
             )
             self.assertNotEqual(Path(paths["candidate"]), runtime.resolve())
 
+    def test_only_dev_container_reads_source_registry_from_runtime_snapshot(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            code = """
+import json
+import source_orchestration as orchestration
+print(json.dumps({"sources":str(orchestration.SOURCES_PATH)}))
+"""
+            for environment in ("dev", "test", "prod"):
+                output = self.run_python(code, {
+                    "APP_ENV": environment,
+                    "JSCC_RUNTIME_MODE": "container",
+                    "JSCC_RUNTIME_DATA_DIR": tmp,
+                })
+                self.assertEqual(output.returncode, 0, output.stderr)
+                actual = Path(json.loads(output.stdout)["sources"])
+                expected = (Path(tmp) if environment == "dev" else ROOT / "data") / "sources.json"
+                self.assertEqual(actual, expected.resolve(), environment)
+
     def test_manual_scope_validates_without_seed_role_criteria(self):
         """A bounded DEV USER refresh must not depend on legacy global roles."""
         code = """
