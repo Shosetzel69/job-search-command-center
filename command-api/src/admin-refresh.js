@@ -47,6 +47,10 @@ export function decideAdminRefresh({ state, coverage, runtime, activeRun, aggreg
   if (coverage?.all_sufficient) {
     return { outcome:'REUSED_CORPUS', reason:null, execution_mode:executionMode, ...metadata(state, coverage, aggregate, request) };
   }
+  if (request?.retrieve_scope?.effective_source_ids?.length === 0) {
+    return { outcome:'BLOCKED_BY_POLICY', reason:'NO_ACTIVE_SOURCES', execution_mode:executionMode,
+      ...metadata(state, coverage, aggregate, request) };
+  }
   if (!request?.retrieve_scope?.scopes?.length) {
     const reason = coverage?.blocked_by_cooldown ? 'COVERAGE_REFRESH_COOLDOWN' : 'NO_ACTIVE_REFRESH_SCOPES';
     return { outcome:'BLOCKED_BY_POLICY', reason, execution_mode:executionMode, ...metadata(state, coverage, aggregate, request) };
@@ -94,8 +98,11 @@ export async function adminRefresh(
   }
 
   const runtime = assertEnvironmentConfig(env, buildIdentity);
-  const sourceCatalog = await readCatalog(env, runtime);
-  const catalogOption = sourceCatalog ? {sourceCatalog} : {};
+  let sourceSnapshot = await readCatalog(env, runtime);
+  let catalogOption = sourceSnapshot ? {
+    sourceCatalog:sourceSnapshot.catalog,
+    sourceCatalogGeneration:sourceSnapshot.generation,
+  } : {};
   const aggregate = await aggregateScopes(env);
   const initialState = await readState(env);
   const initialCoverage = await readCoverage(aggregate?.scopes, env);
@@ -111,6 +118,13 @@ export async function adminRefresh(
   const activeRun = await getActive(env, runtime);
   if (activeRun) return decideAdminRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun, aggregate, request });
 
+  // Re-read before signing the final request. A concurrent ADMIN edit must
+  // change the source generation/signature or fail closed at Job admission.
+  sourceSnapshot = await readCatalog(env, runtime);
+  catalogOption = sourceSnapshot ? {
+    sourceCatalog:sourceSnapshot.catalog,
+    sourceCatalogGeneration:sourceSnapshot.generation,
+  } : {};
   const currentState = await readState(env);
   const currentCoverage = await readCoverage(aggregate?.scopes, env);
   request = buildRequest({
