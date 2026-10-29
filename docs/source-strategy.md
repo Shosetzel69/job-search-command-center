@@ -52,6 +52,10 @@ Reguli:
 - un blocaj care necesita ruta ATS/connector dedicat ramane blocat pana la validarea si activarea explicita a acelei rute;
 - outcome-ul canonic ramane `blocked`; motivul structurat exista pentru triere si remediere, nu pentru cosmetizarea ratei de succes.
 
+### #585 — SA-B01/B02 source snapshot admission (DEV only)
+
+Un Retrieve bounded foloseste lista explicita `effective_source_ids`. Lista goala inseamna **nicio sursa**, niciodata toate sursele; API refuza dispatch. Semnatura include generatia GCS a registrului de surse, iar inainte de dispatch starea este citita din nou. Cloud Run Job foloseste o cerere GCS versionata pentru aceeasi generatie si verifica exact ID-urile active semnate; refuza o modificare ADMIN concurenta, un URL mutat in spatele aceluiasi ID, o creare initiala concurenta si orice imagine Job de SHA diferit. In absenta unui registru operational, generatia `0` semneaza numai catalogul candidat din aceeasi versiune. Nu se introduc mutatii SQL sau automatizari de activare; rularile legacy nesemnate nu isi schimba scopul.
+
 ## 3. Administrarea registrului - Package 2A
 
 **#585 (DEV-only candidate; not yet merged or deployed):** catalogul operațional din UI este separat de `data/sources.json` din Git. La prima modificare ADMIN, GCS `seed/sources.json` se creeaza atomic din catalogul curent; ulterior actualizarea foloseste generatia obiectului. Cloud Run Job primeste o copie stabila in directorul rularii; ruta Python dinamica este limitat la domenii Zoho publice strict valide (`https://<tenant>.zohorecruit.com/careers`). `active=true` fara `validated+approved` nu poate activa o ruta, iar TEST/PROD pastreaza regulile anterioare. Colectarea efectiva are loc la urmatorul Retrieve, nu la click pe activare. Validarea tehnica si controlul de calitate ramân preconditii operationale, nu sunt automatizate de actiunea manuala `Marcheaza validata`.
