@@ -5,6 +5,7 @@ import {
   buildRetrieveRequest,
   canonicalizeRefreshScopes,
   effectiveSourceIds,
+  loadSourceCatalogForRefresh,
   equivalentActiveRun,
   userRefreshScopes,
 } from '../src/retrieve-scope.js';
@@ -137,4 +138,37 @@ test('migrated three-family preferences fail closed instead of silently dropping
   assert.throws(() => userRefreshScopes({
     target_role_families:['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE','SERVICE_OPERATIONS_MANAGEMENT'],
   }), error => error.code === 'ROLE_FAMILY_SELECTION_NEEDS_REVIEW' && error.status === 409);
+});
+
+
+test('DEV Retrieve uses approved live source set in signature and rejects invalid registry', async () => {
+  const env = {SOURCES_PATH:'data/sources.json'};
+  const runtime = {appEnv:'dev',runtimeBackend:'gcp'};
+  const source = {id:'src-zoho-hr-plus',name:'HR Plus',active:true,
+    validation_status:'validated',approval_status:'approved',policy_excluded:false};
+  const baseline = {schema_version:'1.0',sources:[
+    {id:'src-regular',name:'Normal',active:true,policy_excluded:false},
+    {id:'src-pending',name:'MADIFF',active:false,policy_excluded:false},
+  ]};
+  const dynamic = {schema_version:'1.0',sources:[...baseline.sources,source]};
+  let reads = 0;
+  const readJson = async (_env, _runtime, path) => {
+    reads++;
+    assert.equal(path, 'data/sources.json');
+    return {payload:dynamic};
+  };
+  const chosen = await loadSourceCatalogForRefresh(env,runtime,readJson);
+  assert.equal(reads, 1);
+  assert.deepEqual(effectiveSourceIds(chosen), ['src-regular','src-zoho-hr-plus']);
+  const scopes=[{role_family:'PROJECT_DELIVERY_MANAGEMENT',
+    role_subfamilies:['project_management'],target_country_codes:['RO'],work_modes:['remote']}];
+  const oldRequest=buildRetrieveRequest({scopes,collectionFreshnessHours:24,sourceCatalog:baseline});
+  const newRequest=buildRetrieveRequest({scopes,collectionFreshnessHours:24,sourceCatalog:chosen});
+  assert.deepEqual(newRequest.retrieve_scope.effective_source_ids,['src-regular','src-zoho-hr-plus']);
+  assert.notEqual(newRequest.request_signature,oldRequest.request_signature);
+  for (const appEnv of ['test','prod']) {
+    const original = await loadSourceCatalogForRefresh(env,{...runtime,appEnv},async()=>{throw Error('no provider calls allowed')});
+    assert.equal(original,null);
+  }
+  await assert.rejects(loadSourceCatalogForRefresh(env,runtime,async()=>({payload:{sources:[]}})),/invalid/);
 });
