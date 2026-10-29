@@ -186,3 +186,48 @@ test('Monster stays operationally excluded even if legacy catalog says active', 
   assert.match(source.validation_reason, /Exclus operational/);
   assert.throws(() => applySourceAction(source, 'activate'), /exclusa operational/);
 });
+
+
+test('Zoho public board activates only after explicit ADMIN validation and approval', () => {
+  for (const url of ['https://hr-plus.zohorecruit.com/careers',
+                     'https://madiffpl.zohorecruit.com/careers',
+                     'https://matritel.zohorecruit.com/careers',
+                     'https://new-tenant.zohorecruit.com/careers']) {
+    let source = newPendingSource({name:'Zoho public board',url,category:'Servicii IT si consultanta'}, 'src-zoho-'+url.length);
+    assert.equal(source.collection_method, 'zoho_recruit');
+    assert.equal(source.active, false);
+    assert.throws(() => applySourceAction(source, 'activate'), /validata si aprobata/);
+    source = applySourceAction(source, 'submit_validation');
+    source = applySourceAction(source, 'mark_validated');
+    assert.throws(() => applySourceAction(source, 'activate'), /validata si aprobata/);
+    source = applySourceAction(source, 'approve');
+    source = applySourceAction(source, 'activate');
+    assert.equal(source.active, true);
+    source = applySourceAction(source, 'disable');
+    assert.equal(source.active, false);
+    assert.equal(source.approval_status, 'approved');
+  }
+});
+
+test('Zoho activation refuses private, misleading or unsafe career URLs', () => {
+  const bad = [
+    'http://hr-plus.zohorecruit.com/careers',
+    'https://hr-plus.zohorecruit.com/api/v2/jobs',
+    'https://hr-plus.zohorecruit.com/careers?token=private',
+    'https://hr-plus.zohorecruit.com:444/careers',
+    'https://user@hr-plus.zohorecruit.com/careers',
+    'https://hr-plus.zohorecruit.com.evil.example/careers',
+  ];
+  for (const url of bad) {
+    let source = normalizeSource({
+      id:'src-zoho-legacy',
+      name:'HR Plus',
+      url,
+      collection_method:'zoho_recruit',
+      active:false,
+      validation_status:'validated',
+      approval_status:'approved',
+    });
+    assert.throws(() => applySourceAction(source, 'activate'), /Zoho necesita/);
+  }
+});

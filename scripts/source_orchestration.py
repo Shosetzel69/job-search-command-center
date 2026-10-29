@@ -1,6 +1,7 @@
 """Catalog-driven collection using the existing CollectionResult contract."""
 
 import hashlib
+import os
 import json
 import socket
 from concurrent.futures import ThreadPoolExecutor
@@ -32,7 +33,16 @@ import job_search_public_boards as public_boards
 
 REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
 ATS_ROUTES = json.loads((engine.ROOT / "shared/validated-ats-routes.json").read_text()).get("routes", {})
-SOURCES_PATH = engine.CANDIDATE_DATA / "sources.json"
+# Only DEV GCP collection consumes the operator-owned per-run source snapshot.
+# Local, TEST and PROD retain the existing candidate-managed catalog boundary.
+_DEV_RUNTIME_SOURCE_SNAPSHOT = (
+    str(os.environ.get("APP_ENV") or "").strip().lower() == "dev"
+    and (bool(os.environ.get("CLOUD_RUN_JOB") or os.environ.get("CLOUD_RUN_EXECUTION"))
+         or str(os.environ.get("JSCC_RUNTIME_MODE") or "").strip().lower()
+            in {"container", "gcp", "cloud-run"})
+)
+SOURCES_PATH = (engine.RUNTIME_DATA if _DEV_RUNTIME_SOURCE_SNAPSHOT
+                else engine.CANDIDATE_DATA) / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
@@ -67,8 +77,56 @@ def policy_excluded(source):
     return str(source.get("name") or "").strip().casefold() in POLICY_EXCLUDED_SOURCE_NAMES
 
 
+def _source_route(source):
+    """Resolve the public provider route without broadening any non-Zoho gate."""
+    static = ATS_ROUTES.get(source.get("name"))
+    if static and static.get("connector") != "zoho_recruit":
+        return static
+    try:
+        parsed = urlsplit(str(source.get("url") or ""))
+        zoho_host = (parsed.hostname or "").endswith(".zohorecruit.com")
+    except ValueError:
+        zoho_host = False
+    if not zoho_host and not (static and static.get("connector") == "zoho_recruit"):
+        return static
+    try:
+        board = zoho_recruit.validate_board(source.get("url"))
+    except (ValueError, TypeError):
+        return {"connector": "zoho_recruit", "enabled": False,
+                "disabled_reason": "invalid_public_zoho_board"}
+    if static and static.get("career_url") != board:
+        return {"connector": "zoho_recruit", "enabled": False,
+                "disabled_reason": "zoho_route_url_mismatch"}
+    if static:
+        return static
+    # No per-tenant source-code change: new public Zoho boards are eligible
+    # through ADMIN governance, exclusively in DEV and never on private APIs.
+    return {"connector": "zoho_recruit", "career_url": board, "enabled": False,
+            "disabled_reason": "admin_approval_required"}
+
+
+def _dev_zoho_admin_enabled(source, route):
+    if (str(os.environ.get("APP_ENV") or "").lower() != "dev"
+            or route is None or route.get("connector") != "zoho_recruit"
+            or route.get("disabled_reason") in {
+                "connector_requires_credentials", "invalid_public_zoho_board",
+                "zoho_route_url_mismatch",
+            }):
+        return False
+    if (source.get("active") is not True
+            or source.get("validation_status") != "validated"
+            or source.get("approval_status") != "approved"
+            or policy_excluded(source)):
+        return False
+    try:
+        return (route.get("career_url") ==
+                zoho_recruit.validate_board(source.get("url")))
+    except (ValueError, TypeError):
+        return False
+
+
 def connector_for(source):
-    route = ATS_ROUTES.get(source.get("name"))
+    route = _source_route(source)
     if route:
         return route.get("connector")
     if public_boards.source_supported(source.get("name")):
@@ -294,8 +352,9 @@ def build_plan(catalog):
     seen = set()
     catalog_names = {str(source.get("name") or "") for source in catalog["sources"]}
     for source in catalog["sources"]:
-        route = ATS_ROUTES.get(source.get("name"))
+        route = _source_route(source)
         dev_osf_enabled = _dev_osf_override(source, route)
+        dev_zoho_admin_enabled = _dev_zoho_admin_enabled(source, route)
         alias_target = PROVIDER_ALIASES.get(source.get("name"))
         connector = connector_for(source)
         deferred = None if connector else deferred_provider(source)
@@ -330,11 +389,17 @@ def build_plan(catalog):
                         failure_reason=reason, provider_alias=alias_target)
         if route:
             item["connector_config"] = route
-            if route.get("enabled") is False and not dev_osf_enabled:
+            if route.get("enabled") is False and not (dev_osf_enabled or dev_zoho_admin_enabled):
                 item["active"] = False
                 reason = route.get("disabled_reason") or "ATS route disabled"
                 item.update(status="inactive", outcome=disabled_route_outcome(reason),
                             error=reason, failure_reason=reason)
+        if (item["status"] == "pending" and connector == "zoho_recruit"
+                and not (dev_osf_enabled or dev_zoho_admin_enabled)):
+            item["active"] = False
+            item.update(status="inactive", outcome="disabled_config",
+                        error="Zoho requires explicit DEV ADMIN approval and valid public board",
+                        failure_reason="Zoho requires explicit DEV ADMIN approval and valid public board")
         if item["status"] == "pending" and not item["active"]:
             item.update(status="inactive", outcome="disabled_config",
                         error="Disabled in source catalog", failure_reason="Disabled in source catalog")
@@ -725,14 +790,19 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
     retrieve_scope = retrieve_scope if isinstance(retrieve_scope, dict) else None
     request_signature = str(request_signature or "").strip().casefold() or None
     raw_plan = build_plan(json.loads(SOURCES_PATH.read_text(encoding="utf-8")))
-    effective_source_ids = {
-        str(value).strip()
-        for value in ((retrieve_scope or {}).get("effective_source_ids") or [])
-        if str(value).strip()
-    }
+    # An explicit empty bounded source set is NO sources, never an unrestricted
+    # provider scan. Only legacy unscoped executions may use the full catalog.
+    bounded = retrieve_scope is not None
+    if bounded:
+        ids = retrieve_scope.get("effective_source_ids")
+        if not isinstance(ids, list) or any(not isinstance(v, str) or not v.strip() for v in ids):
+            raise ValueError("bounded Retrieve requires an explicit source ID array")
+        effective_source_ids = set(ids)
+    else:
+        effective_source_ids = None
     plan = [
         item for item in raw_plan
-        if not effective_source_ids or str(item.get("source_id") or "") in effective_source_ids
+        if effective_source_ids is None or str(item.get("source_id") or "") in effective_source_ids
     ]
     scope_families = sorted({
         str(scope.get("role_family") or "").strip().upper()

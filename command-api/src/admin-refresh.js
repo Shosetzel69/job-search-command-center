@@ -3,7 +3,7 @@ import { assertEnvironmentConfig, manualSearchExecutionMode } from './environmen
 import { activeWorkflowRun, dispatchWorkflow } from './runtime-backend.js';
 import { sharedCorpusRefreshState } from './multiuser-repository.js';
 import { aggregateAdminRefreshScopes } from './db/cross-tenant-refresh-scope-aggregator.js';
-import { buildRetrieveRequest, equivalentActiveRun } from './retrieve-scope.js';
+import { buildRetrieveRequest, equivalentActiveRun, loadSourceCatalogForRefresh } from './retrieve-scope.js';
 import { coverageStateForScopes } from './coverage.js';
 
 export const ADMIN_REFRESH_OUTCOMES = Object.freeze([
@@ -47,6 +47,10 @@ export function decideAdminRefresh({ state, coverage, runtime, activeRun, aggreg
   if (coverage?.all_sufficient) {
     return { outcome:'REUSED_CORPUS', reason:null, execution_mode:executionMode, ...metadata(state, coverage, aggregate, request) };
   }
+  if (request?.retrieve_scope?.effective_source_ids?.length === 0) {
+    return { outcome:'BLOCKED_BY_POLICY', reason:'NO_ACTIVE_SOURCES', execution_mode:executionMode,
+      ...metadata(state, coverage, aggregate, request) };
+  }
   if (!request?.retrieve_scope?.scopes?.length) {
     const reason = coverage?.blocked_by_cooldown ? 'COVERAGE_REFRESH_COOLDOWN' : 'NO_ACTIVE_REFRESH_SCOPES';
     return { outcome:'BLOCKED_BY_POLICY', reason, execution_mode:executionMode, ...metadata(state, coverage, aggregate, request) };
@@ -82,6 +86,7 @@ export async function adminRefresh(
     getActive = activeWorkflowRun,
     dispatch = dispatchWorkflow,
     buildRequest = buildRetrieveRequest,
+    readCatalog = loadSourceCatalogForRefresh,
     buildIdentity = BUILD_IDENTITY,
   } = {},
 ) {
@@ -93,12 +98,18 @@ export async function adminRefresh(
   }
 
   const runtime = assertEnvironmentConfig(env, buildIdentity);
+  let sourceSnapshot = await readCatalog(env, runtime);
+  let catalogOption = sourceSnapshot ? {
+    sourceCatalog:sourceSnapshot.catalog,
+    sourceCatalogGeneration:sourceSnapshot.generation,
+  } : {};
   const aggregate = await aggregateScopes(env);
   const initialState = await readState(env);
   const initialCoverage = await readCoverage(aggregate?.scopes, env);
   let request = buildRequest({
     scopes:initialCoverage.refresh_scopes,
     collectionFreshnessHours:initialState.collection_freshness_hours,
+    ...catalogOption,
   });
 
   let decision = decideAdminRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun:null, aggregate, request });
@@ -107,11 +118,19 @@ export async function adminRefresh(
   const activeRun = await getActive(env, runtime);
   if (activeRun) return decideAdminRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun, aggregate, request });
 
+  // Re-read before signing the final request. A concurrent ADMIN edit must
+  // change the source generation/signature or fail closed at Job admission.
+  sourceSnapshot = await readCatalog(env, runtime);
+  catalogOption = sourceSnapshot ? {
+    sourceCatalog:sourceSnapshot.catalog,
+    sourceCatalogGeneration:sourceSnapshot.generation,
+  } : {};
   const currentState = await readState(env);
   const currentCoverage = await readCoverage(aggregate?.scopes, env);
   request = buildRequest({
     scopes:currentCoverage.refresh_scopes,
     collectionFreshnessHours:currentState.collection_freshness_hours,
+    ...catalogOption,
   });
   decision = decideAdminRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, aggregate, request });
   if (decision.outcome !== 'STARTED_RUN') return decision;

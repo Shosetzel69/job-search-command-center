@@ -81,6 +81,7 @@ function request(a=aggregate()){
 function deps(overrides={}){
   return {
     aggregateScopes:async()=>aggregate(),
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage(),
     getActive:async()=>null,
@@ -119,6 +120,7 @@ test('equivalent active global Retrieve coalesces ADMIN refresh',async()=>{
   const req=request();
   let dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     getActive:async()=>({run_id:'run-live',request_signature:req.request_signature}),
@@ -132,6 +134,7 @@ test('equivalent active global Retrieve coalesces ADMIN refresh',async()=>{
 test('non-equivalent active run blocks a second ADMIN heavy Retrieve',async()=>{
   let dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     getActive:async()=>({run_id:'other',request_signature:'0'.repeat(64)}),
@@ -145,6 +148,7 @@ test('non-equivalent active run blocks a second ADMIN heavy Retrieve',async()=>{
 test('stale corpus starts exactly one bounded admin-ui Retrieve',async()=>{
   const calls=[];
   const result=await adminRefresh(admin,baseEnv,deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     dispatch:async(...args)=>{calls.push(args);return{name:'projects/jscc-dev/operations/admin-1',run_id:'run-admin-1'};},
@@ -162,6 +166,7 @@ test('dispatch race 409 joins only equivalent ADMIN request',async()=>{
   const req=request();
   let reads=0;
   const result=await adminRefresh(admin,baseEnv,deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     getActive:async()=>{reads+=1;return reads===1?null:{run_id:'run-race',request_signature:req.request_signature};},
@@ -175,6 +180,7 @@ test('dispatch race 409 joins only equivalent ADMIN request',async()=>{
 test('completed Retrieve race reuses fresh corpus before dispatch',async()=>{
   let reads=0,dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>{
       reads+=1;
@@ -191,6 +197,7 @@ test('zero active refresh scopes fail closed without dispatch',async()=>{
   let activeReads=0,dispatches=0;
   const result=await adminRefresh(admin,baseEnv,deps({
     aggregateScopes:async()=>aggregate({active_profile_count:0,scope_count:0,scopes:[]}),
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('INSUFFICIENT',[]),
     getActive:async()=>{activeReads+=1;return null;},
@@ -205,6 +212,7 @@ test('zero active refresh scopes fail closed without dispatch',async()=>{
 test('PROD ADMIN refresh fails closed without runtime interaction',async()=>{
   let activeReads=0,dispatches=0;
   const result=await adminRefresh(admin,{...baseEnv,APP_ENV:'prod',GCP_PROJECT_ID:'jscc-prod',SEARCH_MODE:'live'},deps({
+    readCatalog:async()=>null,
     readState:async()=>state(),
     readCoverage:async()=>coverage('STALE'),
     getActive:async()=>{activeReads+=1;return null;},
@@ -316,4 +324,37 @@ test('both runtime adapters expose active run identity and accept admin-ui trigg
     assert.match(source,/admin-ui/);
     assert.match(source,/activeWorkflowRun/);
   }
+});
+test('SA-B01/B02 ADMIN refresh: explicit empty DEV sources blocks; a changed generation is re-signed', async () => {
+  const empty = await adminRefresh(admin,baseEnv,deps({
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
+    readCatalog:async()=>({catalog:{schema_version:'1.0',sources:[]},generation:'7'}),
+    dispatch:async()=>{throw Error('empty source set must never dispatch')},
+  }));
+  assert.equal(empty.outcome,'BLOCKED_BY_POLICY');
+  assert.equal(empty.reason,'NO_ACTIVE_SOURCES');
+  let reads=0,captured=null;
+  const sourceCatalog={schema_version:'1.0',sources:[
+    {id:'src-hr',name:'HR Plus',active:true,policy_excluded:false},
+  ]};
+  const result=await adminRefresh(admin,baseEnv,deps({
+    readState:async()=>state(),
+    readCoverage:async()=>coverage('STALE'),
+    readCatalog:async()=>{
+      reads++;
+      return {catalog:sourceCatalog,generation:reads===1?'7':'8'};
+    },
+    dispatch:async(_env,_runtime,_origin,_checkActive,_mode,request)=>{
+      captured=request;
+      return {name:'mock-operation',run_id:'run-test'};
+    },
+  }));
+  assert.equal(result.outcome,'STARTED_RUN');
+  assert.equal(reads,2);
+  assert.equal(captured.retrieve_scope.source_catalog_generation,'8');
+  assert.deepEqual(captured.retrieve_scope.effective_source_ids,['src-hr']);
+  const old=buildRetrieveRequest({scopes:aggregate().scopes,
+    collectionFreshnessHours:24,sourceCatalog,sourceCatalogGeneration:'7'});
+  assert.notEqual(old.request_signature,captured.request_signature);
 });

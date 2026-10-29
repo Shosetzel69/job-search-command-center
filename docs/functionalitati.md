@@ -117,6 +117,9 @@ Administrare
 
 ### 5.2 Surse
 
+**#585 — propunere DEV, neintegrata in aplicatia deployed:** validarea, aprobarea si activarea raman actiuni explicite exclusiv ADMIN. In DEV, starea operationala va fi stocata in GCS `seed/sources.json` cu compare-and-swap, nu in artefactul sursa; Job-ul de colectare va copia un snapshot al registrului la pornirea rularii. Pentru rute Zoho publice validate, `Activeaza` permite executia la urmatoarea colectare fara editarea listei de rute. Schimbarea numelui sau URL-ului unei surse invalideaza aprobarea precedenta. TEST/PROD nu primesc activare dinamica. Nu se lanseaza colectare din simpla apasare a butonului Activeaza; validarea tehnica a site-ului necesita dovezi separate.
+
+
 - registru persistent `data/sources.json`;
 - cautare si sortare;
 - adaugare/editare sursa;

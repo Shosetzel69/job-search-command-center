@@ -81,7 +81,7 @@ test('D1: 3 distinct legacy families -> idempotent migration -> persisted load -
   assert.deepEqual(state.persisted.target_role_families,migrated.target_role_families);
   let dispatchCount=0;const coverageScopes=[];
   const deps={
-    buildIdentity:{},readScope:(ctx,e)=>userRefreshScope(ctx,e,{db}),
+    buildIdentity:{},readCatalog:async()=>null,readScope:(ctx,e)=>userRefreshScope(ctx,e,{db}),
     readState:async()=>({user_refresh_enabled:true,collection_freshness_hours:24,
       corpus_age_hours:30,latest_usable_run:null}),
     readCoverage:async(scopes)=>{

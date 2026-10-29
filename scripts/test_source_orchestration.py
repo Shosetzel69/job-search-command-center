@@ -63,6 +63,84 @@ class OrchestrationTests(unittest.TestCase):
         plan = orchestration.build_plan(catalog)
         self.assertEqual([item["outcome"] for item in plan], ["deferred_provider", "deferred_provider", "deferred_provider"])
 
+    def test_dev_admin_zoho_activation_is_operational_and_no_implicit_pilot_expansion(self):
+        import os
+        catalog = json.loads((engine.ROOT / "data/sources.json").read_text(encoding="utf-8"))
+        labels = ("HR Plus", "MADIFF", "Matritel", "MyEmployment")
+        selected = [copy.deepcopy(next(row for row in catalog["sources"] if row["name"] == label))
+                    for label in labels]
+        with patch.dict(os.environ, {"APP_ENV": "dev", "JSCC_DEV_OSF_ENABLED": "0"}):
+            original = orchestration.build_plan({"sources": selected})
+            self.assertTrue(all(item["status"] == "inactive" for item in original))
+            self.assertTrue(all(item["records"] == 0 for item in original))
+            for source in selected:
+                source.update(validation_status="validated", approval_status="approved", active=True)
+            admitted = orchestration.build_plan({"sources": selected})
+            self.assertEqual([item["source"] for item in admitted], list(labels))
+            for item in admitted:
+                self.assertEqual(item["status"], "pending")
+                self.assertTrue(item["active"])
+                self.assertEqual(item["connector"], "zoho_recruit")
+                self.assertEqual(item["connector_config"]["career_url"], next(
+                    row["url"] for row in selected if row["name"] == item["source"]))
+            with patch.object(orchestration.zoho_recruit, "collect_result", return_value=[
+                    engine.CollectionResult("zoho_recruit", "public", True, [], 0)]) as collect:
+                results, _, _ = orchestration.collect_api_sources(
+                    {"jobspipe_mode": "disabled"}, {"usage": {}}, NOW, [admitted[0]])
+                self.assertTrue(results[0].ok)
+                self.assertEqual(collect.call_args.args[0], selected[0]["url"])
+            selected[0]["active"] = False
+            self.assertEqual(orchestration.build_plan({"sources": [selected[0]]})[0]["status"], "inactive")
+            selected[1]["approval_status"] = "pending"
+            self.assertEqual(orchestration.build_plan({"sources": [selected[1]]})[0]["status"], "inactive")
+        for env_name in ("test", "prod"):
+            with patch.dict(os.environ, {"APP_ENV": env_name, "JSCC_DEV_OSF_ENABLED": "1"}):
+                no_promotion = orchestration.build_plan({"sources": selected})
+            self.assertTrue(all(item["status"] == "inactive" for item in no_promotion))
+
+    def test_dynamic_public_zoho_route_for_new_admin_source_requires_dev_governance(self):
+        import os
+        source = {
+            "id": "src-new-public-board", "name": "New Public Employer",
+            "url": "https://new-tenant.zohorecruit.com/careers",
+            "active": True, "validation_status": "validated", "approval_status": "approved",
+        }
+        with patch.dict(os.environ, {"APP_ENV": "dev"}):
+            ready = orchestration.build_plan({"sources": [source]})[0]
+            self.assertEqual(ready["connector"], "zoho_recruit")
+            self.assertEqual(ready["status"], "pending")
+            self.assertEqual(ready["connector_config"]["career_url"], source["url"])
+            for invalid in [
+                "http://new-tenant.zohorecruit.com/careers",
+                "https://new-tenant.zohorecruit.com/private",
+                "https://new-tenant.zohorecruit.com/careers?token=secret",
+                "https://evil@new-tenant.zohorecruit.com/careers",
+                "https://new-tenant.zohorecruit.com:444/careers",
+            ]:
+                with self.subTest(invalid=invalid):
+                    bad = orchestration.build_plan({"sources": [{**source, "url":invalid}]})[0]
+                    self.assertEqual(bad["status"], "inactive")
+            for field, value in [("active", False), ("validation_status", "pending"),
+                                 ("approval_status", "pending")]:
+                blocked = orchestration.build_plan({"sources": [{**source, field:value}]})[0]
+                self.assertEqual(blocked["status"], "inactive", field)
+        with patch.dict(os.environ, {"APP_ENV": "prod"}):
+            self.assertEqual(orchestration.build_plan({"sources": [source]})[0]["status"], "inactive")
+
+    def test_admin_zoho_never_enables_credential_gated_route(self):
+        import os
+        item = {"name": "Credential Zoho", "id": "src-credential-test",
+                "url": "https://credential-tenant.zohorecruit.com/careers",
+                "active": True, "validation_status": "validated",
+                "approval_status": "approved"}
+        route = {"connector": "zoho_recruit", "career_url": item["url"],
+                 "enabled": False, "disabled_reason": "connector_requires_credentials"}
+        with patch.dict(os.environ, {"APP_ENV":"dev"}), patch.dict(
+                orchestration.ATS_ROUTES, {"Credential Zoho": route}):
+            result = orchestration.build_plan({"sources":[item]})[0]
+        self.assertEqual(result["status"], "inactive")
+        self.assertEqual(result["outcome"], "blocked_credentials")
+
     def setUp(self):
         self.stack = ExitStack()
         self.addCleanup(self.stack.close)
@@ -612,6 +690,47 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual([row["job_title"] for row in included],
                          ["Technical Project Manager", "Unrecognized Specialized Position"])
         self.assertEqual(prefilter_public_metadata(listings, role_family=None), listings)
+
+    def test_sa_b01_signed_empty_source_set_never_collects_unrestricted_providers(self):
+        catalog = copy.deepcopy(CATALOG)
+        catalog["sources"][0]["id"] = "src-jobs"
+        catalog["sources"][1]["id"] = "src-jobicy"
+        orchestration.SOURCES_PATH.write_text(json.dumps(catalog))
+        scope = {
+            "scopes": [{
+                "role_family": "PROJECT_DELIVERY_MANAGEMENT",
+                "role_subfamilies": ["project_management"],
+                "target_country_codes": ["RO"],
+                "work_modes": ["remote"], "contract_types": [],
+            }],
+            "effective_source_ids": [],
+            "source_catalog_generation": "123",
+        }
+        with patch.object(orchestration.shared_corpus, "persist_collection") as persist:
+            result = orchestration.run(
+                CONFIG, NOW, run_id="run-empty-explicit-sources",
+                retrieve_scope=scope, request_signature="e" * 64,
+            )
+        self.assertEqual(result, 0)
+        self.apify.assert_not_called()
+        self.jobicy.assert_not_called()
+        self.direct.assert_not_called()
+        persist.assert_not_called()
+        status = json.loads(engine.STATUS_PATH.read_text())
+        self.assertEqual(status["sources_configured"], 0)
+        self.assertEqual(status["sources_attempted"], 0)
+        self.assertEqual(status["source_results"], [])
+        self.assertEqual(status["retrieve_scope"]["effective_source_ids"], [])
+
+    def test_sa_b01_missing_source_id_array_is_not_legacy_unbounded(self):
+        with self.assertRaisesRegex(ValueError, "explicit source ID array"):
+            orchestration.run(
+                CONFIG, NOW, run_id="run-invalid-source-scope",
+                retrieve_scope={"scopes": [{"role_family": "PROJECT_DELIVERY_MANAGEMENT"}]},
+                request_signature="d" * 64,
+            )
+        self.apify.assert_not_called()
+        self.jobicy.assert_not_called()
 
     def test_targeted_run_filters_source_plan_and_suppresses_lifecycle_aging(self):
         catalog = copy.deepcopy(CATALOG)
