@@ -93,8 +93,19 @@ export async function attestNativeDatabase(db,{env=process.env}={}){
   if(row.db_name!=='jobsearch_dev' ||
      typeof row.principal!=='string' || !row.principal.trim() ||
      !Number.isInteger(Number(row.backend_pid)) || Number(row.backend_pid)<=0 ||
-     Number(row.server_port)!==NILE_NATIVE_BACKEND_PORT || row.challenge!==challenge)
+     Number(row.server_port)!==NILE_NATIVE_BACKEND_PORT || row.challenge!==challenge) {
+    // Diagnostic only: record the five non-secret identity checks on failure.
+    // Never log URLs, passwords, raw challenges, queries, or arbitrary DB fields.
+    console.error('W025_NATIVE_IDENTITY_DIAGNOSTIC='+JSON.stringify({
+      run,
+      db_name:typeof row.db_name==='string'?row.db_name.slice(0,80):null,
+      principal:typeof row.principal==='string'?row.principal.slice(0,80):null,
+      backend_pid:Number.isInteger(Number(row.backend_pid))?Number(row.backend_pid):null,
+      server_port:Number.isInteger(Number(row.server_port))?Number(row.server_port):null,
+      challenge_matches:row.challenge===challenge
+    }));
     deny('native SQL identity mismatch');
+  }
   const attestation=Object.freeze({
     run,challenge,db_name:row.db_name,principal:row.principal,
     backend_pid:Number(row.backend_pid),server_port:Number(row.server_port)
