@@ -70,3 +70,85 @@ test('Node server listens on PORT and delegates to the existing secure handler',
   assert.match(text, /process\.env\.PORT \|\| 8080/);
   assert.match(text, /commandApi\.fetch/);
 });
+
+
+test('DEV ADMIN sources persist with GCS create-if-absent, generation CAS and no TEST/PROD mutation', async () => {
+  const { readRuntimeJson, writeRuntimeJson } = await import('../src/runtime-gcp.js');
+  const originalFetch = globalThis.fetch;
+  let generation = null;
+  let payload = null;
+  const requests = [];
+  try {
+    globalThis.fetch = async (input, init = {}) => {
+      const url = new URL(String(input));
+      const method = init.method || 'GET';
+      requests.push({ method, path:url.pathname, query:url.searchParams.toString() });
+      if (url.hostname === 'metadata.google.internal') {
+        return new Response(JSON.stringify({ access_token:'test-gcp-token' }), { status:200 });
+      }
+      if (url.hostname !== 'storage.googleapis.com') throw Error('Unexpected network destination');
+      const object = url.searchParams.get('name') || decodeURIComponent(url.pathname.split('/o/').at(-1) || '');
+      assert.equal(object, 'seed/sources.json', 'only the DEV source registry may be modified');
+      if (method === 'GET' && url.searchParams.get('alt') === 'media') {
+        if (generation === null) return new Response('not found', { status:404 });
+        return new Response(JSON.stringify(payload), { status:200 });
+      }
+      if (method === 'GET') {
+        if (generation === null) return new Response('not found', { status:404 });
+        return new Response(JSON.stringify({generation:String(generation)}), { status:200 });
+      }
+      if (method === 'POST') {
+        const expected = url.searchParams.get('ifGenerationMatch');
+        if (String(generation ?? 0) !== expected) return new Response('conflict', { status:412 });
+        generation = (generation ?? 0) + 1;
+        payload = JSON.parse(init.body);
+        return new Response(JSON.stringify({generation:String(generation)}), { status:200 });
+      }
+      throw Error('Unexpected method');
+    };
+    const runtime = {sourceSha:SHA};
+    const first = await readRuntimeJson(gcp, runtime, 'data/sources.json');
+    assert.equal(first.sha, '0');
+    assert.ok(first.payload.sources.length >= 100);
+    const edited = structuredClone(first.payload);
+    const hr = edited.sources.find(s => s.name === 'HR Plus');
+    assert.ok(hr);
+    hr.validation_status = 'validated';
+    hr.approval_status = 'approved';
+    hr.active = true;
+    await writeRuntimeJson(gcp, runtime, 'data/sources.json', first.sha, edited);
+    const second = await readRuntimeJson(gcp, runtime, 'data/sources.json');
+    assert.equal(second.sha, '1');
+    assert.equal(second.payload.sources.find(s => s.name === 'HR Plus').active, true);
+    await assert.rejects(
+      writeRuntimeJson(gcp, runtime, 'data/sources.json', '0', edited),
+      error => error.status === 409 && /concurrently/.test(error.message),
+    );
+    edited.sources.find(s => s.name === 'HR Plus').active = false;
+    await writeRuntimeJson(gcp, runtime, 'data/sources.json', '1', edited);
+    assert.equal((await readRuntimeJson(gcp, runtime, 'data/sources.json')).payload.sources.find(s => s.name === 'HR Plus').active, false);
+    for (const environment of ['test','prod']) {
+      const frozen = { ...gcp, APP_ENV:environment, GCP_PROJECT_ID:'jscc-'+environment };
+      const original = await readRuntimeJson(frozen, runtime, 'data/sources.json');
+      assert.equal(original.sha, SHA);
+      assert.equal(original.payload.sources.find(s => s.name === 'HR Plus').active, false);
+      await assert.rejects(
+        writeRuntimeJson(frozen, runtime, 'data/sources.json', original.sha, edited),
+        error => error.status === 409 && /candidate-managed/.test(error.message),
+      );
+    }
+    assert.ok(requests.some(r => r.method === 'POST' && r.query.includes('ifGenerationMatch=0')));
+    assert.ok(requests.some(r => r.method === 'POST' && r.query.includes('ifGenerationMatch=1')));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('GCP source snapshot must be copied into each run before collector starts', () => {
+  const text = readFileSync(new URL('../src/runtime-gcp.js', import.meta.url), 'utf8');
+  assert.match(text, /\/runtime\/seed\/sources\.json/);
+  assert.match(text, /\/sources\.json/);
+  assert.match(text, /data\/sources\.json/);
+  assert.match(text, /JSCC_RUNTIME_DATA_DIR/);
+  assert.match(text, /devSourcesEnabled\(env\)/);
+});
