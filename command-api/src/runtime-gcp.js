@@ -161,8 +161,24 @@ export async function canAccessRuntimeRepository(env) {
   try { await readObjectJson(env, 'seed/search-config.json'); return true; } catch { return false; }
 }
 
+// DEV registry is operator-owned state, not a candidate binary artifact.
+// All other environments and candidate-managed files retain the immutable contract.
+function devSourcesEnabled(env) {
+  return env.APP_ENV === 'dev' && env.GCP_PROJECT_ID === 'jscc-dev'
+    && env.JSCC_RUNTIME_BACKEND === 'gcp';
+}
+
 export async function readRuntimeJson(env, runtime, path) {
   const name = path.split('/').pop();
+  if (name === 'sources.json' && devSourcesEnabled(env)) {
+    try {
+      return await readObjectJson(env, 'seed/sources.json');
+    } catch (error) {
+      if (error?.status !== 404) throw error;
+      // First read on an existing DEV installation: no writes or implicit activation.
+      return { sha:'0', payload:await readCandidateJson(path) };
+    }
+  }
   if (CANDIDATE_MANAGED_DATA_FILES.includes(name)) {
     return { sha:runtime.sourceSha, payload:await readCandidateJson(path) };
   }
@@ -171,6 +187,11 @@ export async function readRuntimeJson(env, runtime, path) {
 
 export async function writeRuntimeJson(env, runtime, path, sha, payload) {
   const name = path.split('/').pop();
+  if (name === 'sources.json' && devSourcesEnabled(env)) {
+    // Admin-only endpoint passes the read generation. Generation 0 creates
+    // the DEV registry exactly once; updates use GCS optimistic concurrency.
+    return writeObjectJson(env, 'seed/sources.json', sha, payload);
+  }
   if (CANDIDATE_MANAGED_DATA_FILES.includes(name)) {
     throw runtimeError(`${name} is candidate-managed; create a new candidate instead of mutating runtime data`, 409);
   }
@@ -187,7 +208,7 @@ export async function hasActiveWorkflowRun(env) {
 function fullRunArgs() {
   return [
     '-ceu',
-    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 scripts/gcp_finalize_run.py; exit ${rc}'
+    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; if [ -f /runtime/seed/sources.json ]; then cp /runtime/seed/sources.json "${run_dir}/sources.json"; else cp data/sources.json "${run_dir}/sources.json"; fi; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 scripts/gcp_finalize_run.py; exit ${rc}'
   ];
 }
 
