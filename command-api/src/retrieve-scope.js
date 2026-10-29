@@ -88,11 +88,12 @@ export function canonicalizeRefreshScopes(scopes) {
 export async function loadSourceCatalogForRefresh(env, runtime, readJson = readRuntimeJson) {
   if (runtime?.appEnv !== 'dev' || runtime?.runtimeBackend !== 'gcp') return null;
   const path = env.SOURCES_PATH || 'data/sources.json';
-  const { payload } = await readJson(env, runtime, path);
-  if (!payload || payload.schema_version !== '1.0' || !Array.isArray(payload.sources)) {
-    throw Object.assign(new Error('DEV operational source registry is invalid'), {status:503});
+  const { payload, sha } = await readJson(env, runtime, path);
+  if (!payload || payload.schema_version !== '1.0' || !Array.isArray(payload.sources)
+      || !/^(?:0|[1-9][0-9]*)$/.test(String(sha ?? ''))) {
+    throw Object.assign(new Error('DEV operational source registry or generation is invalid'), {status:503});
   }
-  return payload;
+  return { catalog:payload, generation:String(sha) };
 }
 
 export function effectiveSourceIds(catalog = sourcesCatalog) {
@@ -126,6 +127,7 @@ export function buildRetrieveRequest({
   scopes,
   collectionFreshnessHours,
   sourceCatalog = sourcesCatalog,
+  sourceCatalogGeneration = null,
 } = {}) {
   const canonicalScopes = canonicalizeRefreshScopes(scopes);
   const keyedScopes = canonicalScopes.map(scope => Object.freeze({
@@ -135,10 +137,15 @@ export function buildRetrieveRequest({
   const sourceIds = effectiveSourceIds(sourceCatalog);
   const freshness = Number(collectionFreshnessHours);
   const safeFreshness = Number.isFinite(freshness) && freshness > 0 ? Math.min(freshness, 24 * 365) : 24;
+  const generation = sourceCatalogGeneration === null ? null : String(sourceCatalogGeneration);
+  if (generation !== null && !/^(?:0|[1-9][0-9]*)$/.test(generation)) {
+    throw Object.assign(new Error('Invalid operational source catalog generation'), {status:409});
+  }
   const scope = Object.freeze({
     schema_version:'1.1',
     scopes:keyedScopes,
     effective_source_ids:sourceIds,
+    ...(generation === null ? {} : {source_catalog_generation:generation}),
     freshness:{ collection_freshness_hours:safeFreshness },
   });
   const canonical = JSON.stringify(stablePayload(scope));
