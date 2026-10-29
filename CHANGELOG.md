@@ -4,6 +4,9 @@
 
 ### DEV ADMIN source activation — #585 (candidate, NOT deployed)
 
+- **SA-B01/B02 R2 corrections:** Explicitly empty signed source IDs no longer authorize unbounded Python collection; USER/ADMIN dispatch is refused when the active source set is empty. GCS source catalog generation is included in the canonical Retrieve signature, refreshed before final dispatch, bound to the Job start, and read via version-specific GCS media. The new packaged Job helper checks the same generation and signed source IDs, fails on intervening ADMIN edits and first-create races, and enforces matching exact service/Job SHA before any collector call. TEST/PROD/legacy unscoped source behavior preserved.
+
+
 - DEV-only GCS operational `seed/sources.json` source registry, bootstrapped from immutable candidate on first ADMIN mutation and updated with generation compare-and-swap. ADMIN validation / approval / activation / disable actions now affect the next shared Cloud Run collection snapshot, without manual code changes per public Zoho board. All sources remain inactive until explicit ADMIN actions; URL/name identity edits reset existing approvals. TEST/PROD and other candidate-managed files remain immutable.
 - Public-only Zoho `https://<tenant>.zohorecruit.com/careers` routes are derived from source identity, with origin validation and the existing bounded collector. No private APIs, secrets, automatic activation, anti-bot bypass, DEV traffic change, or migration. Existing OSF pilot flag remains compatible. New GCP service + **search job** image deployment and DEV UI E2E validation are separate acceptance requirements.
 
