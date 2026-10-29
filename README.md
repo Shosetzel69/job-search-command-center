@@ -6,7 +6,7 @@ Versiune curenta: `0.06-dev`
 
 ## Obiectiv
 
-- familii de roluri configurabile per profil;
+- familii de joburi configurabile per profil;
 - mod de lucru configurabil per profil;
 - selectie geografica pe regiuni si tari canonice;
 - criterii de compensatie configurabile per profil;

@@ -39,6 +39,9 @@ test('criteria save serializes only personal preference patch fields', () => {
   assert.ok(start > 0 && end > start);
   const helper = main.slice(start, end);
   assert.doesNotMatch(helper, /jobspipe/i);
+  // Hidden, inactive rate controls must not send stale defaults (10000) to the API (max 5000).
+  assert.doesNotMatch(helper, /rateMin\s*:/);
+  assert.doesNotMatch(helper, /rateMax\s*:/);
   assert.match(main, /JSON\.stringify\(preferencePatchFromCriteria\(draftCriteria\)\)/);
 });
 

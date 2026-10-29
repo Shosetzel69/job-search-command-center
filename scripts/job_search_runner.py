@@ -45,6 +45,10 @@ def terminal_failure_status(now: datetime, run_id: str, signature: str | None, s
             current = {}
     except Exception:
         current = {}
+    # The launcher seeds run-status.json from a previous snapshot. Never relabel
+    # that run's counters, timestamps or limitations as this failed run.
+    if current.get("run_id") != run_id:
+        current = {}
     current.update({
         "schema_version": engine.SCHEMA_VERSION,
         "run_id": run_id,
@@ -280,19 +284,26 @@ def main() -> int:
 
     now = datetime.now(timezone.utc)
     run_id, request_signature, retrieve_scope = retrieve_context(now)
-    config = shared_corpus.apply_collection_policy(engine.load_config())
-    shared_corpus.persist_run_started(
-        run_id,
-        now,
-        {
-            "request_signature": request_signature,
-            "retrieve_scope": retrieve_scope,
-            "trigger": os.environ.get("RUN_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME") or "unknown",
-            "source_sha": (os.environ.get("SOURCE_SHA") or "").strip().lower() or None,
-        },
-    )
-
     try:
+        # A scoped UI refresh owns its criteria; the runtime seed does not represent a user profile.
+        if retrieve_scope:
+            seed = json.loads(engine.CONFIG_PATH.read_text(encoding="utf-8"))
+            scoped = shared_corpus.shared_collection_config(seed, retrieve_scope, request_signature)
+            scoped["schema_version"] = seed.get("schema_version")
+            config = engine.load_config(scoped)
+        else:
+            config = engine.load_config()
+        config = shared_corpus.apply_collection_policy(config)
+        shared_corpus.persist_run_started(
+            run_id,
+            now,
+            {
+                "request_signature": request_signature,
+                "retrieve_scope": retrieve_scope,
+                "trigger": os.environ.get("RUN_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME") or "unknown",
+                "source_sha": (os.environ.get("SOURCE_SHA") or "").strip().lower() or None,
+            },
+        )
         code = orchestration.run(
             config,
             now,

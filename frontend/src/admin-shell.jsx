@@ -485,7 +485,7 @@ function CoverageAdmin({ token, notify }) {
     </Panel>
     <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div className="hidden grid-cols-[minmax(170px,1fr)_120px_110px_110px_150px_minmax(220px,1.2fr)] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 lg:grid">
-        <span>Role Family</span><span>Stare</span><span>Volum</span><span>Surse</span><span>Ultimul usable</span><span>Scope</span>
+        <span>Jobs Family</span><span>Stare</span><span>Volum</span><span>Surse</span><span>Ultimul usable</span><span>Scope</span>
       </div>
       <div className="divide-y divide-slate-100">
         {scopes.map(item => <div key={item.scope_key} className="grid gap-3 px-5 py-4 text-sm lg:grid-cols-[minmax(170px,1fr)_120px_110px_110px_150px_minmax(220px,1.2fr)] lg:items-center">

@@ -486,7 +486,7 @@ Acestea sunt boundary-uri arhitecturale, nu schema SQL finala. Schema/keys/index
 - Source Posting;
 - shared job lifecycle;
 - dedup/repost relationships;
-- role-family classification;
+- Jobs Families classification;
 - Source Registry / source categories;
 - nomenclatures.
 
@@ -534,7 +534,7 @@ Cross-source merge este conservator. Un requisition id nou nu este automat repos
 ### Shared corpus PostgreSQL schema — ATC-275-03
 
 Implementarea shared-domain foloseste doua tabele:
-- `canonical_jobs` — identitatea canonica, title/company/location/country codes/work mode, role-family canonica si lifecycle;
+- `canonical_jobs` — identitatea canonica, title/company/location/country codes/work mode, familia canonica de joburi si lifecycle;
 - `source_postings` — posting-ul unei surse, cu `source_id`, `external_job_id`/canonical URL, identity precedence, provenance si relatie optionala de repost.
 
 Invarianti:
@@ -616,7 +616,7 @@ Invariants:
 
 `POST /admin/refresh` is the ADMIN-only global refresh control.
 
-A narrowly allowlisted Cross-Tenant Refresh Scope Aggregator reads active Search Profile selection scope and returns only deduplicated aggregate scope data: Role Family, target regions/countries, remote-eligible countries, work modes, contract types, and `active_profile_count`. It never returns tenant/search-profile/user identity, email, Candidate Profile evidence, Applications, FIT/evaluation state, or arbitrary preferences JSON.
+A narrowly allowlisted Cross-Tenant Refresh Scope Aggregator reads active Search Profile selection scope and returns only deduplicated aggregate scope data: Jobs Family, target regions/countries, remote-eligible countries, work modes, contract types, and `active_profile_count`. It never returns tenant/search-profile/user identity, email, Candidate Profile evidence, Applications, FIT/evaluation state, or arbitrary preferences JSON.
 
 ADMIN Refresh uses the same global corpus freshness and heavy-search coalescing authority as USER Refresh. Canonical outcomes remain `REUSED_CORPUS | JOINED_EXISTING_RUN | STARTED_RUN | BLOCKED_BY_POLICY`.
 

@@ -233,6 +233,7 @@ function jobSearchQuery(url) {
     cursor:url.searchParams.get('cursor'),
     q:url.searchParams.get('q'),
     role_family:url.searchParams.getAll('role_family'),
+    role_subfamily:url.searchParams.getAll('role_subfamily'),
     work_mode:url.searchParams.getAll('work_mode'),
     contract_type:url.searchParams.getAll('contract_type'),
     freshness_hours:url.searchParams.get('freshness_hours'),

@@ -8,8 +8,9 @@ import {
 } from '../src/coverage.js';
 import { coverageScopeKey } from '../src/retrieve-scope.js';
 
-const pm = {
-  role_family:'PROJECT_MANAGEMENT',
+const project = {
+  role_family:'PROJECT_DELIVERY_MANAGEMENT',
+  role_subfamilies:['project_management'],
   target_regions:['EU'],
   target_country_codes:['RO'],
   remote_eligible_country_codes:['RO'],
@@ -18,7 +19,8 @@ const pm = {
 };
 
 const delivery = {
-  role_family:'DELIVERY',
+  role_family:'PROJECT_DELIVERY_MANAGEMENT',
+  role_subfamilies:['delivery_management'],
   target_regions:['EU'],
   target_country_codes:['RO'],
   remote_eligible_country_codes:['RO'],
@@ -50,7 +52,7 @@ test('coverage state derives SUFFICIENT STALE and INSUFFICIENT dynamically', () 
     coverage_min_corpus_volume:5,
     coverage_min_source_diversity:2,
   };
-  const sufficient = classifyCoverageObservation(pm, {
+  const sufficient = classifyCoverageObservation(project, {
     last_usable_at:'2026-10-07T10:00:00Z',
     corpus_volume:10,
     source_diversity:3,
@@ -58,7 +60,7 @@ test('coverage state derives SUFFICIENT STALE and INSUFFICIENT dynamically', () 
   }, policy, now);
   assert.equal(sufficient.state, 'SUFFICIENT');
 
-  const stale = classifyCoverageObservation(pm, {
+  const stale = classifyCoverageObservation(project, {
     last_usable_at:'2026-10-05T10:00:00Z',
     corpus_volume:10,
     source_diversity:3,
@@ -66,7 +68,7 @@ test('coverage state derives SUFFICIENT STALE and INSUFFICIENT dynamically', () 
   assert.equal(stale.state, 'STALE');
   assert.equal(stale.reason, 'FRESHNESS_EXPIRED');
 
-  const insufficient = classifyCoverageObservation(pm, {
+  const insufficient = classifyCoverageObservation(project, {
     last_usable_at:'2026-10-07T10:00:00Z',
     corpus_volume:2,
     source_diversity:3,
@@ -75,8 +77,8 @@ test('coverage state derives SUFFICIENT STALE and INSUFFICIENT dynamically', () 
   assert.equal(insufficient.reason, 'CORPUS_VOLUME_BELOW_MINIMUM');
 });
 
-test('two Role Families can have different coverage and only stale slice is planned', async () => {
-  const pmKey = coverageScopeKey(pm);
+test('two subfamilies in one major family can have different coverage and only stale slice is planned', async () => {
+  const projectKey = coverageScopeKey(project);
   const deliveryKey = coverageScopeKey(delivery);
   const db = {
     async query(sql, params) {
@@ -87,13 +89,14 @@ test('two Role Families can have different coverage and only stale slice is plan
           coverage_min_source_diversity:2,
         } }] };
       }
-      assert.deepEqual(new Set(params[0]), new Set([pmKey, deliveryKey]));
+      assert.deepEqual(new Set(params[0]), new Set([projectKey, deliveryKey]));
       return { rows:[
         {
-          scope_key:pmKey,
-          role_family:'PROJECT_MANAGEMENT',
-          scope:pm,
-          last_usable_run_id:'run-pm',
+          scope_key:projectKey,
+          role_family:'PROJECT_DELIVERY_MANAGEMENT',
+          role_subfamilies:['project_management'],
+          scope:project,
+          last_usable_run_id:'run-project',
           last_usable_at:new Date('2026-10-07T10:00:00Z'),
           corpus_volume:20,
           source_diversity:5,
@@ -101,7 +104,8 @@ test('two Role Families can have different coverage and only stale slice is plan
         },
         {
           scope_key:deliveryKey,
-          role_family:'DELIVERY',
+          role_family:'PROJECT_DELIVERY_MANAGEMENT',
+          role_subfamilies:['delivery_management'],
           scope:delivery,
           last_usable_run_id:'run-delivery-old',
           last_usable_at:new Date('2026-10-05T10:00:00Z'),
@@ -114,7 +118,7 @@ test('two Role Families can have different coverage and only stale slice is plan
   };
 
   const result = await coverageStateForScopes(
-    [pm, delivery],
+    [project, delivery],
     {},
     { db, now:new Date('2026-10-07T12:00:00Z') },
   );
@@ -122,18 +126,20 @@ test('two Role Families can have different coverage and only stale slice is plan
   assert.equal(result.state_counts.SUFFICIENT, 1);
   assert.equal(result.state_counts.STALE, 1);
   assert.equal(result.refresh_scopes.length, 1);
-  assert.equal(result.refresh_scopes[0].role_family, 'DELIVERY');
+  assert.deepEqual(result.refresh_scopes[0].role_subfamilies, ['delivery_management']);
   assert.equal(result.all_sufficient, false);
 });
 
-test('scope key is deterministic across ordering noise', () => {
+test('scope key is deterministic across ordering noise and changes by subfamily', () => {
   assert.equal(
-    coverageScopeKey(pm),
+    coverageScopeKey(project),
     coverageScopeKey({
-      ...pm,
+      ...project,
+      role_subfamilies:['project_management','project_management'],
       target_regions:['EU','EU'],
       target_country_codes:['RO','RO'],
       work_modes:['hybrid','remote'],
     }),
   );
+  assert.notEqual(coverageScopeKey(project), coverageScopeKey(delivery));
 });

@@ -1,4 +1,6 @@
 import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
+import { ROLE_FAMILIES } from '../../shared/role-taxonomy-runtime.mjs';
+import { selectRoleFamily } from './role-family-selection.mjs';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import AdminShell from './admin-shell.jsx';
@@ -15,6 +17,7 @@ import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, reme
 import { environmentBadge, releaseVersionLabel } from './environment-marker.mjs';
 import { reviewRowsForFilters } from './review-selection.mjs';
 import { jobCountScopeLabel, jobViewCounts, jobViewPopulation } from './job-count-model.mjs';
+import { filterAndSortJobRows } from './job-row-filters.mjs';
 
 const DATA_SCHEMA = '1.0';
 const APP_VERSION = releaseVersionLabel(__APP_VERSION__);
@@ -72,10 +75,12 @@ async function commandApi(path,token,options={}) {
   return payload;
 }
 
-function ageHours(value,fallback=0) {
-  if(!value) return Number.isFinite(Number(fallback))?Number(fallback):0;
+function ageHours(value,fallback=null) {
+  // API age is relative to the immutable first-page/cursor anchor.
+  if(fallback != null && Number.isFinite(Number(fallback))) return Number(fallback);
+  if(!value) return null;
   const ms=Date.now()-new Date(value).getTime();
-  return Number.isFinite(ms)?Math.max(0,Math.floor(ms/3600000)):Number(fallback)||0;
+  return Number.isFinite(ms) && ms>=0 ? Math.floor(ms/3600000) : null;
 }
 
 function normalizeMode(value) {
@@ -99,13 +104,10 @@ function normalizeApplication(application){const ref=application.reference?`Refe
   id:application.id||`application-${application.company||''}-${application.title||''}-${application.applied_at||''}`,title:application.title||'Rol nespecificat',company:application.company||'Companie nespecificata',initial:(application.company||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?',fit:null,location:application.location||'Nespecificat',countries,countryCodes:[],remoteScope:'Unknown',mode:'N/A',type:'Aplicat',contractType:'unknown',employmentTypeRaw:null,age:0,remote:false,b2b:false,repost:false,status:application.status||'applied',pros:[`Aplicat: ${application.applied_at||'data nespecificata'}`,ref],risks:[next],url:application.url||null,description:`Status: ${application.status||'applied'}. ${ref}. ${next}.`,source:'Istoric aplicari',date_posted:application.applied_at||null,isApplication:true,
 };}
 function criteriaFromConfig(config){
-  const groups=config?.role_groups||{},modes=config?.work_modes||{};
+  const modes=config?.work_modes||{};
   return{
-    rolePm:groups.pm?.enabled===true,
-    roleDelivery:groups.delivery?.enabled===true,
-    roleService:groups.service?.enabled===true,
-    roleScrum:groups.scrum?.enabled===true,
-    roleProgram:groups.program?.enabled===true,
+    roleFamilies:Array.isArray(config?.target_role_families)?[...config.target_role_families]:[],
+    roleSubfamilies:Array.isArray(config?.target_role_subfamilies)?[...config.target_role_subfamilies]:[],
     workRemote:modes.remote===true,
     workHybrid:modes.hybrid===true,
     workOnsite:modes.onsite===true,
@@ -127,19 +129,23 @@ function normalizeSource(source){const method=source.collection_method||sourceCo
   id:source.id||null,category:source.category||'Altele',name:source.name||'Sursa',url:source.url||'#',active:source.active===true,collectionMethod:method,connectorAvailable:source.connector_available??Boolean(method),validationStatus:source.validation_status||(source.active?'validated':'pending'),approvalStatus:source.approval_status||(source.active?'approved':'pending'),lastValidatedAt:source.last_validated_at||null,validationReason:source.validation_reason||null,
 };}
 const jobKey=job=>String(job.id||`${job.title}|${job.company}|${job.date_posted||''}`);
-function publishedLabel(job){if(job.isApplication)return job.date_posted?`aplicat ${job.date_posted}`:'aplicat';const age=ageHours(job.date_posted,job.age);if(age<1)return'sub 1h';if(age<24)return`${age}h`;const days=Math.floor(age/24),hours=age%24;return hours?`${days}z ${hours}h`:`${days}z`;}
+function publishedLabel(job){if(job.isApplication)return job.date_posted?`aplicat ${job.date_posted}`:'aplicat';const age=ageHours(job.date_posted,job.age);if(age===null)return'data publicării necunoscută';if(age<1)return'sub 1h';if(age<24)return`${age}h`;const days=Math.floor(age/24),hours=age%24;return hours?`${days}z ${hours}h`:`${days}z`;}
 function formatRunTime(value){if(!value)return'—';try{return new Intl.DateTimeFormat('ro-RO',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit',timeZone:'Europe/Bucharest'}).format(new Date(value));}catch{return value;}}
 function geographyConflicts(criteria){const targetR=new Set(criteria.targetRegions||[]),excludedR=new Set(criteria.excludedRegions||[]),targetC=new Set(criteria.targetCountries||[]),excludedC=new Set(criteria.excludedCountries||[]);for(const x of targetR)if(excludedR.has(x))return true;for(const x of targetC)if(excludedC.has(x))return true;for(const r of targetR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of targetR)for(const c of excludedC)if(REGION_COUNTRIES[r]?.has(c))return true;for(const r of excludedR)for(const c of targetC)if(REGION_COUNTRIES[r]?.has(c))return true;return false;}
 function hasTargetGeography(criteria){return Boolean(criteria?.targetRegions?.length||criteria?.targetCountries?.length);}
-function hasSelectedRole(criteria){return Boolean(criteria?.rolePm||criteria?.roleDelivery||criteria?.roleService||criteria?.roleScrum||criteria?.roleProgram);}
+function hasSelectedRole(criteria){
+  const families=Array.isArray(criteria?.roleFamilies)?criteria.roleFamilies:[];
+  const subfamilies=new Set(Array.isArray(criteria?.roleSubfamilies)?criteria.roleSubfamilies:[]);
+  return families.length>0&&families.every(code=>{
+    const family=ROLE_FAMILIES.find(item=>item.code===code);
+    return Boolean(family?.subfamilies?.some(item=>subfamilies.has(item.code)));
+  });
+}
 function hasSelectedWorkMode(criteria){return Boolean(criteria?.workRemote||criteria?.workHybrid||criteria?.workOnsite);}
 function hasSelectedContractType(criteria){return Array.isArray(criteria?.contractTypes)&&criteria.contractTypes.length>0;}
 function preferencePatchFromCriteria(criteria){return{
-  rolePm:criteria.rolePm===true,
-  roleDelivery:criteria.roleDelivery===true,
-  roleService:criteria.roleService===true,
-  roleScrum:criteria.roleScrum===true,
-  roleProgram:criteria.roleProgram===true,
+  roleFamilies:[...(criteria.roleFamilies||[])],
+  roleSubfamilies:[...(criteria.roleSubfamilies||[])],
   workRemote:criteria.workRemote===true,
   workHybrid:criteria.workHybrid===true,
   workOnsite:criteria.workOnsite===true,
@@ -147,8 +153,6 @@ function preferencePatchFromCriteria(criteria){return{
   freshness:Number(criteria.freshness),
   fitThreshold:Number(criteria.fitThreshold),
   keepReposts:criteria.keepReposts!==false,
-  rateMin:Number(criteria.rateMin),
-  rateMax:Number(criteria.rateMax),
   immediateStart:criteria.immediateStart===true,
   exclusions:[...(criteria.exclusions||[])],
   targetRegions:[...(criteria.targetRegions||[])],
@@ -340,22 +344,36 @@ function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
   const conflict=geographyConflicts(draft);
   const missingTarget=!hasTargetGeography(draft);
   const missingRole=!hasSelectedRole(draft);
+  const tooManyRoleFamilies=(draft.roleFamilies||[]).length>2;
   const missingWorkMode=!hasSelectedWorkMode(draft);
   const missingContract=!hasSelectedContractType(draft);
-  const invalidRetrieve=conflict||missingTarget||missingRole||missingWorkMode||missingContract;
+  const invalidRetrieve=conflict||missingTarget||missingRole||tooManyRoleFamilies||missingWorkMode||missingContract;
   return <div className="space-y-5">
     <section className="rounded-2xl border border-blue-200 bg-blue-50 p-4">
       <div className="flex flex-wrap items-center gap-2"><h2 className="font-display text-base font-bold text-slate-900">Criterii Retrieve</h2><ScopeBadge scope="RETRIEVE"/></div>
-      <p className="mt-1 text-sm text-slate-600">Aceste criterii afecteaza urmatorul Full Search si setul publicat in runtime-ul tranzitoriu curent. Salvarea singura nu porneste cautarea.</p>
+      <p className="mt-1 text-sm text-slate-600">Aceste criterii definesc urmatoarea actualizare bounded si setul de joburi eligibile pentru Search Profile. Salvarea singura nu porneste Retrieve.</p>
     </section>
     <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-      <CriteriaCard title="Roluri urmarite" scope="RETRIEVE" note="Selectia runtime este inca legacy; taxonomia #403 nu este inca S5 cutover.">
-        <CheckRow checked={draft.rolePm} onChange={v=>update('rolePm',v)}>Project Manager / IT Project Manager</CheckRow>
-        <CheckRow checked={draft.roleDelivery} onChange={v=>update('roleDelivery',v)}>Delivery / Technical Project Manager</CheckRow>
-        <CheckRow checked={draft.roleService} onChange={v=>update('roleService',v)}>Service Manager</CheckRow>
-        <CheckRow checked={draft.roleScrum} onChange={v=>update('roleScrum',v)}>Scrum Master</CheckRow>
-        <CheckRow checked={draft.roleProgram} onChange={v=>update('roleProgram',v)}>Program / PMO Manager</CheckRow>
-        {missingRole&&<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Selecteaza cel putin un grup de roluri pentru Retrieve.</div>}
+      <CriteriaCard title="Jobs Families" scope="RETRIEVE" note="Selecteaza familia de joburi si subfamiliile care definesc scope-ul de cautare.">
+        {ROLE_FAMILIES.map(family=>{
+          const familySelected=draft.roleFamilies.includes(family.code);
+          const selectedSubs=new Set(draft.roleSubfamilies);
+          const toggleFamily=checked=>setDraft(current=>selectRoleFamily(current,family,checked));
+          const toggleSubfamily=(code,checked)=>{
+            const next=checked?[...new Set([...draft.roleSubfamilies,code])]:draft.roleSubfamilies.filter(item=>item!==code);
+            update('roleSubfamilies',next);
+          };
+          return <div key={family.code} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+            <CheckRow checked={familySelected} onChange={toggleFamily}><span className="font-semibold text-slate-800">{family.label}</span></CheckRow>
+            {familySelected&&<div className="ml-7 mt-2 space-y-2 border-l border-slate-200 pl-3">
+              {family.subfamilies.map(sub=><CheckRow key={sub.code} checked={selectedSubs.has(sub.code)} onChange={checked=>toggleSubfamily(sub.code,checked)}>{sub.label}</CheckRow>)}
+              {!family.subfamilies.some(sub=>selectedSubs.has(sub.code))&&<div className="text-xs text-red-600">Selecteaza cel putin o subfamilie.</div>}
+            </div>}
+          </div>;
+        })}
+        {missingRole&&<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Selecteaza cel putin o familie si o subfamilie pentru Retrieve.</div>}
+        {!missingRole&&draft.roleFamilies.length>=2&&<div className="text-xs text-slate-500">Poti selecta maximum doua familii majore pentru un Retrieve USER.</div>}
+        {tooManyRoleFamilies&&<div className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">Pastreaza maximum doua familii pentru Retrieve.</div>}
       </CriteriaCard>
       <CriteriaCard title="Mod de lucru" scope="RETRIEVE" note="Aici controlezi eligibilitatea backend. Filtrul de pe pagina Joburi este separat si GUI-only.">
         <CheckRow checked={draft.workRemote} onChange={v=>update('workRemote',v)}>Remote</CheckRow>
@@ -397,7 +415,7 @@ function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
 }
 
 function OnboardingPanel({onStart}) {
-  return <section className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm"><div className="max-w-2xl"><span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">Configurare initiala</span><h2 className="mt-3 font-display text-xl font-bold text-slate-950">Defineste Search Profile-ul inainte de prima lista de joburi</h2><p className="mt-2 text-sm leading-6 text-slate-600">JSCC nu porneste automat un Retrieve pentru un profil nou. Alege familia de roluri, geografia, modul de lucru si tipul de contract; apoi sistemul va reutiliza mai intai corpusul partajat existent.</p><button type="button" onClick={onStart} className="mt-5 min-h-11 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">Configureaza criteriile</button></div></section>;
+  return <section className="rounded-2xl border border-blue-200 bg-white p-6 shadow-sm"><div className="max-w-2xl"><span className="inline-flex rounded-full bg-blue-50 px-2.5 py-1 text-xs font-bold text-blue-700">Configurare initiala</span><h2 className="mt-3 font-display text-xl font-bold text-slate-950">Defineste Search Profile-ul inainte de prima lista de joburi</h2><p className="mt-2 text-sm leading-6 text-slate-600">JSCC nu porneste automat un Retrieve pentru un profil nou. Alege familia de joburi, geografia, modul de lucru si tipul de contract; apoi sistemul va reutiliza mai intai corpusul partajat existent.</p><button type="button" onClick={onStart} className="mt-5 min-h-11 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">Configureaza criteriile</button></div></section>;
 }
 
 function App(){
@@ -446,7 +464,15 @@ function App(){
       setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results||normalized.length)});
       if(!append)jobQueryRef.current=buildJobsPath({filters:filterState,limit:25,prefetch:25});
       return payload;
-    }catch(error){setJobPage(current=>({...current,loading:false,loadingMore:false}));throw error;}
+    }catch(error){
+      if(append && error.status===400 && /^STALE_CURSOR/.test(error.message||'')){
+        // Exactly one clean restart: second attempt is append:false, so no retry loop.
+        setJobs([]);
+        return loadJobsPage(token,criteria,filterState,{cursor:null,append:false});
+      }
+      setJobPage(current=>({...current,loading:false,loadingMore:false}));
+      throw error;
+    }
   },[]);
 
   const loadData=useCallback(async(token,role)=>{setDataState({status:'loading',error:null});try{
@@ -487,7 +513,7 @@ function App(){
   const jobPopulation=useMemo(()=>jobViewPopulation(activeJobs,filters,ageHours),[activeJobs,filters.freshness,filters.workModes]);
   const reviewRows=useMemo(()=>reviewRowsForFilters(activeJobs,filters,ageHours,threshold),[activeJobs,filters.freshness,filters.workModes,threshold]);
   const baseRows=useMemo(()=>view==='applications'?applications:view==='review'?reviewRows:jobPopulation,[view,applications,reviewRows,jobPopulation]);
-  const filteredRows=useMemo(()=>{if(view==='applications')return[...baseRows];const q=filters.search.trim().toLowerCase();const rows=baseRows.filter(job=>{const quick=filters.quick==='all'||(filters.quick==='high'&&job.fit!==null&&job.fit>=threshold)||(filters.quick==='b2b'&&job.b2b);const kpi=kpiFilter==='all'||(kpiFilter==='new'&&ageHours(job.date_posted,job.age)<=24)||(kpiFilter==='high'&&job.fit!==null&&job.fit>=threshold)||(kpiFilter==='repost'&&job.repost)||(kpiFilter==='remote'&&job.mode==='Remote');const text=(job.title+' '+job.company+' '+job.description+' '+job.source+' '+job.location+' '+(job.countries||[]).join(' ')).toLowerCase();return quick&&kpi&&(!q||text.includes(q));});return[...rows].sort(filters.sort==='fit-asc'?(a,b)=>(a.fit??Number.MAX_SAFE_INTEGER)-(b.fit??Number.MAX_SAFE_INTEGER)||a.age-b.age:(a,b)=>(b.fit??-1)-(a.fit??-1)||a.age-b.age);},[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
+  const filteredRows=useMemo(()=>filterAndSortJobRows(baseRows,{view,filters,threshold,kpiFilter,ageHours}),[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
   const canonicalCounts=useMemo(()=>jobViewCounts(jobPopulation,threshold,ageHours),[jobPopulation,threshold]);
   const quickCounts=useMemo(()=>({all:canonicalCounts.all,high:canonicalCounts.high,b2b:canonicalCounts.b2b}),[canonicalCounts]);
   const metrics=useMemo(()=>({jobs:canonicalCounts.new24h,high:canonicalCounts.high,reposts:canonicalCounts.reposts,remote:canonicalCounts.remote,threshold,scope:jobCountScopeLabel(filters.freshness)}),[canonicalCounts,threshold,filters.freshness]);
@@ -502,7 +528,7 @@ function App(){
 
   const runSearch=useCallback(async()=>{
     if(!auth.token||running)return;
-    if(!isSearchProfileConfigured(savedCriteria)){setView('criteria');notify('Configureaza si salveaza Search Profile-ul inainte de actualizare.','error');return;}
+    if(!isSearchProfileConfigured(savedCriteria)){setView('criteria');notify('Configureaza familia, subfamilia si restul Search Profile-ului inainte de actualizare.','error');return;}
     setRunning(true);
     const previousRunId=runStatus?.run_id||null,previousCompletedAt=runStatus?.completed_at||null;
     try{
@@ -517,7 +543,7 @@ function App(){
     finally{setRunning(false);}
   },[auth.token,auth.role,running,savedCriteria,runStatus,notify,loadJobsPage,pollRun]);
 
-  const saveCriteria=useCallback(async()=>{if(!auth.token||saving)return;if(geographyConflicts(draftCriteria)){notify('Rezolva conflictul dintre includerile si excluderile teritoriale.','error');return;}if(!hasTargetGeography(draftCriteria)){notify('Selecteaza cel putin o tara sau regiune tinta.','error');return;}if(!hasSelectedRole(draftCriteria)){notify('Selecteaza cel putin un grup de roluri pentru Retrieve.','error');return;}if(!hasSelectedWorkMode(draftCriteria)){notify('Selecteaza cel putin un mod de lucru pentru Retrieve.','error');return;}if(!hasSelectedContractType(draftCriteria)){notify('Selecteaza cel putin un tip de contract pentru Retrieve.','error');return;}setSaving(true);try{const result=await commandApi('/me/preferences',auth.token,{method:'PUT',body:JSON.stringify(preferencePatchFromCriteria(draftCriteria))});setSavedCriteria(draftCriteria);setCanonicalConfig(result?.preferences||canonicalConfig);const nextFilters={...filtersRef.current,freshness:filtersRef.current.freshness??draftCriteria.freshness};setFilters(nextFilters);await loadJobsPage(auth.token,draftCriteria,nextFilters);notify('Preferintele au fost salvate. Nu a fost pornit niciun Retrieve.','success');}catch(error){notify('Preferintele nu au putut fi salvate: '+error.message,'error');}finally{setSaving(false);}},[auth.token,saving,draftCriteria,notify,loadJobsPage,canonicalConfig]);
+  const saveCriteria=useCallback(async()=>{if(!auth.token||saving)return;if(geographyConflicts(draftCriteria)){notify('Rezolva conflictul dintre includerile si excluderile teritoriale.','error');return;}if(!hasTargetGeography(draftCriteria)){notify('Selecteaza cel putin o tara sau regiune tinta.','error');return;}if(!hasSelectedRole(draftCriteria)){notify('Selecteaza cel putin o familie si o subfamilie pentru Retrieve.','error');return;}if(!hasSelectedWorkMode(draftCriteria)){notify('Selecteaza cel putin un mod de lucru pentru Retrieve.','error');return;}if(!hasSelectedContractType(draftCriteria)){notify('Selecteaza cel putin un tip de contract pentru Retrieve.','error');return;}setSaving(true);try{const result=await commandApi('/me/preferences',auth.token,{method:'PUT',body:JSON.stringify(preferencePatchFromCriteria(draftCriteria))});setSavedCriteria(draftCriteria);setCanonicalConfig(result?.preferences||canonicalConfig);const nextFilters={...filtersRef.current,freshness:filtersRef.current.freshness??draftCriteria.freshness};setFilters(nextFilters);await loadJobsPage(auth.token,draftCriteria,nextFilters);notify('Preferintele au fost salvate. Nu a fost pornit niciun Retrieve.','success');}catch(error){notify('Preferintele nu au putut fi salvate: '+error.message,'error');}finally{setSaving(false);}},[auth.token,saving,draftCriteria,notify,loadJobsPage,canonicalConfig]);
 
   const loadMoreJobs=useCallback(()=>{if(auth.token&&jobPage.nextCursor&&!jobPage.loadingMore)loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor:jobPage.nextCursor,append:true}).catch(error=>notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error'));},[auth.token,jobPage.nextCursor,jobPage.loadingMore,savedCriteria,loadJobsPage,notify]);
   const changeView=useCallback(next=>{setView(next);if(next!=='jobs')setKpiFilter('all');},[]);

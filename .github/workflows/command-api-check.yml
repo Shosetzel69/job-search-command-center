@@ -65,19 +65,6 @@ jobs:
   validate:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    services:
-      postgres:
-        image: postgres:16-alpine
-        env:
-          POSTGRES_DB: jobsearch_dev
-          POSTGRES_PASSWORD: postgres
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres -d jobsearch_dev"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
     steps:
       - name: Check out repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -237,97 +224,23 @@ jobs:
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
 
-      - name: Provision ephemeral PostgreSQL roles
-        working-directory: command-api
-        run: |
-          node --input-type=module - <<'NODE'
-          import pg from 'pg';
-          const { Client } = pg;
-          const client = new Client({ connectionString:'postgresql://postgres:postgres@localhost:5432/jobsearch_dev' });
-          await client.connect();
-          await client.query("CREATE ROLE jscc_migration LOGIN PASSWORD 'migration' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE");
-          await client.query("CREATE ROLE jscc_runtime LOGIN PASSWORD 'runtime' NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE NOINHERIT");
-          await client.query('ALTER DATABASE jobsearch_dev OWNER TO jscc_migration');
-          await client.query('ALTER SCHEMA public OWNER TO jscc_migration');
-          await client.end();
-          NODE
-
       - name: Validate ADR-008 tenant boundary
         working-directory: command-api
         run: npm run check:tenant-boundary
 
-      - name: Run Multiuser PostgreSQL integration tests
+      - name: Assert retired migrations are still disabled (E86)
         working-directory: command-api
-        env:
-          APP_ENV: dev
-          NILE_DATABASE_URL: postgresql://jscc_runtime:runtime@localhost:5432/jobsearch_dev
-          NILE_MIGRATION_DATABASE_URL: postgresql://jscc_migration:migration@localhost:5432/jobsearch_dev
-          JSCC_INTEGRATION_DATABASE_URL: postgresql://jscc_runtime:runtime@localhost:5432/jobsearch_dev
-          JSCC_TEST_ADMIN_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/jobsearch_dev
-          JSCC_MAX_USERS: "50"
-          BOOTSTRAP_ADMIN_GOOGLE_SUB: owner-sub
         run: |
-          # DEV-01B: verify that the released db:migrate path remains disabled.
-          # npm normalizes nonzero script exits; direct Node must return exactly 86.
           set +e
-          direct_refusal="$(node scripts/db-migrate.mjs 2>&1)"
+          node scripts/db-migrate.mjs > /tmp/w025_direct.out 2>&1
           direct_rc=$?
-          npm_refusal="$(npm run db:migrate 2>&1)"
+          npm run db:migrate > /tmp/w025_npm.out 2>&1
           npm_rc=$?
           set -e
           test "$direct_rc" -eq 86
           test "$npm_rc" -ne 0
-          [[ "$direct_refusal" == *JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED* ]]
-          [[ "$npm_refusal" == *JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED* ]]
-
-          # Test-only migration on GitHub-hosted ephemeral Postgres at localhost.
-          # Never introduce a migration override in the production image.
-          node --input-type=module <<'NODE'
-          import { strict as assert } from 'node:assert';
-
-          assert.equal(process.env.CI, 'true');
-          assert.equal(process.env.GITHUB_ACTIONS, 'true');
-          assert.equal(process.env.APP_ENV, 'dev');
-          const principals = {
-            NILE_DATABASE_URL: 'jscc_runtime',
-            NILE_MIGRATION_DATABASE_URL: 'jscc_migration',
-            JSCC_INTEGRATION_DATABASE_URL: 'jscc_runtime',
-            JSCC_TEST_ADMIN_DATABASE_URL: 'postgres',
-          };
-          for (const [name, principal] of Object.entries(principals)) {
-            const url = new URL(process.env[name] || '');
-            assert.equal(url.protocol, 'postgresql:');
-            assert.equal(url.hostname, 'localhost');
-            assert.equal(url.port, '5432');
-            assert.equal(url.pathname, '/jobsearch_dev');
-            assert.equal(decodeURIComponent(url.username), principal);
-            assert.equal(url.search, '');
-            assert.equal(url.hash, '');
-          }
-
-          // Import migration/backfill code only after confirming an isolated CI DB.
-          const { migrate } = await import('./src/db/migrations.js');
-          const { backfillSearchProfileFoundations } = await import('./src/db/search-profile-backfill.js');
-          const { closeMigrationPool, getMigrationPool } = await import('./src/db/pool.js');
-          const {
-            backfillCanonicalJobClassification,
-            backfillSearchProfilePreferences,
-          } = await import('./src/db/atc-489-02-backfill.js');
-          const db = getMigrationPool();
-          try {
-            await migrate({ db });
-            await backfillSearchProfileFoundations(process.env, { db });
-            await backfillSearchProfilePreferences(process.env, { db });
-            await backfillCanonicalJobClassification(process.env, { db });
-            console.log('JSCC541_DEV01B_LOCAL_CI_MIGRATION_PASS');
-          } finally {
-            await closeMigrationPool();
-          }
-          NODE
-          npm run db:nile-tenant-probe
-          npm run db:provision-runtime
-          npm run db:privilege-readiness
-          node --test test/multiuser-db.integration.mjs
+          grep -q JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED /tmp/w025_direct.out
+          grep -q JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED /tmp/w025_npm.out
 
       - name: Run Command API unit tests
         working-directory: command-api
@@ -339,59 +252,193 @@ jobs:
 
 
   nile-contract-evidence:
-    name: Nile provider contract evidence
+    name: Nile-only native provider CI
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
+    env:
+      APP_ENV: dev
+      NILE_TESTING_DB_NAME: jobsearch_dev
+      JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE: "true"
+      NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      NILE_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      NILE_MIGRATION_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      JSCC_INTEGRATION_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      JSCC_TEST_ADMIN_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
     steps:
-      - name: Check out repository
+      - name: Check out exact candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 24
-
-      - name: Install Command API dependencies
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
         working-directory: command-api
         run: npm install --ignore-scripts --no-audit --no-fund
-
-      - name: Start official Nile testing container
+      - name: Start official immutable Nile testing image
+        id: nile
+        shell: bash
         run: |
-          docker pull ghcr.io/niledatabase/testingcontainer:latest
-          docker run --rm -d \
-            --name jscc-nile-test \
-            -p 55432:5432 \
-            ghcr.io/niledatabase/testingcontainer:latest
-
-          ready=0
+          set -euo pipefail
+          image=ghcr.io/niledatabase/testingcontainer@sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869
+          docker pull "$image"
+          docker buildx imagetools inspect "$image" | grep -F 'sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869'
+          id="$(docker run -d --name "w025-nile-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -e NILE_TESTING_DB_NAME=jobsearch_dev -p 127.0.0.1:55432:5432 "$image")"
+          echo "W025_NILE_CONTAINER_ID=$id" >> "$GITHUB_ENV"
           for i in $(seq 1 90); do
-            if docker logs jscc-nile-test 2>&1 | grep -q "Database has been created and is ready"; then
-              ready=1
-              break
+            if docker logs "$id" 2>&1 | grep -q 'Database has been created and is ready'; then
+              exit 0
             fi
             sleep 2
           done
-          if [ "$ready" -ne 1 ]; then
-            docker logs jscc-nile-test
-            exit 1
+          docker logs "$id"
+          exit 1
+      - name: Admit exact runner container and all database bindings
+        working-directory: command-api
+        run: node scripts/nile-ci-local-admission.mjs
+      - name: Execute mandatory Nile suites with process-bound TAP evidence
+        working-directory: command-api
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {spawnSync} from 'node:child_process';
+          import {randomBytes} from 'node:crypto';
+          import {NILE_NATIVE_BACKEND_PORT} from './scripts/nile-ci-local-admission.mjs';
+          import {writeFileSync} from 'node:fs';
+          const sha=spawnSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).stdout.trim();
+          if(!/^[a-f0-9]{40}$/.test(sha))throw Error('checkout SHA unresolved');
+          const id=process.env.W025_NILE_CONTAINER_ID;
+          const evidence={source_sha:sha,checkout_sha:sha,
+            native_container:{verified:true,id,database:'jobsearch_dev',cleaned_up:false},
+            runs:[],results:[]};
+          let good=true;
+          const run=(runId,mode,command,args,expected=[],kind='tap')=>{
+            const challenge=mode==='NATIVE'?randomBytes(16).toString('hex'):null;
+            // Node.js 24 defaults to spec output; the ledger accepts only complete TAP.
+            // Force TAP only for node:test suites (including npm test), never infer PASS from spec.
+            const needsTap=['tap','unit_admission','mock_composite'].includes(kind);
+            const childEnv={
+              ...process.env,
+              ...(needsTap?{NODE_OPTIONS:[process.env.NODE_OPTIONS,'--test-reporter=tap'].filter(Boolean).join(' ')}:{}),
+              ...(mode==='NATIVE'?{W025_NATIVE_RUN_ID:runId,W025_NATIVE_CHALLENGE:challenge}:{})
+            };
+            const child=spawnSync(command,args,{encoding:'utf8',env:childEnv,timeout:180000});
+            const output=(child.stdout||'')+'\n'+(child.stderr||'');
+            process.stdout.write(output);
+            let sqlReadback=null;
+            if(mode==='NATIVE'){
+              const matches=[...output.matchAll(/(?:^|\n)(?:# )?W025_NATIVE_DB_READBACK=(\{[^\n]+\})/g)];
+              if(matches.length===1){
+                try{
+                  const row=JSON.parse(matches[0][1]);
+                  if(row.run===runId && row.challenge===challenge &&
+                     row.db_name==='jobsearch_dev' &&
+                     typeof row.principal==='string' && row.principal.trim() &&
+                     Number.isInteger(row.backend_pid) && row.backend_pid>0 &&
+                     row.server_port===NILE_NATIVE_BACKEND_PORT)sqlReadback=row;
+                }catch{/* malformed or spoofed evidence is a hard failure */}
+              }
+              if(!sqlReadback)good=false;
+            }
+            const subtests=[...output.matchAll(/^\s*# Subtest: (?:W025[- ]([A-Z][0-9]{1,2})|([DG]1):)/gm)]
+              .map(m=>m[1]||m[2]);
+            const pick=name=>Number(new RegExp('^# '+name+' (\\d+)$','m').exec(output)?.[1]??-1);
+            const tap={tests:pick('tests'),passed:pick('pass'),failed:pick('fail'),
+              skipped:pick('skipped'),todo:pick('todo'),cancelled:pick('cancelled'),
+              complete:/^1\.\.\d+$/m.test(output)};
+            let observed=[];
+            if(kind==='migration' && output.includes('W025_MIGRATIONS_FIRST=PASS') &&
+               output.includes('W025_MIGRATIONS_IDEMPOTENCE=PASS'))observed=['M01','M02'];
+            else if(kind==='admission' && output.includes('W025_ADMISSION=PASS'))observed=['H01'];
+            else if(kind==='provider' && child.status===0 && /EVIDENCE_COLLECTED/.test(output))observed=[];
+            else if(kind==='unit_admission' && tap.failed===0 && tap.skipped===0 && tap.passed===tap.tests)observed=['H02'];
+            else if(kind==='mock_composite' && tap.failed===0 && tap.skipped===0 && tap.passed===tap.tests)observed=['M04'];
+            else if(kind==='tap')observed=subtests;
+            // No expected ID can be inferred from filename, nor from a test that did not run.
+            if(expected.some(x=>observed.filter(y=>x===y).length!==1) ||
+               observed.some(x=>!expected.includes(x)))good=false;
+            const exit_code=child.status??-1;
+            if(exit_code!==0 || (kind!=='migration' && kind!=='provider' && (tap.tests<1 || tap.passed!==tap.tests ||
+               tap.failed!==0 || tap.skipped!==0 || tap.todo!==0 ||
+               tap.cancelled!==0 || !tap.complete)))good=false;
+            evidence.runs.push({id:runId,mode,command:[command,...args].join(' '),
+              exit_code,checkout_sha:sha,tap:kind==='migration'||kind==='provider'?null:tap,
+              probe_verified:(kind==='migration'||kind==='provider')?exit_code===0:undefined,observed_ids:observed,
+              ...(mode==='NATIVE'?{native_container_id:id,native_db_observed:Boolean(sqlReadback),
+                native_challenge:challenge,native_db_readback:sqlReadback}:{})});
+            for(const x of observed)evidence.results.push({id:x,status:'PASS',sha,run_id:runId});
+          };
+          run('migration','NATIVE','node',['scripts/db-nile-migrate-evidence.mjs'],['M01','M02'],'migration');
+          const providerWrapper=[
+            "import {spawnSync} from 'node:child_process';",
+            "import {admitNileCi,attestNativeDatabase} from './scripts/nile-ci-local-admission.mjs';",
+            "admitNileCi();",
+            "const child=spawnSync(process.execPath,['scripts/db-nile-contract-evidence.mjs'],{env:process.env,encoding:'utf8',timeout:150000});",
+            "process.stdout.write(child.stdout||'');process.stderr.write(child.stderr||'');",
+            "if(child.status!==0)throw Error('Nile provider contract evidence failed');",
+            "const {default:pg}=await import('pg');",
+            "const pool=new pg.Pool({connectionString:process.env.NILE_TEST_DATABASE_URL,max:1});",
+            "try{await attestNativeDatabase(pool);}finally{await pool.end();}"
+          ].join('\n');
+          run('provider','NATIVE','node',['--input-type=module','-e',providerWrapper],[],'provider');
+          run('admission_unit','HARNESS','node',['--test','test/nile-ci-local-admission.test.mjs'],['H02'],'unit_admission');
+          run('tenant','NATIVE','node',['--test','test/nile-native-isolation.integration.mjs'],['T01','T02','T03','T04','T05']);
+          run('multiuser','NATIVE','node',['--test','test/multiuser-db.integration.mjs'],['U01','U02','U03','U04','U05','F01','F02','U06','L01','L02']);
+          run('role_family','NATIVE','node',['--test','test/nile-role-family.integration.mjs'],['R01','R02','R03','R04','R05']);
+          run('role_review','MOCK','node',['--test','test/role-family-review.test.mjs'],['D1','G1']);
+          run('unit_all','MOCK','npm',['test'],['M04'],'mock_composite');
+          // H01 is read back by an actual admission process (never from arbitrary logs).
+          const admit=spawnSync('node',['scripts/nile-ci-local-admission.mjs'],{encoding:'utf8',env:process.env});
+          const admitted=admit.status===0 && /^W025_ADMISSION=PASS /m.test(admit.stdout||'');
+          if(!admitted)good=false;
+          evidence.runs.push({id:'admission',mode:'HARNESS',command:'node scripts/nile-ci-local-admission.mjs',
+            exit_code:admitted?0:1,checkout_sha:sha,probe_verified:admitted,tap:null,observed_ids:admitted?['H01']:[]});
+          if(admitted)evidence.results.push({id:'H01',status:'PASS',sha,run_id:'admission'});
+          const direct=spawnSync('node',['scripts/db-migrate.mjs'],{encoding:'utf8',env:process.env});
+          const npm=spawnSync('npm',['run','db:migrate'],{encoding:'utf8',env:process.env});
+          const refusal=direct.status===86 && npm.status!==0 &&
+            (direct.stdout+direct.stderr).includes('JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED') &&
+            (npm.stdout+npm.stderr).includes('JSCC541_DEV01B_MIGRATION_ENTRYPOINT_DISABLED');
+          if(!refusal)good=false;
+          evidence.runs.push({id:'retired_entrypoint',mode:'HARNESS',command:'node scripts/db-migrate.mjs AND npm run db:migrate',
+            exit_code:refusal?0:1,checkout_sha:sha,probe_verified:refusal,tap:null,observed_ids:refusal?['E86']:[]});
+          if(refusal)evidence.results.push({id:'E86',status:'PASS',sha,run_id:'retired_entrypoint'});
+          writeFileSync('/tmp/w025-nile-process-evidence.json',JSON.stringify(evidence,null,2));
+          if(!good)process.exitCode=1;
+          NODE
+      - name: Nile container diagnostic and confirmed cleanup
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${W025_NILE_CONTAINER_ID:-}" ]; then
+            docker logs "$W025_NILE_CONTAINER_ID" || true
+            docker rm -f "$W025_NILE_CONTAINER_ID"
+            ! docker inspect "$W025_NILE_CONTAINER_ID" >/dev/null 2>&1
           fi
-
-      - name: Apply migrations on official Nile testing container
-        working-directory: command-api
-        env:
-          NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
-        run: npm run db:nile-migrate-evidence
-
-      - name: Collect Nile provider contract evidence
-        working-directory: command-api
-        env:
-          NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@localhost:55432/test
-        run: npm run db:nile-contract-evidence
-
-      - name: Show Nile container logs
+          node --input-type=module <<'NODE'
+          import {existsSync,readFileSync,writeFileSync} from 'node:fs';
+          import {spawnSync} from 'node:child_process';
+          const file='/tmp/w025-nile-process-evidence.json';
+          if(!existsSync(file))throw Error('Nile test evidence missing');
+          const e=JSON.parse(readFileSync(file,'utf8'));
+          const id=process.env.W025_NILE_CONTAINER_ID;
+          if(!id || id!==e.native_container.id || !/^[a-f0-9]{64}$/.test(id))throw Error('container identity missing');
+          const check=spawnSync('docker',['inspect',id],{encoding:'utf8'});
+          if(check.status===0)throw Error('Docker container was not removed');
+          e.native_container.cleaned_up=true;
+          e.runs.push({id:'cleanup',mode:'HARNESS',command:'docker rm -f and inspect',exit_code:0,
+            checkout_sha:e.source_sha,probe_verified:true,tap:null,observed_ids:['H03']});
+          e.results.push({id:'H03',status:'PASS',sha:e.source_sha,run_id:'cleanup'});
+          writeFileSync(file,JSON.stringify(e,null,2));
+          NODE
+      - name: Exact SHA mandatory 29-ID source and native gate
         if: always()
-        run: docker logs jscc-nile-test || true
-
-      - name: Stop Nile testing container
-        if: always()
-        run: docker stop jscc-nile-test || true
+        working-directory: command-api
+        run: node scripts/nile-ci-test-gate.mjs /tmp/w025-nile-process-evidence.json "$(git rev-parse HEAD)"

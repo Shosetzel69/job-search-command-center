@@ -20,7 +20,7 @@
 - OSF Digital Zoho Recruit public-only HTTP collector staged under ATC-542-01: public tenant-bound detail pages, embedded job description field extraction, explicit summary/partial provenance, ISO publication dates, stable job identity and bounded HTTP requests. OSF source and route remain **inactive** until independent review and separately authorized activation. CollectionResult orchestration and corpus projection tests added; runtime PostgreSQL evidence remains pending.
 
 
-> App version: `0.10.0` — bounded Coverage per Role Family with selective corpus refresh.
+> App version: `0.10.0` — bounded Coverage per Jobs Family with selective corpus refresh.
 
 ### Guvernanta
 
@@ -37,7 +37,9 @@
 
 ### Functionalitati
 
-- #521 / R2: Coverage global/system este evaluat per bounded scope (Role Family + geografie/work mode/contract), cu observatii persistente, stari dinamice `SUFFICIENT/INSUFFICIENT/STALE`, threshold-uri in Collection Policy, planner selectiv care reia doar scope-urile stale/insufficient si inspector ADMIN `Administrare -> Coverage`.
+- #535 / #531 QA remediation: migrated profiles selecting >2 Jobs Families no longer silently truncate USER Refresh; it fails closed with actionable 409 until the user resolves selections. Added canonical ambiguity corpus for cross-family conflicts and same-family multi-member titles; DEV E2E acceptance stays separately gated by #534.
+
+- #521 / R2: Coverage global/system este evaluat per bounded scope (Jobs Family + geografie/work mode/contract), cu observatii persistente, stari dinamice `SUFFICIENT/INSUFFICIENT/STALE`, threshold-uri in Collection Policy, planner selectiv care reia doar scope-urile stale/insufficient si inspector ADMIN `Administrare -> Coverage`.
 - #522 / R3: Administrare -> Utilizatori expune exclusiv metadata de cont privacy-safe si actiuni deactivate/reactivate/delete; self-service `DELETE /me/account` foloseste acelasi Account Lifecycle Gateway, revoca toate sesiunile, sterge datele personale tenant-aware, pastreaza corpusul shared si cere confirmare ireversibila `STERGE` in UI.
 - #520 / R1: Retrieve USER/ADMIN foloseste acum scope bounded derivat server-side, semnatura determinista scope+surse+freshness, coalescing numai pentru cereri echivalente, `run_id` stabilit inainte de provider work si propagat in GCP status/PostgreSQL/history; targeted runs filtreaza rezultatele inainte de shared persistence si nu avanseaza lifecycle-ul joburilor din afara scope-ului.
 
