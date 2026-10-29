@@ -233,7 +233,7 @@ export function applySourceAction(source, action, { now = new Date().toISOString
     case 'activate':
       if (next.policy_excluded) fail('Sursa este exclusa operational prin politica proiectului.', 409);
       if (next.validation_status !== 'validated' || next.approval_status !== 'approved') fail('Sursa trebuie validata si aprobata inainte de activare.', 409);
-      if (isZohoHost(next.url) && !isPublicZohoBoard(next.url)) fail('Zoho necesita un URL public HTTPS de forma /careers.', 409);
+      if ((next.collection_method === 'zoho_recruit' || isZohoHost(next.url)) && !isPublicZohoBoard(next.url)) fail('Zoho necesita un URL public HTTPS de forma /careers.', 409);
       next.active = true;
       return next;
     case 'disable':
