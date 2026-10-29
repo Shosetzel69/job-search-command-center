@@ -48,7 +48,9 @@ async function authorizedFetch(url, init = {}) {
 function objectMetadataUrl(env, object) {
   return `${STORAGE_API}/storage/v1/b/${encodeURIComponent(bucket(env))}/o/${encodeURIComponent(object)}`;
 }
-function objectMediaUrl(env, object) { return `${objectMetadataUrl(env, object)}?alt=media`; }
+function objectMediaUrl(env, object, generation = null) {
+  return `${objectMetadataUrl(env, object)}?alt=media${generation == null ? '' : `&generation=${encodeURIComponent(generation)}`}`;
+}
 
 async function objectMetadata(env, object) {
   const response = await authorizedFetch(objectMetadataUrl(env, object));
@@ -63,6 +65,22 @@ async function readObjectJson(env, object) {
   const response = await authorizedFetch(objectMediaUrl(env, object));
   if (!response.ok) throw runtimeError(`Cloud Storage object read failed: ${response.status}`);
   return { sha:String(metadata.generation), payload:await response.json() };
+}
+
+// Source catalog reads must bind content to the very GCS generation used
+// for signing. If an ADMIN mutation races the download, fail closed.
+async function readSourceObjectVersioned(env) {
+  const object = 'seed/sources.json';
+  const meta = await objectMetadata(env, object);
+  if (!meta) throw runtimeError('DEV source catalog not yet created', 404);
+  const generation = String(meta.generation || '');
+  if (!/^[1-9][0-9]*$/.test(generation)) throw runtimeError('Invalid GCS catalog generation');
+  const response = await authorizedFetch(objectMediaUrl(env, object, generation));
+  if (response.status === 404 || response.status === 412) {
+    throw runtimeError('DEV sources changed during versioned read', 409);
+  }
+  if (!response.ok) throw runtimeError(`Versioned source catalog read failed: ${response.status}`);
+  return { sha:generation, payload:await response.json() };
 }
 
 async function writeObjectJson(env, object, generation, payload) {
@@ -172,7 +190,7 @@ export async function readRuntimeJson(env, runtime, path) {
   const name = path.split('/').pop();
   if (name === 'sources.json' && devSourcesEnabled(env)) {
     try {
-      return await readObjectJson(env, 'seed/sources.json');
+      return await readSourceObjectVersioned(env);
     } catch (error) {
       if (error?.status !== 404) throw error;
       // First read on an existing DEV installation: no writes or implicit activation.
@@ -208,7 +226,7 @@ export async function hasActiveWorkflowRun(env) {
 function fullRunArgs() {
   return [
     '-ceu',
-    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; if [ -f /runtime/seed/sources.json ]; then cp /runtime/seed/sources.json "${run_dir}/sources.json"; else cp data/sources.json "${run_dir}/sources.json"; fi; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 scripts/gcp_finalize_run.py; exit ${rc}'
+    'trap \'rm -f /runtime/active.json /runtime/locks/heavy-search.lock\' EXIT; run_dir="/runtime/runs/${JSCC_RUN_ID:?JSCC_RUN_ID is required}"; mkdir -p "${run_dir}"; for f in search-config.json jobs.json run-status.json run-history.json search-state.json; do cp "/runtime/seed/${f}" "${run_dir}/${f}"; done; if [ "${APP_ENV:-}" = dev ]; then python3 scripts/gcp_source_snapshot.py "${run_dir}/sources.json"; elif [ -f /runtime/seed/sources.json ]; then cp /runtime/seed/sources.json "${run_dir}/sources.json"; else cp data/sources.json "${run_dir}/sources.json"; fi; export JSCC_RUNTIME_DATA_DIR="${run_dir}"; set +e; python3 scripts/job_search_runner.py; rc=$?; set -e; python3 scripts/gcp_finalize_run.py; exit ${rc}'
   ];
 }
 
@@ -218,8 +236,13 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
   const scoped = ['manual-ui','admin-ui'].includes(runTrigger);
   const requestSignature = String(retrieveRequest?.request_signature || '').trim().toLowerCase();
   const retrieveScope = retrieveRequest?.retrieve_scope;
-  if (scoped && (!/^[0-9a-f]{64}$/.test(requestSignature) || !retrieveScope || !Array.isArray(retrieveScope.scopes) || !retrieveScope.scopes.length)) {
-    throw runtimeError('Bounded retrieve scope and request signature are required', 400);
+  if (scoped && (!/^[0-9a-f]{64}$/.test(requestSignature) || !retrieveScope || !Array.isArray(retrieveScope.scopes) || !retrieveScope.scopes.length
+      || !Array.isArray(retrieveScope.effective_source_ids) || retrieveScope.effective_source_ids.length === 0)) {
+    throw runtimeError('Bounded Retrieve requires nonempty signed scopes and source IDs', 400);
+  }
+  if (scoped && devSourcesEnabled(env)
+      && !/^(?:0|[1-9][0-9]*)$/.test(String(retrieveScope?.source_catalog_generation ?? ''))) {
+    throw runtimeError('DEV bounded Retrieve requires signed source catalog generation', 409);
   }
   if (checkActive && await activeWorkflowRun(env)) throw runtimeError('A search run is already queued or running', 409);
 
@@ -260,7 +283,8 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
             { name:'GCP_CURRENT_GENERATION', value:currentGeneration },
             { name:'JSCC_RUN_ID', value:runId },
             { name:'JSCC_REQUEST_SIGNATURE', value:requestSignature },
-            { name:'JSCC_RETRIEVE_SCOPE_JSON', value:JSON.stringify(retrieveScope || {}) }
+            { name:'JSCC_RETRIEVE_SCOPE_JSON', value:JSON.stringify(retrieveScope || {}) },
+            { name:'JSCC_SOURCE_CATALOG_GENERATION', value:String(retrieveScope?.source_catalog_generation ?? '') }
           ]
         }],
         taskCount:1,
