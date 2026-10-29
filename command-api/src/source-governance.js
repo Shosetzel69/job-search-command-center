@@ -102,6 +102,24 @@ export function isPolicyExcludedSource(source) {
   return POLICY_EXCLUDED_SOURCE_NAMES.has(String(source?.name || '').trim().toLocaleLowerCase('ro-RO'));
 }
 
+// Activated Zoho routes must be public, tenant-bound and exactly /careers.
+// Do not accept a private API endpoint or a misleading suffix/redirect host.
+export function isPublicZohoBoard(url) {
+  try {
+    const parsed = new URL(String(url || ''));
+    return parsed.protocol === 'https:'
+      && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.zohorecruit\.com$/.test(parsed.hostname)
+      && !parsed.username && !parsed.password && !parsed.port
+      && !parsed.search && !parsed.hash
+      && (parsed.pathname === '/careers' || parsed.pathname === '/careers/');
+  } catch { return false; }
+}
+
+export function isZohoHost(url) {
+  try { return new URL(String(url || '')).hostname.endsWith('.zohorecruit.com'); }
+  catch { return false; }
+}
+
 export function normalizeSource(source, { legacyApproved = true } = {}) {
   const url = String(source?.url || '').trim();
   const name = String(source?.name || 'Sursa').trim();
@@ -215,6 +233,7 @@ export function applySourceAction(source, action, { now = new Date().toISOString
     case 'activate':
       if (next.policy_excluded) fail('Sursa este exclusa operational prin politica proiectului.', 409);
       if (next.validation_status !== 'validated' || next.approval_status !== 'approved') fail('Sursa trebuie validata si aprobata inainte de activare.', 409);
+      if (isZohoHost(next.url) && !isPublicZohoBoard(next.url)) fail('Zoho necesita un URL public HTTPS de forma /careers.', 409);
       next.active = true;
       return next;
     case 'disable':
