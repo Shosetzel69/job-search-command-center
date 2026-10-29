@@ -323,7 +323,7 @@ jobs:
               consecutive++;
               if(consecutive===3){
                 console.log('W025_SQL_READINESS=PASS attempts='+attempt);
-                process.exit(0);
+                break;
               }
             }catch(error){
               consecutive=0;
@@ -333,7 +333,7 @@ jobs:
             }
             if(attempt<45) await new Promise(resolve=>setTimeout(resolve,2000));
           }
-          throw Error('W025_SQL_READINESS_FAIL: no three consecutive verified native SQL sessions');
+          if(consecutive!==3) throw Error('W025_SQL_READINESS_FAIL: no three consecutive verified native SQL sessions');
           NODE
       - name: Execute mandatory Nile suites with process-bound TAP evidence
         working-directory: command-api
