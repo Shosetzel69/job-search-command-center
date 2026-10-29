@@ -155,15 +155,16 @@ test('DEV Retrieve uses approved live source set in signature and rejects invali
   const readJson = async (_env, _runtime, path) => {
     reads++;
     assert.equal(path, 'data/sources.json');
-    return {payload:dynamic};
+    return {payload:dynamic,sha:'42'};
   };
   const chosen = await loadSourceCatalogForRefresh(env,runtime,readJson);
   assert.equal(reads, 1);
-  assert.deepEqual(effectiveSourceIds(chosen), ['src-regular','src-zoho-hr-plus']);
+  assert.deepEqual(effectiveSourceIds(chosen.catalog), ['src-regular','src-zoho-hr-plus']);
+  assert.equal(chosen.generation, '42');
   const scopes=[{role_family:'PROJECT_DELIVERY_MANAGEMENT',
     role_subfamilies:['project_management'],target_country_codes:['RO'],work_modes:['remote']}];
   const oldRequest=buildRetrieveRequest({scopes,collectionFreshnessHours:24,sourceCatalog:baseline});
-  const newRequest=buildRetrieveRequest({scopes,collectionFreshnessHours:24,sourceCatalog:chosen});
+  const newRequest=buildRetrieveRequest({scopes,collectionFreshnessHours:24,sourceCatalog:chosen.catalog,sourceCatalogGeneration:chosen.generation});
   assert.deepEqual(newRequest.retrieve_scope.effective_source_ids,['src-regular','src-zoho-hr-plus']);
   assert.notEqual(newRequest.request_signature,oldRequest.request_signature);
   for (const appEnv of ['test','prod']) {
@@ -171,4 +172,19 @@ test('DEV Retrieve uses approved live source set in signature and rejects invali
     assert.equal(original,null);
   }
   await assert.rejects(loadSourceCatalogForRefresh(env,runtime,async()=>({payload:{sources:[]}})),/invalid/);
+});
+
+test('signed source generation changes signature even when active IDs do not change', () => {
+  const sourceCatalog={schema_version:'1.0',sources:[{id:'src-a',name:'A',active:true}]};
+  const input={scopes:[{role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamilies:['project_management']}],
+    collectionFreshnessHours:24,sourceCatalog};
+  const a=buildRetrieveRequest({...input,sourceCatalogGeneration:'102'});
+  const b=buildRetrieveRequest({...input,sourceCatalogGeneration:'103'});
+  assert.deepEqual(a.retrieve_scope.effective_source_ids,b.retrieve_scope.effective_source_ids);
+  assert.equal(a.retrieve_scope.source_catalog_generation,'102');
+  assert.notEqual(a.request_signature,b.request_signature);
+  const zero=buildRetrieveRequest({...input,sourceCatalogGeneration:'0'});
+  assert.equal(zero.retrieve_scope.source_catalog_generation,'0');
+  assert.notEqual(zero.request_signature,a.request_signature);
+  assert.throws(()=>buildRetrieveRequest({...input,sourceCatalogGeneration:'-1'}),/generation/);
 });
