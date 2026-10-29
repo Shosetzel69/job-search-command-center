@@ -9,7 +9,8 @@ LABEL org.opencontainers.image.source="https://github.com/Shosetzel69/job-search
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    JSCC_RUNTIME_MODE=container
+    JSCC_RUNTIME_MODE=container \
+    JSCC_JOB_BUILD_SHA=${GIT_SHA}
 
 WORKDIR /app
 
@@ -29,6 +30,7 @@ RUN python3 -m py_compile \
     scripts/shared_corpus_repository.py \
     scripts/shared_corpus_import.py \
     scripts/source_orchestration.py \
+    scripts/gcp_source_snapshot.py \
     scripts/job_search_public_boards.py \
     scripts/job_search_web.py \
     scripts/web_browser.py \
