@@ -2,6 +2,12 @@
 
 ## [Unreleased]
 
+### DEV ADMIN source activation — #585 (candidate, NOT deployed)
+
+- DEV-only GCS operational `seed/sources.json` source registry, bootstrapped from immutable candidate on first ADMIN mutation and updated with generation compare-and-swap. ADMIN validation / approval / activation / disable actions now affect the next shared Cloud Run collection snapshot, without manual code changes per public Zoho board. All sources remain inactive until explicit ADMIN actions; URL/name identity edits reset existing approvals. TEST/PROD and other candidate-managed files remain immutable.
+- Public-only Zoho `https://<tenant>.zohorecruit.com/careers` routes are derived from source identity, with origin validation and the existing bounded collector. No private APIs, secrets, automatic activation, anti-bot bypass, DEV traffic change, or migration. Existing OSF pilot flag remains compatible. New GCP service + **search job** image deployment and DEV UI E2E validation are separate acceptance requirements.
+
+
 ### Sources / JSCC #544
 
 - **R6 / independent R5 defect R5-01:** Reject short standalone login/access/consent calls-to-action (`Sign in to continue.`, `Log in to continue.`, `Login required.` and analogous short variants), including repeated prompts. The bounded, whole-message detector supplements rather than replaces targeted access-gateway patterns; legitimate security job descriptions mentioning SSO, login and cookie-consent engineering are permitted. Shared validation still applies to Zoho HTML partial, embedded full, meta summaries and modern public list descriptions. Added parser, collector and orchestration-to-corpus negative/positive regressions; failed sources produce no projected postings and no opaque token in diagnostics. Owner-approved OSF-only DEV scope, source governance and careers-board fallback controls remain unchanged.
