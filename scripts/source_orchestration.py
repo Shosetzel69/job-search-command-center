@@ -790,14 +790,19 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
     retrieve_scope = retrieve_scope if isinstance(retrieve_scope, dict) else None
     request_signature = str(request_signature or "").strip().casefold() or None
     raw_plan = build_plan(json.loads(SOURCES_PATH.read_text(encoding="utf-8")))
-    effective_source_ids = {
-        str(value).strip()
-        for value in ((retrieve_scope or {}).get("effective_source_ids") or [])
-        if str(value).strip()
-    }
+    # An explicit empty bounded source set is NO sources, never an unrestricted
+    # provider scan. Only legacy unscoped executions may use the full catalog.
+    bounded = retrieve_scope is not None
+    if bounded:
+        ids = retrieve_scope.get("effective_source_ids")
+        if not isinstance(ids, list) or any(not isinstance(v, str) or not v.strip() for v in ids):
+            raise ValueError("bounded Retrieve requires an explicit source ID array")
+        effective_source_ids = set(ids)
+    else:
+        effective_source_ids = None
     plan = [
         item for item in raw_plan
-        if not effective_source_ids or str(item.get("source_id") or "") in effective_source_ids
+        if effective_source_ids is None or str(item.get("source_id") or "") in effective_source_ids
     ]
     scope_families = sorted({
         str(scope.get("role_family") or "").strip().upper()
