@@ -33,9 +33,16 @@ import job_search_public_boards as public_boards
 
 REGISTRY = json.loads((engine.ROOT / "shared/source-connectors.json").read_text())
 ATS_ROUTES = json.loads((engine.ROOT / "shared/validated-ats-routes.json").read_text()).get("routes", {})
-# In Cloud Run the source registry is an operator-owned per-run snapshot.
-# Local/CI execution remains backed by the packaged candidate catalog.
-SOURCES_PATH = engine.RUNTIME_DATA / "sources.json"
+# Only DEV GCP collection consumes the operator-owned per-run source snapshot.
+# Local, TEST and PROD retain the existing candidate-managed catalog boundary.
+_DEV_RUNTIME_SOURCE_SNAPSHOT = (
+    str(os.environ.get("APP_ENV") or "").strip().lower() == "dev"
+    and (bool(os.environ.get("CLOUD_RUN_JOB") or os.environ.get("CLOUD_RUN_EXECUTION"))
+         or str(os.environ.get("JSCC_RUNTIME_MODE") or "").strip().lower()
+            in {"container", "gcp", "cloud-run"})
+)
+SOURCES_PATH = (engine.RUNTIME_DATA if _DEV_RUNTIME_SOURCE_SNAPSHOT
+                else engine.CANDIDATE_DATA) / "sources.json"
 COUNTERS = ("sources_configured", "sources_active", "sources_attempted", "sources_succeeded",
             "sources_failed", "sources_unsupported", "sources_skipped", "sources_inactive", "sources_with_records", "sources_partial",
             "sources_blocked", "sources_no_extractable_jobs")
