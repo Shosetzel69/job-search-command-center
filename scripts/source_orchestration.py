@@ -1,6 +1,7 @@
 """Catalog-driven collection using the existing CollectionResult contract."""
 
 import hashlib
+import os
 import json
 import socket
 from concurrent.futures import ThreadPoolExecutor
@@ -98,7 +99,7 @@ def _source_route(source):
 
 
 def _dev_zoho_admin_enabled(source, route):
-    if (str(__import__("os").environ.get("APP_ENV") or "").lower() != "dev"
+    if (str(os.environ.get("APP_ENV") or "").lower() != "dev"
             or route is None or route.get("connector") != "zoho_recruit"):
         return False
     if (source.get("active") is not True
