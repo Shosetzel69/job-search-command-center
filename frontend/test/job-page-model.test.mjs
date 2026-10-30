@@ -66,3 +66,11 @@ test('F-04 API reports pending aggregate totals without presenting a fabricated 
   assert.equal(page.aggregate_counts.status,'INCOMPLETE');
   assert.equal(page.aggregate_counts.totals,null);
 });
+
+test('F-03 frontend requests database-wide FIT sorting when user chooses descending FIT', () => {
+  const url=new URL(buildJobsPath({filters:{sort:'fit-desc',freshness:48}}),'https://example.test');
+  assert.equal(url.searchParams.get('sort_fit'),'desc');
+  assert.equal(url.searchParams.get('freshness_hours'),'48');
+  const unsorted=new URL(buildJobsPath({filters:{sort:'fit-asc'}}),'https://example.test');
+  assert.equal(unsorted.searchParams.has('sort_fit'),false);
+});
