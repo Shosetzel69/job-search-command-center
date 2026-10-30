@@ -1271,6 +1271,22 @@ export async function listProfileJobs(
       ? {status:'COMPLETE',scope:'profile_filtered',totals:{all:Number(c.total),
           high:Number(c.high),remote:Number(c.remote),reposts:Number(c.reposts),jobs:Number(c.jobs)}}
       : {status:'INCOMPLETE',scope:'profile_filtered',totals:null,remaining:Number(c.pending)};
+    if (aggregateCounts.status === 'COMPLETE') {
+      const scopeKey = createHash('sha256').update(JSON.stringify({
+        q:spec.q,roleFamilies:spec.role_family,roleSubfamilies:spec.role_subfamily,
+        modes:spec.work_mode,contracts:spec.contract_type,freshness:spec.freshness_hours,
+        archived:spec.include_archived,minFit:spec.min_fit,asOf:anchor.toISOString().slice(0,10),
+      })).digest('hex');
+      await tx.query(`INSERT INTO profile_job_count_snapshots
+        (tenant_id,search_profile_id,scope_key,profile_version,fit_algorithm_version,totals)
+        VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+        ON CONFLICT (tenant_id,search_profile_id,scope_key)
+        DO UPDATE SET profile_version=EXCLUDED.profile_version,
+        fit_algorithm_version=EXCLUDED.fit_algorithm_version,
+        totals=EXCLUDED.totals,evaluated_at=now()`,
+        [tx.tenantId,foundation.search_profile_id,scopeKey,foundation.profile_version,
+         FIT_ALGORITHM_VERSION,JSON.stringify(aggregateCounts.totals)]);
+    }
     const exhaustedWindow = rows.length < candidateLimit;
     const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
     const hasMore = Boolean(cursorRow)
