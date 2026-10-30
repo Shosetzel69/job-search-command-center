@@ -1248,6 +1248,29 @@ export async function listProfileJobs(
       }
     }
 
+    // Counts cover the full matching DB population, never only this page.
+    const fullScopeSql = candidateSql.replace(
+      `WHERE ${where.join('\n          AND ')}`,
+      `WHERE ${aggregateWhere.join('\n          AND ')}`,
+    );
+    const algorithmParam = '$' + (aggregateParams.length + 1);
+    const thresholdParam = '$' + (aggregateParams.length + 2);
+    const countResult = await tx.query(`SELECT
+      COUNT(*) FILTER (WHERE cached_profile_version IS DISTINCT FROM $3
+        OR cached_job_version IS DISTINCT FROM job_version
+        OR cached_fit_algorithm_version IS DISTINCT FROM ${algorithmParam})::integer AS pending,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE)::integer AS total,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND cached_score >= ${thresholdParam})::integer AS high,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND work_mode = 'remote')::integer AS remote,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND repost_of_posting_id IS NOT NULL)::integer AS reposts,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND sort_at >= $2::timestamptz - interval '24 hours')::integer AS jobs
+      FROM (${fullScopeSql}) full_scope`,
+      [...aggregateParams, FIT_ALGORITHM_VERSION, Number(preferences.fit_threshold ?? 80)]);
+    const c = countResult.rows[0];
+    const aggregateCounts = Number(c.pending) === 0
+      ? {status:'COMPLETE',scope:'profile_filtered',totals:{all:Number(c.total),
+          high:Number(c.high),remote:Number(c.remote),reposts:Number(c.reposts),jobs:Number(c.jobs)}}
+      : {status:'INCOMPLETE',scope:'profile_filtered',totals:null,remaining:Number(c.pending)};
     const exhaustedWindow = rows.length < candidateLimit;
     const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
     const hasMore = Boolean(cursorRow)
@@ -1273,7 +1296,7 @@ export async function listProfileJobs(
       evaluations_computed:evaluationsComputed,
       prefetched,
       results:jobs.length,
-      aggregate_counts:{ status:'INCOMPLETE', totals:null, scope:'profile_filtered', reason:'Full profile-wide evaluation not complete' },
+      aggregate_counts:aggregateCounts,
       jobs,
     };
   }, { env, db });
