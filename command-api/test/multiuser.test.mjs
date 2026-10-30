@@ -374,7 +374,7 @@ test('bounded jobs cursor is opaque, deterministic and rejects malformed input',
 
 test('bounded jobs query caps page/prefetch and keeps temporary filters view-only', () => {
   const query = normalizeJobSearchQuery({
-    limit:'40',
+    limit:'20',
     prefetch:'12',
     role_family:['PROJECT_DELIVERY_MANAGEMENT,PRODUCT_AGILE'],
     role_subfamily:['project_management,product_owner'],
@@ -385,7 +385,7 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
     include_archived:'true',
     q:'technical project',
   });
-  assert.equal(query.limit, 40);
+  assert.equal(query.limit, 20);
   assert.equal(query.prefetch, 12);
   assert.deepEqual(query.role_family, ['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE']);
   assert.deepEqual(query.role_subfamily, ['project_management','product_owner']);
@@ -395,7 +395,7 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
   assert.equal(query.min_fit, 70);
   assert.equal(query.include_archived, true);
   assert.equal(query.q, 'technical project');
-  assert.throws(() => normalizeJobSearchQuery({ limit:'101' }), /limit must be an integer/);
+  assert.throws(() => normalizeJobSearchQuery({ limit:'21' }), /limit must be an integer/);
   assert.throws(() => normalizeJobSearchQuery({ prefetch:'51' }), /prefetch must be an integer/);
 });
 
