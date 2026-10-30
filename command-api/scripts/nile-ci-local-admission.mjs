@@ -94,7 +94,17 @@ export async function attestNativeDatabase(db,{env=process.env}={}){
      typeof row.principal!=='string' || !row.principal.trim() ||
      !Number.isInteger(Number(row.backend_pid)) || Number(row.backend_pid)<=0 ||
      Number(row.server_port)!==NILE_NATIVE_BACKEND_PORT || row.challenge!==challenge)
-    deny('native SQL identity mismatch');
+    {
+      console.error('W025_NATIVE_IDENTITY_DIAGNOSTIC='+JSON.stringify({
+        database:String(row.db_name||''),
+        principal_present:typeof row.principal==='string'&&Boolean(row.principal.trim()),
+        pid_valid:Number.isInteger(Number(row.backend_pid))&&Number(row.backend_pid)>0,
+        reported_port:Number(row.server_port),
+        expected_port:NILE_NATIVE_BACKEND_PORT,
+        challenge_match:row.challenge===challenge,
+      }));
+      deny('native SQL identity mismatch');
+    }
   const attestation=Object.freeze({
     run,challenge,db_name:row.db_name,principal:row.principal,
     backend_pid:Number(row.backend_pid),server_port:Number(row.server_port)
