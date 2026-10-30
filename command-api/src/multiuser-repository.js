@@ -1271,6 +1271,7 @@ export async function listProfileJobs(
       evaluations_computed:evaluationsComputed,
       prefetched,
       results:jobs.length,
+      aggregate_counts:{ status:'INCOMPLETE', totals:null, scope:'profile_filtered', reason:'Full profile-wide evaluation not complete' },
       jobs,
     };
   }, { env, db });
