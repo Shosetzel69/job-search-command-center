@@ -1,7 +1,7 @@
 -- #535: complete profile/filter count snapshots, derived from versioned FIT cache.
 -- Only COMPLETE snapshots are persisted. Listing recomputes completeness before reuse.
 CREATE TABLE IF NOT EXISTS profile_job_count_snapshots (
-  tenant_id uuid NOT NULL,
+  tenant_id uuid NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   search_profile_id uuid NOT NULL,
   scope_key text NOT NULL,
   profile_version integer NOT NULL,
