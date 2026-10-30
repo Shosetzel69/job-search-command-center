@@ -20,3 +20,12 @@ test('object-based explicit reasons survive with accessible display message',()=
 test('unvalidated generic risk text is not misinterpreted as data-quality evidence',()=>{
   assert.deepEqual(jobQualityWarnings({risks:['Low score','Industry mismatch']}),[]);
 });
+
+test('QF-01 navigation prose and embedded URLs are detected but city names remain valid',()=>{
+  assert.deepEqual(jobQualityWarnings({location:'17:55 For freelancers Find projects Benefits for freelancers Prices and features'}),['Locație suspectă']);
+  assert.deepEqual(jobQualityWarnings({location:'Berlin https://example.com/privacy center'}),['Locație incorectă']);
+  assert.deepEqual(jobQualityWarnings({location:'London, United Kingdom'}),[]);
+});
+test('QF-04 inherited Object.prototype keys are literal string reasons',()=>{
+  assert.deepEqual(jobQualityWarnings({data_quality_issues:['toString','constructor']}),['toString','constructor']);
+});
