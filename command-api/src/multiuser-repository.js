@@ -898,6 +898,12 @@ export function encodeJobCursor(row) {
   return Buffer.from(JSON.stringify({ v:2, sort_at:sortAt, job_id:jobId, as_of:anchor }), 'utf8').toString('base64url');
 }
 
+export function encodeFitCursor(offset, anchor) {
+  if (!Number.isSafeInteger(offset) || offset < 0) throw httpError('Invalid FIT cursor offset', 400);
+  const asOf = anchor instanceof Date ? anchor.toISOString() : String(anchor);
+  return Buffer.from(JSON.stringify({v:3,sort:'fit-desc',offset,as_of:asOf}), 'utf8').toString('base64url');
+}
+
 export function decodeJobCursor(raw) {
   if (!raw) return null;
   try {
@@ -905,6 +911,11 @@ export function decodeJobCursor(raw) {
     const date = new Date(parsed?.sort_at);
     const jobId = String(parsed?.job_id || '');
     const anchor = new Date(parsed?.as_of);
+    if (parsed?.v === 3 && parsed?.sort === 'fit-desc'
+      && Number.isSafeInteger(parsed?.offset) && parsed.offset >= 0
+      && !Number.isNaN(anchor.getTime())) {
+      return Object.freeze({fit_offset:parsed.offset,as_of:anchor.toISOString()});
+    }
     if (parsed?.v !== 2 || Number.isNaN(date.getTime()) || Number.isNaN(anchor.getTime())
       || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(jobId)) throw new Error('stale');
     return Object.freeze({ sort_at:date.toISOString(), job_id:jobId, as_of:anchor.toISOString() });
@@ -934,6 +945,7 @@ export function normalizeJobSearchQuery(input = {}) {
     limit,
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
+    sort_fit:String(source.sort_fit || '').trim() === 'desc' ? 'desc' : null,
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
     role_subfamily:listValues(source.role_subfamily),
     work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
@@ -1089,7 +1101,7 @@ export async function listProfileJobs(
     }
     const aggregateWhere = [...where];
     const aggregateParams = [...params];
-    if (spec.cursor) {
+    if (spec.cursor?.sort_at) {
       const at = add(spec.cursor.sort_at);
       const id = add(spec.cursor.job_id);
       where.push(`(
