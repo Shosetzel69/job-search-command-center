@@ -61,3 +61,10 @@ test('UI: job cards constrain long metadata and reserve space for actions',()=>{
   assert.match(main,/min-w-0 overflow-hidden text-left/);
   assert.match(main,/min-w-0 flex-wrap gap-1\.5/);
 });
+
+test('F-05 data-quality exclamation is accessible but does not change review membership',()=>{
+  assert.match(main,/jobQualityWarnings\(job\)\.length>0/);
+  assert.match(main,/Verifică datele jobului:/);
+  assert.match(main,/role="img"/);
+  assert.match(main,/reviewRowsForFilters\(activeJobs,filters,ageHours,threshold\)/);
+});
