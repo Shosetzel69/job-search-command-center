@@ -946,6 +946,7 @@ export function normalizeJobSearchQuery(input = {}) {
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
     sort_fit:String(source.sort_fit || '').trim() === 'desc' ? 'desc' : null,
+    scan_step:source.scan_step === '1' || source.scan_step === 1 || source.scan_step === true,
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
     role_subfamily:listValues(source.role_subfamily),
     work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
@@ -1113,7 +1114,7 @@ export async function listProfileJobs(
       )`);
     }
 
-    const candidateLimit = Math.min(
+    const candidateLimit = spec.scan_step ? JOB_CANDIDATE_WINDOW_MAX : Math.min(
       Math.max(spec.limit * 8, spec.limit + spec.prefetch, 100),
       JOB_CANDIDATE_WINDOW_MAX,
     );
@@ -1248,12 +1249,12 @@ export async function listProfileJobs(
         continue;
       }
       if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
-      jobs.push(resolved.job);
-      if (jobs.length >= spec.limit) break;
+      if (jobs.length < spec.limit) jobs.push(resolved.job);
+      if (!spec.scan_step && jobs.length >= spec.limit) break;
     }
 
     let prefetched = 0;
-    if (pageEndIndex >= 0 && spec.prefetch > 0) {
+    if (!spec.scan_step && pageEndIndex >= 0 && spec.prefetch > 0) {
       for (let index = pageEndIndex + 1; index < rows.length && prefetched < spec.prefetch; index += 1) {
         await resolveRow(rows[index]);
         prefetched += 1;
@@ -1302,7 +1303,7 @@ export async function listProfileJobs(
     }
     // Serve globally FIT-ordered pages only when every candidate has a current
     // persisted evaluation. Never silently claim global order for partial cache.
-    if (spec.sort_fit === 'desc' && aggregateCounts.status === 'COMPLETE') {
+    if (!spec.scan_step && spec.sort_fit === 'desc' && aggregateCounts.status === 'COMPLETE') {
       if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
       const fitOffset = spec.cursor?.fit_offset || 0;
       const base = aggregateParams.length;
