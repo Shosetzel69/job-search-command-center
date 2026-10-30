@@ -1,3 +1,4 @@
+import { qualityIssueCodes } from '../../shared/job-data-quality.mjs';
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
 import { canonicalPostedDate, postedAgeHours } from './posted-date.mjs';
@@ -226,7 +227,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       status:score >= threshold ? 'new' : 'review',
       pros:pros.slice(0,2),
       risks:risks.slice(0,2),
-    data_quality_issues:Array.isArray(payload.data_quality_issues) ? payload.data_quality_issues : Array.isArray(payload.quality_issues) ? payload.quality_issues : [],
+    data_quality_issues:qualityIssueCodes({ ...payload, location:row.location || payload.location || payload.short_location }),
       url,
       description,
       date_posted:posted,
@@ -283,7 +284,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     status:score != null && score >= threshold ? 'new' : 'review',
     pros:pros.slice(0,2),
     risks:risks.slice(0,2),
-    data_quality_issues:Array.isArray(payload.data_quality_issues) ? payload.data_quality_issues : Array.isArray(payload.quality_issues) ? payload.quality_issues : [],
+    data_quality_issues:qualityIssueCodes({ ...payload, location:row.location || payload.location || payload.short_location }),
     url,
     description,
     date_posted:posted,
