@@ -898,10 +898,10 @@ export function encodeJobCursor(row) {
   return Buffer.from(JSON.stringify({ v:2, sort_at:sortAt, job_id:jobId, as_of:anchor }), 'utf8').toString('base64url');
 }
 
-export function encodeFitCursor(offset, anchor) {
+export function encodeFitCursor(offset, anchor, sort = 'desc') {
   if (!Number.isSafeInteger(offset) || offset < 0) throw httpError('Invalid FIT cursor offset', 400);
   const asOf = anchor instanceof Date ? anchor.toISOString() : String(anchor);
-  return Buffer.from(JSON.stringify({v:3,sort:'fit-desc',offset,as_of:asOf}), 'utf8').toString('base64url');
+  return Buffer.from(JSON.stringify({v:3,sort:sort === 'asc' ? 'fit-asc' : 'fit-desc',offset,as_of:asOf}), 'utf8').toString('base64url');
 }
 
 export function decodeJobCursor(raw) {
@@ -911,10 +911,10 @@ export function decodeJobCursor(raw) {
     const date = new Date(parsed?.sort_at);
     const jobId = String(parsed?.job_id || '');
     const anchor = new Date(parsed?.as_of);
-    if (parsed?.v === 3 && parsed?.sort === 'fit-desc'
+    if (parsed?.v === 3 && ['fit-desc','fit-asc'].includes(parsed?.sort)
       && Number.isSafeInteger(parsed?.offset) && parsed.offset >= 0
       && !Number.isNaN(anchor.getTime())) {
-      return Object.freeze({fit_offset:parsed.offset,as_of:anchor.toISOString()});
+      return Object.freeze({fit_offset:parsed.offset,fit_sort:parsed.sort === 'fit-asc' ? 'asc' : 'desc',as_of:anchor.toISOString()});
     }
     if (parsed?.v !== 2 || Number.isNaN(date.getTime()) || Number.isNaN(anchor.getTime())
       || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(jobId)) throw new Error('stale');
@@ -945,7 +945,7 @@ export function normalizeJobSearchQuery(input = {}) {
     limit,
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
-    sort_fit:String(source.sort_fit || '').trim() === 'desc' ? 'desc' : null,
+    sort_fit:['desc','asc'].includes(String(source.sort_fit || '').trim()) ? String(source.sort_fit).trim() : null,
     scan_step:source.scan_step === '1' || source.scan_step === 1 || source.scan_step === true,
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
     role_subfamily:listValues(source.role_subfamily),
@@ -1303,14 +1303,16 @@ export async function listProfileJobs(
     }
     // Serve globally FIT-ordered pages only when every candidate has a current
     // persisted evaluation. Never silently claim global order for partial cache.
-    if (!spec.scan_step && spec.sort_fit === 'desc' && aggregateCounts.status === 'COMPLETE') {
+    if (!spec.scan_step && spec.sort_fit && aggregateCounts.status === 'COMPLETE') {
+      if (spec.cursor?.fit_sort && spec.cursor.fit_sort !== spec.sort_fit)
+        throw httpError('STALE_CURSOR: FIT sort changed',400);
       if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
       const fitOffset = spec.cursor?.fit_offset || 0;
       const base = aggregateParams.length;
       const ranked = await tx.query(
         `SELECT * FROM (${fullScopeSql}) ranked
           WHERE cached_eligible IS TRUE AND cached_score >= $${base + 1}::integer
-          ORDER BY cached_score DESC NULLS LAST, sort_at DESC, job_id ASC
+          ORDER BY cached_score ${spec.sort_fit === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, sort_at DESC, job_id ASC
           LIMIT $${base + 2}::integer OFFSET $${base + 3}::integer`,
         [...aggregateParams, spec.min_fit ?? -1, spec.limit, fitOffset],
       );
@@ -1328,7 +1330,7 @@ export async function listProfileJobs(
         search_profile_id:foundation.search_profile_id,profile_version:foundation.profile_version,
         fit_algorithm_version:FIT_ALGORITHM_VERSION,bounded:true,limit:spec.limit,
         next_cursor:fitOffset + rankedJobs.length < matchedTotal
-          ? encodeFitCursor(fitOffset + rankedJobs.length,anchor) : null,
+          ? encodeFitCursor(fitOffset + rankedJobs.length,anchor,spec.sort_fit) : null,
         freshness_hours:Number(preferences.freshness_hours ?? 24),
         criteria:{fit_threshold:Number(preferences.fit_threshold ?? 80)},
         records_inspected:ranked.rows.length,candidate_window:ranked.rows.length,
