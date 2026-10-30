@@ -776,7 +776,8 @@ test('preference response changed flag reflects semantic personal change only', 
 test('F-03 stable opaque global FIT pagination cursor round-trip', () => {
   const anchor = new Date('2026-10-30T02:00:00Z');
   const cursor = encodeFitCursor(20, anchor);
-  assert.deepEqual(decodeJobCursor(cursor), {fit_offset:20,as_of:anchor.toISOString()});
+  assert.deepEqual(decodeJobCursor(cursor), {fit_offset:20,fit_sort:'desc',as_of:anchor.toISOString()});
+  assert.equal(decodeJobCursor(encodeFitCursor(40,anchor,'asc')).fit_sort,'asc');
   assert.throws(() => encodeFitCursor(-1, anchor), /Invalid FIT cursor offset/);
   assert.throws(() => decodeJobCursor(Buffer.from(JSON.stringify(
     {v:3,sort:'fit-desc',offset:-1,as_of:anchor.toISOString()})).toString('base64url')), /STALE_CURSOR/);
