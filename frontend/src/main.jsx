@@ -286,18 +286,30 @@ function FitBadge({fit,threshold}){if(fit===null||fit===undefined)return<span cl
 function ModeBadge({mode}){const tone=mode==='Remote'?'bg-violet-50 text-violet-700':mode==='Hybrid'?'bg-amber-50 text-amber-700':'bg-slate-100 text-slate-600';return<span className={cx('inline-flex rounded-full px-2 py-1 text-xs font-medium',tone)}>{mode==='Hybrid'?'Hibrid':mode}</span>;}
 function knownCompact(value){const text=String(value||'').trim();return text&&!['n/a','nespecificat','unknown','companie nespecificata'].includes(text.toLowerCase())?text:null;}
 function MobileOverflow({job,onArchive}){return<details className="relative"><summary aria-label="Mai multe actiuni" className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500">•••</summary><div className="absolute bottom-12 right-0 z-20 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{!job.isApplication&&<button type="button" onClick={()=>onArchive(job)} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-slate-600 hover:bg-slate-50"><Icon name="archive"/> Arhiveaza</button>}</div></details>;}
+function JobQualityMarker({job}) {
+  const [open,setOpen]=useState(false);
+  const reasons=jobQualityWarnings(job);
+  if(!reasons.length)return null;
+  const description=reasons.join('; ');
+  return <div className="absolute right-0 top-0 z-10">
+    <button type="button" title={description} aria-label={'Verifică datele jobului: '+description}
+      aria-expanded={open} onClick={()=>setOpen(value=>!value)}
+      className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-50 font-bold text-amber-800">!</button>
+    {open&&<div role="status" className="absolute right-0 top-9 z-30 w-64 max-w-[80vw] rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-800 shadow-lg">{description}</div>}
+  </div>;
+}
 function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=false,loadingMore=false,onLoadMore,loading=false,page=1,onPrevious=null,onNext=null}) {
   if(!rows.length&&!loading&&!hasMore&&page===1)return<div className="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500 shadow-sm">Niciun rol nu corespunde filtrelor.</div>;
   return <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     <div className="hidden grid-cols-[minmax(0,1fr)_110px_65px_85px_90px_minmax(300px,auto)] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:grid"><span>Rol</span><span>Tara</span><span>Fit</span><span>Mod lucru</span><span>Publicat</span><span className="text-right">Actiuni</span></div>
     <div>{rows.map((job,index)=><article key={jobKey(job)} className={cx('border-b border-slate-100 px-3 py-3 transition last:border-b-0 md:grid md:grid-cols-[minmax(0,1fr)_110px_65px_85px_90px_minmax(300px,auto)] md:items-center md:gap-3 md:px-5 md:py-3',index%2===0?'bg-white':'bg-slate-50/70','hover:bg-blue-50/40')}>
-      <button type="button" onClick={()=>onDetails(job)} className="block w-full min-w-0 overflow-hidden text-left md:flex md:items-start md:gap-3">
+      <div className="relative min-w-0 pr-9"><button type="button" onClick={()=>onDetails(job)} className="block w-full min-w-0 overflow-hidden text-left md:flex md:items-start md:gap-3">
         <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-xs font-bold text-slate-600 md:grid">{job.initial}</span>
         <span className="block min-w-0 overflow-hidden">
-          <span className="flex items-start justify-between gap-3"><span className="line-clamp-2 text-[15px] font-semibold leading-5 text-slate-950 md:block md:truncate md:text-sm">{job.title}</span>{jobQualityWarnings(job).length>0&&<span title={jobQualityWarnings(job).join('; ')} aria-label={'Verifică datele jobului: '+jobQualityWarnings(job).join('; ')} role="img" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-xs font-bold text-amber-800">!</span>}<span className="shrink-0 md:hidden"><FitBadge fit={job.fit} threshold={threshold}/></span></span>
+          <span className="flex items-start justify-between gap-3"><span className="line-clamp-2 text-[15px] font-semibold leading-5 text-slate-950 md:block md:truncate md:text-sm">{job.title}</span><span className="shrink-0 md:hidden"><FitBadge fit={job.fit} threshold={threshold}/></span></span>
           <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-xs text-slate-500"><span className="truncate">{knownCompact(job.company)||'Companie'}</span>{knownCompact(job.location)&&<><span>·</span><span className="truncate">{job.location}</span></>}{knownCompact(job.mode)&&<><span>·</span><span>{job.mode==='Hybrid'?'Hibrid':job.mode}</span></>}<span>·</span><span>{publishedLabel(job)}</span>{job.repost&&<span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">Repost</span>}</span>
         </span>
-      </button>
+      </button><JobQualityMarker job={job}/></div>
       <div className="hidden min-w-0 text-xs md:contents"><div className="font-medium text-slate-600">{countryCompact(job)}</div><div><FitBadge fit={job.fit} threshold={threshold}/></div><div>{knownCompact(job.mode)?<ModeBadge mode={job.mode}/>:<span className="text-slate-300">—</span>}</div><div className="font-medium text-slate-500">{publishedLabel(job)}</div></div>
       <div className="mt-3 flex items-center gap-2 md:hidden" onClick={event=>event.stopPropagation()}>
         {!job.isApplication&&<button type="button" onClick={()=>onReview(job)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700"><Icon name="review"/>Review</button>}
