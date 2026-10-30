@@ -99,7 +99,7 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    assert.deepEqual(stored.target_role_families,prefs.target_role_families);
    assert.deepEqual(stored.target_role_subfamilies,prefs.target_role_subfamilies);
    const actual=await repository.listProfileJobs(ctx,stored,nomenclatures,
-     {limit:50,prefetch:0,q:'W025'},env,{db});
+     {limit:20,prefetch:0,q:'W025'},env,{db});
    assert.equal(actual.bounded,true);
    const returned=new Set(actual.jobs.map(j=>j.id));
    const selected=seeded.filter(j=>j.expected==='PROJECT_DELIVERY_MANAGEMENT');
