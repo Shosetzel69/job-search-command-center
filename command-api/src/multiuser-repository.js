@@ -1300,6 +1300,43 @@ export async function listProfileJobs(
         [tx.tenantId,foundation.search_profile_id,scopeKey,foundation.profile_version,
          FIT_ALGORITHM_VERSION,JSON.stringify(aggregateCounts.totals)]);
     }
+    // Serve globally FIT-ordered pages only when every candidate has a current
+    // persisted evaluation. Never silently claim global order for partial cache.
+    if (spec.sort_fit === 'desc' && aggregateCounts.status === 'COMPLETE') {
+      if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
+      const fitOffset = spec.cursor?.fit_offset || 0;
+      const base = aggregateParams.length;
+      const ranked = await tx.query(
+        `SELECT * FROM (${fullScopeSql}) ranked
+          WHERE cached_eligible IS TRUE AND cached_score >= $${base + 1}::integer
+          ORDER BY cached_score DESC NULLS LAST, sort_at DESC, job_id ASC
+          LIMIT $${base + 2}::integer OFFSET $${base + 3}::integer`,
+        [...aggregateParams, spec.min_fit ?? -1, spec.limit, fitOffset],
+      );
+      const rankedJobs = ranked.rows.map(row =>
+        materializeCachedJob(row, cachedEvaluation(row), preferences, anchor));
+      const matchedTotal = spec.min_fit == null
+        ? aggregateCounts.totals.all
+        : Number((await tx.query(
+            `SELECT COUNT(*)::integer AS total FROM (${fullScopeSql}) ranked
+              WHERE cached_eligible IS TRUE AND cached_score >= $${base + 1}::integer`,
+            [...aggregateParams,spec.min_fit],
+          )).rows[0].total);
+      return {
+        schema_version:'2.0',generated_at:anchor.toISOString(),
+        search_profile_id:foundation.search_profile_id,profile_version:foundation.profile_version,
+        fit_algorithm_version:FIT_ALGORITHM_VERSION,bounded:true,limit:spec.limit,
+        next_cursor:fitOffset + rankedJobs.length < matchedTotal
+          ? encodeFitCursor(fitOffset + rankedJobs.length,anchor) : null,
+        freshness_hours:Number(preferences.freshness_hours ?? 24),
+        criteria:{fit_threshold:Number(preferences.fit_threshold ?? 80)},
+        records_inspected:ranked.rows.length,candidate_window:ranked.rows.length,
+        excluded_count:0,cache_hits:ranked.rows.length,evaluations_computed:0,prefetched:0,
+        results:rankedJobs.length,aggregate_counts:aggregateCounts,
+        fit_order_status:'GLOBAL_VERIFIED',jobs:rankedJobs,
+      };
+    }
+    if (spec.cursor?.fit_offset != null) throw httpError('STALE_CURSOR: FIT evaluation incomplete',400);
     const exhaustedWindow = rows.length < candidateLimit;
     const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
     const hasMore = Boolean(cursorRow)
