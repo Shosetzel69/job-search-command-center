@@ -865,8 +865,8 @@ export async function sharedCorpusRefreshState(
 }
 
 
-const JOB_PAGE_DEFAULT = 25;
-const JOB_PAGE_MAX = 100;
+const JOB_PAGE_DEFAULT = 20;
+const JOB_PAGE_MAX = 20;
 const JOB_CANDIDATE_WINDOW_MAX = 400;
 const JOB_PREFETCH_MAX = 50;
 
