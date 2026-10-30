@@ -50,3 +50,9 @@ test('static frontend leaves canonical multiuser endpoints to Command API', () =
   assert.match(staticFrontend, /'\/admin\/'/);
   assert.match(staticFrontend, /'\/applications\/'/);
 });
+
+test('F-03 empty filtered page still preserves next-page navigation', () => {
+  const main = readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.match(main,/!rows\.length&&!loading&&!hasMore&&page===1/);
+  assert.match(main,/onClick=\{onNext\|\|onLoadMore\}/);
+});
