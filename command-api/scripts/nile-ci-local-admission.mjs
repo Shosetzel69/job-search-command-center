@@ -5,9 +5,9 @@ export const TEST_IMAGE='ghcr.io/niledatabase/testingcontainer@sha256:8e670df2a4
 export const CI_USER='00000000-0000-0000-0000-000000000000';
 export const CI_PORT=55432;
 // Pinned Nile Testing Container: PostgreSQL SQL backend is reached through the
-// container's 5432/tcp gateway, but inet_server_port() reports internal PDB 5421.
+// container's 5432/tcp gateway, but inet_server_port() reports internal PDB 5420.
 // Keep gateway/loopback attestation in admitNileCi(); never relax URL matching.
-export const NILE_NATIVE_BACKEND_PORT=5421;
+export const NILE_NATIVE_BACKEND_PORT=5420;
 export const TARGET_KEYS=Object.freeze([
   'NILE_TEST_DATABASE_URL','NILE_DATABASE_URL','NILE_MIGRATION_DATABASE_URL',
   'JSCC_INTEGRATION_DATABASE_URL','JSCC_TEST_ADMIN_DATABASE_URL',
