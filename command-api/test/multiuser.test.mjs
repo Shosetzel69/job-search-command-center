@@ -783,3 +783,10 @@ test('F-03 stable opaque global FIT pagination cursor round-trip', () => {
   assert.equal(normalizeJobSearchQuery({sort_fit:'desc'}).sort_fit,'desc');
   assert.equal(normalizeJobSearchQuery({sort_fit:'invalid'}).sort_fit,null);
 });
+
+test('F-04 bounded aggregate scan is explicit and distinct from ordinary paging', () => {
+  assert.equal(normalizeJobSearchQuery({scan_step:'1'}).scan_step,true);
+  assert.equal(normalizeJobSearchQuery({}).scan_step,false);
+  assert.equal(normalizeJobSearchQuery({scan_step:'0'}).scan_step,false);
+  assert.equal(normalizeJobSearchQuery({sort_fit:'desc',scan_step:'1'}).sort_fit,'desc');
+});
