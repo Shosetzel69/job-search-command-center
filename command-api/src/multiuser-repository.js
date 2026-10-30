@@ -1204,6 +1204,1024 @@ export async function listProfileJobs(
       params,
     );
 
+    // Global counts use the same hard filters, independently of the current cursor.
+    // All FIT results must be valid in the persisted versioned evaluation cache.
+    const aggregateSql = candidateSql.replace(
+      `WHERE ${where.join('\\n          AND ')}`,
+      `WHERE ${aggregateWhere.join('\\n          AND ')}`,
+    );
+    const algorithmParam = '
+    const jobs = [];
+    let excluded = 0;
+    let inspected = 0;
+    let cacheHits = 0;
+    let evaluationsComputed = 0;
+    let pageEndIndex = -1;
+
+    const resolveRow = async row => {
+      if (evaluationCacheValid(row, foundation)) {
+        cacheHits += 1;
+        const evaluation = cachedEvaluation(row);
+        return {
+          evaluation,
+          job:evaluation.eligible ? materializeCachedJob(row, evaluation, preferences, anchor) : null,
+        };
+      }
+      evaluationsComputed += 1;
+      const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
+      await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
+      return { evaluation, job:evaluation.job };
+    };
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const resolved = await resolveRow(rows[index]);
+      inspected += 1;
+      pageEndIndex = index;
+      if (!resolved.evaluation.eligible) {
+        excluded += 1;
+        continue;
+      }
+      if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
+      jobs.push(resolved.job);
+      if (jobs.length >= spec.limit) break;
+    }
+
+    let prefetched = 0;
+    if (pageEndIndex >= 0 && spec.prefetch > 0) {
+      for (let index = pageEndIndex + 1; index < rows.length && prefetched < spec.prefetch; index += 1) {
+        await resolveRow(rows[index]);
+        prefetched += 1;
+      }
+    }
+
+    const exhaustedWindow = rows.length < candidateLimit;
+    const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
+    const hasMore = Boolean(cursorRow)
+      && (!exhaustedWindow || pageEndIndex < rows.length - 1);
+    const nextCursor = hasMore ? encodeJobCursor({ ...cursorRow, anchor }) : null;
+
+    return {
+      schema_version:'2.0',
+      generated_at:anchor.toISOString(),
+      search_profile_id:foundation.search_profile_id,
+      profile_version:foundation.profile_version,
+      fit_algorithm_version:FIT_ALGORITHM_VERSION,
+      bounded:true,
+      limit:spec.limit,
+      next_cursor:nextCursor,
+      freshness_hours:Number(preferences.freshness_hours ?? 24),
+      collection_freshness_hours:Number(preferences.collection_freshness_hours ?? preferences.freshness_hours ?? 24),
+      criteria:{ fit_threshold:Number(preferences.fit_threshold ?? 80) },
+      records_inspected:inspected,
+      candidate_window:rows.length,
+      excluded_count:excluded,
+      cache_hits:cacheHits,
+      evaluations_computed:evaluationsComputed,
+      prefetched,
+      results:jobs.length,
+      aggregate_counts:aggregateCounts,
+      jobs,
+    };
+  }, { env, db });
+}
+
+export async function nomenclatureReferenceCount(domain, code, env = process.env, { db = getPool(env) } = {}) {
+  return crossTenantNomenclatureReferenceCount(domain, code, env, { db });
+}
+
+export async function operationalHistory(authContext, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const result = await db.query(
+    `SELECT payload
+       FROM search_runs
+      ORDER BY COALESCE(completed_at, started_at, created_at) DESC, run_id DESC
+      LIMIT 10`,
+  );
+  return {
+    schema_version:'1.0',
+    runs:(result.rows || []).map(row => jsonObject(row.payload)),
+  };
+}
+
+export async function setJobState(authContext, jobId, patch, env = process.env, { db = getPool(env) } = {}) {
+  const archived = patch?.archived;
+  const seen = patch?.seen;
+  if (archived != null && typeof archived !== 'boolean') throw httpError('archived must be boolean', 400);
+  if (seen != null && typeof seen !== 'boolean') throw httpError('seen must be boolean', 400);
+
+  return withTenantTransaction(authContext, async tx => {
+    const exists = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id = $1', [jobId]);
+    if (!exists.rows?.length) throw httpError('Job not found', 404);
+    const result = await tx.query(
+      `INSERT INTO profile_job_state(tenant_id, job_id, seen_at, archived_at, updated_at)
+       VALUES ($1, $2,
+               CASE WHEN $3::boolean THEN now() ELSE NULL END,
+               CASE WHEN $4::boolean THEN now() ELSE NULL END,
+               now())
+       ON CONFLICT(tenant_id, job_id)
+       DO UPDATE SET
+         seen_at = CASE WHEN $3::boolean THEN COALESCE(profile_job_state.seen_at, now())
+                        WHEN $3::boolean = false THEN NULL ELSE profile_job_state.seen_at END,
+         archived_at = CASE WHEN $4::boolean THEN COALESCE(profile_job_state.archived_at, now())
+                            WHEN $4::boolean = false THEN NULL ELSE profile_job_state.archived_at END,
+         updated_at = now()
+       RETURNING job_id, seen_at, archived_at`,
+      [authContext.profile_id, jobId, seen ?? null, archived ?? null],
+    );
+    return result.rows[0];
+  }, { env, db });
+}
+
+export async function listApplications(authContext, env = process.env, { db = getPool(env) } = {}) {
+  return withTenantTransaction(authContext, async tx => {
+    const result = await tx.query(
+      `SELECT application_id AS id, job_id, company, title, location, countries,
+              reference, status, applied_at, next_status_check, source_url AS url
+         FROM applications
+        WHERE tenant_id = $1
+        ORDER BY applied_at DESC NULLS LAST, created_at DESC`,
+      [authContext.profile_id],
+    );
+    return { schema_version:'1.0', applications:result.rows || [] };
+  }, { env, db });
+}
+
+function applicationInput(input, { partial = false } = {}) {
+  const source = jsonObject(input);
+  const output = {};
+  for (const key of ['company','title','location','reference','status','applied_at','next_status_check','url','job_id']) {
+    if (Object.hasOwn(source, key)) output[key] = source[key] == null ? null : String(source[key]).trim();
+  }
+  if (Object.hasOwn(source, 'countries')) {
+    if (!Array.isArray(source.countries)) throw httpError('countries must be a list', 400);
+    output.countries = source.countries.map(x => String(x || '').trim()).filter(Boolean);
+  }
+  if (!partial && (!output.company || !output.title || !output.status)) {
+    throw httpError('company, title and status are required', 400);
+  }
+  return output;
+}
+
+async function validateSharedJobReference(tx, jobId) {
+  if (!jobId) return;
+  const result = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id=$1', [jobId]);
+  if (!result.rows?.length) throw httpError('Job not found', 404);
+}
+
+export async function createApplication(authContext, input, env = process.env, { db = getPool(env) } = {}) {
+  const value = applicationInput(input);
+  const id = randomUUID();
+  return withTenantTransaction(authContext, async tx => {
+    await validateSharedJobReference(tx, value.job_id || null);
+    const result = await tx.query(
+      `INSERT INTO applications(
+          tenant_id, application_id, job_id, company, title, location, countries,
+          reference, status, applied_at, next_status_check, source_url, snapshot
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13::jsonb)
+        RETURNING application_id AS id, job_id, company, title, location, countries,
+                  reference, status, applied_at, next_status_check, source_url AS url`,
+      [
+        authContext.profile_id, id, value.job_id || null, value.company, value.title,
+        value.location || null, JSON.stringify(value.countries || []), value.reference || null,
+        value.status, value.applied_at || null, value.next_status_check || null, value.url || null,
+        JSON.stringify(value),
+      ],
+    );
+    return result.rows[0];
+  }, { env, db });
+}
+
+export async function updateApplication(authContext, applicationId, input, env = process.env, { db = getPool(env) } = {}) {
+  const value = applicationInput(input, { partial:true });
+  return withTenantTransaction(authContext, async tx => {
+    const current = await tx.query(
+      'SELECT * FROM applications WHERE tenant_id = $1 AND application_id = $2',
+      [authContext.profile_id, applicationId],
+    );
+    const row = current.rows?.[0];
+    if (!row) throw httpError('Application not found', 404);
+    const next = {
+      job_id:Object.hasOwn(value,'job_id') ? value.job_id : row.job_id,
+      company:Object.hasOwn(value,'company') ? value.company : row.company,
+      title:Object.hasOwn(value,'title') ? value.title : row.title,
+      location:Object.hasOwn(value,'location') ? value.location : row.location,
+      countries:Object.hasOwn(value,'countries') ? value.countries : row.countries,
+      reference:Object.hasOwn(value,'reference') ? value.reference : row.reference,
+      status:Object.hasOwn(value,'status') ? value.status : row.status,
+      applied_at:Object.hasOwn(value,'applied_at') ? value.applied_at : row.applied_at,
+      next_status_check:Object.hasOwn(value,'next_status_check') ? value.next_status_check : row.next_status_check,
+      url:Object.hasOwn(value,'url') ? value.url : row.source_url,
+    };
+    await validateSharedJobReference(tx, next.job_id || null);
+    const result = await tx.query(
+      `UPDATE applications
+          SET job_id=$1, company=$2, title=$3, location=$4, countries=$5::jsonb,
+              reference=$6, status=$7, applied_at=$8, next_status_check=$9,
+              source_url=$10, updated_at=now()
+        WHERE tenant_id=$11 AND application_id=$12
+        RETURNING application_id AS id, job_id, company, title, location, countries,
+                  reference, status, applied_at, next_status_check, source_url AS url`,
+      [
+        next.job_id || null, next.company, next.title, next.location || null,
+        JSON.stringify(next.countries || []), next.reference || null, next.status,
+        next.applied_at || null, next.next_status_check || null, next.url || null,
+        authContext.profile_id, applicationId,
+      ],
+    );
+    return result.rows[0];
+  }, { env, db });
+}
+
+export async function deleteApplication(authContext, applicationId, env = process.env, { db = getPool(env) } = {}) {
+  return withTenantTransaction(authContext, async tx => {
+    const result = await tx.query(
+      'DELETE FROM applications WHERE tenant_id = $1 AND application_id = $2 RETURNING application_id',
+      [authContext.profile_id, applicationId],
+    );
+    if (!result.rows?.length) throw httpError('Application not found', 404);
+    return true;
+  }, { env, db });
+}
+
+function requireAdmin(authContext) {
+  if (authContext?.role !== 'ADMIN') throw httpError('ADMIN role required', 403);
+}
+
+export async function listAccounts(authContext, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const result = await db.query(
+    `SELECT a.user_id, a.role, a.status, a.created_at, a.updated_at,
+            i.email, i.email_verified,
+            (SELECT max(s.created_at) FROM user_session s WHERE s.user_id = a.user_id) AS last_login_at
+       FROM app_user a
+       LEFT JOIN user_identity i ON i.user_id = a.user_id AND i.provider = 'GOOGLE'
+      ORDER BY a.created_at ASC, a.user_id ASC`,
+  );
+  return result.rows || [];
+}
+
+export async function setAccountStatus(authContext, userId, status, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  if (!['ACTIVE','DEACTIVATED'].includes(status)) throw httpError('Invalid account status', 400);
+
+  if (status === 'ACTIVE') {
+    const state = await accountStateForUser(db, userId);
+    if (!state) throw httpError('Account not found', 404);
+    if (state.deletion_started_at) throw httpError('Account deletion is irreversible and already in progress', 409);
+    assertSharedAccountReady({ ...state, status:'ACTIVE' });
+    await verifyTenantMapping(String(state.profile_id), { env, db });
+  }
+
+  return withTransaction(async tx => {
+    await lockAccountLifecycle(tx, userId);
+    const current = await accountStateForUser(tx, userId);
+    if (!current) throw httpError('Account not found', 404);
+    if (status === 'ACTIVE' && current.deletion_started_at) {
+      throw httpError('Account deletion is irreversible and already in progress', 409);
+    }
+    const result = await tx.query(
+      'UPDATE app_user SET status=$1, updated_at=now() WHERE user_id=$2 RETURNING user_id, role, status',
+      [status, userId],
+    );
+    if (status === 'DEACTIVATED') {
+      await tx.query('UPDATE user_session SET revoked_at=COALESCE(revoked_at, now()) WHERE user_id=$1', [userId]);
+    }
+    return result.rows[0];
+  }, { env, db });
+}
+
+async function startAccountDeletion(userId, actorKind, env, db) {
+  return withTransaction(async tx => {
+    await lockAccountLifecycle(tx, userId);
+    const target = await resolveAccountDeletionTarget(tx, userId);
+    if (target.result === 'NOT_FOUND') return target;
+
+    const started = await tx.query(
+      `UPDATE app_user
+          SET deletion_started_at=COALESCE(deletion_started_at, now()),
+              deletion_initiated_by=COALESCE(deletion_initiated_by, $2),
+              status='DEACTIVATED',
+              updated_at=now()
+        WHERE user_id=$1
+        RETURNING deletion_started_at, deletion_initiated_by`,
+      [userId, actorKind],
+    );
+    await tx.query(
+      'UPDATE user_session SET revoked_at=COALESCE(revoked_at, now()) WHERE user_id=$1',
+      [userId],
+    );
+    return Object.freeze({
+      ...target,
+      deletion_started_at:started.rows?.[0]?.deletion_started_at || target.deletion_started_at,
+      deletion_initiated_by:started.rows?.[0]?.deletion_initiated_by || target.deletion_initiated_by || actorKind,
+    });
+  }, { env, db });
+}
+
+async function finalizeAccountDeletion(target, env, db) {
+  return withTransaction(async tx => {
+    await lockAccountLifecycle(tx, target.user_id);
+    const current = await resolveAccountDeletionTarget(tx, target.user_id);
+    if (current.result === 'NOT_FOUND') return { result:'DELETED' };
+    if (!current.deletion_started_at) throw httpError('Account deletion progress marker is missing', 409);
+
+    const deleted = await tx.query(
+      'DELETE FROM app_user WHERE user_id=$1 RETURNING user_id',
+      [target.user_id],
+    );
+    if (!deleted.rows?.length) throw httpError('Account lifecycle delete lost target account', 409);
+
+    await tx.query(
+      `INSERT INTO account_deletion_audit(audit_id, event_type, actor_kind, result)
+       VALUES ($1, 'ACCOUNT_DELETE', $2, 'DELETED')`,
+      [randomUUID(), current.deletion_initiated_by || target.deletion_initiated_by || 'ADMIN'],
+    );
+    return { result:'DELETED' };
+  }, { env, db });
+}
+
+async function verifySharedAccountResidue(target, db) {
+  const result = await db.query(
+    `SELECT
+       (SELECT count(*)::integer FROM profile WHERE profile_id=$1) AS profiles,
+       (SELECT count(*)::integer FROM app_user WHERE user_id=$2) AS users,
+       (SELECT count(*)::integer FROM user_identity WHERE user_id=$2) AS identities,
+       (SELECT count(*)::integer FROM user_session WHERE user_id=$2) AS sessions`,
+    [target.profile_id, target.user_id],
+  );
+  if (Object.values(result.rows?.[0] || {}).some(value => Number(value) !== 0)) {
+    throw httpError('Account lifecycle delete left shared account residue', 503);
+  }
+}
+
+async function deleteAccountLifecycle(userId, actorKind, env, db) {
+  const target = await startAccountDeletion(userId, actorKind, env, db);
+  if (target.result === 'NOT_FOUND') {
+    await db.query(
+      `INSERT INTO account_deletion_audit(audit_id, event_type, actor_kind, result)
+       VALUES ($1, 'ACCOUNT_DELETE', $2, 'NOT_FOUND')`,
+      [randomUUID(), actorKind],
+    );
+    return { result:'NOT_FOUND' };
+  }
+
+  await deleteTenantDomain(target.profile_id, { env, db });
+  await verifyTenantPersonalResidue(target.profile_id, { env, db });
+  const deletion = await finalizeAccountDeletion(target, env, db);
+  await verifySharedAccountResidue(target, db);
+  return deletion;
+}
+
+export async function deleteAccount(authContext, userId, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  return deleteAccountLifecycle(userId, 'ADMIN', env, db);
+}
+
+export async function deleteOwnAccount(authContext, env = process.env, { db = getPool(env) } = {}) {
+  if (!authContext?.user_id || authContext?.status !== 'ACTIVE') {
+    throw httpError('Authenticated active user is required', 401);
+  }
+  return deleteAccountLifecycle(authContext.user_id, 'SELF', env, db);
+}
+
+export async function saveCapacityPolicy(authContext, input, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const source = jsonObject(input);
+  const enabled = source.admission_enabled;
+  const maxUsers = source.max_users;
+  const warningPercent = source.warning_percent;
+
+  if (enabled != null && typeof enabled !== 'boolean') throw httpError('admission_enabled must be boolean', 400);
+  if (maxUsers != null && (!Number.isInteger(Number(maxUsers)) || Number(maxUsers) < 1)) {
+    throw httpError('max_users must be a positive integer or null', 400);
+  }
+  if (warningPercent != null && (!Number.isInteger(Number(warningPercent)) || Number(warningPercent) < 1 || Number(warningPercent) > 100)) {
+    throw httpError('warning_percent must be 1-100', 400);
+  }
+
+  const current = await db.query(
+    'SELECT admission_enabled, max_users, warning_percent FROM account_capacity_policy WHERE singleton=true',
+  );
+  const row = current.rows?.[0] || { admission_enabled:true, max_users:null, warning_percent:70 };
+  const next = {
+    admission_enabled:enabled == null ? row.admission_enabled !== false : enabled,
+    max_users:Object.hasOwn(source, 'max_users') ? (maxUsers == null ? null : Number(maxUsers)) : row.max_users,
+    warning_percent:warningPercent == null ? Number(row.warning_percent || 70) : Number(warningPercent),
+  };
+  await db.query(
+    `INSERT INTO account_capacity_policy(singleton, admission_enabled, max_users, warning_percent, updated_at)
+     VALUES (true, $1, $2, $3, now())
+     ON CONFLICT(singleton)
+     DO UPDATE SET admission_enabled=EXCLUDED.admission_enabled,
+                   max_users=EXCLUDED.max_users,
+                   warning_percent=EXCLUDED.warning_percent,
+                   updated_at=now()`,
+    [next.admission_enabled, next.max_users, next.warning_percent],
+  );
+  return next;
+}
+
+export async function schedulerConfig(authContext, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const result = await db.query(
+    `SELECT c.enabled, c.schedule_expression, c.timezone, c.updated_at,
+            s.last_triggered_at, s.last_run_id, s.state
+       FROM scheduler_config c
+       LEFT JOIN scheduler_state s ON s.singleton = true
+      WHERE c.singleton = true`,
+  );
+  return result.rows?.[0] || {
+    enabled:false,
+    schedule_expression:null,
+    timezone:'Europe/Bucharest',
+    last_triggered_at:null,
+    last_run_id:null,
+    state:{},
+  };
+}
+
+export async function saveSchedulerConfig(authContext, input, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const source = jsonObject(input);
+  const enabled = source.enabled;
+  const expression = source.schedule_expression;
+  const timezone = source.timezone;
+
+  if (enabled != null && typeof enabled !== 'boolean') throw httpError('enabled must be boolean', 400);
+  if (expression != null && (typeof expression !== 'string' || expression.length > 200)) {
+    throw httpError('schedule_expression is invalid', 400);
+  }
+  if (timezone != null && (typeof timezone !== 'string' || timezone.length > 100)) {
+    throw httpError('timezone is invalid', 400);
+  }
+
+  const current = await schedulerConfig(authContext, env, { db });
+  const next = {
+    enabled:enabled == null ? Boolean(current.enabled) : enabled,
+    schedule_expression:Object.hasOwn(source, 'schedule_expression') ? (expression || null) : current.schedule_expression,
+    timezone:timezone == null ? (current.timezone || 'Europe/Bucharest') : timezone,
+  };
+  await db.query(
+    `INSERT INTO scheduler_config(singleton, enabled, schedule_expression, timezone, updated_at)
+     VALUES (true, $1, $2, $3, now())
+     ON CONFLICT(singleton)
+     DO UPDATE SET enabled=EXCLUDED.enabled,
+                   schedule_expression=EXCLUDED.schedule_expression,
+                   timezone=EXCLUDED.timezone,
+                   updated_at=now()`,
+    [next.enabled, next.schedule_expression, next.timezone],
+  );
+  return next;
+}
+
+export async function capacityStatus(authContext, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const [countResult, policyResult] = await Promise.all([
+    db.query('SELECT count(*)::integer AS count FROM app_user'),
+    db.query('SELECT admission_enabled, max_users, warning_percent FROM account_capacity_policy WHERE singleton=true'),
+  ]);
+  const policy = policyResult.rows?.[0] || {};
+  const envLimit = accountLimitFromEnv(env);
+  const limit = policy.max_users == null ? envLimit : Number(policy.max_users);
+  const count = Number(countResult.rows?.[0]?.count || 0);
+  const warningPercent = Number(policy.warning_percent || 70);
+  return {
+    users:count,
+    max_users:limit,
+    admission_enabled:policy.admission_enabled !== false,
+    warning_percent:warningPercent,
+    usage_percent:limit ? Math.round((count / limit) * 10000) / 100 : null,
+    warning:limit ? count / limit >= warningPercent / 100 : null,
+    prod_guard_configured:String(env.APP_ENV || '').toLowerCase() !== 'prod' || Boolean(limit),
+  };
+} + (aggregateParams.length + 1);
+    const thresholdParam = '
+    const jobs = [];
+    let excluded = 0;
+    let inspected = 0;
+    let cacheHits = 0;
+    let evaluationsComputed = 0;
+    let pageEndIndex = -1;
+
+    const resolveRow = async row => {
+      if (evaluationCacheValid(row, foundation)) {
+        cacheHits += 1;
+        const evaluation = cachedEvaluation(row);
+        return {
+          evaluation,
+          job:evaluation.eligible ? materializeCachedJob(row, evaluation, preferences, anchor) : null,
+        };
+      }
+      evaluationsComputed += 1;
+      const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
+      await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
+      return { evaluation, job:evaluation.job };
+    };
+
+    for (let index = 0; index < rows.length; index += 1) {
+      const resolved = await resolveRow(rows[index]);
+      inspected += 1;
+      pageEndIndex = index;
+      if (!resolved.evaluation.eligible) {
+        excluded += 1;
+        continue;
+      }
+      if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
+      jobs.push(resolved.job);
+      if (jobs.length >= spec.limit) break;
+    }
+
+    let prefetched = 0;
+    if (pageEndIndex >= 0 && spec.prefetch > 0) {
+      for (let index = pageEndIndex + 1; index < rows.length && prefetched < spec.prefetch; index += 1) {
+        await resolveRow(rows[index]);
+        prefetched += 1;
+      }
+    }
+
+    const exhaustedWindow = rows.length < candidateLimit;
+    const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
+    const hasMore = Boolean(cursorRow)
+      && (!exhaustedWindow || pageEndIndex < rows.length - 1);
+    const nextCursor = hasMore ? encodeJobCursor({ ...cursorRow, anchor }) : null;
+
+    return {
+      schema_version:'2.0',
+      generated_at:anchor.toISOString(),
+      search_profile_id:foundation.search_profile_id,
+      profile_version:foundation.profile_version,
+      fit_algorithm_version:FIT_ALGORITHM_VERSION,
+      bounded:true,
+      limit:spec.limit,
+      next_cursor:nextCursor,
+      freshness_hours:Number(preferences.freshness_hours ?? 24),
+      collection_freshness_hours:Number(preferences.collection_freshness_hours ?? preferences.freshness_hours ?? 24),
+      criteria:{ fit_threshold:Number(preferences.fit_threshold ?? 80) },
+      records_inspected:inspected,
+      candidate_window:rows.length,
+      excluded_count:excluded,
+      cache_hits:cacheHits,
+      evaluations_computed:evaluationsComputed,
+      prefetched,
+      results:jobs.length,
+      aggregate_counts:{ status:'INCOMPLETE', totals:null, scope:'profile_filtered', reason:'Full profile-wide evaluation not complete' },
+      jobs,
+    };
+  }, { env, db });
+}
+
+export async function nomenclatureReferenceCount(domain, code, env = process.env, { db = getPool(env) } = {}) {
+  return crossTenantNomenclatureReferenceCount(domain, code, env, { db });
+}
+
+export async function operationalHistory(authContext, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const result = await db.query(
+    `SELECT payload
+       FROM search_runs
+      ORDER BY COALESCE(completed_at, started_at, created_at) DESC, run_id DESC
+      LIMIT 10`,
+  );
+  return {
+    schema_version:'1.0',
+    runs:(result.rows || []).map(row => jsonObject(row.payload)),
+  };
+}
+
+export async function setJobState(authContext, jobId, patch, env = process.env, { db = getPool(env) } = {}) {
+  const archived = patch?.archived;
+  const seen = patch?.seen;
+  if (archived != null && typeof archived !== 'boolean') throw httpError('archived must be boolean', 400);
+  if (seen != null && typeof seen !== 'boolean') throw httpError('seen must be boolean', 400);
+
+  return withTenantTransaction(authContext, async tx => {
+    const exists = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id = $1', [jobId]);
+    if (!exists.rows?.length) throw httpError('Job not found', 404);
+    const result = await tx.query(
+      `INSERT INTO profile_job_state(tenant_id, job_id, seen_at, archived_at, updated_at)
+       VALUES ($1, $2,
+               CASE WHEN $3::boolean THEN now() ELSE NULL END,
+               CASE WHEN $4::boolean THEN now() ELSE NULL END,
+               now())
+       ON CONFLICT(tenant_id, job_id)
+       DO UPDATE SET
+         seen_at = CASE WHEN $3::boolean THEN COALESCE(profile_job_state.seen_at, now())
+                        WHEN $3::boolean = false THEN NULL ELSE profile_job_state.seen_at END,
+         archived_at = CASE WHEN $4::boolean THEN COALESCE(profile_job_state.archived_at, now())
+                            WHEN $4::boolean = false THEN NULL ELSE profile_job_state.archived_at END,
+         updated_at = now()
+       RETURNING job_id, seen_at, archived_at`,
+      [authContext.profile_id, jobId, seen ?? null, archived ?? null],
+    );
+    return result.rows[0];
+  }, { env, db });
+}
+
+export async function listApplications(authContext, env = process.env, { db = getPool(env) } = {}) {
+  return withTenantTransaction(authContext, async tx => {
+    const result = await tx.query(
+      `SELECT application_id AS id, job_id, company, title, location, countries,
+              reference, status, applied_at, next_status_check, source_url AS url
+         FROM applications
+        WHERE tenant_id = $1
+        ORDER BY applied_at DESC NULLS LAST, created_at DESC`,
+      [authContext.profile_id],
+    );
+    return { schema_version:'1.0', applications:result.rows || [] };
+  }, { env, db });
+}
+
+function applicationInput(input, { partial = false } = {}) {
+  const source = jsonObject(input);
+  const output = {};
+  for (const key of ['company','title','location','reference','status','applied_at','next_status_check','url','job_id']) {
+    if (Object.hasOwn(source, key)) output[key] = source[key] == null ? null : String(source[key]).trim();
+  }
+  if (Object.hasOwn(source, 'countries')) {
+    if (!Array.isArray(source.countries)) throw httpError('countries must be a list', 400);
+    output.countries = source.countries.map(x => String(x || '').trim()).filter(Boolean);
+  }
+  if (!partial && (!output.company || !output.title || !output.status)) {
+    throw httpError('company, title and status are required', 400);
+  }
+  return output;
+}
+
+async function validateSharedJobReference(tx, jobId) {
+  if (!jobId) return;
+  const result = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id=$1', [jobId]);
+  if (!result.rows?.length) throw httpError('Job not found', 404);
+}
+
+export async function createApplication(authContext, input, env = process.env, { db = getPool(env) } = {}) {
+  const value = applicationInput(input);
+  const id = randomUUID();
+  return withTenantTransaction(authContext, async tx => {
+    await validateSharedJobReference(tx, value.job_id || null);
+    const result = await tx.query(
+      `INSERT INTO applications(
+          tenant_id, application_id, job_id, company, title, location, countries,
+          reference, status, applied_at, next_status_check, source_url, snapshot
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13::jsonb)
+        RETURNING application_id AS id, job_id, company, title, location, countries,
+                  reference, status, applied_at, next_status_check, source_url AS url`,
+      [
+        authContext.profile_id, id, value.job_id || null, value.company, value.title,
+        value.location || null, JSON.stringify(value.countries || []), value.reference || null,
+        value.status, value.applied_at || null, value.next_status_check || null, value.url || null,
+        JSON.stringify(value),
+      ],
+    );
+    return result.rows[0];
+  }, { env, db });
+}
+
+export async function updateApplication(authContext, applicationId, input, env = process.env, { db = getPool(env) } = {}) {
+  const value = applicationInput(input, { partial:true });
+  return withTenantTransaction(authContext, async tx => {
+    const current = await tx.query(
+      'SELECT * FROM applications WHERE tenant_id = $1 AND application_id = $2',
+      [authContext.profile_id, applicationId],
+    );
+    const row = current.rows?.[0];
+    if (!row) throw httpError('Application not found', 404);
+    const next = {
+      job_id:Object.hasOwn(value,'job_id') ? value.job_id : row.job_id,
+      company:Object.hasOwn(value,'company') ? value.company : row.company,
+      title:Object.hasOwn(value,'title') ? value.title : row.title,
+      location:Object.hasOwn(value,'location') ? value.location : row.location,
+      countries:Object.hasOwn(value,'countries') ? value.countries : row.countries,
+      reference:Object.hasOwn(value,'reference') ? value.reference : row.reference,
+      status:Object.hasOwn(value,'status') ? value.status : row.status,
+      applied_at:Object.hasOwn(value,'applied_at') ? value.applied_at : row.applied_at,
+      next_status_check:Object.hasOwn(value,'next_status_check') ? value.next_status_check : row.next_status_check,
+      url:Object.hasOwn(value,'url') ? value.url : row.source_url,
+    };
+    await validateSharedJobReference(tx, next.job_id || null);
+    const result = await tx.query(
+      `UPDATE applications
+          SET job_id=$1, company=$2, title=$3, location=$4, countries=$5::jsonb,
+              reference=$6, status=$7, applied_at=$8, next_status_check=$9,
+              source_url=$10, updated_at=now()
+        WHERE tenant_id=$11 AND application_id=$12
+        RETURNING application_id AS id, job_id, company, title, location, countries,
+                  reference, status, applied_at, next_status_check, source_url AS url`,
+      [
+        next.job_id || null, next.company, next.title, next.location || null,
+        JSON.stringify(next.countries || []), next.reference || null, next.status,
+        next.applied_at || null, next.next_status_check || null, next.url || null,
+        authContext.profile_id, applicationId,
+      ],
+    );
+    return result.rows[0];
+  }, { env, db });
+}
+
+export async function deleteApplication(authContext, applicationId, env = process.env, { db = getPool(env) } = {}) {
+  return withTenantTransaction(authContext, async tx => {
+    const result = await tx.query(
+      'DELETE FROM applications WHERE tenant_id = $1 AND application_id = $2 RETURNING application_id',
+      [authContext.profile_id, applicationId],
+    );
+    if (!result.rows?.length) throw httpError('Application not found', 404);
+    return true;
+  }, { env, db });
+}
+
+function requireAdmin(authContext) {
+  if (authContext?.role !== 'ADMIN') throw httpError('ADMIN role required', 403);
+}
+
+export async function listAccounts(authContext, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const result = await db.query(
+    `SELECT a.user_id, a.role, a.status, a.created_at, a.updated_at,
+            i.email, i.email_verified,
+            (SELECT max(s.created_at) FROM user_session s WHERE s.user_id = a.user_id) AS last_login_at
+       FROM app_user a
+       LEFT JOIN user_identity i ON i.user_id = a.user_id AND i.provider = 'GOOGLE'
+      ORDER BY a.created_at ASC, a.user_id ASC`,
+  );
+  return result.rows || [];
+}
+
+export async function setAccountStatus(authContext, userId, status, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  if (!['ACTIVE','DEACTIVATED'].includes(status)) throw httpError('Invalid account status', 400);
+
+  if (status === 'ACTIVE') {
+    const state = await accountStateForUser(db, userId);
+    if (!state) throw httpError('Account not found', 404);
+    if (state.deletion_started_at) throw httpError('Account deletion is irreversible and already in progress', 409);
+    assertSharedAccountReady({ ...state, status:'ACTIVE' });
+    await verifyTenantMapping(String(state.profile_id), { env, db });
+  }
+
+  return withTransaction(async tx => {
+    await lockAccountLifecycle(tx, userId);
+    const current = await accountStateForUser(tx, userId);
+    if (!current) throw httpError('Account not found', 404);
+    if (status === 'ACTIVE' && current.deletion_started_at) {
+      throw httpError('Account deletion is irreversible and already in progress', 409);
+    }
+    const result = await tx.query(
+      'UPDATE app_user SET status=$1, updated_at=now() WHERE user_id=$2 RETURNING user_id, role, status',
+      [status, userId],
+    );
+    if (status === 'DEACTIVATED') {
+      await tx.query('UPDATE user_session SET revoked_at=COALESCE(revoked_at, now()) WHERE user_id=$1', [userId]);
+    }
+    return result.rows[0];
+  }, { env, db });
+}
+
+async function startAccountDeletion(userId, actorKind, env, db) {
+  return withTransaction(async tx => {
+    await lockAccountLifecycle(tx, userId);
+    const target = await resolveAccountDeletionTarget(tx, userId);
+    if (target.result === 'NOT_FOUND') return target;
+
+    const started = await tx.query(
+      `UPDATE app_user
+          SET deletion_started_at=COALESCE(deletion_started_at, now()),
+              deletion_initiated_by=COALESCE(deletion_initiated_by, $2),
+              status='DEACTIVATED',
+              updated_at=now()
+        WHERE user_id=$1
+        RETURNING deletion_started_at, deletion_initiated_by`,
+      [userId, actorKind],
+    );
+    await tx.query(
+      'UPDATE user_session SET revoked_at=COALESCE(revoked_at, now()) WHERE user_id=$1',
+      [userId],
+    );
+    return Object.freeze({
+      ...target,
+      deletion_started_at:started.rows?.[0]?.deletion_started_at || target.deletion_started_at,
+      deletion_initiated_by:started.rows?.[0]?.deletion_initiated_by || target.deletion_initiated_by || actorKind,
+    });
+  }, { env, db });
+}
+
+async function finalizeAccountDeletion(target, env, db) {
+  return withTransaction(async tx => {
+    await lockAccountLifecycle(tx, target.user_id);
+    const current = await resolveAccountDeletionTarget(tx, target.user_id);
+    if (current.result === 'NOT_FOUND') return { result:'DELETED' };
+    if (!current.deletion_started_at) throw httpError('Account deletion progress marker is missing', 409);
+
+    const deleted = await tx.query(
+      'DELETE FROM app_user WHERE user_id=$1 RETURNING user_id',
+      [target.user_id],
+    );
+    if (!deleted.rows?.length) throw httpError('Account lifecycle delete lost target account', 409);
+
+    await tx.query(
+      `INSERT INTO account_deletion_audit(audit_id, event_type, actor_kind, result)
+       VALUES ($1, 'ACCOUNT_DELETE', $2, 'DELETED')`,
+      [randomUUID(), current.deletion_initiated_by || target.deletion_initiated_by || 'ADMIN'],
+    );
+    return { result:'DELETED' };
+  }, { env, db });
+}
+
+async function verifySharedAccountResidue(target, db) {
+  const result = await db.query(
+    `SELECT
+       (SELECT count(*)::integer FROM profile WHERE profile_id=$1) AS profiles,
+       (SELECT count(*)::integer FROM app_user WHERE user_id=$2) AS users,
+       (SELECT count(*)::integer FROM user_identity WHERE user_id=$2) AS identities,
+       (SELECT count(*)::integer FROM user_session WHERE user_id=$2) AS sessions`,
+    [target.profile_id, target.user_id],
+  );
+  if (Object.values(result.rows?.[0] || {}).some(value => Number(value) !== 0)) {
+    throw httpError('Account lifecycle delete left shared account residue', 503);
+  }
+}
+
+async function deleteAccountLifecycle(userId, actorKind, env, db) {
+  const target = await startAccountDeletion(userId, actorKind, env, db);
+  if (target.result === 'NOT_FOUND') {
+    await db.query(
+      `INSERT INTO account_deletion_audit(audit_id, event_type, actor_kind, result)
+       VALUES ($1, 'ACCOUNT_DELETE', $2, 'NOT_FOUND')`,
+      [randomUUID(), actorKind],
+    );
+    return { result:'NOT_FOUND' };
+  }
+
+  await deleteTenantDomain(target.profile_id, { env, db });
+  await verifyTenantPersonalResidue(target.profile_id, { env, db });
+  const deletion = await finalizeAccountDeletion(target, env, db);
+  await verifySharedAccountResidue(target, db);
+  return deletion;
+}
+
+export async function deleteAccount(authContext, userId, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  return deleteAccountLifecycle(userId, 'ADMIN', env, db);
+}
+
+export async function deleteOwnAccount(authContext, env = process.env, { db = getPool(env) } = {}) {
+  if (!authContext?.user_id || authContext?.status !== 'ACTIVE') {
+    throw httpError('Authenticated active user is required', 401);
+  }
+  return deleteAccountLifecycle(authContext.user_id, 'SELF', env, db);
+}
+
+export async function saveCapacityPolicy(authContext, input, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const source = jsonObject(input);
+  const enabled = source.admission_enabled;
+  const maxUsers = source.max_users;
+  const warningPercent = source.warning_percent;
+
+  if (enabled != null && typeof enabled !== 'boolean') throw httpError('admission_enabled must be boolean', 400);
+  if (maxUsers != null && (!Number.isInteger(Number(maxUsers)) || Number(maxUsers) < 1)) {
+    throw httpError('max_users must be a positive integer or null', 400);
+  }
+  if (warningPercent != null && (!Number.isInteger(Number(warningPercent)) || Number(warningPercent) < 1 || Number(warningPercent) > 100)) {
+    throw httpError('warning_percent must be 1-100', 400);
+  }
+
+  const current = await db.query(
+    'SELECT admission_enabled, max_users, warning_percent FROM account_capacity_policy WHERE singleton=true',
+  );
+  const row = current.rows?.[0] || { admission_enabled:true, max_users:null, warning_percent:70 };
+  const next = {
+    admission_enabled:enabled == null ? row.admission_enabled !== false : enabled,
+    max_users:Object.hasOwn(source, 'max_users') ? (maxUsers == null ? null : Number(maxUsers)) : row.max_users,
+    warning_percent:warningPercent == null ? Number(row.warning_percent || 70) : Number(warningPercent),
+  };
+  await db.query(
+    `INSERT INTO account_capacity_policy(singleton, admission_enabled, max_users, warning_percent, updated_at)
+     VALUES (true, $1, $2, $3, now())
+     ON CONFLICT(singleton)
+     DO UPDATE SET admission_enabled=EXCLUDED.admission_enabled,
+                   max_users=EXCLUDED.max_users,
+                   warning_percent=EXCLUDED.warning_percent,
+                   updated_at=now()`,
+    [next.admission_enabled, next.max_users, next.warning_percent],
+  );
+  return next;
+}
+
+export async function schedulerConfig(authContext, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const result = await db.query(
+    `SELECT c.enabled, c.schedule_expression, c.timezone, c.updated_at,
+            s.last_triggered_at, s.last_run_id, s.state
+       FROM scheduler_config c
+       LEFT JOIN scheduler_state s ON s.singleton = true
+      WHERE c.singleton = true`,
+  );
+  return result.rows?.[0] || {
+    enabled:false,
+    schedule_expression:null,
+    timezone:'Europe/Bucharest',
+    last_triggered_at:null,
+    last_run_id:null,
+    state:{},
+  };
+}
+
+export async function saveSchedulerConfig(authContext, input, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const source = jsonObject(input);
+  const enabled = source.enabled;
+  const expression = source.schedule_expression;
+  const timezone = source.timezone;
+
+  if (enabled != null && typeof enabled !== 'boolean') throw httpError('enabled must be boolean', 400);
+  if (expression != null && (typeof expression !== 'string' || expression.length > 200)) {
+    throw httpError('schedule_expression is invalid', 400);
+  }
+  if (timezone != null && (typeof timezone !== 'string' || timezone.length > 100)) {
+    throw httpError('timezone is invalid', 400);
+  }
+
+  const current = await schedulerConfig(authContext, env, { db });
+  const next = {
+    enabled:enabled == null ? Boolean(current.enabled) : enabled,
+    schedule_expression:Object.hasOwn(source, 'schedule_expression') ? (expression || null) : current.schedule_expression,
+    timezone:timezone == null ? (current.timezone || 'Europe/Bucharest') : timezone,
+  };
+  await db.query(
+    `INSERT INTO scheduler_config(singleton, enabled, schedule_expression, timezone, updated_at)
+     VALUES (true, $1, $2, $3, now())
+     ON CONFLICT(singleton)
+     DO UPDATE SET enabled=EXCLUDED.enabled,
+                   schedule_expression=EXCLUDED.schedule_expression,
+                   timezone=EXCLUDED.timezone,
+                   updated_at=now()`,
+    [next.enabled, next.schedule_expression, next.timezone],
+  );
+  return next;
+}
+
+export async function capacityStatus(authContext, env = process.env, { db = getPool(env) } = {}) {
+  requireAdmin(authContext);
+  const [countResult, policyResult] = await Promise.all([
+    db.query('SELECT count(*)::integer AS count FROM app_user'),
+    db.query('SELECT admission_enabled, max_users, warning_percent FROM account_capacity_policy WHERE singleton=true'),
+  ]);
+  const policy = policyResult.rows?.[0] || {};
+  const envLimit = accountLimitFromEnv(env);
+  const limit = policy.max_users == null ? envLimit : Number(policy.max_users);
+  const count = Number(countResult.rows?.[0]?.count || 0);
+  const warningPercent = Number(policy.warning_percent || 70);
+  return {
+    users:count,
+    max_users:limit,
+    admission_enabled:policy.admission_enabled !== false,
+    warning_percent:warningPercent,
+    usage_percent:limit ? Math.round((count / limit) * 10000) / 100 : null,
+    warning:limit ? count / limit >= warningPercent / 100 : null,
+    prod_guard_configured:String(env.APP_ENV || '').toLowerCase() !== 'prod' || Boolean(limit),
+  };
+} + (aggregateParams.length + 2);
+    const countResult = await tx.query(
+      `SELECT COUNT(*)::integer AS candidates,
+        COUNT(*) FILTER (WHERE cached_profile_version IS DISTINCT FROM $3::integer
+          OR cached_job_version IS DISTINCT FROM job_version
+          OR cached_fit_algorithm_version IS DISTINCT FROM ${algorithmParam}::text)::integer AS unevaluated,
+        COUNT(*) FILTER (WHERE cached_eligible IS TRUE)::integer AS all_count,
+        COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND cached_score >= ${thresholdParam}::integer)::integer AS high,
+        COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND lower(coalesce(work_mode,'unknown')) = 'remote')::integer AS remote,
+        COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND repost_of_posting_id IS NOT NULL)::integer AS reposts,
+        COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND sort_at >= $2::timestamptz - interval '24 hours')::integer AS new24h
+        FROM (${aggregateSql}) full_scope`,
+      [...aggregateParams, FIT_ALGORITHM_VERSION, Number(preferences.fit_threshold ?? 80)],
+    );
+    const countRow = countResult.rows[0];
+    let aggregateCounts = {status:'INCOMPLETE',totals:null,scope:'profile_filtered',
+      reason:'Global FIT cache not fully evaluated',remaining:Number(countRow.unevaluated)};
+    if (Number(countRow.unevaluated) === 0) {
+      const totals = {all:Number(countRow.all_count),high:Number(countRow.high),
+        remote:Number(countRow.remote),reposts:Number(countRow.reposts),
+        jobs:Number(countRow.new24h)};
+      const scopeKey = createHash('sha256').update(JSON.stringify({
+        query:spec.q,workModes:spec.work_mode,contractTypes:spec.contract_type,
+        roleFamilies:spec.role_family,roleSubfamilies:spec.role_subfamily,
+        freshnessHours:spec.freshness_hours,archived:spec.include_archived,
+        minFit:spec.min_fit,asOf:anchor.toISOString().slice(0,10),
+      })).digest('hex');
+      await tx.query(
+        `INSERT INTO profile_job_count_snapshots
+          (tenant_id,search_profile_id,scope_key,profile_version,fit_algorithm_version,totals,evaluated_at)
+         VALUES ($1,$2,$3,$4,$5,$6::jsonb,now())
+         ON CONFLICT (tenant_id,search_profile_id,scope_key)
+         DO UPDATE SET profile_version=EXCLUDED.profile_version,
+           fit_algorithm_version=EXCLUDED.fit_algorithm_version,totals=EXCLUDED.totals,
+           evaluated_at=now()`,
+        [tx.tenantId,foundation.search_profile_id,scopeKey,foundation.profile_version,
+          FIT_ALGORITHM_VERSION,JSON.stringify(totals)],
+      );
+      aggregateCounts = {status:'COMPLETE',totals,scope:'profile_filtered',remaining:0};
+    }
+
     const rows = rowsResult.rows || [];
     const jobs = [];
     let excluded = 0;
