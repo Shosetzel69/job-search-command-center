@@ -21,7 +21,7 @@ test('profile jobs are bounded and paginated in the UI', () => {
   assert.match(main, /Navigare pagini joburi/);
   assert.match(main, /Urmatoarea/);
   assert.match(main, /Anterioara/);
-  assert.match(main, /rezultate de profil incarcate/);
+  assert.match(main, /rezultate pe pagina/);
 });
 
 test('new profiles receive onboarding without forced Retrieve', () => {
