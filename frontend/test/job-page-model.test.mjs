@@ -59,3 +59,10 @@ test('F-04 navigation reports exact page boundaries for a known database total',
 test('F-04 no invented page total while the database aggregate is unknown', () => {
   assert.deepEqual(pageBounds(1, null), {page:1,pageCount:null,canPrevious:false,canNext:null});
 });
+
+test('F-04 API reports pending aggregate totals without presenting a fabricated value', () => {
+  const page = validateJobsPage({ schema_version:'2.0', bounded:true, jobs:[{id:'a'}],
+    aggregate_counts:{status:'INCOMPLETE', totals:null, scope:'profile_filtered'} });
+  assert.equal(page.aggregate_counts.status,'INCOMPLETE');
+  assert.equal(page.aggregate_counts.totals,null);
+});
