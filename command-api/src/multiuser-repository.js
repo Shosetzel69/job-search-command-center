@@ -1255,8 +1255,9 @@ export async function listProfileJobs(
     );
     const algorithmParam = '$' + (aggregateParams.length + 1);
     const thresholdParam = '$' + (aggregateParams.length + 2);
+    const versionParam = '$' + (aggregateParams.length + 3);
     const countResult = await tx.query(`SELECT
-      COUNT(*) FILTER (WHERE cached_profile_version IS DISTINCT FROM $3
+      COUNT(*) FILTER (WHERE cached_profile_version IS DISTINCT FROM ${versionParam}
         OR cached_job_version IS DISTINCT FROM job_version
         OR cached_fit_algorithm_version IS DISTINCT FROM ${algorithmParam})::integer AS pending,
       COUNT(*) FILTER (WHERE cached_eligible IS TRUE)::integer AS total,
@@ -1265,12 +1266,28 @@ export async function listProfileJobs(
       COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND repost_of_posting_id IS NOT NULL)::integer AS reposts,
       COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND sort_at >= $2::timestamptz - interval '24 hours')::integer AS jobs
       FROM (${fullScopeSql}) full_scope`,
-      [...aggregateParams, FIT_ALGORITHM_VERSION, Number(preferences.fit_threshold ?? 80)]);
+      [...aggregateParams, FIT_ALGORITHM_VERSION, Number(preferences.fit_threshold ?? 80), foundation.profile_version]);
     const c = countResult.rows[0];
     const aggregateCounts = Number(c.pending) === 0
       ? {status:'COMPLETE',scope:'profile_filtered',totals:{all:Number(c.total),
           high:Number(c.high),remote:Number(c.remote),reposts:Number(c.reposts),jobs:Number(c.jobs)}}
       : {status:'INCOMPLETE',scope:'profile_filtered',totals:null,remaining:Number(c.pending)};
+    if (aggregateCounts.status === 'COMPLETE') {
+      const scopeKey = createHash('sha256').update(JSON.stringify({
+        q:spec.q,roleFamilies:spec.role_family,roleSubfamilies:spec.role_subfamily,
+        modes:spec.work_mode,contracts:spec.contract_type,freshness:spec.freshness_hours,
+        archived:spec.include_archived,minFit:spec.min_fit,asOf:anchor.toISOString().slice(0,10),
+      })).digest('hex');
+      await tx.query(`INSERT INTO profile_job_count_snapshots
+        (tenant_id,search_profile_id,scope_key,profile_version,fit_algorithm_version,totals)
+        VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+        ON CONFLICT (tenant_id,search_profile_id,scope_key)
+        DO UPDATE SET profile_version=EXCLUDED.profile_version,
+        fit_algorithm_version=EXCLUDED.fit_algorithm_version,
+        totals=EXCLUDED.totals,evaluated_at=now()`,
+        [tx.tenantId,foundation.search_profile_id,scopeKey,foundation.profile_version,
+         FIT_ALGORITHM_VERSION,JSON.stringify(aggregateCounts.totals)]);
+    }
     const exhaustedWindow = rows.length < candidateLimit;
     const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
     const hasMore = Boolean(cursorRow)
