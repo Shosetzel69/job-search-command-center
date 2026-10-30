@@ -1087,6 +1087,8 @@ export async function listProfileJobs(
       const p = add(spec.freshness_hours);
       where.push(`COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) >= $2 - (${p}::integer * interval '1 hour')`);
     }
+    const aggregateWhere = [...where];
+    const aggregateParams = [...params];
     if (spec.cursor) {
       const at = add(spec.cursor.sort_at);
       const id = add(spec.cursor.job_id);
@@ -1105,8 +1107,7 @@ export async function listProfileJobs(
     );
     const limitParam = add(candidateLimit);
 
-    const rowsResult = await tx.query(
-      `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
+    const candidateSql = `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
               j.role_family, j.role_subfamily, j.seniority, j.contract_type,
               j.remote_scope, j.job_version, j.classification_status,
               j.classification_confidence, j.classification_version,
@@ -1196,9 +1197,10 @@ export async function listProfileJobs(
            ON eval.tenant_id = $1
           AND eval.search_profile_id = $3
           AND eval.job_id = j.job_id
-        WHERE ${where.join('\n          AND ')}
-        ORDER BY COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) DESC, j.job_id ASC
-        LIMIT ${limitParam}::integer`,
+        WHERE ${where.join('\n          AND ')}`;
+    const candidateOrderSql = ' ORDER BY sort_at DESC, job_id ASC';
+    const rowsResult = await tx.query(
+      `SELECT * FROM (${candidateSql}) candidates${candidateOrderSql} LIMIT ${limitParam}::integer`,
       params,
     );
 
