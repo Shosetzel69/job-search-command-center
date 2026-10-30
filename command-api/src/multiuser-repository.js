@@ -1312,10 +1312,10 @@ export async function listProfileJobs(
       const base = aggregateParams.length;
       const ranked = await tx.query(
         `SELECT * FROM (${fullScopeSql}) ranked
-          WHERE cached_eligible IS TRUE AND cached_score >= $${base + 1}::integer
+          WHERE cached_eligible IS TRUE AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)
           ORDER BY cached_score ${spec.sort_fit === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, sort_at DESC, job_id ASC
           LIMIT $${base + 2}::integer OFFSET $${base + 3}::integer`,
-        [...aggregateParams, spec.min_fit ?? -1, spec.limit, fitOffset],
+        [...aggregateParams, spec.min_fit, spec.limit, fitOffset],
       );
       const rankedJobs = ranked.rows.map(row =>
         materializeCachedJob(row, cachedEvaluation(row), preferences, anchor));
@@ -1323,7 +1323,7 @@ export async function listProfileJobs(
         ? aggregateCounts.totals.all
         : Number((await tx.query(
             `SELECT COUNT(*)::integer AS total FROM (${fullScopeSql}) ranked
-              WHERE cached_eligible IS TRUE AND cached_score >= $${base + 1}::integer`,
+              WHERE cached_eligible IS TRUE AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)`,
             [...aggregateParams,spec.min_fit],
           )).rows[0].total);
       return {
