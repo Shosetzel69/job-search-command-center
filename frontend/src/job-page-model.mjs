@@ -27,6 +27,7 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_S
   params.set('prefetch', String(prefetch));
   const q = String(filters.search || '').trim();
   if (q) params.set('q', q.slice(0, 200));
+  if (filters.sort === 'fit-desc') params.set('sort_fit','desc');
   const freshness = Number(filters.freshness);
   if (Number.isInteger(freshness) && freshness > 0) params.set('freshness_hours', String(freshness));
   const modes = Array.isArray(filters.workModes) ? filters.workModes : [];
