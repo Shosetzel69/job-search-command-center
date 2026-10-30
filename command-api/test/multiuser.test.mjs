@@ -10,6 +10,7 @@ import {
   decodeJobCursor,
   deterministicTenantEntityUuid,
   encodeJobCursor,
+  encodeFitCursor,
   mergeEffectiveConfig,
   normalizeJobSearchQuery,
   ownerBootstrapPending,
@@ -771,4 +772,14 @@ test('preference response changed flag reflects semantic personal change only', 
     false,
     'system collection policy must not affect personal semantic changed flag',
   );
+});
+test('F-03 stable opaque global FIT pagination cursor round-trip', () => {
+  const anchor = new Date('2026-10-30T02:00:00Z');
+  const cursor = encodeFitCursor(20, anchor);
+  assert.deepEqual(decodeJobCursor(cursor), {fit_offset:20,as_of:anchor.toISOString()});
+  assert.throws(() => encodeFitCursor(-1, anchor), /Invalid FIT cursor offset/);
+  assert.throws(() => decodeJobCursor(Buffer.from(JSON.stringify(
+    {v:3,sort:'fit-desc',offset:-1,as_of:anchor.toISOString()})).toString('base64url')), /STALE_CURSOR/);
+  assert.equal(normalizeJobSearchQuery({sort_fit:'desc'}).sort_fit,'desc');
+  assert.equal(normalizeJobSearchQuery({sort_fit:'invalid'}).sort_fit,null);
 });
