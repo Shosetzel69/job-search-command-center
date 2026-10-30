@@ -72,5 +72,5 @@ test('F-03 frontend requests database-wide FIT sorting when user chooses descend
   assert.equal(url.searchParams.get('sort_fit'),'desc');
   assert.equal(url.searchParams.get('freshness_hours'),'48');
   const unsorted=new URL(buildJobsPath({filters:{sort:'fit-asc'}}),'https://example.test');
-  assert.equal(unsorted.searchParams.has('sort_fit'),false);
+  assert.equal(unsorted.searchParams.get('sort_fit'),'asc');
 });
