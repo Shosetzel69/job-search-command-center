@@ -5,9 +5,10 @@ export const TEST_IMAGE='ghcr.io/niledatabase/testingcontainer@sha256:8e670df2a4
 export const CI_USER='00000000-0000-0000-0000-000000000000';
 export const CI_PORT=55432;
 // Pinned Nile Testing Container: PostgreSQL SQL backend is reached through the
-// container's 5432/tcp gateway, but inet_server_port() reports internal PDB 5421.
+// container's 5432/tcp gateway, but inet_server_port() reports internal PDB 5420 or 5421.
 // Keep gateway/loopback attestation in admitNileCi(); never relax URL matching.
-export const NILE_NATIVE_BACKEND_PORT=5421;
+export const NILE_NATIVE_BACKEND_PORT=5420;
+export const NILE_NATIVE_BACKEND_PORTS=Object.freeze([5420,5421]);
 export const TARGET_KEYS=Object.freeze([
   'NILE_TEST_DATABASE_URL','NILE_DATABASE_URL','NILE_MIGRATION_DATABASE_URL',
   'JSCC_INTEGRATION_DATABASE_URL','JSCC_TEST_ADMIN_DATABASE_URL',
@@ -93,8 +94,18 @@ export async function attestNativeDatabase(db,{env=process.env}={}){
   if(row.db_name!=='jobsearch_dev' ||
      typeof row.principal!=='string' || !row.principal.trim() ||
      !Number.isInteger(Number(row.backend_pid)) || Number(row.backend_pid)<=0 ||
-     Number(row.server_port)!==NILE_NATIVE_BACKEND_PORT || row.challenge!==challenge)
-    deny('native SQL identity mismatch');
+     !NILE_NATIVE_BACKEND_PORTS.includes(Number(row.server_port)) || row.challenge!==challenge)
+    {
+      console.error('W025_NATIVE_IDENTITY_DIAGNOSTIC='+JSON.stringify({
+        database:String(row.db_name||''),
+        principal_present:typeof row.principal==='string'&&Boolean(row.principal.trim()),
+        pid_valid:Number.isInteger(Number(row.backend_pid))&&Number(row.backend_pid)>0,
+        reported_port:Number(row.server_port),
+        expected_ports:NILE_NATIVE_BACKEND_PORTS,
+        challenge_match:row.challenge===challenge,
+      }));
+      deny('native SQL identity mismatch');
+    }
   const attestation=Object.freeze({
     run,challenge,db_name:row.db_name,principal:row.principal,
     backend_pid:Number(row.backend_pid),server_port:Number(row.server_port)

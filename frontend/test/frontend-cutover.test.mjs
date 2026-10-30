@@ -18,8 +18,10 @@ test('ATC-489-06 frontend uses canonical profile APIs instead of legacy job/run 
 test('profile jobs are bounded and paginated in the UI', () => {
   assert.match(main, /nextCursor/);
   assert.match(main, /loadMoreJobs/);
-  assert.match(main, /Incarca mai multe/);
-  assert.match(main, /rezultate de profil incarcate/);
+  assert.match(main, /Navigare pagini joburi/);
+  assert.match(main, /Urmatoarea/);
+  assert.match(main, /Anterioara/);
+  assert.match(main, /rezultate pe pagina/);
 });
 
 test('new profiles receive onboarding without forced Retrieve', () => {
@@ -47,4 +49,22 @@ test('static frontend leaves canonical multiuser endpoints to Command API', () =
   assert.match(staticFrontend, /'\/me\/'/);
   assert.match(staticFrontend, /'\/admin\/'/);
   assert.match(staticFrontend, /'\/applications\/'/);
+});
+
+test('F-03 empty filtered page still preserves next-page navigation', () => {
+  const main = readFileSync(new URL('../src/main.jsx',import.meta.url),'utf8');
+  assert.match(main,/!rows\.length&&!loading&&!hasMore&&page===1/);
+  assert.match(main,/onClick=\{onNext\|\|onLoadMore\}/);
+});
+
+test('UI: job cards constrain long metadata and reserve space for actions',()=>{
+  assert.match(main,/min-w-0 overflow-hidden text-left/);
+  assert.match(main,/min-w-0 flex-wrap gap-1\.5/);
+});
+
+test('F-05 data-quality exclamation is accessible but does not change review membership',()=>{
+  assert.match(main,/function JobQualityMarker/);
+  assert.match(main,/Verifică datele jobului:/);
+  assert.match(main,/aria-expanded=\{open\}/);
+  assert.match(main,/reviewRowsForFilters\(activeJobs,filters,ageHours,threshold\)/);
 });

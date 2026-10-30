@@ -865,8 +865,8 @@ export async function sharedCorpusRefreshState(
 }
 
 
-const JOB_PAGE_DEFAULT = 25;
-const JOB_PAGE_MAX = 100;
+const JOB_PAGE_DEFAULT = 20;
+const JOB_PAGE_MAX = 20;
 const JOB_CANDIDATE_WINDOW_MAX = 400;
 const JOB_PREFETCH_MAX = 50;
 
@@ -898,6 +898,12 @@ export function encodeJobCursor(row) {
   return Buffer.from(JSON.stringify({ v:2, sort_at:sortAt, job_id:jobId, as_of:anchor }), 'utf8').toString('base64url');
 }
 
+export function encodeFitCursor(offset, anchor, sort = 'desc') {
+  if (!Number.isSafeInteger(offset) || offset < 0) throw httpError('Invalid FIT cursor offset', 400);
+  const asOf = anchor instanceof Date ? anchor.toISOString() : String(anchor);
+  return Buffer.from(JSON.stringify({v:3,sort:sort === 'asc' ? 'fit-asc' : 'fit-desc',offset,as_of:asOf}), 'utf8').toString('base64url');
+}
+
 export function decodeJobCursor(raw) {
   if (!raw) return null;
   try {
@@ -905,6 +911,11 @@ export function decodeJobCursor(raw) {
     const date = new Date(parsed?.sort_at);
     const jobId = String(parsed?.job_id || '');
     const anchor = new Date(parsed?.as_of);
+    if (parsed?.v === 3 && ['fit-desc','fit-asc'].includes(parsed?.sort)
+      && Number.isSafeInteger(parsed?.offset) && parsed.offset >= 0
+      && !Number.isNaN(anchor.getTime())) {
+      return Object.freeze({fit_offset:parsed.offset,fit_sort:parsed.sort === 'fit-asc' ? 'asc' : 'desc',as_of:anchor.toISOString()});
+    }
     if (parsed?.v !== 2 || Number.isNaN(date.getTime()) || Number.isNaN(anchor.getTime())
       || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(jobId)) throw new Error('stale');
     return Object.freeze({ sort_at:date.toISOString(), job_id:jobId, as_of:anchor.toISOString() });
@@ -934,6 +945,8 @@ export function normalizeJobSearchQuery(input = {}) {
     limit,
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
+    sort_fit:['desc','asc'].includes(String(source.sort_fit || '').trim()) ? String(source.sort_fit).trim() : null,
+    scan_step:source.scan_step === '1' || source.scan_step === 1 || source.scan_step === true,
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
     role_subfamily:listValues(source.role_subfamily),
     work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
@@ -1087,7 +1100,9 @@ export async function listProfileJobs(
       const p = add(spec.freshness_hours);
       where.push(`COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) >= $2 - (${p}::integer * interval '1 hour')`);
     }
-    if (spec.cursor) {
+    const aggregateWhere = [...where];
+    const aggregateParams = [...params];
+    if (spec.cursor?.sort_at) {
       const at = add(spec.cursor.sort_at);
       const id = add(spec.cursor.job_id);
       where.push(`(
@@ -1099,14 +1114,13 @@ export async function listProfileJobs(
       )`);
     }
 
-    const candidateLimit = Math.min(
+    const candidateLimit = spec.scan_step ? JOB_CANDIDATE_WINDOW_MAX : Math.min(
       Math.max(spec.limit * 8, spec.limit + spec.prefetch, 100),
       JOB_CANDIDATE_WINDOW_MAX,
     );
     const limitParam = add(candidateLimit);
 
-    const rowsResult = await tx.query(
-      `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
+    const candidateSql = `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
               j.role_family, j.role_subfamily, j.seniority, j.contract_type,
               j.remote_scope, j.job_version, j.classification_status,
               j.classification_confidence, j.classification_version,
@@ -1196,9 +1210,10 @@ export async function listProfileJobs(
            ON eval.tenant_id = $1
           AND eval.search_profile_id = $3
           AND eval.job_id = j.job_id
-        WHERE ${where.join('\n          AND ')}
-        ORDER BY COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) DESC, j.job_id ASC
-        LIMIT ${limitParam}::integer`,
+        WHERE ${where.join('\n          AND ')}`;
+    const candidateOrderSql = ' ORDER BY sort_at DESC, job_id ASC';
+    const rowsResult = await tx.query(
+      `SELECT * FROM (${candidateSql}) candidates${candidateOrderSql} LIMIT ${limitParam}::integer`,
       params,
     );
 
@@ -1234,18 +1249,98 @@ export async function listProfileJobs(
         continue;
       }
       if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
-      jobs.push(resolved.job);
-      if (jobs.length >= spec.limit) break;
+      if (jobs.length < spec.limit) jobs.push(resolved.job);
+      if (!spec.scan_step && jobs.length >= spec.limit) break;
     }
 
     let prefetched = 0;
-    if (pageEndIndex >= 0 && spec.prefetch > 0) {
+    if (!spec.scan_step && pageEndIndex >= 0 && spec.prefetch > 0) {
       for (let index = pageEndIndex + 1; index < rows.length && prefetched < spec.prefetch; index += 1) {
         await resolveRow(rows[index]);
         prefetched += 1;
       }
     }
 
+    // Counts cover the full matching DB population, never only this page.
+    const fullScopeSql = candidateSql.replace(
+      `WHERE ${where.join('\n          AND ')}`,
+      `WHERE ${aggregateWhere.join('\n          AND ')}`,
+    );
+    const algorithmParam = '$' + (aggregateParams.length + 1);
+    const thresholdParam = '$' + (aggregateParams.length + 2);
+    const versionParam = '$' + (aggregateParams.length + 3);
+    const minimumParam = '$' + (aggregateParams.length + 4);
+    const countResult = await tx.query(`SELECT
+      COUNT(*) FILTER (WHERE cached_profile_version IS DISTINCT FROM ${versionParam}
+        OR cached_job_version IS DISTINCT FROM job_version
+        OR cached_fit_algorithm_version IS DISTINCT FROM ${algorithmParam})::integer AS pending,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer))::integer AS total,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND cached_score >= ${thresholdParam} AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer))::integer AS high,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer) AND lower(work_mode) = 'remote')::integer AS remote,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer) AND repost_of_posting_id IS NOT NULL)::integer AS reposts,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer) AND sort_at >= $2::timestamptz - interval '24 hours')::integer AS jobs
+      FROM (${fullScopeSql}) full_scope`,
+      [...aggregateParams, FIT_ALGORITHM_VERSION, Number(preferences.fit_threshold ?? 80), foundation.profile_version, spec.min_fit]);
+    const c = countResult.rows[0];
+    const aggregateCounts = Number(c.pending) === 0
+      ? {status:'COMPLETE',scope:'profile_filtered',totals:{all:Number(c.total),
+          high:Number(c.high),remote:Number(c.remote),reposts:Number(c.reposts),jobs:Number(c.jobs)}}
+      : {status:'INCOMPLETE',scope:'profile_filtered',totals:null,remaining:Number(c.pending)};
+    if (aggregateCounts.status === 'COMPLETE') {
+      const scopeKey = createHash('sha256').update(JSON.stringify({
+        q:spec.q,roleFamilies:spec.role_family,roleSubfamilies:spec.role_subfamily,
+        modes:spec.work_mode,contracts:spec.contract_type,freshness:spec.freshness_hours,
+        archived:spec.include_archived,minFit:spec.min_fit,asOf:anchor.toISOString().slice(0,10),
+      })).digest('hex');
+      await tx.query(`INSERT INTO profile_job_count_snapshots
+        (tenant_id,search_profile_id,scope_key,profile_version,fit_algorithm_version,totals)
+        VALUES ($1,$2,$3,$4,$5,$6::jsonb)
+        ON CONFLICT (tenant_id,search_profile_id,scope_key)
+        DO UPDATE SET profile_version=EXCLUDED.profile_version,
+        fit_algorithm_version=EXCLUDED.fit_algorithm_version,
+        totals=EXCLUDED.totals,evaluated_at=now()`,
+        [tx.tenantId,foundation.search_profile_id,scopeKey,foundation.profile_version,
+         FIT_ALGORITHM_VERSION,JSON.stringify(aggregateCounts.totals)]);
+    }
+    // Serve globally FIT-ordered pages only when every candidate has a current
+    // persisted evaluation. Never silently claim global order for partial cache.
+    if (!spec.scan_step && spec.sort_fit && aggregateCounts.status === 'COMPLETE') {
+      if (spec.cursor?.fit_sort && spec.cursor.fit_sort !== spec.sort_fit)
+        throw httpError('STALE_CURSOR: FIT sort changed',400);
+      if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
+      const fitOffset = spec.cursor?.fit_offset || 0;
+      const base = aggregateParams.length;
+      const ranked = await tx.query(
+        `SELECT * FROM (${fullScopeSql}) ranked
+          WHERE cached_eligible IS TRUE AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)
+          ORDER BY cached_score ${spec.sort_fit === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, sort_at DESC, job_id ASC
+          LIMIT $${base + 2}::integer OFFSET $${base + 3}::integer`,
+        [...aggregateParams, spec.min_fit, spec.limit, fitOffset],
+      );
+      const rankedJobs = ranked.rows.map(row =>
+        materializeCachedJob(row, cachedEvaluation(row), preferences, anchor));
+      const matchedTotal = spec.min_fit == null
+        ? aggregateCounts.totals.all
+        : Number((await tx.query(
+            `SELECT COUNT(*)::integer AS total FROM (${fullScopeSql}) ranked
+              WHERE cached_eligible IS TRUE AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)`,
+            [...aggregateParams,spec.min_fit],
+          )).rows[0].total);
+      return {
+        schema_version:'2.0',generated_at:anchor.toISOString(),
+        search_profile_id:foundation.search_profile_id,profile_version:foundation.profile_version,
+        fit_algorithm_version:FIT_ALGORITHM_VERSION,bounded:true,limit:spec.limit,
+        next_cursor:fitOffset + rankedJobs.length < matchedTotal
+          ? encodeFitCursor(fitOffset + rankedJobs.length,anchor,spec.sort_fit) : null,
+        freshness_hours:Number(preferences.freshness_hours ?? 24),
+        criteria:{fit_threshold:Number(preferences.fit_threshold ?? 80)},
+        records_inspected:ranked.rows.length,candidate_window:ranked.rows.length,
+        excluded_count:0,cache_hits:ranked.rows.length,evaluations_computed:0,prefetched:0,
+        results:rankedJobs.length,aggregate_counts:aggregateCounts,
+        fit_order_status:'GLOBAL_VERIFIED',jobs:rankedJobs,
+      };
+    }
+    if (spec.cursor?.fit_offset != null) throw httpError('STALE_CURSOR: FIT evaluation incomplete',400);
     const exhaustedWindow = rows.length < candidateLimit;
     const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
     const hasMore = Boolean(cursorRow)
@@ -1271,6 +1366,7 @@ export async function listProfileJobs(
       evaluations_computed:evaluationsComputed,
       prefetched,
       results:jobs.length,
+      aggregate_counts:aggregateCounts,
       jobs,
     };
   }, { env, db });

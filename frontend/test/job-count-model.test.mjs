@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { jobCountScopeLabel, jobViewCounts, jobViewPopulation } from '../src/job-count-model.mjs';
+import { formatPageDatabaseCount, jobCountScopeLabel, jobViewCounts, jobViewPopulation } from '../src/job-count-model.mjs';
 
 const ageHours = (_datePosted, age) => age;
 const jobs = [
@@ -44,4 +44,10 @@ test('work mode subset still excludes N/A and unselected canonical modes', () =>
 test('scope labels explain current population', () => {
   assert.equal(jobCountScopeLabel(24),'filtrul curent: 24h + mod lucru');
   assert.equal(jobCountScopeLabel(120),'filtrul curent: 5 zile + mod lucru');
+});
+
+test('F-04 counts distinguish page numerator from exact database total', () => {
+  assert.equal(formatPageDatabaseCount(5,31,'COMPLETE'),'5 (din 31)');
+  assert.equal(formatPageDatabaseCount(5,null),'5 (din total în curs de calcul)');
+  assert.equal(formatPageDatabaseCount(5,4,'COMPLETE'),'5 (din total în curs de calcul)');
 });

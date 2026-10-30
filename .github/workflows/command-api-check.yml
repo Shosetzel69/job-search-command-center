@@ -312,28 +312,39 @@ jobs:
           import {admitNileCi,attestNativeDatabase} from './scripts/nile-ci-local-admission.mjs';
           // Readiness does not replace independent per-suite native attestations.
           admitNileCi();
-          let consecutive=0;
-          for(let attempt=1;attempt<=45;attempt++){
-            const pool=new pg.Pool({connectionString:process.env.NILE_TEST_DATABASE_URL,max:1,connectionTimeoutMillis:3000});
-            try{
-              await attestNativeDatabase(pool,{env:{...process.env,
-                W025_NATIVE_RUN_ID:'migration',
-                W025_NATIVE_CHALLENGE:randomBytes(16).toString('hex')
-              }});
-              consecutive++;
-              if(consecutive===3){
-                console.log('W025_SQL_READINESS=PASS attempts='+attempt);
-                break;
+          // Four bounded readiness rounds. Each attempt still performs the full
+          // native DB identity and challenge attestation; no bypass or fake PASS.
+          let consecutive=0, passed=false;
+          const rounds=4, checksPerRound=12;
+          for(let round=1;round<=rounds&&!passed;round++){
+            console.log('W025_SQL_READINESS_ROUND_START='+round+'/'+rounds);
+            for(let check=1;check<=checksPerRound;check++){
+              const pool=new pg.Pool({connectionString:process.env.NILE_TEST_DATABASE_URL,max:1,connectionTimeoutMillis:3000});
+              try{
+                await attestNativeDatabase(pool,{env:{...process.env,
+                  W025_NATIVE_RUN_ID:'migration',
+                  W025_NATIVE_CHALLENGE:randomBytes(16).toString('hex')
+                }});
+                consecutive++;
+                if(consecutive===3){
+                  passed=true;
+                  console.log('W025_SQL_READINESS=PASS round='+round+' check='+check);
+                  break;
+                }
+              }catch(error){
+                consecutive=0;
+                console.error('W025_SQL_READINESS_RETRY round='+round+' check='+check+' reason='+String(error?.message||'unknown').slice(0,160));
+              }finally{
+                await pool.end();
               }
-            }catch(error){
-              consecutive=0;
-              console.error('W025_SQL_READINESS_RETRY attempt='+attempt+' reason='+String(error?.message||'unknown').slice(0,160));
-            }finally{
-              await pool.end();
+              if(check<checksPerRound) await new Promise(resolve=>setTimeout(resolve,2000));
             }
-            if(attempt<45) await new Promise(resolve=>setTimeout(resolve,2000));
+            if(!passed&&round<rounds){
+              console.error('W025_SQL_READINESS_ROUND_FAIL='+round);
+              await new Promise(resolve=>setTimeout(resolve,3000));
+            }
           }
-          if(consecutive!==3) throw Error('W025_SQL_READINESS_FAIL: no three consecutive verified native SQL sessions');
+          if(!passed) throw Error('W025_SQL_READINESS_FAIL: four rounds without three consecutive verified native SQL sessions');
           NODE
       - name: Execute mandatory Nile suites with process-bound TAP evidence
         working-directory: command-api

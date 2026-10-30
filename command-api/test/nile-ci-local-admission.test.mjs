@@ -114,11 +114,11 @@ test('W025-S03 live readback requires valid challenge and real SQL identity',asy
  assert.equal(calls,1);
 });
 
-test('W025-NILE-PORT actual pinned 5421 backend accepted; 5432 gateway and other ports denied',async()=>{
+test('W025-NILE-PORT pinned 5420 and 5421 internal backends accepted; 5432 gateway and other ports denied',async()=>{
  const env={W025_NATIVE_RUN_ID:'migration',W025_NATIVE_CHALLENGE:'c'.repeat(32)};
  const row={db_name:'jobsearch_dev',principal:'Nile runtime SQL principal',backend_pid:456,
   server_port:NILE_NATIVE_BACKEND_PORT,challenge:env.W025_NATIVE_CHALLENGE};
- assert.equal(NILE_NATIVE_BACKEND_PORT,5421,'pinned provider-native SQL backend contract changed');
+ assert.equal(NILE_NATIVE_BACKEND_PORT,5420,'pinned provider-native SQL backend contract changed');
  let queries=0;
  const db={query:async(sql,args)=>{
   queries++;
@@ -127,8 +127,10 @@ test('W025-NILE-PORT actual pinned 5421 backend accepted; 5432 gateway and other
   return {rows:[row]};
  }};
  const attested=await attestNativeDatabase(db,{env});
- assert.equal(attested.server_port,5421);
+ assert.equal(attested.server_port,5420);
  assert.equal(attested.run,'migration');
+ const alternate=await attestNativeDatabase({query:async()=>({rows:[{...row,server_port:5421}]})},{env});
+ assert.equal(alternate.server_port,5421);
  assert.equal(queries,1);
  for(const port of [5432,5444,55432,null]){
   await assert.rejects(attestNativeDatabase({query:async()=>({rows:[{...row,server_port:port}]})},{env}),/ADMISSION_DENIED/,
