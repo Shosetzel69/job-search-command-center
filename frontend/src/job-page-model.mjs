@@ -4,8 +4,9 @@ export function pageBounds(page, total, pageSize = JOBS_PAGE_SIZE) {
   const safeTotal = Number.isInteger(total) && total >= 0 ? total : null;
   const pageCount = safeTotal === null ? null : Math.max(1, Math.ceil(safeTotal / pageSize));
   const current = Math.max(1, Number.isInteger(page) ? page : 1);
-  return { page: pageCount === null ? current : Math.min(current, pageCount), pageCount,
-    canPrevious: current > 1, canNext: pageCount === null ? null : current < pageCount };
+  const resolvedPage = pageCount === null ? current : Math.min(current, pageCount);
+  return { page:resolvedPage, pageCount,
+    canPrevious: resolvedPage > 1, canNext: pageCount === null ? null : resolvedPage < pageCount };
 }
 
 const MODE_CODE = Object.freeze({ Remote:'remote', Hybrid:'hybrid', Onsite:'onsite' });
