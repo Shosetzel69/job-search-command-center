@@ -56,3 +56,8 @@ test('F-03 empty filtered page still preserves next-page navigation', () => {
   assert.match(main,/!rows\.length&&!loading&&!hasMore&&page===1/);
   assert.match(main,/onClick=\{onNext\|\|onLoadMore\}/);
 });
+
+test('UI: job cards constrain long metadata and reserve space for actions',()=>{
+  assert.match(main,/min-w-0 overflow-hidden text-left/);
+  assert.match(main,/min-w-0 flex-wrap gap-1\.5/);
+});
