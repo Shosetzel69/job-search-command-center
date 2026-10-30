@@ -18,6 +18,7 @@ import { environmentBadge, releaseVersionLabel } from './environment-marker.mjs'
 import { reviewRowsForFilters } from './review-selection.mjs';
 import { formatPageDatabaseCount, jobCountScopeLabel, jobViewCounts, jobViewPopulation } from './job-count-model.mjs';
 import { filterAndSortJobRows } from './job-row-filters.mjs';
+import { jobQualityWarnings } from './job-quality.mjs';
 
 const DATA_SCHEMA = '1.0';
 const APP_VERSION = releaseVersionLabel(__APP_VERSION__);
@@ -96,7 +97,7 @@ function countryCompact(job){const list=job.countries||[];if(!list.length)return
 function normalizeJob(job){const countries=normalizedCountries(job);return{
   id:job.id||null,title:job.title||'Titlu indisponibil',company:job.company||'Companie nespecificata',initial:job.initial||((job.company||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?'),
   fit:Number.isFinite(Number(job.fit))?Number(job.fit):0,location:job.location||'Nespecificat',countries,countryCodes:Array.isArray(job.country_codes)?job.country_codes:[],remoteScope:job.remote_scope||'Unknown',mode:normalizeMode(job.mode),type:job.type||'Nespecificat',contractType:job.contract_type||'unknown',employmentTypeRaw:job.employment_type_raw||null,age:ageHours(job.date_posted,job.age),
-  remote:Boolean(job.remote),b2b:Boolean(job.b2b),repost:Boolean(job.repost),status:job.status||'review',pros:Array.isArray(job.pros)?job.pros:[],risks:Array.isArray(job.risks)?job.risks:[],url:job.url||null,
+  remote:Boolean(job.remote),b2b:Boolean(job.b2b),repost:Boolean(job.repost),status:job.status||'review',pros:Array.isArray(job.pros)?job.pros:[],risks:Array.isArray(job.risks)?job.risks:[],data_quality_issues:Array.isArray(job.data_quality_issues)?job.data_quality_issues:[],url:job.url||null,
   description:String(job.description||'').trim(),date_posted:job.date_posted||null,source:job.source||'Nespecificata',verified_at:job.verified_at||null,archivedAt:job.archived_at||null,isApplication:false,
 };}
 function inferApplicationCountry(){return[];}
@@ -293,7 +294,7 @@ function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=f
       <button type="button" onClick={()=>onDetails(job)} className="block w-full min-w-0 overflow-hidden text-left md:flex md:items-start md:gap-3">
         <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-xs font-bold text-slate-600 md:grid">{job.initial}</span>
         <span className="block min-w-0 overflow-hidden">
-          <span className="flex items-start justify-between gap-3"><span className="line-clamp-2 text-[15px] font-semibold leading-5 text-slate-950 md:block md:truncate md:text-sm">{job.title}</span><span className="shrink-0 md:hidden"><FitBadge fit={job.fit} threshold={threshold}/></span></span>
+          <span className="flex items-start justify-between gap-3"><span className="line-clamp-2 text-[15px] font-semibold leading-5 text-slate-950 md:block md:truncate md:text-sm">{job.title}</span>{jobQualityWarnings(job).length>0&&<span title={jobQualityWarnings(job).join('; ')} aria-label={'Verifică datele jobului: '+jobQualityWarnings(job).join('; ')} role="img" className="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-amber-300 bg-amber-50 text-xs font-bold text-amber-800">!</span>}<span className="shrink-0 md:hidden"><FitBadge fit={job.fit} threshold={threshold}/></span></span>
           <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-xs text-slate-500"><span className="truncate">{knownCompact(job.company)||'Companie'}</span>{knownCompact(job.location)&&<><span>·</span><span className="truncate">{job.location}</span></>}{knownCompact(job.mode)&&<><span>·</span><span>{job.mode==='Hybrid'?'Hibrid':job.mode}</span></>}<span>·</span><span>{publishedLabel(job)}</span>{job.repost&&<span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">Repost</span>}</span>
         </span>
       </button>
