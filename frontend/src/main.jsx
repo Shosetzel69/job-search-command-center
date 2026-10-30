@@ -452,10 +452,11 @@ function App(){
   useEffect(()=>{if(auth.status==='authenticated')rememberUi();},[auth.status,rememberUi]);
   useEffect(()=>{if(auth.status!=='authenticated')return undefined;const save=()=>rememberUi();window.addEventListener('pagehide',save);return()=>window.removeEventListener('pagehide',save);},[auth.status,rememberUi]);
 
-  const clearData=useCallback(()=>{setJobs([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';},[]);
+  const clearData=useCallback(()=>{pageCursorHistory.current=[null];setPageNumber(1);setJobs([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';},[]);
 
   const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false}={})=>{
     if(!isSearchProfileConfigured(criteria)){setJobs([]);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';return null;}
+    if(!append){pageCursorHistory.current=[null];setPageNumber(1);}
     const path=buildJobsPath({filters:filterState,cursor,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE});
     setJobPage(current=>({...current,loading:!append,loadingMore:append}));
     try{
