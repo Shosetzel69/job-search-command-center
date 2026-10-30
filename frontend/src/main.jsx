@@ -512,6 +512,31 @@ function App(){
   useEffect(()=>{if(dataState.status!=='ready'||restoredScrollRef.current)return;restoredScrollRef.current=true;requestAnimationFrame(()=>window.scrollTo({top:initialUi.scrollY||0,behavior:'auto'}));},[dataState.status,initialUi.scrollY]);
   useEffect(()=>{if(restoredJobRef.current||!initialUi.selectedJobId||!jobs.length)return;const found=jobs.find(job=>String(job.id)===String(initialUi.selectedJobId));if(found)setDetailJob(found);restoredJobRef.current=true;},[jobs,initialUi.selectedJobId]);
 
+  // Backfill FIT evaluations in bounded, cancellable pages without replacing
+  // the visible jobs. Totals remain INCOMPLETE until the whole scope is scanned.
+  useEffect(()=>{
+    if(auth.status!=='authenticated'||dataState.status!=='ready'||!profileConfigured)return undefined;
+    let cancelled=false;
+    const scan=async()=>{
+      let cursor=null;
+      for(let step=0;step<32&&!cancelled;step+=1){
+        const path=buildJobsPath({filters:{...filters,sort:'fit-asc'},cursor,
+          limit:JOBS_PAGE_SIZE,prefetch:0})+'&scan_step=1';
+        const payload=validateJobsPage(await fetchJson(path,auth.token));
+        if(cancelled)return;
+        if(payload.aggregate_counts){
+          setJobPage(previous=>({...previous,aggregateCounts:payload.aggregate_counts}));
+        }
+        if(payload.aggregate_counts?.status==='COMPLETE'||!payload.next_cursor)return;
+        cursor=payload.next_cursor;
+        await new Promise(resolve=>setTimeout(resolve,80));
+      }
+    };
+    scan().catch(error=>{if(!cancelled)console.warn('FIT aggregate refresh incomplete:',error?.message);});
+    return()=>{cancelled=true;};
+  },[auth.status,auth.token,dataState.status,profileConfigured,
+    filters.search,filters.freshness,filters.workModes.join('|'),savedCriteria]);
+
   const activeJobs=useMemo(()=>jobs.filter(job=>!archivedKeys.includes(jobKey(job))),[jobs,archivedKeys]);
   const threshold=savedCriteria.fitThreshold||80;
   const jobPopulation=useMemo(()=>jobViewPopulation(activeJobs,filters,ageHours),[activeJobs,filters.freshness,filters.workModes]);
