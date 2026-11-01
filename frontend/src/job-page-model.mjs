@@ -27,6 +27,8 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_S
   params.set('prefetch', String(prefetch));
   const q = String(filters.search || '').trim();
   if (q) params.set('q', q.slice(0, 200));
+  if (filters.quick === 'b2b') params.set('b2b','true');
+  if (filters.quick === 'unknown') params.set('eligibility','unknown');
   if (filters.sort === 'fit-desc') params.set('sort_fit','desc');
   if (filters.sort === 'fit-asc') params.set('sort_fit','asc');
   const freshness = Number(filters.freshness);

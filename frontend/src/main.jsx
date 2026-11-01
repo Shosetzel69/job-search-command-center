@@ -97,7 +97,10 @@ function countryCompact(job){const list=job.countries||[];if(!list.length)return
 function normalizeJob(job){const countries=normalizedCountries(job);return{
   id:job.id||null,title:job.title||'Titlu indisponibil',company:job.company||'Companie nespecificata',initial:job.initial||((job.company||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?'),
   fit:Number.isFinite(Number(job.fit))?Number(job.fit):0,location:job.location||'Nespecificat',countries,countryCodes:Array.isArray(job.country_codes)?job.country_codes:[],remoteScope:job.remote_scope||'Unknown',mode:normalizeMode(job.mode),type:job.type||'Nespecificat',contractType:job.contract_type||'unknown',employmentTypeRaw:job.employment_type_raw||null,age:ageHours(job.date_posted,job.age),
-  remote:Boolean(job.remote),b2b:Boolean(job.b2b),repost:Boolean(job.repost),status:job.status||'review',pros:Array.isArray(job.pros)?job.pros:[],risks:Array.isArray(job.risks)?job.risks:[],data_quality_issues:Array.isArray(job.data_quality_issues)?job.data_quality_issues:[],url:job.url||null,
+  remote:Boolean(job.remote),b2b:Boolean(job.b2b),repost:Boolean(job.repost),
+  eligibility_state:job.eligibility_state||null,
+  eligibility_reason_code:job.eligibility_reason_code||null,
+  status:job.status||'review',pros:Array.isArray(job.pros)?job.pros:[],risks:Array.isArray(job.risks)?job.risks:[],data_quality_issues:Array.isArray(job.data_quality_issues)?job.data_quality_issues:[],url:job.url||null,
   description:String(job.description||'').trim(),date_posted:job.date_posted||null,source:job.source||'Nespecificata',verified_at:job.verified_at||null,archivedAt:job.archived_at||null,isApplication:false,
 };}
 function inferApplicationCountry(){return[];}
@@ -270,7 +273,10 @@ function Filters({filters,setFilters,counts,defaultFreshness,onResetKpi}) {
         <button type="button" onClick={()=>setMobileOpen(true)} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 md:hidden">Filtre{secondaryCount>0&&<span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">{secondaryCount}</span>}</button>
       </div>
       <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5 md:mt-0 md:flex-wrap md:items-center md:p-4">
-        <FilterButton active={filters.quick==='all'} onClick={()=>setFilters(v=>({...v,quick:'all'}))} count={counts.all}>Toate</FilterButton><FilterButton active={filters.quick==='high'} onClick={()=>setFilters(v=>({...v,quick:'high'}))} count={counts.high}>High FIT</FilterButton><FilterButton active={filters.quick==='b2b'} onClick={()=>setFilters(v=>({...v,quick:'b2b'}))} count={counts.b2b}>B2B</FilterButton>
+        <FilterButton active={filters.quick==='all'} onClick={()=>setFilters(v=>({...v,quick:'all'}))} count={counts.all}>Toate</FilterButton><FilterButton active={filters.quick==='high'} onClick={()=>setFilters(v=>({...v,quick:'high'}))} count={counts.high}>High FIT</FilterButton><FilterButton active={filters.quick==='b2b'} onClick={()=>setFilters(v=>({...v,quick:'b2b'}))} count={counts.b2b}>B2B</FilterButton><FilterButton
+          active={filters.quick==='unknown'}
+          onClick={()=>setFilters(v=>({...v,quick:'unknown'}))}
+        >Neclasificate</FilterButton>
         <div className="hidden flex-1 items-center gap-2 md:flex">{secondary}<button onClick={reset} className="ml-auto inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600"><Icon name="reset"/> Reseteaza</button></div>
       </div>
     </div>
@@ -288,14 +294,17 @@ function knownCompact(value){const text=String(value||'').trim();return text&&![
 function MobileOverflow({job,onArchive}){return<details className="relative"><summary aria-label="Mai multe actiuni" className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500">•••</summary><div className="absolute bottom-12 right-0 z-20 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{!job.isApplication&&<button type="button" onClick={()=>onArchive(job)} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-slate-600 hover:bg-slate-50"><Icon name="archive"/> Arhiveaza</button>}</div></details>;}
 function JobQualityMarker({job}) {
   const [open,setOpen]=useState(false);
+  const popupId=React.useId();
   const reasons=jobQualityWarnings(job);
   if(!reasons.length)return null;
   const description=reasons.join('; ');
   return <div className="absolute right-0 top-0 z-10">
     <button type="button" title={description} aria-label={'Verifică datele jobului: '+description}
-      aria-expanded={open} onClick={()=>setOpen(value=>!value)}
+      aria-expanded={open} aria-controls={open?popupId:undefined} aria-haspopup="true"
+      onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();setOpen(false);}}}
+      onClick={()=>setOpen(value=>!value)}
       className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-50 font-bold text-amber-800">!</button>
-    {open&&<div role="status" className="absolute right-0 top-9 z-30 w-64 max-w-[80vw] rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-800 shadow-lg">{description}</div>}
+    {open&&<div id={popupId} role="status" className="absolute right-0 top-9 z-30 w-64 max-w-[80vw] rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-800 shadow-lg">{description}</div>}
   </div>;
 }
 function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=false,loadingMore=false,onLoadMore,loading=false,page=1,onPrevious=null,onNext=null}) {
@@ -477,7 +486,8 @@ function App(){
       const normalized=(payload.jobs||[]).map(normalizeJob);
       setJobs(normalized);
       setArchivedKeys(normalized.filter(job=>job.archivedAt).map(jobKey));
-      setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results??normalized.length),aggregateCounts:payload.aggregate_counts||null});
+      setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results??normalized.length),aggregateCounts:payload.aggregate_counts||null,
+        fitOrderStatus:payload.fit_order_status||'PARTIAL_UNVERIFIED'});
       if(!append)jobQueryRef.current=buildJobsPath({filters:filterState,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE});
       return payload;
     }catch(error){
@@ -520,7 +530,7 @@ function App(){
     if(key===jobQueryRef.current)return undefined;
     const timer=setTimeout(()=>loadJobsPage(auth.token,savedCriteria,filters).catch(error=>notify('Lista de joburi nu a putut fi actualizata: '+error.message,'error')),250);
     return()=>clearTimeout(timer);
-  },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),savedCriteria,loadJobsPage,notify]);
+  },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),filters.quick,filters.sort,savedCriteria,loadJobsPage,notify]);
 
   useEffect(()=>{if(dataState.status!=='ready'||restoredScrollRef.current)return;restoredScrollRef.current=true;requestAnimationFrame(()=>window.scrollTo({top:initialUi.scrollY||0,behavior:'auto'}));},[dataState.status,initialUi.scrollY]);
   useEffect(()=>{if(restoredJobRef.current||!initialUi.selectedJobId||!jobs.length)return;const found=jobs.find(job=>String(job.id)===String(initialUi.selectedJobId));if(found)setDetailJob(found);restoredJobRef.current=true;},[jobs,initialUi.selectedJobId]);
@@ -595,7 +605,18 @@ function App(){
 
   if(auth.status!=='authenticated')return<><SignedOutScreen clientId={clientId} loginHint={loginHint} allowAutoRestore={allowAutoRestore} authError={auth.error} authStatus={auth.status} onCredential={handleCredential}/><EnvironmentMarker environment={environment} className="fixed left-4 top-4 z-50"/><Toast toast={toast}/></>;
   const onboarding=!profileConfigured&&(view==='jobs'||view==='review');
-  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} onLoadMore={loadMoreJobs} onNext={loadMoreJobs} onPrevious={previousJobsPage} page={pageNumber}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
+  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&
+  (jobPage.aggregateCounts?.status!=='COMPLETE' ||
+    (filters.sort?.startsWith('fit-') &&
+      jobPage.fitOrderStatus!=='GLOBAL_VERIFIED'))&&
+  <div role="status" aria-live="polite"
+    className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-950">
+    <strong>INCOMPLETE — rezultate provizorii.</strong>
+    {' '}Contoarele globale nu sunt confirmate.
+    {filters.sort?.startsWith('fit-') &&
+      ' Sortarea FIT este valabila doar pentru pagina afisata, nu pentru toate joburile.'}
+  </div>}
+  {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} onLoadMore={loadMoreJobs} onNext={loadMoreJobs} onPrevious={previousJobsPage} page={pageNumber}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);

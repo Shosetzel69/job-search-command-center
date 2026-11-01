@@ -947,6 +947,9 @@ export function normalizeJobSearchQuery(input = {}) {
     q:String(source.q || '').trim().slice(0, 200),
     sort_fit:['desc','asc'].includes(String(source.sort_fit || '').trim()) ? String(source.sort_fit).trim() : null,
     scan_step:source.scan_step === '1' || source.scan_step === 1 || source.scan_step === true,
+    b2b:source.b2b === true || source.b2b === 'true',
+    eligibility:String(source.eligibility || '').toLowerCase() === 'unknown'
+      ? 'unknown' : 'eligible',
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
     role_subfamily:listValues(source.role_subfamily),
     work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
@@ -1092,6 +1095,26 @@ export async function listProfileJobs(
       const p = add(spec.contract_type);
       where.push(`lower(COALESCE(j.contract_type, 'unknown')) = ANY(${p}::text[])`);
     }
+    if (spec.b2b) {
+      where.push(`(
+        lower(COALESCE(j.contract_type, '')) IN ('contract','freelance')
+        OR lower(COALESCE(sp.payload ->> 'contract_type',
+                          j.payload ->> 'contract_type','')) IN ('contract','freelance')
+        OR concat_ws(' ', j.title,
+             COALESCE(sp.payload ->> 'description',j.payload ->> 'description',''))
+             ~* '(contract|freelance|b2b)'
+        OR concat_ws(' ',
+             COALESCE(sp.payload ->> 'employment_statuses',
+                      j.payload ->> 'employment_statuses',''),
+             COALESCE(sp.payload ->> 'employment_type',
+                      j.payload ->> 'employment_type',''),
+             COALESCE(sp.payload ->> 'employment_status',
+                      j.payload ->> 'employment_status',''),
+             COALESCE(sp.payload ->> 'job_type',
+                      j.payload ->> 'job_type',''))
+             ~* '(contract|freelance|b2b)'
+      )`);
+    }
     if (spec.q) {
       const p = add('%' + spec.q + '%');
       where.push(`concat_ws(' ', j.title, j.company, j.location) ILIKE ${p}`);
@@ -1231,25 +1254,51 @@ export async function listProfileJobs(
         const evaluation = cachedEvaluation(row);
         return {
           evaluation,
-          job:evaluation.eligible ? materializeCachedJob(row, evaluation, preferences, anchor) : null,
+          job:evaluation.eligible || (
+            spec.eligibility === 'unknown' &&
+            evaluation.eligibilityState === 'UNKNOWN'
+          ) ? materializeCachedJob(row, evaluation, preferences, anchor) : null,
         };
       }
       evaluationsComputed += 1;
       const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
       await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
-      return { evaluation, job:evaluation.job };
+      const unknownJob = spec.eligibility === 'unknown' &&
+        evaluation.eligibilityState === 'UNKNOWN'
+        ? materializeCachedJob(row, evaluation, preferences, anchor)
+        : null;
+      return { evaluation, job:evaluation.job || unknownJob };
     };
 
     for (let index = 0; index < rows.length; index += 1) {
       const resolved = await resolveRow(rows[index]);
       inspected += 1;
       pageEndIndex = index;
-      if (!resolved.evaluation.eligible) {
+      const wanted = spec.eligibility === 'unknown'
+        ? resolved.evaluation.eligibilityState === 'UNKNOWN'
+        : resolved.evaluation.eligible;
+      if (!wanted) {
         excluded += 1;
         continue;
       }
       if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
-      if (jobs.length < spec.limit) jobs.push(resolved.job);
+      if (jobs.length < spec.limit) {
+        jobs.push(spec.eligibility === 'unknown'
+          ? {
+              ...resolved.job,
+              fit:null,
+              status:'unclassified',
+              eligibility_state:'UNKNOWN',
+              eligibility_reason_code:
+                resolved.evaluation.eligibilityReasonCode ||
+                'ELIGIBILITY_UNKNOWN',
+              risks:[
+                resolved.evaluation.eligibilityReasonCode ||
+                'ELIGIBILITY_UNKNOWN'
+              ],
+            }
+          : resolved.job);
+      }
       if (!spec.scan_step && jobs.length >= spec.limit) break;
     }
 
@@ -1274,6 +1323,7 @@ export async function listProfileJobs(
       COUNT(*) FILTER (WHERE cached_profile_version IS DISTINCT FROM ${versionParam}
         OR cached_job_version IS DISTINCT FROM job_version
         OR cached_fit_algorithm_version IS DISTINCT FROM ${algorithmParam})::integer AS pending,
+      COUNT(*) FILTER (WHERE cached_eligibility_state = 'UNKNOWN')::integer AS unknown_total,
       COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer))::integer AS total,
       COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND cached_score >= ${thresholdParam} AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer))::integer AS high,
       COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer) AND lower(work_mode) = 'remote')::integer AS remote,
@@ -1284,12 +1334,13 @@ export async function listProfileJobs(
     const c = countResult.rows[0];
     const aggregateCounts = Number(c.pending) === 0
       ? {status:'COMPLETE',scope:'profile_filtered',totals:{all:Number(c.total),
-          high:Number(c.high),remote:Number(c.remote),reposts:Number(c.reposts),jobs:Number(c.jobs)}}
+          high:Number(c.high),remote:Number(c.remote),reposts:Number(c.reposts),
+          jobs:Number(c.jobs),unknown:Number(c.unknown_total)}}
       : {status:'INCOMPLETE',scope:'profile_filtered',totals:null,remaining:Number(c.pending)};
     if (aggregateCounts.status === 'COMPLETE') {
       const scopeKey = createHash('sha256').update(JSON.stringify({
         q:spec.q,roleFamilies:spec.role_family,roleSubfamilies:spec.role_subfamily,
-        modes:spec.work_mode,contracts:spec.contract_type,freshness:spec.freshness_hours,
+        modes:spec.work_mode,contracts:spec.contract_type,b2b:spec.b2b,freshness:spec.freshness_hours,
         archived:spec.include_archived,minFit:spec.min_fit,asOf:anchor.toISOString().slice(0,10),
       })).digest('hex');
       await tx.query(`INSERT INTO profile_job_count_snapshots
@@ -1304,7 +1355,8 @@ export async function listProfileJobs(
     }
     // Serve globally FIT-ordered pages only when every candidate has a current
     // persisted evaluation. Never silently claim global order for partial cache.
-    if (!spec.scan_step && spec.sort_fit && aggregateCounts.status === 'COMPLETE') {
+    if (!spec.scan_step && spec.eligibility !== 'unknown' &&
+        spec.sort_fit && aggregateCounts.status === 'COMPLETE') {
       if (spec.cursor?.fit_sort && spec.cursor.fit_sort !== spec.sort_fit)
         throw httpError('STALE_CURSOR: FIT sort changed',400);
       if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
@@ -1367,6 +1419,9 @@ export async function listProfileJobs(
       prefetched,
       results:jobs.length,
       aggregate_counts:aggregateCounts,
+      fit_order_status:spec.sort_fit
+        ? 'PARTIAL_UNVERIFIED'
+        : 'NOT_REQUESTED',
       jobs,
     };
   }, { env, db });

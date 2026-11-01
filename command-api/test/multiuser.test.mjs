@@ -473,6 +473,7 @@ test('same shared job can produce different per-profile eligibility without prov
     country_codes:['RO'],
     work_mode:'remote',
     role_family:'PROJECT_DELIVERY_MANAGEMENT',
+    role_subfamily:['project_management'],
     source_name:'Example',
     canonical_url:'https://example.test/job',
     posted_at:'2026-10-01T00:00:00Z',
@@ -504,7 +505,11 @@ test('same shared job can produce different per-profile eligibility without prov
     nomenclatures,
     new Date('2026-10-01T12:00:00Z'),
   );
-  assert.equal(unknownRole.eligible, true, 'unknown is not an explicit incompatibility');
+  assert.equal(unknownRole.eligible, false, 'UNKNOWN must not enter eligible jobs');
+  assert.equal(unknownRole.eligibilityState, 'UNKNOWN');
+  assert.equal(unknownRole.score, null);
+  assert.equal(unknownRole.job, null);
+  assert.ok(unknownRole.eligibilityReasonCode);
   const incompatibleRemote = evaluateSharedJob(
     { ...row, country_codes:['US'], payload:{ ...row.payload, remote_scope:'Country' } },
     { ...base, target_country_codes:['US'], remote_eligible_country_codes:['RO'] },
@@ -513,8 +518,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(incompatibleRemote.eligible, false);
   assert.equal(incompatibleRemote.exclusionReason, 'remote eligibility geography incompatible');
-  assert.equal(EVALUATION_VERSION, 'fit-v1');
-  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1');
+  assert.equal(EVALUATION_VERSION, 'fit-v2-eligibility-strict');
+  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v2-eligibility-strict');
 });
 
 test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {

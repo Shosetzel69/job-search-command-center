@@ -17,7 +17,10 @@ export function filterAndSortJobRows(baseRows, { view, filters, threshold, kpiFi
   if (view === 'applications') return [...baseRows];
   const q = (filters.search || '').trim().toLowerCase();
   const rows = baseRows.filter(job => {
-    const quick = filters.quick === 'all'
+    const quick = (filters.quick === 'unknown' &&
+         job.eligibility_state === 'UNKNOWN')
+      || (filters.quick === 'all' &&
+         job.eligibility_state !== 'UNKNOWN')
       || (filters.quick === 'high' && job.fit !== null && job.fit >= threshold)
       || (filters.quick === 'b2b' && job.b2b);
     const kpi = kpiFilter === 'all'
@@ -28,6 +31,7 @@ export function filterAndSortJobRows(baseRows, { view, filters, threshold, kpiFi
     const text = (job.title + ' ' + job.company + ' ' + job.description + ' ' + job.source + ' ' + job.location + ' ' + (job.countries || []).join(' ')).toLowerCase();
     return quick && kpi && (!q || text.includes(q));
   });
+  if (filters.quick === 'unknown') return rows;
   return [...rows].sort((a,b) => {
     const fit = filters.sort === 'fit-asc'
       ? (a.fit ?? Number.MAX_SAFE_INTEGER) - (b.fit ?? Number.MAX_SAFE_INTEGER)

@@ -3,7 +3,7 @@ import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
 import { canonicalPostedDate, postedAgeHours } from './posted-date.mjs';
 
-export const FIT_ALGORITHM_VERSION = 'fit-v1';
+export const FIT_ALGORITHM_VERSION = 'fit-v2-eligibility-strict';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
 
@@ -137,6 +137,21 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     repost_of_posting_id:row.repost_of_posting_id,
     payload,
   }, preferences, nomenclatures);
+
+  // D1=A: an uncertain eligibility decision must never receive FIT.
+  // Persist the actual state and reason; preserve source/job data.
+  if (eligibility.state === 'UNKNOWN') {
+    return {
+      eligible:false,
+      eligibilityState:'UNKNOWN',
+      eligibilityReasonCode:eligibility.reason_code || 'ELIGIBILITY_UNKNOWN',
+      score:null,
+      pros:[],
+      risks:[],
+      exclusionReason:eligibility.reason_code || 'ELIGIBILITY_UNKNOWN',
+      job:null,
+    };
+  }
 
   if (eligibility.state === 'INELIGIBLE') {
     const compatibilityReasons = {
