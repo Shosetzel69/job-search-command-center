@@ -37,9 +37,12 @@ function safeDigest(s) {
   const found = typeof s === 'string' ? DIGEST.exec(s) : null;
   return found ? found[1] : 'UNKNOWN';
 }
-function safeRevision(value, name) {
-  return typeof value === 'string' && value.startsWith(name + '-') &&
-    /^[a-z0-9-]{1,100}$/.test(value) ? value : 'UNKNOWN';
+function safeRevision(value, service) {
+  if (typeof value !== 'string') return 'UNKNOWN';
+  const prefix = `projects/${PROJECT}/locations/${REGION}/services/${service}/revisions/`;
+  const shortName = value.startsWith(prefix) ? value.slice(prefix.length) : value;
+  return shortName.startsWith(service + '-') &&
+    /^[a-z0-9-]{1,100}$/.test(shortName) ? shortName : 'UNKNOWN';
 }
 function trafficRows(service, name) {
   const rows = Array.isArray(service.trafficStatuses) ? service.trafficStatuses :
@@ -75,12 +78,12 @@ export function createDevObserver({ transport, now = () => new Date().toISOStrin
       if (admitted.task === 'describe_dev_build') {
         const path = `/v1/projects/${BUILD_PROJECT}/locations/${REGION}/builds/${admitted.buildId}`;
         const data = resultData(await get({ api: 'cloudbuild.googleapis.com', path }));
-        const matchingId = data.id === admitted.buildId;
+        if (data.id !== admitted.buildId) throw new Error('RESOURCE_MISMATCH');
         return Object.freeze({
           environment: 'dev', task: admitted.task,
           resource: `projects/${BUILD_PROJECT}/locations/${REGION}/builds/${admitted.buildId}`,
           build_id: admitted.buildId,
-          build_status: matchingId && typeof data.status === 'string' &&
+          build_status: typeof data.status === 'string' &&
             /^[A-Z_]{1,36}$/.test(data.status) ? data.status : 'UNKNOWN',
           source_sha: 'UNKNOWN',
           observed_at: capturedAt,
