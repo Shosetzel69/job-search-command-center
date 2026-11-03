@@ -9,7 +9,7 @@ import unittest
 
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO / "ops/workspace-manager"))
-from service import backend, common
+from service import backend, common, worker
 
 
 class Blob:
@@ -74,6 +74,22 @@ class Cap100FunctionalTests(unittest.TestCase):
         files = {f"f{i}.py": base64.b64encode(b"x").decode() for i in range(101)}
         with self.assertRaisesRegex(ValueError, "file_count_limit"):
             common.checked_files(files)
+
+    def test_actual_worker_executes_with_100_files(self):
+        files = {f"sample_{i:03d}.txt": base64.b64encode(b"x").decode()
+                 for i in range(100)}
+        result = worker.execute(files, "command",
+                                ["python3", "-c", "print('WORKER_CAP100_OK')"])
+        self.assertEqual(result["exit_code"], 0)
+        self.assertIn("WORKER_CAP100_OK", result["stdout"])
+        self.assertFalse(result["timed_out"])
+
+    def test_actual_worker_rejects_101_files(self):
+        files = {f"sample_{i:03d}.txt": base64.b64encode(b"x").decode()
+                 for i in range(101)}
+        with self.assertRaisesRegex(ValueError, "file_count_limit"):
+            worker.execute(files, "command",
+                           ["python3", "-c", "print('MUST_NOT_RUN')"])
 
     def test_invalid_path_still_denied(self):
         with self.assertRaisesRegex(ValueError, "invalid_path"):
