@@ -99,3 +99,27 @@ test('Cloud Build ID strict and output is sanitized',async()=>{
   assert.deepEqual(requests[0],{api:'cloudbuild.googleapis.com',path:'/v1/projects/jscc-shared/locations/europe-west1/builds/'+id});
   assert.throws(()=>admitDevRequest({environment:'dev',task:'describe_dev_build',buildId:'../secrets'}),/resource_denied/);
 });
+
+test('desired traffic without observed traffic cannot be used as effective state', async () => {
+  const id = `projects/jscc-dev/locations/europe-west1/services/${service}`;
+  const observer = createDevObserver({transport: async()=>({status:200,body:{
+    name:id,traffic:[{revision:rev1,percent:100}],latestReadyRevision:rev1,
+  }})});
+  await assert.rejects(()=>observer.describe({environment:'dev',task:'describe_dev_runtime',service}),
+    /INSUFFICIENT_EVIDENCE/);
+});
+test('fully qualified Cloud Run revision names normalize without cross-project acceptance',async()=>{
+  const qualified=`projects/jscc-dev/locations/europe-west1/services/${service}/revisions/${rev1}`;
+  const {observer}=mock({traffic:[{revision:qualified,percent:100}]});
+  const result=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
+  assert.equal(result.effective_revisions[0].revision,rev1);
+  const cross=`projects/jscc-prod/locations/europe-west1/services/${service}/revisions/${rev1}`;
+  const {observer:blocked}=mock({traffic:[{revision:cross,percent:100}]});
+  await assert.rejects(()=>blocked.describe({environment:'dev',task:'describe_dev_runtime',service}),
+    /INSUFFICIENT_EVIDENCE/);
+});
+test('mismatched Cloud Build resource cannot be reported as a successful build',async()=>{
+  const id='c5bbfb85-0aab-40c7-aa47-a5589aa9e295';
+  const observer=createDevObserver({transport:async()=>({status:200,body:{id:'deadbeef-0aab-40c7-aa47-a5589aa9e295',status:'SUCCESS'}})});
+  await assert.rejects(()=>observer.describe({environment:'dev',task:'describe_dev_build',buildId:id}),/RESOURCE_MISMATCH/);
+});
