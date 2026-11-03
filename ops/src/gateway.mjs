@@ -1,5 +1,6 @@
 import http from 'node:http';
 import { DEV_SCOPE, workspaceTools, validScopeRequest, hasDevWriteScope, invokeWorkspaceTool } from './dev_workspace.mjs';
+import { invokeDevObserver } from '../observation/dev-observer-client.mjs';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import * as oidc from 'openid-client';
 import {
@@ -460,6 +461,68 @@ const server = http.createServer(async (req, res) => {
       if (body.method === 'notifications/initialized') { res.writeHead(202); return res.end(); }
       if (body.method === 'tools/list') return sendJson(res, 200, { jsonrpc: '2.0', id, result: { tools: [
         ...workspaceTools.map(t => ({ ...t, securitySchemes: [{ type:'oauth2', scopes:[REQUIRED_SCOPE,DEV_SCOPE] }] })),
+        { name: 'describe_dev_runtime', description: 'Observe effective Cloud Run DEV revision traffic and image digests (read-only).', inputSchema: { type:'object',required:['environment','service'],additionalProperties:false,properties:{environment:{type:'string',enum:['dev']},service:{type:'string',enum:['jscc-dev-workspace-manager','jscc-dev-sandbox-worker','jscc-ops-gateway-dev','jscc-command-api-dev']} } } },
+        { name: 'describe_dev_build', description: 'Observe an allowlisted Cloud Build ID in jscc-shared/europe-west1 (read-only).', inputSchema: { type:'object',required:['environment','buildId'],additionalProperties:false,properties:{environment:{type:'string',enum:['dev']},buildId:{type:'string',pattern:'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}
+        { name: 'run_operation', description: 'Run an allowlisted DEV diagnostic or verification operation.', inputSchema: { type:'object', required:['work_item_ref','idempotency_key','task','args'], additionalProperties:false, properties:{ work_item_ref:{type:'string'}, idempotency_key:{type:'string'}, task:{type:'string',enum:Object.keys(TASK_CATALOG)}, args:{type:'object'} } } },
+        { name: 'get_operation', description: 'Read sanitized operation state/evidence.', inputSchema: { type:'object',required:['operation_id'],additionalProperties:false,properties:{operation_id:{type:'string'}} } }
+      ] } });
+      if (body.method === 'tools/call' && workspaceTools.some(t => t.name===body.params?.name)) {
+        try {
+          if (!hasDevWriteScope(auth.record.scope)) {
+            return sendJson(res,200,{jsonrpc:'2.0',id,result:{
+              isError:true,
+              content:[{type:'text',text:'Additional JSCC DEV workspace authorization required.'}],
+              _meta:{'mcp/www_authenticate':[
+                `Bearer resource_metadata="${issuer}/.well-known/oauth-protected-resource", error="insufficient_scope", error_description="DEV workspace requires jscc.dev.write", scope="${REQUIRED_SCOPE} ${DEV_SCOPE}"`
+              ]}
+            }});
+          }
+          const out=await invokeWorkspaceTool(body.params.name,body.params.arguments || {},process.env.DEV_WORKSPACE_MANAGER_URL);
+          if (out.data && typeof out.data==='object') {
+            // Existing #537 sanitation path: never return raw, unbounded test output.
+            if (typeof out.data.stdout==='string') out.data.stdout=sanitizeText(out.data.stdout).slice(0,16000);
+            if (typeof out.data.stderr==='string') out.data.stderr=sanitizeText(out.data.stderr).slice(0,16000);
+          }
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}],isError:!out.ok}});
+        } catch(e) {
+          const message=String(e?.message||'workspace_error');
+          const safe=/^[a-z0-9_]{1,60}$/.test(message)?message:'workspace_error';
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:safe})}]}});
+        }
+      }
+      if (body.method === 'tools/call' && ['describe_dev_runtime','describe_dev_build'].includes(body.params?.name)) {
+        try {
+          const args = body.params?.arguments || {};
+          const out = await invokeDevObserver({
+            ...args, task:body.params.name
+          }, process.env.JSCC_DEV_OBSERVER_URL);
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}]}});
+        } catch(e) {
+          const error=String(e?.message||'observation_failed');
+          const safe=/^[A-Za-z0-9_]{1,60}$/.test(error)?error:'observation_failed';
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:safe})}]}});
+        }
+      }
+      if (body.method === 'tools/call' && body.params?.name === 'auth_check') return sendJson(res, 200, { jsonrpc:'2.0', id, result:{content:[{type:'text',text:JSON.stringify({authenticated:true,scope:(Array.isArray(auth.record.scope)?auth.record.scope.join(' '):String(auth.record.scope||'')),audience:REQUIRED_AUDIENCE,token_ttl_class:'short',gcp_credential_exposed:false,privileged:true,project:cfg.project})}]}});
+      if (body.method === 'tools/call' && body.params?.name === 'run_operation') {
+        try { const out = await acceptOperation(auth, body.params.arguments || {}); return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}]}}); }
+        catch (e) { return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:e.message})}]}}); }
+      }
+      if (body.method === 'tools/call' && body.params?.name === 'get_operation') {
+        try { const out = await getOperation(body.params.arguments?.operation_id); return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}]}}); }
+        catch (e) { return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:e.message})}]}}); }
+      }
+      return sendJson(res, 200, { jsonrpc:'2.0', id, error:{code:-32601,message:'Method not found'} });
+    }
+    return sendText(res, 404, 'not found');
+  } catch (e) {
+    console.error(JSON.stringify({ event:'gateway_error', error:String(e?.message || 'unknown') }));
+    return sendJson(res, 500, { error:'internal_error' });
+  }
+});
+
+server.listen(PORT, () => console.log(JSON.stringify({ event:'startup', component:'jscc-ops-gateway-dev', project:cfg.project, region:cfg.region, catalog_version:CATALOG_VERSION })));
+} } } },
         { name: 'auth_check', description: 'Return non-sensitive authentication metadata.', inputSchema: { type:'object',properties:{},additionalProperties:false } },
         { name: 'run_operation', description: 'Run an allowlisted DEV diagnostic or verification operation.', inputSchema: { type:'object', required:['work_item_ref','idempotency_key','task','args'], additionalProperties:false, properties:{ work_item_ref:{type:'string'}, idempotency_key:{type:'string'}, task:{type:'string',enum:Object.keys(TASK_CATALOG)}, args:{type:'object'} } } },
         { name: 'get_operation', description: 'Read sanitized operation state/evidence.', inputSchema: { type:'object',required:['operation_id'],additionalProperties:false,properties:{operation_id:{type:'string'}} } }
