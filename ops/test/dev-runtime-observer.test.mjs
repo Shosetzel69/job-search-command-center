@@ -30,7 +30,10 @@ function mock({ traffic = [{revision:rev1,percent:100}], fail = null,
     if (request.path.endsWith('/services/' + service)) {
       return { status:200, body:{
         name:servicePath, trafficStatuses:traffic,
-        latestReadyRevision:rev2, env:[{name:'DB_PASSWORD',value:'leak'}],
+        latestReadyRevision:rev2,
+        template:{serviceAccount:'jscc-dev-workspace-manager@jscc-dev.iam.gserviceaccount.com',
+          containers:[{env:[{name:'DB_PASSWORD',value:'leak'}]}]},
+        env:[{name:'DB_PASSWORD',value:'leak'}],
       }};
     }
     if (request.path.includes('/builds/')) {
@@ -65,9 +68,13 @@ test('effective traffic not latest ready; image digest redacted and source unkno
   const result=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
   assert.deepEqual(result.effective_revisions,[{revision:rev1,percent:100,image_digest:'sha256:'+sha}]);
   assert.equal(result.source_sha,'UNKNOWN');
+  assert.equal(result.service_account,'jscc-dev-workspace-manager@jscc-dev.iam.gserviceaccount.com');
+  assert.equal(result.environment_variable_count,1);
   assert.equal(result.observed_at,'2026-11-04T00:00:00Z');
   assert.equal(requests.length,2);
   assert.equal(JSON.stringify(result).includes('not-for-client'),false);
+  assert.equal(JSON.stringify(result).includes('DB_PASSWORD'),false);
+  assert.equal(JSON.stringify(result).includes('leak'),false);
 });
 test('multiple traffic revisions remain separate with unknown digest fail-closed',async()=>{
   const {observer}=mock({traffic:[{revision:rev1,percent:80},{revision:rev2,percent:20}]});
