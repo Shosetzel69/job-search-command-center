@@ -7,6 +7,8 @@ on:
       - 'tests/test_workspace_manager_cap_patch.py'
       - 'tests/test_workspace_manager_cap_functional.py'
       - 'ops/workspace-manager/service/**'
+      - 'scripts/gcp/rollout_workspace_manager_cap100_dev.sh'
+      - 'cloudbuild.workspace-manager-cap-100.yaml'
       - '.github/workflows/workspace-manager-cap-100-tests.yml'
   push:
     branches: [main]
@@ -31,6 +33,8 @@ jobs:
           persist-credentials: false
       - name: Verify Python syntax
         run: python3 -m py_compile scripts/gcp/patch_workspace_manager_limit.py tests/test_workspace_manager_cap_patch.py tests/test_workspace_manager_cap_functional.py ops/workspace-manager/service/*.py
+      - name: Validate DEV rollout shell syntax
+        run: bash -n scripts/gcp/rollout_workspace_manager_cap100_dev.sh
       - name: Source transformation tests
         run: python3 -m unittest discover -s tests -p 'test_workspace_manager_cap_patch.py' -v
       - name: Test real manager GCS and worker validation boundaries (99/100/101)
