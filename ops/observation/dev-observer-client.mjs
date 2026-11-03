@@ -2,14 +2,14 @@
 // No GCP credential, CLI, secret or privileged API executes in gateway.
 import { admitDevRequest } from './dev-runtime-observer.mjs';
 
-const PREFIX='jscc-dev-runtime-observer-';
+const OBSERVER_HOST='jscc-dev-runtime-observer-828902654738.europe-west1.run.app';
 export function checkedObserverUrl(raw) {
   if (typeof raw!=='string' || !raw) throw new Error('observer_not_configured');
   let url;
   try { url=new URL(raw); } catch { throw new Error('observer_url_invalid'); }
   if (url.protocol!=='https:' || url.username || url.password || url.port ||
       url.pathname!=='/' || url.search || url.hash ||
-      !url.hostname.startsWith(PREFIX) || !url.hostname.endsWith('.europe-west1.run.app'))
+      url.hostname!==OBSERVER_HOST)
     throw new Error('observer_url_invalid');
   return url.origin;
 }
