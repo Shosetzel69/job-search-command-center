@@ -3,6 +3,7 @@ WORKDIR /workspace
 COPY ops/package.json ./ops/package.json
 RUN cd ops && npm install --omit=dev --ignore-scripts
 COPY ops/src ./ops/src
+COPY ops/observation ./ops/observation
 ARG SOURCE_SHA
 ENV SOURCE_SHA=${SOURCE_SHA}
 USER node
