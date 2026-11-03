@@ -17,7 +17,8 @@ function mock({ traffic = [{revision:rev1,percent:100}], fail = null,
     if (request.path.endsWith('/revisions/' + rev1)) {
       return { status:200, body:{
         name: servicePath+'/revisions/'+(mismatched?'bad':rev1),
-        containers: [{image:'repo/image@sha256:'+sha}],
+        containers: [{image:'repo/image:mutable-tag'}],
+        containerStatuses:[{imageDigest:'repo/image@sha256:'+sha}],
         env:[{name:'SECRET',value:'not-for-client'}],
       }};
     }
@@ -129,4 +130,10 @@ test('mismatched Cloud Build resource cannot be reported as a successful build',
   const id='c5bbfb85-0aab-40c7-aa47-a5589aa9e295';
   const observer=createDevObserver({transport:async()=>({status:200,body:{id:'deadbeef-0aab-40c7-aa47-a5589aa9e295',status:'SUCCESS'}})});
   await assert.rejects(()=>observer.describe({environment:'dev',task:'describe_dev_build',buildId:id}),/RESOURCE_MISMATCH/);
+});
+
+test('image tag is never treated as proof of an immutable digest',async()=>{
+ const {observer}=mock({traffic:[{revision:rev2,percent:100}]});
+ const out=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
+ assert.equal(out.effective_revisions[0].image_digest,'UNKNOWN');
 });
