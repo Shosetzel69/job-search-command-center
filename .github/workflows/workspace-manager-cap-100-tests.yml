@@ -5,12 +5,16 @@ on:
     paths:
       - 'scripts/gcp/patch_workspace_manager_limit.py'
       - 'tests/test_workspace_manager_cap_patch.py'
+      - 'tests/test_workspace_manager_cap_functional.py'
+      - 'ops/workspace-manager/service/**'
       - '.github/workflows/workspace-manager-cap-100-tests.yml'
   push:
     branches: [main]
     paths:
       - 'scripts/gcp/patch_workspace_manager_limit.py'
       - 'tests/test_workspace_manager_cap_patch.py'
+      - 'tests/test_workspace_manager_cap_functional.py'
+      - 'ops/workspace-manager/service/**'
       - '.github/workflows/workspace-manager-cap-100-tests.yml'
 
 permissions:
@@ -26,9 +30,11 @@ jobs:
         with:
           persist-credentials: false
       - name: Verify Python syntax
-        run: python3 -m py_compile scripts/gcp/patch_workspace_manager_limit.py tests/test_workspace_manager_cap_patch.py
+        run: python3 -m py_compile scripts/gcp/patch_workspace_manager_limit.py tests/test_workspace_manager_cap_patch.py tests/test_workspace_manager_cap_functional.py ops/workspace-manager/service/*.py
       - name: Source transformation tests
         run: python3 -m unittest discover -s tests -p 'test_workspace_manager_cap_patch.py' -v
+      - name: Test real manager GCS and worker validation boundaries (99/100/101)
+        run: python3 -m unittest discover -s tests -p 'test_workspace_manager_cap_functional.py' -v
       - name: Verify source-only patch against synthetic isolated manager
         shell: bash
         run: |
