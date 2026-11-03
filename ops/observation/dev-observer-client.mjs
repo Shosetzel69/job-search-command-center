@@ -38,9 +38,48 @@ export async function invokeDevObserver(args, observerUrl, { fetchImpl=fetch, id
   if(Buffer.byteLength(raw,'utf8')>16384) throw new Error('observer_response_too_large');
   let response;
   try{response=JSON.parse(raw);}catch{throw new Error('observer_invalid_response');}
-  if(!response || response.environment!=='dev' || response.task!==request.task ||
-     typeof response.resource!=='string' || response.resource.length>300 ||
-     Object.hasOwn(response,'access_token') || Object.hasOwn(response,'secret'))
+  if(!response || typeof response!=='object' || Array.isArray(response) ||
+     response.environment!=='dev' || response.task!==request.task)
     throw new Error('observer_invalid_response');
-  return response;
+  const expected=request.task==='describe_dev_runtime'
+    ? 'projects/jscc-dev/locations/europe-west1/services/'+request.service
+    : 'projects/jscc-shared/locations/europe-west1/builds/'+request.buildId;
+  if(response.resource!==expected || response.source_sha!=='UNKNOWN' ||
+     typeof response.observed_at!=='string' ||
+     response.observed_at.length>60)
+    throw new Error('observer_invalid_response');
+  const core={
+    environment:'dev',task:request.task,resource:expected,
+    source_sha:'UNKNOWN',observed_at:response.observed_at,
+  };
+  if(request.task==='describe_dev_build'){
+    if(response.build_id!==request.buildId ||
+       typeof response.build_status!=='string' ||
+       !/^[A-Z_]{1,36}$/.test(response.build_status))
+      throw new Error('observer_invalid_response');
+    return Object.freeze({...core,build_id:request.buildId,build_status:response.build_status});
+  }
+  const revisions=response.effective_revisions;
+  if(!Array.isArray(revisions) || revisions.length===0 || revisions.length>10)
+    throw new Error('observer_invalid_response');
+  const output=[];
+  for(const rev of revisions){
+    if(!rev || typeof rev.revision!=='string' ||
+       !rev.revision.startsWith(request.service+'-') ||
+       !/^[a-z0-9-]{1,100}$/.test(rev.revision) ||
+       !Number.isInteger(rev.percent) || rev.percent<0 || rev.percent>100 ||
+       !(rev.image_digest==='UNKNOWN' || /^sha256:[0-9a-f]{64}$/.test(rev.image_digest)))
+      throw new Error('observer_invalid_response');
+    output.push({revision:rev.revision,percent:rev.percent,image_digest:rev.image_digest});
+  }
+  if(output.reduce((a,r)=>a+r.percent,0)!==100) throw new Error('observer_invalid_response');
+  return Object.freeze({
+    ...core,effective_revisions:output,
+    service_account:typeof response.service_account==='string' &&
+      /^[a-z][a-z0-9-]{3,120}@(jscc-dev|jscc-shared)\\.iam\\.gserviceaccount\\.com$/.test(response.service_account)
+      ? response.service_account : 'UNKNOWN',
+    environment_variable_count:Number.isInteger(response.environment_variable_count) &&
+      response.environment_variable_count>=0 && response.environment_variable_count<=500
+      ? response.environment_variable_count : null,
+  });
 }
