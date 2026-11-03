@@ -14,8 +14,13 @@ const SERVICE_SET = new Set(SERVICES);
 const BUILD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DIGEST = /(?:^|@)(sha256:[0-9a-f]{64})$/;
 
-export function admitDevRequest({ environment, task, service, buildId } = {}) {
+export function admitDevRequest(request = {}) {
+  if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('invalid_request');
+  const keys = Object.keys(request);
+  const { environment, task, service, buildId } = request;
   if (environment !== 'dev') throw new Error('environment_denied');
+  if (keys.some(k => !['environment','task','service','buildId'].includes(k)))
+    throw new Error('resource_denied');
   if (task === 'describe_dev_runtime') {
     if (!SERVICE_SET.has(service) || buildId !== undefined) throw new Error('resource_denied');
     return Object.freeze({ environment: 'dev', task, service });
