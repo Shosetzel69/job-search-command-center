@@ -1,0 +1,83 @@
+# JSCC #593 — DEV-only, source-pinned dual-image cap-100 build; never deploys.
+# Execute ONLY after independent review and trusted-source admission.
+substitutions:
+  _GIT_SHA: ""
+  _TRUSTED_REF: ""
+  _MANAGER_BASE: ""
+  _WORKER_BASE: ""
+  _MANAGER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-cap100"
+  _WORKER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-worker-cap100"
+
+steps:
+  - id: trusted-source-admission
+    name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args: ['scripts/gcp/verify_trusted_ops_ref.sh']
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
+      - 'TRUSTED_OPS_REF=${_TRUSTED_REF}'
+  - id: validate-exact-baselines
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        [[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]
+        [[ "${_MANAGER_BASE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager@sha256:df89d44657c56826eab4d6507487e8f6c391df2f42e13a4b3f80e7cc47c5c9f2" ]]
+        [[ "${_WORKER_BASE}" =~ ^europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/[a-z0-9_-]+@sha256:[0-9a-f]{64}$ ]]
+        [[ "${_MANAGER_BASE}" != "${_WORKER_BASE}" ]]
+        v="$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+        [[ "$v" == "True" || "$v" == "true" ]]
+        for image in "${_MANAGER_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}"; do
+          if gcloud artifacts docker images describe "$image" --project=jscc-shared >/dev/null 2>&1; then
+            echo "IMMUTABLE_TAG_ALREADY_EXISTS: $image" >&2
+            exit 1
+          fi
+        done
+  - id: source-tests
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        python3 -m unittest discover -s tests -p test_workspace_manager_cap_patch.py -v
+        python3 -m unittest discover -s tests -p test_workspace_manager_cap_functional.py -v
+  - id: build-manager
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull=false
+      - --file=ops/workspace-manager/Dockerfile.cap100
+      - --build-arg=BASE_IMAGE=${_MANAGER_BASE}
+      - --tag=${_MANAGER_IMAGE}:${_GIT_SHA}
+      - .
+  - id: build-worker
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull=false
+      - --file=ops/workspace-manager/Dockerfile.cap100
+      - --build-arg=BASE_IMAGE=${_WORKER_BASE}
+      - --tag=${_WORKER_IMAGE}:${_GIT_SHA}
+      - .
+  - id: push-manager
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_MANAGER_IMAGE}:${_GIT_SHA}"]
+  - id: push-worker
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_WORKER_IMAGE}:${_GIT_SHA}"]
+  - id: digest-evidence
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        for image in "${_MANAGER_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}"; do
+          digest="$(gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          echo "CAP100_BUILT_IMAGE=$image@$digest"
+        done
+
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
