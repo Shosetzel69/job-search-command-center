@@ -155,6 +155,7 @@ async function describeDevObservation(task,args){
   return {
     target_alias:task==='describe_dev_runtime'?args.service:args.buildId,
     resource:result.resource,
+    target_source_sha:result.source_sha,
     observed_at:result.observed_at,
     ...(task==='describe_dev_runtime'?{
       service_account:result.service_account,
