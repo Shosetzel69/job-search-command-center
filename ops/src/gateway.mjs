@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { DEV_SCOPE, workspaceTools, validScopeRequest, hasDevWriteScope, invokeWorkspaceTool } from './dev_workspace.mjs';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import * as oidc from 'openid-client';
 import {
@@ -6,7 +7,7 @@ import {
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow,
   normalizeExecutionName, operationObject, authenticatedEvidence, accessTokenRecordError, authorizationCodeRecordError,
-  randomToken, releaseLease, resolveIdempotencyReservation, sha256, isAllowedChatGptClientId, validateChatGptRedirectUris, validateTaskRequest
+  randomToken, releaseLease, resolveIdempotencyReservation, sha256, sanitizeText, isAllowedChatGptClientId, validateChatGptRedirectUris, validateTaskRequest
 } from './lib.mjs';
 
 const cfg = envConfig();
@@ -46,7 +47,7 @@ const oauthModel = {
   ),
   validateScope: async (_user, client, scope) => {
     const values = Array.isArray(scope) ? scope : String(scope || '').split(/\s+/).filter(Boolean);
-    return chatGptClient(client?.id) && values.length === 1 && values[0] === REQUIRED_SCOPE ? values : false;
+    return chatGptClient(client?.id) && validScopeRequest(values,REQUIRED_SCOPE) ? values : false;
   },
   verifyScope: async (token, scope) => {
     const required = Array.isArray(scope) ? scope : String(scope || '').split(/\s+/).filter(Boolean);
@@ -176,7 +177,7 @@ async function authenticate(req) {
     );
     if (token?.user?.audience !== REQUIRED_AUDIENCE) return { ok:false, error:'wrong_audience' };
     if (token?.user?.resource !== `${base(req)}/mcp`) return { ok:false, error:'wrong_resource' };
-    return { ok:true, record:{ actor_sub:token.user.id, scope:REQUIRED_SCOPE, audience:REQUIRED_AUDIENCE } };
+    return { ok:true, record:{ actor_sub:token.user.id, scope:token.scope, audience:REQUIRED_AUDIENCE } };
   } catch {
     return { ok:false, error:'invalid_token' };
   }
@@ -306,9 +307,9 @@ const server = http.createServer(async (req, res) => {
     const u = new URL(req.url, base(req));
     const issuer = base(req);
     if (req.method === 'GET' && u.pathname === '/health') return sendJson(res, 200, { ok: true, component: 'jscc-ops-gateway-dev', privileged: true, project: cfg.project, catalog_version: CATALOG_VERSION });
-    if (req.method === 'GET' && u.pathname === '/.well-known/oauth-protected-resource') return sendJson(res, 200, { resource: `${issuer}/mcp`, authorization_servers: [issuer], scopes_supported: [REQUIRED_SCOPE], bearer_methods_supported: ['header'] });
+    if (req.method === 'GET' && u.pathname === '/.well-known/oauth-protected-resource') return sendJson(res, 200, { resource: `${issuer}/mcp`, authorization_servers: [issuer], scopes_supported: [REQUIRED_SCOPE, DEV_SCOPE], bearer_methods_supported: ['header'] });
     if (req.method === 'GET' && (u.pathname === '/.well-known/oauth-authorization-server' || u.pathname === '/.well-known/openid-configuration')) {
-      return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code'], code_challenge_methods_supported: ['S256'], scopes_supported: [REQUIRED_SCOPE], token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
+      return sendJson(res, 200, { issuer, authorization_endpoint: `${issuer}/authorize`, token_endpoint: `${issuer}/token`, registration_endpoint: `${issuer}/register`, revocation_endpoint: `${issuer}/revoke`, response_types_supported: ['code'], grant_types_supported: ['authorization_code'], code_challenge_methods_supported: ['S256'], scopes_supported: [REQUIRED_SCOPE, DEV_SCOPE], token_endpoint_auth_methods_supported: ['none'], authorization_response_iss_parameter_supported: true });
     }
     if (req.method === 'POST' && u.pathname === '/register') {
       const body = await readBody(req);
@@ -335,7 +336,7 @@ const server = http.createServer(async (req, res) => {
       if (!chatGptClient(clientId) || redirectUri !== CHATGPT_REDIRECT_URI) return sendText(res, 400, 'invalid_client_or_redirect');
       if (q.get('response_type') !== 'code') return sendText(res, 400, 'unsupported_response_type');
       if (method !== 'S256' || !challenge) return sendText(res, 400, 'pkce_s256_required');
-      if (scope !== REQUIRED_SCOPE) return sendText(res, 400, 'required_scope_missing');
+      if (!validScopeRequest(scope,REQUIRED_SCOPE)) return sendText(res, 400, 'required_scope_missing');
       if (resource !== `${issuer}/mcp`) return sendText(res, 400, 'invalid_resource');
 
       const upstreamState = oidc.randomState();
@@ -458,11 +459,36 @@ const server = http.createServer(async (req, res) => {
       if (body.method === 'initialize') return sendJson(res, 200, { jsonrpc: '2.0', id, result: { protocolVersion: body.params?.protocolVersion || '2025-03-26', capabilities: { tools: {} }, serverInfo: { name: 'jscc-ops-gateway-dev', version: '1.0.0' } } });
       if (body.method === 'notifications/initialized') { res.writeHead(202); return res.end(); }
       if (body.method === 'tools/list') return sendJson(res, 200, { jsonrpc: '2.0', id, result: { tools: [
+        ...workspaceTools.map(t => ({ ...t, securitySchemes: [{ type:'oauth2', scopes:[REQUIRED_SCOPE,DEV_SCOPE] }] })),
         { name: 'auth_check', description: 'Return non-sensitive authentication metadata.', inputSchema: { type:'object',properties:{},additionalProperties:false } },
         { name: 'run_operation', description: 'Run an allowlisted DEV diagnostic or verification operation.', inputSchema: { type:'object', required:['work_item_ref','idempotency_key','task','args'], additionalProperties:false, properties:{ work_item_ref:{type:'string'}, idempotency_key:{type:'string'}, task:{type:'string',enum:Object.keys(TASK_CATALOG)}, args:{type:'object'} } } },
         { name: 'get_operation', description: 'Read sanitized operation state/evidence.', inputSchema: { type:'object',required:['operation_id'],additionalProperties:false,properties:{operation_id:{type:'string'}} } }
       ] } });
-      if (body.method === 'tools/call' && body.params?.name === 'auth_check') return sendJson(res, 200, { jsonrpc:'2.0', id, result:{content:[{type:'text',text:JSON.stringify({authenticated:true,scope:REQUIRED_SCOPE,audience:REQUIRED_AUDIENCE,token_ttl_class:'short',gcp_credential_exposed:false,privileged:true,project:cfg.project})}]}});
+      if (body.method === 'tools/call' && workspaceTools.some(t => t.name===body.params?.name)) {
+        try {
+          if (!hasDevWriteScope(auth.record.scope)) {
+            return sendJson(res,200,{jsonrpc:'2.0',id,result:{
+              isError:true,
+              content:[{type:'text',text:'Additional JSCC DEV workspace authorization required.'}],
+              _meta:{'mcp/www_authenticate':[
+                `Bearer resource_metadata="${issuer}/.well-known/oauth-protected-resource", error="insufficient_scope", error_description="DEV workspace requires jscc.dev.write", scope="${REQUIRED_SCOPE} ${DEV_SCOPE}"`
+              ]}
+            }});
+          }
+          const out=await invokeWorkspaceTool(body.params.name,body.params.arguments || {},process.env.DEV_WORKSPACE_MANAGER_URL);
+          if (out.data && typeof out.data==='object') {
+            // Existing #537 sanitation path: never return raw, unbounded test output.
+            if (typeof out.data.stdout==='string') out.data.stdout=sanitizeText(out.data.stdout).slice(0,16000);
+            if (typeof out.data.stderr==='string') out.data.stderr=sanitizeText(out.data.stderr).slice(0,16000);
+          }
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}],isError:!out.ok}});
+        } catch(e) {
+          const message=String(e?.message||'workspace_error');
+          const safe=/^[a-z0-9_]{1,60}$/.test(message)?message:'workspace_error';
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:safe})}]}});
+        }
+      }
+      if (body.method === 'tools/call' && body.params?.name === 'auth_check') return sendJson(res, 200, { jsonrpc:'2.0', id, result:{content:[{type:'text',text:JSON.stringify({authenticated:true,scope:(Array.isArray(auth.record.scope)?auth.record.scope.join(' '):String(auth.record.scope||'')),audience:REQUIRED_AUDIENCE,token_ttl_class:'short',gcp_credential_exposed:false,privileged:true,project:cfg.project})}]}});
       if (body.method === 'tools/call' && body.params?.name === 'run_operation') {
         try { const out = await acceptOperation(auth, body.params.arguments || {}); return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}]}}); }
         catch (e) { return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:e.message})}]}}); }
