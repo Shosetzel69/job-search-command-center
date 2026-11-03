@@ -45,8 +45,9 @@ function safeRevision(value, service) {
     /^[a-z0-9-]{1,100}$/.test(shortName) ? shortName : 'UNKNOWN';
 }
 function trafficRows(service, name) {
-  const rows = Array.isArray(service.trafficStatuses) ? service.trafficStatuses :
-    Array.isArray(service.traffic) ? service.traffic : [];
+  // trafficStatuses is the observed routing state. service.traffic is desired
+  // configuration and must never be presented as an active revision.
+  const rows = Array.isArray(service.trafficStatuses) ? service.trafficStatuses : [];
   return rows.map(row => ({
     revision: safeRevision(row.revision || row.revisionName, name),
     percent: Number.isInteger(row.percent) && row.percent >= 0 && row.percent <= 100
