@@ -54,6 +54,10 @@ test('deny TEST PROD and cross-project or mutation strings', () => {
   for (const name of ['jscc-prod','jscc-test-foo','jscc-dev-workspace-manager/../foo',''])
     assert.throws(()=>admitDevRequest({environment:'dev',task:'describe_dev_runtime',service:name}),/resource_denied/);
   assert.throws(()=>admitDevRequest({environment:'dev',task:'run_gcloud',service}),/task_denied/);
+  assert.throws(()=>admitDevRequest({environment:'dev',task:'describe_dev_runtime',service,project:'jscc-prod'}),/resource_denied/);
+  assert.throws(()=>admitDevRequest({environment:'dev',task:'describe_dev_runtime',service,approval:'magic'}),/resource_denied/);
+  assert.throws(()=>admitDevRequest({environment:'dev',task:'describe_dev_runtime',service,method:'POST'}),/resource_denied/);
+  assert.throws(()=>admitDevRequest(null),/invalid_request/);
   assert.throws(()=>admitDevRequest({environment:'dev',task:'describe_dev_runtime',service,buildId:'x'}),/resource_denied/);
 });
 test('effective traffic not latest ready; image digest redacted and source unknown', async () => {
