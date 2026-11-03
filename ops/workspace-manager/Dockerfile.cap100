@@ -1,0 +1,6 @@
+# Bounded hotfix layered on an immutable, independently verified live image.
+# BASE_IMAGE MUST be a digest-pinned image for the matching service role.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY ops/workspace-manager/service/common.py /workspace/service/common.py
+RUN python3 -B -c 'from service.common import MAX_FILES, MAX_FILE, MAX_TOTAL; assert (MAX_FILES, MAX_FILE, MAX_TOTAL) == (100, 131072, 2097152)'
