@@ -111,8 +111,9 @@ export function createDevObserver({ transport, now = () => new Date().toISOStrin
         if (revision.name !== revPath.slice(4)) throw new Error('RESOURCE_MISMATCH');
         revisions.push(Object.freeze({
           revision: item.revision, percent: item.percent,
-          image_digest: safeDigest(revision.imageDigest ||
-            revision.containers?.[0]?.imageDigest || revision.containers?.[0]?.image),
+          // API v2 exposes the *resolved* immutable image through
+          // output-only containerStatuses; a configured tag is not evidence.
+          image_digest: safeDigest(revision.containerStatuses?.[0]?.imageDigest),
         }));
       }
       const account = data.template?.serviceAccount;
