@@ -12,6 +12,11 @@ const SERVICES = Object.freeze([
 ]);
 const SERVICE_SET = new Set(SERVICES);
 const BUILD_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const KNOWN_BUILD_IDS = new Set([
+  // Reviewed #594 cap=100 image build and #589 exact R33 source capture.
+  'c5bbfb85-0aab-40c7-aa47-a5589aa9e295',
+  'f38fa001-3681-42fd-bb8f-9ade6a8eeb8e',
+]);
 const DIGEST = /(?:^|@)(sha256:[0-9a-f]{64})$/;
 
 export function admitDevRequest(request = {}) {
@@ -26,7 +31,7 @@ export function admitDevRequest(request = {}) {
     return Object.freeze({ environment: 'dev', task, service });
   }
   if (task === 'describe_dev_build') {
-    if (service !== undefined || typeof buildId !== 'string' || !BUILD_ID.test(buildId))
+    if (service !== undefined || typeof buildId !== 'string' || !BUILD_ID.test(buildId) || !KNOWN_BUILD_IDS.has(buildId))
       throw new Error('resource_denied');
     return Object.freeze({ environment: 'dev', task, buildId });
   }
