@@ -63,6 +63,7 @@ jobs:
           bash -n scripts/gcp/verify_trusted_ops_ref.sh
           bash -n scripts/gcp/build_remote_executor_dev.sh
           bash -n scripts/gcp/verify_remote_executor_dev.sh
+          bash -n scripts/gcp/capture_r33_gateway_source_dev.sh
 
       - name: Validate security boundaries statically
         run: |
