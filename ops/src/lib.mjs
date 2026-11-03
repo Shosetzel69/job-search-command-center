@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
 export const CATALOG_VERSION = '537-v1';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
@@ -30,6 +31,14 @@ export const TASK_CATALOG = Object.freeze({
   run_test_suite: Object.freeze({
     class: 'VERIFY',
     params: Object.freeze({ suite: 'suite', expected_source_sha: 'sha40' }),
+  }),
+  describe_dev_runtime: Object.freeze({
+    class: 'OBSERVE',
+    params: Object.freeze({ environment: 'dev_env', service: 'dev_service' }),
+  }),
+  describe_dev_build: Object.freeze({
+    class: 'OBSERVE',
+    params: Object.freeze({ environment: 'dev_env', buildId: 'known_build' }),
   }),
 });
 
@@ -94,6 +103,14 @@ export function validateTaskRequest(task, args) {
     const value = args[name];
     if (type === 'execution_id') clean[name] = normalizeExecutionId(value);
     else if (type === 'run_id') clean[name] = validateRunId(value);
+    else if (type === 'dev_env') {
+      if (value !== 'dev') throw new Error('environment_denied');
+      clean[name] = 'dev';
+    } else if (type === 'dev_service') {
+      clean[name] = admitDevRequest({environment:'dev',task:'describe_dev_runtime',service:value}).service;
+    } else if (type === 'known_build') {
+      clean[name] = admitDevRequest({environment:'dev',task:'describe_dev_build',buildId:value}).buildId;
+    }
     else if (type === 'sha40') clean[name] = validateSha40(value);
     else if (type === 'suite') {
       const suite = String(value || '');
@@ -130,7 +147,9 @@ const PUBLIC_ASSERTION_FIELDS = Object.freeze([
   'target_alias','failed_count','succeeded_count','cancelled_count','completed','line_count',
   'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha',
   'exit_code','test_verdict','coarse_error','task_count','target_exit_code','target_term_signal',
-  'task_metadata_available','task_metadata_error'
+  'task_metadata_available','task_metadata_error',
+  'observed_at','resource','build_id','build_status','service_account','environment_variable_count',
+  'effective_revisions_json'
 ]);
 
 const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
