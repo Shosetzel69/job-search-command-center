@@ -110,9 +110,18 @@ export function createDevObserver({ transport, now = () => new Date().toISOStrin
             revision.containers?.[0]?.imageDigest || revision.containers?.[0]?.image),
         }));
       }
+      const account = data.template?.serviceAccount;
+      const serviceAccount = typeof account === 'string' &&
+        /^[a-z][a-z0-9-]{3,120}@(jscc-dev|jscc-shared)\.iam\.gserviceaccount\.com$/.test(account)
+        ? account : 'UNKNOWN';
       return Object.freeze({
         environment: 'dev', task: admitted.task, resource: expected,
         effective_revisions: revisions,
+        service_account: serviceAccount,
+        // The count is metadata, not env names or values. Secret references are
+        // deliberately not copied out of the GCP response.
+        environment_variable_count: Array.isArray(data.template?.containers?.[0]?.env)
+          ? data.template.containers[0].env.length : null,
         source_sha: 'UNKNOWN', observed_at: capturedAt,
       });
     },
