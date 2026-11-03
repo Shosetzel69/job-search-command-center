@@ -53,6 +53,10 @@ jobs:
           node --check ops/src/lib.mjs
           node --check ops/src/gateway.mjs
           node --check ops/src/worker.mjs
+          node --check ops/src/dev_workspace.mjs
+          node --check ops/observation/dev-runtime-observer.mjs
+          node --check ops/observation/dev-observer-client.mjs
+          node --check ops/observation/server.mjs
 
       - name: Validate DEV scripts
         run: |
