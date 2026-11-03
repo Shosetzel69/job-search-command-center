@@ -76,7 +76,7 @@ export async function invokeDevObserver(args, observerUrl, { fetchImpl=fetch, id
   return Object.freeze({
     ...core,effective_revisions:output,
     service_account:typeof response.service_account==='string' &&
-      /^[a-z][a-z0-9-]{3,120}@(jscc-dev|jscc-shared)\\.iam\\.gserviceaccount\\.com$/.test(response.service_account)
+      /^[a-z][a-z0-9-]{3,120}@(jscc-dev|jscc-shared)\.iam\.gserviceaccount\.com$/.test(response.service_account)
       ? response.service_account : 'UNKNOWN',
     environment_variable_count:Number.isInteger(response.environment_variable_count) &&
       response.environment_variable_count>=0 && response.environment_variable_count<=500
