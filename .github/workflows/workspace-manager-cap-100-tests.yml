@@ -1,0 +1,46 @@
+name: Workspace Manager cap 100 patch tests
+
+on:
+  pull_request:
+    paths:
+      - 'scripts/gcp/patch_workspace_manager_limit.py'
+      - 'tests/test_workspace_manager_cap_patch.py'
+      - '.github/workflows/workspace-manager-cap-100-tests.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'scripts/gcp/patch_workspace_manager_limit.py'
+      - 'tests/test_workspace_manager_cap_patch.py'
+      - '.github/workflows/workspace-manager-cap-100-tests.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  source-patch-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout exact tested commit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify Python syntax
+        run: python3 -m py_compile scripts/gcp/patch_workspace_manager_limit.py tests/test_workspace_manager_cap_patch.py
+      - name: Source transformation tests
+        run: python3 -m unittest discover -s tests -p 'test_workspace_manager_cap_patch.py' -v
+      - name: Verify source-only patch against synthetic isolated manager
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$(mktemp -d)"
+          trap 'rm -rf "$root"' EXIT
+          mkdir -p "$root/service"
+          printf 'MAX_FILES = 80\nMAX_FILE = 131072\nMAX_TOTAL = 2097152\n' > "$root/service/common.py"
+          python3 scripts/gcp/patch_workspace_manager_limit.py --source-dir "$root" --apply
+          grep -qx 'MAX_FILES = 100' "$root/service/common.py"
+          grep -qx 'MAX_FILE = 131072' "$root/service/common.py"
+          grep -qx 'MAX_TOTAL = 2097152' "$root/service/common.py"
+          python3 scripts/gcp/patch_workspace_manager_limit.py --source-dir "$root" --apply
+
+# This workflow neither builds nor deploys the actual Cloud Run manager.
