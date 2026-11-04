@@ -15,6 +15,7 @@ export const workspaceTools = Object.freeze([
   { name:'workspace_search', description:'Search literal text in bounded DEV workspace files. Returns file names and line numbers only, never matching source snippets.', inputSchema:{type:'object',required:['term'],properties:{term:{type:'string',minLength:1,maxLength:100}},additionalProperties:false} },
   { name:'workspace_compare', description:'Compare two DEV workspace files by SHA256 and changed-line ranges (no source snippets).', inputSchema:{type:'object',required:['left','right'],properties:{left:{type:'string'},right:{type:'string'}},additionalProperties:false} },
   { name:'workspace_replace', description:'Replace one unique literal in an existing DEV UTF-8 file with an optimistic generation precondition.', inputSchema:{type:'object',required:['path','old','new','if_generation_match'],properties:{path:{type:'string'},old:{type:'string'},new:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
+  { name:'workspace_delete', description:'Delete one exact DEV workspace file only if its existing object generation matches (no recursive delete).', inputSchema:{type:'object',required:['path','if_generation_match'],properties:{path:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
 ]);
 
 export function hasDevWriteScope(scope) {
@@ -74,6 +75,12 @@ export function validatedWorkspaceRequest(name, args) {
        typeof args.new!=='string' || Buffer.byteLength(args.new,'utf8')>8192) throw new Error('invalid_replacement_text');
     if(!Number.isSafeInteger(args.if_generation_match) || args.if_generation_match<=0) throw new Error('invalid_generation');
     return {method:'POST',path:'/v1/replace',body:{path,old:args.old,new:args.new,if_generation_match:args.if_generation_match}};
+  }
+  if (name==='workspace_delete') {
+    plainArgs(args,['path','if_generation_match']);
+    const path=filePath(args.path);
+    if(!Number.isSafeInteger(args.if_generation_match) || args.if_generation_match<=0) throw new Error('invalid_generation');
+    return {method:'DELETE',path:'/v1/file?path='+encodeURIComponent(path)+'&if_generation_match='+args.if_generation_match};
   }
   if (name==='workspace_run') {plainArgs(args,['task','argv']);return {method:'POST',path:'/v1/run',body:gatewayCommand(args.task,args.argv)};}
   throw new Error('unknown_workspace_tool');
