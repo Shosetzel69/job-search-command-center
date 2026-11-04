@@ -163,7 +163,7 @@ const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
   'root_cause','log_excerpt',
   // R1-B operational topology is for authenticated tools only, never public.
   'observed_at','resource','build_id','build_status','service_account',
-  'environment_variable_count','effective_revisions_json',
+  'environment_variable_count','effective_revisions_json','immutable_images_json',
   'expected_image_digest','matched_percent','other_percent','unknown_percent',
   'active_revision_count','rollout_verdict','source_provenance','traffic_cutover_authorized'
 ]);
