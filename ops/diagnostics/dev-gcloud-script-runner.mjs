@@ -78,7 +78,7 @@ export async function executeDevGcloudScript(args, {
   for(const image of build.immutable_images) {
     if (!image || typeof image.image!=='string' ||
       !image.image.startsWith('europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/') ||
-      !/^[a-z0-9][a-z0-9._:\\/-]{1,150}$/.test(
+      !/^[a-z0-9][a-z0-9._:-]{1,150}$/.test(
         image.image.slice('europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/'.length)) ||
       image.image.includes('..') ||
       !DIGEST.test(String(image.image_digest))) throw new Error('SCRIPT_EVIDENCE_MISMATCH');
