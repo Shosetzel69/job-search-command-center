@@ -49,6 +49,21 @@ class WorkspaceOpsTests(unittest.TestCase):
         self.assertTrue(compare(self.store,'src/app.py','src/app.py')['equal'])
         self.assertIsNone(compare(self.store,'missing.txt','src/app.py'))
 
+    def test_delete_requires_exact_generation_and_path(self):
+        gen=self.store.put('out/report.txt',b'good',0)
+        with self.assertRaises(GenerationConflict):
+            self.store.delete('out/report.txt',gen+1)
+        self.assertEqual(self.store.get('out/report.txt')[0],b'good')
+        self.assertTrue(self.store.delete('out/report.txt',gen))
+        self.assertIsNone(self.store.get('out/report.txt'))
+        with self.assertRaises(GenerationConflict):
+            self.store.delete('out/report.txt',gen)
+        for bad in (0,True,-1):
+            with self.assertRaises(ValueError):
+                self.store.delete('src/app.py',bad)
+        with self.assertRaises(ValueError):
+            self.store.delete('../credentials.json',1)
+
     def test_replace_generation_cas(self):
         out=replace_once(self.store,'src/app.py','second line','patched',1)
         self.assertEqual(out['generation'],2)
