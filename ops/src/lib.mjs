@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
-export const CATALOG_VERSION = '589-r1b-v1';
+export const CATALOG_VERSION = '589-r3-v1';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
 export const REQUIRED_AUDIENCE = 'urn:jscc:ops:dev';
 export const CHATGPT_CLIENT_ID = 'jscc-ops-chatgpt-private';
@@ -39,6 +39,10 @@ export const TASK_CATALOG = Object.freeze({
   describe_dev_build: Object.freeze({
     class: 'OBSERVE',
     params: Object.freeze({ environment: 'dev_env', buildId: 'known_build' }),
+  }),
+  inspect_dev_rollout: Object.freeze({
+    class: 'OBSERVE',
+    params: Object.freeze({ environment: 'dev_env', service: 'dev_service', expected_image_digest:'sha256_digest' }),
   }),
 });
 
@@ -111,6 +115,10 @@ export function validateTaskRequest(task, args) {
     } else if (type === 'known_build') {
       clean[name] = admitDevRequest({environment:'dev',task:'describe_dev_build',buildId:value}).buildId;
     }
+    else if (type === 'sha256_digest') {
+      if (typeof value !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(value)) throw new Error('invalid_image_digest');
+      clean[name] = value;
+    }
     else if (type === 'sha40') clean[name] = validateSha40(value);
     else if (type === 'suite') {
       const suite = String(value || '');
@@ -155,7 +163,9 @@ const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
   'root_cause','log_excerpt',
   // R1-B operational topology is for authenticated tools only, never public.
   'observed_at','resource','build_id','build_status','service_account',
-  'environment_variable_count','effective_revisions_json'
+  'environment_variable_count','effective_revisions_json',
+  'expected_image_digest','matched_percent','other_percent','unknown_percent',
+  'active_revision_count','rollout_verdict','source_provenance','traffic_cutover_authorized'
 ]);
 
 function projectAssertions(input, fields) {
