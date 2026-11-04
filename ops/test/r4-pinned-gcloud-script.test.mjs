@@ -136,6 +136,17 @@ test('R4 cross-project or mismatched evidence cannot be emitted as valid',async(
   {onBuild:{...build(),resource:'projects/other/locations/europe-west1/builds/'+buildId}},
   {onRuntime:{...runtime(),effective_revisions:[{revision:service+'-x',percent:60,image_digest:digest}]}},
   {onRuntime:{...runtime(),effective_revisions:[]}},
+  {onRuntime:{...runtime(),effective_revisions:[
+    {revision:service+'-00001-lbp',percent:50,image_digest:digest},
+    {revision:service+'-00001-lbp',percent:50,image_digest:digest},
+  ]}},
+  {onRuntime:{...runtime(),effective_revisions:[
+    {revision:service+'-00001-lbp',percent:100,image_digest:digest},
+    {revision:service+'-00002-lbp',percent:-1,image_digest:digest},
+  ]}},
+  {onRuntime:{...runtime(),effective_revisions:[
+    {revision:'jscc-prod-app-00001-lbp',percent:100,image_digest:digest},
+  ]}},
   {onBuild:{...build(),immutable_images:[{image:'other-registry/x',image_digest:digest}]}},
  ]) {
   const {observer}=mock(overrides);
