@@ -44,6 +44,11 @@ jobs:
       - name: Run Remote Executor contract tests
         run: node --test ops/test/*.test.mjs
 
+      - name: Run DEV workspace Python contract tests
+        run: |
+          python3 -m unittest discover -s ops/workspace-manager/tests -p 'test_*.py' -v
+          python3 -m compileall -q ops/workspace-manager/service
+
       - name: Validate auth library resolution
         run: node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
         working-directory: ops
