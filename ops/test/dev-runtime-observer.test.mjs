@@ -178,7 +178,7 @@ test('F2: missing revision is never inferred for non-LATEST allocation',async()=
 
 test('F2: absent or foreign latest-ready revision fails closed',async()=>{
  for(const latestReadyRevision of [
-   undefined,
+   null,
    'projects/jscc-prod/locations/europe-west1/services/'+service+'/revisions/'+rev1,
  ]) {
   const {observer}=mock({
