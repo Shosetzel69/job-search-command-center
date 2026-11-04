@@ -11,6 +11,10 @@ export const workspaceTools = Object.freeze([
   { name:'workspace_read_file', description:'Read a UTF-8 file from the DEV workspace.', inputSchema:{type:'object',required:['path'],properties:{path:{type:'string'}},additionalProperties:false} },
   { name:'workspace_write_file', description:'Create or update one DEV workspace file using optimistic generation checking (0 for create).', inputSchema:{type:'object',required:['path','content','if_generation_match'],properties:{path:{type:'string'},content:{type:'string'},if_generation_match:{type:'integer',minimum:0}},additionalProperties:false} },
   { name:'workspace_run', description:'Run a trusted DEV development command or validation task in the isolated sandbox; no TEST/PROD.', inputSchema:{type:'object',required:['task'],properties:{task:{type:'string',enum:['python_syntax','pytest','command']},argv:{type:'array',items:{type:'string'}}},additionalProperties:false} },
+  { name:'workspace_checksum', description:'Read SHA256, byte count and generation for one DEV workspace file without retrieving its contents.', inputSchema:{type:'object',required:['path'],properties:{path:{type:'string'}},additionalProperties:false} },
+  { name:'workspace_search', description:'Search literal text in bounded DEV workspace files. Returns file names and line numbers only, never matching source snippets.', inputSchema:{type:'object',required:['term'],properties:{term:{type:'string',minLength:1,maxLength:100}},additionalProperties:false} },
+  { name:'workspace_compare', description:'Compare two DEV workspace files by SHA256 and changed-line ranges (no source snippets).', inputSchema:{type:'object',required:['left','right'],properties:{left:{type:'string'},right:{type:'string'}},additionalProperties:false} },
+  { name:'workspace_replace', description:'Replace one unique literal in an existing DEV UTF-8 file with an optimistic generation precondition.', inputSchema:{type:'object',required:['path','old','new','if_generation_match'],properties:{path:{type:'string'},old:{type:'string'},new:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
 ]);
 
 export function hasDevWriteScope(scope) {
@@ -50,6 +54,26 @@ export function validatedWorkspaceRequest(name, args) {
     if (typeof args.content!=='string' || Buffer.byteLength(args.content,'utf8')>maxSourceBytes) throw new Error('invalid_content');
     if (!Number.isSafeInteger(args.if_generation_match) || args.if_generation_match<0) throw new Error('invalid_generation');
     return {method:'PUT',path:'/v1/file',body:{path,content:args.content,if_generation_match:args.if_generation_match}};
+  }
+  if (name==='workspace_checksum') {
+    plainArgs(args,['path']);return {method:'GET',path:'/v1/checksum?path='+encodeURIComponent(filePath(args.path))};
+  }
+  if (name==='workspace_search') {
+    plainArgs(args,['term']);
+    if (typeof args.term!=='string' || !args.term || Buffer.byteLength(args.term,'utf8')>100) throw new Error('invalid_search_term');
+    return {method:'GET',path:'/v1/search?term='+encodeURIComponent(args.term)};
+  }
+  if (name==='workspace_compare') {
+    plainArgs(args,['left','right']);
+    return {method:'GET',path:'/v1/compare?left='+encodeURIComponent(filePath(args.left))+'&right='+encodeURIComponent(filePath(args.right))};
+  }
+  if (name==='workspace_replace') {
+    plainArgs(args,['path','old','new','if_generation_match']);
+    const path=filePath(args.path);
+    if(typeof args.old!=='string' || !args.old || Buffer.byteLength(args.old,'utf8')>8192 ||
+       typeof args.new!=='string' || Buffer.byteLength(args.new,'utf8')>8192) throw new Error('invalid_replacement_text');
+    if(!Number.isSafeInteger(args.if_generation_match) || args.if_generation_match<=0) throw new Error('invalid_generation');
+    return {method:'POST',path:'/v1/replace',body:{path,old:args.old,new:args.new,if_generation_match:args.if_generation_match}};
   }
   if (name==='workspace_run') {plainArgs(args,['task','argv']);return {method:'POST',path:'/v1/run',body:gatewayCommand(args.task,args.argv)};}
   throw new Error('unknown_workspace_tool');
