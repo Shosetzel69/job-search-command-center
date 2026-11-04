@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {TASK_CATALOG,validateTaskRequest,publicEvidence,authenticatedEvidence} from '../src/lib.mjs';
+import {CATALOG_VERSION,TASK_CATALOG,validateTaskRequest,validateDispatchBinding,publicEvidence,authenticatedEvidence} from '../src/lib.mjs';
 
 test('R1 B reuses existing operation protocol with OBSERVE-only tasks',()=>{
  for(const task of ['describe_dev_runtime','describe_dev_build']){
@@ -30,4 +30,18 @@ test('R1 B evidence projection does not return arbitrary worker-private response
  assert.equal(publicResult.assertions.token,undefined);
  assert.equal(auth.assertions.token,undefined);
  assert.ok(auth.assertions.effective_revisions_json);
+});
+
+test('R1-B catalog version rejects old R33 dispatch in changed worker',()=>{
+ assert.equal(CATALOG_VERSION,'589-r1b-v1');
+ const now=Date.now();
+ const base={
+  execution_name:'jscc-diagnostics-dev-123',
+  ops_source_sha:'a'.repeat(40),
+  worker_image_digest:'sha256:'+'b'.repeat(64),
+  expires_at_ms:now+60000,
+ };
+ const expected={catalog_version:CATALOG_VERSION,ops_source_sha:base.ops_source_sha,worker_image_digest:base.worker_image_digest};
+ assert.throws(()=>validateDispatchBinding({...base,catalog_version:'537-v1'},base.execution_name,expected,now),/catalog_version_mismatch/);
+ assert.equal(validateDispatchBinding({...base,catalog_version:CATALOG_VERSION},base.execution_name,expected,now).catalog_version,CATALOG_VERSION);
 });
