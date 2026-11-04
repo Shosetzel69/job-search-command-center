@@ -19,6 +19,27 @@ const KNOWN_BUILD_IDS = new Set([
 ]);
 const DIGEST = /(?:^|@)(sha256:[0-9a-f]{64})$/;
 
+// Cloud Build results can include substitutions, secrets and opaque metadata.
+// Project ONLY immutable digests from the pre-approved JSCC ops registry.
+function verifiedBuildImages(build) {
+  const entries = build?.results?.images;
+  if (!Array.isArray(entries)) return [];
+  if (entries.length > 20) throw new Error('INSUFFICIENT_EVIDENCE');
+  const prefix = 'europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/';
+  const out = [];
+  for (const image of entries) {
+    const name = image?.name, digest = image?.digest;
+    if (typeof name !== 'string' || !name.startsWith(prefix) ||
+        !/^sha256:[0-9a-f]{64}$/.test(String(digest))) continue;
+    const imagePath = name.slice(prefix.length);
+    if (!/^[a-z0-9][a-z0-9._:\/-]{1,150}$/.test(imagePath) ||
+        imagePath.split('/').some(x=>!x || x==='..' || x==='.')) continue;
+    if (out.length >= 10) throw new Error('INSUFFICIENT_EVIDENCE');
+    out.push(Object.freeze({image:name,image_digest:digest}));
+  }
+  return out;
+}
+
 export function admitDevRequest(request = {}) {
   if (!request || typeof request !== 'object' || Array.isArray(request)) throw new Error('invalid_request');
   const keys = Object.keys(request);
@@ -101,6 +122,7 @@ export function createDevObserver({ transport, now = () => new Date().toISOStrin
           build_id: admitted.buildId,
           build_status: typeof data.status === 'string' &&
             /^[A-Z_]{1,36}$/.test(data.status) ? data.status : 'UNKNOWN',
+          immutable_images:verifiedBuildImages(data),
           source_sha: 'UNKNOWN',
           observed_at: capturedAt,
         });
