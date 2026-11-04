@@ -56,14 +56,31 @@ export async function executeDevGcloudScript(args, {
       !Array.isArray(build.immutable_images) || build.immutable_images.length>10) {
     throw new Error('SCRIPT_EVIDENCE_MISMATCH');
   }
-  const serving=runtime.effective_revisions.filter(x=>x?.percent>0);
-  if(serving.length<1 || serving.some(x=>!Number.isInteger(x.percent) || x.percent>100) ||
-      serving.reduce((n,x)=>n+x.percent,0)!==100) throw new Error('SCRIPT_EVIDENCE_MISMATCH');
+  const seen=new Set();
+  for(const row of runtime.effective_revisions) {
+    if (!row || typeof row.revision!=='string' ||
+        !row.revision.startsWith(clean.service+'-') ||
+        !/^[a-z0-9-]{6,100}$/.test(row.revision) ||
+        !Number.isInteger(row.percent) || row.percent<0 || row.percent>100) {
+      throw new Error('SCRIPT_EVIDENCE_MISMATCH');
+    }
+    if(row.percent>0) {
+      if(seen.has(row.revision)) throw new Error('SCRIPT_EVIDENCE_MISMATCH');
+      seen.add(row.revision);
+    }
+  }
+  const serving=runtime.effective_revisions.filter(x=>x.percent>0);
+  if(serving.length<1 || serving.reduce((n,x)=>n+x.percent,0)!==100) {
+    throw new Error('SCRIPT_EVIDENCE_MISMATCH');
+  }
 
   const buildDigests=new Set();
   for(const image of build.immutable_images) {
     if (!image || typeof image.image!=='string' ||
       !image.image.startsWith('europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/') ||
+      !/^[a-z0-9][a-z0-9._:\\/-]{1,150}$/.test(
+        image.image.slice('europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/'.length)) ||
+      image.image.includes('..') ||
       !DIGEST.test(String(image.image_digest))) throw new Error('SCRIPT_EVIDENCE_MISMATCH');
     buildDigests.add(image.image_digest);
   }
