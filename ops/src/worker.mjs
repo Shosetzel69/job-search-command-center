@@ -3,7 +3,7 @@ import {
   gcsWriteJson, isoNow, normalizeExecutionId, publicEvidence, releaseLease, sanitizeExternal, sanitizeText, validateDispatchBinding, validateTaskRequest
 } from './lib.mjs';
 import { createDevObserver } from '../observation/dev-runtime-observer.mjs';
-import { assessDevRollout } from '../observation/dev-rollout-evaluator.mjs';
+import { assessDevRollout, planDevDeployment } from '../observation/dev-rollout-evaluator.mjs';
 
 const cfg = envConfig();
 const ownExecution = normalizeExecutionId(process.env.CLOUD_RUN_EXECUTION || '');
@@ -154,6 +154,11 @@ async function describeDevObservation(task,args){
     const review=assessDevRollout(observed,args.expected_image_digest);
     return {...review,resource:observed.resource,target_source_sha:'UNKNOWN'};
   }
+  if(task==='plan_dev_deployment') {
+    const observed=await observer.describe({environment:'dev',task:'describe_dev_runtime',service:args.service});
+    const plan=planDevDeployment(observed,args);
+    return {...plan,resource:observed.resource,target_source_sha:'UNKNOWN'};
+  }
   const result=await observer.describe({...args,task});
   const summary=task==='describe_dev_runtime'
     ? JSON.stringify(result.effective_revisions) : null;
@@ -199,6 +204,15 @@ function publicAssertions(task, value) {
     rollout_verdict:value.rollout_verdict,source_provenance:value.source_provenance,
     traffic_cutover_authorized:false,
   };
+  if (task === 'plan_dev_deployment') return {
+    target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
+    expected_current_digest:value.expected_current_digest,
+    proposed_image_digest:value.proposed_image_digest,
+    expected_source_sha:value.expected_source_sha,
+    source_image_link:value.source_image_link,change_required:value.change_required,
+    deployment_authorized:false,approval_required:value.approval_required,
+    preflight_verdict:value.preflight_verdict,
+  };
   return {};
 }
 
@@ -218,7 +232,7 @@ async function main(){
     else if(taskReq.task==='read_execution_logs') value=await readExecutionLogs(taskReq.args);
     else if(taskReq.task==='inspect_runtime_snapshot') value=await inspectRuntimeSnapshot(taskReq.args);
     else if(taskReq.task==='run_test_suite') value=await runTestSuite(taskReq.args);
-    else if(['describe_dev_runtime','describe_dev_build','inspect_dev_rollout'].includes(taskReq.task))
+    else if(['describe_dev_runtime','describe_dev_build','inspect_dev_rollout','plan_dev_deployment'].includes(taskReq.task))
       value=await describeDevObservation(taskReq.task,taskReq.args);
     else throw new Error('unknown_task');
     const external=sanitizeExternal(typeof value.output==='string'?value.output:'');
