@@ -157,7 +157,10 @@ async function describeDevObservation(task,args){
   const result=await observer.describe({...args,task});
   const summary=task==='describe_dev_runtime'
     ? JSON.stringify(result.effective_revisions) : null;
+  const buildImages=task==='describe_dev_build'
+    ? JSON.stringify(result.immutable_images) : null;
   if(summary && Buffer.byteLength(summary)>4096) throw new Error('observation_too_large');
+  if(buildImages && Buffer.byteLength(buildImages)>4096) throw new Error('observation_too_large');
   return {
     target_alias:task==='describe_dev_runtime'?args.service:args.buildId,
     resource:result.resource,
@@ -169,6 +172,7 @@ async function describeDevObservation(task,args){
       effective_revisions_json:summary,
     }:{
       build_id:result.build_id,build_status:result.build_status,
+      immutable_images_json:buildImages,
     }),
   };
 }
@@ -185,6 +189,7 @@ function publicAssertions(task, value) {
   if (task === 'describe_dev_build') return {
     target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
     build_id:value.build_id,build_status:value.build_status,
+    immutable_images_json:value.immutable_images_json,
   };
   if (task === 'inspect_dev_rollout') return {
     target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
