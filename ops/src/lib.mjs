@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
-export const CATALOG_VERSION = '537-v1';
+export const CATALOG_VERSION = '589-r1b-v1';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
 export const REQUIRED_AUDIENCE = 'urn:jscc:ops:dev';
 export const CHATGPT_CLIENT_ID = 'jscc-ops-chatgpt-private';
