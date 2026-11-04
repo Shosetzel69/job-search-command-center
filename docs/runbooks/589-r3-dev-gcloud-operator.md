@@ -49,9 +49,26 @@ deliberately `UNKNOWN` unless independently verified.
 
 **Builds are NOT triggered by this operation.**
 
-### 3. Catalog and rollout compatibility
+### 3. `plan_dev_deployment` — source-only preflight
 
-Catalog changes from `589-r1b-v1` to `589-r3-v1`, so old gateway /
+Input:
+`{ "environment":"dev", "service":"<fixed DEV target>",
+   "expected_current_digest":"sha256:<64 hex>",
+   "proposed_image_digest":"sha256:<64 hex>",
+   "expected_source_sha":"<40 lowercase hex>" }`
+
+Calls the same observed Cloud Run service/revision evidence and requires the
+**current serving image to match the supplied expected digest at 100% traffic**
+before preparing any release change. Any drift, split or unknown image
+fails closed. It emits `SOURCE_IMAGE_PROVENANCE_REQUIRED` until the
+proposed source SHA and image digest have been independently correlated
+with the trusted Cloud Build execution. If both digests are identical,
+it emits `ALREADY_AT_DIGEST` instead. This tool **does not deploy**:
+`deployment_authorized=false` always, regardless of input or user scope.
+
+### 4. Catalog and rollout compatibility
+
+Catalog changes from `589-r1b-v1` to `589-r3-v2`, so old gateway /
 new worker mismatch must fail closed. Release requires paired, matching
 immutable gateway+worker images, a drain of existing operations,
 separate owner permission to deploy and a tested rollback to R33.
