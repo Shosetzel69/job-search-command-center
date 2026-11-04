@@ -50,14 +50,24 @@ function safeRevision(value, service) {
     /^[a-z0-9-]{1,100}$/.test(shortName) ? shortName : 'UNKNOWN';
 }
 function trafficRows(service, name) {
-  // trafficStatuses is the observed routing state. service.traffic is desired
-  // configuration and must never be presented as an active revision.
+  // v2 trafficStatuses is OBSERVED routing, unlike desired service.traffic.
+  // LATEST allocation may not carry a revision; only for that explicit
+  // allocation type may latestReadyRevision resolve the serving target.
   const rows = Array.isArray(service.trafficStatuses) ? service.trafficStatuses : [];
-  return rows.map(row => ({
-    revision: safeRevision(row.revision || row.revisionName, name),
-    percent: Number.isInteger(row.percent) && row.percent >= 0 && row.percent <= 100
-      ? row.percent : null,
-  })).filter(row => row.revision !== 'UNKNOWN' && row.percent !== null);
+  return rows.map(row => {
+    if (!row || typeof row !== 'object' || Array.isArray(row)) return null;
+    const latest = row.type === 'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST';
+    const revisionIsMissing = row.revision === undefined || row.revision === null || row.revision === '';
+    const candidate = revisionIsMissing && latest
+      ? service.latestReadyRevision : row.revision;
+    const revision = safeRevision(candidate, name);
+    const percent = Number.isInteger(row.percent) && row.percent >= 0 && row.percent <= 100
+      ? row.percent : null;
+    if (revision === 'UNKNOWN' || percent === null) return null;
+    return revisionIsMissing && latest
+      ? { revision, percent, resolved_from:'latest_ready' }
+      : { revision, percent };
+  }).filter(Boolean);
 }
 function statusOf(http) {
   return Number.isInteger(http?.status) ? http.status : 0;
@@ -109,11 +119,17 @@ export function createDevObserver({ transport, now = () => new Date().toISOStrin
         const revPath = `/v2/projects/${PROJECT}/locations/${REGION}/services/${service}/revisions/${item.revision}`;
         const revision = resultData(await get({ api: 'run.googleapis.com', path: revPath }));
         if (revision.name !== revPath.slice(4)) throw new Error('RESOURCE_MISMATCH');
+        // Status array order is not evidence of which container is the main
+        // application. Match the image status to the first declared container.
+        const primaryName = revision.containers?.[0]?.name;
+        const statuses = revision.containerStatuses;
+        const primaryStatus = typeof primaryName === 'string' &&
+          Array.isArray(statuses)
+          ? statuses.find(s => s?.name === primaryName) : null;
         revisions.push(Object.freeze({
-          revision: item.revision, percent: item.percent,
-          // API v2 exposes the *resolved* immutable image through
-          // output-only containerStatuses; a configured tag is not evidence.
-          image_digest: safeDigest(revision.containerStatuses?.[0]?.imageDigest),
+          revision:item.revision, percent:item.percent,
+          ...(item.resolved_from ? { resolved_from:item.resolved_from } : {}),
+          image_digest:safeDigest(primaryStatus?.imageDigest),
         }));
       }
       const account = data.template?.serviceAccount;
