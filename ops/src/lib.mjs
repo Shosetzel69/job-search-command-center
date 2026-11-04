@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
-export const CATALOG_VERSION = '589-r3-v1';
+export const CATALOG_VERSION = '589-r3-v2';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
 export const REQUIRED_AUDIENCE = 'urn:jscc:ops:dev';
 export const CHATGPT_CLIENT_ID = 'jscc-ops-chatgpt-private';
@@ -43,6 +43,15 @@ export const TASK_CATALOG = Object.freeze({
   inspect_dev_rollout: Object.freeze({
     class: 'OBSERVE',
     params: Object.freeze({ environment: 'dev_env', service: 'dev_service', expected_image_digest:'sha256_digest' }),
+  }),
+  plan_dev_deployment: Object.freeze({
+    class:'OBSERVE',
+    params:Object.freeze({
+      environment:'dev_env',service:'dev_service',
+      expected_current_digest:'sha256_digest',
+      proposed_image_digest:'sha256_digest',
+      expected_source_sha:'sha40',
+    }),
   }),
 });
 
@@ -165,7 +174,10 @@ const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
   'observed_at','resource','build_id','build_status','service_account',
   'environment_variable_count','effective_revisions_json','immutable_images_json',
   'expected_image_digest','matched_percent','other_percent','unknown_percent',
-  'active_revision_count','rollout_verdict','source_provenance','traffic_cutover_authorized'
+  'active_revision_count','rollout_verdict','source_provenance','traffic_cutover_authorized',
+  'expected_current_digest','proposed_image_digest','expected_source_sha',
+  'source_image_link','change_required','deployment_authorized','approval_required',
+  'preflight_verdict'
 ]);
 
 function projectAssertions(input, fields) {
