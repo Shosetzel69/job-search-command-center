@@ -4,8 +4,9 @@ COPY ops/package.json ./ops/package.json
 RUN cd ops && npm install --omit=dev --ignore-scripts
 COPY ops/src ./ops/src
 COPY ops/observation/dev-runtime-observer.mjs ./ops/observation/dev-runtime-observer.mjs
+COPY ops/observation/dev-rollout-evaluator.mjs ./ops/observation/dev-rollout-evaluator.mjs
 ARG SOURCE_SHA
 ENV SOURCE_SHA=${SOURCE_SHA}
-RUN cd ops && node --check src/lib.mjs && node --check src/worker.mjs && node --check observation/dev-runtime-observer.mjs
+RUN cd ops && node --check src/lib.mjs && node --check src/worker.mjs && node --check observation/dev-runtime-observer.mjs && node --check observation/dev-rollout-evaluator.mjs
 USER node
 CMD ["node","ops/src/worker.mjs"]
