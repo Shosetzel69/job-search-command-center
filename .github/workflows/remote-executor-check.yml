@@ -68,6 +68,8 @@ jobs:
           bash -n scripts/gcp/capture_r33_gateway_source_dev.sh
           bash -n scripts/gcp/import_r33_source_to_dev_workspace_589.sh
           bash -n scripts/gcp/inspect_r1_b_worker_iam_readonly.sh
+          bash -n scripts/gcp/grant_r1b_minimal_observer_iam_589.sh
+          bash -n scripts/gcp/revoke_r1b_minimal_observer_iam_589.sh
 
       - name: Validate security boundaries statically
         run: |
