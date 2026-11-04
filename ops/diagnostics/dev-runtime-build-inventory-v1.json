@@ -1,0 +1,12 @@
+{
+  "schema_version": "1.0",
+  "script_id": "dev_runtime_build_inventory_v1",
+  "environment": "dev",
+  "class": "OBSERVE",
+  "steps": [
+    {"action": "describe_dev_runtime", "project": "jscc-dev", "api": "run.googleapis.com", "method": "GET"},
+    {"action": "describe_dev_build", "project": "jscc-shared", "api": "cloudbuild.googleapis.com", "method": "GET"}
+  ],
+  "effects": "none",
+  "approved_resource_policy": "R1-B-FOUR-SERVICES-TWO-BUILDS"
+}
