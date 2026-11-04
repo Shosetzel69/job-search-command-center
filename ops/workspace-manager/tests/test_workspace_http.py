@@ -37,12 +37,12 @@ class WorkspaceHTTPTests(unittest.TestCase):
         cls.temp.cleanup()
 
     @classmethod
-    def request(cls,path,body=None):
+    def request(cls,path,body=None,method=None):
         payload=None if body is None else json.dumps(body).encode('utf-8')
         req=urllib.request.Request(
             cls.url+path,data=payload,
             headers={'Content-Type':'application/json'},
-            method='GET' if body is None else 'POST'
+            method=method or ('GET' if body is None else 'POST')
         )
         try:
             with urllib.request.urlopen(req,timeout=3) as r:
@@ -76,6 +76,19 @@ class WorkspaceHTTPTests(unittest.TestCase):
         })
         self.assertEqual(status,409)
         self.assertEqual(data['error'],'generation_conflict')
+
+    def test_delete_exact_path_and_stale_generation(self):
+        manager.backend.put('tmp/discard.txt',b'data',0)
+        status,result=self.request('/v1/file?path=tmp%2Fdiscard.txt&if_generation_match=2',method='DELETE')
+        self.assertEqual(status,409)
+        self.assertEqual(result['error'],'generation_conflict')
+        status,result=self.request('/v1/file?path=tmp%2Fdiscard.txt&if_generation_match=1',method='DELETE')
+        self.assertEqual(status,200)
+        self.assertTrue(result['deleted'])
+        status,result=self.request('/v1/file?path=tmp%2Fdiscard.txt&if_generation_match=1',method='DELETE')
+        self.assertEqual(status,409)
+        status,result=self.request('/v1/file?path=tmp%2Fdiscard.txt&if_generation_match=0',method='DELETE')
+        self.assertEqual(status,400)
 
     def test_rejected_paths_extra_args_and_nonunique_patch(self):
         status,data=self.request('/v1/checksum?path=..%2Fprivate')
