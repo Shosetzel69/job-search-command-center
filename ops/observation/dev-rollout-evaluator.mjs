@@ -61,3 +61,33 @@ export function assessDevRollout(observation, expectedDigest) {
     observed_at:observation.observed_at || null,
   });
 }
+
+export function planDevDeployment(observation, {
+  expected_current_digest, proposed_image_digest, expected_source_sha,
+}) {
+  const current=validateImageDigest(expected_current_digest);
+  const proposed=validateImageDigest(proposed_image_digest);
+  if (typeof expected_source_sha !== 'string' ||
+      !/^[0-9a-f]{40}$/.test(expected_source_sha)) {
+    throw new Error('invalid_source_sha');
+  }
+  // This is an OBSERVE preflight, not Cloud Run's mutating service UPDATE.
+  const live=assessDevRollout(observation,current);
+  if(live.rollout_verdict !== 'IMAGE_MATCHED_100_PERCENT') {
+    throw new Error('DEPLOYMENT_PRECONDITION_FAILED');
+  }
+  return Object.freeze({
+    environment:'dev',
+    target_alias:live.target_alias,
+    expected_current_digest:current,
+    proposed_image_digest:proposed,
+    expected_source_sha,
+    source_image_link:'UNVERIFIED',
+    change_required:current!==proposed,
+    deployment_authorized:false,
+    approval_required:current!==proposed,
+    preflight_verdict:current===proposed
+      ? 'ALREADY_AT_DIGEST' : 'SOURCE_IMAGE_PROVENANCE_REQUIRED',
+    observed_at:live.observed_at,
+  });
+}
