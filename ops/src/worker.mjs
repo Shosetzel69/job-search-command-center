@@ -3,6 +3,7 @@ import {
   gcsWriteJson, isoNow, normalizeExecutionId, publicEvidence, releaseLease, sanitizeExternal, sanitizeText, validateDispatchBinding, validateTaskRequest
 } from './lib.mjs';
 import { createDevObserver } from '../observation/dev-runtime-observer.mjs';
+import { assessDevRollout, planDevDeployment } from '../observation/dev-rollout-evaluator.mjs';
 
 const cfg = envConfig();
 const ownExecution = normalizeExecutionId(process.env.CLOUD_RUN_EXECUTION || '');
@@ -148,10 +149,23 @@ async function devObservationTransport({api,path}) {
 }
 async function describeDevObservation(task,args){
   const observer=createDevObserver({transport:devObservationTransport});
+  if(task==='inspect_dev_rollout') {
+    const observed=await observer.describe({environment:'dev',task:'describe_dev_runtime',service:args.service});
+    const review=assessDevRollout(observed,args.expected_image_digest);
+    return {...review,resource:observed.resource,target_source_sha:'UNKNOWN'};
+  }
+  if(task==='plan_dev_deployment') {
+    const observed=await observer.describe({environment:'dev',task:'describe_dev_runtime',service:args.service});
+    const plan=planDevDeployment(observed,args);
+    return {...plan,resource:observed.resource,target_source_sha:'UNKNOWN'};
+  }
   const result=await observer.describe({...args,task});
   const summary=task==='describe_dev_runtime'
     ? JSON.stringify(result.effective_revisions) : null;
+  const buildImages=task==='describe_dev_build'
+    ? JSON.stringify(result.immutable_images) : null;
   if(summary && Buffer.byteLength(summary)>4096) throw new Error('observation_too_large');
+  if(buildImages && Buffer.byteLength(buildImages)>4096) throw new Error('observation_too_large');
   return {
     target_alias:task==='describe_dev_runtime'?args.service:args.buildId,
     resource:result.resource,
@@ -163,6 +177,7 @@ async function describeDevObservation(task,args){
       effective_revisions_json:summary,
     }:{
       build_id:result.build_id,build_status:result.build_status,
+      immutable_images_json:buildImages,
     }),
   };
 }
@@ -179,6 +194,24 @@ function publicAssertions(task, value) {
   if (task === 'describe_dev_build') return {
     target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
     build_id:value.build_id,build_status:value.build_status,
+    immutable_images_json:value.immutable_images_json,
+  };
+  if (task === 'inspect_dev_rollout') return {
+    target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
+    expected_image_digest:value.expected_image_digest,
+    matched_percent:value.matched_percent,other_percent:value.other_percent,
+    unknown_percent:value.unknown_percent,active_revision_count:value.active_revision_count,
+    rollout_verdict:value.rollout_verdict,source_provenance:value.source_provenance,
+    traffic_cutover_authorized:false,
+  };
+  if (task === 'plan_dev_deployment') return {
+    target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
+    expected_current_digest:value.expected_current_digest,
+    proposed_image_digest:value.proposed_image_digest,
+    expected_source_sha:value.expected_source_sha,
+    source_image_link:value.source_image_link,change_required:value.change_required,
+    deployment_authorized:false,approval_required:value.approval_required,
+    preflight_verdict:value.preflight_verdict,
   };
   return {};
 }
@@ -199,7 +232,7 @@ async function main(){
     else if(taskReq.task==='read_execution_logs') value=await readExecutionLogs(taskReq.args);
     else if(taskReq.task==='inspect_runtime_snapshot') value=await inspectRuntimeSnapshot(taskReq.args);
     else if(taskReq.task==='run_test_suite') value=await runTestSuite(taskReq.args);
-    else if(taskReq.task==='describe_dev_runtime' || taskReq.task==='describe_dev_build')
+    else if(['describe_dev_runtime','describe_dev_build','inspect_dev_rollout','plan_dev_deployment'].includes(taskReq.task))
       value=await describeDevObservation(taskReq.task,taskReq.args);
     else throw new Error('unknown_task');
     const external=sanitizeExternal(typeof value.output==='string'?value.output:'');
