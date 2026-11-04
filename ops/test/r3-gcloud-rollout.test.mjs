@@ -58,7 +58,7 @@ test('R3 unknown source, malformed traffic, duplicates and mismatched environmen
  const bad=[
   obs([]),
   obs([row('00001-lbp',90,desired)]),
-  obs([row('00001-lbp',100,desired),row('00001-lbp',0,desired)]),
+  obs([row('00001-lbp',50,desired),row('00001-lbp',50,desired)]),
   obs([row('00001-lbp',101,desired)]),
   obs([{revision:'../../other',percent:100,image_digest:desired}]),
   {...obs([row('00001-lbp',100,desired)]),environment:'prod'},
@@ -105,4 +105,11 @@ test('R3 worker image closure contains evaluator; gateway does not require it',(
  const docker=readFileSync(new URL('../Dockerfile.worker',import.meta.url),'utf8');
  assert.ok(docker.includes('COPY ops/observation/dev-rollout-evaluator.mjs ./ops/observation/dev-rollout-evaluator.mjs'));
  assert.ok(docker.includes('USER node'));
+});
+
+test('R3 zero-percent revision tags are not treated as serving traffic',()=>{
+ const r=assessDevRollout(obs([row('00001-lbp',100,desired),row('00002-lbp',0,other)]),desired);
+ assert.equal(r.rollout_verdict,'IMAGE_MATCHED_100_PERCENT');
+ assert.equal(r.active_revision_count,1);
+ assert.equal(r.other_percent,0);
 });
