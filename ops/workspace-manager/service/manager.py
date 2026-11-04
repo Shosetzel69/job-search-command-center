@@ -87,6 +87,30 @@ class Handler(BaseHandler):
                 return self.out(400,{'error':str(e)})
         return self.out(404,{'error':'not_found'})
 
+    def do_DELETE(self):
+        q=urllib.parse.urlsplit(self.path)
+        if q.path != '/v1/file':
+            return self.out(404,{'error':'not_found'})
+        try:
+            query=urllib.parse.parse_qs(q.query,keep_blank_values=True)
+            if set(query) != {'path','if_generation_match'} or len(query['path']) != 1 or len(query['if_generation_match']) != 1:
+                raise ValueError('invalid_request')
+            name=checked_path(query['path'][0])
+            raw=query['if_generation_match'][0]
+            if not raw.isascii() or not raw.isdecimal() or len(raw)>20:
+                raise ValueError('invalid_generation')
+            expected=int(raw)
+            if expected<=0:
+                raise ValueError('invalid_generation')
+            removed=backend.delete(name,expected)
+            if not removed:
+                return self.out(404,{'error':'not_found'})
+            return self.out(200,{'path':name,'deleted':True,'generation_matched':expected})
+        except GenerationConflict:
+            return self.out(409,{'error':'generation_conflict'})
+        except ValueError as e:
+            return self.out(400,{'error':str(e)})
+
     def do_PUT(self):
         if self.path != '/v1/file':
             return self.out(404,{'error':'not_found'})
