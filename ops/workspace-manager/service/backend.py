@@ -38,6 +38,23 @@ class LocalBackend:
             self.generations[path] = current + 1
             return current + 1
 
+    def delete(self, path, expected):
+        path = checked_path(path)
+        if type(expected) is not int or expected <= 0:
+            raise ValueError('invalid_generation')
+        with self.lock:
+            current = self.generations.get(path, 0)
+            if current != expected:
+                raise GenerationConflict()
+            p = self.root.joinpath(*path.split('/'))
+            if p.is_symlink() or any(x.is_symlink() for x in p.parents if x != self.root.parent):
+                raise ValueError('symlink_forbidden')
+            if not p.is_file():
+                raise GenerationConflict()
+            p.unlink()
+            del self.generations[path]
+            return True
+
     def snapshot(self):
         with self.lock:
             result = {}
@@ -76,6 +93,20 @@ class GCSBackend:
         except (self.PreconditionFailed, self.Conflict):
             raise GenerationConflict() from None
         return int(blob.generation)
+
+    def delete(self, path, expected):
+        path = checked_path(path)
+        if type(expected) is not int or expected <= 0:
+            raise ValueError('invalid_generation')
+        from google.api_core.exceptions import NotFound
+        blob = self.bucket.blob(self.PREFIX + path)
+        try:
+            blob.delete(if_generation_match=expected)
+        except (self.PreconditionFailed, self.Conflict):
+            raise GenerationConflict() from None
+        except NotFound:
+            return False
+        return True
 
     def snapshot(self):
         items = list(self.client.list_blobs(self.bucket_name, prefix=self.PREFIX, max_results=MAX_FILES + 1))

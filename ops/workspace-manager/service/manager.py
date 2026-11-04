@@ -7,6 +7,7 @@ import urllib.request
 from .httpbase import BaseHandler, serve
 from .backend import GCSBackend, LocalBackend, GenerationConflict
 from .common import checked_path, checked_content, checked_task, MAX_FILES, MAX_TOTAL, MAX_REQUEST, json_bytes
+from .workspace_ops import checksum, find_literal, compare, replace_once
 
 WORKER_URL = os.environ.get('WORKER_URL','').rstrip('/')
 if os.environ.get('K_SERVICE'):
@@ -58,7 +59,57 @@ class Handler(BaseHandler):
                 return self.out(200,{'path':p,'content':content,'generation':generation})
             except ValueError as e:
                 return self.out(400,{'error':str(e)})
+        if q.path == '/v1/checksum':
+            try:
+                query=urllib.parse.parse_qs(q.query,keep_blank_values=True)
+                if set(query) != {'path'} or len(query['path']) != 1:
+                    raise ValueError('invalid_request')
+                found=checksum(backend,query['path'][0])
+                return self.out(200,found) if found is not None else self.out(404,{'error':'not_found'})
+            except ValueError as e:
+                return self.out(400,{'error':str(e)})
+        if q.path == '/v1/search':
+            try:
+                query=urllib.parse.parse_qs(q.query,keep_blank_values=True)
+                if set(query) != {'term'} or len(query['term']) != 1:
+                    raise ValueError('invalid_request')
+                return self.out(200,find_literal(backend,query['term'][0]))
+            except ValueError as e:
+                return self.out(413 if str(e) in ('file_count_limit','workspace_too_large') else 400,{'error':str(e)})
+        if q.path == '/v1/compare':
+            try:
+                query=urllib.parse.parse_qs(q.query,keep_blank_values=True)
+                if set(query) != {'left','right'} or len(query['left']) != 1 or len(query['right']) != 1:
+                    raise ValueError('invalid_request')
+                found=compare(backend,query['left'][0],query['right'][0])
+                return self.out(200,found) if found is not None else self.out(404,{'error':'not_found'})
+            except ValueError as e:
+                return self.out(400,{'error':str(e)})
         return self.out(404,{'error':'not_found'})
+
+    def do_DELETE(self):
+        q=urllib.parse.urlsplit(self.path)
+        if q.path != '/v1/file':
+            return self.out(404,{'error':'not_found'})
+        try:
+            query=urllib.parse.parse_qs(q.query,keep_blank_values=True)
+            if set(query) != {'path','if_generation_match'} or len(query['path']) != 1 or len(query['if_generation_match']) != 1:
+                raise ValueError('invalid_request')
+            name=checked_path(query['path'][0])
+            raw=query['if_generation_match'][0]
+            if not raw.isascii() or not raw.isdecimal() or len(raw)>20:
+                raise ValueError('invalid_generation')
+            expected=int(raw)
+            if expected<=0:
+                raise ValueError('invalid_generation')
+            removed=backend.delete(name,expected)
+            if not removed:
+                return self.out(404,{'error':'not_found'})
+            return self.out(200,{'path':name,'deleted':True,'generation_matched':expected})
+        except GenerationConflict:
+            return self.out(409,{'error':'generation_conflict'})
+        except ValueError as e:
+            return self.out(400,{'error':str(e)})
 
     def do_PUT(self):
         if self.path != '/v1/file':
@@ -80,6 +131,17 @@ class Handler(BaseHandler):
             return self.out(400,{'error':str(e)})
 
     def do_POST(self):
+        if self.path == '/v1/replace':
+            try:
+                o=self.body()
+                if not isinstance(o,dict) or set(o) != {'path','old','new','if_generation_match'}:
+                    raise ValueError('invalid_request')
+                found=replace_once(backend,o['path'],o['old'],o['new'],o['if_generation_match'])
+                return self.out(200,found) if found is not None else self.out(404,{'error':'not_found'})
+            except GenerationConflict:
+                return self.out(409,{'error':'generation_conflict'})
+            except ValueError as e:
+                return self.out(400,{'error':str(e)})
         if self.path != '/v1/run':
             return self.out(404,{'error':'not_found'})
         try:
