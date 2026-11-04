@@ -9,7 +9,8 @@ const rev2 = `${service}-00001-lbp`;
 const sha = 'a'.repeat(64);
 
 function mock({ traffic = [{revision:rev1,percent:100}], fail = null,
-                  mismatched = false, expose = false } = {}) {
+                  mismatched = false, expose = false, latestReadyRevision = rev2,
+                  sidecarFirst = false } = {}) {
   const requests = [];
   const transport = async request => {
     requests.push(request);
@@ -17,21 +18,24 @@ function mock({ traffic = [{revision:rev1,percent:100}], fail = null,
     if (request.path.endsWith('/revisions/' + rev1)) {
       return { status:200, body:{
         name: servicePath+'/revisions/'+(mismatched?'bad':rev1),
-        containers: [{image:'repo/image:mutable-tag'}],
-        containerStatuses:[{imageDigest:'repo/image@sha256:'+sha}],
+        containers: [{name:'app',image:'repo/image:mutable-tag'}],
+        containerStatuses:sidecarFirst ? [
+          {name:'sidecar',imageDigest:'repo/sidecar@sha256:'+'c'.repeat(64)},
+          {name:'app',imageDigest:'repo/image@sha256:'+sha}
+        ] : [{name:'app',imageDigest:'repo/image@sha256:'+sha}],
         env:[{name:'SECRET',value:'not-for-client'}],
       }};
     }
     if (request.path.endsWith('/revisions/' + rev2)) {
       return { status:200, body:{
         name:servicePath+'/revisions/'+rev2,
-        containers:[{image:'repo/image:unpinned'}],
+        containers:[{name:'app',image:'repo/image:unpinned'}],
       }};
     }
     if (request.path.endsWith('/services/' + service)) {
       return { status:200, body:{
         name:servicePath, trafficStatuses:traffic,
-        latestReadyRevision:rev2,
+        latestReadyRevision,
         template:{serviceAccount:'jscc-dev-workspace-manager@jscc-dev.iam.gserviceaccount.com',
           containers:[{env:[{name:'DB_PASSWORD',value:'leak'}]}]},
         env:[{name:'DB_PASSWORD',value:'leak'}],
@@ -136,4 +140,58 @@ test('image tag is never treated as proof of an immutable digest',async()=>{
  const {observer}=mock({traffic:[{revision:rev2,percent:100}]});
  const out=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
  assert.equal(out.effective_revisions[0].image_digest,'UNKNOWN');
+});
+
+test('F2: observed LATEST allocation resolves an omitted revision only from latestReadyRevision',async()=>{
+ const {observer,requests}=mock({
+   traffic:[{type:'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST',percent:100}],
+ });
+ const result=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
+ assert.deepEqual(result.effective_revisions,[{
+   revision:rev2,percent:100,resolved_from:'latest_ready',image_digest:'UNKNOWN'
+ }]);
+ assert.equal(requests.length,2);
+ assert.equal(requests[1].path.endsWith('/revisions/'+rev2),true);
+});
+
+test('F2: explicit observed LATEST revision wins over latestReadyRevision',async()=>{
+ const {observer}=mock({
+   traffic:[{type:'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST',revision:rev1,percent:100}],
+ });
+ const result=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
+ assert.deepEqual(result.effective_revisions,[{
+   revision:rev1,percent:100,image_digest:'sha256:'+sha,
+ }]);
+});
+
+test('F2: missing revision is never inferred for non-LATEST allocation',async()=>{
+ for(const traffic of [
+   [{type:'TRAFFIC_TARGET_ALLOCATION_TYPE_REVISION',percent:100}],
+   [{percent:100}],
+   [{type:'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST',revision:'projects/jscc-prod/locations/europe-west1/services/'+service+'/revisions/'+rev1,percent:100}],
+ ]) {
+  const {observer}=mock({traffic});
+  await assert.rejects(()=>observer.describe({environment:'dev',task:'describe_dev_runtime',service}),
+   /INSUFFICIENT_EVIDENCE/);
+ }
+});
+
+test('F2: absent or foreign latest-ready revision fails closed',async()=>{
+ for(const latestReadyRevision of [
+   undefined,
+   'projects/jscc-prod/locations/europe-west1/services/'+service+'/revisions/'+rev1,
+ ]) {
+  const {observer}=mock({
+    traffic:[{type:'TRAFFIC_TARGET_ALLOCATION_TYPE_LATEST',percent:100}],
+    latestReadyRevision,
+  });
+  await assert.rejects(()=>observer.describe({environment:'dev',task:'describe_dev_runtime',service}),
+    /INSUFFICIENT_EVIDENCE/);
+ }
+});
+
+test('F4: containerStatuses are joined by name, never by array order',async()=>{
+ const {observer}=mock({sidecarFirst:true});
+ const result=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
+ assert.equal(result.effective_revisions[0].image_digest,'sha256:'+sha);
 });
