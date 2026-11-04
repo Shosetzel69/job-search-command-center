@@ -61,6 +61,7 @@ jobs:
           node --check ops/src/dev_workspace.mjs
           node --check ops/observation/dev-runtime-observer.mjs
           node --check ops/observation/dev-rollout-evaluator.mjs
+          node --check ops/diagnostics/dev-gcloud-script-runner.mjs
 
       - name: Validate DEV scripts
         run: |
