@@ -29,6 +29,9 @@ test('R1 B evidence projection does not return arbitrary worker-private response
  const auth=authenticatedEvidence(result);
  assert.equal(publicResult.assertions.token,undefined);
  assert.equal(auth.assertions.token,undefined);
+ assert.equal(publicResult.assertions.resource,undefined);
+ assert.equal(publicResult.assertions.effective_revisions_json,undefined);
+ assert.ok(auth.assertions.resource);
  assert.ok(auth.assertions.effective_revisions_json);
 });
 
