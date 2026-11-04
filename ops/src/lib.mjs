@@ -147,14 +147,15 @@ const PUBLIC_ASSERTION_FIELDS = Object.freeze([
   'target_alias','failed_count','succeeded_count','cancelled_count','completed','line_count',
   'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha',
   'exit_code','test_verdict','coarse_error','task_count','target_exit_code','target_term_signal',
-  'task_metadata_available','task_metadata_error',
-  'observed_at','resource','build_id','build_status','service_account','environment_variable_count',
-  'effective_revisions_json'
+  'task_metadata_available','task_metadata_error'
 ]);
 
 const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
   ...PUBLIC_ASSERTION_FIELDS,
-  'root_cause','log_excerpt'
+  'root_cause','log_excerpt',
+  // R1-B operational topology is for authenticated tools only, never public.
+  'observed_at','resource','build_id','build_status','service_account',
+  'environment_variable_count','effective_revisions_json'
 ]);
 
 function projectAssertions(input, fields) {
