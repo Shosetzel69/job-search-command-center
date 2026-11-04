@@ -21,10 +21,14 @@ export function assessDevRollout(observation, expectedDigest) {
   const seen = new Set();
   for (const row of observation.effective_revisions) {
     if (!row || typeof row.revision !== 'string' ||
-        !/^[a-z0-9-]{6,100}$/.test(row.revision) || seen.has(row.revision) ||
-        !Number.isInteger(row.percent) || row.percent <= 0 || row.percent > 100) {
+        !/^[a-z0-9-]{6,100}$/.test(row.revision) ||
+        !Number.isInteger(row.percent) || row.percent < 0 || row.percent > 100) {
       throw new Error('INSUFFICIENT_EVIDENCE');
     }
+    // Cloud Run may report tag-only/previous revisions with 0% traffic:
+    // these are NOT active serving revisions and must not dilute evidence.
+    if (row.percent === 0) continue;
+    if (seen.has(row.revision)) throw new Error('INSUFFICIENT_EVIDENCE');
     seen.add(row.revision);
     total += row.percent;
     if (row.image_digest === 'UNKNOWN' || !DIGEST.test(String(row.image_digest))) {
@@ -49,7 +53,7 @@ export function assessDevRollout(observation, expectedDigest) {
     matched_percent:matchedPercent,
     other_percent:otherPercent,
     unknown_percent:unknownPercent,
-    active_revision_count:observation.effective_revisions.length,
+    active_revision_count:seen.size,
     rollout_verdict:verdict,
     source_provenance:'UNVERIFIED',
     // Read-only observation is never an authorization to move traffic.
