@@ -5,6 +5,11 @@
 # No deployment, job execution, TEST/PROD or permission escalation.
 set -Eeuo pipefail
 
+[[ "${APPROVE_IAM_589_F1_SCOPED:-}" == "YES" ]] || {
+  echo 'BLOCKED: owner must explicitly approve APPROVE_IAM_589_F1_SCOPED' >&2
+  exit 4
+}
+
 DEV=jscc-dev
 SHARED=jscc-shared
 REGION=europe-west1
