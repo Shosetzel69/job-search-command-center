@@ -4,6 +4,7 @@ import {
 } from './lib.mjs';
 import { createDevObserver } from '../observation/dev-runtime-observer.mjs';
 import { assessDevRollout, planDevDeployment } from '../observation/dev-rollout-evaluator.mjs';
+import { executeDevGcloudScript } from '../diagnostics/dev-gcloud-script-runner.mjs';
 
 const cfg = envConfig();
 const ownExecution = normalizeExecutionId(process.env.CLOUD_RUN_EXECUTION || '');
@@ -213,6 +214,14 @@ function publicAssertions(task, value) {
     deployment_authorized:false,approval_required:value.approval_required,
     preflight_verdict:value.preflight_verdict,
   };
+  if (task === 'run_dev_gcloud_script') return {
+    target_alias:value.target_alias, resource:value.resource,observed_at:value.observed_at,
+    script_id:value.script_id,script_sha256:value.script_sha256,
+    script_step_count:value.script_step_count,script_verdict:value.script_verdict,
+    runtime_service:value.runtime_service,runtime_revision_count:value.runtime_revision_count,
+    build_id:value.build_id,build_status:value.build_status,
+    script_source_provenance:value.script_source_provenance,
+  };
   return {};
 }
 
@@ -234,6 +243,10 @@ async function main(){
     else if(taskReq.task==='run_test_suite') value=await runTestSuite(taskReq.args);
     else if(['describe_dev_runtime','describe_dev_build','inspect_dev_rollout','plan_dev_deployment'].includes(taskReq.task))
       value=await describeDevObservation(taskReq.task,taskReq.args);
+    else if(taskReq.task==='run_dev_gcloud_script')
+      value=await executeDevGcloudScript(taskReq.args,{
+        observer:createDevObserver({transport:devObservationTransport})
+      });
     else throw new Error('unknown_task');
     const external=sanitizeExternal(typeof value.output==='string'?value.output:'');
     if (!external.ok) throw new Error(external.coarse_error);

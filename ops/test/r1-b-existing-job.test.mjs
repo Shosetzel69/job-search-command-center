@@ -36,7 +36,7 @@ test('R1 B evidence projection does not return arbitrary worker-private response
 });
 
 test('R3 catalog version rejects old R33/R1-B dispatch in changed worker',()=>{
- assert.equal(CATALOG_VERSION,'589-r3-v2');
+ assert.equal(CATALOG_VERSION,'589-r4-v1');
  const now=Date.now();
  const base={
   execution_name:'jscc-diagnostics-dev-123',

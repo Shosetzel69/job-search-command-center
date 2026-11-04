@@ -14,7 +14,7 @@ const live=()=>({
 });
 
 test('R3 deployment plan requires verified current image and never authorizes changes',()=>{
- assert.equal(CATALOG_VERSION,'589-r3-v2');
+ assert.equal(CATALOG_VERSION,'589-r4-v1');
  const args={environment:'dev',service,
    expected_current_digest:digest,proposed_image_digest:next,expected_source_sha:source};
  assert.equal(validateTaskRequest('plan_dev_deployment',args).task_class,'OBSERVE');
