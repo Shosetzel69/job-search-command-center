@@ -4,7 +4,7 @@ import {workspaceTools, validatedWorkspaceRequest, hasDevWriteScope} from '../sr
 
 test('R2 adds typed tools to the EXISTING DEV gateway scope',()=>{
  const names=workspaceTools.map(x=>x.name);
- for(const name of ['workspace_checksum','workspace_search','workspace_compare','workspace_replace']){
+ for(const name of ['workspace_checksum','workspace_search','workspace_compare','workspace_replace','workspace_delete']){
    assert.ok(names.includes(name));
    assert.equal(workspaceTools.find(x=>x.name===name).inputSchema.additionalProperties,false);
  }
@@ -49,4 +49,15 @@ test('R2 rejects path escape, extra fields, large strings and malformed requests
  assert.throws(()=>validatedWorkspaceRequest('workspace_replace',{path:'a',old:'',new:'b',if_generation_match:1}));
  assert.throws(()=>validatedWorkspaceRequest('workspace_replace',{path:'a',old:'x',new:'a'.repeat(8193),if_generation_match:1}));
  assert.throws(()=>validatedWorkspaceRequest('workspace_replace',{path:'a',old:'x',new:'b',if_generation_match:1,command:'rm'}));
+});
+
+test('R2 delete is one exact generation-bound file and refuses recursive or missing preconditions',()=>{
+ const out=validatedWorkspaceRequest('workspace_delete',{path:'src/code.py',if_generation_match:6});
+ assert.deepEqual(out,{method:'DELETE',path:'/v1/file?path=src%2Fcode.py&if_generation_match=6'});
+ for(const bad of [
+  {path:'src/code.py'},
+  {path:'src/code.py',if_generation_match:0},
+  {path:'../secret',if_generation_match:1},
+  {path:'src/code.py',if_generation_match:1,recursive:true},
+ ]) assert.throws(()=>validatedWorkspaceRequest('workspace_delete',bad));
 });
