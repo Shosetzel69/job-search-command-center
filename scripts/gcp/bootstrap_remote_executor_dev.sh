@@ -60,23 +60,9 @@ GATEWAY_IMAGE="$GATEWAY_REPO@$GATEWAY_DIGEST"
 WORKER_IMAGE="$WORKER_REPO@$WORKER_DIGEST"
 
 # Resolve existing DEV target facts under the bootstrap owner identity; runtime identities never receive this read authority.
-APP_JSON="$(gcloud run services describe jscc-command-api-dev --project="$PROJECT" --region="$REGION" --format=json)"
-DEV_BASE_URL="${DEV_BASE_URL:-$(python3 -c 'import json,sys; d=json.load(sys.stdin); print((d.get("status") or {}).get("url") or "")' <<<"$APP_JSON")}"
+DEV_BASE_URL="${DEV_BASE_URL:-$(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev uri)}"
 if [[ -z "${GCP_RUNTIME_BUCKET:-}" ]]; then
-  GCP_RUNTIME_BUCKET="$(python3 -c 'import json,sys
-d=json.load(sys.stdin)
-def walk(x):
-    if isinstance(x,dict):
-        if x.get("name")=="GCP_RUNTIME_BUCKET" and isinstance(x.get("value"),str): return x["value"]
-        for v in x.values():
-            r=walk(v)
-            if r: return r
-    elif isinstance(x,list):
-        for v in x:
-            r=walk(v)
-            if r: return r
-    return ""
-print(walk(d))' <<<"$APP_JSON")"
+  GCP_RUNTIME_BUCKET="$(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev env GCP_RUNTIME_BUCKET)"
 fi
 [[ "$DEV_BASE_URL" == https://* ]] || { echo "cannot resolve DEV_BASE_URL" >&2; exit 3; }
 [[ -n "$GCP_RUNTIME_BUCKET" ]] || { echo "cannot resolve GCP_RUNTIME_BUCKET" >&2; exit 3; }
@@ -125,7 +111,7 @@ export GATEWAY_IMAGE WORKER_IMAGE SOURCE_SHA
 
 scripts/gcp/provision_remote_executor_dev.sh
 
-GATEWAY_URL="$(gcloud run services describe jscc-ops-gateway-dev --project="$PROJECT" --region="$REGION" --format='value(status.url)')"
+GATEWAY_URL="$(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-ops-gateway-dev uri)"
 [[ "$GATEWAY_URL" == https://* ]]
 
 echo
