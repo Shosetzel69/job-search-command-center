@@ -61,6 +61,8 @@ jobs:
           node --check ops/src/lib.mjs
           node --check ops/src/gateway.mjs
           node --check ops/src/worker.mjs
+          node --check ops/src/dev_workspace.mjs
+          node --check ops/observation/dev-runtime-observer.mjs
 
       - name: Verify gateway v2 scaling fixture contract
         run: python3 -m unittest -v scripts.test_gateway_v2_scaling
@@ -74,6 +76,13 @@ jobs:
           bash -n scripts/gcp/verify_trusted_ops_ref.sh
           bash -n scripts/gcp/build_remote_executor_dev.sh
           bash -n scripts/gcp/verify_remote_executor_dev.sh
+          bash -n scripts/gcp/capture_r33_gateway_source_dev.sh
+          bash -n scripts/gcp/import_r33_source_to_dev_workspace_589.sh
+          bash -n scripts/gcp/inspect_r1_b_worker_iam_readonly.sh
+          bash -n scripts/gcp/grant_r1b_minimal_observer_iam_589.sh
+          bash -n scripts/gcp/revoke_r1b_minimal_observer_iam_589.sh
+          bash -n scripts/gcp/remediate_589_f1_service_scoped_iam.sh
+          bash -n scripts/gcp/capture_589_r1b_v2_traffic_fixture_readonly.sh
 
       - name: Validate security boundaries statically
         run: |

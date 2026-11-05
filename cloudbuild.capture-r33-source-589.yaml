@@ -1,0 +1,45 @@
+# #589 R1: exact-digest R33 gateway source extraction only. NO deploy/IAM.
+steps:
+  - id: extract-pinned-r33-source
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        IMAGE="europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway-dev-r33@sha256:ac0c7843807921c466135bd039d34d50ab62cec2dcf70ba0667e950310ea7cbf"
+        docker pull "$$IMAGE"
+        cid="$$(docker create "$$IMAGE")"
+        trap 'docker rm "$$cid" >/dev/null 2>&1 || true' EXIT
+        mkdir -p /workspace/r33-src
+        docker export "$$cid" | tar -tf - | grep -E '(^|/)gateway\.mjs$$' | head -20 > /workspace/r33-gateway-locations.txt
+        cat /workspace/r33-gateway-locations.txt
+        [[ "$$(wc -l < /workspace/r33-gateway-locations.txt)" -eq 1 ]] || { echo "BLOCKED: gateway source missing or ambiguous"; exit 4; }
+        gateway="$$(cat /workspace/r33-gateway-locations.txt)"
+        root="$$(dirname "$$gateway")"
+        [[ "$$root" != "." && "$$root" != "/" ]] || exit 4
+        docker cp "$$cid:/$$root/." /workspace/r33-src/
+        count="$$(find /workspace/r33-src -maxdepth 1 -type f -name '*.mjs' | wc -l)"
+        (( count >= 2 && count <= 25 )) || { echo "BLOCKED: module count"; exit 4; }
+        for file in /workspace/r33-src/*.mjs; do
+          [[ -f "$$file" && ! -L "$$file" ]] || exit 4
+          (( $$(wc -c < "$$file") <= 131072 )) || { echo "BLOCKED: source size"; exit 4; }
+          sha256sum "$$file"
+        done
+        mkdir -p /workspace/r33-artifacts/src
+        cp /workspace/r33-src/*.mjs /workspace/r33-artifacts/src/
+        echo 'sha256:ac0c7843807921c466135bd039d34d50ab62cec2dcf70ba0667e950310ea7cbf' > /workspace/r33-artifacts/IMAGE_DIGEST
+        tar -C /workspace/r33-artifacts -czf /workspace/jscc589-r33-sources.tar.gz .
+        echo "R33_SOURCE_ARCHIVE_READY"
+  - id: publish-to-existing-build-bucket
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        target='gs://jscc-shared-ops-cloudbuild-source/r33/jscc589-r33-sources.tar.gz'
+        gcloud storage cp --if-generation-match=0 /workspace/jscc589-r33-sources.tar.gz "$$target"
+        sha256sum /workspace/jscc589-r33-sources.tar.gz
+        echo "R33_CAPTURE_PUBLISHED=$$target"
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
