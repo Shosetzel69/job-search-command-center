@@ -115,7 +115,37 @@ case "$state" in
     ;;
 esac
 
-# This validates only the allow binding, not deny/PAB/org policies or
-# the resulting live tasks.list call. Never report E2E PASS from IAM alone.
-echo "IAM_BINDING_CHECK_PASS; EFFECTIVE_ACCESS_UNVERIFIED"
-echo "NEXT: Policy Troubleshooter on the Execution + worker-identity E2E tasks.list"
+# Diagnose the *effective* permission on the existing failing Execution.
+# Google's Policy Troubleshooter evaluates inherited allow/deny conditions.
+# This is read-only, and does NOT impersonate the service account or access
+# any Cloud Run task data. Lack of Troubleshooter access remains inconclusive.
+EXECUTION=jscc-diagnostics-dev-5lf4k
+RESOURCE="//run.googleapis.com/projects/jscc-dev/locations/europe-west1/jobs/${JOB}/executions/${EXECUTION}"
+if evaluation="$(gcloud policy-intelligence troubleshoot-policy iam "$RESOURCE" \
+    --principal-email="$READER" --permission=run.tasks.list \
+    --project="$PROJECT" --format=json --quiet 2>/dev/null)"; then
+  access="$(python3 -c '
+import json,sys
+data=json.load(sys.stdin)
+print(data.get("overallAccessState",data.get("access","UNKNOWN")))
+' <<<"$evaluation")"
+  case "$access" in
+    CAN_ACCESS|GRANTED)
+      echo "EFFECTIVE_IAM_GRANT_REPORTED; E2E_TASK_READ_STILL_REQUIRED"
+      ;;
+    CANNOT_ACCESS|NOT_GRANTED)
+      echo "BLOCKED: effective policy still denies run.tasks.list; inspect deny/PAB and policy inheritance" >&2
+      exit 10
+      ;;
+    *)
+      echo "EFFECTIVE_IAM_INCONCLUSIVE; E2E_TASK_READ_STILL_REQUIRED"
+      ;;
+  esac
+else
+  echo "TROUBLESHOOTER_UNAVAILABLE; EFFECTIVE_ACCESS_UNVERIFIED"
+fi
+
+# Even CAN_ACCESS cannot prove correct runtime token/service-account binding
+# or a successful Cloud Run v2 tasks.list call. E2E F1 remains OPEN until
+# the actual worker reads nonempty task metadata from the existing execution.
+echo "IAM_BINDING_CHECK_PASS; LIVE_E2E_TASK_METADATA_PENDING"
