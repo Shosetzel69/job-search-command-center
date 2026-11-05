@@ -154,7 +154,7 @@ export function validateTaskRequest(task, args) {
     else if (type === 'trusted_ops_ref') {
       if(value!=='refs/heads/main' &&
          !(typeof value==='string' &&
-           /^refs\\/tags\\/jscc-ops-approved\\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(value) &&
+           /^refs\/tags\/jscc-ops-approved\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(value) &&
            !value.includes('..'))) throw new Error('unapproved_source_ref');
       clean[name]=value;
     }
