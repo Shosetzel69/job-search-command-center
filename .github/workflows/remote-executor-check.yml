@@ -9,6 +9,9 @@ on:
       - "docs/runbooks/remote-executor-dev.md"
       - "docs/adr/ADR-006-google-cloud-runtime.md"
       - "ARCHITECTURE.md"
+      - "docs/adr/ADR-009-cloud-run-admin-api-v2-only.md"
+      - "scripts/check_cloud_run_api_version.mjs"
+      - "scripts/test_cloud_run_api_version.mjs"
       - ".github/workflows/remote-executor-check.yml"
   push:
     branches: [main]
@@ -37,6 +40,11 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
+
+      - name: Validate Cloud Run API v2 contract
+        run: |
+          node scripts/check_cloud_run_api_version.mjs
+          node --test scripts/test_cloud_run_api_version.mjs
 
       - name: Install Remote Executor dependencies
         run: npm --prefix ops install --ignore-scripts
