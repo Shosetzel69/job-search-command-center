@@ -18,9 +18,9 @@ def main():
     try:
         verify(json.load(sys.stdin))
     except (ValueError, TypeError, json.JSONDecodeError) as error:
-        print("FAIL gateway v2 template.scaling.maxInstanceCount = 1: " + str(error), file=sys.stderr)
+        print("FAIL gateway v2 scaling.maxInstanceCount = 1: " + str(error), file=sys.stderr)
         return 1
-    print("PASS gateway v2 template.scaling.maxInstanceCount = 1")
+    print("PASS gateway v2 scaling.maxInstanceCount = 1")
     return 0
 
 
