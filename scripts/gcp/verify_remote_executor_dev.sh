@@ -8,21 +8,7 @@ OPS_BUCKET="${OPS_BUCKET:-jscc-dev-ops-state}"
 if [[ -n "${GCP_RUNTIME_BUCKET:-}" ]]; then
   RUNTIME_BUCKET="$GCP_RUNTIME_BUCKET"
 else
-  APP_JSON="$(gcloud run services describe jscc-command-api-dev --project="$PROJECT" --region="$REGION" --format=json)"
-  RUNTIME_BUCKET="$(python3 -c 'import json,sys
-d=json.load(sys.stdin)
-def walk(x):
-    if isinstance(x,dict):
-        if x.get("name")=="GCP_RUNTIME_BUCKET" and isinstance(x.get("value"),str): return x["value"]
-        for v in x.values():
-            r=walk(v)
-            if r: return r
-    elif isinstance(x,list):
-        for v in x:
-            r=walk(v)
-            if r: return r
-    return ""
-print(walk(d))' <<<"$APP_JSON")"
+  RUNTIME_BUCKET="$(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev env GCP_RUNTIME_BUCKET)"
 fi
 [[ -n "$RUNTIME_BUCKET" ]] || { echo "FAIL cannot resolve GCP_RUNTIME_BUCKET" >&2; exit 2; }
 GW_EMAIL="jscc-ops-gateway-dev@$PROJECT.iam.gserviceaccount.com"
@@ -112,12 +98,12 @@ role_permissions_exact jsccOpsDeployLroReaderDev 'run.operations.get' 'ops deplo
 GW_SERVICE_POLICY="$(gcloud run services get-iam-policy jscc-ops-gateway-dev --project="$PROJECT" --region="$REGION" --format=json)"
 require_contains "$GW_SERVICE_POLICY" "$DP_EMAIL" 'deployer bound to gateway service'
 require_contains "$DIAG_POLICY" "$DP_EMAIL" 'deployer bound to diagnostics job'
-for svc in $(gcloud run services list --project="$PROJECT" --region="$REGION" --format='value(metadata.name)'); do
+for svc in $(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev service-names); do
   [[ "$svc" == jscc-ops-gateway-dev ]] && continue
   p="$(gcloud run services get-iam-policy "$svc" --project="$PROJECT" --region="$REGION" --format=json)"
   require_absent "$p" "$DP_EMAIL" "ops deployer absent from product service $svc"
 done
-for job in $(gcloud run jobs list --project="$PROJECT" --region="$REGION" --format='value(metadata.name)'); do
+for job in $(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev job-names); do
   [[ "$job" == jscc-diagnostics-dev ]] && continue
   p="$(gcloud run jobs get-iam-policy "$job" --project="$PROJECT" --region="$REGION" --format=json)"
   require_absent "$p" "$DP_EMAIL" "ops deployer absent from product job $job"
