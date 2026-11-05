@@ -50,7 +50,7 @@ test('R4 reviewed immutable script JSON is SHA-bound to exact catalog value',()=
 });
 
 test('R4 catalog exposes only one typed OBSERVE script and retains diagnostics',()=>{
- assert.equal(CATALOG_VERSION,'589-r4-v1');
+ assert.equal(CATALOG_VERSION,'589-r5-v1');
  assert.equal(TASK_CATALOG.run_dev_gcloud_script.class,'OBSERVE');
  assert.deepEqual(validateTaskRequest('run_dev_gcloud_script',args).args,args);
  for(const old of ['describe_execution','read_execution_logs','inspect_runtime_snapshot',
