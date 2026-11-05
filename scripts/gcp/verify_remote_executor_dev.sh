@@ -163,7 +163,14 @@ SERVICE_DESC="$(gcloud run services describe jscc-ops-gateway-dev --project="$PR
 require_contains "$JOB_DESC" '"maxRetries": 0' 'worker automatic retry is zero'
 require_contains "$JOB_DESC" "$WK_EMAIL" 'diagnostics job uses dedicated worker identity'
 require_contains "$SERVICE_DESC" "$GW_EMAIL" 'gateway uses dedicated gateway identity'
-python3 -c 'import json,sys; d=json.load(sys.stdin); vals=[]; vals.append((d.get("scaling") or {}).get("maxInstanceCount")); vals.append(((d.get("metadata") or {}).get("annotations") or {}).get("run.googleapis.com/maxScale")); vals.append((((((d.get("spec") or {}).get("template") or {}).get("metadata") or {}).get("annotations") or {}).get("autoscaling.knative.dev/maxScale"))); ok=any(str(v)=="1" for v in vals if v is not None); print(("PASS " if ok else "FAIL ")+"gateway max instances = 1",file=sys.stdout if ok else sys.stderr); raise SystemExit(0 if ok else 1)' <<<"$SERVICE_DESC" || fail=1
+# The gcloud CLI resource JSON is not the v2 REST contract. Verify the v2 REST
+# Service scaling limit explicitly, without a v1/v2 output-shape fallback.
+GATEWAY_V2_URL="https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/services/jscc-ops-gateway-dev"
+GATEWAY_TOKEN="$(gcloud auth print-access-token)"
+GATEWAY_V2_JSON="$(curl --fail-with-body --silent --show-error \
+  -H "Authorization: Bearer $GATEWAY_TOKEN" "$GATEWAY_V2_URL")"
+unset GATEWAY_TOKEN
+python3 scripts/gcp/assert_gateway_v2_scaling.py <<<"$GATEWAY_V2_JSON" || fail=1
 
 for forbidden in NILE_DATABASE_URL DATABASE_URL POSTGRES_URL POSTGRESQL_URL; do
   require_absent "$SERVICE_DESC" "$forbidden" "N28 gateway has no DB credential binding: $forbidden"

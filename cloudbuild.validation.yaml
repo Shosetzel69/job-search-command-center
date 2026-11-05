@@ -19,6 +19,15 @@ steps:
         fi
         echo "CANDIDATE_GIT_SHA=${_GIT_SHA}"
 
+  - id: cloud-run-api-version
+    name: node:22-bookworm-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        node scripts/check_cloud_run_api_version.mjs
+        node --test scripts/test_cloud_run_api_version.mjs
+
   - id: syntax
     name: python:3.12-slim
     entrypoint: bash

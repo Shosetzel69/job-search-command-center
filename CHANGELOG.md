@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### ADR-009 — Cloud Run Admin API v2-only (PR #603, candidate)
+
+- Owner approved v2 as the sole Cloud Run Admin REST/SDK integration contract for JSCC; pre-merge guard and fixture tests were added. Legacy Google CLI output-schema dependencies remain tracked separately in #604; no runtime or IAM deployment is implied.
+
 ### DEV ADMIN source activation — #585 (candidate, NOT deployed)
 
 - **SA-B01/B02 R2 corrections:** Explicitly empty signed source IDs no longer authorize unbounded Python collection; USER/ADMIN dispatch is refused when the active source set is empty. GCS source catalog generation is included in the canonical Retrieve signature, refreshed before final dispatch, bound to the Job start, and read via version-specific GCS media. The new packaged Job helper checks the same generation and signed source IDs, fails on intervening ADMIN edits and first-create races, and enforces matching exact service/Job SHA before any collector call. TEST/PROD/legacy unscoped source behavior preserved.
