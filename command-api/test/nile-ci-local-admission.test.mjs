@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {admitNileCi,attestNativeDatabase,verifyTarget,CI_USER,TEST_IMAGE,TARGET_KEYS,NILE_NATIVE_BACKEND_PORT} from '../scripts/nile-ci-local-admission.mjs';
+import {admitNileCi,attestNativeDatabase,verifyTarget,CI_USER,TEST_IMAGE,TARGET_KEYS,NILE_NATIVE_BACKEND_PORTS} from '../scripts/nile-ci-local-admission.mjs';
 import {validateNileLedger} from '../scripts/nile-ci-test-gate.mjs';
 const url='postgresql://'+CI_USER+':password@127.0.0.1:55432/jobsearch_dev';
 const valid=()=>Object.fromEntries([
@@ -74,12 +74,20 @@ test('W025-S03 rejects forged or absent native SQL provenance and broken TAP out
     observed_ids:[id],...(isNative?{
       native_container_id:imageId,native_db_observed:true,native_challenge:challenge,
       native_db_readback:{run:run_id,challenge,db_name:'jobsearch_dev',principal:'synthetic',
-       backend_pid:123,server_port:NILE_NATIVE_BACKEND_PORT}
+       backend_pid:123,server_port:5421}
     }:{})};
   }),
   results:ids.map(id=>({id,status:'PASS',sha,run_id:id.toLowerCase()}))
  };
  assert.equal(validateNileLedger(evidence,{sourceSha:sha}).passed,29);
+ // All mandatory native suites must accept either explicitly pinned physical PDB.
+ for(const entry of evidence.runs){
+  if(entry.native_db_readback)entry.native_db_readback.server_port=5420;
+ }
+ assert.equal(validateNileLedger(evidence,{sourceSha:sha}).passed,29);
+ for(const entry of evidence.runs){
+  if(entry.native_db_readback)entry.native_db_readback.server_port=5421;
+ }
  const find=id=>evidence.runs.find(r=>r.id===id.toLowerCase());
  for(const broken of [
   ()=>(find('R03').native_db_readback=null),
@@ -114,11 +122,11 @@ test('W025-S03 live readback requires valid challenge and real SQL identity',asy
  assert.equal(calls,1);
 });
 
-test('W025-NILE-PORT actual pinned 5421 backend accepted; 5432 gateway and other ports denied',async()=>{
+test('W025-NILE-PORT pinned 5420 and 5421 backends accepted; gateway and other ports denied',async()=>{
  const env={W025_NATIVE_RUN_ID:'migration',W025_NATIVE_CHALLENGE:'c'.repeat(32)};
  const row={db_name:'jobsearch_dev',principal:'Nile runtime SQL principal',backend_pid:456,
-  server_port:NILE_NATIVE_BACKEND_PORT,challenge:env.W025_NATIVE_CHALLENGE};
- assert.equal(NILE_NATIVE_BACKEND_PORT,5421,'pinned provider-native SQL backend contract changed');
+  server_port:5421,challenge:env.W025_NATIVE_CHALLENGE};
+ assert.deepEqual(NILE_NATIVE_BACKEND_PORTS,[5420,5421],'pinned provider-native SQL backend contract changed');
  let queries=0;
  const db={query:async(sql,args)=>{
   queries++;
@@ -128,6 +136,8 @@ test('W025-NILE-PORT actual pinned 5421 backend accepted; 5432 gateway and other
  }};
  const attested=await attestNativeDatabase(db,{env});
  assert.equal(attested.server_port,5421);
+ const alt=await attestNativeDatabase({query:async()=>({rows:[{...row,server_port:5420}]})},{env});
+ assert.equal(alt.server_port,5420);
  assert.equal(attested.run,'migration');
  assert.equal(queries,1);
  for(const port of [5432,5444,55432,null]){
