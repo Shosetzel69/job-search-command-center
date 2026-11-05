@@ -69,7 +69,7 @@ export async function readBoundedExecutionLogs({execution_id,limit,view,request,
     });
     requireResponse(r,'logging_read');
     const data=await r.json();
-    if(!data || !Array.isArray(data.entries || []) || data.entries.length>100)
+    if(!data || !Array.isArray(data.entries || []) || (data.entries||[]).length>100)
       throw Error('logging_response_invalid');
     for(const entry of data.entries || []){
       const resource=entry?.resource;
