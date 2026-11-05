@@ -4,19 +4,20 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 
-export const DEFAULT_ROOTS = ['ops/src', 'command-api/src', 'scripts/gcp', 'scripts/environment', 'frontend/src'];
+export const DEFAULT_ROOTS = ['ops/src', 'command-api/src', 'scripts', 'frontend/src'];
 const EXTENSIONS = new Set(['.mjs', '.js', '.cjs', '.ts', '.tsx', '.py', '.sh']);
 const EXCLUDE = new Set(['node_modules', 'dist', '.git', '__pycache__']);
+const EXCLUDE_FILES = new Set(['scripts/test_cloud_run_api_version.mjs']);
 
 // Both global and regional Cloud Run Admin API hostnames; optional scheme.
-const V1_HOST = /\b(?:https?:\/\/)?(?:[a-z][a-z0-9-]*-)?run\.googleapis\.com\/v1(?:\/|(?=['"`?#\s]|$))/i;
-// Explicit Cloud Run Admin v1 SDK/module selection, not innocent generic API version strings.
-const V1_CLIENT = /(?:@google-cloud\/run\/v1\b|google\.cloud\.run\.v1\b|google\.cloud\.run_v1\b|require\(['"]@google-cloud\/run\/v1['"]\))/i;
+const V1_HOST = /\\b(?:https?:\\/\\/)?(?:[a-z][a-z0-9-]*-)?run\\.googleapis\\.com\\/(?:apis\\/[^\\s'"\`]+\\/)?v1(?:alpha|beta)?\\d*\\b/i;
+const V1_KNATIVE = /\\b(?:https?:\\/\\/)?(?:[a-z][a-z0-9-]*-)?run\\.googleapis\\.com\\/apis\\/serving\\.knative\\.dev\\/v1\\b/i;
+const V1_CLIENT = /(?:@google-cloud\\/run\\/v1\\b|google\\.cloud\\.run\\.v1\\b|google\\.cloud\\.run_v1\\b|google\\s*\\.\\s*run\\s*\\(\\s*(?:['"]v1['"]|\\{[^}]*\\bversion\\s*:\\s*['"]v1['"])|(?:discovery\\.)?build\\s*\\(\\s*['"]run['"]\\s*,\\s*['"]v1['"])/i;
 
 export function violationsForContent(content) {
   const errors = [];
   for (const [index, line] of content.split(/\r?\n/).entries()) {
-    if (V1_HOST.test(line)) errors.push({ line: index + 1, reason: 'v1_endpoint' });
+    if (V1_HOST.test(line) || V1_KNATIVE.test(line)) errors.push({ line: index + 1, reason: 'v1_endpoint' });
     if (V1_CLIENT.test(line)) errors.push({ line: index + 1, reason: 'v1_client' });
   }
   return errors;
@@ -30,7 +31,7 @@ export function scan(paths = DEFAULT_ROOTS) {
       for (const name of readdirSync(path).sort()) {
         if (!EXCLUDE.has(name)) walk(join(path, name));
       }
-    } else if (info.isFile() && EXTENSIONS.has(extname(path))) {
+    } else if (info.isFile() && EXTENSIONS.has(extname(path)) && !EXCLUDE_FILES.has(relative(process.cwd(), path).replaceAll('\\\\', '/'))) {
       for (const item of violationsForContent(readFileSync(path, 'utf8')))
         violations.push({ file: relative(process.cwd(), path), ...item });
     }
