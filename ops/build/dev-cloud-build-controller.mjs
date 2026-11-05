@@ -77,6 +77,9 @@ export async function submitApprovedDevOpsBuild(input, {
   if(gates.some(fn=>typeof fn!=='function')) throw new Error('authorized_operator_not_configured');
   const approval=await verifyApproval(plan);
   verifiedProof(approval,'OWNER_APPROVAL',plan);
+  if(typeof approval.approval_ref!=='string' ||
+     !/^#[1-9][0-9]{0,5}\/[a-zA-Z0-9._-]{1,100}$/.test(approval.approval_ref))
+    throw new Error('owner_approval_reference_missing');
   const ref=await verifyTrustedRef(plan);
   verifiedProof(ref,'TRUSTED_REF',plan);
   const archive=await verifySourceSnapshot(plan);
@@ -111,9 +114,8 @@ export function projectDevBuildStatus(raw, expected) {
   const build=raw;
   if(!build || typeof build!=='object' || Array.isArray(build) ||
      build.id!==expected.build_id ||
-     (typeof build.projectId==='string' && build.projectId!==PROJECT) ||
-     (typeof build.name==='string' &&
-       build.name!==`projects/${PROJECT}/locations/${REGION}/builds/${expected.build_id}`))
+     (build.projectId !== undefined && build.projectId!==PROJECT) ||
+     build.name!==`projects/${PROJECT}/locations/${REGION}/builds/${expected.build_id}`)
     throw new Error('build_identity_mismatch');
   const status=build.status;
   if(!TERMINAL.has(status) && !PENDING.has(status)) throw new Error('unknown_build_status');
