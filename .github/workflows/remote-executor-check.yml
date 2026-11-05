@@ -63,6 +63,7 @@ jobs:
           bash -n scripts/gcp/bootstrap_remote_executor_dev.sh
           bash -n scripts/gcp/provision_remote_executor_dev.sh
           bash -n scripts/gcp/repair_remote_executor_dev_task_iam.sh
+          bash -n scripts/gcp/verify_remote_executor_dev_task_v2.sh
           bash -n scripts/gcp/deploy_remote_executor_dev.sh
           bash -n scripts/gcp/assert_trusted_ops_source.sh
           bash -n scripts/gcp/verify_trusted_ops_ref.sh
