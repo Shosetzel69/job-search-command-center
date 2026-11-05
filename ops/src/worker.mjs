@@ -5,6 +5,7 @@ import {
 import { createDevObserver } from '../observation/dev-runtime-observer.mjs';
 import { assessDevRollout, planDevDeployment } from '../observation/dev-rollout-evaluator.mjs';
 import { executeDevGcloudScript } from '../diagnostics/dev-gcloud-script-runner.mjs';
+import { planDevOpsBuild } from '../build/dev-cloud-build-controller.mjs';
 
 const cfg = envConfig();
 const ownExecution = normalizeExecutionId(process.env.CLOUD_RUN_EXECUTION || '');
@@ -222,6 +223,21 @@ function publicAssertions(task, value) {
     build_id:value.build_id,build_status:value.build_status,
     script_source_provenance:value.script_source_provenance,
   };
+  if (task === 'plan_dev_ops_build') return {
+    target_alias:value.target_alias,
+    requested_source_sha:value.requested_source_sha,
+    trusted_ref:value.trusted_ref,
+    build_script:value.build_script,
+    build_config:value.build_config,
+    build_project:value.build_project,
+    build_region:value.build_region,
+    build_service_account:value.build_service_account,
+    source_bucket:value.source_bucket,
+    source_ref_verified:false,source_snapshot_verified:false,
+    approval_verified:false,submission_enabled:false,
+    required_gate:value.required_gate,
+    estimated_incremental_cost:value.estimated_incremental_cost,
+  };
   return {};
 }
 
@@ -247,6 +263,23 @@ async function main(){
       value=await executeDevGcloudScript(taskReq.args,{
         observer:createDevObserver({transport:devObservationTransport})
       });
+    else if(taskReq.task==='plan_dev_ops_build') {
+      const plan=planDevOpsBuild({
+        ...taskReq.args,work_item_ref:dispatch.work_item_ref
+      });
+      value={
+        target_alias:'jscc-ops-build',
+        requested_source_sha:plan.source_sha,
+        trusted_ref:plan.trusted_ref,build_script:plan.script,build_config:plan.config,
+        build_project:plan.project,build_region:plan.region,
+        build_service_account:plan.build_service_account,
+        source_bucket:plan.source_bucket,
+        source_ref_verified:false,source_snapshot_verified:false,
+        approval_verified:false,submission_enabled:false,
+        required_gate:plan.required_gate,
+        estimated_incremental_cost:plan.estimated_incremental_cost,
+      };
+    }
     else throw new Error('unknown_task');
     const external=sanitizeExternal(typeof value.output==='string'?value.output:'');
     if (!external.ok) throw new Error(external.coarse_error);

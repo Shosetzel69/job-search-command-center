@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
-export const CATALOG_VERSION = '589-r4-v1';
+export const CATALOG_VERSION = '589-r5-v1';
 export const DEV_DIAGNOSTIC_SCRIPT_ID = 'dev_runtime_build_inventory_v1';
 export const DEV_DIAGNOSTIC_SCRIPT_SHA256 = '60f9c0f87abd9da979e1dc66c5a5e2580faa5a4483aacb7f3b8bdd2478bea73b';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
@@ -63,6 +63,14 @@ export const TASK_CATALOG = Object.freeze({
       script_sha256:'dev_script_sha256',
       service:'dev_service',
       buildId:'known_build',
+    }),
+  }),
+  plan_dev_ops_build: Object.freeze({
+    class:'OBSERVE',
+    params:Object.freeze({
+      environment:'dev_env',
+      source_sha:'sha40',
+      trusted_ref:'trusted_ops_ref',
     }),
   }),
 });
@@ -143,6 +151,13 @@ export function validateTaskRequest(task, args) {
       if (value !== DEV_DIAGNOSTIC_SCRIPT_SHA256) throw new Error('script_sha_mismatch');
       clean[name] = value;
     }
+    else if (type === 'trusted_ops_ref') {
+      if(value!=='refs/heads/main' &&
+         !(typeof value==='string' &&
+           /^refs\/tags\/jscc-ops-approved\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(value) &&
+           !value.includes('..'))) throw new Error('unapproved_source_ref');
+      clean[name]=value;
+    }
     else if (type === 'sha256_digest') {
       if (typeof value !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(value)) throw new Error('invalid_image_digest');
       clean[name] = value;
@@ -198,7 +213,11 @@ const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
   'source_image_link','change_required','deployment_authorized','approval_required',
   'preflight_verdict',
   'script_id','script_sha256','script_step_count','script_verdict',
-  'runtime_service','runtime_revision_count','script_source_provenance'
+  'runtime_service','runtime_revision_count','script_source_provenance',
+  'requested_source_sha','trusted_ref','build_script','build_config','build_project',
+  'build_region','build_service_account','source_bucket','source_ref_verified',
+  'source_snapshot_verified','approval_verified','submission_enabled',
+  'required_gate','estimated_incremental_cost'
 ]);
 
 function projectAssertions(input, fields) {
