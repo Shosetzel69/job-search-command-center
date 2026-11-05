@@ -103,7 +103,10 @@ export async function submitApprovedDevOpsBuild(input, {
     approved_source_sha256:archive.object_sha256,
     approval_ref:approval.approval_ref,
   }));
-  return validateBuildReceipt(receipt,plan);
+  const verifiedReceipt=validateBuildReceipt(receipt,plan);
+  if(verifiedReceipt.actor_approval_ref!==approval.approval_ref)
+    throw new Error('build_receipt_approval_mismatch');
+  return verifiedReceipt;
 }
 
 export function projectDevBuildStatus(raw, expected) {
@@ -115,7 +118,8 @@ export function projectDevBuildStatus(raw, expected) {
   if(!build || typeof build!=='object' || Array.isArray(build) ||
      build.id!==expected.build_id ||
      (build.projectId !== undefined && build.projectId!==PROJECT) ||
-     build.name!==`projects/${PROJECT}/locations/${REGION}/builds/${expected.build_id}`)
+     build.name!==`projects/${PROJECT}/locations/${REGION}/builds/${expected.build_id}` ||
+     build.serviceAccount!==BUILDER)
     throw new Error('build_identity_mismatch');
   const status=build.status;
   if(!TERMINAL.has(status) && !PENDING.has(status)) throw new Error('unknown_build_status');
