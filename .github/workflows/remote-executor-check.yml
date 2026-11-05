@@ -44,6 +44,9 @@ jobs:
       - name: Run Remote Executor contract tests
         run: node --test ops/test/*.test.mjs
 
+      - name: Test job-scoped IAM remediation (mock gcloud)
+        run: python3 -m unittest discover -s ops/test -p 'test_dev_task_iam_remediation.py'
+
       - name: Validate auth library resolution
         run: node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
         working-directory: ops
@@ -59,6 +62,7 @@ jobs:
         run: |
           bash -n scripts/gcp/bootstrap_remote_executor_dev.sh
           bash -n scripts/gcp/provision_remote_executor_dev.sh
+          bash -n scripts/gcp/repair_remote_executor_dev_task_iam.sh
           bash -n scripts/gcp/deploy_remote_executor_dev.sh
           bash -n scripts/gcp/assert_trusted_ops_source.sh
           bash -n scripts/gcp/verify_trusted_ops_ref.sh
