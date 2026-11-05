@@ -43,6 +43,7 @@ steps:
         python3 --version
         # DEV-01B local regression; blocked pipeline does not run this step.
         node scripts/check_cloud_run_api_version.mjs
+        node --test scripts/test_cloud_run_api_version.mjs
         node scripts/test_gcp_dev_runtime_contract.mjs
         cd command-api
         npm install --ignore-scripts --no-audit --no-fund
