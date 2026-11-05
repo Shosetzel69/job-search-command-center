@@ -1058,3 +1058,7 @@ The canonical role hierarchy is defined in `shared/role-taxonomy.json` (version 
 Migration 010 adds the v1 persistence model without rewriting applied migrations 001–009 or changing canonical job/source posting identity. Legacy Search Profile selections must retain their full intent. USER Refresh may target at most two major families: if a migrated profile contains more than two, Refresh must return an actionable conflict rather than silently truncate a family; the user must resolve and save the selection before retrying. A separate #534 E2E gate must demonstrate persistence and the Criteria → Search → Refresh/Coverage experience with an existing family and a newly introduced family.
 
 DEV normally uses `SEARCH_MODE=disabled`. A real provider-backed Full Search requires a separately authorized, manual-only `manual-full` exception, not an implicit change of environment mode. TEST and PROD promotion remain independently gated. The PostgreSQL/Nile multiuser integration suite needs isolated runtime/migration/admin DB connections; without all three it is **SKIP**, not evidence of isolation.
+
+## ADR-009 — Cloud Run Admin API version policy
+
+All JSCC-owned programmatic Cloud Run Admin API integrations use v2 only. No v1/v2 fallback is authorized. Static enforcement: `npm run check:cloud-run-api-version`; review still covers dynamic URLs and third-party tooling. Google-managed gcloud internals are outside this rule. This policy does not authorize any IAM or deployment change. See `docs/adr/ADR-009-cloud-run-admin-api-v2-only.md`.
