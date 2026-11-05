@@ -9,7 +9,7 @@ SERVICE = {
     "uri": "https://jscc-command-api-dev-abc.europe-west1.run.app",
     "latestReadyRevision": "jscc-command-api-dev-00062-abc",
     "trafficStatuses": [
-        {"revision": "jscc-command-api-dev-00062-abc", "percent": 100},
+        {"revision": "jscc-command-api-dev-00062-abc", "percent": 100, "tag": "pr591-final"},
         {"revision": "jscc-command-api-dev-00061-def", "tag": "rf531", "uri": "https://rf531---jscc-command-api-dev-abc.europe-west1.run.app"},
     ],
     "template": {"containers": [{"env": [
@@ -22,8 +22,7 @@ SERVICE = {
 }
 REVISION = {
     "name": "projects/jscc-dev/locations/europe-west1/services/foo/revisions/foo-00001-abc",
-    "containers": [{"image": "europe-west1-docker.pkg.dev/jscc-shared/jscc/foo:v1"}],
-    "containerStatuses": [{"imageDigest": DIG}],
+    "containers": [{"image": "europe-west1-docker.pkg.dev/jscc-shared/jscc/foo@" + DIG}],
 }
 
 
@@ -31,6 +30,7 @@ class ContractTest(unittest.TestCase):
     def test_service_observed_traffic_and_tag(self):
         self.assertEqual(cr.service_summary(SERVICE)["latestReadyRevision"], "jscc-command-api-dev-00062-abc")
         self.assertEqual(cr.primary_revision(SERVICE), "jscc-command-api-dev-00062-abc")
+        self.assertEqual(cr.revision_image(REVISION), "europe-west1-docker.pkg.dev/jscc-shared/jscc/foo@" + DIG)
         self.assertTrue(cr.tagged_uri(SERVICE).startswith("https://rf531---"))
         self.assertEqual(cr.env_value(SERVICE, "GCP_RUNTIME_BUCKET"), "jscc-dev-runtime")
         self.assertEqual(cr.stage_preflight(SERVICE), "JSCC531_DEV_SERVICE_PREFLIGHT_PASS")
@@ -38,9 +38,9 @@ class ContractTest(unittest.TestCase):
     def test_revision_digest_identity(self):
         self.assertEqual(cr.revision_image(REVISION), "europe-west1-docker.pkg.dev/jscc-shared/jscc/foo@" + DIG)
         with self.assertRaises(ValueError):
-            cr.revision_image({**REVISION, "containerStatuses": [{"imageDigest": "latest"}]})
+            cr.revision_image({**REVISION, "containers": [{"image": "europe-west1-docker.pkg.dev/jscc-shared/jscc/foo:latest"}]})
         with self.assertRaises(ValueError):
-            cr.revision_image({**REVISION, "containerStatuses": []})
+            cr.revision_image({**REVISION, "containers": []})
 
     def test_reject_legacy_gcloud_json(self):
         legacy = {"metadata": {"name": "foo"}, "status": {"url": SERVICE["uri"], "traffic": [{"percent": 100}]}}
