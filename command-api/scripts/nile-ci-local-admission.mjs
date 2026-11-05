@@ -8,7 +8,6 @@ export const CI_PORT=55432;
 // exposed only through its 5432/tcp gateway bound to host 127.0.0.1:55432.
 // Native SQL identity is verified on EACH live session; never relax URL/image matching.
 export const NILE_NATIVE_BACKEND_PORTS=Object.freeze([5420,5421]);
-export const NILE_NATIVE_BACKEND_PORT=5421; // Legacy fixture alias; do not use for admission.
 export const TARGET_KEYS=Object.freeze([
   'NILE_TEST_DATABASE_URL','NILE_DATABASE_URL','NILE_MIGRATION_DATABASE_URL',
   'JSCC_INTEGRATION_DATABASE_URL','JSCC_TEST_ADMIN_DATABASE_URL',
