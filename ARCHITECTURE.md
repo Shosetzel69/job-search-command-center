@@ -22,6 +22,7 @@ Documente complementare:
 - `docs/adr/ADR-006-google-cloud-runtime.md` — target hosting/runtime GCP, build-once si promovare prin image digest;
 - `docs/adr/ADR-007-google-first-multiuser-identity-session.md` — identity mapping provider-neutral si sesiune JSCC pentru multiuser Google-first;
 - `docs/adr/ADR-008-nile-native-tenant-isolation.md` — tenant isolation nativ Nile prin fail-closed Tenant Data Gateway;
+- `docs/adr/ADR-009-cloud-run-admin-api-v2-only.md` — standardul API v2 pentru integrările JSCC;
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
