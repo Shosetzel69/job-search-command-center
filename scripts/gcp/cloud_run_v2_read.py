@@ -37,7 +37,7 @@ def service_summary(d):
 
 def primary_revision(d):
     s = service_summary(d)
-    active = [t for t in s["trafficStatuses"] if isinstance(t, dict) and t.get("percent") == 100 and not t.get("tag")]
+    active = [t for t in s["trafficStatuses"] if isinstance(t, dict) and t.get("percent") == 100 ]
     if len(active) != 1:
         raise ValueError("expected one untagged revision receiving 100 percent")
     revision = require(active[0].get("revision"), "v2 trafficStatuses revision")
@@ -45,20 +45,17 @@ def primary_revision(d):
 
 
 def revision_image(d):
-    containers = d.get("containerStatuses")
-    if not isinstance(containers, list) or len(containers) != 1:
-        raise ValueError("v2 revision containerStatuses must contain one resolved image")
-    digest = require(containers[0].get("imageDigest"), "v2 revision imageDigest")
-    if not DIGEST.fullmatch(digest):
-        raise ValueError("v2 revision imageDigest must be sha256")
+    """Return an immutable digest-pinned image from the documented v2 Revision."""
     configured = d.get("containers")
     if not isinstance(configured, list) or len(configured) != 1:
         raise ValueError("v2 revision must have one container")
     image = require(configured[0].get("image"), "v2 revision image")
-    repo = image.split("@sha256:")[0] if "@sha256:" in image else image.rsplit(":", 1)[0]
-    if not repo or "/" not in repo:
-        raise ValueError("invalid revision image repository")
-    return repo + "@" + digest
+    if "@sha256:" not in image:
+        raise ValueError("v2 revision image must be digest pinned; cannot infer tag digest")
+    repo, digest = image.rsplit("@", 1)
+    if not repo or "/" not in repo or not DIGEST.fullmatch(digest):
+        raise ValueError("v2 revision image is not a valid immutable digest reference")
+    return image
 
 
 def stage_preflight(d):
