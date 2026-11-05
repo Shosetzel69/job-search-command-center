@@ -60,12 +60,9 @@ assert contains_exact_image(job, expected_job), f"DEV Job is not deployed from {
 assert contains_exact_image(service, expected_service), f"DEV Service is not deployed from {expected_service}"
 PY
 
-reported_service_url="$(gcloud run services describe "${SERVICE_NAME}" \
-  --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
-latest_ready="$(gcloud run services describe "${SERVICE_NAME}" \
-  --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.latestReadyRevisionName)')"
-traffic="$(gcloud run services describe "${SERVICE_NAME}" \
-  --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.traffic[0].percent)')"
+reported_service_url="$(python3 "${ROOT}/scripts/gcp/cloud_run_v2_read.py" "${PROJECT_ID}" "${REGION}" "${SERVICE_NAME}" uri)"
+latest_ready="$(python3 "${ROOT}/scripts/gcp/cloud_run_v2_read.py" "${PROJECT_ID}" "${REGION}" "${SERVICE_NAME}" ready)"
+traffic="$(python3 "${ROOT}/scripts/gcp/cloud_run_v2_read.py" "${PROJECT_ID}" "${REGION}" "${SERVICE_NAME}" percent)"
 
 frontend_origin="https://${SERVICE_NAME}-${PROJECT_NUMBER}.${REGION}.run.app"
 [[ "${reported_service_url}" == https://*.run.app ]] || { echo "Unexpected Cloud Run reported URL: ${reported_service_url}" >&2; exit 11; }
