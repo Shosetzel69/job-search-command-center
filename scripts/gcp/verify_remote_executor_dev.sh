@@ -98,12 +98,14 @@ role_permissions_exact jsccOpsDeployLroReaderDev 'run.operations.get' 'ops deplo
 GW_SERVICE_POLICY="$(gcloud run services get-iam-policy jscc-ops-gateway-dev --project="$PROJECT" --region="$REGION" --format=json)"
 require_contains "$GW_SERVICE_POLICY" "$DP_EMAIL" 'deployer bound to gateway service'
 require_contains "$DIAG_POLICY" "$DP_EMAIL" 'deployer bound to diagnostics job'
-for svc in $(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev service-names); do
+SERVICES_V2="$(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev service-names)"
+for svc in $SERVICES_V2; do
   [[ "$svc" == jscc-ops-gateway-dev ]] && continue
   p="$(gcloud run services get-iam-policy "$svc" --project="$PROJECT" --region="$REGION" --format=json)"
   require_absent "$p" "$DP_EMAIL" "ops deployer absent from product service $svc"
 done
-for job in $(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev job-names); do
+JOBS_V2="$(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" jscc-command-api-dev job-names)"
+for job in $JOBS_V2; do
   [[ "$job" == jscc-diagnostics-dev ]] && continue
   p="$(gcloud run jobs get-iam-policy "$job" --project="$PROJECT" --region="$REGION" --format=json)"
   require_absent "$p" "$DP_EMAIL" "ops deployer absent from product job $job"
