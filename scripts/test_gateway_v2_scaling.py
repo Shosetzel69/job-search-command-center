@@ -5,12 +5,12 @@ from scripts.gcp.assert_gateway_v2_scaling import verify
 
 
 class GatewayV2ScalingTest(unittest.TestCase):
-    def test_revision_level_limit(self):
-        self.assertTrue(verify({"name": "projects/jscc-dev/locations/europe-west1/services/jscc-ops-gateway-dev", "template": {"scaling": {"maxInstanceCount": 1}}}))
+    def test_service_level_limit(self):
+        self.assertTrue(verify({"name": "projects/jscc-dev/locations/europe-west1/services/jscc-ops-gateway-dev", "scaling": {"maxInstanceCount": 1}, "template": {"scaling": {"maxInstanceCount": 3}}}))
 
-    def test_top_level_service_limit_is_not_revision_limit(self):
+    def test_revision_limit_alone_does_not_satisfy_service_limit(self):
         with self.assertRaises(ValueError):
-            verify({"scaling": {"maxInstanceCount": 1}, "template": {}})
+            verify({"template": {"scaling": {"maxInstanceCount": 1}}})
 
     def test_legacy_knative_annotations_rejected(self):
         with self.assertRaises(ValueError):
@@ -18,11 +18,11 @@ class GatewayV2ScalingTest(unittest.TestCase):
 
     def test_incorrect_limit_rejected(self):
         with self.assertRaises(ValueError):
-            verify({"template": {"scaling": {"maxInstanceCount": 2}}})
+            verify({"scaling": {"maxInstanceCount": 2}})
 
     def test_missing_limit_rejected(self):
         with self.assertRaises(ValueError):
-            verify({"template": {"scaling": {}}})
+            verify({"scaling": {}})
 
 
 if __name__ == "__main__":
