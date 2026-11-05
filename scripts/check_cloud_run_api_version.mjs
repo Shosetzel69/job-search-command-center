@@ -10,7 +10,7 @@ const EXCLUDE = new Set(['node_modules', 'dist', '.git', '__pycache__']);
 const EXCLUDE_FILES = new Set(['scripts/test_cloud_run_api_version.mjs']);
 
 // Both global and regional Cloud Run Admin API hostnames; optional scheme.
-const V1_HOST = /\b(?:https?:\/\/)?(?:[a-z][a-z0-9-]*-)?run\.googleapis\.com\/(?:apis\/[^\s'"\`]+\/)?v1(?:alpha|beta)?\d*\b/i;
+const V1_HOST = /\b(?:https?:\/\/)?(?:[a-z][a-z0-9-]*-)?run\.googleapis\.com\/(?:apis\/[^\s'"\`]+\/)?v1(?:(?:alpha|beta)\d*)?\b/i;
 const V1_KNATIVE = /\b(?:https?:\/\/)?(?:[a-z][a-z0-9-]*-)?run\.googleapis\.com\/apis\/serving\.knative\.dev\/v1\b/i;
 const V1_CLIENT = /(?:@google-cloud\/run\/v1\b|google\.cloud\.run\.v1\b|google\.cloud\.run_v1\b|google\s*\.\s*run\s*\(\s*(?:['"]v1['"]|\{[^}]*\bversion\s*:\s*['"]v1['"])|(?:discovery\.)?build\s*\(\s*['"]run['"]\s*,\s*['"]v1['"])/i;
 
