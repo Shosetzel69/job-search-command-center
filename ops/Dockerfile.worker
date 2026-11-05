@@ -5,6 +5,6 @@ RUN cd ops && npm install --omit=dev --ignore-scripts
 COPY ops/src ./ops/src
 ARG SOURCE_SHA
 ENV SOURCE_SHA=${SOURCE_SHA}
-RUN cd ops && node --check src/lib.mjs && node --check src/worker.mjs
+RUN cd ops && node --check src/lib.mjs && node --check src/worker.mjs && node --check src/dev-e2e-diagnostics.mjs
 USER node
 CMD ["node","ops/src/worker.mjs"]
