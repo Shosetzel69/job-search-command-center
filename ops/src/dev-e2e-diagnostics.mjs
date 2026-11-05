@@ -35,8 +35,8 @@ export async function listExecutionTaskEvidence(executionId,{request}) {
       return {task_metadata_available:false,task_metadata_error:'task_read_'+r.status,tasks:[],task_count_verified:0};
     requireResponse(r,'task_read');
     const json=await r.json();
-    if(!json || !Array.isArray(json.tasks) || json.tasks.length>100)throw Error('task_response_invalid');
-    tasks.push(...json.tasks);
+    if(!json || !Array.isArray(json.tasks||[]) || (json.tasks||[]).length>100)throw Error('task_response_invalid');
+    tasks.push(...(json.tasks||[]));
     if(tasks.length>400)throw Error('task_result_limit');
     token=json.nextPageToken || '';
     if(typeof token!=='string' || token.length>2048 || (token && seen.has(token)))throw Error('task_page_token_invalid');
