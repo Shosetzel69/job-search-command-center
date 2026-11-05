@@ -53,6 +53,7 @@ jobs:
           node --check ops/src/lib.mjs
           node --check ops/src/gateway.mjs
           node --check ops/src/worker.mjs
+          node --check ops/src/dev-e2e-diagnostics.mjs
 
       - name: Validate DEV scripts
         run: |
@@ -87,7 +88,7 @@ jobs:
           ! grep -q -- '--no-cpu-boost' scripts/gcp/deploy_remote_executor_dev.sh
           grep -q 'LOG_LOCATION=' scripts/gcp/provision_remote_executor_dev.sh
           grep -Fq 'job_name=~"^(jscc-search-dev|jscc-diagnostics-dev)$"' scripts/gcp/provision_remote_executor_dev.sh
-          grep -q 'labels.execution_name' ops/src/worker.mjs
+          grep -q 'labels.execution_name' ops/src/dev-e2e-diagnostics.mjs
           ! grep -Eq 'read[[:space:]]+-r|read[[:space:]]+-s|read[[:space:]]+-p' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q "replace(/_/g,'-')" ops/src/gateway.mjs
