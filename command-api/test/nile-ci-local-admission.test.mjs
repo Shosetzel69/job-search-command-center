@@ -80,6 +80,14 @@ test('W025-S03 rejects forged or absent native SQL provenance and broken TAP out
   results:ids.map(id=>({id,status:'PASS',sha,run_id:id.toLowerCase()}))
  };
  assert.equal(validateNileLedger(evidence,{sourceSha:sha}).passed,29);
+ // All mandatory native suites must accept either explicitly pinned physical PDB.
+ for(const entry of evidence.runs){
+  if(entry.native_db_readback)entry.native_db_readback.server_port=5420;
+ }
+ assert.equal(validateNileLedger(evidence,{sourceSha:sha}).passed,29);
+ for(const entry of evidence.runs){
+  if(entry.native_db_readback)entry.native_db_readback.server_port=5421;
+ }
  const find=id=>evidence.runs.find(r=>r.id===id.toLowerCase());
  for(const broken of [
   ()=>(find('R03').native_db_readback=null),
