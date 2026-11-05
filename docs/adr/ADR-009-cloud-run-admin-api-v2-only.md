@@ -1,6 +1,6 @@
 # ADR-009 — Cloud Run Admin API v2 as the sole JSCC integration API
 
-Status: ACCEPTED (owner decision, 2026-11-05)
+Status: PROPOSED implementation / owner-approved direction (2026-11-05); pending independent review and merge
 Applies to: AGENTFLOW; DEV, TEST and PROD
 Builds on: ADR-003, ADR-006
 Scope: JSCC-owned programmatic Cloud Run Admin API integrations
@@ -25,18 +25,18 @@ Source-code search on default branch (2026-11-05):
 - `ops/src/gateway.mjs`: explicit v2 Job execution.
 - `command-api/src/runtime-gcp.js`: `RUN_API = 'https://run.googleapis.com/v2'`.
 - No literal `run.googleapis.com/v1` match found by repository code search; this did NOT cover regional URLs, SDK version selectors or CLI output schemas.
-- `scripts/gcp/verify_remote_executor_dev.sh` previously accepted v2 `scaling.maxInstanceCount` OR v1 `metadata.annotations` / `spec.template.metadata.annotations` for max scale. In this PR the verifier now requires the v2 field.
-- Additional `gcloud` output-schema consumers identified for follow-up audit: `scripts/gcp/seed_runtime.sh`, `scripts/gcp/deploy_remote_executor_dev.sh`, `scripts/gcp/capture_live_promotion_evidence.sh`, `scripts/gcp/provision_remote_executor_dev.sh`, `scripts/gcp/promote.sh`, `scripts/gcp/execute_dev_job.sh`, `scripts/gcp/environment.sh`, `scripts/gcp/stage_531_role_family_dev_service.sh`. Not every one is independently proven to rely on a v1 schema. The independent review reports six additional v1-shaped consumers; exact lines and migration suitability require a follow-up audit.
+- `scripts/gcp/verify_remote_executor_dev.sh` previously accepted v2 `scaling.maxInstanceCount` OR v1/Knative annotations. R3 verifies the v2 REST Service `template.scaling.maxInstanceCount` instead, with fixture tests. Live DEV field evidence remains a separate acceptance gate.
+- Confirmed v1-shaped `gcloud` CLI schema consumers from independent review: `scripts/gcp/promote.sh` (L169-174); `scripts/gcp/capture_live_promotion_evidence.sh` (L63-67); `scripts/gcp/rollout_workspace_manager_cap100_dev.sh` (L32-34); `scripts/gcp/stage_531_role_family_dev_service.sh` (L26, L59); `scripts/gcp/bootstrap_remote_executor_dev.sh` (L128); `scripts/gcp/verify_remote_executor_dev.sh` (L11, L163-166 before R3). Other candidates that require inspection include `seed_runtime.sh`, `deploy_remote_executor_dev.sh`, `provision_remote_executor_dev.sh`, `execute_dev_job.sh`, and `environment.sh`. These are CLI output contracts, not identified REST v1 endpoints. Full audit, migration, owner and retirement criterion: issue #604 (operational owner: JSCC repository owner; target: close by 2026-11-30 after exact-file and fixture verification, or request a dated exception). 
 
 This is a source-search inventory, **not** proof that all scripts, external deploy tools, live revisions or third-party integrations use v2. Runtime inventory and IAM validation remain separate gates.
 
 ## Enforcement and acceptance
 
-- A repository guard rejects explicit `run.googleapis.com/v1` endpoints in JSCC-owned runtime/script sources.
+- A repository guard rejects recognizable global/regional v1 endpoints (including Knative serving paths), alpha/beta variants and selected `googleapis`/Python discovery SDK selectors in JSCC-owned runtime/script sources. It scans all `scripts/`; only the dedicated fixture test is explicitly excluded.
 - The guard runs in `cloudbuild.promotion.yaml`, `cloudbuild.service.yaml`, `cloudbuild.ops.yaml`, `cloudbuild.validation.yaml`, and a dedicated GitHub Actions workflow on every PR and push to `main`. It is runnable via `npm run check:cloud-run-api-version`. Other Cloud Build configs are not asserted to be covered.
-- Automated positive and negative tests cover global/regional v1 endpoints, explicit v1 SDK selectors, and ordinary v2 calls.
-- A guarded change must be reviewed for dynamic URL composition, library calls, split strings, and transitive tooling which a static literal scan cannot prove. The guard does not attempt to interpret arbitrary `gcloud` output formats.
-- Acceptance for this policy slice requires ADR review, guard/test CI success, a PR-level independent review, and an explicit disposition of remaining CLI schema compatibility. Passing a source scan is not proof of fully migrated live infrastructure.
+- Automated positive and negative tests cover regional and Knative v1 endpoints, selected SDK calls, beta/alpha paths, false positives such as v10, full `scripts/` scan root, and normal v2 calls. Fixture tests also assert the v2 REST gateway revision scaling schema.
+- A guarded change must be reviewed for dynamic URL composition, other library calls, split strings, files outside selected roots, symlinks, and transitive tooling which a static literal scan cannot prove. The guard does not interpret arbitrary `gcloud` output formats. The guard does not attempt to interpret arbitrary `gcloud` output formats.
+- Acceptance for this policy slice requires ADR review, guard/test CI success, an exact-SHA independent review, a redacted live read-only DEV v2 scaling field check, and an explicit disposition of remaining CLI schema compatibility via #604. Passing a source scan is not proof of fully migrated live infrastructure.
 - Operational acceptance of `run.tasks.list` is **not** implied; its 403 remains a separate runtime/IAM defect until re-tested successfully.
 
 ## Consequences
