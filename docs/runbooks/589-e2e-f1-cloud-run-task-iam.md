@@ -47,3 +47,25 @@ Google official docs establish this distinction:
 - Auth/transport failures are inconclusive, not PASS.
 
 The original deployed #537 worker uses the v2 REST path; the test's CLI 403 alone is insufficient to explain the worker error. The independent E2E finding remains OPEN until a real worker `describe_execution` shows task metadata.
+
+## 2026-11-05: DIRECT V2 IMPERSONATED 403 — supersedes v1-only hypothesis
+
+A subsequent user-operated Cloud Shell test used `gcloud auth print-access-token --impersonate-service-account=jscc-diagnostics-dev@jscc-dev.iam.gserviceaccount.com` and called the **exact v2 API used by JSCC**:
+`GET https://run.googleapis.com/v2/projects/jscc-dev/locations/europe-west1/jobs/jscc-diagnostics-dev/executions/jscc-diagnostics-dev-5lf4k/tasks?pageSize=5`.
+
+**Actual result: HTTP 403** with `Permission 'run.tasks.list' denied on resource 'projects/jscc-dev/locations/europe-west1/jobs/jscc-diagnostics-dev/executions/jscc-diagnostics-dev-5lf4k/tasks'`.
+
+This eliminates the earlier conjecture that CLI v1 differences **fully explain** the failure. **Both v1 CLI and direct v2 impersonated task listing fail**, while Policy Troubleshooter `CAN_ACCESS` evaluated **only the execution parent** (not the `/tasks` child explicitly named in the actual v2 rejection).
+
+**Next read-only discriminator:** Policy Troubleshooter on the exact `/tasks` resource named in the rejection, not just its parent. The troubleshooter may reject `/tasks` as a non-resource collection; if so, report this as inconclusive, not denied.
+```bash
+gcloud policy-intelligence troubleshoot-policy iam \
+  "//run.googleapis.com/projects/jscc-dev/locations/europe-west1/jobs/jscc-diagnostics-dev/executions/jscc-diagnostics-dev-5lf4k/tasks" \
+  --principal-email="jscc-diagnostics-dev@jscc-dev.iam.gserviceaccount.com" \
+  --permission="run.tasks.list" --project="jscc-dev" \
+  --format="json(overallAccessState,allowPolicyExplanation.allowAccessState,denyPolicyExplanation.denyAccessState)"
+```
+
+Before any role addition, verify actual Cloud Run AuditLog `authorizationInfo` (if Data Access audit records exist) for denial resource and principal, and compare with official v2 documentation. The v2 `tasks.list` reference declares `run.tasks.list` on execution parent; if exact evidence continues to contradict this, escalate to Google Cloud support/issue with sanitized 403, resource name, parent Policy Troubleshooter results and existing job-level role binding.
+
+**NO IAM mutation, project-level grant or E2E PASS is justified by current evidence.** PR #602 IAM `--apply` is not to be executed; keep F1 `OPEN/ROOT_CAUSE_UNCONFIRMED`.
