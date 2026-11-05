@@ -24,6 +24,7 @@ steps:
       - |
         node scripts/check_cloud_run_api_version.mjs
         node --test scripts/test_cloud_run_api_version.mjs
+        python3 -m unittest -v scripts.test_gateway_v2_scaling
         cd ops
         npm install --ignore-scripts --no-audit --no-fund
         node --test test/*.test.mjs
