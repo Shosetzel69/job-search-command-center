@@ -164,7 +164,7 @@ require_contains "$JOB_DESC" '"maxRetries": 0' 'worker automatic retry is zero'
 require_contains "$JOB_DESC" "$WK_EMAIL" 'diagnostics job uses dedicated worker identity'
 require_contains "$SERVICE_DESC" "$GW_EMAIL" 'gateway uses dedicated gateway identity'
 # The gcloud CLI resource JSON is not the v2 REST contract. Verify the v2 REST
-# Service template explicitly, without a v1/v2 output-shape fallback.
+# Service scaling limit explicitly, without a v1/v2 output-shape fallback.
 GATEWAY_V2_URL="https://run.googleapis.com/v2/projects/$PROJECT/locations/$REGION/services/jscc-ops-gateway-dev"
 GATEWAY_TOKEN="$(gcloud auth print-access-token)"
 GATEWAY_V2_JSON="$(curl --fail-with-body --silent --show-error \
