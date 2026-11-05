@@ -29,3 +29,21 @@ This is a source implementation. To apply against live DEV requires an existing 
 5. Leave `E2E_ACCEPTANCE_FAIL` until F1–F3 have real evidence. A green source CI, successful Job IAM readback or even Troubleshooter `CAN_ACCESS` is **not** a task-metadata E2E PASS.
 
 **Separation:** this E2E F1 finding is distinct from the broader project-IAM **F1 HIGH** security finding in PR #595, which remains open.
+
+## 2026-11-05: Actual troubleshooting results supersede missing-binding hypothesis
+
+The owner enabled the Policy Troubleshooter API and obtained **`overallAccessState=CAN_ACCESS`**, `allowAccessState=ALLOW_ACCESS_STATE_GRANTED`, `denyAccessState=DENY_ACCESS_STATE_NOT_DENIED` for the **v2 Execution** parent `//run.googleapis.com/projects/jscc-dev/locations/europe-west1/jobs/jscc-diagnostics-dev/executions/jscc-diagnostics-dev-5lf4k`. The job IAM custom role is already present. **Do not run `--apply` or add IAM grants**.
+
+The CLI `gcloud run jobs executions tasks list --impersonate-service-account=...` returned HTTP 403, specifically **`run.tasks.list` denied on `namespaces/jscc-dev/tasks`**. This is the **Cloud Run v1 namespace path**, not the narrower v2 execution parent checked by Policy Troubleshooter and requested by `ops/src/worker.mjs`.
+
+Google official docs establish this distinction:
+- [v1 namespaces.tasks.list](https://docs.cloud.google.com/run/docs/reference/rest/v1/namespaces.tasks/list) authorizes the namespace `namespaces/{project}`.
+- [v2 projects.locations.jobs.executions.tasks.list](https://docs.cloud.google.com/run/docs/reference/rest/v2/projects.locations.jobs.executions.tasks/list) authorizes the exact `projects/{project}/locations/{location}/jobs/{job}/executions/{execution}` parent.
+
+**Do not grant project IAM merely to satisfy the v1 CLI implementation.** Instead, diagnose the actual v2 path using `bash scripts/gcp/verify_remote_executor_dev_task_v2.sh`; this read-only probe impersonates the existing DEV worker and calls the exact v2 URI, emitting only HTTP status and bounded task count, never a token or task payload.
+
+- `V2_TASKS_VERDICT=READ_GRANTED`: API v2 access works under Cloud Shell impersonation. Any deployed worker's existing `task_read_403` still needs a worker-runtime token/identity/request-path investigation; it is not automatically closed by this probe.
+- `V2_TASKS_VERDICT=HTTP_DENIED`: API v2 also denies, and a detailed, server-side diagnosis of effective identity/resource remains necessary; no speculative IAM grants.
+- Auth/transport failures are inconclusive, not PASS.
+
+The original deployed #537 worker uses the v2 REST path; the test's CLI 403 alone is insufficient to explain the worker error. The independent E2E finding remains OPEN until a real worker `describe_execution` shows task metadata.
