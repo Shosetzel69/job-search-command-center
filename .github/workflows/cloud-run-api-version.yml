@@ -20,5 +20,7 @@ jobs:
           node-version: 22
       - name: Test v1 detection rules
         run: node --test scripts/test_cloud_run_api_version.mjs
+      - name: Validate gateway v2 service-scaling fixtures
+        run: python3 -m unittest -v scripts.test_gateway_v2_scaling
       - name: Enforce Cloud Run Admin API v2
         run: node scripts/check_cloud_run_api_version.mjs
