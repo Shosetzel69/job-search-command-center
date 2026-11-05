@@ -44,6 +44,9 @@ jobs:
       - name: Run Remote Executor contract tests
         run: node --test ops/test/*.test.mjs
 
+      - name: Test job-scoped IAM remediation (mock gcloud)
+        run: python3 -m unittest discover -s ops/test -p 'test_dev_task_iam_remediation.py'
+
       - name: Validate auth library resolution
         run: node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
         working-directory: ops
@@ -53,11 +56,14 @@ jobs:
           node --check ops/src/lib.mjs
           node --check ops/src/gateway.mjs
           node --check ops/src/worker.mjs
+          node --check ops/src/dev-e2e-diagnostics.mjs
 
       - name: Validate DEV scripts
         run: |
           bash -n scripts/gcp/bootstrap_remote_executor_dev.sh
           bash -n scripts/gcp/provision_remote_executor_dev.sh
+          bash -n scripts/gcp/repair_remote_executor_dev_task_iam.sh
+          bash -n scripts/gcp/verify_remote_executor_dev_task_v2.sh
           bash -n scripts/gcp/deploy_remote_executor_dev.sh
           bash -n scripts/gcp/assert_trusted_ops_source.sh
           bash -n scripts/gcp/verify_trusted_ops_ref.sh
@@ -87,7 +93,7 @@ jobs:
           ! grep -q -- '--no-cpu-boost' scripts/gcp/deploy_remote_executor_dev.sh
           grep -q 'LOG_LOCATION=' scripts/gcp/provision_remote_executor_dev.sh
           grep -Fq 'job_name=~"^(jscc-search-dev|jscc-diagnostics-dev)$"' scripts/gcp/provision_remote_executor_dev.sh
-          grep -q 'labels.execution_name' ops/src/worker.mjs
+          grep -q 'labels.execution_name' ops/src/dev-e2e-diagnostics.mjs
           ! grep -Eq 'read[[:space:]]+-r|read[[:space:]]+-s|read[[:space:]]+-p' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q "replace(/_/g,'-')" ops/src/gateway.mjs
