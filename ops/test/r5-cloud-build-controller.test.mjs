@@ -142,6 +142,7 @@ test('R5 track terminal SUCCESS with immutable images only and never infer sourc
  const expected={build_id:id,project:'jscc-shared',region:'europe-west1',source_sha:source};
  const raw={id,projectId:'jscc-shared',
   name:'projects/jscc-shared/locations/europe-west1/builds/'+id,
+  serviceAccount:'projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com',
   status:'SUCCESS',source:{repoSource:{commitSha:'not-verified'}},
   substitutions:{_API_TOKEN:'do-not-leak'},
   results:{images:[
@@ -170,6 +171,7 @@ test('R5 distinguish queued, running, and failure; never produce images from fai
  ]) {
   const r=projectDevBuildStatus({
    id,projectId:'jscc-shared',name:'projects/jscc-shared/locations/europe-west1/builds/'+id,
+  serviceAccount:'projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com',
    status,results:{images:[{name:'europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/x:tag',digest}]},
   },expected);
   assert.equal(r.status,status);
@@ -182,15 +184,31 @@ test('R5 distinguish queued, running, and failure; never produce images from fai
 test('R5 build status rejects untracked, foreign or tampered identity',()=>{
  const expected={build_id:id,project:'jscc-shared',region:'europe-west1',source_sha:source};
  const basic={id,projectId:'jscc-shared',
-   name:'projects/jscc-shared/locations/europe-west1/builds/'+id,status:'SUCCESS'};
+   name:'projects/jscc-shared/locations/europe-west1/builds/'+id,
+  serviceAccount:'projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com',status:'SUCCESS'};
  for(const bad of [
   {...basic,id:'00000000-0000-0000-0000-000000000000'},
   {...basic,projectId:'jscc-prod'},
   {...basic,name:'projects/jscc-prod/locations/europe-west1/builds/'+id},
+  {...basic,serviceAccount:'projects/jscc-shared/serviceAccounts/other@jscc-shared.iam.gserviceaccount.com'},
   {...basic,status:'UNKNOWN_USER_VALUE'},
   {...basic,results:{images:'arbitrary'}},
  ])assert.throws(()=>projectDevBuildStatus(bad,expected));
  assert.throws(()=>projectDevBuildStatus(basic,{...expected,project:'jscc-prod'}));
+});
+
+test('R5 dispatch receipt MUST carry matching exact owner approval reference',async()=>{
+ const callbacks={
+  verifyApproval:async()=>({...proof('OWNER_APPROVAL'),approval_ref:'#589/APPROVE_BUILD'}),
+  verifyTrustedRef:async()=>proof('TRUSTED_REF'),
+  verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),generation:'5',object_sha256:digest}),
+  verifyCostAdmission:async()=>({...proof('COST_ADMISSION'),no_incremental_cost_proven:true}),
+  dispatch:async()=>({
+   build_id:id,project:'jscc-shared',region:'europe-west1',
+   source_sha:source,approval_ref:'#589/OTHER_APPROVAL',
+  }),
+ };
+ await assert.rejects(()=>submitApprovedDevOpsBuild(input,callbacks),/build_receipt_approval_mismatch/);
 });
 
 test('R5 build plan evidence is authenticated only and source plan is explicitly unverified',()=>{
