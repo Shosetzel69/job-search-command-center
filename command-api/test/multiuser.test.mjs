@@ -495,7 +495,8 @@ test('same shared job can produce different per-profile eligibility without prov
   const allowed = evaluateSharedJob(row, base, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   const blocked = evaluateSharedJob(row, { ...base, work_modes:{ ...base.work_modes, remote:false } }, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   assert.equal(allowed.eligible, true);
-  assert.equal(typeof allowed.score, 'number');
+  // UNKNOWN must retain no invented FIT; only ELIGIBLE has a numeric score.
+  assert.equal(allowed.eligibilityState==='UNKNOWN'?allowed.score===null:typeof allowed.score==='number',true);
   assert.equal(blocked.eligible, false);
   assert.equal(blocked.exclusionReason, 'remote disabled');
   const unknownRole = evaluateSharedJob(
