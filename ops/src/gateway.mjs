@@ -1,4 +1,5 @@
 import http from 'node:http';
+import { createExecutorHandler } from './executor/operation-auth.mjs';
 import OAuth2Server from '@node-oauth/oauth2-server';
 import * as oidc from 'openid-client';
 import {
@@ -301,10 +302,23 @@ async function getOperation(id) {
   return result ? authenticatedEvidence({ ...rec.data, ...result.data }) : authenticatedEvidence(rec.data);
 }
 
+// Fail-closed: capability is disabled unless explicitly enabled after security review.
+const executorHandler = createExecutorHandler({
+  authenticate, readBody, sendJson, gcsReadJson, gcsWriteJson,
+  bucket: cfg.bucket,
+  githubToken: process.env.JSCC_DEV_GITHUB_TOKEN || '',
+  signingKey: process.env.JSCC_DEV_APPROVAL_HMAC_KEY || '',
+  admissionKey: process.env.JSCC_DEV_ADMISSION_HMAC_KEY || ''
+});
+
 const server = http.createServer(async (req, res) => {
   try {
     const u = new URL(req.url, base(req));
     const issuer = base(req);
+    if (req.method === 'POST' && u.pathname === '/executor/operations') {
+      if (process.env.JSCC_DEV_EXECUTOR_API_ENABLED !== 'true') return sendJson(res, 404, { error: 'not_found' });
+      return executorHandler(req, res);
+    }
     if (req.method === 'GET' && u.pathname === '/health') return sendJson(res, 200, { ok: true, component: 'jscc-ops-gateway-dev', privileged: true, project: cfg.project, catalog_version: CATALOG_VERSION });
     if (req.method === 'GET' && u.pathname === '/.well-known/oauth-protected-resource') return sendJson(res, 200, { resource: `${issuer}/mcp`, authorization_servers: [issuer], scopes_supported: [REQUIRED_SCOPE], bearer_methods_supported: ['header'] });
     if (req.method === 'GET' && (u.pathname === '/.well-known/oauth-authorization-server' || u.pathname === '/.well-known/openid-configuration')) {
