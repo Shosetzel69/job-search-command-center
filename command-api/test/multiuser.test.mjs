@@ -782,12 +782,18 @@ test('F-03 stable opaque global FIT pagination cursor round-trip', () => {
   assert.throws(() => decodeJobCursor(Buffer.from(JSON.stringify(
     {v:3,sort:'fit-desc',offset:-1,as_of:anchor.toISOString()})).toString('base64url')), /STALE_CURSOR/);
   assert.equal(normalizeJobSearchQuery({sort_fit:'desc'}).sort_fit,'desc');
-  assert.equal(normalizeJobSearchQuery({sort_fit:'invalid'}).sort_fit,null);
+  assert.throws(() => normalizeJobSearchQuery({sort_fit:'invalid'}), /Invalid sort_fit/);
 });
 
-test('F-04 bounded aggregate scan is explicit and distinct from ordinary paging', () => {
-  assert.equal(normalizeJobSearchQuery({scan_step:'1'}).scan_step,true);
-  assert.equal(normalizeJobSearchQuery({}).scan_step,false);
-  assert.equal(normalizeJobSearchQuery({scan_step:'0'}).scan_step,false);
-  assert.equal(normalizeJobSearchQuery({sort_fit:'desc',scan_step:'1'}).sort_fit,'desc');
+test('Stage A forbids every legacy scan_step value and strictly validates filters', () => {
+  for(const value of ['0','1','',false,true,0,1]){
+    assert.throws(() => normalizeJobSearchQuery({scan_step:value}), /SCAN_STEP_UNSUPPORTED/);
+  }
+  assert.equal(normalizeJobSearchQuery({sort_fit:'desc'}).sort_fit,'desc');
+  assert.equal(normalizeJobSearchQuery({b2b:'true'}).b2b,true);
+  assert.equal(normalizeJobSearchQuery({b2b:'false'}).b2b,false);
+  assert.equal(normalizeJobSearchQuery({eligibility:'unknown'}).eligibility,'UNKNOWN');
+  for(const key of ['sort_fit','b2b','eligibility']){
+    assert.throws(()=>normalizeJobSearchQuery({[key]:'invalid'}));
+  }
 });
