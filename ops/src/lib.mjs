@@ -38,10 +38,6 @@ export const TASK_CATALOG = Object.freeze({
     class: 'OBSERVE',
     params: Object.freeze({ environment: 'dev_env', service: 'dev_service' }),
   }),
-  describe_dev_build: Object.freeze({
-    class: 'OBSERVE',
-    params: Object.freeze({ environment: 'dev_env', buildId: 'known_build' }),
-  }),
   inspect_dev_rollout: Object.freeze({
     class: 'OBSERVE',
     params: Object.freeze({ environment: 'dev_env', service: 'dev_service', expected_image_digest:'sha256_digest' }),
@@ -55,16 +51,7 @@ export const TASK_CATALOG = Object.freeze({
       expected_source_sha:'sha40',
     }),
   }),
-  run_dev_gcloud_script: Object.freeze({
-    class:'OBSERVE',
-    params:Object.freeze({
-      environment:'dev_env',
-      script_id:'dev_script_id',
-      script_sha256:'dev_script_sha256',
-      service:'dev_service',
-      buildId:'known_build',
-    }),
-  }),
+
 });
 
 export const TEST_SUITES = Object.freeze({
