@@ -168,6 +168,25 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    assert.deepEqual([...restrictedIds].sort(),unknown.map(j=>j.id).sort(),
      'UNKNOWN conflict jobs must survive subfamily filter despite nonempty member codes');
   });
+  await t.test('Stage A global FIT cursor fails closed after evaluation reorder between pages',async()=>{
+   const {withTenantTransaction}=await import('../src/db/tenant-gateway.js');
+   const stored=await repository.effectiveConfig(ctx,env,{db});
+   const first=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:1,prefetch:0,q:'W025',sort_fit:'desc'},env,{db});
+   assert.equal(first.fit_order_status,'GLOBAL_VERIFIED');
+   assert.ok(first.next_cursor,'fixture requires at least two ranked candidates');
+   const active=await repository.resolveActiveSearchProfile(ctx,env,{db});
+   const target=seeded.find(j=>j.expected==='PROJECT_DELIVERY_MANAGEMENT');
+   await withTenantTransaction(ctx,async tx=>{
+     const update=await tx.query(
+      'UPDATE profile_job_evaluation SET score=LEAST(COALESCE(score,65)+1,100) WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=$3',
+      [ctx.profile_id,active.search_profile_id,target.id]);
+     assert.equal(update.rowCount,1);
+   },{env,db});
+   await assert.rejects(()=>repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:1,prefetch:0,q:'W025',sort_fit:'desc',cursor:first.next_cursor},env,{db}),
+     error=>error.status===400 && /STALE_CURSOR: FIT population changed/.test(error.message));
+  });
   await t.test('W025-R04 two or more pages, exact expected set/order and no canonical mutation',async()=>{
    const prefs={...await repository.effectiveConfig(ctx,env,{db}),
     target_role_families:['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE'],
