@@ -1308,7 +1308,8 @@ export async function listProfileJobs(
       }
       evaluationsComputed += 1;
       const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
-      await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
+      const persisted=await persistEvaluationTx(tx, foundation, row, evaluation);
+      if(!persisted) throw httpError('STALE_BASIS: evaluation was not persisted',409);
       return { evaluation, job:evaluation.job };
     };
 
