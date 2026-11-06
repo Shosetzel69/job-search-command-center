@@ -2,6 +2,9 @@ import {
   CATALOG_VERSION, TEST_SUITES, envConfig, executionJobName, gcpFetch, gcsReadJson, gcsReplaceJson,
   gcsWriteJson, isoNow, normalizeExecutionId, publicEvidence, releaseLease, sanitizeExternal, sanitizeText, validateDispatchBinding, validateTaskRequest
 } from './lib.mjs';
+import { createDevObserver } from '../observation/dev-runtime-observer.mjs';
+import { assessDevRollout, planDevDeployment } from '../observation/dev-rollout-evaluator.mjs';
+import { executeDevGcloudScript } from '../diagnostics/dev-gcloud-script-runner.mjs';
 
 const cfg = envConfig();
 const ownExecution = normalizeExecutionId(process.env.CLOUD_RUN_EXECUTION || '');
@@ -129,11 +132,96 @@ async function runTestSuite(args) {
   if (targetSourceSha !== args.expected_source_sha) return { target_alias:args.suite, target_source_sha:targetSourceSha, exit_code:0, test_verdict:'BLOCKED', coarse_error:'source_sha_mismatch' };
   return { target_alias:args.suite, target_source_sha:targetSourceSha, exit_code:0, test_verdict:'PASS', coarse_error:null };
 }
+// Reuse the existing typed diagnostics job, dispatch, worker identity and
+// evidence pipeline. GCP permissions are *not* elevated here: missing
+// run.services.get/run.revisions.get/builds.get must fail closed.
+async function devObservationTransport({api,path}) {
+  if ((api!=='run.googleapis.com' && api!=='cloudbuild.googleapis.com') ||
+      typeof path!=='string' || path.length>350 ||
+      !/^\/v[12]\/projects\//.test(path)) throw new Error('transport_request_denied');
+  const r=await gcpFetch('https://'+api+path,{signal:AbortSignal.timeout(9000)});
+  if(!r.ok) return {status:r.status,body:null};
+  const bound=Number(r.headers.get('content-length')||0);
+  if(bound>131072) throw new Error('upstream_response_too_large');
+  const raw=await r.text();
+  if(Buffer.byteLength(raw,'utf8')>131072) throw new Error('upstream_response_too_large');
+  try{return {status:r.status,body:JSON.parse(raw)};}
+  catch{throw new Error('upstream_invalid_json');}
+}
+async function describeDevObservation(task,args){
+  const observer=createDevObserver({transport:devObservationTransport});
+  if(task==='inspect_dev_rollout') {
+    const observed=await observer.describe({environment:'dev',task:'describe_dev_runtime',service:args.service});
+    const review=assessDevRollout(observed,args.expected_image_digest);
+    return {...review,resource:observed.resource,target_source_sha:'UNKNOWN'};
+  }
+  if(task==='plan_dev_deployment') {
+    const observed=await observer.describe({environment:'dev',task:'describe_dev_runtime',service:args.service});
+    const plan=planDevDeployment(observed,args);
+    return {...plan,resource:observed.resource,target_source_sha:'UNKNOWN'};
+  }
+  const result=await observer.describe({...args,task});
+  const summary=task==='describe_dev_runtime'
+    ? JSON.stringify(result.effective_revisions) : null;
+  const buildImages=task==='describe_dev_build'
+    ? JSON.stringify(result.immutable_images) : null;
+  if(summary && Buffer.byteLength(summary)>4096) throw new Error('observation_too_large');
+  if(buildImages && Buffer.byteLength(buildImages)>4096) throw new Error('observation_too_large');
+  return {
+    target_alias:task==='describe_dev_runtime'?args.service:args.buildId,
+    resource:result.resource,
+    target_source_sha:result.source_sha,
+    observed_at:result.observed_at,
+    ...(task==='describe_dev_runtime'?{
+      service_account:result.service_account,
+      environment_variable_count:result.environment_variable_count,
+      effective_revisions_json:summary,
+    }:{
+      build_id:result.build_id,build_status:result.build_status,
+      immutable_images_json:buildImages,
+    }),
+  };
+}
 function publicAssertions(task, value) {
   if (task === 'describe_execution') return { target_alias:value.target_alias, failed_count:value.failed_count, succeeded_count:value.succeeded_count, cancelled_count:value.cancelled_count, completed:Boolean(value.completion_time), task_count:value.task_count, target_exit_code:value.target_exit_code, target_term_signal:value.target_term_signal, root_cause:value.root_cause, task_metadata_available:value.task_metadata_available, task_metadata_error:value.task_metadata_error };
   if (task === 'read_execution_logs') return { target_alias:value.target_alias, line_count:value.line_count, log_excerpt:value.log_excerpt };
   if (task === 'inspect_runtime_snapshot') return { target_alias:value.target_alias, run_status:value.run_status, published_jobs:value.published_jobs, status_present:value.status_present, jobs_present:value.jobs_present };
   if (task === 'run_test_suite') return { target_alias:value.target_alias, target_source_sha:value.target_source_sha, exit_code:value.exit_code, test_verdict:value.test_verdict, coarse_error:value.coarse_error || null };
+  if (task === 'describe_dev_runtime') return {
+    target_alias:value.target_alias, resource:value.resource,observed_at:value.observed_at,
+    service_account:value.service_account,environment_variable_count:value.environment_variable_count,
+    effective_revisions_json:value.effective_revisions_json,
+  };
+  if (task === 'describe_dev_build') return {
+    target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
+    build_id:value.build_id,build_status:value.build_status,
+    immutable_images_json:value.immutable_images_json,
+  };
+  if (task === 'inspect_dev_rollout') return {
+    target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
+    expected_image_digest:value.expected_image_digest,
+    matched_percent:value.matched_percent,other_percent:value.other_percent,
+    unknown_percent:value.unknown_percent,active_revision_count:value.active_revision_count,
+    rollout_verdict:value.rollout_verdict,source_provenance:value.source_provenance,
+    traffic_cutover_authorized:false,
+  };
+  if (task === 'plan_dev_deployment') return {
+    target_alias:value.target_alias,resource:value.resource,observed_at:value.observed_at,
+    expected_current_digest:value.expected_current_digest,
+    proposed_image_digest:value.proposed_image_digest,
+    expected_source_sha:value.expected_source_sha,
+    source_image_link:value.source_image_link,change_required:value.change_required,
+    deployment_authorized:false,approval_required:value.approval_required,
+    preflight_verdict:value.preflight_verdict,
+  };
+  if (task === 'run_dev_gcloud_script') return {
+    target_alias:value.target_alias, resource:value.resource,observed_at:value.observed_at,
+    script_id:value.script_id,script_sha256:value.script_sha256,
+    script_step_count:value.script_step_count,script_verdict:value.script_verdict,
+    runtime_service:value.runtime_service,runtime_revision_count:value.runtime_revision_count,
+    build_id:value.build_id,build_status:value.build_status,
+    script_source_provenance:value.script_source_provenance,
+  };
   return {};
 }
 
@@ -153,6 +241,12 @@ async function main(){
     else if(taskReq.task==='read_execution_logs') value=await readExecutionLogs(taskReq.args);
     else if(taskReq.task==='inspect_runtime_snapshot') value=await inspectRuntimeSnapshot(taskReq.args);
     else if(taskReq.task==='run_test_suite') value=await runTestSuite(taskReq.args);
+    else if(['describe_dev_runtime','describe_dev_build','inspect_dev_rollout','plan_dev_deployment'].includes(taskReq.task))
+      value=await describeDevObservation(taskReq.task,taskReq.args);
+    else if(taskReq.task==='run_dev_gcloud_script')
+      value=await executeDevGcloudScript(taskReq.args,{
+        observer:createDevObserver({transport:devObservationTransport})
+      });
     else throw new Error('unknown_task');
     const external=sanitizeExternal(typeof value.output==='string'?value.output:'');
     if (!external.ok) throw new Error(external.coarse_error);

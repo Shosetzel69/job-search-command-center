@@ -1,6 +1,9 @@
 import crypto from 'node:crypto';
+import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
-export const CATALOG_VERSION = '537-v1';
+export const CATALOG_VERSION = '589-r4-v1';
+export const DEV_DIAGNOSTIC_SCRIPT_ID = 'dev_runtime_build_inventory_v1';
+export const DEV_DIAGNOSTIC_SCRIPT_SHA256 = '60f9c0f87abd9da979e1dc66c5a5e2580faa5a4483aacb7f3b8bdd2478bea73b';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
 export const REQUIRED_AUDIENCE = 'urn:jscc:ops:dev';
 export const CHATGPT_CLIENT_ID = 'jscc-ops-chatgpt-private';
@@ -30,6 +33,37 @@ export const TASK_CATALOG = Object.freeze({
   run_test_suite: Object.freeze({
     class: 'VERIFY',
     params: Object.freeze({ suite: 'suite', expected_source_sha: 'sha40' }),
+  }),
+  describe_dev_runtime: Object.freeze({
+    class: 'OBSERVE',
+    params: Object.freeze({ environment: 'dev_env', service: 'dev_service' }),
+  }),
+  describe_dev_build: Object.freeze({
+    class: 'OBSERVE',
+    params: Object.freeze({ environment: 'dev_env', buildId: 'known_build' }),
+  }),
+  inspect_dev_rollout: Object.freeze({
+    class: 'OBSERVE',
+    params: Object.freeze({ environment: 'dev_env', service: 'dev_service', expected_image_digest:'sha256_digest' }),
+  }),
+  plan_dev_deployment: Object.freeze({
+    class:'OBSERVE',
+    params:Object.freeze({
+      environment:'dev_env',service:'dev_service',
+      expected_current_digest:'sha256_digest',
+      proposed_image_digest:'sha256_digest',
+      expected_source_sha:'sha40',
+    }),
+  }),
+  run_dev_gcloud_script: Object.freeze({
+    class:'OBSERVE',
+    params:Object.freeze({
+      environment:'dev_env',
+      script_id:'dev_script_id',
+      script_sha256:'dev_script_sha256',
+      service:'dev_service',
+      buildId:'known_build',
+    }),
   }),
 });
 
@@ -94,6 +128,25 @@ export function validateTaskRequest(task, args) {
     const value = args[name];
     if (type === 'execution_id') clean[name] = normalizeExecutionId(value);
     else if (type === 'run_id') clean[name] = validateRunId(value);
+    else if (type === 'dev_env') {
+      if (value !== 'dev') throw new Error('environment_denied');
+      clean[name] = 'dev';
+    } else if (type === 'dev_service') {
+      clean[name] = admitDevRequest({environment:'dev',task:'describe_dev_runtime',service:value}).service;
+    } else if (type === 'known_build') {
+      clean[name] = admitDevRequest({environment:'dev',task:'describe_dev_build',buildId:value}).buildId;
+    }
+    else if (type === 'dev_script_id') {
+      if (value !== DEV_DIAGNOSTIC_SCRIPT_ID) throw new Error('script_not_allowlisted');
+      clean[name] = value;
+    } else if (type === 'dev_script_sha256') {
+      if (value !== DEV_DIAGNOSTIC_SCRIPT_SHA256) throw new Error('script_sha_mismatch');
+      clean[name] = value;
+    }
+    else if (type === 'sha256_digest') {
+      if (typeof value !== 'string' || !/^sha256:[0-9a-f]{64}$/.test(value)) throw new Error('invalid_image_digest');
+      clean[name] = value;
+    }
     else if (type === 'sha40') clean[name] = validateSha40(value);
     else if (type === 'suite') {
       const suite = String(value || '');
@@ -135,7 +188,17 @@ const PUBLIC_ASSERTION_FIELDS = Object.freeze([
 
 const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
   ...PUBLIC_ASSERTION_FIELDS,
-  'root_cause','log_excerpt'
+  'root_cause','log_excerpt',
+  // R1-B operational topology is for authenticated tools only, never public.
+  'observed_at','resource','build_id','build_status','service_account',
+  'environment_variable_count','effective_revisions_json','immutable_images_json',
+  'expected_image_digest','matched_percent','other_percent','unknown_percent',
+  'active_revision_count','rollout_verdict','source_provenance','traffic_cutover_authorized',
+  'expected_current_digest','proposed_image_digest','expected_source_sha',
+  'source_image_link','change_required','deployment_authorized','approval_required',
+  'preflight_verdict',
+  'script_id','script_sha256','script_step_count','script_verdict',
+  'runtime_service','runtime_revision_count','script_source_provenance'
 ]);
 
 function projectAssertions(input, fields) {

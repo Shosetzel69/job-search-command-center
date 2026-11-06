@@ -1,0 +1,10 @@
+# #589 R2: extend ONLY the existing DEV Workspace Manager image.
+# BASE_IMAGE must be an independently verified immutable Manager digest.
+ARG BASE_IMAGE
+FROM ${BASE_IMAGE}
+COPY ops/workspace-manager/service/common.py /workspace/service/common.py
+COPY ops/workspace-manager/service/backend.py /workspace/service/backend.py
+COPY ops/workspace-manager/service/manager.py /workspace/service/manager.py
+COPY ops/workspace-manager/service/httpbase.py /workspace/service/httpbase.py
+COPY ops/workspace-manager/service/workspace_ops.py /workspace/service/workspace_ops.py
+RUN python3 -B -c "import ast, pathlib; [ast.parse(p.read_text()) for p in pathlib.Path('/workspace/service').glob('*.py')]"
