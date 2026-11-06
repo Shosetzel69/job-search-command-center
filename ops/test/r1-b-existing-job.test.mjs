@@ -3,13 +3,13 @@ import assert from 'node:assert/strict';
 import {CATALOG_VERSION,TASK_CATALOG,validateTaskRequest,validateDispatchBinding,publicEvidence,authenticatedEvidence} from '../src/lib.mjs';
 
 test('R1 B reuses existing operation protocol with OBSERVE-only tasks',()=>{
- for(const task of ['describe_dev_runtime','describe_dev_build']){
+ for(const task of ['describe_dev_runtime','inspect_dev_rollout','plan_dev_deployment']){
   assert.equal(TASK_CATALOG[task].class,'OBSERVE');
  }
  const r=validateTaskRequest('describe_dev_runtime',{environment:'dev',service:'jscc-dev-workspace-manager'});
  assert.deepEqual(r,{task:'describe_dev_runtime',task_class:'OBSERVE',args:{environment:'dev',service:'jscc-dev-workspace-manager'}});
- const b=validateTaskRequest('describe_dev_build',{environment:'dev',buildId:'f38fa001-3681-42fd-bb8f-9ade6a8eeb8e'});
- assert.equal(b.args.buildId,'f38fa001-3681-42fd-bb8f-9ade6a8eeb8e');
+ assert.equal(TASK_CATALOG.describe_dev_build,undefined);
+ assert.equal(TASK_CATALOG.run_dev_gcloud_script,undefined);
 });
 test('R1 B rejects cross-project, unrecognized IDs, extra parameters',()=>{
  for(const request of [
