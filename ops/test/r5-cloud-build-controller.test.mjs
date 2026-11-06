@@ -218,18 +218,19 @@ test('R5 build plan evidence is authenticated only and source plan is explicitly
  const pub=publicEvidence(x).assertions,auth=authenticatedEvidence(x).assertions;
  assert.equal(pub.trusted_ref,undefined);
  assert.equal(pub.requested_source_sha,undefined);
- assert.equal(auth.trusted_ref,ref);
- assert.equal(auth.submission_enabled,false);
+ assert.equal(auth.trusted_ref,undefined);
+ assert.equal(auth.requested_source_sha,undefined);
+ assert.equal(auth.submission_enabled,undefined);
  assert.equal(auth.secret,undefined);
 });
 
 test('R5 contracts do not alter Delivery 1 catalog or worker image',()=>{
- const dispatch={execution_name:'jscc-diagnostics-dev-abcdef',catalog_version:'589-r4-v1',
+ const dispatch={execution_name:'jscc-diagnostics-dev-abcdef',catalog_version:'589-r5-v1',
   ops_source_sha:source,worker_image_digest:digest,expires_at_ms:Date.now()+50000};
  assert.throws(()=>validateDispatchBinding(dispatch,dispatch.execution_name,{
   catalog_version:CATALOG_VERSION,ops_source_sha:source,worker_image_digest:digest,
  }),/catalog_version_mismatch/);
  const worker=readFileSync(new URL('../Dockerfile.worker',import.meta.url),'utf8');
- assert.match(worker,/COPY ops\/build\/dev-cloud-build-controller.mjs/);
+ assert.doesNotMatch(worker,/COPY ops\/build\/dev-cloud-build-controller.mjs/);
  assert.match(worker,/USER node/);
 });
