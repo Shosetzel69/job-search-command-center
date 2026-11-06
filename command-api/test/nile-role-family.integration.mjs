@@ -253,6 +253,33 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    assert.ok(result.processed>=0&&result.processed<=100);
    assert.equal(result.completion_semantics,'PROCESSING_COVERAGE');
   });
+  await t.test('B-01 feasibility: advisory lock shared by tenant and global sessions',async()=>{
+   const {withTenantTransaction}=await import('../src/db/tenant-gateway.js');
+   const contender=await db.connect();
+   try{
+    await withTenantTransaction(ctx,async tx=>{
+     const key='job:'+seeded[0].id;
+     const first=await tx.query(
+       'SELECT pg_try_advisory_xact_lock($1::integer, hashtext($2::text)) AS acquired',
+       [5910410,key]);
+     assert.equal(first.rows[0]?.acquired,true);
+     await contender.query('BEGIN');
+     const second=await contender.query(
+       'SELECT pg_try_advisory_xact_lock($1::integer, hashtext($2::text)) AS acquired',
+       [5910410,key]);
+     assert.equal(second.rows[0]?.acquired,false,
+       'shared writer must observe tenant evaluator advisory lock');
+     await contender.query('ROLLBACK');
+    },{env,db});
+    await contender.query('BEGIN');
+    const released=await contender.query(
+      'SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',
+      [5910410,'job:'+seeded[0].id]);
+    assert.equal(released.rows[0]?.acquired,true,
+      'lock must release on evaluator COMMIT');
+    await contender.query('ROLLBACK');
+   }finally{await contender.query('ROLLBACK').catch(()=>{});contender.release();}
+  });
   await t.test('W025-R05 persisted independent scope family/subfamily states',async()=>{
    const column=(await db.query("SELECT column_name FROM information_schema.columns WHERE table_name='coverage_scope_state'")).rows.map(r=>r.column_name);
    assert.ok(column.includes('role_subfamilies'));
