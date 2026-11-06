@@ -24,7 +24,7 @@ import { migrationDatabaseConfig } from '../src/db/config.js';
 import { runtimePrivilegeReadiness, TENANT_AWARE_TABLES } from '../src/db/privilege-readiness.js';
 import { deleteTenantFirst, resolveAccountDeletionTarget } from '../src/db/tenant-gateway.js';
 import { provisionRuntimeRole } from '../scripts/db-provision-runtime.mjs';
-import { personalPreferencesChanged } from '../src/multiuser-api.js';
+import { handleAuthenticatedRoute, personalPreferencesChanged } from '../src/multiuser-api.js';
 import { migrateRoleCriteria } from '../src/db/atc-489-02-backfill.js';
 
 const nomenclatures = JSON.parse(
@@ -796,5 +796,18 @@ test('Stage A forbids every legacy scan_step value and strictly validates filter
   assert.equal(normalizeJobSearchQuery({eligibility:'unknown'}).eligibility,'UNKNOWN');
   for(const key of ['sort_fit','b2b','eligibility']){
     assert.throws(()=>normalizeJobSearchQuery({[key]:'invalid'}));
+  }
+});
+
+test('Stage A HTTP rejects scan_step even when 0/empty, before repository or GCP access',async()=>{
+  const context={user_id:'11111111-1111-4111-8111-111111111111',
+    profile_id:'22222222-2222-4222-8222-222222222222',
+    role:'USER',status:'ACTIVE'};
+  for(const value of ['0','1','']){
+    const url='https://app.example.test/me/jobs?scan_step='+value;
+    await assert.rejects(
+      ()=>handleAuthenticatedRoute(new Request(url),{APP_ENV:'dev'},context),
+      error=>error.status===400&&error.message==='SCAN_STEP_UNSUPPORTED',
+    );
   }
 });
