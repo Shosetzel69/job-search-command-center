@@ -29,9 +29,9 @@ done
 # Fail closed if either original effective deployed image changed since last observation.
 get_effective_image() {
   local service="$1" rev image
-  rev="$(gcloud run services describe "$service" --project="$PROJECT" --region="$REGION" --format='value(status.traffic[0].revisionName)')"
+  rev="$(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" "$service" primary-revision)"
   [[ -n "$rev" ]] || return 1
-  image="$(gcloud run revisions describe "$rev" --project="$PROJECT" --region="$REGION" --format='value(status.imageDigest)')"
+  image="$(python3 scripts/gcp/cloud_run_v2_read.py "$PROJECT" "$REGION" "$service" effective-image)"
   printf '%s' "$image"
 }
 [[ "$(get_effective_image "$MANAGER")" == "$MANAGER_BASE" ]] || { echo "Manager baseline drift; abort" >&2; exit 3; }

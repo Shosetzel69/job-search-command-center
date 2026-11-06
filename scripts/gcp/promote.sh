@@ -166,12 +166,9 @@ gcloud run deploy "${SERVICE_NAME}" \
   --set-secrets="NILE_DATABASE_URL=NILE_DATABASE_URL:1,ALLOWED_GOOGLE_SUB=ALLOWED_GOOGLE_SUB:latest,GOOGLE_CLIENT_ID=GOOGLE_CLIENT_ID:latest"
 status_pass service
 
-reported_service_url="$(gcloud run services describe "${SERVICE_NAME}" \
-  --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.url)')"
-latest_ready="$(gcloud run services describe "${SERVICE_NAME}" \
-  --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.latestReadyRevisionName)')"
-traffic="$(gcloud run services describe "${SERVICE_NAME}" \
-  --project="${PROJECT_ID}" --region="${REGION}" --format='value(status.traffic[0].percent)')"
+reported_service_url="$(python3 "${ROOT}/scripts/gcp/cloud_run_v2_read.py" "${PROJECT_ID}" "${REGION}" "${SERVICE_NAME}" uri)"
+latest_ready="$(python3 "${ROOT}/scripts/gcp/cloud_run_v2_read.py" "${PROJECT_ID}" "${REGION}" "${SERVICE_NAME}" ready)"
+traffic="$(python3 "${ROOT}/scripts/gcp/cloud_run_v2_read.py" "${PROJECT_ID}" "${REGION}" "${SERVICE_NAME}" percent)"
 
 status_step traffic
 [[ "${reported_service_url}" == https://*.run.app ]] || { echo "Unexpected Cloud Run reported URL: ${reported_service_url}" >&2; exit 11; }

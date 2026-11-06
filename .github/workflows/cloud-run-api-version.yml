@@ -22,5 +22,9 @@ jobs:
         run: node --test scripts/test_cloud_run_api_version.mjs
       - name: Validate gateway v2 service-scaling fixtures
         run: python3 -m unittest -v scripts.test_gateway_v2_scaling
+      - name: Validate Cloud Run v2 read contracts
+        run: python3 -m unittest -v scripts.test_cloud_run_v2_read
+      - name: Check operational shell syntax
+        run: bash -n scripts/gcp/promote.sh scripts/gcp/capture_live_promotion_evidence.sh scripts/gcp/rollout_workspace_manager_cap100_dev.sh scripts/gcp/stage_531_role_family_dev_service.sh scripts/gcp/bootstrap_remote_executor_dev.sh scripts/gcp/verify_remote_executor_dev.sh
       - name: Enforce Cloud Run Admin API v2
         run: node scripts/check_cloud_run_api_version.mjs

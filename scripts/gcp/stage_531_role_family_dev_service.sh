@@ -23,23 +23,7 @@ image_digest="$(gcloud artifacts docker images describe "${image_tag}" --project
 image="${image_repo}@${image_digest}"
 
 # Verify the existing DEV service identity, DB secret binding, and collection mode.
-gcloud run services describe "${service}" --project="${project}" --region="${region}" --format=json \
-  | python3 -c '
-import json,sys
-d=json.load(sys.stdin)
-meta=d.get("metadata",{})
-assert meta.get("name")=="jscc-command-api-dev", "Incorrect service"
-spec=d.get("spec",{}).get("template",{}).get("spec",{})
-containers=spec.get("containers",[])
-assert len(containers)==1, "Unexpected container layout"
-env={e.get("name"):e for e in containers[0].get("env",[])}
-assert env.get("APP_ENV",{}).get("value")=="dev", "Not DEV"
-assert env.get("SEARCH_MODE",{}).get("value")=="disabled", "Search must stay disabled"
-assert env.get("JSCC_RUNTIME_BACKEND",{}).get("value")=="gcp", "Unexpected backend"
-secret=env.get("NILE_DATABASE_URL",{}).get("valueFrom",{}).get("secretKeyRef",{})
-assert secret.get("name")=="NILE_DATABASE_URL" and str(secret.get("key"))=="1", "Nile secret pin mismatch"
-print("JSCC531_DEV_SERVICE_PREFLIGHT_PASS")
-'
+python3 scripts/gcp/cloud_run_v2_read.py "${project}" "${region}" "${service}" preflight
 echo "JSCC531_EXACT_SHA=${candidate}"
 echo "JSCC531_SERVICE_IMAGE=${image}"
 echo "JSCC531_MODE=${mode}"
@@ -56,17 +40,7 @@ gcloud run services update "${service}" \
   --tag="rf531" --no-traffic
 
 # The tag is testable while the production DEV route remains on its prior revision.
-tag_url="$(gcloud run services describe "${service}" --project="${project}" --region="${region}" --format=json \
- | python3 -c '
-import json,sys
-d=json.load(sys.stdin)
-matches=[x for x in d.get("status",{}).get("traffic",[]) if x.get("tag")=="rf531"]
-assert len(matches)==1, "Tagged revision not found"
-assert int(matches[0].get("percent") or 0)==0, "Candidate unexpectedly serving traffic"
-url=matches[0].get("url","")
-assert url.startswith("https://") and ".run.app" in url, "Tagged revision URL missing"
-print(url)
-')"
+tag_url="$(python3 scripts/gcp/cloud_run_v2_read.py "${project}" "${region}" "${service}" tag-uri)"
 echo "JSCC531_STAGED_0_PERCENT_TRAFFIC_PASS"
 echo "JSCC531_TAGGED_REVISION_URL=${tag_url}"
 
