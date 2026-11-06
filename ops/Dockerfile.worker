@@ -5,10 +5,8 @@ RUN cd ops && npm install --omit=dev --ignore-scripts
 COPY ops/src ./ops/src
 COPY ops/observation/dev-runtime-observer.mjs ./ops/observation/dev-runtime-observer.mjs
 COPY ops/observation/dev-rollout-evaluator.mjs ./ops/observation/dev-rollout-evaluator.mjs
-COPY ops/diagnostics/dev-gcloud-script-runner.mjs ./ops/diagnostics/dev-gcloud-script-runner.mjs
-COPY ops/diagnostics/dev-runtime-build-inventory-v1.json ./ops/diagnostics/dev-runtime-build-inventory-v1.json
 ARG SOURCE_SHA
 ENV SOURCE_SHA=${SOURCE_SHA}
-RUN cd ops && node --check src/lib.mjs && node --check src/worker.mjs && node --check observation/dev-runtime-observer.mjs && node --check observation/dev-rollout-evaluator.mjs && node --check diagnostics/dev-gcloud-script-runner.mjs
+RUN cd ops && node --check src/lib.mjs && node --check src/worker.mjs && node --check observation/dev-runtime-observer.mjs && node --check observation/dev-rollout-evaluator.mjs
 USER node
 CMD ["node","ops/src/worker.mjs"]
