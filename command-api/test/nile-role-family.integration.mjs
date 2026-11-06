@@ -183,6 +183,19 @@ test('W025 Nile 010 role families native functional contract',async t=>{
       [ctx.profile_id,active.search_profile_id,target.id]);
      assert.equal(update.rowCount,1);
    },{env,db});
+   const currentScore=await withTenantTransaction(ctx,async tx=>
+     (await tx.query(
+       'SELECT score FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=$3',
+       [ctx.profile_id,active.search_profile_id,target.id])).rows[0]?.score,
+     {env,db});
+   assert.ok(Number.isFinite(Number(currentScore)));
+   const refreshed=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:1,prefetch:0,q:'W025',sort_fit:'desc'},env,{db});
+   assert.ok(refreshed.next_cursor,'updated population needs a continuation cursor');
+   const beforeFingerprint=repository.decodeJobCursor(first.next_cursor).fit_fingerprint;
+   const afterFingerprint=repository.decodeJobCursor(refreshed.next_cursor).fit_fingerprint;
+   assert.notEqual(afterFingerprint,beforeFingerprint,
+     'modifying persisted FIT score must change the population fingerprint');
    await assert.rejects(()=>repository.listProfileJobs(ctx,stored,nomenclatures,
      {limit:1,prefetch:0,q:'W025',sort_fit:'desc',cursor:first.next_cursor},env,{db}),
      error=>error.status===400 && /STALE_CURSOR: FIT population changed/.test(error.message));
