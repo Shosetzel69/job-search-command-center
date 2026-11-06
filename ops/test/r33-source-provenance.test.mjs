@@ -21,9 +21,11 @@ test('gateway remains byte-for-byte R33 and adds no new MCP endpoints',()=>{
 test('new tasks are dispatched using existing #537 catalog and worker',()=>{
  const lib=readFileSync(new URL('../src/lib.mjs',import.meta.url),'utf8');
  const worker=readFileSync(new URL('../src/worker.mjs',import.meta.url),'utf8');
- for(const name of ['describe_dev_runtime','describe_dev_build']){
+ for(const name of ['describe_dev_runtime','inspect_dev_rollout']){
   assert.match(lib,new RegExp(name));
   assert.match(worker,new RegExp(name));
  }
  assert.match(worker,/describeDevObservation/);
+ assert.doesNotMatch(lib,/  describe_dev_build: Object.freeze/);
+ assert.doesNotMatch(lib,/  run_dev_gcloud_script: Object.freeze/);
 });
