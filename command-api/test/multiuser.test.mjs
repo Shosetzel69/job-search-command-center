@@ -776,12 +776,17 @@ test('preference response changed flag reflects semantic personal change only', 
 });
 test('F-03 stable opaque global FIT pagination cursor round-trip', () => {
   const anchor = new Date('2026-10-30T02:00:00Z');
-  const cursor = encodeFitCursor(20, anchor);
-  assert.deepEqual(decodeJobCursor(cursor), {fit_offset:20,fit_sort:'desc',as_of:anchor.toISOString()});
-  assert.equal(decodeJobCursor(encodeFitCursor(40,anchor,'asc')).fit_sort,'asc');
-  assert.throws(() => encodeFitCursor(-1, anchor), /Invalid FIT cursor offset/);
+  const fingerprint='a'.repeat(32);
+  const cursor = encodeFitCursor(20, anchor, 'desc',fingerprint);
+  assert.deepEqual(decodeJobCursor(cursor), {fit_offset:20,fit_sort:'desc',
+    as_of:anchor.toISOString(),fit_fingerprint:fingerprint});
+  assert.equal(decodeJobCursor(encodeFitCursor(40,anchor,'asc',fingerprint)).fit_sort,'asc');
+  assert.throws(() => encodeFitCursor(-1, anchor,'desc',fingerprint), /Invalid FIT cursor offset/);
   assert.throws(() => decodeJobCursor(Buffer.from(JSON.stringify(
-    {v:3,sort:'fit-desc',offset:-1,as_of:anchor.toISOString()})).toString('base64url')), /STALE_CURSOR/);
+    {v:4,sort:'fit-desc',offset:-1,as_of:anchor.toISOString(),fingerprint})).toString('base64url')), /STALE_CURSOR/);
+  assert.throws(() => encodeFitCursor(20,anchor,'desc'),/fingerprint/);
+  assert.throws(() => decodeJobCursor(Buffer.from(JSON.stringify(
+    {v:3,sort:'fit-desc',offset:20,as_of:anchor.toISOString()})).toString('base64url')),/STALE_CURSOR/);
   assert.equal(normalizeJobSearchQuery({sort_fit:'desc'}).sort_fit,'desc');
   assert.throws(() => normalizeJobSearchQuery({sort_fit:'invalid'}), /Invalid sort_fit/);
 });
