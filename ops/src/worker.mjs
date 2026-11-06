@@ -155,23 +155,15 @@ async function describeDevObservation(task,args){
   const result=await observer.describe({...args,task});
   const summary=task==='describe_dev_runtime'
     ? JSON.stringify(result.effective_revisions) : null;
-  const buildImages=task==='describe_dev_build'
-    ? JSON.stringify(result.immutable_images) : null;
   if(summary && Buffer.byteLength(summary)>4096) throw new Error('observation_too_large');
-  if(buildImages && Buffer.byteLength(buildImages)>4096) throw new Error('observation_too_large');
   return {
-    target_alias:task==='describe_dev_runtime'?args.service:args.buildId,
+    target_alias:args.service,
     resource:result.resource,
     target_source_sha:result.source_sha,
     observed_at:result.observed_at,
-    ...(task==='describe_dev_runtime'?{
-      service_account:result.service_account,
-      environment_variable_count:result.environment_variable_count,
-      effective_revisions_json:summary,
-    }:{
-      build_id:result.build_id,build_status:result.build_status,
-      immutable_images_json:buildImages,
-    }),
+    service_account:result.service_account,
+    environment_variable_count:result.environment_variable_count,
+    effective_revisions_json:summary,
   };
 }
 function publicAssertions(task, value) {
@@ -233,12 +225,8 @@ async function main(){
     else if(taskReq.task==='read_execution_logs') value=await readExecutionLogs(taskReq.args);
     else if(taskReq.task==='inspect_runtime_snapshot') value=await inspectRuntimeSnapshot(taskReq.args);
     else if(taskReq.task==='run_test_suite') value=await runTestSuite(taskReq.args);
-    else if(['describe_dev_runtime','describe_dev_build','inspect_dev_rollout','plan_dev_deployment'].includes(taskReq.task))
+    else if(['describe_dev_runtime','inspect_dev_rollout','plan_dev_deployment'].includes(taskReq.task))
       value=await describeDevObservation(taskReq.task,taskReq.args);
-    else if(taskReq.task==='run_dev_gcloud_script')
-      value=await executeDevGcloudScript(taskReq.args,{
-        observer:createDevObserver({transport:devObservationTransport})
-      });
     else throw new Error('unknown_task');
     const external=sanitizeExternal(typeof value.output==='string'?value.output:'');
     if (!external.ok) throw new Error(external.coarse_error);
