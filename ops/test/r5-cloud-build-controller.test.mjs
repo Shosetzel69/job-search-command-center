@@ -16,18 +16,17 @@ const digest='sha256:'+'d'.repeat(64);
 const input={environment:'dev',work_item_ref:'#589',source_sha:source,trusted_ref:ref};
 const proof=(kind)=>({verified:true,kind,source_sha:source,trusted_ref:ref,work_item_ref:'#589'});
 
-test('R5 exposes one read-only ops build plan; existing tasks and same connector preserved',()=>{
- assert.equal(CATALOG_VERSION,'589-r5-v1');
- assert.equal(TASK_CATALOG.plan_dev_ops_build.class,'OBSERVE');
- assert.deepEqual(validateTaskRequest('plan_dev_ops_build',{
-   environment:'dev',source_sha:source,trusted_ref:ref,
- }).args,{environment:'dev',source_sha:source,trusted_ref:ref});
+test('R5 module remains dormant; Delivery 1 catalog is unchanged',()=>{
+ assert.equal(CATALOG_VERSION,'589-r4-v1');
  for(const key of ['describe_execution','read_execution_logs','inspect_runtime_snapshot',
-   'run_test_suite','describe_dev_runtime','describe_dev_build',
-   'inspect_dev_rollout','plan_dev_deployment','run_dev_gcloud_script']) {
-     assert.ok(TASK_CATALOG[key]);
-   }
- assert.equal(TASK_CATALOG.submit_dev_ops_build,undefined);
+   'run_test_suite','describe_dev_runtime','inspect_dev_rollout','plan_dev_deployment']) {
+   assert.ok(TASK_CATALOG[key]);
+ }
+ for(const key of ['plan_dev_ops_build','submit_dev_ops_build',
+   'describe_dev_build','run_dev_gcloud_script']) {
+   assert.equal(TASK_CATALOG[key],undefined);
+   assert.throws(()=>validateTaskRequest(key,{}),/unknown_task/);
+ }
 });
 
 test('R5 plan reuses fixed existing trusted build and says explicitly NOT AUTHORIZED',()=>{
@@ -62,9 +61,7 @@ test('R5 rejects untrusted source refs, TEST/PROD, arbitrary build config/flags 
  assert.equal(validateDevOpsBuildInput({
    ...input,trusted_ref:'refs/tags/jscc-ops-approved/r5-verified'
  }).trusted_ref,'refs/tags/jscc-ops-approved/r5-verified');
- assert.throws(()=>validateTaskRequest('plan_dev_ops_build',{
-   environment:'dev',source_sha:source,trusted_ref:'refs/heads/random',
- }),/unapproved_source_ref/);
+ assert.throws(()=>validateTaskRequest('plan_dev_ops_build',{}),/unknown_task/);
 });
 
 test('R5 cannot dispatch without trusted server-side admission callbacks',async()=>{
@@ -226,7 +223,7 @@ test('R5 build plan evidence is authenticated only and source plan is explicitly
  assert.equal(auth.secret,undefined);
 });
 
-test('R5 catalog bump rejects old R4 operations and bundles read-only planner',()=>{
+test('R5 contracts do not alter Delivery 1 catalog or worker image',()=>{
  const dispatch={execution_name:'jscc-diagnostics-dev-abcdef',catalog_version:'589-r4-v1',
   ops_source_sha:source,worker_image_digest:digest,expires_at_ms:Date.now()+50000};
  assert.throws(()=>validateDispatchBinding(dispatch,dispatch.execution_name,{
