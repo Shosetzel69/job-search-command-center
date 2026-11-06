@@ -16,7 +16,6 @@ import {
   effectiveConfig,
   updateApplication,
   listProfileJobs,
-  advanceProfileEvaluation,
   listAccounts,
   listApplications,
   operationalHistory,
@@ -34,6 +33,7 @@ import {
   setAccountStatus,
   setJobState,
 } from './multiuser-repository.js';
+import { advanceProfileEvaluation } from './evaluation-advance.js';
 import { clearSessionCookie, cookieValue, sessionCookie } from './session-cookie.js';
 import { userRefresh } from './user-refresh.js';
 import { adminCoverageSnapshot } from './coverage.js';
