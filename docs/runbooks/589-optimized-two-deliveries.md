@@ -14,10 +14,10 @@ Scope: existing one-Google-user JSCC connector, GitHub native connector as sole 
 
 ## Delivery 1 — source contents
 
-1. R1: typed Cloud Run v2 runtime, revision/traffic, build and immutable digest observation; owner-approved DEV targets only.
+1. R1: typed Cloud Run v2 runtime, revision/traffic and immutable digest observation (Cloud Build metadata deferred to Delivery 2); owner-approved DEV targets only.
 2. R2: workspace `checksum/search/compare/replace/delete`; 409 generation conflict; no recursive delete; existing list/read/write/run retained.
 3. R3: readonly rollout and source-image deployment preflight, explicit `INSUFFICIENT_EVIDENCE` if provenance cannot be proven.
-4. R4: pinned declarative readonly Cloud API diagnostics through existing worker; no generic gcloud IAM shell.
+4. R4: fixed read-only Cloud Run observation through existing worker; Cloud Build-dependent pinned script deferred to Delivery 2.
 5. F1-F3 from #602: bounded v2 tasks list, redacted nonempty execution log evidence with pagination, GCS run metadata assertions, explicit 403/unknown rather than invented PASS. No IAM mutation; live `run.tasks.list` 403 remains open.
 
 ## One review and one DEV release — gates
@@ -28,7 +28,7 @@ Scope: existing one-Google-user JSCC connector, GitHub native connector as sole 
 
 **Gate G3 — release:** explicit owner approval for exact reviewed SHA and image digests, source-build attestation, zero incremental cost, staged nonserving revisions and rollback, confirmation of the currently live Connector registration. Deployment is not authorized by this plan.
 
-**Gate G4 — E2E:** authenticate existing ChatGPT connector, verify all legacy tools, new workspace tools including CAS conflict and 99/100/101 guard in isolated backend, runtime/rollout observation, pinned script, known log entry, actual F1 task metadata and F3 positive/negative snapshot. If F1 permission remains denied, retain `F1_FAIL` while allowing independent features to pass; do not label overall connector E2E PASS.
+**Gate G4 — E2E:** authenticate existing ChatGPT connector, verify all legacy tools, new workspace tools including CAS conflict and 99/100/101 guard in isolated backend, runtime/rollout observation, known log entry, actual F1 task metadata and F3 positive/negative snapshot. If F1 permission remains denied, retain `F1_FAIL` while allowing independent features to pass; do not label overall connector E2E PASS.
 
 ## Delivery 2 — later, separately authorized
 
