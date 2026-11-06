@@ -170,6 +170,12 @@ test('W025 Nile 010 role families native functional contract',async t=>{
   });
   await t.test('Stage A global FIT cursor fails closed after evaluation reorder between pages',async()=>{
    const {withTenantTransaction}=await import('../src/db/tenant-gateway.js');
+   // Restore inclusion of selected canonical job: previous negative regression
+   // deliberately excluded its subfamily, which made its score irrelevant.
+   const before=await repository.effectiveConfig(ctx,env,{db});
+   await repository.savePreferences(ctx,{
+     ...before,target_role_subfamilies:['project_management'],
+   },env,{db});
    const stored=await repository.effectiveConfig(ctx,env,{db});
    const first=await repository.listProfileJobs(ctx,stored,nomenclatures,
      {limit:1,prefetch:0,q:'W025',sort_fit:'desc'},env,{db});
