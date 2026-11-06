@@ -164,6 +164,43 @@ async function resolveActiveSearchProfileTx(tx) {
   });
 }
 
+/**
+ * Read preferences and their profile version in ONE SQL statement/snapshot.
+ * A request must never combine preferences from before a criteria save with
+ * a profile_version obtained after that save (Stage A S-01).
+ */
+async function resolveEvaluationBasisTx(tx) {
+  const result = await tx.query(
+    `SELECT sp.search_profile_id, sp.candidate_profile_id, sp.status,
+            sp.profile_version, sp.onboarding_state, sp.created_at, sp.updated_at,
+            spp.preferences AS personal_preferences, cp.policy AS system_policy
+       FROM search_profile sp
+       LEFT JOIN search_profile_preferences spp
+         ON spp.tenant_id=sp.tenant_id AND spp.search_profile_id=sp.search_profile_id
+       CROSS JOIN collection_policy cp
+      WHERE sp.tenant_id=$1 AND sp.status='ACTIVE' AND cp.singleton=true
+      ORDER BY sp.created_at, sp.search_profile_id`,
+    [tx.tenantId],
+  );
+  if (result.rows.length !== 1) {
+    throw httpError('Exactly one active Search Profile and collection policy are required', 503);
+  }
+  const row = result.rows[0];
+  await assertCandidateProfileReferenceTx(tx, tx.tenantId, row.candidate_profile_id);
+  return Object.freeze({
+    foundation:Object.freeze({
+      search_profile_id:String(row.search_profile_id),
+      candidate_profile_id:String(row.candidate_profile_id),
+      profile_version:Number(row.profile_version),
+      status:String(row.status),
+      onboarding_state:String(row.onboarding_state),
+      created_at:row.created_at,
+      updated_at:row.updated_at,
+    }),
+    preferences:mergeEffectiveConfig(row.personal_preferences || {}, row.system_policy || {}),
+  });
+}
+
 async function ensureSearchProfileFoundationTx(tx, tenantId) {
   const tenant = requireUuid(tenantId, 'tenant_id');
   const candidateProfileId = deterministicTenantEntityUuid('candidate-profile', tenant);
@@ -1023,7 +1060,7 @@ function cachedEvaluation(row) {
 
 export async function listProfileJobs(
   authContext,
-  preferences,
+  _requestPreferences,
   nomenclatures,
   query = {},
   env = process.env,
@@ -1034,7 +1071,7 @@ export async function listProfileJobs(
   if (!Number.isFinite(anchor.getTime())) throw httpError('STALE_CURSOR', 400);
 
   return withTenantTransaction(authContext, async tx => {
-    const foundation = await resolveActiveSearchProfileTx(tx);
+    const {foundation, preferences} = await resolveEvaluationBasisTx(tx);
     const params = [tx.tenantId, anchor, foundation.search_profile_id];
     const where = [
       `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`,
