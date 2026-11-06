@@ -935,10 +935,14 @@ export function encodeJobCursor(row) {
   return Buffer.from(JSON.stringify({ v:2, sort_at:sortAt, job_id:jobId, as_of:anchor }), 'utf8').toString('base64url');
 }
 
-export function encodeFitCursor(offset, anchor, sort = 'desc') {
+export function encodeFitCursor(offset, anchor, sort = 'desc', fingerprint = null) {
   if (!Number.isSafeInteger(offset) || offset < 0) throw httpError('Invalid FIT cursor offset', 400);
+  if (typeof fingerprint !== 'string' || !/^[a-f0-9]{32}$/.test(fingerprint)) {
+    throw httpError('FIT cursor requires versioned population fingerprint', 400);
+  }
   const asOf = anchor instanceof Date ? anchor.toISOString() : String(anchor);
-  return Buffer.from(JSON.stringify({v:3,sort:sort === 'asc' ? 'fit-asc' : 'fit-desc',offset,as_of:asOf}), 'utf8').toString('base64url');
+  return Buffer.from(JSON.stringify({v:4,sort:sort === 'asc' ? 'fit-asc' : 'fit-desc',
+    offset,as_of:asOf,fingerprint}), 'utf8').toString('base64url');
 }
 
 export function decodeJobCursor(raw) {
@@ -948,10 +952,12 @@ export function decodeJobCursor(raw) {
     const date = new Date(parsed?.sort_at);
     const jobId = String(parsed?.job_id || '');
     const anchor = new Date(parsed?.as_of);
-    if (parsed?.v === 3 && ['fit-desc','fit-asc'].includes(parsed?.sort)
+    if (parsed?.v === 4 && ['fit-desc','fit-asc'].includes(parsed?.sort)
       && Number.isSafeInteger(parsed?.offset) && parsed.offset >= 0
+      && /^[a-f0-9]{32}$/.test(String(parsed.fingerprint || ''))
       && !Number.isNaN(anchor.getTime())) {
-      return Object.freeze({fit_offset:parsed.offset,fit_sort:parsed.sort === 'fit-asc' ? 'asc' : 'desc',as_of:anchor.toISOString()});
+      return Object.freeze({fit_offset:parsed.offset,fit_sort:parsed.sort === 'fit-asc' ? 'asc' : 'desc',
+        as_of:anchor.toISOString(),fit_fingerprint:parsed.fingerprint});
     }
     if (parsed?.v !== 2 || Number.isNaN(date.getTime()) || Number.isNaN(anchor.getTime())
       || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(jobId)) throw new Error('stale');
@@ -1388,6 +1394,29 @@ export async function listProfileJobs(
       if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
       const fitOffset = spec.cursor?.fit_offset || 0;
       const base = aggregateParams.length;
+      // Exact population fingerprint over the ranked set. A changed job,
+      // score, membership or order invalidates every subsequent OFFSET cursor.
+      // Deliberately fail closed rather than returning skipped/duplicated jobs.
+      const signature = await tx.query(
+        `SELECT md5(COALESCE(string_agg(
+             concat_ws(':',job_id::text,job_version::text,
+               cached_profile_version::text,cached_job_version::text,
+               cached_score::text,sort_at::text),
+             ',' ORDER BY cached_score ${spec.sort_fit === 'asc' ? 'ASC' : 'DESC'} NULLS LAST,
+                        sort_at DESC,job_id ASC),'')) AS fingerprint
+           FROM (${fullScopeSql}) ranked
+          WHERE cached_eligible IS TRUE
+            AND (${base + 1}::integer IS NULL OR cached_score >= ${base + 1}::integer)`,
+        [...aggregateParams,spec.min_fit],
+      );
+      const populationFingerprint = String(signature.rows?.[0]?.fingerprint || '');
+      if (!/^[a-f0-9]{32}$/.test(populationFingerprint)) {
+        throw httpError('FIT population fingerprint unavailable',503);
+      }
+      if (spec.cursor?.fit_offset != null &&
+          spec.cursor.fit_fingerprint !== populationFingerprint) {
+        throw httpError('STALE_CURSOR: FIT population changed',400);
+      }
       const ranked = await tx.query(
         `SELECT * FROM (${fullScopeSql}) ranked
           WHERE cached_eligible IS TRUE AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)
@@ -1409,7 +1438,7 @@ export async function listProfileJobs(
         search_profile_id:foundation.search_profile_id,profile_version:foundation.profile_version,
         fit_algorithm_version:FIT_ALGORITHM_VERSION,bounded:true,limit:spec.limit,
         next_cursor:fitOffset + rankedJobs.length < matchedTotal
-          ? encodeFitCursor(fitOffset + rankedJobs.length,anchor,spec.sort_fit) : null,
+          ? encodeFitCursor(fitOffset + rankedJobs.length,anchor,spec.sort_fit,populationFingerprint) : null,
         freshness_hours:Number(preferences.freshness_hours ?? 24),
         criteria:{fit_threshold:Number(preferences.fit_threshold ?? 80)},
         records_inspected:ranked.rows.length,candidate_window:ranked.rows.length,
