@@ -441,6 +441,9 @@ function App(){
   const[deleteAccountOpen,setDeleteAccountOpen]=useState(false),[deleteAccountConfirmation,setDeleteAccountConfirmation]=useState(''),[deletingAccount,setDeletingAccount]=useState(false);
   const[jobPage,setJobPage]=useState({nextCursor:null,loading:false,loadingMore:false,results:0});
   const[pageNumber,setPageNumber]=useState(1);
+  const[evaluationProgress,setEvaluationProgress]=useState(null);
+  const[pageVisible,setPageVisible]=useState(()=>document.visibilityState==='visible');
+  const evaluationCallsRef=useRef(0);
   const pageCursorHistory=useRef([null]);
   const[archivedKeys,setArchivedKeys]=useState([]);
   const pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
@@ -448,6 +451,9 @@ function App(){
 
   useEffect(()=>{filtersRef.current=filters;},[filters]);
   useEffect(()=>{registerPwa().catch(()=>{});},[]);
+  useEffect(()=>{const visible=()=>setPageVisible(document.visibilityState==='visible');
+    document.addEventListener('visibilitychange',visible);
+    return()=>document.removeEventListener('visibilitychange',visible);},[]);
   useEffect(()=>{Promise.all([commandApi('/auth/config',null),commandApi('/health',null)]).then(([config,health])=>{if(!config?.configured||!config?.client_id)throw new Error('Autentificarea Google nu este configurata complet.');setClientId(config.client_id);setEnvironment(health?.environment||null);}).catch(error=>setAuth(current=>({...current,error:error.message})));},[]);
   useEffect(()=>()=>{pollGenerationRef.current+=1;},[]);
 
@@ -465,7 +471,7 @@ function App(){
   useEffect(()=>{if(auth.status==='authenticated')rememberUi();},[auth.status,rememberUi]);
   useEffect(()=>{if(auth.status!=='authenticated')return undefined;const save=()=>rememberUi();window.addEventListener('pagehide',save);return()=>window.removeEventListener('pagehide',save);},[auth.status,rememberUi]);
 
-  const clearData=useCallback(()=>{pageCursorHistory.current=[null];setPageNumber(1);setJobs([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';},[]);
+  const clearData=useCallback(()=>{evaluationCallsRef.current=0;setEvaluationProgress(null);pageCursorHistory.current=[null];setPageNumber(1);setJobs([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';},[]);
 
   const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false}={})=>{
     if(!isSearchProfileConfigured(criteria)){setJobs([]);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';return null;}
@@ -525,30 +531,52 @@ function App(){
   useEffect(()=>{if(dataState.status!=='ready'||restoredScrollRef.current)return;restoredScrollRef.current=true;requestAnimationFrame(()=>window.scrollTo({top:initialUi.scrollY||0,behavior:'auto'}));},[dataState.status,initialUi.scrollY]);
   useEffect(()=>{if(restoredJobRef.current||!initialUi.selectedJobId||!jobs.length)return;const found=jobs.find(job=>String(job.id)===String(initialUi.selectedJobId));if(found)setDetailJob(found);restoredJobRef.current=true;},[jobs,initialUi.selectedJobId]);
 
-  // Backfill FIT evaluations in bounded, cancellable pages without replacing
-  // the visible jobs. Totals remain INCOMPLETE until the whole scope is scanned.
+  // One sequential authenticated advance at a time; no GET scan_step loops.
+  // The server serializes same-profile writers. Incomplete state is intentional
+  // when the user is logged out or the 50-call session budget is exhausted.
   useEffect(()=>{
-    if(auth.status!=='authenticated'||dataState.status!=='ready'||!profileConfigured)return undefined;
+    if(auth.status!=='authenticated'||dataState.status!=='ready'||!profileConfigured
+      ||!pageVisible||!['jobs','review'].includes(view))return undefined;
     let cancelled=false;
-    const scan=async()=>{
-      let cursor=null;
-      for(let step=0;step<32&&!cancelled;step+=1){
-        const path=buildJobsPath({filters:{...filters,sort:'fit-asc'},cursor,
-          limit:JOBS_PAGE_SIZE,prefetch:0})+'&scan_step=1';
-        const payload=validateJobsPage(await fetchJson(path,auth.token));
-        if(cancelled)return;
-        if(payload.aggregate_counts){
-          setJobPage(previous=>({...previous,aggregateCounts:payload.aggregate_counts}));
+    const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
+    const advance=async()=>{
+      let delay=1000;
+      while(!cancelled&&evaluationCallsRef.current<50){
+        if(document.visibilityState!=='visible')break;
+        evaluationCallsRef.current+=1;
+        try{
+          const result=await commandApi('/me/evaluation/advance',auth.token,{method:'POST'});
+          if(cancelled)return;
+          if(!['COMPLETE','INCOMPLETE'].includes(result?.status)
+            ||!Number.isSafeInteger(result?.remaining)||result.remaining<0){
+            throw new Error('Invalid evaluation advance contract');
+          }
+          setEvaluationProgress(result);
+          delay=1000;
+          if(result.status==='COMPLETE'){
+            await loadJobsPage(auth.token,savedCriteria,filtersRef.current);
+            return;
+          }
+          if(result.processed===0)break;
+        }catch(error){
+          if(cancelled)return;
+          if(![409,429,500,502,503,504].includes(Number(error?.status))){
+            console.warn('Evaluation advance stopped:',error?.message);
+            break;
+          }
+          setEvaluationProgress(previous=>({...previous,status:'INCOMPLETE',
+            retryable:true,error:error?.message||'Temporary error'}));
+          await sleep(delay);
+          delay=Math.min(delay*2,30000);
         }
-        if(payload.aggregate_counts?.status==='COMPLETE'||!payload.next_cursor)return;
-        cursor=payload.next_cursor;
-        await new Promise(resolve=>setTimeout(resolve,80));
       }
+      if(!cancelled)setEvaluationProgress(previous=>previous?.status==='COMPLETE'
+        ?previous:{...previous,status:'INCOMPLETE',paused:true});
     };
-    scan().catch(error=>{if(!cancelled)console.warn('FIT aggregate refresh incomplete:',error?.message);});
+    advance().catch(error=>{if(!cancelled)console.warn('Evaluation advance:',error?.message);});
     return()=>{cancelled=true;};
-  },[auth.status,auth.token,dataState.status,profileConfigured,
-    filters.search,filters.freshness,filters.workModes.join('|'),savedCriteria]);
+  },[auth.status,auth.token,dataState.status,profileConfigured,pageVisible,view,
+    savedCriteria,loadJobsPage]);
 
   const activeJobs=useMemo(()=>jobs.filter(job=>!archivedKeys.includes(jobKey(job))),[jobs,archivedKeys]);
   const threshold=savedCriteria.fitThreshold||80;
@@ -595,7 +623,7 @@ function App(){
 
   if(auth.status!=='authenticated')return<><SignedOutScreen clientId={clientId} loginHint={loginHint} allowAutoRestore={allowAutoRestore} authError={auth.error} authStatus={auth.status} onCredential={handleCredential}/><EnvironmentMarker environment={environment} className="fixed left-4 top-4 z-50"/><Toast toast={toast}/></>;
   const onboarding=!profileConfigured&&(view==='jobs'||view==='review');
-  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} onLoadMore={loadMoreJobs} onNext={loadMoreJobs} onPrevious={previousJobsPage} page={pageNumber}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
+  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {evaluationProgress?.status==='INCOMPLETE'&&<p role="status" className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">Evaluare FIT in curs sau intrerupta; reia la urmatoarea sesiune. {Number.isInteger(evaluationProgress.remaining)?'Ramase: '+evaluationProgress.remaining:''}</p>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} onLoadMore={loadMoreJobs} onNext={loadMoreJobs} onPrevious={previousJobsPage} page={pageNumber}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
