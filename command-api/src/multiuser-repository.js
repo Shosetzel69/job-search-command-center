@@ -970,6 +970,14 @@ export function normalizeJobSearchQuery(input = {}) {
   const minFit = source.min_fit == null || source.min_fit === ''
     ? null
     : boundedInteger(source.min_fit, null, 0, 100, 'min_fit');
+  if (Object.hasOwn(source,'scan_step')) throw httpError('SCAN_STEP_UNSUPPORTED',400);
+  const sortFit=source.sort_fit == null || source.sort_fit === '' ? null : String(source.sort_fit).trim();
+  if (sortFit!==null && !['asc','desc'].includes(sortFit)) throw httpError('Invalid sort_fit',400);
+  const b2b=source.b2b == null || source.b2b === '' ? null : String(source.b2b).toLowerCase();
+  if (b2b!==null && !['true','false'].includes(b2b)) throw httpError('Invalid b2b',400);
+  const eligibility=source.eligibility == null || source.eligibility === '' ? null : String(source.eligibility).toUpperCase();
+  if (eligibility!==null && !['ELIGIBLE','INELIGIBLE','UNKNOWN'].includes(eligibility))
+    throw httpError('Invalid eligibility',400);
   const includeArchived = source.include_archived === true || String(source.include_archived || '').toLowerCase() === 'true';
   const prefetch = boundedInteger(
     source.prefetch,
@@ -982,8 +990,9 @@ export function normalizeJobSearchQuery(input = {}) {
     limit,
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
-    sort_fit:['desc','asc'].includes(String(source.sort_fit || '').trim()) ? String(source.sort_fit).trim() : null,
-    scan_step:source.scan_step === '1' || source.scan_step === 1 || source.scan_step === true,
+    sort_fit:sortFit,
+    b2b:b2b===null?null:b2b==='true',
+    eligibility,
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
     role_subfamily:listValues(source.role_subfamily),
     work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
@@ -1177,7 +1186,7 @@ export async function listProfileJobs(
       )`);
     }
 
-    const candidateLimit = spec.scan_step ? JOB_CANDIDATE_WINDOW_MAX : Math.min(
+    const candidateLimit = Math.min(
       Math.max(spec.limit * 8, spec.limit + spec.prefetch, 100),
       JOB_CANDIDATE_WINDOW_MAX,
     );
@@ -1313,11 +1322,11 @@ export async function listProfileJobs(
       }
       if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
       if (jobs.length < spec.limit) jobs.push(resolved.job);
-      if (!spec.scan_step && jobs.length >= spec.limit) break;
+      if (jobs.length >= spec.limit) break;
     }
 
     let prefetched = 0;
-    if (!spec.scan_step && pageEndIndex >= 0 && spec.prefetch > 0) {
+    if (pageEndIndex >= 0 && spec.prefetch > 0) {
       for (let index = pageEndIndex + 1; index < rows.length && prefetched < spec.prefetch; index += 1) {
         await resolveRow(rows[index]);
         prefetched += 1;
@@ -1349,25 +1358,9 @@ export async function listProfileJobs(
       ? {status:'COMPLETE',scope:'profile_filtered',totals:{all:Number(c.total),
           high:Number(c.high),remote:Number(c.remote),reposts:Number(c.reposts),jobs:Number(c.jobs)}}
       : {status:'INCOMPLETE',scope:'profile_filtered',totals:null,remaining:Number(c.pending)};
-    if (aggregateCounts.status === 'COMPLETE') {
-      const scopeKey = createHash('sha256').update(JSON.stringify({
-        q:spec.q,roleFamilies:spec.role_family,roleSubfamilies:spec.role_subfamily,
-        modes:spec.work_mode,contracts:spec.contract_type,freshness:spec.freshness_hours,
-        archived:spec.include_archived,minFit:spec.min_fit,asOf:anchor.toISOString().slice(0,10),
-      })).digest('hex');
-      await tx.query(`INSERT INTO profile_job_count_snapshots
-        (tenant_id,search_profile_id,scope_key,profile_version,fit_algorithm_version,totals)
-        VALUES ($1,$2,$3,$4,$5,$6::jsonb)
-        ON CONFLICT (tenant_id,search_profile_id,scope_key)
-        DO UPDATE SET profile_version=EXCLUDED.profile_version,
-        fit_algorithm_version=EXCLUDED.fit_algorithm_version,
-        totals=EXCLUDED.totals,evaluated_at=now()`,
-        [tx.tenantId,foundation.search_profile_id,scopeKey,foundation.profile_version,
-         FIT_ALGORITHM_VERSION,JSON.stringify(aggregateCounts.totals)]);
-    }
     // Serve globally FIT-ordered pages only when every candidate has a current
     // persisted evaluation. Never silently claim global order for partial cache.
-    if (!spec.scan_step && spec.sort_fit && aggregateCounts.status === 'COMPLETE') {
+    if (spec.sort_fit && aggregateCounts.status === 'COMPLETE') {
       if (spec.cursor?.fit_sort && spec.cursor.fit_sort !== spec.sort_fit)
         throw httpError('STALE_CURSOR: FIT sort changed',400);
       if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
