@@ -26,7 +26,17 @@ export async function advanceProfileEvaluation(
   authContext,nomenclatures,env=process.env,{db=getPool(env)}={},
 ) {
   return withTenantTransaction(authContext,async tx=>{
+    // Pin criteria version until COMMIT even on an empty (COMPLETE) batch.
+    // Always lock profile before locking canonical jobs (same order as UPSERT).
+    const pinned=await tx.query(
+      `SELECT search_profile_id FROM search_profile
+        WHERE tenant_id=$1 AND status='ACTIVE' FOR SHARE`,[tx.tenantId],
+    );
+    if(pinned.rows?.length!==1) throw httpError('ACTIVE_PROFILE_UNAVAILABLE',503);
     const {foundation,preferences}=await resolveEvaluationBasisTx(tx);
+    if(String(pinned.rows[0].search_profile_id)!==foundation.search_profile_id){
+      throw httpError('STALE_BASIS',409);
+    }
     const lock=await tx.query(
       'SELECT pg_try_advisory_xact_lock($1::integer, hashtext($2::text)) AS acquired',
       [LOCK_NAMESPACE,tx.tenantId+':'+foundation.search_profile_id],
