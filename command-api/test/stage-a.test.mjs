@@ -21,6 +21,9 @@ function fakeDatabase({lock=true,pending=0}={}) {
     if(sql.includes("current_setting('nile.tenant_id'")) {
       return {rows:[{tenant_id:USER.profile_id}]};
     }
+    if(sql.includes("FROM search_profile") && sql.includes("FOR SHARE")) {
+      return {rows:[{search_profile_id:SEARCH}]};
+    }
     if(sql.includes('FROM search_profile sp')) {
       return {rows:[{
         search_profile_id:SEARCH,candidate_profile_id:CANDIDATE,
