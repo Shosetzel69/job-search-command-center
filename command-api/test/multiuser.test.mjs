@@ -10,6 +10,7 @@ import {
   decodeJobCursor,
   deterministicTenantEntityUuid,
   encodeJobCursor,
+  encodeFitCursor,
   mergeEffectiveConfig,
   normalizeJobSearchQuery,
   ownerBootstrapPending,
@@ -374,7 +375,7 @@ test('bounded jobs cursor is opaque, deterministic and rejects malformed input',
 
 test('bounded jobs query caps page/prefetch and keeps temporary filters view-only', () => {
   const query = normalizeJobSearchQuery({
-    limit:'40',
+    limit:'20',
     prefetch:'12',
     role_family:['PROJECT_DELIVERY_MANAGEMENT,PRODUCT_AGILE'],
     role_subfamily:['project_management,product_owner'],
@@ -385,7 +386,7 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
     include_archived:'true',
     q:'technical project',
   });
-  assert.equal(query.limit, 40);
+  assert.equal(query.limit, 20);
   assert.equal(query.prefetch, 12);
   assert.deepEqual(query.role_family, ['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE']);
   assert.deepEqual(query.role_subfamily, ['project_management','product_owner']);
@@ -395,7 +396,7 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
   assert.equal(query.min_fit, 70);
   assert.equal(query.include_archived, true);
   assert.equal(query.q, 'technical project');
-  assert.throws(() => normalizeJobSearchQuery({ limit:'101' }), /limit must be an integer/);
+  assert.throws(() => normalizeJobSearchQuery({ limit:'21' }), /limit must be an integer/);
   assert.throws(() => normalizeJobSearchQuery({ prefetch:'51' }), /prefetch must be an integer/);
 });
 
@@ -771,4 +772,22 @@ test('preference response changed flag reflects semantic personal change only', 
     false,
     'system collection policy must not affect personal semantic changed flag',
   );
+});
+test('F-03 stable opaque global FIT pagination cursor round-trip', () => {
+  const anchor = new Date('2026-10-30T02:00:00Z');
+  const cursor = encodeFitCursor(20, anchor);
+  assert.deepEqual(decodeJobCursor(cursor), {fit_offset:20,fit_sort:'desc',as_of:anchor.toISOString()});
+  assert.equal(decodeJobCursor(encodeFitCursor(40,anchor,'asc')).fit_sort,'asc');
+  assert.throws(() => encodeFitCursor(-1, anchor), /Invalid FIT cursor offset/);
+  assert.throws(() => decodeJobCursor(Buffer.from(JSON.stringify(
+    {v:3,sort:'fit-desc',offset:-1,as_of:anchor.toISOString()})).toString('base64url')), /STALE_CURSOR/);
+  assert.equal(normalizeJobSearchQuery({sort_fit:'desc'}).sort_fit,'desc');
+  assert.equal(normalizeJobSearchQuery({sort_fit:'invalid'}).sort_fit,null);
+});
+
+test('F-04 bounded aggregate scan is explicit and distinct from ordinary paging', () => {
+  assert.equal(normalizeJobSearchQuery({scan_step:'1'}).scan_step,true);
+  assert.equal(normalizeJobSearchQuery({}).scan_step,false);
+  assert.equal(normalizeJobSearchQuery({scan_step:'0'}).scan_step,false);
+  assert.equal(normalizeJobSearchQuery({sort_fit:'desc',scan_step:'1'}).sort_fit,'desc');
 });

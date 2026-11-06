@@ -10,14 +10,15 @@ import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
 import { runProgressModel } from './run-progress.mjs';
-import { buildJobsPath, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
+import { JOBS_PAGE_SIZE, buildJobsPath, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
 import { readUiState, writeUiState } from './ui-state.mjs';
 import { registerPwa } from './pwa.mjs';
 import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
 import { environmentBadge, releaseVersionLabel } from './environment-marker.mjs';
 import { reviewRowsForFilters } from './review-selection.mjs';
-import { jobCountScopeLabel, jobViewCounts, jobViewPopulation } from './job-count-model.mjs';
+import { formatPageDatabaseCount, jobCountScopeLabel, jobViewCounts, jobViewPopulation } from './job-count-model.mjs';
 import { filterAndSortJobRows } from './job-row-filters.mjs';
+import { jobQualityWarnings } from './job-quality.mjs';
 
 const DATA_SCHEMA = '1.0';
 const APP_VERSION = releaseVersionLabel(__APP_VERSION__);
@@ -96,7 +97,7 @@ function countryCompact(job){const list=job.countries||[];if(!list.length)return
 function normalizeJob(job){const countries=normalizedCountries(job);return{
   id:job.id||null,title:job.title||'Titlu indisponibil',company:job.company||'Companie nespecificata',initial:job.initial||((job.company||'?').split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?'),
   fit:Number.isFinite(Number(job.fit))?Number(job.fit):0,location:job.location||'Nespecificat',countries,countryCodes:Array.isArray(job.country_codes)?job.country_codes:[],remoteScope:job.remote_scope||'Unknown',mode:normalizeMode(job.mode),type:job.type||'Nespecificat',contractType:job.contract_type||'unknown',employmentTypeRaw:job.employment_type_raw||null,age:ageHours(job.date_posted,job.age),
-  remote:Boolean(job.remote),b2b:Boolean(job.b2b),repost:Boolean(job.repost),status:job.status||'review',pros:Array.isArray(job.pros)?job.pros:[],risks:Array.isArray(job.risks)?job.risks:[],url:job.url||null,
+  remote:Boolean(job.remote),b2b:Boolean(job.b2b),repost:Boolean(job.repost),status:job.status||'review',pros:Array.isArray(job.pros)?job.pros:[],risks:Array.isArray(job.risks)?job.risks:[],data_quality_issues:Array.isArray(job.data_quality_issues)?job.data_quality_issues:[],url:job.url||null,
   description:String(job.description||'').trim(),date_posted:job.date_posted||null,source:job.source||'Nespecificata',verified_at:job.verified_at||null,archivedAt:job.archived_at||null,isApplication:false,
 };}
 function inferApplicationCountry(){return[];}
@@ -246,14 +247,14 @@ function RunProgressPanel({status}) {
 
 function MetricCard({value,label,note,icon,tone='blue',active,onClick}){const tones={blue:'bg-blue-50 text-blue-600',amber:'bg-amber-50 text-amber-600',violet:'bg-violet-50 text-violet-600',slate:'bg-slate-100 text-slate-600'};return<button onClick={onClick} className={cx('w-full rounded-2xl border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',active?'border-blue-400 ring-4 ring-blue-50':'border-slate-200')}><div className="flex items-start gap-3"><span className={cx('grid h-9 w-9 place-items-center rounded-xl',tones[tone])}><Icon name={icon}/></span><div><div className="text-2xl font-bold leading-none text-slate-950">{value}</div><div className="mt-1 text-sm text-slate-600">{label}</div><div className="mt-1 text-xs text-slate-400">{note}</div></div></div></button>;}
 function MobileKpiChip({value,label,active,onClick}){return<button type="button" onClick={onClick} className={cx('min-w-[7rem] rounded-xl border px-3 py-2 text-left shadow-sm',active?'border-blue-300 bg-blue-50':'border-slate-200 bg-white')}><span className="block text-lg font-bold leading-none text-slate-950">{value}</span><span className="mt-1 block text-[11px] font-medium text-slate-500">{label}</span></button>;}
-function KPIGrid({metrics,selected,onSelect}){const toggle=key=>onSelect(selected===key?'all':key);return<>
+function KPIGrid({metrics,selected,onSelect}){const toggle=key=>onSelect(selected===key?'all':key);const display=key=>formatPageDatabaseCount(metrics[key],metrics.databaseTotals?.[key],metrics.countStatus);return<>
   <section aria-label="Rezumat joburi" className="-mx-3 flex gap-2 overflow-x-auto px-3 pb-1 md:hidden">
-    <MobileKpiChip value={metrics.jobs} label="noi" active={selected==='new'} onClick={()=>toggle('new')}/>
-    <MobileKpiChip value={metrics.high} label="fit ridicat" active={selected==='high'} onClick={()=>toggle('high')}/>
-    <MobileKpiChip value={metrics.remote} label="remote" active={selected==='remote'} onClick={()=>toggle('remote')}/>
-    <MobileKpiChip value={metrics.reposts} label="repostari" active={selected==='repost'} onClick={()=>toggle('repost')}/>
+    <MobileKpiChip value={display('jobs')} label="noi" active={selected==='new'} onClick={()=>toggle('new')}/>
+    <MobileKpiChip value={display('high')} label="fit ridicat" active={selected==='high'} onClick={()=>toggle('high')}/>
+    <MobileKpiChip value={display('remote')} label="remote" active={selected==='remote'} onClick={()=>toggle('remote')}/>
+    <MobileKpiChip value={display('reposts')} label="repostari" active={selected==='repost'} onClick={()=>toggle('repost')}/>
   </section>
-  <section className="hidden gap-3 sm:grid-cols-2 md:grid xl:grid-cols-4"><MetricCard value={metrics.jobs} label="roluri noi" note="ultimele 24h din filtrul curent" icon="jobs" active={selected==='new'} onClick={()=>toggle('new')}/><MetricCard value={metrics.high} label="fit ridicat" note={`>= ${metrics.threshold}% · ${metrics.scope}`} icon="review" tone="slate" active={selected==='high'} onClick={()=>toggle('high')}/><MetricCard value={metrics.reposts} label="repostari" note={metrics.scope} icon="refresh" tone="amber" active={selected==='repost'} onClick={()=>toggle('repost')}/><MetricCard value={metrics.remote} label="remote" note={metrics.scope} icon="globe" tone="violet" active={selected==='remote'} onClick={()=>toggle('remote')}/></section>
+  <section className="hidden gap-3 sm:grid-cols-2 md:grid xl:grid-cols-4"><MetricCard value={display('jobs')} label="roluri noi" note="ultimele 24h din filtrul curent" icon="jobs" active={selected==='new'} onClick={()=>toggle('new')}/><MetricCard value={display('high')} label="fit ridicat" note={`>= ${metrics.threshold}% · ${metrics.scope}`} icon="review" tone="slate" active={selected==='high'} onClick={()=>toggle('high')}/><MetricCard value={display('reposts')} label="repostari" note={metrics.scope} icon="refresh" tone="amber" active={selected==='repost'} onClick={()=>toggle('repost')}/><MetricCard value={display('remote')} label="remote" note={metrics.scope} icon="globe" tone="violet" active={selected==='remote'} onClick={()=>toggle('remote')}/></section>
 </>;}
 function FilterButton({active,onClick,children,count}){return<button onClick={onClick} className={cx('inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition',active?'border-blue-200 bg-blue-50 text-blue-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50')}>{children}{count!==undefined&&<span className={cx('rounded-full px-1.5 py-0.5 text-[11px] font-semibold',active?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-500')}>{count}</span>}</button>;}
 function WorkModeDropdown({selected,onChange}){const[open,setOpen]=useState(false),ref=useRef(null);useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)};document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h)},[]);const label=selected.length===ALL_WORK_MODES.length?'Toate':selected.length===0?'Niciunul':selected.map(mode=>mode==='Hybrid'?'Hibrid':mode).join(', ');const toggle=mode=>onChange(selected.includes(mode)?selected.filter(x=>x!==mode):[...selected,mode]);return<div className="relative" ref={ref}><button onClick={()=>setOpen(v=>!v)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600">Mod lucru: <span className="max-w-36 truncate text-slate-800">{label}</span><Icon name="chevronDown" className="h-4 w-4 text-slate-400"/></button>{open&&<div className="absolute left-0 z-40 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">{ALL_WORK_MODES.map(mode=><label key={mode} className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-700 hover:bg-slate-50"><input type="checkbox" checked={selected.includes(mode)} onChange={()=>toggle(mode)} className="h-4 w-4 rounded border-slate-300"/>{mode==='Hybrid'?'Hibrid':mode}</label>)}</div>}</div>;}
@@ -285,32 +286,44 @@ function FitBadge({fit,threshold}){if(fit===null||fit===undefined)return<span cl
 function ModeBadge({mode}){const tone=mode==='Remote'?'bg-violet-50 text-violet-700':mode==='Hybrid'?'bg-amber-50 text-amber-700':'bg-slate-100 text-slate-600';return<span className={cx('inline-flex rounded-full px-2 py-1 text-xs font-medium',tone)}>{mode==='Hybrid'?'Hibrid':mode}</span>;}
 function knownCompact(value){const text=String(value||'').trim();return text&&!['n/a','nespecificat','unknown','companie nespecificata'].includes(text.toLowerCase())?text:null;}
 function MobileOverflow({job,onArchive}){return<details className="relative"><summary aria-label="Mai multe actiuni" className="flex min-h-11 min-w-11 cursor-pointer list-none items-center justify-center rounded-xl border border-slate-200 bg-white text-lg font-bold text-slate-500">•••</summary><div className="absolute bottom-12 right-0 z-20 w-44 rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl">{!job.isApplication&&<button type="button" onClick={()=>onArchive(job)} className="flex min-h-10 w-full items-center gap-2 rounded-lg px-3 text-left text-sm font-medium text-slate-600 hover:bg-slate-50"><Icon name="archive"/> Arhiveaza</button>}</div></details>;}
-function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=false,loadingMore=false,onLoadMore,loading=false}) {
-  if(!rows.length&&!loading)return<div className="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500 shadow-sm">Niciun rol nu corespunde filtrelor.</div>;
+function JobQualityMarker({job}) {
+  const [open,setOpen]=useState(false);
+  const reasons=jobQualityWarnings(job);
+  if(!reasons.length)return null;
+  const description=reasons.join('; ');
+  return <div className="absolute right-0 top-0 z-10">
+    <button type="button" title={description} aria-label={'Verifică datele jobului: '+description}
+      aria-expanded={open} onClick={()=>setOpen(value=>!value)}
+      className="inline-flex min-h-8 min-w-8 items-center justify-center rounded-full border border-amber-300 bg-amber-50 font-bold text-amber-800">!</button>
+    {open&&<div role="status" className="absolute right-0 top-9 z-30 w-64 max-w-[80vw] rounded-lg border border-amber-200 bg-white p-3 text-xs text-slate-800 shadow-lg">{description}</div>}
+  </div>;
+}
+function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=false,loadingMore=false,onLoadMore,loading=false,page=1,onPrevious=null,onNext=null}) {
+  if(!rows.length&&!loading&&!hasMore&&page===1)return<div className="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500 shadow-sm">Niciun rol nu corespunde filtrelor.</div>;
   return <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-    <div className="hidden grid-cols-[minmax(0,1fr)_150px_80px_105px_95px_220px] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:grid"><span>Rol</span><span>Tara</span><span>Fit</span><span>Mod lucru</span><span>Publicat</span><span className="text-right">Actiuni</span></div>
-    <div>{rows.map((job,index)=><article key={jobKey(job)} className={cx('border-b border-slate-100 px-3 py-3 transition last:border-b-0 md:grid md:grid-cols-[minmax(0,1fr)_150px_80px_105px_95px_220px] md:items-center md:gap-3 md:px-5 md:py-3',index%2===0?'bg-white':'bg-slate-50/70','hover:bg-blue-50/40')}>
-      <button type="button" onClick={()=>onDetails(job)} className="block w-full min-w-0 text-left md:flex md:items-start md:gap-3">
+    <div className="hidden grid-cols-[minmax(0,1fr)_110px_65px_85px_90px_minmax(300px,auto)] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 md:grid"><span>Rol</span><span>Tara</span><span>Fit</span><span>Mod lucru</span><span>Publicat</span><span className="text-right">Actiuni</span></div>
+    <div>{rows.map((job,index)=><article key={jobKey(job)} className={cx('border-b border-slate-100 px-3 py-3 transition last:border-b-0 md:grid md:grid-cols-[minmax(0,1fr)_110px_65px_85px_90px_minmax(300px,auto)] md:items-center md:gap-3 md:px-5 md:py-3',index%2===0?'bg-white':'bg-slate-50/70','hover:bg-blue-50/40')}>
+      <div className="relative min-w-0 pr-9"><button type="button" onClick={()=>onDetails(job)} className="block w-full min-w-0 overflow-hidden text-left md:flex md:items-start md:gap-3">
         <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-xs font-bold text-slate-600 md:grid">{job.initial}</span>
-        <span className="block min-w-0">
+        <span className="block min-w-0 overflow-hidden">
           <span className="flex items-start justify-between gap-3"><span className="line-clamp-2 text-[15px] font-semibold leading-5 text-slate-950 md:block md:truncate md:text-sm">{job.title}</span><span className="shrink-0 md:hidden"><FitBadge fit={job.fit} threshold={threshold}/></span></span>
-          <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs text-slate-500"><span className="truncate">{knownCompact(job.company)||'Companie'}</span>{knownCompact(job.location)&&<><span>·</span><span className="truncate">{job.location}</span></>}{knownCompact(job.mode)&&<><span>·</span><span>{job.mode==='Hybrid'?'Hibrid':job.mode}</span></>}<span>·</span><span>{publishedLabel(job)}</span>{job.repost&&<span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">Repost</span>}</span>
+          <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-xs text-slate-500"><span className="truncate">{knownCompact(job.company)||'Companie'}</span>{knownCompact(job.location)&&<><span>·</span><span className="truncate">{job.location}</span></>}{knownCompact(job.mode)&&<><span>·</span><span>{job.mode==='Hybrid'?'Hibrid':job.mode}</span></>}<span>·</span><span>{publishedLabel(job)}</span>{job.repost&&<span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">Repost</span>}</span>
         </span>
-      </button>
-      <div className="hidden text-xs md:contents"><div className="font-medium text-slate-600">{countryCompact(job)}</div><div><FitBadge fit={job.fit} threshold={threshold}/></div><div>{knownCompact(job.mode)?<ModeBadge mode={job.mode}/>:<span className="text-slate-300">—</span>}</div><div className="font-medium text-slate-500">{publishedLabel(job)}</div></div>
+      </button><JobQualityMarker job={job}/></div>
+      <div className="hidden min-w-0 text-xs md:contents"><div className="font-medium text-slate-600">{countryCompact(job)}</div><div><FitBadge fit={job.fit} threshold={threshold}/></div><div>{knownCompact(job.mode)?<ModeBadge mode={job.mode}/>:<span className="text-slate-300">—</span>}</div><div className="font-medium text-slate-500">{publishedLabel(job)}</div></div>
       <div className="mt-3 flex items-center gap-2 md:hidden" onClick={event=>event.stopPropagation()}>
         {!job.isApplication&&<button type="button" onClick={()=>onReview(job)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700"><Icon name="review"/>Review</button>}
         {job.url&&<a role="button" href={job.url} target="_blank" rel="noopener noreferrer" onClick={()=>onApply(job)} className="inline-flex min-h-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white"><Icon name="external"/>Aplica</a>}
         {!job.isApplication&&<MobileOverflow job={job} onArchive={onArchive}/>}
       </div>
-      <div className="hidden gap-2 md:flex md:justify-end" onClick={event=>event.stopPropagation()}>
+      <div className="hidden min-w-0 flex-wrap gap-1.5 md:flex md:justify-end" onClick={event=>event.stopPropagation()}>
         <button type="button" onClick={()=>onDetails(job)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600"><Icon name="eye"/>Detalii</button>
         {!job.isApplication&&<button type="button" onClick={()=>onReview(job)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-blue-200 px-3 text-xs font-semibold text-blue-700"><Icon name="review"/>Review</button>}
         {job.url&&<a role="button" href={job.url} target="_blank" rel="noopener noreferrer" onClick={()=>onApply(job)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white"><Icon name="external"/>Aplica</a>}
         {!job.isApplication&&<button type="button" onClick={()=>onArchive(job)} className="inline-flex min-h-10 items-center gap-1.5 rounded-xl border border-slate-200 px-3 text-xs font-semibold text-slate-600"><Icon name="archive"/>Arhiveaza</button>}
       </div>
     </article>)}</div>
-    <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><span>{loading?'Se actualizeaza lista...':rows.length+' rezultate de profil incarcate'}</span>{hasMore&&<button type="button" disabled={loadingMore} onClick={onLoadMore} className="min-h-11 rounded-xl border border-slate-200 bg-white px-4 font-semibold text-slate-700 disabled:opacity-50">{loadingMore?'Se incarca...':'Incarca mai multe'}</button>}</div>
+    <div className="flex flex-col gap-2 border-t border-slate-100 bg-slate-50 px-4 py-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between"><span>{loading?'Se actualizeaza lista...':rows.length+' rezultate pe pagina '+page}</span><nav aria-label="Navigare pagini joburi" className="flex items-center gap-2"><button type="button" disabled={loadingMore||page===1} onClick={onPrevious} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold disabled:opacity-50">Anterioara</button><span>Pagina {page}</span><button type="button" disabled={loadingMore||!hasMore} onClick={onNext||onLoadMore} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold disabled:opacity-50">{loadingMore?'Se incarca...':'Urmatoarea'}</button></nav></div>
   </div>;
 }
 function ErrorPanel({error,onRetry}){return<div className="rounded-2xl border border-red-200 bg-white p-6 shadow-sm"><div className="flex items-start gap-4"><span className="grid h-10 w-10 place-items-center rounded-xl bg-red-50 text-red-600"><Icon name="alert"/></span><div><h2 className="font-display font-bold text-slate-900">Datele nu au putut fi incarcate</h2><p className="mt-1 text-sm text-slate-600">{error?.message||'Eroare necunoscuta'}</p><button onClick={onRetry} className="mt-4 inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 px-3 text-sm font-semibold"><Icon name="retry"/> Reincearca</button></div></div></div>;}
@@ -427,6 +440,8 @@ function App(){
   const[filters,setFilters]=useState(()=>({...initialUi.filters,workModes:[...(initialUi.filters?.workModes||ALL_WORK_MODES)]})),[kpiFilter,setKpiFilter]=useState('all'),[detailJob,setDetailJob]=useState(null),[running,setRunning]=useState(false),[saving,setSaving]=useState(false),[toast,setToast]=useState(null);
   const[deleteAccountOpen,setDeleteAccountOpen]=useState(false),[deleteAccountConfirmation,setDeleteAccountConfirmation]=useState(''),[deletingAccount,setDeletingAccount]=useState(false);
   const[jobPage,setJobPage]=useState({nextCursor:null,loading:false,loadingMore:false,results:0});
+  const[pageNumber,setPageNumber]=useState(1);
+  const pageCursorHistory=useRef([null]);
   const[archivedKeys,setArchivedKeys]=useState([]);
   const pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
   const notify=useCallback((message,type='info')=>{const id=Date.now();setToast({id,message,type});window.setTimeout(()=>setToast(current=>current?.id===id?null:current),3500);},[]);
@@ -450,25 +465,27 @@ function App(){
   useEffect(()=>{if(auth.status==='authenticated')rememberUi();},[auth.status,rememberUi]);
   useEffect(()=>{if(auth.status!=='authenticated')return undefined;const save=()=>rememberUi();window.addEventListener('pagehide',save);return()=>window.removeEventListener('pagehide',save);},[auth.status,rememberUi]);
 
-  const clearData=useCallback(()=>{setJobs([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';},[]);
+  const clearData=useCallback(()=>{pageCursorHistory.current=[null];setPageNumber(1);setJobs([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';},[]);
 
   const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false}={})=>{
     if(!isSearchProfileConfigured(criteria)){setJobs([]);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';return null;}
-    const path=buildJobsPath({filters:filterState,cursor,limit:25,prefetch:25});
+    if(!append){pageCursorHistory.current=[null];setPageNumber(1);}
+    const path=buildJobsPath({filters:filterState,cursor,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE});
     setJobPage(current=>({...current,loading:!append,loadingMore:append}));
     try{
       const payload=validateJobsPage(await fetchJson(path,token));
       const normalized=(payload.jobs||[]).map(normalizeJob);
-      setJobs(current=>append?mergeJobPages(current,normalized,jobKey):normalized);
-      setArchivedKeys(current=>append?current:normalized.filter(job=>job.archivedAt).map(jobKey));
-      setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results||normalized.length)});
-      if(!append)jobQueryRef.current=buildJobsPath({filters:filterState,limit:25,prefetch:25});
+      setJobs(normalized);
+      setArchivedKeys(normalized.filter(job=>job.archivedAt).map(jobKey));
+      setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results??normalized.length),aggregateCounts:payload.aggregate_counts||null});
+      if(!append)jobQueryRef.current=buildJobsPath({filters:filterState,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE});
       return payload;
     }catch(error){
       if(append && error.status===400 && /^STALE_CURSOR/.test(error.message||'')){
         // Exactly one clean restart: second attempt is append:false, so no retry loop.
         setJobs([]);
-        return loadJobsPage(token,criteria,filterState,{cursor:null,append:false});
+        const restarted=await loadJobsPage(token,criteria,filterState,{cursor:null,append:false});
+        return {...restarted,restarted:true};
       }
       setJobPage(current=>({...current,loading:false,loadingMore:false}));
       throw error;
@@ -499,7 +516,7 @@ function App(){
   const profileConfigured=isSearchProfileConfigured(savedCriteria);
   useEffect(()=>{
     if(auth.status!=='authenticated'||dataState.status!=='ready'||!profileConfigured||!['jobs','review'].includes(view))return undefined;
-    const key=buildJobsPath({filters,limit:25,prefetch:25});
+    const key=buildJobsPath({filters,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE});
     if(key===jobQueryRef.current)return undefined;
     const timer=setTimeout(()=>loadJobsPage(auth.token,savedCriteria,filters).catch(error=>notify('Lista de joburi nu a putut fi actualizata: '+error.message,'error')),250);
     return()=>clearTimeout(timer);
@@ -507,6 +524,31 @@ function App(){
 
   useEffect(()=>{if(dataState.status!=='ready'||restoredScrollRef.current)return;restoredScrollRef.current=true;requestAnimationFrame(()=>window.scrollTo({top:initialUi.scrollY||0,behavior:'auto'}));},[dataState.status,initialUi.scrollY]);
   useEffect(()=>{if(restoredJobRef.current||!initialUi.selectedJobId||!jobs.length)return;const found=jobs.find(job=>String(job.id)===String(initialUi.selectedJobId));if(found)setDetailJob(found);restoredJobRef.current=true;},[jobs,initialUi.selectedJobId]);
+
+  // Backfill FIT evaluations in bounded, cancellable pages without replacing
+  // the visible jobs. Totals remain INCOMPLETE until the whole scope is scanned.
+  useEffect(()=>{
+    if(auth.status!=='authenticated'||dataState.status!=='ready'||!profileConfigured)return undefined;
+    let cancelled=false;
+    const scan=async()=>{
+      let cursor=null;
+      for(let step=0;step<32&&!cancelled;step+=1){
+        const path=buildJobsPath({filters:{...filters,sort:'fit-asc'},cursor,
+          limit:JOBS_PAGE_SIZE,prefetch:0})+'&scan_step=1';
+        const payload=validateJobsPage(await fetchJson(path,auth.token));
+        if(cancelled)return;
+        if(payload.aggregate_counts){
+          setJobPage(previous=>({...previous,aggregateCounts:payload.aggregate_counts}));
+        }
+        if(payload.aggregate_counts?.status==='COMPLETE'||!payload.next_cursor)return;
+        cursor=payload.next_cursor;
+        await new Promise(resolve=>setTimeout(resolve,80));
+      }
+    };
+    scan().catch(error=>{if(!cancelled)console.warn('FIT aggregate refresh incomplete:',error?.message);});
+    return()=>{cancelled=true;};
+  },[auth.status,auth.token,dataState.status,profileConfigured,
+    filters.search,filters.freshness,filters.workModes.join('|'),savedCriteria]);
 
   const activeJobs=useMemo(()=>jobs.filter(job=>!archivedKeys.includes(jobKey(job))),[jobs,archivedKeys]);
   const threshold=savedCriteria.fitThreshold||80;
@@ -516,7 +558,7 @@ function App(){
   const filteredRows=useMemo(()=>filterAndSortJobRows(baseRows,{view,filters,threshold,kpiFilter,ageHours}),[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
   const canonicalCounts=useMemo(()=>jobViewCounts(jobPopulation,threshold,ageHours),[jobPopulation,threshold]);
   const quickCounts=useMemo(()=>({all:canonicalCounts.all,high:canonicalCounts.high,b2b:canonicalCounts.b2b}),[canonicalCounts]);
-  const metrics=useMemo(()=>({jobs:canonicalCounts.new24h,high:canonicalCounts.high,reposts:canonicalCounts.reposts,remote:canonicalCounts.remote,threshold,scope:jobCountScopeLabel(filters.freshness)}),[canonicalCounts,threshold,filters.freshness]);
+  const metrics=useMemo(()=>({jobs:canonicalCounts.new24h,high:canonicalCounts.high,reposts:canonicalCounts.reposts,remote:canonicalCounts.remote,threshold,scope:jobCountScopeLabel(filters.freshness),databaseTotals:jobPage.aggregateCounts?.totals??null,countStatus:jobPage.aggregateCounts?.status??'INCOMPLETE'}),[canonicalCounts,threshold,filters.freshness,jobPage.aggregateCounts]);
   const counts=useMemo(()=>({jobs:canonicalCounts.all,review:reviewRows.length,applications:applications.length}),[canonicalCounts,reviewRows,applications]);
 
   const archiveJob=useCallback(async job=>{try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({archived:true})});setArchivedKeys(current=>[...new Set([...current,jobKey(job)])]);if(detailJob?.id===job.id)setDetailJob(null);notify('Job arhivat pentru profilul curent.','success');}catch(error){notify('Arhivarea a esuat: '+error.message,'error');}},[auth.token,detailJob,notify]);
@@ -545,14 +587,15 @@ function App(){
 
   const saveCriteria=useCallback(async()=>{if(!auth.token||saving)return;if(geographyConflicts(draftCriteria)){notify('Rezolva conflictul dintre includerile si excluderile teritoriale.','error');return;}if(!hasTargetGeography(draftCriteria)){notify('Selecteaza cel putin o tara sau regiune tinta.','error');return;}if(!hasSelectedRole(draftCriteria)){notify('Selecteaza cel putin o familie si o subfamilie pentru Retrieve.','error');return;}if(!hasSelectedWorkMode(draftCriteria)){notify('Selecteaza cel putin un mod de lucru pentru Retrieve.','error');return;}if(!hasSelectedContractType(draftCriteria)){notify('Selecteaza cel putin un tip de contract pentru Retrieve.','error');return;}setSaving(true);try{const result=await commandApi('/me/preferences',auth.token,{method:'PUT',body:JSON.stringify(preferencePatchFromCriteria(draftCriteria))});setSavedCriteria(draftCriteria);setCanonicalConfig(result?.preferences||canonicalConfig);const nextFilters={...filtersRef.current,freshness:filtersRef.current.freshness??draftCriteria.freshness};setFilters(nextFilters);await loadJobsPage(auth.token,draftCriteria,nextFilters);notify('Preferintele au fost salvate. Nu a fost pornit niciun Retrieve.','success');}catch(error){notify('Preferintele nu au putut fi salvate: '+error.message,'error');}finally{setSaving(false);}},[auth.token,saving,draftCriteria,notify,loadJobsPage,canonicalConfig]);
 
-  const loadMoreJobs=useCallback(()=>{if(auth.token&&jobPage.nextCursor&&!jobPage.loadingMore)loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor:jobPage.nextCursor,append:true}).catch(error=>notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error'));},[auth.token,jobPage.nextCursor,jobPage.loadingMore,savedCriteria,loadJobsPage,notify]);
+  const loadMoreJobs=useCallback(async()=>{if(!auth.token||!jobPage.nextCursor||jobPage.loadingMore)return;const cursor=jobPage.nextCursor;try{const pageResult=await loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true});if(pageResult?.restarted)return;pageCursorHistory.current[pageNumber]=cursor;setPageNumber(current=>current+1);}catch(error){notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error');}},[auth.token,jobPage.nextCursor,jobPage.loadingMore,savedCriteria,loadJobsPage,notify,pageNumber]);
+  const previousJobsPage=useCallback(async()=>{if(!auth.token||pageNumber<=1||jobPage.loadingMore)return;const cursor=pageCursorHistory.current[pageNumber-2]||null;try{const pageResult=await loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true});if(pageResult?.restarted)return;setPageNumber(current=>current-1);}catch(error){notify('Pagina anterioara nu a putut fi incarcata: '+error.message,'error');}},[auth.token,pageNumber,jobPage.loadingMore,savedCriteria,loadJobsPage,notify]);
   const changeView=useCallback(next=>{setView(next);if(next!=='jobs')setKpiFilter('all');},[]);
   const openDetails=useCallback(job=>{detailScrollRef.current=window.scrollY;setDetailJob(job);},[]);
   const closeDetails=useCallback(()=>{setDetailJob(null);requestAnimationFrame(()=>window.scrollTo({top:detailScrollRef.current,behavior:'auto'}));},[]);
 
   if(auth.status!=='authenticated')return<><SignedOutScreen clientId={clientId} loginHint={loginHint} allowAutoRestore={allowAutoRestore} authError={auth.error} authStatus={auth.status} onCredential={handleCredential}/><EnvironmentMarker environment={environment} className="fixed left-4 top-4 z-50"/><Toast toast={toast}/></>;
   const onboarding=!profileConfigured&&(view==='jobs'||view==='review');
-  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} onLoadMore={loadMoreJobs}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
+  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} onLoadMore={loadMoreJobs} onNext={loadMoreJobs} onPrevious={previousJobsPage} page={pageNumber}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
