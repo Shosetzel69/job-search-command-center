@@ -4,7 +4,6 @@ import {
 } from './lib.mjs';
 import { createDevObserver } from '../observation/dev-runtime-observer.mjs';
 import { assessDevRollout, planDevDeployment } from '../observation/dev-rollout-evaluator.mjs';
-import { executeDevGcloudScript } from '../diagnostics/dev-gcloud-script-runner.mjs';
 import {listExecutionTaskEvidence,readBoundedExecutionLogs,inspectDevRunSnapshot} from './dev-e2e-diagnostics.mjs';
 
 const cfg = envConfig();
