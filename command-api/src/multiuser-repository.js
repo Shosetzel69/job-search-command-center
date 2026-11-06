@@ -1332,10 +1332,13 @@ export async function listProfileJobs(
       const resolved = await resolveRow(rows[index]);
       inspected += 1;
       pageEndIndex = index;
+      // Apply view-only eligibility/B2B filters AFTER actual current-basis evaluation.
+      if (spec.eligibility && resolved.evaluation.eligibilityState !== spec.eligibility) continue;
       if (!resolved.evaluation.eligible) {
         excluded += 1;
         continue;
       }
+      if (spec.b2b !== null && Boolean(resolved.job?.b2b) !== spec.b2b) continue;
       if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
       if (jobs.length < spec.limit) jobs.push(resolved.job);
       if (jobs.length >= spec.limit) break;
@@ -1376,7 +1379,10 @@ export async function listProfileJobs(
       : {status:'INCOMPLETE',scope:'profile_filtered',totals:null,remaining:Number(c.pending)};
     // Serve globally FIT-ordered pages only when every candidate has a current
     // persisted evaluation. Never silently claim global order for partial cache.
-    if (spec.sort_fit && aggregateCounts.status === 'COMPLETE') {
+    // The global ranking query has no SQL predicate equivalent to the runtime
+    // materialized B2B/eligibility filters. Do not falsely report GLOBAL_VERIFIED.
+    if (spec.sort_fit && aggregateCounts.status === 'COMPLETE'
+      && spec.b2b === null && spec.eligibility === null) {
       if (spec.cursor?.fit_sort && spec.cursor.fit_sort !== spec.sort_fit)
         throw httpError('STALE_CURSOR: FIT sort changed',400);
       if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
