@@ -1025,6 +1025,34 @@ if (!FIT_ALGORITHM_ORDER.includes(FIT_ALGORITHM_VERSION)) throw new Error('Unran
  */
 export async function persistEvaluationBatchTx(tx, foundation, entries) {
   if (!entries.length) return new Set();
+  // Lock authoritative basis rows until COMMIT/ROLLBACK, in fixed order:
+  // (1) tenant-local Search Profile, (2) global canonical jobs by job_id.
+  // Shared locks conflict with UPDATE/DELETE but allow independent evaluations.
+  // The lock must be acquired BEFORE the VALUES UPSERT; a post-write SELECT
+  // cannot prevent a concurrent criteria/corpus update before COMMIT.
+  const profileLock=await tx.query(
+    `SELECT profile_version FROM search_profile
+       WHERE tenant_id=$1 AND search_profile_id=$2 AND status='ACTIVE'
+       FOR SHARE`,
+    [tx.tenantId,foundation.search_profile_id],
+  );
+  if(profileLock.rows?.length!==1 ||
+      Number(profileLock.rows[0].profile_version)!==Number(foundation.profile_version)){
+    throw httpError('STALE_BASIS: profile changed before evaluation write',409);
+  }
+  const orderedIds=[...new Set(entries.map(({row})=>String(row.job_id)))].sort();
+  const jobLocks=await tx.query(
+    `SELECT job_id,job_version FROM canonical_jobs
+      WHERE job_id=ANY($1::uuid[]) ORDER BY job_id ASC FOR SHARE`,
+    [orderedIds],
+  );
+  const currentJobs=new Map((jobLocks.rows||[]).map(row=>
+    [String(row.job_id),Number(row.job_version)]));
+  for(const {row} of entries){
+    if(currentJobs.get(String(row.job_id))!==Number(row.job_version)){
+      throw httpError('STALE_BASIS: job changed before evaluation write',409);
+    }
+  }
   const params=[tx.tenantId, foundation.search_profile_id, foundation.profile_version,
     FIT_ALGORITHM_VERSION, FIT_ALGORITHM_ORDER];
   const tuples=entries.map(({row,evaluation})=>{
@@ -1066,28 +1094,6 @@ export async function persistEvaluationBatchTx(tx, foundation, entries) {
     RETURNING job_id`;
   const result=await tx.query(sql,params);
 
-  // Reconfirm the actual basis before transaction commit; if any version changed
-  // since the evaluator snapshot, rollback the entire batch (including INSERT).
-  const latest=await tx.query(
-    `SELECT profile_version FROM search_profile
-      WHERE tenant_id=$1 AND search_profile_id=$2 AND status='ACTIVE'`,
-    [tx.tenantId,foundation.search_profile_id],
-  );
-  if(latest.rows?.length!==1 ||
-    Number(latest.rows[0].profile_version)!==Number(foundation.profile_version)){
-    throw httpError('STALE_BASIS: profile changed during evaluation',409);
-  }
-  const latestJobs=await tx.query(
-    'SELECT job_id,job_version FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
-    [entries.map(({row})=>String(row.job_id))],
-  );
-  const observed=new Map((latestJobs.rows||[]).map(row=>
-    [String(row.job_id),Number(row.job_version)]));
-  for(const {row} of entries){
-    if(observed.get(String(row.job_id))!==Number(row.job_version)){
-      throw httpError('STALE_BASIS: job changed during evaluation',409);
-    }
-  }
   return new Set((result.rows||[]).map(row=>String(row.job_id)));
 }
 
