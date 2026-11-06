@@ -111,6 +111,16 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    for(const job of unknown)assert.ok(returned.has(job.id),'UNKNOWN silently filtered: '+job.title);
    for(const job of rejected)assert.ok(!returned.has(job.id),'explicit role mismatch leaked: '+job.title);
    assert.deepEqual([...returned].sort(),[...selected,...unknown].map(j=>j.id).sort());
+   const unknownOnly=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:20,prefetch:0,q:'W025',eligibility:'unknown'},env,{db});
+   assert.deepEqual(new Set(unknownOnly.jobs.map(job=>job.id)),
+     new Set(unknown.map(job=>job.id)), 'UNKNOWN filter must show only unknown family jobs');
+   assert.ok(unknownOnly.jobs.every(job=>job.fit===null),
+     'UNKNOWN eligibility must never fabricate FIT');
+   const b2bOnly=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:20,prefetch:0,q:'W025',b2b:'true'},env,{db});
+   assert.ok(b2bOnly.jobs.every(job=>job.b2b===true),
+     'B2B=true must not leak non-B2B rows');
    const persisted=await db.query(
      'SELECT job_id,eligibility_state,eligibility_reason_code,profile_version FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])',
      [ctx.profile_id,foundation.search_profile_id,[...selected,...unknown].map(j=>j.id)]);
