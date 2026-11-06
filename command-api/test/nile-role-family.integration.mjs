@@ -234,6 +234,52 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    assert.ok(result.processed>=0&&result.processed<=100);
    assert.equal(result.completion_semantics,'PROCESSING_COVERAGE');
   });
+  await t.test('Stage A B-01 forced interleaving: authoritative locks through COMMIT',async()=>{
+   const {withTenantTransaction}=await import('../src/db/tenant-gateway.js');
+   const current=await repository.resolveActiveSearchProfile(ctx,env,{db});
+   const id=seeded[0].id;
+   const contender=await db.connect();
+   const version=(await db.query(
+     'SELECT job_version FROM canonical_jobs WHERE job_id=$1',[id])).rows[0].job_version;
+   try{
+    await withTenantTransaction(ctx,async tx=>{
+     const basis=await repository.resolveEvaluationBasisTx(tx);
+     const stored=await repository.persistEvaluationBatchTx(tx,basis.foundation,[{
+      row:{job_id:id,job_version:version},
+      evaluation:{eligibilityState:'UNKNOWN',eligibilityReasonCode:'ROLE_FAMILY_UNKNOWN',
+       eligible:true,score:null,pros:[],risks:[],exclusionReason:null}
+     }]);
+     assert.ok(stored.has(id));
+     // Different physical DB connection deliberately attempts a mutation
+     // AFTER UPSERT yet BEFORE evaluator COMMIT.
+     await contender.query('BEGIN');
+     await contender.query("SET LOCAL lock_timeout = '150ms'");
+     await contender.query(`SET LOCAL nile.tenant_id = '${ctx.profile_id}'`);
+     await assert.rejects(
+      ()=>contender.query(
+       'UPDATE search_profile SET profile_version=profile_version+1 WHERE tenant_id=$1 AND search_profile_id=$2',
+       [ctx.profile_id,current.search_profile_id]),
+      err=>err?.code==='55P03',
+      'criteria-save writer must be blocked until evaluation COMMIT');
+     await contender.query('ROLLBACK');
+     await contender.query('BEGIN');
+     await contender.query("SET LOCAL lock_timeout = '150ms'");
+     await assert.rejects(
+      ()=>contender.query('UPDATE canonical_jobs SET job_version=job_version+1 WHERE job_id=$1',[id]),
+      err=>err?.code==='55P03',
+      'canonical job mutation must be blocked until evaluation COMMIT');
+     await contender.query('ROLLBACK');
+    },{env,db});
+    // After COMMIT, mutations are allowed and invalidate cached versions.
+    await db.query('UPDATE canonical_jobs SET job_version=job_version+1 WHERE job_id=$1',[id]);
+    const after=(await db.query('SELECT job_version FROM canonical_jobs WHERE job_id=$1',[id])).rows[0];
+    assert.equal(Number(after.job_version),Number(version)+1);
+    const cached=(await db.query(
+     'SELECT job_version FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=$3',
+     [ctx.profile_id,current.search_profile_id,id])).rows[0];
+    assert.notEqual(Number(cached.job_version),Number(after.job_version));
+   }finally{await contender.query('ROLLBACK').catch(()=>{});contender.release();}
+  });
   await t.test('W025-R05 persisted independent scope family/subfamily states',async()=>{
    const column=(await db.query("SELECT column_name FROM information_schema.columns WHERE table_name='coverage_scope_state'")).rows.map(r=>r.column_name);
    assert.ok(column.includes('role_subfamilies'));
