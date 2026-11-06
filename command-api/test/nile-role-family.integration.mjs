@@ -124,7 +124,8 @@ test('W025 Nile 010 role families native functional contract',async t=>{
     assert.ok(row);assert.equal(row.eligibility_state,'UNKNOWN');
     assert.equal(row.eligibility_reason_code,'ROLE_FAMILY_UNKNOWN');
    }
-   // #535: exact scope totals are persisted only after all candidates are evaluated.
+   // Stage A: complete exact totals are computed, but dormant migration 011
+   // receives no GET-time snapshot writes.
    const ranked=await repository.listProfileJobs(ctx,stored,nomenclatures,
      {limit:20,prefetch:0,q:'W025',sort_fit:'desc'},env,{db});
    assert.equal(ranked.aggregate_counts.status,'COMPLETE');
@@ -134,10 +135,6 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    for(let i=1;i<ranked.jobs.length;i+=1){
      assert.ok(Number(ranked.jobs[i-1].fit)>=Number(ranked.jobs[i].fit),'global FIT order regressed');
    }
-   const countSnapshots=await db.query(
-     'SELECT totals FROM profile_job_count_snapshots WHERE tenant_id=$1 AND search_profile_id=$2',
-     [ctx.profile_id,foundation.search_profile_id]);
-   assert.ok(countSnapshots.rows.length>0,'complete FIT totals must be persisted');
    const direct=await db.query('SELECT job_id,role_family,role_subfamily FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
      [seeded.map(j=>j.id)]);
    assert.equal(direct.rows.length,seeded.length);
