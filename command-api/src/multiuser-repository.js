@@ -1015,40 +1015,43 @@ function evaluationCacheValid(row, foundation) {
 const FIT_ALGORITHM_ORDER = Object.freeze(['fit-v1']);
 if (!FIT_ALGORITHM_ORDER.includes(FIT_ALGORITHM_VERSION)) throw new Error('Unranked FIT version');
 
+
+/**
+ * Nile tenant routing requires an INSERT VALUES tenant parameter, not an
+ * INSERT SELECT projection (native SQL 0A000). The associated SQL snapshot,
+ * post-write basis checks and transaction rollback enforce the R4 currentness
+ * invariant without allowing stale committed evaluations.
+ * R4-03 variation requires independent review before release.
+ */
 export async function persistEvaluationBatchTx(tx, foundation, entries) {
   if (!entries.length) return new Set();
-  const result = await tx.query(
-    `WITH proposed AS (
-      SELECT * FROM UNNEST(
-        $3::uuid[], $4::text[], $5::text[], $6::boolean[], $7::integer[],
-        $8::jsonb[], $9::jsonb[], $10::text[], $11::bigint[]
-      ) AS v(job_id,eligibility_state,eligibility_reason_code,eligible,
-             score,pros,risks,exclusion_reason,job_version)
-    )
-    INSERT INTO profile_job_evaluation(
+  const params=[tx.tenantId, foundation.search_profile_id, foundation.profile_version,
+    FIT_ALGORITHM_VERSION, FIT_ALGORITHM_ORDER];
+  const tuples=entries.map(({row,evaluation})=>{
+    const start=params.length+1;
+    params.push(String(row.job_id),evaluation.eligibilityState,
+      evaluation.eligibilityReasonCode||null,Boolean(evaluation.eligible),
+      evaluation.score??null,JSON.stringify(evaluation.pros||[]),
+      JSON.stringify(evaluation.risks||[]),evaluation.exclusionReason||null,
+      Number(row.job_version));
+    const p=Array.from({length:9},(_,i)=>'$'+(start+i));
+    return `($1,$2,${p[0]}::uuid,${p[1]}::text,${p[2]}::text,${p[3]}::boolean,
+      ${p[4]}::integer,${p[5]}::jsonb,${p[6]}::jsonb,${p[7]}::text,
+      $3::bigint,${p[8]}::bigint,$4::text,$4::text,now())`;
+  });
+  const sql=`INSERT INTO profile_job_evaluation(
       tenant_id,search_profile_id,job_id,
       eligibility_state,eligibility_reason_code,eligible,score,pros,risks,
       exclusion_reason,profile_version,job_version,fit_algorithm_version,
       evaluation_version,evaluated_at
-    )
-    SELECT $1::uuid,$2::uuid,p.job_id,
-           p.eligibility_state,p.eligibility_reason_code,p.eligible,
-           p.score,p.pros,p.risks,p.exclusion_reason,
-           $12::bigint,p.job_version,$13::text,$13::text,now()
-      FROM proposed p
-      JOIN search_profile sp
-        ON sp.tenant_id=$1 AND sp.search_profile_id=$2
-       AND sp.status='ACTIVE' AND sp.profile_version=$12
-      JOIN canonical_jobs j
-        ON j.job_id=p.job_id AND j.job_version=p.job_version
+    ) VALUES ${tuples.join(',')}
     ON CONFLICT (tenant_id,search_profile_id,job_id)
     DO UPDATE SET
       eligibility_state=EXCLUDED.eligibility_state,
       eligibility_reason_code=EXCLUDED.eligibility_reason_code,
       eligible=EXCLUDED.eligible,
       score=EXCLUDED.score,
-      pros=EXCLUDED.pros,
-      risks=EXCLUDED.risks,
+      pros=EXCLUDED.pros,risks=EXCLUDED.risks,
       exclusion_reason=EXCLUDED.exclusion_reason,
       profile_version=EXCLUDED.profile_version,
       job_version=EXCLUDED.job_version,
@@ -1057,22 +1060,34 @@ export async function persistEvaluationBatchTx(tx, foundation, entries) {
       evaluated_at=EXCLUDED.evaluated_at
     WHERE EXCLUDED.profile_version >= profile_job_evaluation.profile_version
       AND EXCLUDED.job_version >= profile_job_evaluation.job_version
-      AND array_position($14::text[],profile_job_evaluation.fit_algorithm_version) IS NOT NULL
-      AND array_position($14::text[],EXCLUDED.fit_algorithm_version) >=
-          array_position($14::text[],profile_job_evaluation.fit_algorithm_version)
-    RETURNING job_id`,
-    [tx.tenantId,foundation.search_profile_id,
-      entries.map(({row})=>String(row.job_id)),
-      entries.map(({evaluation})=>evaluation.eligibilityState),
-      entries.map(({evaluation})=>evaluation.eligibilityReasonCode||null),
-      entries.map(({evaluation})=>Boolean(evaluation.eligible)),
-      entries.map(({evaluation})=>evaluation.score??null),
-      entries.map(({evaluation})=>JSON.stringify(evaluation.pros||[])),
-      entries.map(({evaluation})=>JSON.stringify(evaluation.risks||[])),
-      entries.map(({evaluation})=>evaluation.exclusionReason||null),
-      entries.map(({row})=>Number(row.job_version)),
-      foundation.profile_version,FIT_ALGORITHM_VERSION,FIT_ALGORITHM_ORDER],
+      AND array_position($5::text[],profile_job_evaluation.fit_algorithm_version) IS NOT NULL
+      AND array_position($5::text[],EXCLUDED.fit_algorithm_version) >=
+          array_position($5::text[],profile_job_evaluation.fit_algorithm_version)
+    RETURNING job_id`;
+  const result=await tx.query(sql,params);
+
+  // Reconfirm the actual basis before transaction commit; if any version changed
+  // since the evaluator snapshot, rollback the entire batch (including INSERT).
+  const latest=await tx.query(
+    `SELECT profile_version FROM search_profile
+      WHERE tenant_id=$1 AND search_profile_id=$2 AND status='ACTIVE'`,
+    [tx.tenantId,foundation.search_profile_id],
   );
+  if(latest.rows?.length!==1 ||
+    Number(latest.rows[0].profile_version)!==Number(foundation.profile_version)){
+    throw httpError('STALE_BASIS: profile changed during evaluation',409);
+  }
+  const latestJobs=await tx.query(
+    'SELECT job_id,job_version FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
+    [entries.map(({row})=>String(row.job_id))],
+  );
+  const observed=new Map((latestJobs.rows||[]).map(row=>
+    [String(row.job_id),Number(row.job_version)]));
+  for(const {row} of entries){
+    if(observed.get(String(row.job_id))!==Number(row.job_version)){
+      throw httpError('STALE_BASIS: job changed during evaluation',409);
+    }
+  }
   return new Set((result.rows||[]).map(row=>String(row.job_id)));
 }
 
