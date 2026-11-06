@@ -1,0 +1,6 @@
+.gcloudignore
+.git
+.gitignore
+#!include:.gitignore
+!ops/build/
+!ops/build/dev-cloud-build-controller.mjs
