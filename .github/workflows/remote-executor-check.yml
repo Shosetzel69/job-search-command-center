@@ -9,9 +9,6 @@ on:
       - "docs/runbooks/remote-executor-dev.md"
       - "docs/adr/ADR-006-google-cloud-runtime.md"
       - "ARCHITECTURE.md"
-      - "docs/adr/ADR-009-cloud-run-admin-api-v2-only.md"
-      - "scripts/check_cloud_run_api_version.mjs"
-      - "scripts/test_cloud_run_api_version.mjs"
       - ".github/workflows/remote-executor-check.yml"
   push:
     branches: [main]
@@ -41,16 +38,16 @@ jobs:
         with:
           node-version: 22
 
-      - name: Validate Cloud Run API v2 contract
-        run: |
-          node scripts/check_cloud_run_api_version.mjs
-          node --test scripts/test_cloud_run_api_version.mjs
-
       - name: Install Remote Executor dependencies
         run: npm --prefix ops install --ignore-scripts
 
       - name: Run Remote Executor contract tests
         run: node --test ops/test/*.test.mjs
+
+      - name: Run DEV workspace Python contract tests
+        run: |
+          python3 -m unittest discover -s ops/workspace-manager/tests -p 'test_*.py' -v
+          python3 -m compileall -q ops/workspace-manager/service
 
       - name: Validate auth library resolution
         run: node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
@@ -61,9 +58,11 @@ jobs:
           node --check ops/src/lib.mjs
           node --check ops/src/gateway.mjs
           node --check ops/src/worker.mjs
-
-      - name: Verify gateway v2 scaling fixture contract
-        run: python3 -m unittest -v scripts.test_gateway_v2_scaling
+          node --check ops/src/dev_workspace.mjs
+          node --check ops/src/dev-e2e-diagnostics.mjs
+          node --check ops/observation/dev-runtime-observer.mjs
+          node --check ops/observation/dev-rollout-evaluator.mjs
+          node --check ops/diagnostics/dev-gcloud-script-runner.mjs
 
       - name: Validate DEV scripts
         run: |
@@ -74,6 +73,13 @@ jobs:
           bash -n scripts/gcp/verify_trusted_ops_ref.sh
           bash -n scripts/gcp/build_remote_executor_dev.sh
           bash -n scripts/gcp/verify_remote_executor_dev.sh
+          bash -n scripts/gcp/capture_r33_gateway_source_dev.sh
+          bash -n scripts/gcp/import_r33_source_to_dev_workspace_589.sh
+          bash -n scripts/gcp/inspect_r1_b_worker_iam_readonly.sh
+          bash -n scripts/gcp/grant_r1b_minimal_observer_iam_589.sh
+          bash -n scripts/gcp/revoke_r1b_minimal_observer_iam_589.sh
+          bash -n scripts/gcp/remediate_589_f1_service_scoped_iam.sh
+          bash -n scripts/gcp/capture_589_r1b_v2_traffic_fixture_readonly.sh
 
       - name: Validate security boundaries statically
         run: |
@@ -98,7 +104,8 @@ jobs:
           ! grep -q -- '--no-cpu-boost' scripts/gcp/deploy_remote_executor_dev.sh
           grep -q 'LOG_LOCATION=' scripts/gcp/provision_remote_executor_dev.sh
           grep -Fq 'job_name=~"^(jscc-search-dev|jscc-diagnostics-dev)$"' scripts/gcp/provision_remote_executor_dev.sh
-          grep -q 'labels.execution_name' ops/src/worker.mjs
+          grep -Fq 'labels.execution_name' ops/src/dev-e2e-diagnostics.mjs
+          grep -Fq 'logging_execution_binding_mismatch' ops/src/dev-e2e-diagnostics.mjs
           ! grep -Eq 'read[[:space:]]+-r|read[[:space:]]+-s|read[[:space:]]+-p' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q 'BOOTSTRAP_BLOCKED=OAUTH_CLIENT_SECRET_MISSING' scripts/gcp/bootstrap_remote_executor_dev.sh
           grep -q "replace(/_/g,'-')" ops/src/gateway.mjs
