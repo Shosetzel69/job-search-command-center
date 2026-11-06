@@ -181,7 +181,8 @@ export function sanitizeText(input) {
 
 const PUBLIC_ASSERTION_FIELDS = Object.freeze([
   'target_alias','failed_count','succeeded_count','cancelled_count','completed','line_count',
-  'run_status','published_jobs','status_present','jobs_present','ops_source_sha','target_source_sha',
+  'run_status','published_jobs','status_present','jobs_present','jobs_evidence','log_evidence_verified',
+  'log_search_complete','log_lookup_status','ops_source_sha','target_source_sha',
   'exit_code','test_verdict','coarse_error','task_count','target_exit_code','target_term_signal',
   'task_metadata_available','task_metadata_error'
 ]);
