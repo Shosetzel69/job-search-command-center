@@ -177,6 +177,10 @@ test('W025 Nile 010 role families native functional contract',async t=>{
      ...before,target_role_subfamilies:['project_management'],
    },env,{db});
    const stored=await repository.effectiveConfig(ctx,env,{db});
+   // Populate current-version caches before asserting globally ranked cursors.
+   const warm=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:20,prefetch:20,q:'W025'},env,{db});
+   assert.equal(warm.aggregate_counts.status,'COMPLETE');
    const first=await repository.listProfileJobs(ctx,stored,nomenclatures,
      {limit:1,prefetch:0,q:'W025',sort_fit:'desc'},env,{db});
    assert.equal(first.fit_order_status,'GLOBAL_VERIFIED');
