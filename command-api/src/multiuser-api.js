@@ -16,6 +16,7 @@ import {
   effectiveConfig,
   updateApplication,
   listProfileJobs,
+  advanceProfileEvaluation,
   listAccounts,
   listApplications,
   operationalHistory,
@@ -238,6 +239,9 @@ function jobSearchQuery(url) {
     contract_type:url.searchParams.getAll('contract_type'),
     freshness_hours:url.searchParams.get('freshness_hours'),
     min_fit:url.searchParams.get('min_fit'),
+    sort_fit:url.searchParams.get('sort_fit'),
+    b2b:url.searchParams.get('b2b'),
+    eligibility:url.searchParams.get('eligibility'),
     include_archived:url.searchParams.get('include_archived'),
     prefetch:url.searchParams.get('prefetch'),
   };
@@ -285,7 +289,16 @@ export async function handleAuthenticatedRoute(request, env, context) {
     return json(result, status);
   }
 
+  if (request.method === 'POST' && url.pathname === '/me/evaluation/advance') {
+    requireSameOrigin(request, env);
+    const nomenclatures = (await readNomenclatures(env)).payload;
+    return json(await advanceProfileEvaluation(context, nomenclatures, env));
+  }
+
   if (request.method === 'GET' && url.pathname === '/me/jobs') {
+    if (url.searchParams.has('scan_step')) {
+      throw Object.assign(new Error('SCAN_STEP_UNSUPPORTED'), { status:400 });
+    }
     const preferences = await currentPreferences(context, env);
     const nomenclatures = (await readNomenclatures(env)).payload;
     return json(await listProfileJobs(
