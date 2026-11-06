@@ -200,6 +200,30 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    const stable=rows=>rows.map(r=>({...r,role_subfamily:[...r.role_subfamily]})).sort((a,b)=>a.job_id.localeCompare(b.job_id));
    assert.deepEqual(stable(after),stable(before),'selection mutated canonical corpus');
   });
+  await t.test('Stage A native Nile tenant-local lock, progress and release',async()=>{
+   const {withTenantTransaction}=await import('../src/db/tenant-gateway.js');
+   const {advanceProfileEvaluation}=await import('../src/evaluation-advance.js');
+   const active=await repository.resolveActiveSearchProfile(ctx,env,{db});
+   const lockKey=ctx.profile_id+':'+active.search_profile_id;
+   await withTenantTransaction(ctx,async first=>{
+    const lock=await first.query(
+      'SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',
+      [5910401,lockKey]);
+    assert.equal(lock.rows?.[0]?.acquired,true,'initial tenant lock must be obtainable');
+    await withTenantTransaction(ctx,async second=>{
+      const contender=await second.query(
+        'SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',
+        [5910401,lockKey]);
+      assert.equal(contender.rows?.[0]?.acquired,false,
+        'another physical connection must not enter same profile');
+    },{env,db});
+   },{env,db});
+   const result=await advanceProfileEvaluation(ctx,nomenclatures,env,{db});
+   assert.ok(['INCOMPLETE','COMPLETE'].includes(result.status));
+   assert.ok(Number.isSafeInteger(result.remaining)&&result.remaining>=0);
+   assert.ok(result.processed>=0&&result.processed<=100);
+   assert.equal(result.completion_semantics,'PROCESSING_COVERAGE');
+  });
   await t.test('W025-R05 persisted independent scope family/subfamily states',async()=>{
    const column=(await db.query("SELECT column_name FROM information_schema.columns WHERE table_name='coverage_scope_state'")).rows.map(r=>r.column_name);
    assert.ok(column.includes('role_subfamilies'));
