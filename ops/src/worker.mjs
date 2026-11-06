@@ -5,6 +5,7 @@ import {
 import { createDevObserver } from '../observation/dev-runtime-observer.mjs';
 import { assessDevRollout, planDevDeployment } from '../observation/dev-rollout-evaluator.mjs';
 import { executeDevGcloudScript } from '../diagnostics/dev-gcloud-script-runner.mjs';
+import {listExecutionTaskEvidence,readBoundedExecutionLogs,inspectDevRunSnapshot} from './dev-e2e-diagnostics.mjs';
 
 const cfg = envConfig();
 const ownExecution = normalizeExecutionId(process.env.CLOUD_RUN_EXECUTION || '');
@@ -32,19 +33,9 @@ async function describeExecution(args) {
   const url = `https://run.googleapis.com/v2/projects/${cfg.project}/locations/${cfg.region}/jobs/${job}/executions/${id}`;
   const r = await gcpFetch(url); if (!r.ok) throw new Error(`execution_read_${r.status}`); const j=await r.json();
 
-  const tr = await gcpFetch(`${url}/tasks?pageSize=1000`);
-  let taskMetadataAvailable = false;
-  let taskMetadataError = null;
-  let tasks = [];
-  if (tr.ok) {
-    const tj = await tr.json();
-    tasks = tj.tasks || [];
-    taskMetadataAvailable = true;
-  } else if (tr.status === 403 || tr.status === 404) {
-    taskMetadataError = `task_read_${tr.status}`;
-  } else {
-    throw new Error(`task_read_${tr.status}`);
-  }
+  const taskEvidence=await listExecutionTaskEvidence(id,{request:gcpFetch});
+  const {task_metadata_available:taskMetadataAvailable,
+         task_metadata_error:taskMetadataError,tasks}=taskEvidence;
 
   let targetExitCode = null;
   let targetTermSignal = null;
@@ -91,28 +82,29 @@ async function describeExecution(args) {
   };
 }
 async function readExecutionLogs(args) {
-  const id = normalizeExecutionId(args.execution_id); const job = executionJobName(id);
-  const filter = `resource.type="cloud_run_job" AND resource.labels.job_name="${job}" AND (labels.execution_name="${id}" OR labels."run.googleapis.com/execution_name"="${id}")`;
-  if (!cfg.logViewResource) throw new Error('log_view_not_configured');
-  const r = await gcpFetch('https://logging.googleapis.com/v2/entries:list',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({resourceNames:[cfg.logViewResource],filter,orderBy:'timestamp asc',pageSize:Math.min(args.limit,200)})});
-  if (!r.ok) throw new Error(`logging_read_${r.status}`); const j=await r.json();
-  const lines=(j.entries||[]).slice(0,args.limit).map(e=>sanitizeText(typeof (e.textPayload ?? e.jsonPayload ?? e.protoPayload ?? '')==='string'?(e.textPayload ?? ''):JSON.stringify(e.jsonPayload ?? e.protoPayload ?? {}))).filter(Boolean);
-  const logExcerpt = sanitizeText(lines.join('\n'));
-  return { target_alias:id, line_count:lines.length, log_excerpt:logExcerpt, logs:lines };
+  if(!cfg.logViewResource)throw Error('log_view_not_configured');
+  return readBoundedExecutionLogs({
+    execution_id:args.execution_id,limit:args.limit,
+    view:cfg.logViewResource,request:gcpFetch,sanitize:sanitizeText,
+  });
 }
+
 async function inspectRuntimeSnapshot(args) {
-  if (!cfg.runtimeBucket) throw new Error('runtime_bucket_not_configured');
-  const runId = args.run_id;
-  const status = await gcsReadJson(cfg.runtimeBucket, `runs/${runId}/run-status.json`);
-  if (!status) throw new Error('runtime_snapshot_not_found');
-  const published = Number(status.data.jobs_published ?? status.data.results ?? 0);
-  return {
-    target_alias: runId,
-    run_status: status.data.status || status.data.state || null,
-    published_jobs: Number.isFinite(published) ? published : 0,
-    status_present: true
-  };
+  if(!cfg.runtimeBucket)throw Error('runtime_bucket_not_configured');
+  return inspectDevRunSnapshot({
+    run_id:args.run_id,runtimeBucket:cfg.runtimeBucket,readStatus:gcsReadJson,
+    readMetadata:async(bucket,name)=>{
+      const url='https://storage.googleapis.com/storage/v1/b/'+
+        encodeURIComponent(bucket)+'/o/'+encodeURIComponent(name);
+      const r=await gcpFetch(url);
+      if(r.status===404 || r.status===403)return {status:r.status};
+      if(!r.ok)throw Error('jobs_metadata_read_'+r.status);
+      const obj=await r.json();
+      return {status:200,contentType:obj.contentType||null};
+    },
+  });
 }
+
 async function runTestSuite(args) {
   if (!cfg.devBaseUrl) throw new Error('dev_base_url_not_configured');
   if (args.suite !== 'dev-health') throw new Error('unknown_suite');
@@ -184,8 +176,8 @@ async function describeDevObservation(task,args){
 }
 function publicAssertions(task, value) {
   if (task === 'describe_execution') return { target_alias:value.target_alias, failed_count:value.failed_count, succeeded_count:value.succeeded_count, cancelled_count:value.cancelled_count, completed:Boolean(value.completion_time), task_count:value.task_count, target_exit_code:value.target_exit_code, target_term_signal:value.target_term_signal, root_cause:value.root_cause, task_metadata_available:value.task_metadata_available, task_metadata_error:value.task_metadata_error };
-  if (task === 'read_execution_logs') return { target_alias:value.target_alias, line_count:value.line_count, log_excerpt:value.log_excerpt };
-  if (task === 'inspect_runtime_snapshot') return { target_alias:value.target_alias, run_status:value.run_status, published_jobs:value.published_jobs, status_present:value.status_present, jobs_present:value.jobs_present };
+  if (task === 'read_execution_logs') return { target_alias:value.target_alias, line_count:value.line_count, log_excerpt:value.log_excerpt, log_evidence_verified:value.log_evidence_verified, log_search_complete:value.log_search_complete, log_lookup_status:value.log_lookup_status };
+  if (task === 'inspect_runtime_snapshot') return { target_alias:value.target_alias, run_status:value.run_status, published_jobs:value.published_jobs, status_present:value.status_present, jobs_present:value.jobs_present, jobs_evidence:value.jobs_evidence };
   if (task === 'run_test_suite') return { target_alias:value.target_alias, target_source_sha:value.target_source_sha, exit_code:value.exit_code, test_verdict:value.test_verdict, coarse_error:value.coarse_error || null };
   if (task === 'describe_dev_runtime') return {
     target_alias:value.target_alias, resource:value.resource,observed_at:value.observed_at,
