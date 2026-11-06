@@ -1406,7 +1406,7 @@ export async function listProfileJobs(
                         sort_at DESC,job_id ASC),'')) AS fingerprint
            FROM (${fullScopeSql}) ranked
           WHERE cached_eligible IS TRUE
-            AND (${base + 1}::integer IS NULL OR cached_score >= ${base + 1}::integer)`,
+            AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)`,
         [...aggregateParams,spec.min_fit],
       );
       const populationFingerprint = String(signature.rows?.[0]?.fingerprint || '');
