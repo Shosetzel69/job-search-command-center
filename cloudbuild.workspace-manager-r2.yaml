@@ -23,18 +23,18 @@ steps:
         set -o pipefail
         git_root=/workspace/jscc589-verified-git
         source_root=/workspace/jscc589-verified-src
-        [[ ! -e "$git_root" && ! -e "$source_root" ]]
-        mkdir -p "$source_root"
-        git init --quiet "$git_root"
-        git -C "$git_root" remote add origin https://github.com/Shosetzel69/job-search-command-center.git
-        git -C "$git_root" fetch --quiet --no-tags --depth=1 origin "${_TRUSTED_REF}"
-        [[ "$(git -C "$git_root" rev-parse FETCH_HEAD)" == "${_GIT_SHA}" ]] || {
+        [[ ! -e "$$git_root" && ! -e "$$source_root" ]]
+        mkdir -p "$$source_root"
+        git init --quiet "$$git_root"
+        git -C "$$git_root" remote add origin https://github.com/Shosetzel69/job-search-command-center.git
+        git -C "$$git_root" fetch --quiet --no-tags --depth=1 origin "${_TRUSTED_REF}"
+        [[ "$$(git -C "$$git_root" rev-parse FETCH_HEAD)" == "${_GIT_SHA}" ]] || {
           echo "TRUSTED_BUILD_CONTEXT=BLOCKED source_sha_mismatch" >&2
           exit 42
         }
-        git -C "$git_root" archive --format=tar "${_GIT_SHA}" | tar -xf - -C "$source_root"
-        [[ -f "$source_root/ops/workspace-manager/Dockerfile.r2-tools" ]]
-        [[ -f "$source_root/ops/workspace-manager/service/manager.py" ]]
+        git -C "$$git_root" archive --format=tar "${_GIT_SHA}" | tar -xf - -C "$$source_root"
+        [[ -f "$$source_root/ops/workspace-manager/Dockerfile.r2-tools" ]]
+        [[ -f "$$source_root/ops/workspace-manager/service/manager.py" ]]
         echo "TRUSTED_BUILD_CONTEXT=VERIFIED"
 
   - id: immutable-manager-baseline
@@ -47,8 +47,8 @@ steps:
         [[ "${_MANAGER_BASE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb" ]]
         [[ "${_MANAGER_IMAGE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2" ]]
         gcloud artifacts docker images describe "${_MANAGER_BASE}" --project=jscc-shared >/dev/null
-        immutable="$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
-        [[ "$immutable" == "True" || "$immutable" == "true" ]]
+        immutable="$$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+        [[ "$$immutable" == "True" || "$$immutable" == "true" ]]
         if gcloud artifacts docker images describe "${_MANAGER_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
           echo "IMMUTABLE_TAG_ALREADY_EXISTS" >&2
           exit 1
@@ -137,9 +137,9 @@ steps:
     args:
       - -ceu
       - |
-        digest="$(gcloud artifacts docker images describe "${_MANAGER_IMAGE}:${_GIT_SHA}" --project=jscc-shared --format='value(image_summary.digest)')"
-        [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-        echo "JSCC589_MANAGER_R2_IMAGE=${_MANAGER_IMAGE}@${digest}"
+        digest="$$(gcloud artifacts docker images describe "${_MANAGER_IMAGE}:${_GIT_SHA}" --project=jscc-shared --format='value(image_summary.digest)')"
+        [[ "$$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+        echo "JSCC589_MANAGER_R2_IMAGE=${_MANAGER_IMAGE}@$${digest}"
 
 serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com
 options:
