@@ -14,6 +14,29 @@ steps:
       - 'SOURCE_SHA=${_GIT_SHA}'
       - 'TRUSTED_OPS_REF=${_TRUSTED_REF}'
 
+  - id: materialize-verified-source
+    name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        set -o pipefail
+        git_root=/workspace/jscc589-verified-git
+        source_root=/workspace/jscc589-verified-src
+        [[ ! -e "$git_root" && ! -e "$source_root" ]]
+        mkdir -p "$source_root"
+        git init --quiet "$git_root"
+        git -C "$git_root" remote add origin https://github.com/Shosetzel69/job-search-command-center.git
+        git -C "$git_root" fetch --quiet --no-tags --depth=1 origin "${_TRUSTED_REF}"
+        [[ "$(git -C "$git_root" rev-parse FETCH_HEAD)" == "${_GIT_SHA}" ]] || {
+          echo "TRUSTED_BUILD_CONTEXT=BLOCKED source_sha_mismatch" >&2
+          exit 42
+        }
+        git -C "$git_root" archive --format=tar "${_GIT_SHA}" | tar -xf - -C "$source_root"
+        [[ -f "$source_root/ops/workspace-manager/Dockerfile.r2-tools" ]]
+        [[ -f "$source_root/ops/workspace-manager/service/manager.py" ]]
+        echo "TRUSTED_BUILD_CONTEXT=VERIFIED"
+
   - id: immutable-manager-baseline
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
@@ -37,6 +60,7 @@ steps:
     args:
       - -ceu
       - |
+        cd /workspace/jscc589-verified-src
         PYTHONPATH=ops/workspace-manager python3 -B -c 'from service.common import MAX_FILES, MAX_FILE, MAX_TOTAL; assert (MAX_FILES, MAX_FILE, MAX_TOTAL) == (100, 131072, 2097152)'
         python3 -m unittest discover -s ops/workspace-manager/tests -p 'test_workspace_*.py' -v
 
@@ -45,10 +69,64 @@ steps:
     args:
       - build
       - --pull=false
-      - --file=ops/workspace-manager/Dockerfile.r2-tools
+      - --file=/workspace/jscc589-verified-src/ops/workspace-manager/Dockerfile.r2-tools
       - --build-arg=BASE_IMAGE=${_MANAGER_BASE}
       - --tag=${_MANAGER_IMAGE}:${_GIT_SHA}
-      - .
+      - /workspace/jscc589-verified-src
+
+  - id: manager-image-route-smoke
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        docker run --rm -i --network=none --read-only --tmpfs /tmp \
+          -e K_SERVICE= -e JSCC_LOCAL_BACKEND=/tmp/jscc589-smoke \
+          -e WORKER_URL=http://127.0.0.1:9 -w /workspace \
+          --entrypoint python3 "${_MANAGER_IMAGE}:${_GIT_SHA}" -B - <<'PY'
+        import json
+        import threading
+        import urllib.error
+        import urllib.request
+        from http.server import ThreadingHTTPServer
+        from service import manager
+        from service.common import MAX_FILES
+
+        assert MAX_FILES == 100
+        manager.backend.put('smoke.txt', b'hello\n', 0)
+        server = ThreadingHTTPServer(('127.0.0.1', 0), manager.Handler)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        root = 'http://127.0.0.1:' + str(server.server_address[1])
+
+        def request(method, path, payload=None):
+            data = None if payload is None else json.dumps(payload).encode()
+            req = urllib.request.Request(root + path, data=data, method=method,
+                                         headers={'Content-Type': 'application/json'})
+            with urllib.request.urlopen(req, timeout=5) as response:
+                return response.status, json.load(response)
+
+        try:
+            assert request('GET', '/v1/files')[0] == 200
+            assert request('GET', '/v1/file?path=smoke.txt')[0] == 200
+            status, checksum = request('GET', '/v1/checksum?path=smoke.txt')
+            assert status == 200 and checksum['generation'] == 1 and len(checksum['sha256']) == 64
+            status, search = request('GET', '/v1/search?term=hello')
+            assert status == 200 and search['matches'] == [{'path': 'smoke.txt', 'line': 1}]
+            status, comparison = request('GET', '/v1/compare?left=smoke.txt&right=smoke.txt')
+            assert status == 200 and comparison['equal'] is True
+            status, patched = request('POST', '/v1/replace', {
+                'path': 'smoke.txt', 'old': 'hello', 'new': 'updated', 'if_generation_match': 1
+            })
+            assert status == 200 and patched['generation'] == 2
+            status, deleted = request('DELETE', '/v1/file?path=smoke.txt&if_generation_match=2')
+            assert status == 200 and deleted['deleted'] is True
+            print('MANAGER_IMAGE_ROUTE_SMOKE_PASS')
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join(timeout=5)
+        PY
 
   - id: push-manager-r2
     name: gcr.io/cloud-builders/docker
