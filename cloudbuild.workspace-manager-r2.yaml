@@ -1,0 +1,69 @@
+# JSCC #589 — DEV-only Workspace Manager R2 image build; no Cloud Run deployment.
+substitutions:
+  _GIT_SHA: ""
+  _TRUSTED_REF: ""
+  _MANAGER_BASE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb"
+  _MANAGER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2"
+
+steps:
+  - id: trusted-source-admission
+    name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    args: ['scripts/gcp/verify_trusted_ops_ref.sh']
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
+      - 'TRUSTED_OPS_REF=${_TRUSTED_REF}'
+
+  - id: immutable-manager-baseline
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        [[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]
+        [[ "${_MANAGER_BASE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb" ]]
+        [[ "${_MANAGER_IMAGE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2" ]]
+        gcloud artifacts docker images describe "${_MANAGER_BASE}" --project=jscc-shared >/dev/null
+        immutable="$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+        [[ "$immutable" == "True" || "$immutable" == "true" ]]
+        if gcloud artifacts docker images describe "${_MANAGER_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+          echo "IMMUTABLE_TAG_ALREADY_EXISTS" >&2
+          exit 1
+        fi
+
+  - id: workspace-manager-contract-tests
+    name: python:3.12-slim-bookworm
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        PYTHONPATH=ops/workspace-manager python3 -B -c 'from service.common import MAX_FILES, MAX_FILE, MAX_TOTAL; assert (MAX_FILES, MAX_FILE, MAX_TOTAL) == (100, 131072, 2097152)'
+        python3 -m unittest discover -s ops/workspace-manager/tests -p 'test_workspace_*.py' -v
+
+  - id: build-manager-r2
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull=false
+      - --file=ops/workspace-manager/Dockerfile.r2-tools
+      - --build-arg=BASE_IMAGE=${_MANAGER_BASE}
+      - --tag=${_MANAGER_IMAGE}:${_GIT_SHA}
+      - .
+
+  - id: push-manager-r2
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_MANAGER_IMAGE}:${_GIT_SHA}"]
+
+  - id: digest-evidence
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        digest="$(gcloud artifacts docker images describe "${_MANAGER_IMAGE}:${_GIT_SHA}" --project=jscc-shared --format='value(image_summary.digest)')"
+        [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+        echo "JSCC589_MANAGER_R2_IMAGE=${_MANAGER_IMAGE}@${digest}"
+
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
