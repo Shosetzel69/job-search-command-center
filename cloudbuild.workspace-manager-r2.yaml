@@ -86,7 +86,6 @@ steps:
           --entrypoint python3 "${_MANAGER_IMAGE}:${_GIT_SHA}" -B - <<'PY'
         import json
         import threading
-        import urllib.error
         import urllib.request
         from http.server import ThreadingHTTPServer
         from service import manager
