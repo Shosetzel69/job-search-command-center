@@ -7,6 +7,7 @@ export const PERSONAL_TABLES = Object.freeze([
   'profile_preferences',
   'profile_job_state',
   'profile_job_evaluation',
+  'profile_job_count_snapshots',
   'applications',
   'profile_notes',
   'profile_ui_preferences',
@@ -162,10 +163,21 @@ export async function verifyTenantPersonalResidue(
     [tenantId],
   );
   const counts = result.rows?.[0] || {};
+  // Migration 011 is dormant; do not reference an uncreated table in SQL.
+  const presence = await db.query("SELECT to_regclass('profile_job_count_snapshots') IS NOT NULL AS exists");
+  const hasSnapshots = presence.rows?.[0]?.exists === true;
+  if (hasSnapshots) {
+    const snapshotCount = await db.query(
+      'SELECT COUNT(*)::integer AS count FROM profile_job_count_snapshots WHERE tenant_id=$1',
+      [tenantId],
+    );
+    counts.snapshots = snapshotCount.rows?.[0]?.count;
+  }
   if (Object.values(counts).some(value => Number(value) !== 0)) {
     throw httpError('Tenant deletion left personal residue', 503);
   }
-  return Object.freeze({ status:'ok', profile_id:tenantId });
+  return Object.freeze({ status:'ok', profile_id:tenantId,
+    snapshot_table:hasSnapshots?'PRESENT_EMPTY':'ABSENT_UNAPPLIED_011' });
 }
 
 export async function resolveAccountDeletionTarget(

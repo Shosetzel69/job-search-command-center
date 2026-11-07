@@ -53,7 +53,7 @@ test('mobile details are full-screen and list scroll is restored on close', () =
 });
 
 test('bounded jobs pagination remains the only mobile list loading path', () => {
-  assert.match(main, /buildJobsPath\(\{filters:filterState,cursor,limit:25,prefetch:25\}\)/);
+  assert.match(main, /buildJobsPath\(\{filters:filterState,cursor,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE\}\)/);
   assert.match(main, /mergeJobPages/);
 });
 

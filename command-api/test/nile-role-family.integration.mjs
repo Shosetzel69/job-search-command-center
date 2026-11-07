@@ -99,7 +99,7 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    assert.deepEqual(stored.target_role_families,prefs.target_role_families);
    assert.deepEqual(stored.target_role_subfamilies,prefs.target_role_subfamilies);
    const actual=await repository.listProfileJobs(ctx,stored,nomenclatures,
-     {limit:50,prefetch:0,q:'W025'},env,{db});
+     {limit:20,prefetch:0,q:'W025'},env,{db});
    assert.equal(actual.bounded,true);
    const returned=new Set(actual.jobs.map(j=>j.id));
    const selected=seeded.filter(j=>j.expected==='PROJECT_DELIVERY_MANAGEMENT');
@@ -111,6 +111,16 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    for(const job of unknown)assert.ok(returned.has(job.id),'UNKNOWN silently filtered: '+job.title);
    for(const job of rejected)assert.ok(!returned.has(job.id),'explicit role mismatch leaked: '+job.title);
    assert.deepEqual([...returned].sort(),[...selected,...unknown].map(j=>j.id).sort());
+   const unknownOnly=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:20,prefetch:0,q:'W025',eligibility:'unknown'},env,{db});
+   assert.deepEqual(new Set(unknownOnly.jobs.map(job=>job.id)),
+     new Set(unknown.map(job=>job.id)), 'UNKNOWN filter must show only unknown family jobs');
+   assert.ok(unknownOnly.jobs.every(job=>job.fit===null),
+     'UNKNOWN eligibility must never fabricate FIT');
+   const b2bOnly=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:20,prefetch:0,q:'W025',b2b:'true'},env,{db});
+   assert.ok(b2bOnly.jobs.every(job=>job.b2b===true),
+     'B2B=true must not leak non-B2B rows');
    const persisted=await db.query(
      'SELECT job_id,eligibility_state,eligibility_reason_code,profile_version FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])',
      [ctx.profile_id,foundation.search_profile_id,[...selected,...unknown].map(j=>j.id)]);
@@ -123,6 +133,17 @@ test('W025 Nile 010 role families native functional contract',async t=>{
     const row=persisted.rows.find(r=>r.job_id===job.id);
     assert.ok(row);assert.equal(row.eligibility_state,'UNKNOWN');
     assert.equal(row.eligibility_reason_code,'ROLE_FAMILY_UNKNOWN');
+   }
+   // Stage A: complete exact totals are computed, but dormant migration 011
+   // receives no GET-time snapshot writes.
+   const ranked=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:20,prefetch:0,q:'W025',sort_fit:'desc'},env,{db});
+   assert.equal(ranked.aggregate_counts.status,'COMPLETE');
+   assert.equal(ranked.fit_order_status,'GLOBAL_VERIFIED');
+   assert.equal(ranked.aggregate_counts.totals.all,returned.size);
+   assert.deepEqual(new Set(ranked.jobs.map(j=>j.id)),returned);
+   for(let i=1;i<ranked.jobs.length;i+=1){
+     assert.ok(Number(ranked.jobs[i-1].fit)>=Number(ranked.jobs[i].fit),'global FIT order regressed');
    }
    const direct=await db.query('SELECT job_id,role_family,role_subfamily FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
      [seeded.map(j=>j.id)]);
@@ -140,12 +161,54 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    await repository.savePreferences(ctx,restricted,env,{db});
    const restrictedConfig=await repository.effectiveConfig(ctx,env,{db});
    const restrictedPage=await repository.listProfileJobs(ctx,restrictedConfig,nomenclatures,
-     {limit:50,prefetch:0,q:'W025'},env,{db});
+     {limit:20,prefetch:0,q:'W025'},env,{db});
    const restrictedIds=new Set(restrictedPage.jobs.map(j=>j.id));
    assert.ok(!restrictedIds.has(selected[0].id),
      'known family with explicitly mismatched subfamily must stay excluded');
    assert.deepEqual([...restrictedIds].sort(),unknown.map(j=>j.id).sort(),
      'UNKNOWN conflict jobs must survive subfamily filter despite nonempty member codes');
+  });
+  await t.test('Stage A global FIT cursor fails closed after evaluation reorder between pages',async()=>{
+   const {withTenantTransaction}=await import('../src/db/tenant-gateway.js');
+   // Restore inclusion of selected canonical job: previous negative regression
+   // deliberately excluded its subfamily, which made its score irrelevant.
+   const before=await repository.effectiveConfig(ctx,env,{db});
+   await repository.savePreferences(ctx,{
+     ...before,target_role_subfamilies:['project_management'],
+   },env,{db});
+   const stored=await repository.effectiveConfig(ctx,env,{db});
+   // Populate current-version caches before asserting globally ranked cursors.
+   const warm=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:20,prefetch:20,q:'W025'},env,{db});
+   assert.equal(warm.aggregate_counts.status,'COMPLETE');
+   const first=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:1,prefetch:0,q:'W025',sort_fit:'desc'},env,{db});
+   assert.equal(first.fit_order_status,'GLOBAL_VERIFIED');
+   assert.ok(first.next_cursor,'fixture requires at least two ranked candidates');
+   const active=await repository.resolveActiveSearchProfile(ctx,env,{db});
+   const target=seeded.find(j=>j.expected==='PROJECT_DELIVERY_MANAGEMENT');
+   await withTenantTransaction(ctx,async tx=>{
+     const update=await tx.query(
+      'UPDATE profile_job_evaluation SET score=LEAST(COALESCE(score,65)+1,100) WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=$3',
+      [ctx.profile_id,active.search_profile_id,target.id]);
+     assert.equal(update.rowCount,1);
+   },{env,db});
+   const currentScore=await withTenantTransaction(ctx,async tx=>
+     (await tx.query(
+       'SELECT score FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=$3',
+       [ctx.profile_id,active.search_profile_id,target.id])).rows[0]?.score,
+     {env,db});
+   assert.ok(Number.isFinite(Number(currentScore)));
+   const refreshed=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:1,prefetch:0,q:'W025',sort_fit:'desc'},env,{db});
+   assert.ok(refreshed.next_cursor,'updated population needs a continuation cursor');
+   const beforeFingerprint=repository.decodeJobCursor(first.next_cursor).fit_fingerprint;
+   const afterFingerprint=repository.decodeJobCursor(refreshed.next_cursor).fit_fingerprint;
+   assert.notEqual(afterFingerprint,beforeFingerprint,
+     'modifying persisted FIT score must change the population fingerprint');
+   await assert.rejects(()=>repository.listProfileJobs(ctx,stored,nomenclatures,
+     {limit:1,prefetch:0,q:'W025',sort_fit:'desc',cursor:first.next_cursor},env,{db}),
+     error=>error.status===400 && /STALE_CURSOR: FIT population changed/.test(error.message));
   });
   await t.test('W025-R04 two or more pages, exact expected set/order and no canonical mutation',async()=>{
    const prefs={...await repository.effectiveConfig(ctx,env,{db}),
@@ -188,6 +251,30 @@ test('W025 Nile 010 role families native functional contract',async t=>{
      [seeded.map(j=>j.id)])).rows;
    const stable=rows=>rows.map(r=>({...r,role_subfamily:[...r.role_subfamily]})).sort((a,b)=>a.job_id.localeCompare(b.job_id));
    assert.deepEqual(stable(after),stable(before),'selection mutated canonical corpus');
+  });
+  await t.test('Stage A native Nile tenant-local lock, progress and release',async()=>{
+   const {withTenantTransaction}=await import('../src/db/tenant-gateway.js');
+   const {advanceProfileEvaluation}=await import('../src/evaluation-advance.js');
+   const active=await repository.resolveActiveSearchProfile(ctx,env,{db});
+   const lockKey=ctx.profile_id+':'+active.search_profile_id;
+   await withTenantTransaction(ctx,async first=>{
+    const lock=await first.query(
+      'SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',
+      [5910401,lockKey]);
+    assert.equal(lock.rows?.[0]?.acquired,true,'initial tenant lock must be obtainable');
+    await withTenantTransaction(ctx,async second=>{
+      const contender=await second.query(
+        'SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',
+        [5910401,lockKey]);
+      assert.equal(contender.rows?.[0]?.acquired,false,
+        'another physical connection must not enter same profile');
+    },{env,db});
+   },{env,db});
+   const result=await advanceProfileEvaluation(ctx,nomenclatures,env,{db});
+   assert.ok(['INCOMPLETE','COMPLETE'].includes(result.status));
+   assert.ok(Number.isSafeInteger(result.remaining)&&result.remaining>=0);
+   assert.ok(result.processed>=0&&result.processed<=100);
+   assert.equal(result.completion_semantics,'PROCESSING_COVERAGE');
   });
   await t.test('W025-R05 persisted independent scope family/subfamily states',async()=>{
    const column=(await db.query("SELECT column_name FROM information_schema.columns WHERE table_name='coverage_scope_state'")).rows.map(r=>r.column_name);
