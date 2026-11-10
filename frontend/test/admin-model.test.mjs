@@ -92,3 +92,9 @@ test('source quick filter composes with text query deterministically', () => {
   ];
   assert.deepEqual(sourceQuickFilterRows(rows,{filter:'active',query:'beta'}).map(row=>row.name), ['Beta Jobs']);
 });
+
+test('inactive approved source is eligible for activation, excluded source is not',()=>{
+  const approved={active:false,validationStatus:'validated',approvalStatus:'approved',policyExcluded:false};
+  assert.ok(sourceGovernanceActions(approved).includes('activate'));
+  assert.ok(!sourceGovernanceActions({...approved,policyExcluded:true}).includes('activate'));
+});

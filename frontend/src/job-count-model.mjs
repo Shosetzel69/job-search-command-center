@@ -30,3 +30,11 @@ export function jobCountScopeLabel(freshness) {
   const hours = Number(freshness ?? 24);
   return hours === 120 ? 'filtrul curent: 5 zile + mod lucru' : `filtrul curent: ${hours}h + mod lucru`;
 }
+
+export function formatPageDatabaseCount(pageCount, totalCount, status = 'INCOMPLETE') {
+  const page = Number.isInteger(pageCount) && pageCount >= 0 ? pageCount : 0;
+  if (status !== 'COMPLETE' || !Number.isInteger(totalCount) || totalCount < page) {
+    return `${page} (din total în curs de calcul)`;
+  }
+  return `${page} (din ${totalCount})`;
+}

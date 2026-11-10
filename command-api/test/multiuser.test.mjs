@@ -10,6 +10,7 @@ import {
   decodeJobCursor,
   deterministicTenantEntityUuid,
   encodeJobCursor,
+  encodeFitCursor,
   mergeEffectiveConfig,
   normalizeJobSearchQuery,
   ownerBootstrapPending,
@@ -23,7 +24,7 @@ import { migrationDatabaseConfig } from '../src/db/config.js';
 import { runtimePrivilegeReadiness, TENANT_AWARE_TABLES } from '../src/db/privilege-readiness.js';
 import { deleteTenantFirst, resolveAccountDeletionTarget } from '../src/db/tenant-gateway.js';
 import { provisionRuntimeRole } from '../scripts/db-provision-runtime.mjs';
-import { personalPreferencesChanged } from '../src/multiuser-api.js';
+import { handleAuthenticatedRoute, personalPreferencesChanged } from '../src/multiuser-api.js';
 import { migrateRoleCriteria } from '../src/db/atc-489-02-backfill.js';
 
 const nomenclatures = JSON.parse(
@@ -374,7 +375,7 @@ test('bounded jobs cursor is opaque, deterministic and rejects malformed input',
 
 test('bounded jobs query caps page/prefetch and keeps temporary filters view-only', () => {
   const query = normalizeJobSearchQuery({
-    limit:'40',
+    limit:'20',
     prefetch:'12',
     role_family:['PROJECT_DELIVERY_MANAGEMENT,PRODUCT_AGILE'],
     role_subfamily:['project_management,product_owner'],
@@ -385,7 +386,7 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
     include_archived:'true',
     q:'technical project',
   });
-  assert.equal(query.limit, 40);
+  assert.equal(query.limit, 20);
   assert.equal(query.prefetch, 12);
   assert.deepEqual(query.role_family, ['PROJECT_DELIVERY_MANAGEMENT','PRODUCT_AGILE']);
   assert.deepEqual(query.role_subfamily, ['project_management','product_owner']);
@@ -395,7 +396,7 @@ test('bounded jobs query caps page/prefetch and keeps temporary filters view-onl
   assert.equal(query.min_fit, 70);
   assert.equal(query.include_archived, true);
   assert.equal(query.q, 'technical project');
-  assert.throws(() => normalizeJobSearchQuery({ limit:'101' }), /limit must be an integer/);
+  assert.throws(() => normalizeJobSearchQuery({ limit:'21' }), /limit must be an integer/);
   assert.throws(() => normalizeJobSearchQuery({ prefetch:'51' }), /prefetch must be an integer/);
 });
 
@@ -494,7 +495,8 @@ test('same shared job can produce different per-profile eligibility without prov
   const allowed = evaluateSharedJob(row, base, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   const blocked = evaluateSharedJob(row, { ...base, work_modes:{ ...base.work_modes, remote:false } }, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   assert.equal(allowed.eligible, true);
-  assert.equal(typeof allowed.score, 'number');
+  // UNKNOWN must retain no invented FIT; only ELIGIBLE has a numeric score.
+  assert.equal(allowed.eligibilityState==='UNKNOWN'?allowed.score===null:typeof allowed.score==='number',true);
   assert.equal(blocked.eligible, false);
   assert.equal(blocked.exclusionReason, 'remote disabled');
   const unknownRole = evaluateSharedJob(
@@ -771,4 +773,46 @@ test('preference response changed flag reflects semantic personal change only', 
     false,
     'system collection policy must not affect personal semantic changed flag',
   );
+});
+test('F-03 stable opaque global FIT pagination cursor round-trip', () => {
+  const anchor = new Date('2026-10-30T02:00:00Z');
+  const fingerprint='a'.repeat(32);
+  const cursor = encodeFitCursor(20, anchor, 'desc',fingerprint);
+  assert.deepEqual(decodeJobCursor(cursor), {fit_offset:20,fit_sort:'desc',
+    as_of:anchor.toISOString(),fit_fingerprint:fingerprint});
+  assert.equal(decodeJobCursor(encodeFitCursor(40,anchor,'asc',fingerprint)).fit_sort,'asc');
+  assert.throws(() => encodeFitCursor(-1, anchor,'desc',fingerprint), /Invalid FIT cursor offset/);
+  assert.throws(() => decodeJobCursor(Buffer.from(JSON.stringify(
+    {v:4,sort:'fit-desc',offset:-1,as_of:anchor.toISOString(),fingerprint})).toString('base64url')), /STALE_CURSOR/);
+  assert.throws(() => encodeFitCursor(20,anchor,'desc'),/fingerprint/);
+  assert.throws(() => decodeJobCursor(Buffer.from(JSON.stringify(
+    {v:3,sort:'fit-desc',offset:20,as_of:anchor.toISOString()})).toString('base64url')),/STALE_CURSOR/);
+  assert.equal(normalizeJobSearchQuery({sort_fit:'desc'}).sort_fit,'desc');
+  assert.throws(() => normalizeJobSearchQuery({sort_fit:'invalid'}), /Invalid sort_fit/);
+});
+
+test('Stage A forbids every legacy scan_step value and strictly validates filters', () => {
+  for(const value of ['0','1','',false,true,0,1]){
+    assert.throws(() => normalizeJobSearchQuery({scan_step:value}), /SCAN_STEP_UNSUPPORTED/);
+  }
+  assert.equal(normalizeJobSearchQuery({sort_fit:'desc'}).sort_fit,'desc');
+  assert.equal(normalizeJobSearchQuery({b2b:'true'}).b2b,true);
+  assert.equal(normalizeJobSearchQuery({b2b:'false'}).b2b,false);
+  assert.equal(normalizeJobSearchQuery({eligibility:'unknown'}).eligibility,'UNKNOWN');
+  for(const key of ['sort_fit','b2b','eligibility']){
+    assert.throws(()=>normalizeJobSearchQuery({[key]:'invalid'}));
+  }
+});
+
+test('Stage A HTTP rejects scan_step even when 0/empty, before repository or GCP access',async()=>{
+  const context={user_id:'11111111-1111-4111-8111-111111111111',
+    profile_id:'22222222-2222-4222-8222-222222222222',
+    role:'USER',status:'ACTIVE'};
+  for(const value of ['0','1','']){
+    const url='https://app.example.test/me/jobs?scan_step='+value;
+    await assert.rejects(
+      ()=>handleAuthenticatedRoute(new Request(url),{APP_ENV:'dev'},context),
+      error=>error.status===400&&error.message==='SCAN_STEP_UNSUPPORTED',
+    );
+  }
 });

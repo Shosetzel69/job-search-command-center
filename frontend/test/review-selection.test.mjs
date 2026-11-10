@@ -40,3 +40,10 @@ test('review rows still honor freshness and subset work-mode filters', () => {
     ['fresh-remote','old-remote','stale-new-low-fit'],
   );
 });
+
+test('QF-05 behavioral review membership is invariant under quality flags',()=>{
+ const filters={freshness:24,workModes:['Remote','Hybrid']};
+ const original=reviewRowsForFilters(jobs,filters,ageHours,80).map(j=>j.id);
+ const flagged=jobs.map((j,i)=>({...j,data_quality_issues:i%2?['INVALID_LOCATION']:[]}));
+ assert.deepEqual(reviewRowsForFilters(flagged,filters,ageHours,80).map(j=>j.id),original);
+});

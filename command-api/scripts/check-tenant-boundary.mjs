@@ -10,6 +10,7 @@ const PERSONAL_TABLES = [
   'profile_preferences',
   'profile_job_state',
   'profile_job_evaluation',
+  'profile_job_count_snapshots',
   'applications',
   'profile_notes',
   'profile_ui_preferences',
@@ -17,6 +18,7 @@ const PERSONAL_TABLES = [
 
 const PERSONAL_SQL_ALLOWED = new Set([
   'multiuser-repository.js',
+  'evaluation-advance.js',
   'db/tenant-gateway.js',
   'db/privilege-readiness.js',
   'db/cross-tenant-reference-guard.js',

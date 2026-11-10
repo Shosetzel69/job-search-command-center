@@ -164,6 +164,43 @@ async function resolveActiveSearchProfileTx(tx) {
   });
 }
 
+/**
+ * Read preferences and their profile version in ONE SQL statement/snapshot.
+ * A request must never combine preferences from before a criteria save with
+ * a profile_version obtained after that save (Stage A S-01).
+ */
+export async function resolveEvaluationBasisTx(tx) {
+  const result = await tx.query(
+    `SELECT sp.search_profile_id, sp.candidate_profile_id, sp.status,
+            sp.profile_version, sp.onboarding_state, sp.created_at, sp.updated_at,
+            spp.preferences AS personal_preferences, cp.policy AS system_policy
+       FROM search_profile sp
+       LEFT JOIN search_profile_preferences spp
+         ON spp.tenant_id=sp.tenant_id AND spp.search_profile_id=sp.search_profile_id
+       CROSS JOIN collection_policy cp
+      WHERE sp.tenant_id=$1 AND sp.status='ACTIVE' AND cp.singleton=true
+      ORDER BY sp.created_at, sp.search_profile_id`,
+    [tx.tenantId],
+  );
+  if (result.rows.length !== 1) {
+    throw httpError('Exactly one active Search Profile and collection policy are required', 503);
+  }
+  const row = result.rows[0];
+  await assertCandidateProfileReferenceTx(tx, tx.tenantId, row.candidate_profile_id);
+  return Object.freeze({
+    foundation:Object.freeze({
+      search_profile_id:String(row.search_profile_id),
+      candidate_profile_id:String(row.candidate_profile_id),
+      profile_version:Number(row.profile_version),
+      status:String(row.status),
+      onboarding_state:String(row.onboarding_state),
+      created_at:row.created_at,
+      updated_at:row.updated_at,
+    }),
+    preferences:mergeEffectiveConfig(row.personal_preferences || {}, row.system_policy || {}),
+  });
+}
+
 async function ensureSearchProfileFoundationTx(tx, tenantId) {
   const tenant = requireUuid(tenantId, 'tenant_id');
   const candidateProfileId = deterministicTenantEntityUuid('candidate-profile', tenant);
@@ -865,8 +902,8 @@ export async function sharedCorpusRefreshState(
 }
 
 
-const JOB_PAGE_DEFAULT = 25;
-const JOB_PAGE_MAX = 100;
+const JOB_PAGE_DEFAULT = 20;
+const JOB_PAGE_MAX = 20;
 const JOB_CANDIDATE_WINDOW_MAX = 400;
 const JOB_PREFETCH_MAX = 50;
 
@@ -898,6 +935,16 @@ export function encodeJobCursor(row) {
   return Buffer.from(JSON.stringify({ v:2, sort_at:sortAt, job_id:jobId, as_of:anchor }), 'utf8').toString('base64url');
 }
 
+export function encodeFitCursor(offset, anchor, sort = 'desc', fingerprint = null) {
+  if (!Number.isSafeInteger(offset) || offset < 0) throw httpError('Invalid FIT cursor offset', 400);
+  if (typeof fingerprint !== 'string' || !/^[a-f0-9]{32}$/.test(fingerprint)) {
+    throw httpError('FIT cursor requires versioned population fingerprint', 400);
+  }
+  const asOf = anchor instanceof Date ? anchor.toISOString() : String(anchor);
+  return Buffer.from(JSON.stringify({v:4,sort:sort === 'asc' ? 'fit-asc' : 'fit-desc',
+    offset,as_of:asOf,fingerprint}), 'utf8').toString('base64url');
+}
+
 export function decodeJobCursor(raw) {
   if (!raw) return null;
   try {
@@ -905,6 +952,13 @@ export function decodeJobCursor(raw) {
     const date = new Date(parsed?.sort_at);
     const jobId = String(parsed?.job_id || '');
     const anchor = new Date(parsed?.as_of);
+    if (parsed?.v === 4 && ['fit-desc','fit-asc'].includes(parsed?.sort)
+      && Number.isSafeInteger(parsed?.offset) && parsed.offset >= 0
+      && /^[a-f0-9]{32}$/.test(String(parsed.fingerprint || ''))
+      && !Number.isNaN(anchor.getTime())) {
+      return Object.freeze({fit_offset:parsed.offset,fit_sort:parsed.sort === 'fit-asc' ? 'asc' : 'desc',
+        as_of:anchor.toISOString(),fit_fingerprint:parsed.fingerprint});
+    }
     if (parsed?.v !== 2 || Number.isNaN(date.getTime()) || Number.isNaN(anchor.getTime())
       || !/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(jobId)) throw new Error('stale');
     return Object.freeze({ sort_at:date.toISOString(), job_id:jobId, as_of:anchor.toISOString() });
@@ -922,6 +976,14 @@ export function normalizeJobSearchQuery(input = {}) {
   const minFit = source.min_fit == null || source.min_fit === ''
     ? null
     : boundedInteger(source.min_fit, null, 0, 100, 'min_fit');
+  if (Object.hasOwn(source,'scan_step')) throw httpError('SCAN_STEP_UNSUPPORTED',400);
+  const sortFit=source.sort_fit == null || source.sort_fit === '' ? null : String(source.sort_fit).trim();
+  if (sortFit!==null && !['asc','desc'].includes(sortFit)) throw httpError('Invalid sort_fit',400);
+  const b2b=source.b2b == null || source.b2b === '' ? null : String(source.b2b).toLowerCase();
+  if (b2b!==null && !['true','false'].includes(b2b)) throw httpError('Invalid b2b',400);
+  const eligibility=source.eligibility == null || source.eligibility === '' ? null : String(source.eligibility).toUpperCase();
+  if (eligibility!==null && !['ELIGIBLE','INELIGIBLE','UNKNOWN'].includes(eligibility))
+    throw httpError('Invalid eligibility',400);
   const includeArchived = source.include_archived === true || String(source.include_archived || '').toLowerCase() === 'true';
   const prefetch = boundedInteger(
     source.prefetch,
@@ -934,6 +996,9 @@ export function normalizeJobSearchQuery(input = {}) {
     limit,
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
+    sort_fit:sortFit,
+    b2b:b2b===null?null:b2b==='true',
+    eligibility,
     role_family:listValues(source.role_family).map(x => x.toUpperCase()),
     role_subfamily:listValues(source.role_subfamily),
     work_mode:listValues(source.work_mode).map(x => x.toLowerCase()),
@@ -952,48 +1017,89 @@ function evaluationCacheValid(row, foundation) {
     && String(row.cached_fit_algorithm_version || '') === FIT_ALGORITHM_VERSION;
 }
 
-async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
-  await tx.query(
-    `INSERT INTO profile_job_evaluation(
-        tenant_id, search_profile_id, job_id,
-        eligibility_state, eligibility_reason_code, eligible,
-        score, pros, risks, exclusion_reason,
-        profile_version, job_version, fit_algorithm_version,
-        evaluation_version, evaluated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15)
-      ON CONFLICT(tenant_id, search_profile_id, job_id)
-      DO UPDATE SET
-        eligibility_state=EXCLUDED.eligibility_state,
-        eligibility_reason_code=EXCLUDED.eligibility_reason_code,
-        eligible=EXCLUDED.eligible,
-        score=EXCLUDED.score,
-        pros=EXCLUDED.pros,
-        risks=EXCLUDED.risks,
-        exclusion_reason=EXCLUDED.exclusion_reason,
-        profile_version=EXCLUDED.profile_version,
-        job_version=EXCLUDED.job_version,
-        fit_algorithm_version=EXCLUDED.fit_algorithm_version,
-        evaluation_version=EXCLUDED.evaluation_version,
-        evaluated_at=EXCLUDED.evaluated_at`,
-    [
-      tx.tenantId,
-      foundation.search_profile_id,
-      String(row.job_id),
-      evaluation.eligibilityState,
-      evaluation.eligibilityReasonCode || null,
-      evaluation.eligible,
-      evaluation.score,
-      JSON.stringify(evaluation.pros || []),
-      JSON.stringify(evaluation.risks || []),
-      evaluation.exclusionReason || null,
-      foundation.profile_version,
-      Number(row.job_version),
-      FIT_ALGORITHM_VERSION,
-      FIT_ALGORITHM_VERSION,
-      now,
-    ],
+// Ordered known algorithm revisions. Unknown existing versions are protected.
+const FIT_ALGORITHM_ORDER = Object.freeze(['fit-v1']);
+if (!FIT_ALGORITHM_ORDER.includes(FIT_ALGORITHM_VERSION)) throw new Error('Unranked FIT version');
+
+
+/**
+ * Nile tenant routing requires an INSERT VALUES tenant parameter, not an
+ * INSERT SELECT projection (native SQL 0A000). The associated SQL snapshot,
+ * post-write basis checks and transaction rollback enforce the R4 currentness
+ * invariant without allowing stale committed evaluations.
+ * R4-03 variation requires independent review before release.
+ */
+export async function persistEvaluationBatchTx(tx, foundation, entries) {
+  if (!entries.length) return new Set();
+  const params=[tx.tenantId, foundation.search_profile_id, foundation.profile_version,
+    FIT_ALGORITHM_VERSION, FIT_ALGORITHM_ORDER];
+  const tuples=entries.map(({row,evaluation})=>{
+    const start=params.length+1;
+    params.push(String(row.job_id),evaluation.eligibilityState,
+      evaluation.eligibilityReasonCode||null,Boolean(evaluation.eligible),
+      evaluation.score??null,JSON.stringify(evaluation.pros||[]),
+      JSON.stringify(evaluation.risks||[]),evaluation.exclusionReason||null,
+      Number(row.job_version));
+    const p=Array.from({length:9},(_,i)=>'$'+(start+i));
+    return `($1,$2,${p[0]}::uuid,${p[1]}::text,${p[2]}::text,${p[3]}::boolean,
+      ${p[4]}::integer,${p[5]}::jsonb,${p[6]}::jsonb,${p[7]}::text,
+      $3::bigint,${p[8]}::bigint,$4::text,$4::text,now())`;
+  });
+  const sql=`INSERT INTO profile_job_evaluation(
+      tenant_id,search_profile_id,job_id,
+      eligibility_state,eligibility_reason_code,eligible,score,pros,risks,
+      exclusion_reason,profile_version,job_version,fit_algorithm_version,
+      evaluation_version,evaluated_at
+    ) VALUES ${tuples.join(',')}
+    ON CONFLICT (tenant_id,search_profile_id,job_id)
+    DO UPDATE SET
+      eligibility_state=EXCLUDED.eligibility_state,
+      eligibility_reason_code=EXCLUDED.eligibility_reason_code,
+      eligible=EXCLUDED.eligible,
+      score=EXCLUDED.score,
+      pros=EXCLUDED.pros,risks=EXCLUDED.risks,
+      exclusion_reason=EXCLUDED.exclusion_reason,
+      profile_version=EXCLUDED.profile_version,
+      job_version=EXCLUDED.job_version,
+      fit_algorithm_version=EXCLUDED.fit_algorithm_version,
+      evaluation_version=EXCLUDED.evaluation_version,
+      evaluated_at=EXCLUDED.evaluated_at
+    WHERE EXCLUDED.profile_version >= profile_job_evaluation.profile_version
+      AND EXCLUDED.job_version >= profile_job_evaluation.job_version
+      AND array_position($5::text[],profile_job_evaluation.fit_algorithm_version) IS NOT NULL
+      AND array_position($5::text[],EXCLUDED.fit_algorithm_version) >=
+          array_position($5::text[],profile_job_evaluation.fit_algorithm_version)
+    RETURNING job_id`;
+  const result=await tx.query(sql,params);
+
+  // Reconfirm the actual basis before transaction commit; if any version changed
+  // since the evaluator snapshot, rollback the entire batch (including INSERT).
+  const latest=await tx.query(
+    `SELECT profile_version FROM search_profile
+      WHERE tenant_id=$1 AND search_profile_id=$2 AND status='ACTIVE'`,
+    [tx.tenantId,foundation.search_profile_id],
   );
+  if(latest.rows?.length!==1 ||
+    Number(latest.rows[0].profile_version)!==Number(foundation.profile_version)){
+    throw httpError('STALE_BASIS: profile changed during evaluation',409);
+  }
+  const latestJobs=await tx.query(
+    'SELECT job_id,job_version FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
+    [entries.map(({row})=>String(row.job_id))],
+  );
+  const observed=new Map((latestJobs.rows||[]).map(row=>
+    [String(row.job_id),Number(row.job_version)]));
+  for(const {row} of entries){
+    if(observed.get(String(row.job_id))!==Number(row.job_version)){
+      throw httpError('STALE_BASIS: job changed during evaluation',409);
+    }
+  }
+  return new Set((result.rows||[]).map(row=>String(row.job_id)));
+}
+
+async function persistEvaluationTx(tx, foundation, row, evaluation) {
+  const written = await persistEvaluationBatchTx(tx, foundation, [{row,evaluation}]);
+  return written.has(String(row.job_id));
 }
 
 function cachedEvaluation(row) {
@@ -1010,7 +1116,7 @@ function cachedEvaluation(row) {
 
 export async function listProfileJobs(
   authContext,
-  preferences,
+  _requestPreferences,
   nomenclatures,
   query = {},
   env = process.env,
@@ -1021,7 +1127,7 @@ export async function listProfileJobs(
   if (!Number.isFinite(anchor.getTime())) throw httpError('STALE_CURSOR', 400);
 
   return withTenantTransaction(authContext, async tx => {
-    const foundation = await resolveActiveSearchProfileTx(tx);
+    const {foundation, preferences} = await resolveEvaluationBasisTx(tx);
     const params = [tx.tenantId, anchor, foundation.search_profile_id];
     const where = [
       `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`,
@@ -1087,7 +1193,9 @@ export async function listProfileJobs(
       const p = add(spec.freshness_hours);
       where.push(`COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) >= $2 - (${p}::integer * interval '1 hour')`);
     }
-    if (spec.cursor) {
+    const aggregateWhere = [...where];
+    const aggregateParams = [...params];
+    if (spec.cursor?.sort_at) {
       const at = add(spec.cursor.sort_at);
       const id = add(spec.cursor.job_id);
       where.push(`(
@@ -1105,8 +1213,7 @@ export async function listProfileJobs(
     );
     const limitParam = add(candidateLimit);
 
-    const rowsResult = await tx.query(
-      `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
+    const candidateSql = `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
               j.role_family, j.role_subfamily, j.seniority, j.contract_type,
               j.remote_scope, j.job_version, j.classification_status,
               j.classification_confidence, j.classification_version,
@@ -1196,9 +1303,10 @@ export async function listProfileJobs(
            ON eval.tenant_id = $1
           AND eval.search_profile_id = $3
           AND eval.job_id = j.job_id
-        WHERE ${where.join('\n          AND ')}
-        ORDER BY COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) DESC, j.job_id ASC
-        LIMIT ${limitParam}::integer`,
+        WHERE ${where.join('\n          AND ')}`;
+    const candidateOrderSql = ' ORDER BY sort_at DESC, job_id ASC';
+    const rowsResult = await tx.query(
+      `SELECT * FROM (${candidateSql}) candidates${candidateOrderSql} LIMIT ${limitParam}::integer`,
       params,
     );
 
@@ -1221,7 +1329,8 @@ export async function listProfileJobs(
       }
       evaluationsComputed += 1;
       const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
-      await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
+      const persisted=await persistEvaluationTx(tx, foundation, row, evaluation);
+      if(!persisted) throw httpError('STALE_BASIS: evaluation was not persisted',409);
       return { evaluation, job:evaluation.job };
     };
 
@@ -1229,12 +1338,15 @@ export async function listProfileJobs(
       const resolved = await resolveRow(rows[index]);
       inspected += 1;
       pageEndIndex = index;
+      // Apply view-only eligibility/B2B filters AFTER actual current-basis evaluation.
+      if (spec.eligibility && resolved.evaluation.eligibilityState !== spec.eligibility) continue;
       if (!resolved.evaluation.eligible) {
         excluded += 1;
         continue;
       }
+      if (spec.b2b !== null && Boolean(resolved.job?.b2b) !== spec.b2b) continue;
       if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
-      jobs.push(resolved.job);
+      if (jobs.length < spec.limit) jobs.push(resolved.job);
       if (jobs.length >= spec.limit) break;
     }
 
@@ -1246,6 +1358,96 @@ export async function listProfileJobs(
       }
     }
 
+    // Counts cover the full matching DB population, never only this page.
+    const fullScopeSql = candidateSql.replace(
+      `WHERE ${where.join('\n          AND ')}`,
+      `WHERE ${aggregateWhere.join('\n          AND ')}`,
+    );
+    const algorithmParam = '$' + (aggregateParams.length + 1);
+    const thresholdParam = '$' + (aggregateParams.length + 2);
+    const versionParam = '$' + (aggregateParams.length + 3);
+    const minimumParam = '$' + (aggregateParams.length + 4);
+    const countResult = await tx.query(`SELECT
+      COUNT(*) FILTER (WHERE cached_profile_version IS DISTINCT FROM ${versionParam}
+        OR cached_job_version IS DISTINCT FROM job_version
+        OR cached_fit_algorithm_version IS DISTINCT FROM ${algorithmParam})::integer AS pending,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer))::integer AS total,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND cached_score >= ${thresholdParam} AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer))::integer AS high,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer) AND lower(work_mode) = 'remote')::integer AS remote,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer) AND repost_of_posting_id IS NOT NULL)::integer AS reposts,
+      COUNT(*) FILTER (WHERE cached_eligible IS TRUE AND (${minimumParam}::integer IS NULL OR cached_score >= ${minimumParam}::integer) AND sort_at >= $2::timestamptz - interval '24 hours')::integer AS jobs
+      FROM (${fullScopeSql}) full_scope`,
+      [...aggregateParams, FIT_ALGORITHM_VERSION, Number(preferences.fit_threshold ?? 80), foundation.profile_version, spec.min_fit]);
+    const c = countResult.rows[0];
+    const aggregateCounts = Number(c.pending) === 0
+      ? {status:'COMPLETE',scope:'profile_filtered',totals:{all:Number(c.total),
+          high:Number(c.high),remote:Number(c.remote),reposts:Number(c.reposts),jobs:Number(c.jobs)}}
+      : {status:'INCOMPLETE',scope:'profile_filtered',totals:null,remaining:Number(c.pending)};
+    // Serve globally FIT-ordered pages only when every candidate has a current
+    // persisted evaluation. Never silently claim global order for partial cache.
+    // The global ranking query has no SQL predicate equivalent to the runtime
+    // materialized B2B/eligibility filters. Do not falsely report GLOBAL_VERIFIED.
+    if (spec.sort_fit && aggregateCounts.status === 'COMPLETE'
+      && spec.b2b === null && spec.eligibility === null) {
+      if (spec.cursor?.fit_sort && spec.cursor.fit_sort !== spec.sort_fit)
+        throw httpError('STALE_CURSOR: FIT sort changed',400);
+      if (spec.cursor?.sort_at) throw httpError('STALE_CURSOR: restart FIT pagination', 400);
+      const fitOffset = spec.cursor?.fit_offset || 0;
+      const base = aggregateParams.length;
+      // Exact population fingerprint over the ranked set. A changed job,
+      // score, membership or order invalidates every subsequent OFFSET cursor.
+      // Deliberately fail closed rather than returning skipped/duplicated jobs.
+      const signature = await tx.query(
+        `SELECT md5(COALESCE(string_agg(
+             concat_ws(':',job_id::text,job_version::text,
+               cached_profile_version::text,cached_job_version::text,
+               cached_score::text,sort_at::text),
+             ',' ORDER BY cached_score ${spec.sort_fit === 'asc' ? 'ASC' : 'DESC'} NULLS LAST,
+                        sort_at DESC,job_id ASC),'')) AS fingerprint
+           FROM (${fullScopeSql}) ranked
+          WHERE cached_eligible IS TRUE
+            AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)`,
+        [...aggregateParams,spec.min_fit],
+      );
+      const populationFingerprint = String(signature.rows?.[0]?.fingerprint || '');
+      if (!/^[a-f0-9]{32}$/.test(populationFingerprint)) {
+        throw httpError('FIT population fingerprint unavailable',503);
+      }
+      if (spec.cursor?.fit_offset != null &&
+          spec.cursor.fit_fingerprint !== populationFingerprint) {
+        throw httpError('STALE_CURSOR: FIT population changed',400);
+      }
+      const ranked = await tx.query(
+        `SELECT * FROM (${fullScopeSql}) ranked
+          WHERE cached_eligible IS TRUE AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)
+          ORDER BY cached_score ${spec.sort_fit === 'asc' ? 'ASC' : 'DESC'} NULLS LAST, sort_at DESC, job_id ASC
+          LIMIT $${base + 2}::integer OFFSET $${base + 3}::integer`,
+        [...aggregateParams, spec.min_fit, spec.limit, fitOffset],
+      );
+      const rankedJobs = ranked.rows.map(row =>
+        materializeCachedJob(row, cachedEvaluation(row), preferences, anchor));
+      const matchedTotal = spec.min_fit == null
+        ? aggregateCounts.totals.all
+        : Number((await tx.query(
+            `SELECT COUNT(*)::integer AS total FROM (${fullScopeSql}) ranked
+              WHERE cached_eligible IS TRUE AND ($${base + 1}::integer IS NULL OR cached_score >= $${base + 1}::integer)`,
+            [...aggregateParams,spec.min_fit],
+          )).rows[0].total);
+      return {
+        schema_version:'2.0',generated_at:anchor.toISOString(),
+        search_profile_id:foundation.search_profile_id,profile_version:foundation.profile_version,
+        fit_algorithm_version:FIT_ALGORITHM_VERSION,bounded:true,limit:spec.limit,
+        next_cursor:fitOffset + rankedJobs.length < matchedTotal
+          ? encodeFitCursor(fitOffset + rankedJobs.length,anchor,spec.sort_fit,populationFingerprint) : null,
+        freshness_hours:Number(preferences.freshness_hours ?? 24),
+        criteria:{fit_threshold:Number(preferences.fit_threshold ?? 80)},
+        records_inspected:ranked.rows.length,candidate_window:ranked.rows.length,
+        excluded_count:0,cache_hits:ranked.rows.length,evaluations_computed:0,prefetched:0,
+        results:rankedJobs.length,aggregate_counts:aggregateCounts,
+        fit_order_status:'GLOBAL_VERIFIED',jobs:rankedJobs,
+      };
+    }
+    if (spec.cursor?.fit_offset != null) throw httpError('STALE_CURSOR: FIT evaluation incomplete',400);
     const exhaustedWindow = rows.length < candidateLimit;
     const cursorRow = pageEndIndex >= 0 ? rows[pageEndIndex] : null;
     const hasMore = Boolean(cursorRow)
@@ -1271,6 +1473,7 @@ export async function listProfileJobs(
       evaluations_computed:evaluationsComputed,
       prefetched,
       results:jobs.length,
+      aggregate_counts:aggregateCounts,
       jobs,
     };
   }, { env, db });

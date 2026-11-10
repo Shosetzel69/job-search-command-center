@@ -1,3 +1,4 @@
+import { qualityIssueCodes } from '../../shared/job-data-quality.mjs';
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
 import { canonicalPostedDate, postedAgeHours } from './posted-date.mjs';
@@ -197,11 +198,13 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   const url = row.canonical_url || payload.final_url || payload.source_url || payload.url || null;
   const modeLabel = workMode === 'remote' ? 'Remote' : workMode === 'hybrid' ? 'Hybrid' : workMode === 'onsite' ? 'Onsite' : 'N/A';
 
+  // UNKNOWN is not a scored eligible match; never invent its FIT.
+  const verifiedScore = eligibility.state === 'UNKNOWN' ? null : score;
   return {
     eligible:true,
     eligibilityState:eligibility.state,
     eligibilityReasonCode:eligibility.reason_code,
-    score,
+    score:verifiedScore,
     pros:pros.slice(0, 2),
     risks:risks.slice(0, 2),
     exclusionReason:null,
@@ -210,7 +213,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       title,
       company,
       initial:company.split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase() || '?',
-      fit:score,
+      fit:verifiedScore,
       location:row.location || payload.location || payload.short_location || 'Nespecificat',
       countries,
       country_codes:countryCodes,
@@ -223,9 +226,10 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       remote,
       b2b:['contract','freelance'].includes(type) || /contract|freelance|b2b/i.test(text),
       repost,
-      status:score >= threshold ? 'new' : 'review',
+      status:verifiedScore != null && verifiedScore >= threshold ? 'new' : 'review',
       pros:pros.slice(0,2),
       risks:risks.slice(0,2),
+    data_quality_issues:qualityIssueCodes({ ...payload, location:row.location || payload.location || payload.short_location }),
       url,
       description,
       date_posted:posted,
@@ -282,6 +286,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     status:score != null && score >= threshold ? 'new' : 'review',
     pros:pros.slice(0,2),
     risks:risks.slice(0,2),
+    data_quality_issues:qualityIssueCodes({ ...payload, location:row.location || payload.location || payload.short_location }),
     url,
     description,
     date_posted:posted,

@@ -1,3 +1,14 @@
+export const JOBS_PAGE_SIZE = 20;
+
+export function pageBounds(page, total, pageSize = JOBS_PAGE_SIZE) {
+  const safeTotal = Number.isInteger(total) && total >= 0 ? total : null;
+  const pageCount = safeTotal === null ? null : Math.max(1, Math.ceil(safeTotal / pageSize));
+  const current = Math.max(1, Number.isInteger(page) ? page : 1);
+  const resolvedPage = pageCount === null ? current : Math.min(current, pageCount);
+  return { page:resolvedPage, pageCount,
+    canPrevious: resolvedPage > 1, canNext: pageCount === null ? null : resolvedPage < pageCount };
+}
+
 const MODE_CODE = Object.freeze({ Remote:'remote', Hybrid:'hybrid', Onsite:'onsite' });
 
 export function isSearchProfileConfigured(criteria = {}) {
@@ -10,12 +21,14 @@ export function isSearchProfileConfigured(criteria = {}) {
   return role && geography && workMode && contract;
 }
 
-export function buildJobsPath({ filters = {}, cursor = null, limit = 25, prefetch = 25 } = {}) {
+export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_SIZE, prefetch = JOBS_PAGE_SIZE } = {}) {
   const params = new URLSearchParams();
-  params.set('limit', String(limit));
+  params.set('limit', String(Math.min(JOBS_PAGE_SIZE, Math.max(1, Number(limit) || JOBS_PAGE_SIZE))));
   params.set('prefetch', String(prefetch));
   const q = String(filters.search || '').trim();
   if (q) params.set('q', q.slice(0, 200));
+  if (filters.sort === 'fit-desc') params.set('sort_fit','desc');
+  if (filters.sort === 'fit-asc') params.set('sort_fit','asc');
   const freshness = Number(filters.freshness);
   if (Number.isInteger(freshness) && freshness > 0) params.set('freshness_hours', String(freshness));
   const modes = Array.isArray(filters.workModes) ? filters.workModes : [];
