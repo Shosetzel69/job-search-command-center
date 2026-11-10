@@ -2,7 +2,7 @@
 substitutions:
   _GIT_SHA: ""
   _TRUSTED_REF: ""
-  _MANAGER_BASE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb"
+  _MANAGER_BASE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-cap100@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb"
   _MANAGER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2"
 
 steps:
@@ -44,7 +44,7 @@ steps:
       - -ceu
       - |
         [[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]
-        [[ "${_MANAGER_BASE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb" ]]
+        [[ "${_MANAGER_BASE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-cap100@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb" ]]
         [[ "${_MANAGER_IMAGE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2" ]]
         gcloud artifacts docker images describe "${_MANAGER_BASE}" --project=jscc-shared >/dev/null
         immutable="$$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
