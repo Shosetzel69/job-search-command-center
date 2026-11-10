@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
-import {evaluateJobGeometry} from './ux515-geometry.mjs';
+import {captureJobGeometry, evaluateJobGeometry} from './ux515-geometry.mjs';
 
 const main = await readFile(new URL('../src/main.jsx', import.meta.url), 'utf8');
 const box = (left, top, width, height) => ({
@@ -105,4 +105,144 @@ test('D515-01/D515-03 use named, expandable and keyboard-operable controls', () 
   assert.match(filters, /aria-expanded=\{mobileOpen\}/);
   assert.match(filters, /id="jscc-mobile-filters"/);
   assert.match(filters, /aria-label="Inchide filtrele" title="Inchide filtrele"/);
+});
+
+
+// F614-01: exercise captureJobGeometry against a DOM-shaped tree, not just
+// author-constructed geometry snapshots. A closed <details> can expose a
+// positive rect for its hidden content in Chrome, despite checkVisibility=false.
+function overflowDomFixture(width, {nativeCheck = true, open = false, archiveVisible = true} = {}) {
+  const left = width >= 768 ? 278 : 12;
+  const right = width - 24;
+  const calls = [];
+  let archive;
+  const node = (tagName, bounds, attributes = {}) => {
+    const element = {
+      tagName, _bounds: bounds, attributes, children: [], parentElement: null,
+      getBoundingClientRect() { return this._bounds; },
+      getAttribute(name) { return this.attributes[name] ?? null; },
+      contains(target) {
+        for (let ancestor = target; ancestor; ancestor = ancestor.parentElement) {
+          if (ancestor === this) return true;
+        }
+        return false;
+      },
+    };
+    if (nativeCheck) {
+      element.checkVisibility = function (options) {
+        calls.push({node: this, options});
+        return this !== archive || archiveVisible;
+      };
+    }
+    return element;
+  };
+  const table = node('DIV', box(left, 90, right - left, 250));
+  const row = node('ARTICLE', box(left, 100, right - left, 180));
+  const role = node('BUTTON', box(left + 12, 110, right - left - 24, 52));
+  const actions = node('DIV', box(left + 12, 180, 176, 44));
+  const details = node('DETAILS', box(left + 104, 180, 56, 44));
+  details.open = open;
+  const summary = node('SUMMARY', box(left + 112, 182, 44, 40), {
+    'aria-label': 'Mai multe actiuni', title: 'Mai multe actiuni',
+  });
+  const popup = node('DIV', box(right + 45, 170, 162, 60));
+  archive = node('BUTTON', box(right + 50, 182, 162, 40));
+  const review = node('BUTTON', box(left + 16, 182, 44, 40), {
+    'aria-label': 'Review job', title: 'Review job',
+  });
+  const apply = node('A', box(left + 64, 182, 44, 40), {
+    'aria-label': 'Aplica la job', title: 'Aplica la job',
+  });
+
+  row.parentElement = table;
+  role.parentElement = row;
+  actions.parentElement = row;
+  review.parentElement = actions;
+  apply.parentElement = actions;
+  details.parentElement = actions;
+  summary.parentElement = details;
+  popup.parentElement = details;
+  archive.parentElement = popup;
+  details.children = [summary, popup];
+  popup.children = [archive];
+  actions.children = [review, apply, details];
+  row.children = [role, actions];
+  table.children = [row];
+
+  table.querySelectorAll = selector => selector === '[data-testid="job-row"]' ? [row] : [];
+  row.querySelector = selector => ({
+    '[data-testid="job-role"]': role,
+    '[data-testid="job-published"]': null,
+    '[data-testid="job-actions"]': null,
+    '[data-testid="job-card-actions"]': actions,
+  })[selector] ?? null;
+  // Deliberately include the closed-menu Archive control in selector results.
+  // The capture function, not the fixture, must exclude it.
+  actions.querySelectorAll = selector =>
+    selector === 'button,a,summary' ? [review, apply, summary, archive] : [];
+
+  const doc = {
+    defaultView: {
+      innerWidth: width,
+      getComputedStyle: () => ({
+        display: 'block', visibility: 'visible',
+        contentVisibility: 'visible', opacity: '1',
+      }),
+    },
+    querySelector: selector => selector === '[data-testid="job-table"]' ? table : null,
+  };
+  return {doc, details, summary, archive, review, calls, left, right};
+}
+
+test('F614-01: closed overflow excludes hidden Archive on real DOM capture at card widths', () => {
+  for (const width of [375, 390, 768, 1024]) {
+    const {doc, calls} = overflowDomFixture(width);
+    const snapshot = captureJobGeometry(doc);
+    const controls = snapshot.rows[0].controls;
+    assert.equal(controls.length, 3, 'review, apply and visible summary only');
+    assert.equal(controls[2].label, 'Mai multe actiuni');
+    assert.equal(evaluateJobGeometry(snapshot, {minRows: 1}).pass, true, 'width ' + width);
+    assert.ok(calls.some(call => call.options.checkOpacity && call.options.checkVisibilityCSS));
+  }
+});
+
+test('F614-01: closed-details fallback works without native checkVisibility', () => {
+  const {doc} = overflowDomFixture(390, {nativeCheck: false});
+  const snapshot = captureJobGeometry(doc);
+  assert.deepEqual(snapshot.rows[0].controls.map(control => control.label), [
+    'Review job', 'Aplica la job', 'Mai multe actiuni',
+  ]);
+  assert.equal(evaluateJobGeometry(snapshot, {minRows: 1}).pass, true);
+});
+
+test('F614-01: native checkVisibility excludes hidden content when menu is open', () => {
+  const {doc, calls} = overflowDomFixture(375, {open: true, archiveVisible: false});
+  const snapshot = captureJobGeometry(doc);
+  assert.equal(snapshot.rows[0].controls.length, 3);
+  assert.ok(calls.some(call => call.node.tagName === 'BUTTON'
+    && call.options.checkOpacity === true && call.options.checkVisibilityCSS === true));
+});
+
+test('F614-01: genuinely visible Archive remains checked for label and clipping', () => {
+  const {doc, archive, left, details} = overflowDomFixture(768, {open: true});
+  assert.equal(details.open, true);
+  const failures = evaluateJobGeometry(captureJobGeometry(doc), {minRows: 1}).failures.join('\n');
+  assert.match(failures, /action 4 missing accessible name\/title/);
+  assert.match(failures, /action 4 clipped\/off-screen/);
+
+  archive.attributes['aria-label'] = 'Arhiveaza job';
+  archive.attributes.title = 'Arhiveaza job';
+  archive._bounds = box(left + 115, 182, 44, 40);
+  const valid = captureJobGeometry(doc);
+  assert.equal(valid.rows[0].controls.length, 4);
+  assert.equal(evaluateJobGeometry(valid, {minRows: 1}).pass, true);
+});
+
+test('F614-01: closed-menu exclusion does not conceal missing labels on visible controls', () => {
+  const {doc, review, summary} = overflowDomFixture(1024, {nativeCheck: false});
+  review.attributes['aria-label'] = '';
+  summary.attributes.title = '';
+  const failures = evaluateJobGeometry(captureJobGeometry(doc), {minRows: 1}).failures.join('\n');
+  assert.match(failures, /action 1 missing accessible name\/title/);
+  assert.match(failures, /action 3 missing accessible name\/title/);
 });
