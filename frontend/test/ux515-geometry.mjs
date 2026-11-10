@@ -9,12 +9,29 @@ const rect = r => r && ({
   top: Number(r.top), bottom: Number(r.bottom),
   width: Number(r.width), height: Number(r.height),
 });
+// Closed <details> keeps its first <summary> visible, but hides other
+// descendants. Hidden controls can still have nonzero bounding rectangles.
+const hiddenByClosedDetails = node => {
+  for (let ancestor = node.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    if (ancestor.tagName !== 'DETAILS' || ancestor.open) continue;
+    const summary = Array.from(ancestor.children).find(child => child.tagName === 'SUMMARY');
+    if (!summary || (node !== summary && !summary.contains(node))) return true;
+  }
+  return false;
+};
 const visible = (node, win) => {
-  if (!node) return false;
+  if (!node || hiddenByClosedDetails(node)) return false;
+  // checkVisibility includes content-visibility, display and visibility on
+  // ancestors; the explicit <details> guard also covers older browsers.
+  if (typeof node.checkVisibility === 'function'
+      && !node.checkVisibility({checkOpacity: true, checkVisibilityCSS: true})) {
+    return false;
+  }
   const box = node.getBoundingClientRect();
   const css = win.getComputedStyle(node);
   return box.width > 0 && box.height > 0
-    && css.display !== 'none' && css.visibility !== 'hidden';
+    && css.display !== 'none' && css.visibility !== 'hidden'
+    && css.contentVisibility !== 'hidden' && css.opacity !== '0';
 };
 const overlap = (a, b, tolerance = 1) =>
   a && b && Math.min(a.right, b.right) - Math.max(a.left, b.left) > tolerance
