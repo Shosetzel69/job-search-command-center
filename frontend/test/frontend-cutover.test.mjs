@@ -18,8 +18,10 @@ test('ATC-489-06 frontend uses canonical profile APIs instead of legacy job/run 
 test('profile jobs are bounded and paginated in the UI', () => {
   assert.match(main, /nextCursor/);
   assert.match(main, /loadMoreJobs/);
-  assert.match(main, /Incarca mai multe/);
-  assert.match(main, /rezultate de profil incarcate/);
+  assert.match(main, /Navigare pagini joburi/);
+  assert.match(main, /Anterioara/);
+  assert.match(main, /Urmatoarea/);
+  assert.match(main, /rezultate pe pagina/);
 });
 
 test('new profiles receive onboarding without forced Retrieve', () => {
