@@ -1,6 +1,5 @@
 const DEFAULT_REPOSITORY = "Shosetzel69/job-search-command-center";
 const MAX_REQUEST_BYTES = 64 * 1024;
-const ENVIRONMENT_DEPLOY_WORKFLOW = "deploy-environment.yml";
 const textEncoder = new TextEncoder();
 
 class BridgeError extends Error {
@@ -267,92 +266,6 @@ function validateCreateIssue(payload) {
   };
 }
 
-function validateEnvironmentDeploy(payload) {
-  const allowed = new Set(["environment", "source_sha", "issue_pr", "dev_evidence_run_id"]);
-  for (const key of Object.keys(payload)) {
-    if (!allowed.has(key)) throw new BridgeError(400, "invalid_request", `Unsupported field: ${key}`);
-  }
-
-  if (payload.environment !== "dev" && payload.environment !== "test") {
-    throw new BridgeError(400, "invalid_request", "environment must be dev or test");
-  }
-  if (typeof payload.source_sha !== "string" || !/^[0-9a-fA-F]{40}$/.test(payload.source_sha)) {
-    throw new BridgeError(400, "invalid_request", "source_sha must be a full 40-character commit SHA");
-  }
-
-  const issuePr = payload.issue_pr === undefined ? undefined : String(payload.issue_pr).trim();
-  const devEvidenceRunId = payload.dev_evidence_run_id === undefined ? undefined : String(payload.dev_evidence_run_id).trim();
-
-  if (payload.environment === "dev") {
-    if (!issuePr || issuePr.length > 256) {
-      throw new BridgeError(400, "invalid_request", "DEV deploy requires issue_pr up to 256 characters");
-    }
-    if (devEvidenceRunId !== undefined) {
-      throw new BridgeError(400, "invalid_request", "DEV deploy must not provide dev_evidence_run_id");
-    }
-  } else {
-    if (!devEvidenceRunId || !/^\d+$/.test(devEvidenceRunId)) {
-      throw new BridgeError(400, "invalid_request", "TEST deploy requires numeric dev_evidence_run_id");
-    }
-  }
-
-  return {
-    workflow: ENVIRONMENT_DEPLOY_WORKFLOW,
-    ref: "main",
-    environment: payload.environment,
-    source_sha: payload.source_sha.toLowerCase(),
-    inputs: {
-      action: "deploy",
-      environment: payload.environment,
-      source_sha: payload.source_sha.toLowerCase(),
-      dry_run: false,
-      ...(issuePr ? { issue_pr: issuePr } : {}),
-      ...(devEvidenceRunId ? { dev_evidence_run_id: devEvidenceRunId } : {}),
-    },
-  };
-}
-
-async function githubEnvironmentDeployRequest(actor, deployment, env, deps) {
-  const repository = env.GITHUB_REPOSITORY || DEFAULT_REPOSITORY;
-  if (repository !== DEFAULT_REPOSITORY) {
-    throw new BridgeError(503, "bridge_not_configured", "Repository allowlist configuration is invalid");
-  }
-
-  const token = await installationToken(actor, deps);
-  const response = await deps.fetchImpl(
-    `https://api.github.com/repos/${DEFAULT_REPOSITORY}/actions/workflows/${ENVIRONMENT_DEPLOY_WORKFLOW}/dispatches`,
-    {
-      method: "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        accept: "application/vnd.github+json",
-        "x-github-api-version": "2022-11-28",
-        "user-agent": actor.userAgent,
-        "content-type": "application/json",
-      },
-      body: JSON.stringify({ ref: deployment.ref, inputs: deployment.inputs }),
-    },
-  );
-
-  if (!response.ok) {
-    let payload = null;
-    try {
-      payload = await response.json();
-    } catch {
-      payload = null;
-    }
-    const message = typeof payload?.message === "string" ? payload.message : "GitHub workflow dispatch failed";
-    throw new BridgeError(response.status, "github_api_error", message);
-  }
-
-  return {
-    workflow: ENVIRONMENT_DEPLOY_WORKFLOW,
-    ref: deployment.ref,
-    environment: deployment.environment,
-    source_sha: deployment.source_sha,
-  };
-}
-
 function validateUpdateIssue(payload) {
   const allowed = new Set(["title", "body", "state", "labels"]);
   for (const key of Object.keys(payload)) {
@@ -448,19 +361,12 @@ export async function handleRequest(request, env, customDeps = {}) {
 
     if (url.pathname === "/v1/actions/environment-deploy" && request.method === "POST") {
       operation = "dispatch_environment_deploy";
-      target = ENVIRONMENT_DEPLOY_WORKFLOW;
-      const deployment = validateEnvironmentDeploy(await readJson(request));
-      const result = await githubEnvironmentDeployRequest(actor, deployment, env, deps);
-      audit(deps.logger, {
-        correlation_id: correlation,
-        actor: actor.actor,
-        operation,
-        target,
-        environment: result.environment,
-        source_sha: result.source_sha,
-        status: 202,
-      });
-      return jsonResponse({ actor: actor.actor, ...result, correlation_id: correlation }, 202);
+      target = "gcp-promotion";
+      throw new BridgeError(
+        410,
+        "environment_deploy_retired",
+        "AI environment deployment dispatch is retired; use the approved GCP promotion path.",
+      );
     }
 
     if (url.pathname === "/v1/issues" && request.method === "POST") {

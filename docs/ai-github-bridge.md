@@ -28,8 +28,9 @@ Nu exista runtime local obligatoriu, PAT personal sau proxy GitHub generic.
 - `GET /health` - public;
 - `GET /v1/issues/{number}` - autentificat;
 - `POST /v1/issues` - autentificat;
-- `PATCH /v1/issues/{number}` - autentificat;
-- `POST /v1/actions/environment-deploy` - dispatch strict allowlisted pentru DEV/TEST.
+- `PATCH /v1/issues/{number}` - autentificat.
+
+Endpoint-ul istoric `POST /v1/actions/environment-deploy` este retras prin #501 si raspunde fail-closed; nu mai efectueaza GitHub Actions dispatch.
 
 REST foloseste bearer credentials separate pentru ChatGPT si Claude.
 
@@ -47,10 +48,9 @@ Tools operationale:
 - `read_file`;
 - `get_issue`;
 - `create_issue`;
-- `update_issue`;
-- `dispatch_environment_deploy`.
+- `update_issue`.
 
-Nu exista write pe files/branches/PR prin MCP in scope-ul curent. `dispatch_environment_deploy` nu este proxy Actions generic: repository-ul, workflow-ul `deploy-environment.yml`, ref-ul `main`, actiunea `deploy` si `dry_run=false` sunt fixate server-side. Sunt acceptate numai mediile `dev|test`; PROD este respins de bridge.
+Nu exista write pe files/branches/PR si nu exista deployment dispatch prin MCP in scope-ul curent.
 
 ## Repository
 
@@ -70,8 +70,6 @@ REST:
 Remote MCP Claude este autorizat prin OAuth, iar operatiile GitHub sunt hard-bound server-side la GitHub App Claude. Actorul nu este selectat din payload-ul MCP.
 
 Bridge-ul genereaza server-side JWT-ul GitHub App si installation token-ul short-lived.
-
-Pentru #204, GitHub Apps care folosesc dispatch-ul trebuie sa aiba permisiunea repository **Actions: Read and write**. Fara aceasta permisiune GitHub raspunde 403; bridge-ul nu incearca fallback cu alt credential.
 
 ## Implementare MCP -> GitHub
 
@@ -124,37 +122,17 @@ Private keys, bridge tokens si owner access code nu se copiaza in repo, issue, l
 - KV binding: `OAUTH_KV`;
 - secret owner OAuth: `MCP_OWNER_ACCESS_CODE`.
 
-## Release workflow dispatch #204
+## Deployment dispatch retirement #501
 
-The bridge extension remains available for future direct client integrations:
+Capabilitatea de deployment dispatch introdusa istoric prin #204 este retrasa.
 
-```text
-POST /v1/actions/environment-deploy
-MCP Claude: dispatch_environment_deploy
-```
+- REST `/v1/actions/environment-deploy` nu mai dispatch-uieste GitHub Actions si raspunde fail-closed;
+- tool-ul MCP `dispatch_environment_deploy` a fost eliminat;
+- comment trigger-ul `/jscc-deploy` a fost eliminat din allowlist;
+- `/jscc-search test ...` si `/jscc-validate dev ...` raman singurele comenzi owner allowlisted in workflow-ul AI;
+- deployment-ul si promovarea environment-urilor folosesc control-plane-ul GCP aprobat, nu bridge-ul AI.
 
-It remains hard-bound to DEV/TEST and cannot dispatch PROD.
-
-For the current ChatGPT operational path, no bridge/plugin refresh is required. The preferred trigger is GitHub-native:
-
-```text
-ChatGPT
-  -> owner-authored GitHub issue comment
-  -> AI release dispatch workflow
-  -> workflow_dispatch deploy-environment.yml
-  -> canonical #198 DEV/TEST evidence
-```
-
-Commands:
-
-```text
-/jscc-deploy dev <40-char CANDIDATE_SHA>
-/jscc-deploy test <40-char CANDIDATE_SHA> <DEV_EVIDENCE_RUN_ID>
-/jscc-search test <40-char CANDIDATE_SHA>
-/jscc-validate dev <40-char CANDIDATE_SHA> <comma-separated-source-ids>
-```
-
-The comment trigger is restricted to GitHub actor `Shosetzel69`, uses only the repository `GITHUB_TOKEN`, and cannot select PROD, another repository, another ref, or workflows outside the fixed allowlist (`deploy-environment.yml`, `test-full-search.yml`, `dev-source-validation.yml`). The search command can target TEST only and passes the exact immutable `source_sha` with `owner_gate=APPROVED` to the existing controlled TEST workflow. The validation command can target DEV only, accepts 1..20 canonical source IDs, fixes `confirm_validation=VALIDATE`, and dispatches only the existing read-only source-cohort validation workflow. The bridge implementation is therefore retained as an optional future integration rather than a prerequisite for ChatGPT release operation.
+Aceasta separare elimina authority de deployment din bridge si pastreaza identitatile AI pentru operatii de engineering/governance strict allowlisted.
 
 ## Audit
 
@@ -181,7 +159,7 @@ Validarea live finala a fost efectuata prin Claude Web:
 6. `update_issue` + close #143 - PASS;
 7. titlul si label-urile #143 au ramas neschimbate - PASS.
 
-Validarea live finala #204 foloseste trigger-ul GitHub-native: un comentariu owner `/jscc-deploy dev ...`, urmat de verificarea run-ului `Environment automation` si a evidence artifact-ului pentru exact acel candidate SHA.
+Validarea #204 ramane istoric de implementare. Din #501, `/jscc-deploy` si deployment dispatch prin bridge sunt retrase; deployment-ul curent foloseste control-plane-ul GCP aprobat.
 
 ## Reguli de lucru
 
