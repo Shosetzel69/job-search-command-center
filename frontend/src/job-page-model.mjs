@@ -40,6 +40,14 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_S
   return '/me/jobs?' + params.toString();
 }
 
+// Any filter or view change invalidates cursor history, including GUI-only filters.
+export function pageRequestKey({filters = {}, view = 'jobs', kpiFilter = 'all'} = {}) {
+  return JSON.stringify({
+    path:buildJobsPath({filters}),
+    view, quick:filters.quick || 'all', sort:filters.sort || 'date', kpiFilter,
+  });
+}
+
 export function validateJobsPage(payload) {
   if (payload?.schema_version !== '2.0' || payload?.bounded !== true || !Array.isArray(payload?.jobs)) {
     throw new Error('me/jobs: invalid bounded profile-job contract');
