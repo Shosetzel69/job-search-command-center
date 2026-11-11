@@ -256,6 +256,44 @@ jobs:
             else
               echo 'R11_PRE_SQL_DIAGNOSTIC_ERROR' >&2
             fi
+            if [ -f "$RUNNER_TEMP/r11-diagnostic-ids" ] &&
+               grep -Fxq 'D06_NO_MOUNTS' "$RUNNER_TEMP/r11-diagnostic-ids"; then
+              if ! jq -r --slurpfile img "$RUNNER_TEMP/nile-image.json" '
+                ($img[0][0].Config.Volumes // {}) as $volumes |
+                .[0] as $c |
+                ($c.HostConfig.Mounts // []) as $requested |
+                ($c.HostConfig.Binds // []) as $binds |
+                ($c.Mounts // [])[] |
+                .Destination as $destination |
+                (if .Type == "volume" or .Type == "bind" or .Type == "tmpfs"
+                 then .Type else "unknown" end) as $type |
+                (if ($destination | type) == "string" and
+                    ($destination | test("^/[A-Za-z0-9_./-]{1,159}$")) and
+                    (($destination | ascii_downcase |
+                      test("secret|credential|password|token|private|key")) | not)
+                 then $destination else "REDACTED" end) as $safe_destination |
+                (if (
+                    any($requested[];
+                      (.Target // .Destination // "") == $destination
+                    ) or
+                    any($binds[];
+                      (if type == "string" then
+                        (split(":") | length) >= 2 and
+                        (split(":")[1] == $destination)
+                       else false end)
+                    )
+                 )
+                 then "HOST_REQUESTED"
+                 elif ($volumes | has($destination))
+                 then "IMAGE_DECLARED"
+                 else "UNKNOWN" end) as $origin |
+                "R12_D06_MOUNT type=\($type) destination=\($safe_destination) origin=\($origin)"
+              ' "$RUNNER_TEMP/nile-inspect.json" > "$RUNNER_TEMP/r12-mount-metadata" 2>/dev/null; then
+                echo 'R12_D06_METADATA_ERROR' >&2
+              else
+                cat "$RUNNER_TEMP/r12-mount-metadata" >&2
+              fi
+            fi
             echo 'R11_PRE_SQL_ADMISSION=FAIL' >&2
             exit 1
           fi
