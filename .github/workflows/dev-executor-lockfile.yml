@@ -1,0 +1,41 @@
+name: Generate DEV Executor npm lockfile
+on:
+  push:
+    branches: [dev/537-executor-lockfile]
+    paths:
+      - '.github/workflows/dev-executor-lockfile.yml'
+      - 'ops/package.json'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  lockfile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: true
+          ref: dev/537-executor-lockfile
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: '22'
+      - name: Generate lockfile using npm registry
+        run: npm --prefix ops install --package-lock-only --ignore-scripts --no-audit --no-fund
+      - name: Verify deterministic installation
+        run: |
+          npm --prefix ops ci --ignore-scripts --no-audit --no-fund
+          npm --prefix ops run check
+          npm --prefix ops test
+      - name: Publish only the verified lockfile to isolated branch
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = 'dev/537-executor-lockfile'
+          test -s ops/package-lock.json
+          git add -- ops/package-lock.json
+          test "$(git diff --cached --name-only)" = 'ops/package-lock.json'
+          git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' commit -m 'build(dev-executor): add validated npm dependency lockfile'
+          git push origin HEAD:refs/heads/dev/537-executor-lockfile
+          sha256sum ops/package-lock.json
