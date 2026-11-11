@@ -1,3 +1,15 @@
+export const JOBS_PAGE_SIZE = 20;
+
+// The API owns the dataset and cursor. Never infer a global total from a page.
+export function pageBounds(page, total, pageSize = JOBS_PAGE_SIZE) {
+  const safeTotal = Number.isInteger(total) && total >= 0 ? total : null;
+  const count = safeTotal === null ? null : Math.max(1, Math.ceil(safeTotal / pageSize));
+  const current = Math.max(1, Number.isInteger(page) ? page : 1);
+  const resolved = count === null ? current : Math.min(current, count);
+  return { page:resolved, pageCount:count, canPrevious:resolved > 1,
+    canNext:count === null ? null : resolved < count };
+}
+
 const MODE_CODE = Object.freeze({ Remote:'remote', Hybrid:'hybrid', Onsite:'onsite' });
 
 export function isSearchProfileConfigured(criteria = {}) {
@@ -10,10 +22,12 @@ export function isSearchProfileConfigured(criteria = {}) {
   return role && geography && workMode && contract;
 }
 
-export function buildJobsPath({ filters = {}, cursor = null, limit = 25, prefetch = 25 } = {}) {
+export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_SIZE, prefetch = JOBS_PAGE_SIZE } = {}) {
   const params = new URLSearchParams();
-  params.set('limit', String(limit));
-  params.set('prefetch', String(prefetch));
+  const boundedLimit = Math.min(JOBS_PAGE_SIZE, Math.max(1, Number.isFinite(Number(limit)) ? Math.trunc(Number(limit)) : JOBS_PAGE_SIZE));
+  const boundedPrefetch = Math.min(JOBS_PAGE_SIZE, Math.max(0, Number.isFinite(Number(prefetch)) ? Math.trunc(Number(prefetch)) : JOBS_PAGE_SIZE));
+  params.set('limit', String(boundedLimit));
+  params.set('prefetch', String(boundedPrefetch));
   const q = String(filters.search || '').trim();
   if (q) params.set('q', q.slice(0, 200));
   const freshness = Number(filters.freshness);
