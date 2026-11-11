@@ -53,8 +53,10 @@ test('mobile details are full-screen and list scroll is restored on close', () =
 });
 
 test('bounded jobs pagination remains the only mobile list loading path', () => {
-  assert.match(main, /buildJobsPath\(\{filters:filterState,cursor,limit:25,prefetch:25\}\)/);
-  assert.match(main, /mergeJobPages/);
+  assert.match(main, /buildJobsPath\(\{filters:filterState,cursor,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE\}\)/);
+  assert.match(main, /pageCursorHistory/);
+  assert.match(main, /onPrevious=\{previousJobsPage\}/);
+  assert.match(main, /onNext=\{loadMoreJobs\}/);
 });
 
 test('PASS promotion state is compact while non-PASS states retain checklist', () => {
