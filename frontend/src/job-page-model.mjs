@@ -53,6 +53,14 @@ export function needsPageReload({page = 1, loadedServerPath = '', nextServerPath
   return page !== 1 || !loadedServerPath || loadedServerPath !== nextServerPath;
 }
 
+// Ignore outdated navigation without leaving the current page permanently loading.
+export function ignorePageResponse({requestSerial, currentSerial, append, navigationContext, currentContext}, setPage) {
+  if (requestSerial !== currentSerial) return true;
+  if (!append || navigationContext === currentContext) return false;
+  setPage(current => ({...current, loading:false, loadingMore:false}));
+  return true;
+}
+
 export function validateJobsPage(payload) {
   if (payload?.schema_version !== '2.0' || payload?.bounded !== true || !Array.isArray(payload?.jobs)) {
     throw new Error('me/jobs: invalid bounded profile-job contract');
