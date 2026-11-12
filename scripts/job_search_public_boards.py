@@ -5,6 +5,7 @@ canonical filtering/FIT engine. It never bypasses login, CAPTCHA, robots or payw
 """
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 import json
 import re
 import time
@@ -869,7 +870,7 @@ def _luxoft_details(html, link, *, now=None):
     )
 
 
-def _luxoft(url, max_details=30, max_seconds=30, diagnostics=None):
+def _luxoft(url, max_details=60, max_seconds=35, diagnostics=None):
     status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
     if status != 200:
         raise RuntimeError(f"Luxoft jobs page HTTP {status}")
@@ -879,25 +880,30 @@ def _luxoft(url, max_details=30, max_seconds=30, diagnostics=None):
     if not links.links:
         raise ValueError("Luxoft jobs listing contains no valid detail links")
     deadline = time.monotonic() + max_seconds
-    client = PublicClient(deadline)
-    records = {}
-    rejected = 0
-    for href in links.links[:max_details]:
-        if time.monotonic() >= deadline:
-            break
+
+    def read_detail(href):
         link = urljoin(url, href)
         if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "career.luxoft.com":
-            rejected += 1
-            continue
+            return None
         try:
-            final_url, html = client.get(link)
-            record = _luxoft_details(html, final_url)
-            records[record["id"]] = record
+            # Independent transport per worker; no shared mutable client state.
+            final_url, html = PublicClient(deadline).get(link)
+            return _luxoft_details(html, final_url)
         except (ValueError, json.JSONDecodeError, FetchError, OSError):
-            rejected += 1
+            return None
+
+    records = {}
+    rejected = 0
+    # Bounded to three first-party workers. All requests retain robots/TLS checks.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        for record in pool.map(read_detail, links.links[:max_details]):
+            if record is None:
+                rejected += 1
+            else:
+                records[record["id"]] = record
     if diagnostics is not None:
         diagnostics["invalid_postings"] = rejected
-        diagnostics["unprocessed_postings"] = len(links.links) - len(records) - rejected
+        diagnostics["unprocessed_postings"] = max(0, len(links.links) - max_details)
     if not records:
         raise ValueError("Luxoft jobs listing has no verified, fully parsed details")
     return list(records.values())
