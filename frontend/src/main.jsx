@@ -472,10 +472,11 @@ function App(){
     if(!append){pageCursorHistory.current=[null];setPageNumber(1);}
     const requestSerial=++pageRequestSerialRef.current;
     const path=buildJobsPath({filters:filterState,cursor,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE});
+    const navigationContext=append?pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current}):null;
     setJobPage(current=>({...current,loading:!append,loadingMore:append}));
     try{
       const payload=validateJobsPage(await fetchJson(path,token));
-      if(requestSerial!==pageRequestSerialRef.current)return {ignored:true};
+      if(requestSerial!==pageRequestSerialRef.current || (append&&navigationContext!==pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})))return {ignored:true};
       const normalized=(payload.jobs||[]).map(normalizeJob);
       // Navigation replaces the visible page; append would exceed the 20-row UI contract.
       setJobs(normalized);
@@ -484,7 +485,7 @@ function App(){
       if(!append){jobQueryRef.current=pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current});serverQueryRef.current=buildJobsPath({filters:filterState});}
       return payload;
     }catch(error){
-      if(requestSerial!==pageRequestSerialRef.current)return {ignored:true};
+      if(requestSerial!==pageRequestSerialRef.current || (append&&navigationContext!==pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})))return {ignored:true};
       if(append && error.status===400 && /^STALE_CURSOR/.test(error.message||'')){
         // One restart on stale cursor; never attempt another continuation with that cursor.
         const restarted=await loadJobsPage(token,criteria,filterState,{cursor:null,append:false});
