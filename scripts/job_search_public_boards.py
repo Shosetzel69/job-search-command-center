@@ -795,6 +795,114 @@ def _linked_job_board(url, provider, job_path):
     return list(records.values())
 
 
+
+class _LuxoftJobPosting(HTMLParser):
+    """Read first-party JobPosting JSON-LD, not social-sharing or page chrome."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.active = False
+        self.parts = []
+        self.scripts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script" and dict(attrs).get("type", "").lower() == "application/ld+json":
+            self.active = True
+            self.parts = []
+
+    def handle_data(self, data):
+        if self.active:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self.active:
+            self.scripts.append("".join(self.parts))
+            self.active = False
+
+
+def _luxoft_details(html, link, *, now=None):
+    if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "career.luxoft.com":
+        raise ValueError("Luxoft detail URL must stay on the first-party HTTPS host")
+    parser = _LuxoftJobPosting()
+    parser.feed(html)
+    postings = []
+    for text in parser.scripts:
+        candidate = json.loads(text)
+        values = candidate if isinstance(candidate, list) else [candidate]
+        for value in values:
+            if isinstance(value, dict) and value.get("@type") == "JobPosting":
+                postings.append(value)
+    if len(postings) != 1:
+        raise ValueError("Luxoft detail must contain exactly one JobPosting")
+    posting = postings[0]
+    title = plain_text(posting.get("title"))
+    description = plain_text(posting.get("description"))
+    # A listing snippet or a share widget is never an acceptable description.
+    if not title or len(description) < 150:
+        raise ValueError("Luxoft job has incomplete title or description")
+    address = (posting.get("jobLocation") or {}).get("address") or {}
+    if not isinstance(address, dict):
+        raise ValueError("Luxoft job location is not a structured address")
+    city = plain_text(address.get("addressLocality"))
+    country_code = plain_text(address.get("addressCountry")).upper()
+    if len(country_code) != 2 or country_code not in engine.COUNTRY_NAMES or not city:
+        raise ValueError("Luxoft job location missing city or recognized country")
+    identity = link.rstrip("/").rsplit("/", 1)[-1]
+    if not re.search(r"-\\d+$", identity):
+        raise ValueError("Luxoft job has no stable public detail identity")
+    posted = None
+    value = str(posting.get("datePosted") or "").strip()
+    if re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}(?:[ T].*)?", value):
+        try:
+            parsed = datetime.strptime(value[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            if parsed <= (now or datetime.now(timezone.utc)):
+                posted = parsed.isoformat()
+        except ValueError:
+            pass
+    country = engine.COUNTRY_NAMES[country_code]
+    location = f"{city}, {country}"
+    remote = str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE"
+    employment = engine.list_values(posting.get("employmentType"))
+    return _record(
+        "Luxoft", identity, title, "Luxoft", description, link,
+        date_posted=posted, location=location, countries=[country],
+        remote=remote, employment_statuses=employment,
+    )
+
+
+def _luxoft(url, max_details=30, max_seconds=30, diagnostics=None):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Luxoft jobs page HTTP {status}")
+    links = _JobLinkCollector(r"/jobs/[^/?#]+-\\d+")
+    links.feed(body.decode("utf-8", errors="replace"))
+    links.close()
+    if not links.links:
+        raise ValueError("Luxoft jobs listing contains no valid detail links")
+    deadline = time.monotonic() + max_seconds
+    client = PublicClient(deadline)
+    records = {}
+    rejected = 0
+    for href in links.links[:max_details]:
+        if time.monotonic() >= deadline:
+            break
+        link = urljoin(url, href)
+        if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "career.luxoft.com":
+            rejected += 1
+            continue
+        try:
+            final_url, html = client.get(link)
+            record = _luxoft_details(html, final_url)
+            records[record["id"]] = record
+        except (ValueError, json.JSONDecodeError, FetchError, OSError):
+            rejected += 1
+    if diagnostics is not None:
+        diagnostics["invalid_postings"] = rejected
+        diagnostics["unprocessed_postings"] = len(links.links) - len(records) - rejected
+    if not records:
+        raise ValueError("Luxoft jobs listing has no verified, fully parsed details")
+    return list(records.values())
+
+
 def _bizneo_job_board(base_url, provider, max_pages=25):
     records = {}
     saw_first_page = False
@@ -3233,7 +3341,10 @@ def collect(source, config=None):
     elif kind == "bizneo":
         records = _bizneo_job_board(url, name)
     elif kind == "linked_jobs":
-        records = _linked_job_board(url, name, spec["job_path"])
+        if name == "Luxoft":
+            records = _luxoft(url, diagnostics=partial_diagnostics)
+        else:
+            records = _linked_job_board(url, name, spec["job_path"])
     elif kind == "squareone":
         records = _squareone(url)
     elif kind == "prohuman":
@@ -3278,7 +3389,7 @@ def collect(source, config=None):
             }[kind]
             records = parser(payload)
     result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
-    invalid = partial_diagnostics.get("invalid_postings", 0)
+    invalid = partial_diagnostics.get("invalid_postings", 0) + partial_diagnostics.get("unprocessed_postings", 0)
     if invalid:
         result.append(engine.CollectionResult(
             "public_board", kind, False, [], 0,
