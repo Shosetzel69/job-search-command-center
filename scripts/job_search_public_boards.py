@@ -789,8 +789,7 @@ def _linked_job_board(url, provider, job_path):
         if (provider == "GitHub" and
                 "There are currently no jobs that match your search criteria" in
                     body.decode("utf-8", errors="replace") and
-                re.search(r"\\b0\\s+(?:results|of\\s+0)\\b",
-                          body.decode("utf-8", errors="replace"), re.I)):
+                "0 results" in body.decode("utf-8", errors="replace").lower()):
             return []
         raise ValueError(f"{provider} jobs page contained no extractable job links")
     return list(records.values())
