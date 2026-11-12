@@ -24,6 +24,14 @@ test('profile jobs are bounded and paginated in the UI', () => {
   assert.match(main, /rezultate pe pagina/);
 });
 
+test('page-local filters never hide next/previous pagination on empty matches', () => {
+  assert.match(main, /Filtrele rapide, indicatoarele si sortarea FIT se aplica doar joburilor din pagina curenta/);
+  assert.match(main, /Nicio potrivire pe aceasta pagina/);
+  assert.match(main, /navigate?aza|navigheaza/);
+  assert.match(main, /paginate&&<nav aria-label="Navigare pagini joburi"/);
+  assert.doesNotMatch(main, /Incarca mai multe/);
+});
+
 test('new profiles receive onboarding without forced Retrieve', () => {
   assert.match(main, /OnboardingPanel/);
   assert.match(main, /nu porneste automat un Retrieve/);
