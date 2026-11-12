@@ -2379,9 +2379,91 @@ class _EpamJobs(HTMLParser):
         self._flush()
 
 
-def _epam(url, max_seconds=20):
+class _EpamNextData(HTMLParser):
+    """Read the first-party, server-rendered EPAM Next.js jobs listing."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_next_data = False
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script" and dict(attrs).get("id") == "__NEXT_DATA__":
+            self.in_next_data = True
+
+    def handle_data(self, data):
+        if self.in_next_data:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script":
+            self.in_next_data = False
+
+
+def _epam_embedded(html, base_url, diagnostics=None):
+    parser = _EpamNextData()
+    parser.feed(html)
+    if not parser.parts:
+        return None
+    payload = json.loads("".join(parser.parts))
+    props = (payload.get("props") or {}).get("pageProps") or {}
+    listing = props.get("jobs")
+    if not isinstance(listing, dict) or not isinstance(listing.get("jobs"), list):
+        raise ValueError("EPAM Next.js public listing missing jobs array")
+    jobs = listing["jobs"]
+    records = {}
+    rejected = 0
+    for raw in jobs:
+        if not isinstance(raw, dict):
+            rejected += 1
+            continue
+        if raw.get("is_hidden") is True or raw.get("is_expired") is True:
+            continue
+        title = str(raw.get("name") or "").strip()
+        identity = str(raw.get("unique_id") or raw.get("uid") or "").strip()
+        seo = raw.get("seo")
+        relative = seo.get("url") if isinstance(seo, dict) else ""
+        if not (title and identity and isinstance(relative, str)
+                and relative.startswith("/en/vacancy/")
+                and not relative.startswith("//")
+                and not any(ch in relative for ch in ("?", "#", "\\", "\r", "\n"))):
+            rejected += 1
+            continue
+        link = urljoin(base_url, relative)
+        if not link.startswith("https://careers.epam.com/en/vacancy/"):
+            rejected += 1
+            continue
+        countries = [
+            str(item.get("name") or "").strip()
+            for item in (raw.get("country") or [])
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        ] if isinstance(raw.get("country"), list) else []
+        city = str(raw.get("city") or "").strip()
+        remote = str(raw.get("vacancy_type") or "").casefold() == "remote"
+        description = plain_text(raw.get("description") or "")
+        if not description:
+            rejected += 1
+            continue
+        record = _record(
+            "EPAM", identity, title, "EPAM", description, link,
+            location=city, countries=countries, remote=remote,
+        )
+        records[record["id"]] = record
+    if diagnostics is not None:
+        diagnostics["invalid_postings"] = rejected
+    if not records and not (not jobs and listing.get("total") == 0):
+        raise ValueError("EPAM Next.js public listing had no valid extractable jobs")
+    return list(records.values())
+
+
+def _epam(url, max_seconds=20, diagnostics=None):
     deadline = time.monotonic() + max_seconds
     client = PublicClient(deadline)
+    final_url, html = client.get(url)
+    embedded = _epam_embedded(html, final_url, diagnostics)
+    if embedded is not None:
+        return embedded
+    # Keep the legacy rendered route only when the official server does not
+    # expose Next.js listing data. Browser safety/robots gates are unchanged.
     final_url, rendered_html, _meta = browser.render(url, deadline, client)
     parser = _EpamJobs()
     parser.feed(rendered_html)
@@ -3129,7 +3211,7 @@ def collect(source, config=None):
     elif kind == "softserve":
         records = _softserve(url)
     elif kind == "epam":
-        records = _epam(url)
+        records = _epam(url, diagnostics=partial_diagnostics)
     elif kind == "hirexa":
         records = _hirexa(url)
     elif kind == "rendered_links":
