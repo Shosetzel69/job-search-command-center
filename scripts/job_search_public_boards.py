@@ -940,11 +940,13 @@ def _stripe_details(html, link, *, now=None):
             continue
         city = plain_text(addr.get("addressLocality"))
         country_code = plain_text(addr.get("addressCountry")).upper()
-        if not city or country_code not in engine.COUNTRY_NAMES:
+        if not city or not re.fullmatch(r"[A-Z]{2}", country_code):
             continue
         if city not in cities:
             cities.append(city)
-        country = engine.COUNTRY_NAMES[country_code]
+        # Preserve source geography even when the target-country nomenclature
+        # excludes that country (for example Canada).
+        country = engine.COUNTRY_NAMES.get(country_code, {"CA": "Canada"}.get(country_code, country_code))
         if country not in countries:
             countries.append(country)
     if not cities or not countries:
