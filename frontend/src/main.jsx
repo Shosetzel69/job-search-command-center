@@ -10,7 +10,7 @@ import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
 import { runProgressModel } from './run-progress.mjs';
-import { JOBS_PAGE_SIZE, buildJobsPath, isSearchProfileConfigured, pageRequestKey, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
+import { JOBS_PAGE_SIZE, buildJobsPath, isSearchProfileConfigured, needsPageReload, pageRequestKey, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
 import { readUiState, writeUiState } from './ui-state.mjs';
 import { registerPwa } from './pwa.mjs';
 import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
@@ -440,7 +440,7 @@ function App(){
   const pageCursorHistory=useRef([null]),pageRequestSerialRef=useRef(0),pageNavigationPendingRef=useRef(false);
   const activeViewRef=useRef(view),activeKpiRef=useRef(kpiFilter);
   const[archivedKeys,setArchivedKeys]=useState([]);
-  const pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
+  const pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),serverQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
   const notify=useCallback((message,type='info')=>{const id=Date.now();setToast({id,message,type});window.setTimeout(()=>setToast(current=>current?.id===id?null:current),3500);},[]);
 
   useEffect(()=>{filtersRef.current=filters;activeViewRef.current=view;activeKpiRef.current=kpiFilter;},[filters,view,kpiFilter]);
@@ -462,7 +462,7 @@ function App(){
   useEffect(()=>{if(auth.status==='authenticated')rememberUi();},[auth.status,rememberUi]);
   useEffect(()=>{if(auth.status!=='authenticated')return undefined;const save=()=>rememberUi();window.addEventListener('pagehide',save);return()=>window.removeEventListener('pagehide',save);},[auth.status,rememberUi]);
 
-  const clearData=useCallback(()=>{pageRequestSerialRef.current++;pageCursorHistory.current=[null];pageNavigationPendingRef.current=false;setPageNumber(1);setJobs([]);setArchivedKeys([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';},[]);
+  const clearData=useCallback(()=>{pageRequestSerialRef.current++;pageCursorHistory.current=[null];pageNavigationPendingRef.current=false;setPageNumber(1);setJobs([]);setArchivedKeys([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';serverQueryRef.current='';},[]);
 
   const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false}={})=>{
     if(!isSearchProfileConfigured(criteria)){
@@ -481,7 +481,7 @@ function App(){
       setJobs(normalized);
       setArchivedKeys(current=>[...new Set([...current,...normalized.filter(job=>job.archivedAt).map(jobKey)])]);
       setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results??normalized.length)});
-      if(!append)jobQueryRef.current=pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current});
+      if(!append){jobQueryRef.current=pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current});serverQueryRef.current=buildJobsPath({filters:filterState});}
       return payload;
     }catch(error){
       if(requestSerial!==pageRequestSerialRef.current)return {ignored:true};
@@ -521,9 +521,14 @@ function App(){
     if(auth.status!=='authenticated'||dataState.status!=='ready'||!profileConfigured||!['jobs','review'].includes(view))return undefined;
     const key=pageRequestKey({filters,view,kpiFilter});
     if(key===jobQueryRef.current)return undefined;
+    // Don't trigger another lazy/cached evaluation for GUI-only filter changes on page 1.
+    const serverPath=buildJobsPath({filters});
+    if(!needsPageReload({page:pageNumber,loadedServerPath:serverQueryRef.current,nextServerPath:serverPath})){
+      jobQueryRef.current=key;return undefined;
+    }
     const timer=setTimeout(()=>loadJobsPage(auth.token,savedCriteria,filters).catch(error=>notify('Lista de joburi nu a putut fi actualizata: '+error.message,'error')),250);
     return()=>clearTimeout(timer);
-  },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),filters.quick,filters.sort,kpiFilter,savedCriteria,loadJobsPage,notify]);
+  },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),filters.quick,filters.sort,kpiFilter,pageNumber,savedCriteria,loadJobsPage,notify]);
 
   useEffect(()=>{if(dataState.status!=='ready'||restoredScrollRef.current)return;restoredScrollRef.current=true;requestAnimationFrame(()=>window.scrollTo({top:initialUi.scrollY||0,behavior:'auto'}));},[dataState.status,initialUi.scrollY]);
   useEffect(()=>{if(restoredJobRef.current||!initialUi.selectedJobId||!jobs.length)return;const found=jobs.find(job=>String(job.id)===String(initialUi.selectedJobId));if(found)setDetailJob(found);restoredJobRef.current=true;},[jobs,initialUi.selectedJobId]);
