@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, pageBounds, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
+import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, navigateJobPage, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
 
 test('canonical job query is bounded, profile-scoped and provider-free', () => {
   const path = buildJobsPath({
@@ -48,14 +48,6 @@ test('pagination is 20 per page without FIT ranking or provider requests', () =>
     assert.equal(url.searchParams.get('prefetch'),String(expectedPrefetch));
     assert.equal(url.searchParams.has('sort_fit'),false);
   }
-});
-
-test('pagination bounds are honest when global total is unknown', () => {
-  assert.deepEqual(pageBounds(1,41),{page:1,pageCount:3,canPrevious:false,canNext:true});
-  assert.deepEqual(pageBounds(3,41),{page:3,pageCount:3,canPrevious:true,canNext:false});
-  assert.deepEqual(pageBounds(99,41),{page:3,pageCount:3,canPrevious:true,canNext:false});
-  assert.deepEqual(pageBounds(1,null),{page:1,pageCount:null,canPrevious:false,canNext:null});
-  assert.equal(pageBounds(1,0).pageCount,1);
 });
 
 test('cursor context changes whenever visible filters, sort or view change', () => {
@@ -110,4 +102,78 @@ test('B1: ignored in-flight Next response restores idle pagination after page-1 
     navigationContext:context,currentContext:'review:all',
   },setPage),false);
   assert.equal(updates,3);
+});
+
+test('N5: Next, Previous and Next use stable cursor history, without appending', async () => {
+  let page=1,history=[null];
+  const requested=[];
+  const load=async cursor=>{requested.push(cursor);return {jobs:[{id:String(requested.length)}]};};
+  const next=async nextCursor=>{
+    const outcome=await navigateJobPage({direction:'next',page,history,nextCursor,load});
+    assert.equal(outcome.outcome,'loaded');
+    page=outcome.page;history=outcome.history;
+  };
+  const previous=async()=>{
+    const outcome=await navigateJobPage({direction:'previous',page,history,load});
+    assert.equal(outcome.outcome,'loaded');
+    page=outcome.page;history=outcome.history;
+  };
+  await next('after-20');
+  assert.equal(page,2);
+  assert.deepEqual(history,[null,'after-20']);
+  await next('after-40');
+  assert.equal(page,3);
+  assert.deepEqual(history,[null,'after-20','after-40']);
+  await previous();
+  assert.equal(page,2);
+  await previous();
+  assert.equal(page,1);
+  await next('after-20');
+  assert.equal(page,2);
+  assert.deepEqual(requested,['after-20','after-40','after-20',null,'after-20']);
+  assert.deepEqual(history,[null,'after-20','after-40']);
+});
+
+test('N5: expired, ignored, invalid and failed navigation do not commit a page change', async () => {
+  const state={page:2,history:[null,'cursor-20'],nextCursor:'cursor-40'};
+  for(const [response,expected] of [
+    [{restarted:true},'restarted'],
+    [{ignored:true},'ignored'],
+  ]){
+    const result=await navigateJobPage({
+      direction:'next',page:state.page,history:state.history,nextCursor:state.nextCursor,
+      load:async cursor=>{assert.equal(cursor,'cursor-40');return response;},
+    });
+    assert.deepEqual(result,{outcome:expected});
+    assert.deepEqual(state.history,[null,'cursor-20']);
+  }
+  const error=new Error('network failure');
+  await assert.rejects(()=>navigateJobPage({
+    direction:'previous',page:state.page,history:state.history,
+    load:async cursor=>{assert.equal(cursor,null);throw error;},
+  }),err=>err===error);
+  assert.deepEqual(await navigateJobPage({
+    direction:'previous',page:1,history:[null],load:async()=>{throw new Error('must not fetch');},
+  }),{outcome:'unavailable'});
+  assert.deepEqual(await navigateJobPage({
+    direction:'next',page:1,history:[null],nextCursor:null,load:async()=>{throw new Error('must not fetch');},
+  }),{outcome:'unavailable'});
+  assert.deepEqual(state.history,[null,'cursor-20']);
+});
+
+test('N5: context-ignored navigation settles loading without moving page', async () => {
+  let page={nextCursor:'next-1',loading:false,loadingMore:true,results:20};
+  const setPage=update=>{page=update(page);};
+  const result=await navigateJobPage({
+    direction:'next',page:1,history:[null],nextCursor:'next-1',
+    load:async()=>({
+      ignored:ignorePageResponse({
+        requestSerial:7,currentSerial:7,append:true,
+        navigationContext:'jobs:all',currentContext:'jobs:high-fit',
+      },setPage),
+    }),
+  });
+  assert.equal(result.outcome,'ignored');
+  assert.equal(page.loadingMore,false);
+  assert.equal(page.nextCursor,'next-1');
 });
