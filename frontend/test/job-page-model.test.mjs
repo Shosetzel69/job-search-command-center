@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { JOBS_PAGE_SIZE, buildJobsPath, pageBounds, pageRequestKey, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
+import { JOBS_PAGE_SIZE, buildJobsPath, pageBounds, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
 
 test('canonical job query is bounded, profile-scoped and provider-free', () => {
   const path = buildJobsPath({
@@ -69,4 +69,12 @@ test('cursor context changes whenever visible filters, sort or view change', () 
     {...baseline,filters:{...baseline.filters,search:'architect'}},
     {...baseline,filters:{...baseline.filters,freshness:48}},
   ]) assert.notEqual(pageRequestKey(modified),key);
+});
+
+test('GUI-only page-one filters never refetch the existing server result set', () => {
+  const serverPath=buildJobsPath({filters:{search:'project',freshness:24,workModes:['Remote']}});
+  assert.equal(needsPageReload({page:1,loadedServerPath:serverPath,nextServerPath:serverPath}),false);
+  assert.equal(needsPageReload({page:2,loadedServerPath:serverPath,nextServerPath:serverPath}),true);
+  assert.equal(needsPageReload({page:1,loadedServerPath:serverPath,nextServerPath:buildJobsPath({filters:{search:'architect'}})}),true);
+  assert.equal(needsPageReload({page:1,loadedServerPath:'',nextServerPath:serverPath}),true);
 });
