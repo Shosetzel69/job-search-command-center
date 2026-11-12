@@ -14,12 +14,12 @@ from email.utils import parsedate_to_datetime
 from html import unescape
 from html.entities import html5
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 import job_search as engine
 import web_browser as browser
-from web_transport import PublicClient
+from web_transport import PublicClient, FetchError
 
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
@@ -847,11 +847,11 @@ def _luxoft_details(html, link, *, now=None):
     if len(country_code) != 2 or country_code not in engine.COUNTRY_NAMES or not city:
         raise ValueError("Luxoft job location missing city or recognized country")
     identity = link.rstrip("/").rsplit("/", 1)[-1]
-    if not re.search(r"-\\d+$", identity):
+    if not re.search(r"-\d+$", identity):
         raise ValueError("Luxoft job has no stable public detail identity")
     posted = None
     value = str(posting.get("datePosted") or "").strip()
-    if re.fullmatch(r"\\d{4}-\\d{2}-\\d{2}(?:[ T].*)?", value):
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:[ T].*)?", value):
         try:
             parsed = datetime.strptime(value[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
             if parsed <= (now or datetime.now(timezone.utc)):
@@ -873,7 +873,7 @@ def _luxoft(url, max_details=30, max_seconds=30, diagnostics=None):
     status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
     if status != 200:
         raise RuntimeError(f"Luxoft jobs page HTTP {status}")
-    links = _JobLinkCollector(r"/jobs/[^/?#]+-\\d+")
+    links = _JobLinkCollector(r"/jobs/[^/?#]+-\d+")
     links.feed(body.decode("utf-8", errors="replace"))
     links.close()
     if not links.links:
