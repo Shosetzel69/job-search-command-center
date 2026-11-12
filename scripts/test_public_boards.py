@@ -491,6 +491,9 @@ class PublicBoardAdapterTests(unittest.TestCase):
           <div>Hybrid in Romania Data Delivery Management</div>
         </section>'''
         fake_client=Mock()
+        fake_client.get.return_value=(
+            "https://careers.epam.com/en/jobs/romania", "<html>no embedded data</html>"
+        )
         with patch.object(boards,"PublicClient",return_value=fake_client), \
              patch.object(boards.browser,"render",return_value=(
                  "https://careers.epam.com/en/jobs/romania",html,{"browser_status":"rendered"}
@@ -499,6 +502,51 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(len(rows),2)
         self.assertIn("Romania",rows[0]["countries"])
         self.assertTrue(any(row["remote"] for row in rows))
+
+    def test_epam_first_party_next_data_preserves_jobs_and_partial_diagnostics(self):
+        payload = {"props": {"pageProps": {"jobs": {"total": 3, "jobs": [
+            {"uid": "id-1", "unique_id": "epam-id1", "name": "Delivery Manager",
+             "seo": {"url": "/en/vacancy/delivery-manager-id1"},
+             "description": "<p>Lead global project delivery</p>",
+             "country": [{"name": "Romania"}], "vacancy_type": "Hybrid"},
+            {"uid": "id-2", "unique_id": "epam-id2", "name": "Wrong URL",
+             "seo": {"url": "https://untrusted.example/jobs/1"},
+             "description": "<p>Should be rejected</p>"},
+            {"uid": "id-3", "unique_id": "epam-id3", "name": "Hidden",
+             "seo": {"url": "/en/vacancy/hidden-id3"},
+             "description": "<p>Hidden role</p>", "is_hidden": True},
+        ]}}}}
+        html = '<script id="__NEXT_DATA__" type="application/json">' + boards.json.dumps(payload) + '</script>'
+        fake_client = Mock()
+        fake_client.get.return_value = ("https://careers.epam.com/en/jobs/romania", html)
+        with patch.object(boards, "PublicClient", return_value=fake_client):
+            with patch.object(boards.browser, "render") as browser_render:
+                result = boards.collect({"name": "EPAM"})
+        browser_render.assert_not_called()
+        self.assertEqual(len(result), 2)
+        self.assertTrue(result[0].ok)
+        self.assertEqual(len(result[0].records), 1)
+        record = result[0].records[0]
+        self.assertEqual(record["job_title"], "Delivery Manager")
+        self.assertEqual(record["description"], "Lead global project delivery")
+        self.assertEqual(record["source_url"],
+                         "https://careers.epam.com/en/vacancy/delivery-manager-id1")
+        self.assertIn("Romania", record["countries"])
+        self.assertFalse(result[1].ok)
+        self.assertEqual(result[1].error_code, "SCHEMA_ERROR")
+
+    def test_epam_next_data_all_invalid_does_not_claim_empty_board(self):
+        payload = {"props": {"pageProps": {"jobs": {"total": 1, "jobs": [
+            {"name": "Invalid", "uid": "id-1",
+             "seo": {"url": "https://example.net/out"},
+             "description": "Description"},
+        ]}}}}
+        html = '<script id="__NEXT_DATA__">' + boards.json.dumps(payload) + '</script>'
+        fake_client = Mock()
+        fake_client.get.return_value = ("https://careers.epam.com/en/jobs/romania", html)
+        with patch.object(boards, "PublicClient", return_value=fake_client):
+            with self.assertRaisesRegex(ValueError, "no valid extractable jobs"):
+                boards.collect({"name": "EPAM"})
 
     def test_orange_softgarden_feed_normalizes_jobs(self):
         payload={
