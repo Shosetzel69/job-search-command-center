@@ -1553,6 +1553,52 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(result[0].records[0]["location"], "Bucharest, Romania")
         self.assertNotIn("Facebook", result[0].records[0]["description"])
 
+    def test_stripe_detail_uses_jsonld_full_description_and_city_array(self):
+        data = {"@type": "JobPosting", "title": "AI Engineer",
+                "description": "<article><h2>About the Team</h2><p>" + ("Build production AI systems and APIs. " * 9) + "</p></article>",
+                "datePosted": "2026-10-07T15:39:36.146Z",
+                "jobLocation": [
+                    {"address": {"addressLocality": "Toronto", "addressCountry": "CA"}},
+                    {"address": {"addressLocality": "Chicago", "addressCountry": "US"}},
+                ],
+                "employmentType": "FULL_TIME"}
+        url = "https://stripe.com/careers/listing/ai-engineer/8144196"
+        html = '<script type="application/ld+json">' + boards.json.dumps(data) + '</script>'
+        record = boards._stripe_details(html, url, now=boards.datetime(2026, 11, 12, tzinfo=boards.timezone.utc))
+        self.assertEqual(record["job_title"], "AI Engineer")
+        self.assertIn("Toronto", record["location"])
+        self.assertIn("Chicago", record["location"])
+        self.assertEqual(set(record["countries"]), {"Canada", "Statele Unite"})
+        self.assertGreater(len(record["description"]), 150)
+        self.assertNotIn("Solutions Architect Toronto", record["description"])
+        self.assertIsNotNone(record["date_posted"])
+
+    def test_stripe_detail_rejects_list_context_and_invalid_host(self):
+        link = "https://stripe.com/careers/listing/ai-engineer/8144196"
+        html = '<h1>AI Engineer</h1>Solutions Architect Toronto'
+        with self.assertRaises(ValueError):
+            boards._stripe_details(html, link)
+        with self.assertRaises(ValueError):
+            boards._stripe_details(html, "https://untrusted.example/careers/listing/ai-engineer/8144196")
+
+    def test_stripe_collector_fetches_listing_detail(self):
+        link = "/careers/listing/ai-engineer/8144196"
+        listing = f'<a href="{link}">AI Engineer</a> Solutions Architect Toronto'
+        data = {"@type": "JobPosting", "title": "AI Engineer",
+                "description": "<p>" + ("Implement real API and ML systems. " * 8) + "</p>",
+                "jobLocation": [{"address": {"addressLocality": "Toronto",
+                                              "addressCountry": "CA"}}]}
+        detail = '<script type="application/ld+json">' + boards.json.dumps(data) + '</script>'
+        fake_client = Mock()
+        fake_client.get.return_value = ("https://stripe.com" + link, detail)
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", listing.encode())):
+            with patch.object(boards, "PublicClient", return_value=fake_client):
+                result = boards.collect({"name": "Stripe"})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].records[0]["job_title"], "AI Engineer")
+        self.assertEqual(result[0].records[0]["location"], "Toronto")
+        self.assertNotIn("Solutions Architect Toronto", result[0].records[0]["description"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
