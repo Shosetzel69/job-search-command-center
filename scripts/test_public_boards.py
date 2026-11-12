@@ -1383,6 +1383,18 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(result.records[0]["remote"])
         self.assertTrue(boards.browser_required("Torre"))
 
+    def test_eu_careers_route_uses_current_selection_portal(self):
+        self.assertEqual(
+            boards.PUBLIC_BOARD_SOURCES["EU Careers / EPSO"]["url"],
+            "https://selection.eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast",
+        )
+
+    def test_torre_route_uses_first_party_parent_host_for_browser_scope(self):
+        from urllib.parse import urlsplit
+        url = boards.PUBLIC_BOARD_SOURCES["Torre"]["url"]
+        self.assertEqual(urlsplit(url).hostname, "torre.ai")
+        self.assertEqual(boards.browser._site_root(urlsplit(url).hostname), "torre.ai")
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
