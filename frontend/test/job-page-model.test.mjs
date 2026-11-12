@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { JOBS_PAGE_SIZE, buildJobsPath, pageBounds, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
+import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, pageBounds, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
 
 test('canonical job query is bounded, profile-scoped and provider-free', () => {
   const path = buildJobsPath({
@@ -77,4 +77,36 @@ test('GUI-only page-one filters never refetch the existing server result set', (
   assert.equal(needsPageReload({page:2,loadedServerPath:serverPath,nextServerPath:serverPath}),true);
   assert.equal(needsPageReload({page:1,loadedServerPath:serverPath,nextServerPath:buildJobsPath({filters:{search:'architect'}})}),true);
   assert.equal(needsPageReload({page:1,loadedServerPath:'',nextServerPath:serverPath}),true);
+});
+
+test('B1: ignored in-flight Next response restores idle pagination after page-1 GUI change', () => {
+  const context='jobs:all';
+  let page={nextCursor:'next-1',loading:false,loadingMore:true,results:20};
+  let updates=0;
+  const setPage=update => {page=update(page);updates++;};
+  for (const currentContext of ['jobs:high-fit','jobs:kpi-remote','review:all']) {
+    page={...page,loadingMore:true};
+    assert.equal(ignorePageResponse({
+      requestSerial:7,currentSerial:7,append:true,
+      navigationContext:context,currentContext,
+    },setPage),true);
+    assert.equal(page.loading,false);
+    assert.equal(page.loadingMore,false);
+    assert.equal(page.nextCursor,'next-1');
+  }
+  assert.equal(updates,3);
+  assert.equal(ignorePageResponse({
+    requestSerial:7,currentSerial:8,append:true,
+    navigationContext:context,currentContext:'review:all',
+  },setPage),true);
+  assert.equal(updates,3,'old request must not clear a newer request loading state');
+  assert.equal(ignorePageResponse({
+    requestSerial:8,currentSerial:8,append:true,
+    navigationContext:context,currentContext:context,
+  },setPage),false);
+  assert.equal(ignorePageResponse({
+    requestSerial:8,currentSerial:8,append:false,
+    navigationContext:context,currentContext:'review:all',
+  },setPage),false);
+  assert.equal(updates,3);
 });
