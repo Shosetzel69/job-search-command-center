@@ -99,4 +99,6 @@ Status classifications refer specifically to new SDQ-01 acceptance and do not re
 
 **Stop and return to owner / Architecture Gate** on: required shared connector interface break, different data authority/tenancy, DB schema change, new privileged service, new recurring cost, new privacy exposure, provider access bypass, or inability to preserve existing identity/lifecycle. For M5 writes: stop until explicit durable approval of exact dry-run plan and rollback.
 
+**Concurrent main delta observed 2026-11-13:** after this analysis branch was created, §main§ advanced by one unrelated frontend-only commit affecting §frontend/src/job-page-model.mjs§, §frontend/src/main.jsx§ and three existing frontend tests. This does **not** change the verified source/persistence findings, but main SHA and integration conflict status must be rechecked immediately before any ATC implementation or PR #617 reuse. The analysis branch itself remains documentation-only and intentionally does not merge/rebase a concurrent implementation.
+
 **No work performed:** no source code changed on `main`/PR #617, no tests or deploy executed as part of this Development Analysis, no data reads/writes of personal Nile rows.
