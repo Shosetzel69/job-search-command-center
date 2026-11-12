@@ -783,6 +783,15 @@ def _linked_job_board(url, provider, job_path):
         )
         records[record["id"]] = record
     if not records:
+        # The official GitHub careers board explicitly distinguishes zero open
+        # positions from an inaccessible or malformed response. Do not turn
+        # unknown/blocked pages into a false authoritative empty result.
+        if (provider == "GitHub" and
+                "There are currently no jobs that match your search criteria" in
+                    body.decode("utf-8", errors="replace") and
+                re.search(r"\\b0\\s+(?:results|of\\s+0)\\b",
+                          body.decode("utf-8", errors="replace"), re.I)):
+            return []
         raise ValueError(f"{provider} jobs page contained no extractable job links")
     return list(records.values())
 
