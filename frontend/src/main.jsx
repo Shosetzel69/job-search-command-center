@@ -10,7 +10,7 @@ import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
 import { runProgressModel } from './run-progress.mjs';
-import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, isSearchProfileConfigured, needsPageReload, pageRequestKey, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
+import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, isSearchProfileConfigured, navigateJobPage, needsPageReload, pageRequestKey, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
 import { readUiState, writeUiState } from './ui-state.mjs';
 import { registerPwa } from './pwa.mjs';
 import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
@@ -316,7 +316,7 @@ function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=f
       <span aria-live="polite">{loading?'Se actualizeaza lista...':paginate?rows.length+' rezultate pe pagina '+page:rows.length+' rezultate'}</span>
       {paginate&&<nav aria-label="Navigare pagini joburi" className="flex flex-wrap items-center gap-2">
         <button type="button" disabled={loading||loadingMore||page===1} onClick={onPrevious} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-700 disabled:opacity-50">Anterioara</button>
-        <span aria-live="polite">Pagina {page}</span>
+        <span>Pagina {page}</span>
         <button type="button" disabled={loading||loadingMore||!hasMore} onClick={onNext} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold text-slate-700 disabled:opacity-50">{loadingMore?'Se incarca...':'Urmatoarea'}</button>
       </nav>}
     </div>
@@ -574,12 +574,15 @@ function App(){
   const loadMoreJobs=useCallback(async()=>{
     if(!auth.token||!jobPage.nextCursor||jobPage.loading||jobPage.loadingMore||pageNavigationPendingRef.current)return;
     pageNavigationPendingRef.current=true;
-    const cursor=jobPage.nextCursor;
     try{
-      const payload=await loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true});
-      if(payload?.ignored||payload?.restarted)return;
-      pageCursorHistory.current[pageNumber]=cursor;
-      setPageNumber(pageNumber+1);
+      const transition=await navigateJobPage({
+        direction:'next',page:pageNumber,history:pageCursorHistory.current,nextCursor:jobPage.nextCursor,
+        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true}),
+      });
+      if(transition.outcome==='restarted'){notify('Cursorul a expirat; lista a fost reluata de la pagina 1.','info');return;}
+      if(transition.outcome!=='loaded')return;
+      pageCursorHistory.current=transition.history;
+      setPageNumber(transition.page);
       document.querySelector('[data-testid="job-table"]')?.scrollIntoView({block:'start',behavior:'auto'});
     }catch(error){notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error');}
     finally{pageNavigationPendingRef.current=false;}
@@ -587,11 +590,15 @@ function App(){
   const previousJobsPage=useCallback(async()=>{
     if(!auth.token||pageNumber<=1||jobPage.loading||jobPage.loadingMore||pageNavigationPendingRef.current)return;
     pageNavigationPendingRef.current=true;
-    const cursor=pageCursorHistory.current[pageNumber-2]||null;
     try{
-      const payload=await loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true});
-      if(payload?.ignored||payload?.restarted)return;
-      setPageNumber(pageNumber-1);
+      const transition=await navigateJobPage({
+        direction:'previous',page:pageNumber,history:pageCursorHistory.current,
+        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true}),
+      });
+      if(transition.outcome==='restarted'){notify('Cursorul a expirat; lista a fost reluata de la pagina 1.','info');return;}
+      if(transition.outcome!=='loaded')return;
+      pageCursorHistory.current=transition.history;
+      setPageNumber(transition.page);
       document.querySelector('[data-testid="job-table"]')?.scrollIntoView({block:'start',behavior:'auto'});
     }catch(error){notify('Pagina anterioara nu a putut fi incarcata: '+error.message,'error');}
     finally{pageNavigationPendingRef.current=false;}
