@@ -32,6 +32,15 @@ test('page-local filters never hide next/previous pagination on empty matches', 
   assert.doesNotMatch(main, /Incarca mai multe/);
 });
 
+test('N2/N4: stale cursor is announced once and page has one live region', () => {
+  const table=main.slice(main.indexOf('function JobTable('),main.indexOf('function ErrorPanel('));
+  assert.ok(table.length>0);
+  assert.equal((table.match(/aria-live="polite"/g)||[]).length,1);
+  assert.match(table, /<span>Pagina \{page\}<\/span>/);
+  assert.equal((main.match(/notify\('Cursorul a expirat; lista a fost reluata de la pagina 1\.'\,'info'\)/g)||[]).length,2);
+  assert.equal((main.match(/const transition=await navigateJobPage\(/g)||[]).length,2);
+});
+
 test('new profiles receive onboarding without forced Retrieve', () => {
   assert.match(main, /OnboardingPanel/);
   assert.match(main, /nu porneste automat un Retrieve/);
