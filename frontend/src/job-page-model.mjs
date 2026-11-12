@@ -1,15 +1,5 @@
 export const JOBS_PAGE_SIZE = 20;
 
-// The API owns the dataset and cursor. Never infer a global total from a page.
-export function pageBounds(page, total, pageSize = JOBS_PAGE_SIZE) {
-  const safeTotal = Number.isInteger(total) && total >= 0 ? total : null;
-  const count = safeTotal === null ? null : Math.max(1, Math.ceil(safeTotal / pageSize));
-  const current = Math.max(1, Number.isInteger(page) ? page : 1);
-  const resolved = count === null ? current : Math.min(current, count);
-  return { page:resolved, pageCount:count, canPrevious:resolved > 1,
-    canNext:count === null ? null : resolved < count };
-}
-
 const MODE_CODE = Object.freeze({ Remote:'remote', Hybrid:'hybrid', Onsite:'onsite' });
 
 export function isSearchProfileConfigured(criteria = {}) {
@@ -59,6 +49,21 @@ export function ignorePageResponse({requestSerial, currentSerial, append, naviga
   if (!append || navigationContext === currentContext) return false;
   setPage(current => ({...current, loading:false, loadingMore:false}));
   return true;
+}
+
+// The same async transition drives both buttons, including ignored and expired cursors.
+export async function navigateJobPage({direction, page, history, nextCursor, load}) {
+  if (direction !== 'next' && direction !== 'previous') throw new Error('Invalid pagination direction');
+  if ((direction === 'next' && !nextCursor) || (direction === 'previous' && page <= 1)) {
+    return {outcome:'unavailable'};
+  }
+  const cursor = direction === 'next' ? nextCursor : (history[page - 2] || null);
+  const result = await load(cursor);
+  if (result?.restarted) return {outcome:'restarted'};
+  if (result?.ignored) return {outcome:'ignored'};
+  const updatedHistory = [...history];
+  if (direction === 'next') updatedHistory[page] = cursor;
+  return {outcome:'loaded',page:page+(direction === 'next' ? 1 : -1),history:updatedHistory};
 }
 
 export function validateJobsPage(payload) {
