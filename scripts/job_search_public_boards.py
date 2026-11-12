@@ -2451,7 +2451,7 @@ class _SocGenJobs(HTMLParser):
         self._flush()
 
 
-def _socgen(url, max_seconds=30):
+def _socgen(url, max_seconds=30, diagnostics=None):
     deadline = time.monotonic() + max_seconds
     client = PublicClient(deadline)
     final_url, html = client.get(url)
@@ -2459,6 +2459,7 @@ def _socgen(url, max_seconds=30):
     parser.feed(html)
     parser.close()
     records = {}
+    rejected = 0
     for href, item in parser.jobs.items():
         title = item.get("title") or ""
         context = item.get("context") or ""
@@ -2468,13 +2469,21 @@ def _socgen(url, max_seconds=30):
         identity = link.rstrip("/").rsplit("/", 1)[-1]
         countries = _country_names_from_text(context)
         location = context
-        record = _record(
-            "Societe Generale", identity, title, "Societe Generale",
-            context or title, link,
-            location=location, countries=countries,
-            remote=bool(re.search(r"\b(remote|hybrid|telework)\b", context, re.I)),
-        )
+        try:
+            record = _record(
+                "Societe Generale", identity, title, "Societe Generale",
+                context or title, link,
+                location=location, countries=countries,
+                remote=bool(re.search(r"\b(remote|hybrid|telework)\b", context, re.I)),
+            )
+        except ValueError:
+            # An individual invalid posting must not discard other valid jobs.
+            # Record the loss for the parent CollectionResult partial outcome.
+            rejected += 1
+            continue
         records[record["id"]] = record
+    if diagnostics is not None:
+        diagnostics["invalid_postings"] = rejected
     if not records:
         raise ValueError("Societe Generale all-jobs page contained no extractable job links")
     return list(records.values())
@@ -3079,6 +3088,7 @@ def collect(source, config=None):
     if not spec:
         raise ValueError(f"Unsupported public-board source: {name}")
     kind, url = spec["kind"], spec["url"]
+    partial_diagnostics = {}
     if kind == "softgarden_feed":
         status, _content_type, body = _fetch(url, "application/json")
         if status != 200:
@@ -3115,7 +3125,7 @@ def collect(source, config=None):
     elif kind == "eurobrussels":
         records = _eurobrussels(url)
     elif kind == "socgen":
-        records = _socgen(url)
+        records = _socgen(url, diagnostics=partial_diagnostics)
     elif kind == "softserve":
         records = _softserve(url)
     elif kind == "epam":
@@ -3185,4 +3195,12 @@ def collect(source, config=None):
                 "remotive": _remotive,
             }[kind]
             records = parser(payload)
-    return [engine.CollectionResult("public_board", kind, True, records, len(records))]
+    result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
+    invalid = partial_diagnostics.get("invalid_postings", 0)
+    if invalid:
+        result.append(engine.CollectionResult(
+            "public_board", kind, False, [], 0,
+            f"Skipped {invalid} malformed {name} posting(s)",
+            error_code="SCHEMA_ERROR", failure_stage="parse",
+        ))
+    return result
