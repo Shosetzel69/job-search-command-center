@@ -10,7 +10,7 @@ import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
 import { runProgressModel } from './run-progress.mjs';
-import { JOBS_PAGE_SIZE, buildJobsPath, isSearchProfileConfigured, needsPageReload, pageRequestKey, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
+import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, isSearchProfileConfigured, needsPageReload, pageRequestKey, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
 import { readUiState, writeUiState } from './ui-state.mjs';
 import { registerPwa } from './pwa.mjs';
 import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
@@ -476,7 +476,7 @@ function App(){
     setJobPage(current=>({...current,loading:!append,loadingMore:append}));
     try{
       const payload=validateJobsPage(await fetchJson(path,token));
-      if(requestSerial!==pageRequestSerialRef.current || (append&&navigationContext!==pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})))return {ignored:true};
+      if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
       const normalized=(payload.jobs||[]).map(normalizeJob);
       // Navigation replaces the visible page; append would exceed the 20-row UI contract.
       setJobs(normalized);
@@ -485,7 +485,7 @@ function App(){
       if(!append){jobQueryRef.current=pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current});serverQueryRef.current=buildJobsPath({filters:filterState});}
       return payload;
     }catch(error){
-      if(requestSerial!==pageRequestSerialRef.current || (append&&navigationContext!==pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})))return {ignored:true};
+      if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
       if(append && error.status===400 && /^STALE_CURSOR/.test(error.message||'')){
         // One restart on stale cursor; never attempt another continuation with that cursor.
         const restarted=await loadJobsPage(token,criteria,filterState,{cursor:null,append:false});
