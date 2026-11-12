@@ -1,0 +1,40 @@
+{
+  "date": "2026-11-12",
+  "files": [
+    {
+      "path": "auth576/INTEGRATION.md",
+      "generation": 1792970567698062,
+      "content": "# JSCC Google login / Nile lock correction — DEV-only integration record\n\nDate: 2026-10-26 (Europe/Bucharest)\nRuntime target: jscc-dev / jscc-command-api-dev (Cloud Run)\nCurrent deployed source_sha (live GET /health): 25a046fffdeccc8c5f877a8c8cac01110f3c7324\nRuntime /health 200; /health/db 200 (jobsearch_dev); /auth/config 200 configured=true.\nRuntime has NOT been updated.\n\n## Exact production source candidates (WHITELIST ONLY)\n1. auth576/command-api/src/multiuser-repository.js\n2. auth576/command-api/test/multiuser.test.mjs\n\nThe above source fixes unsupported Nile pg_advisory_xact_lock in account admission/provisioning/session/lifecycle,\nusing transactional FOR UPDATE on system_bootstrap singleton or app_user per-user row.\nNo schema, OAuth/client IDs, secrets, IAM, TEST, PROD or #555 changes are required by this source patch.\n\n## TEST-ONLY FILES — DO NOT COPY OR DEPLOY\n- auth576/command-api/package.json (local ESM harness type)\n- auth576/command-api/src/db/pool.js (mock)\n- auth576/command-api/src/db/tenant-gateway.js (mock)\n- auth576/command-api/src/db/cross-tenant-reference-guard.js (mock)\n- auth576/command-api/src/profile-evaluation.js (mock)\n- auth576/command-api/src/retrieve-scope.js (mock)\n- auth576/command-api/test/dev-google-session-targeted.test.mjs\n- auth576/source-audit.mjs\n- auth576/inspect-deps.mjs\n- auth576/verify-dev-auth-fix.mjs\n- auth576/dev-health-probe.mjs\n- auth576/dev-auth-endpoint-probe.mjs\n\nThis directory is a partial source workspace with synthetic dependencies, NOT a complete or deployable application. Copy exactly the two WHITELIST files into an authorized full DEV code checkout, never the enclosing directory tree.\nDo not replace production dependency modules with TEST-ONLY mocks.\n\n## Completed in DEV\n- Source check: Node v18 with --experimental-default-type=module PASS\n- Structural lock/assert checks: 4/4 PASS\n- Functional targeted tests executing actual createSession with mock DB: 4/4 PASS\n- Test file syntax PASS\n- GET /auth/config: 200 configured=true; GET /auth/session unauthenticated: 401 expected.\n- Entire application test suite: not executed (full sources/dependencies unavailable in connector workspace).\n- Nile-provider real transaction test: NOT executed.\n- Browser Google login E2E: NOT executed.\n- Cloud Run DEV deployment: NOT executed.\n\n## Existing operational block\nThe connected JSCC DEV workspace is isolated; it has no complete application checkout and no Cloud Run product build/deploy tool.\nCanonical Cloud Build promotion pipeline is deliberately fail-closed (JSCC541_DEV01B... exit 86).\nDo not bypass parked #555/#541 controls or alter TEST/PROD to ship this patch.\n\n## Required to finish\n- Authorized full DEV build workspace/checkout, with source integration and full tests, and managed Nile row lock contract validation.\n- Explicit owner-authorized DEV-only promotion path preserving existing security controls, candidate identity and rollback.\n- Deploy only to jscc-dev after authorization, validate /health SHA, /health/db and real Google browser login.\n- Store validated sources in Git only when owner decides to reconnect/use Git; no Git operations performed in this workspace.\n"
+    },
+    {
+      "path": "auth576/command-api/package.json",
+      "generation": 1792970410400268,
+      "content": "{\"type\":\"module\",\"private\":true}\n"
+    },
+    {
+      "path": "auth576/command-api/src/db/cross-tenant-reference-guard.js",
+      "generation": 1792970414075278,
+      "content": "export const crossTenantNomenclatureReferenceCount=()=>{throw Error('not implemented in targeted test')};\n"
+    },
+    {
+      "path": "auth576/command-api/src/db/pool.js",
+      "generation": 1792970411619874,
+      "content": "export function getPool(){throw Error('Test must supply injected mock database');}\nexport async function withTransaction(fn,{db}={}){\n  const tx=await db.connect();\n  await tx.query('BEGIN');\n  try{ const result=await fn(tx);await tx.query('COMMIT');return result }\n  catch(e){await tx.query('ROLLBACK');throw e}\n  finally{tx.release()}\n}\n"
+    },
+    {
+      "path": "auth576/command-api/src/db/tenant-gateway.js",
+      "generation": 1792970412667843,
+      "content": "export const deleteTenantDomain=()=>{throw Error('not implemented in targeted test')};\nexport const ensureTenant=()=>{throw Error('not implemented in targeted test')};\nexport const resolveAccountDeletionTarget=()=>{throw Error('not implemented in targeted test')};\nexport const requireUuid=(v)=>v;\nexport async function verifyTenantMapping(profile,{db}){const r=await db.query('SELECT id, name FROM tenants WHERE id=$1',[profile]);if(!r.rows?.some(x=>x.id===profile))throw Object.assign(Error('Tenant mapping missing'),{status:503})}\nexport const verifyTenantPersonalResidue=()=>{throw Error('not implemented in targeted test')};\nexport const withTenantTransaction=()=>{throw Error('not implemented in targeted test')};\n"
+    },
+    {
+      "path": "auth576/command-api/src/profile-evaluation.js",
+      "generation": 1792970415160057,
+      "content": "export const FIT_ALGORITHM_VERSION='test';\nexport const evaluateSharedJob=()=>{throw Error('not implemented in targeted test')};\nexport const materializeCachedJob=()=>{throw Error('not implemented in targeted test')};\n"
+    },
+    {
+      "path": "auth576/command-api/src/retrieve-scope.js",
+      "generation": 1792970416362604,
+      "content": "export const userRefreshScopes=()=>{throw Error('not implemented in targeted test')};\n"
+    }
+  ]
+}
