@@ -469,7 +469,6 @@ function App(){
       pageRequestSerialRef.current++;pageCursorHistory.current=[null];setPageNumber(1);
       setJobs([]);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';return null;
     }
-    if(!append){pageCursorHistory.current=[null];setPageNumber(1);}
     const requestSerial=++pageRequestSerialRef.current;
     const path=buildJobsPath({filters:filterState,cursor,limit:JOBS_PAGE_SIZE,prefetch:JOBS_PAGE_SIZE});
     const navigationContext=append?pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current}):null;
@@ -478,6 +477,7 @@ function App(){
       const payload=validateJobsPage(await fetchJson(path,token));
       if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
       const normalized=(payload.jobs||[]).map(normalizeJob);
+      if(!append){pageCursorHistory.current=[null];setPageNumber(1);}
       // Navigation replaces the visible page; append would exceed the 20-row UI contract.
       setJobs(normalized);
       setArchivedKeys(current=>[...new Set([...current,...normalized.filter(job=>job.archivedAt).map(jobKey)])]);
