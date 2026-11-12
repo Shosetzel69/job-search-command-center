@@ -909,6 +909,102 @@ def _luxoft(url, max_details=60, max_seconds=35, diagnostics=None):
     return list(records.values())
 
 
+
+def _stripe_details(html, link, *, now=None):
+    if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "stripe.com":
+        raise ValueError("Stripe detail URL must stay on the first-party HTTPS host")
+    if not re.fullmatch(r"/careers/listing/[^/]+/\d+", urlsplit(link).path):
+        raise ValueError("Stripe detail URL missing stable job identity")
+    parser = _LuxoftJobPosting()
+    parser.feed(html)
+    jobs = []
+    for text in parser.scripts:
+        value = json.loads(text)
+        values = value if isinstance(value, list) else [value]
+        jobs.extend(row for row in values
+                    if isinstance(row, dict) and row.get("@type") == "JobPosting")
+    if len(jobs) != 1:
+        raise ValueError("Stripe detail must contain exactly one JobPosting")
+    posting = jobs[0]
+    title = plain_text(posting.get("title"))
+    description = plain_text(posting.get("description"))
+    if not title or len(description) < 150:
+        raise ValueError("Stripe job has incomplete title or description")
+    raw_locations = posting.get("jobLocation")
+    locations = raw_locations if isinstance(raw_locations, list) else [raw_locations]
+    cities = []
+    countries = []
+    for loc in locations:
+        addr = loc.get("address") if isinstance(loc, dict) else None
+        if not isinstance(addr, dict):
+            continue
+        city = plain_text(addr.get("addressLocality"))
+        country_code = plain_text(addr.get("addressCountry")).upper()
+        if not city or country_code not in engine.COUNTRY_NAMES:
+            continue
+        if city not in cities:
+            cities.append(city)
+        country = engine.COUNTRY_NAMES[country_code]
+        if country not in countries:
+            countries.append(country)
+    if not cities or not countries:
+        raise ValueError("Stripe detail missing structured job locations")
+    posted = None
+    raw_date = str(posting.get("datePosted") or "").strip()
+    try:
+        parsed = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        if parsed <= (now or datetime.now(timezone.utc)):
+            posted = parsed.isoformat()
+    except ValueError:
+        pass
+    return _record(
+        "Stripe", link.rstrip("/").split("/")[-1], title, "Stripe",
+        description, link, date_posted=posted, location="; ".join(cities),
+        countries=countries,
+        remote=str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE",
+        employment_statuses=engine.list_values(posting.get("employmentType")),
+    )
+
+
+def _stripe(url, max_details=30, max_seconds=30, diagnostics=None):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Stripe jobs page HTTP {status}")
+    links = _JobLinkCollector(r"/careers/listing/[^/?#]+/\d+")
+    links.feed(body.decode("utf-8", errors="replace"))
+    links.close()
+    if not links.links:
+        raise ValueError("Stripe listing contains no valid first-party job links")
+    deadline = time.monotonic() + max_seconds
+
+    def read_detail(href):
+        link = urljoin(url, href)
+        if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "stripe.com":
+            return None
+        try:
+            final_url, html = PublicClient(deadline).get(link)
+            return _stripe_details(html, final_url)
+        except (ValueError, json.JSONDecodeError, FetchError, OSError):
+            return None
+
+    records = {}
+    rejected = 0
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        for record in pool.map(read_detail, links.links[:max_details]):
+            if record is None:
+                rejected += 1
+            else:
+                records[record["id"]] = record
+    if diagnostics is not None:
+        diagnostics["invalid_postings"] = rejected
+        diagnostics["unprocessed_postings"] = max(0, len(links.links) - max_details)
+    if not records:
+        raise ValueError("Stripe listing has no fully parsed job details")
+    return list(records.values())
+
+
 def _bizneo_job_board(base_url, provider, max_pages=25):
     records = {}
     saw_first_page = False
@@ -3349,6 +3445,8 @@ def collect(source, config=None):
     elif kind == "linked_jobs":
         if name == "Luxoft":
             records = _luxoft(url, diagnostics=partial_diagnostics)
+        elif name == "Stripe":
+            records = _stripe(url, diagnostics=partial_diagnostics)
         else:
             records = _linked_job_board(url, name, spec["job_path"])
     elif kind == "squareone":
