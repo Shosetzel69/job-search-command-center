@@ -1502,6 +1502,56 @@ class PublicBoardAdapterTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, "no extractable job links"):
                     boards.collect({"name": "Societe Generale"})
 
+    def test_luxoft_uses_first_party_jobposting_not_social_title_or_card_context(self):
+        data = {
+            "@type": "JobPosting",
+            "title": "Technical Analyst - Data, Integration and APIs (Aladdin Wealth)",
+            "description": "<p>Own technical analysis of data mappings, integration APIs and reconciliation.</p>"
+                           "<p>Develop detailed integration specifications and testing plans.</p>",
+            "jobLocation": {"address": {"addressLocality": "Bucharest",
+                                        "addressCountry": "RO"}},
+            "datePosted": "2027-01-01 00:00:00",
+            "employmentType": "FULL_TIME",
+        }
+        link = "https://career.luxoft.com/jobs/technical-analyst-data-integration-and-apis-aladdin-wealth-28810"
+        html = '<script type="application/ld+json">' + boards.json.dumps(data) + '</script>'
+        result = boards._luxoft_details(html, link, now=boards.datetime(2026, 11, 12, tzinfo=boards.timezone.utc))
+        self.assertEqual(result["job_title"], data["title"])
+        self.assertGreater(len(result["description"]), 150)
+        self.assertEqual(result["location"], "Bucharest, Romania")
+        self.assertEqual(result["countries"], ["Romania"])
+        self.assertEqual(result["date_posted"], None)
+        self.assertNotIn("Facebook", result["job_title"])
+
+    def test_luxoft_rejects_bad_schema_no_detail_and_cross_origin(self):
+        link = "https://career.luxoft.com/jobs/example-28810"
+        bad = {"@type": "JobPosting", "title": "Share Facebook Twitter",
+               "description": "Twitter LinkedIn", "jobLocation": {}}
+        html = '<script type="application/ld+json">' + boards.json.dumps(bad) + '</script>'
+        with self.assertRaises(ValueError):
+            boards._luxoft_details(html, link)
+        with self.assertRaises(ValueError):
+            boards._luxoft_details(html, "https://evil.example/jobs/example-28810")
+
+    def test_luxoft_collector_uses_detail_page_not_list_card(self):
+        link = "/jobs/technical-analyst-data-integration-and-apis-aladdin-wealth-28810"
+        listing = f'<a href="{link}">Share Facebook Twitter LinkedIn Mail</a>'
+        data = {"@type": "JobPosting", "title": "Technical Analyst - Data Integration",
+                "description": "<p>" + ("Analyze integrations and API contracts. " * 7) + "</p>",
+                "jobLocation": {"address": {"addressLocality": "Bucharest",
+                                             "addressCountry": "RO"}}}
+        detail = '<script type="application/ld+json">' + boards.json.dumps(data) + '</script>'
+        fake_client = Mock()
+        fake_client.get.return_value = ("https://career.luxoft.com" + link, detail)
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", listing.encode())):
+            with patch.object(boards, "PublicClient", return_value=fake_client):
+                result = boards.collect({"name": "Luxoft"})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result[0].records), 1)
+        self.assertEqual(result[0].records[0]["job_title"], data["title"])
+        self.assertEqual(result[0].records[0]["location"], "Bucharest, Romania")
+        self.assertNotIn("Facebook", result[0].records[0]["description"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
