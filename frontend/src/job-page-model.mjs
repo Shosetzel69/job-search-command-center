@@ -48,6 +48,11 @@ export function pageRequestKey({filters = {}, view = 'jobs', kpiFilter = 'all'} 
   });
 }
 
+// GUI-only filters change presentation, not the server cursor query.
+export function needsPageReload({page = 1, loadedServerPath = '', nextServerPath = ''} = {}) {
+  return page !== 1 || !loadedServerPath || loadedServerPath !== nextServerPath;
+}
+
 export function validateJobsPage(payload) {
   if (payload?.schema_version !== '2.0' || payload?.bounded !== true || !Array.isArray(payload?.jobs)) {
     throw new Error('me/jobs: invalid bounded profile-job contract');
