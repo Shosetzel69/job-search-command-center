@@ -18,8 +18,27 @@ test('ATC-489-06 frontend uses canonical profile APIs instead of legacy job/run 
 test('profile jobs are bounded and paginated in the UI', () => {
   assert.match(main, /nextCursor/);
   assert.match(main, /loadMoreJobs/);
-  assert.match(main, /Incarca mai multe/);
-  assert.match(main, /rezultate de profil incarcate/);
+  assert.match(main, /Navigare pagini joburi/);
+  assert.match(main, /Anterioara/);
+  assert.match(main, /Urmatoarea/);
+  assert.match(main, /rezultate pe pagina/);
+});
+
+test('page-local filters never hide next/previous pagination on empty matches', () => {
+  assert.match(main, /Filtrele rapide, indicatoarele si sortarea FIT se aplica doar joburilor din pagina curenta/);
+  assert.match(main, /Nicio potrivire pe aceasta pagina/);
+  assert.match(main, /navigate?aza|navigheaza/);
+  assert.match(main, /paginate&&<nav aria-label="Navigare pagini joburi"/);
+  assert.doesNotMatch(main, /Incarca mai multe/);
+});
+
+test('N2/N4: stale cursor is announced once and page has one live region', () => {
+  const table=main.slice(main.indexOf('function JobTable('),main.indexOf('function ErrorPanel('));
+  assert.ok(table.length>0);
+  assert.equal((table.match(/aria-live="polite"/g)||[]).length,1);
+  assert.match(table, /<span>Pagina \{page\}<\/span>/);
+  assert.equal((main.match(/notify\('Cursorul a expirat; lista a fost reluata de la pagina 1\.'\,'info'\)/g)||[]).length,2);
+  assert.equal((main.match(/const transition=await navigateJobPage\(/g)||[]).length,2);
 });
 
 test('new profiles receive onboarding without forced Retrieve', () => {

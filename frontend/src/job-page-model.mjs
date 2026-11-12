@@ -1,3 +1,5 @@
+export const JOBS_PAGE_SIZE = 20;
+
 const MODE_CODE = Object.freeze({ Remote:'remote', Hybrid:'hybrid', Onsite:'onsite' });
 
 export function isSearchProfileConfigured(criteria = {}) {
@@ -10,10 +12,12 @@ export function isSearchProfileConfigured(criteria = {}) {
   return role && geography && workMode && contract;
 }
 
-export function buildJobsPath({ filters = {}, cursor = null, limit = 25, prefetch = 25 } = {}) {
+export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_SIZE, prefetch = JOBS_PAGE_SIZE } = {}) {
   const params = new URLSearchParams();
-  params.set('limit', String(limit));
-  params.set('prefetch', String(prefetch));
+  const boundedLimit = Math.min(JOBS_PAGE_SIZE, Math.max(1, Number.isFinite(Number(limit)) ? Math.trunc(Number(limit)) : JOBS_PAGE_SIZE));
+  const boundedPrefetch = Math.min(JOBS_PAGE_SIZE, Math.max(0, Number.isFinite(Number(prefetch)) ? Math.trunc(Number(prefetch)) : JOBS_PAGE_SIZE));
+  params.set('limit', String(boundedLimit));
+  params.set('prefetch', String(boundedPrefetch));
   const q = String(filters.search || '').trim();
   if (q) params.set('q', q.slice(0, 200));
   const freshness = Number(filters.freshness);
@@ -24,6 +28,42 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = 25, prefetc
   }
   if (cursor) params.set('cursor', String(cursor));
   return '/me/jobs?' + params.toString();
+}
+
+// Any filter or view change invalidates cursor history, including GUI-only filters.
+export function pageRequestKey({filters = {}, view = 'jobs', kpiFilter = 'all'} = {}) {
+  return JSON.stringify({
+    path:buildJobsPath({filters}),
+    view, quick:filters.quick || 'all', sort:filters.sort || 'date', kpiFilter,
+  });
+}
+
+// GUI-only filters change presentation, not the server cursor query.
+export function needsPageReload({page = 1, loadedServerPath = '', nextServerPath = ''} = {}) {
+  return page !== 1 || !loadedServerPath || loadedServerPath !== nextServerPath;
+}
+
+// Ignore outdated navigation without leaving the current page permanently loading.
+export function ignorePageResponse({requestSerial, currentSerial, append, navigationContext, currentContext}, setPage) {
+  if (requestSerial !== currentSerial) return true;
+  if (!append || navigationContext === currentContext) return false;
+  setPage(current => ({...current, loading:false, loadingMore:false}));
+  return true;
+}
+
+// The same async transition drives both buttons, including ignored and expired cursors.
+export async function navigateJobPage({direction, page, history, nextCursor, load}) {
+  if (direction !== 'next' && direction !== 'previous') throw new Error('Invalid pagination direction');
+  if ((direction === 'next' && !nextCursor) || (direction === 'previous' && page <= 1)) {
+    return {outcome:'unavailable'};
+  }
+  const cursor = direction === 'next' ? nextCursor : (history[page - 2] || null);
+  const result = await load(cursor);
+  if (result?.restarted) return {outcome:'restarted'};
+  if (result?.ignored) return {outcome:'ignored'};
+  const updatedHistory = [...history];
+  if (direction === 'next') updatedHistory[page] = cursor;
+  return {outcome:'loaded',page:page+(direction === 'next' ? 1 : -1),history:updatedHistory};
 }
 
 export function validateJobsPage(payload) {
