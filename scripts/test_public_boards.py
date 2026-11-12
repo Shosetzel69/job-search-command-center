@@ -1395,6 +1395,26 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(urlsplit(url).hostname, "torre.ai")
         self.assertEqual(boards.browser._site_root(urlsplit(url).hostname), "torre.ai")
 
+    def test_github_careers_authoritative_zero_is_not_schema_error(self):
+        html = b"""<html><body><h2>0 results</h2>
+          There are currently no jobs that match your search criteria.
+        </body></html>"""
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html)):
+            rows = boards._linked_job_board(
+                "https://www.github.careers/careers-home/jobs",
+                "GitHub", r"/careers-home/jobs/\\d+",
+            )
+        self.assertEqual(rows, [])
+
+    def test_github_careers_missing_jobs_without_zero_proof_is_schema_error(self):
+        html = b"<html><body>Access pending verification</body></html>"
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html)):
+            with self.assertRaisesRegex(ValueError, "no extractable job links"):
+                boards._linked_job_board(
+                    "https://www.github.careers/careers-home/jobs",
+                    "GitHub", r"/careers-home/jobs/\\d+",
+                )
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
