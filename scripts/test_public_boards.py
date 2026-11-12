@@ -1507,7 +1507,8 @@ class PublicBoardAdapterTests(unittest.TestCase):
             "@type": "JobPosting",
             "title": "Technical Analyst - Data, Integration and APIs (Aladdin Wealth)",
             "description": "<p>Own technical analysis of data mappings, integration APIs and reconciliation.</p>"
-                           "<p>Develop detailed integration specifications and testing plans.</p>",
+                           "<p>Develop detailed integration specifications and testing plans.</p>"
+                           "<p>Coordinate complex delivery, data quality, solution design and testing.</p>",
             "jobLocation": {"address": {"addressLocality": "Bucharest",
                                         "addressCountry": "RO"}},
             "datePosted": "2027-01-01 00:00:00",
