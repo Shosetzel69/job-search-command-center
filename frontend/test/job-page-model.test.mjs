@@ -93,6 +93,7 @@ test('B1: ignored in-flight Next response restores idle pagination after page-1 
     assert.equal(page.loading,false);
     assert.equal(page.loadingMore,false);
     assert.equal(page.nextCursor,'next-1');
+    assert.equal(Boolean(page.loading||page.loadingMore||!page.nextCursor),false,'Next must be enabled again');
   }
   assert.equal(updates,3);
   assert.equal(ignorePageResponse({
