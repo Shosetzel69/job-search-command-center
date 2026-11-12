@@ -1415,6 +1415,45 @@ class PublicBoardAdapterTests(unittest.TestCase):
                     "GitHub", r"/careers-home/jobs/\\d+",
                 )
 
+    def test_socgen_malformed_posting_keeps_valid_rows_and_reports_partial(self):
+        html = '''<section>
+            <a href="/en/job-offers/invalid-1-en">Bad Posting</a>
+            <a href="/en/job-offers/valid-2-en">Delivery Manager</a>
+            Romania
+        </section>'''
+        fake_client = Mock()
+        fake_client.get.return_value = (
+            "https://careers.societegenerale.com/en/Technical/all-job-offers", html
+        )
+        original_record = boards._record
+
+        def fail_one_record(provider, identity, title, company, description, url, **kw):
+            if title == "Bad Posting":
+                raise ValueError("Malformed Societe Generale listing: missing title/url")
+            return original_record(provider, identity, title, company, description, url, **kw)
+
+        with patch.object(boards, "PublicClient", return_value=fake_client):
+            with patch.object(boards, "_record", side_effect=fail_one_record):
+                results = boards.collect({"name": "Societe Generale"})
+        self.assertEqual(len(results), 2)
+        self.assertTrue(results[0].ok)
+        self.assertEqual(len(results[0].records), 1)
+        self.assertEqual(results[0].records[0]["job_title"], "Delivery Manager")
+        self.assertFalse(results[1].ok)
+        self.assertEqual(results[1].error_code, "SCHEMA_ERROR")
+        self.assertEqual(results[1].failure_stage, "parse")
+
+    def test_socgen_all_malformed_still_fails(self):
+        html = '<a href="/en/job-offers/invalid-1-en">Bad Posting</a>'
+        fake_client = Mock()
+        fake_client.get.return_value = (
+            "https://careers.societegenerale.com/en/Technical/all-job-offers", html
+        )
+        with patch.object(boards, "PublicClient", return_value=fake_client):
+            with patch.object(boards, "_record", side_effect=ValueError("invalid")):
+                with self.assertRaisesRegex(ValueError, "no extractable job links"):
+                    boards.collect({"name": "Societe Generale"})
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
