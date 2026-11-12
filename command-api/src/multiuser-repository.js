@@ -865,10 +865,10 @@ export async function sharedCorpusRefreshState(
 }
 
 
-const JOB_PAGE_DEFAULT = 20;
-const JOB_PAGE_MAX = 20;
+const JOB_PAGE_DEFAULT = 25;
+const JOB_PAGE_MAX = 100;
 const JOB_CANDIDATE_WINDOW_MAX = 400;
-const JOB_PREFETCH_MAX = 20;
+const JOB_PREFETCH_MAX = 50;
 
 function listValues(input) {
   const raw = Array.isArray(input) ? input : input == null ? [] : [input];
@@ -925,7 +925,7 @@ export function normalizeJobSearchQuery(input = {}) {
   const includeArchived = source.include_archived === true || String(source.include_archived || '').toLowerCase() === 'true';
   const prefetch = boundedInteger(
     source.prefetch,
-    Math.min(limit, 20),
+    Math.min(limit, 25),
     0,
     JOB_PREFETCH_MAX,
     'prefetch',
