@@ -1,0 +1,180 @@
+name: GOV85 DEV — scoped exit86 escape / paired immutable images
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Read-only preflight, read-only GCP inventory, or image-only Cloud Build
+        required: true
+        type: choice
+        options: [preflight, inventory, images-only]
+      source_sha:
+        description: Full exact candidate SHA authorized for #515, #520 and #535
+        required: true
+        type: string
+      ticket_scope:
+        description: Must be exactly 515,520,535
+        required: true
+        type: string
+      owner_build_gate:
+        description: For images-only enter APPROVE_BUILD_RC_121F88; otherwise NONE
+        required: true
+        default: NONE
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gov85-dev-images-${{ inputs.source_sha }}
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    # Reject non-owner dispatch even if a caller can invoke workflow_dispatch.
+    if: ${{ github.actor == 'Shosetzel69' && github.ref == 'refs/heads/main' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted control plane (main)
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          path: control
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24'
+
+      - name: Reject other scope, targets and unreviewed operations
+        env:
+          CANDIDATE: ${{ inputs.source_sha }}
+          TICKETS: ${{ inputs.ticket_scope }}
+          ACTION: ${{ inputs.action }}
+          OWNER_BUILD_GATE: ${{ inputs.owner_build_gate }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --test control/scripts/test_gov85_dev_exception.mjs
+          node control/scripts/gov85-dev-exception.mjs "$CANDIDATE" "$TICKETS" "$ACTION" dev
+          if [[ "$ACTION" == "images-only" ]]; then
+            [[ "$OWNER_BUILD_GATE" == "APPROVE_BUILD_RC_121F88" ]] || { echo "GOV85_IMAGES_ONLY_OWNER_GATE_REQUIRED" >&2; exit 86; }
+          else
+            [[ "$OWNER_BUILD_GATE" == "NONE" ]] || { echo "GOV85_NO_BUILD_GATE_ON_READ_ONLY" >&2; exit 86; }
+          fi
+          git -C control cat-file -e "${CANDIDATE}^{commit}"
+          git -C control merge-base --is-ancestor "$CANDIDATE" HEAD
+          printf 'GOV85_CANDIDATE_EXISTS_AND_IS_ANCESTOR=%s\n' "$CANDIDATE"
+
+      - name: Verify required candidate GitHub checks (not release acceptance)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CANDIDATE: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          checks="$(gh api --method GET "repos/${GITHUB_REPOSITORY}/commits/${CANDIDATE}/check-runs?per_page=100")"
+          for check in validate 'Nile-only native provider CI' gitleaks api-version-policy snapshot; do
+            conclusion="$(jq -r --arg name "$check" '[.check_runs[] | select(.name == $name)] | last | .conclusion // "MISSING"' <<< "$checks")"
+            if [[ "$conclusion" != "success" ]]; then
+              echo "GOV85_REQUIRED_CI_NOT_GREEN: $check = $conclusion" >&2
+              exit 86
+            fi
+          done
+          echo "GOV85_EXACT_CANDIDATE_CI_PASS: ${CANDIDATE}"
+          echo "GOV85_PRECHECK_PASS: no GCP side effects"
+
+  gcp:
+    needs: preflight
+    if: ${{ inputs.action == 'inventory' || inputs.action == 'images-only' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    environment: dev
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Refuse missing GCP Workload Identity configuration
+        env:
+          WIF: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }}
+          INVOKER: ${{ vars.JSCC_DEV_GCP_BUILD_INVOKER_SA }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "$WIF" && -n "$INVOKER" ]] || { echo "GOV85_GITHUB_OIDC_GCP_BINDING_NOT_CONFIGURED" >&2; exit 86; }
+
+      - name: Authenticate with narrowly-scoped GitHub OIDC
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.JSCC_DEV_GCP_BUILD_INVOKER_SA }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+
+      - name: Read-only immutable image and DEV runtime inventory
+        env:
+          CANDIDATE: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for image in jscc jscc-service; do
+            ref="europe-west1-docker.pkg.dev/jscc-shared/jscc/${image}:${CANDIDATE}"
+            if digest="$(gcloud artifacts docker images describe "$ref" --project=jscc-shared --format='value(image_summary.digest)' 2>probe.err)"; then
+              [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "GOV85_INVALID_EXISTING_IMAGE_DIGEST" >&2; exit 86; }
+              echo "GOV85_IMAGE_EXISTS ${image}@${digest}"
+            elif grep -Eqi 'NOT_FOUND|not found|404' probe.err; then
+              echo "GOV85_IMAGE_MISSING ${image}"
+            else
+              echo "GOV85_IMAGE_PROBE_PERMISSION_OR_PROVIDER_ERROR" >&2
+              cat probe.err >&2
+              exit 86
+            fi
+          done
+          gcloud run services describe jscc-command-api-dev --project=jscc-dev --region=europe-west1 --format=json > live-service.json
+          gcloud run jobs describe jscc-search-dev --project=jscc-dev --region=europe-west1 --format=json > live-job.json
+          jq -e '.metadata.name? // .name? // .status.latestReadyRevisionName? // empty' live-service.json >/dev/null
+          jq -e '.metadata.name? // .name? // empty' live-job.json >/dev/null
+          echo "GOV85_LIVE_DEV_SERVICE_REVISION=$(jq -r '.status.latestReadyRevisionName // "not-exposed"' live-service.json)"
+          echo "GOV85_LIVE_DEV_SERVICE_TRAFFIC=$(jq -c '.status.traffic // []' live-service.json)"
+          echo "GOV85_LIVE_DEV_JOB_IMAGE=$(jq -r '[.. | objects | .image? // empty] | first // "not-exposed"' live-job.json)"
+          echo "GOV85_READ_ONLY_INVENTORY_PASS"
+          # No full runtime configuration, secret environment values or DB URI in job logs.
+
+      - name: Checkout exact candidate and trusted image-only build contract
+        if: ${{ inputs.action == 'images-only' }}
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          path: candidate
+          persist-credentials: false
+
+      - name: Checkout reviewed workflow source
+        if: ${{ inputs.action == 'images-only' }}
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          path: control
+          persist-credentials: false
+
+      - name: Submit build-only Cloud Build from frozen exact candidate
+        if: ${{ inputs.action == 'images-only' }}
+        env:
+          CANDIDATE: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$(git -C candidate rev-parse HEAD)" == "$CANDIDATE" ]] || { echo "GOV85_CANDIDATE_CHECKOUT_MISMATCH" >&2; exit 86; }
+          [[ -z "$(git -C candidate status --porcelain)" ]] || { echo "GOV85_CANDIDATE_DIRTY" >&2; exit 86; }
+          cmp control/cloudbuild.gov85.dev-images.yaml control/cloudbuild.gov85.dev-images.yaml
+          cp control/cloudbuild.gov85.dev-images.yaml candidate/cloudbuild.gov85.dev-images.yaml
+          printf '%s\n' "$CANDIDATE" > candidate/.gov85-source-sha
+          echo "GOV85_IMAGE_ONLY_BUILD_SUBMIT_BEGIN ${CANDIDATE}"
+          gcloud builds submit candidate \
+            --project=jscc-shared \
+            --region=europe-west1 \
+            --config=candidate/cloudbuild.gov85.dev-images.yaml \
+            --substitutions="_GIT_SHA=${CANDIDATE},_GOV85_TICKETS=515-520-535"
+          echo "GOV85_IMAGES_BUILT_OR_REUSED: no Cloud Run deploy, migration, IAM or TEST/PROD mutation"
