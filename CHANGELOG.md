@@ -37,6 +37,8 @@
 
 ### Guvernanta
 
+- #623 / GOV-85: proposed DEV-only M0-M2 administrative simplification (3 phases / 9 states) documented as a **non-authoritative shadow pilot** with exact 62-status crosswalk and M0/M2 comparison examples. Existing AgentFlow status/approval/release gates unchanged; M3 activation, merge, build, deploy and TEST/PROD not authorized.
+
 - #545: adoptata regula `Feature-led closure / Return-to-root` si modelul hibrid de urmarire: observatii locale prin puncte si comentarii in root Issue, Issues separate doar pentru obiective independente/dependinte transversale/controale distincte; se pastreaza ATC, review, Functional Acceptance si gate-urile de release.
 - Aplicare operationala §2.9 (2026-10-12): preflight root-first obligatoriu in `.ai-instructions.md` inainte de orice creare Issue; template-ul `executable-task.yml` cere motivul unei exceptii. Nu schimba procesul, aprobarile, rolurile sau conectorul GitHub API.
 
