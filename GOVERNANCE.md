@@ -1,11 +1,11 @@
 # GOVERNANCE.md - Job Search Command Center
 
 Status: `CANONICAL`
-Version: `v1.16`
+Version: `v1.17`
 Applicability: `CURRENT`
 Applies to: `BOTH`
-Effective from: `2026-09-23`
-Supersedes: `v1.15`
+Effective from: `2026-11-13`
+Supersedes: `v1.16`
 Last updated: `2026-11-13`
 
 ## 1. Principiu
@@ -178,6 +178,9 @@ Acesti termeni se folosesc identic in Issues, documentatie si handoff-uri. Sinon
 
 ### 2.8 Statusuri canonice de workflow
 
+**GOV-85 DEV override (effective 2026-11-13):** Pentru work nou DEV cu `Governance: GOV85-DEV`, headerul administrativ `Phase/Status` foloseste sectiunea 11 (3 faze / 9 statusuri). Tabelul si fluxul de mai jos raman canonice pentru work existent neconvertit, `LEGACY-ADAPTED` si evenimentele tehnice/lifecycle distincte; nu se retroactiveaza aprobarile sau verdicturile. Gate-urile TEST/PROD raman neschimbate.
+
+
 Orice work item activ are un singur status canonic, separat de faza in care se afla.
 
 Headerul canonic recomandat este:
@@ -193,7 +196,7 @@ Daca un Issue existent contine in sectiuni istorice statusuri vechi sau contradi
 
 Reguli:
 
-- `BLOCKED` singur nu este status canonic;
+- Pentru taxonomia din tabelul §2.8 (work non-GOV85), `BLOCKED` singur nu este status canonic. Pentru `Governance: GOV85-DEV`, `BLOCKED` este status administrativ valid exclusiv impreuna cu `Blocked by` si evenimentul/gate-ul tehnic distinct;
 - `READY FOR DEV`, `WAITING FOR ...`, `READY FOR REVIEW` si `READY FOR TEST` nu mai sunt statusuri canonice;
 - un blocker se exprima prin statusul fazei (`IMPLEMENTATION_BLOCKED`, `REVIEW_BLOCKED`, `TEST_BLOCKED` etc.) plus `Blocked by`;
 - `ARCHITECTURE_BLOCKED` se foloseste numai cand faza curenta este `ARCHITECTURE`; un task de implementare blocat de un architecture gate foloseste `IMPLEMENTATION_BLOCKED` + `Blocked by: #...`;
@@ -617,8 +620,25 @@ In perioada de tranzitie AgentFlow:
 
 Contractele JSON principale folosesc `schema_version`. Schimbarile incompatibile necesita versiune noua de contract.
 
-## 11. GOV-85 DEV shadow pilot (proposal only)
+## 11. GOV-85 — active DEV governance (owner activation 2026-11-13)
 
-Owner approval `APPROVE_GOV85_DEV_PILOT` (2026-11-13) authorizes read-only baseline, documentation PR, independent review and shadow mapping M0-M2 only (root #623). Proposed three-phase/nine-state design and the complete crosswalk: `docs/analysis/2026-11-13-gov85-dev-shadow-pilot.md`.
+**Decision and effective scope:** Owner authorized GOV-85 *in force now* for all **new and active DEV feature-implementation work** (Issue #623). This replaces the administrative tracking overhead with **DEFINE -> EXECUTE -> RELEASE** and nine administrative statuses, **not** the technical gates, review obligations or the single canonical DEV -> TEST -> PROD lifecycle. Only DEV execution is activated; PROD/TEST promotions remain separately gated and are not authorized by this decision. No application runtime build/deploy is part of process activation.
 
-**Non-executable:** Section 2.8 remains the canonical operational Phase/Status vocabulary; sections 2.5-2.9, explicit implementation/architecture approval, independent review, G1-G5, EFA, exact SHA, rollback, DEV/TEST/PROD segregation and `exit 86` blocking guards remain unchanged. Shadow observations must not mutate source issues or authorize anything. Activation M3 requires a separate owner decision. No TEST/PROD scope.
+**Routing:** New DEV feature Issues use `Process: AGENTFLOW`, `Governance: GOV85-DEV`, `Phase: DEFINE|EXECUTE|RELEASE`, and `Status: PROPOSED|APPROVED|IN_PROGRESS|READY|BLOCKED|CHANGES_REQUIRED|VERIFIED|ACCEPTED|CLOSED`. `APPROVED` is a summary label only: every required owner gate still needs its own exact token/reference. `VERIFIED` is not Functional Acceptance. `ACCEPTED` requires applicable functional acceptance evidence. `CLOSED` retains its original disposition (`DONE`, `DEFERRED`, `CANCELLED`, `SUPERSEDED` or rejection).
+
+**Active work migration without reset:** Effective immediately, GOV-85 is the administrative execution view for all eligible in-progress DEV feature work, including existing ATCs/PRs. Preserve existing Issue `Process`, `Phase`, `Status`, blockers, prior owner decisions, exact-SHA verdicts, artifacts and historical evidence; **do not rewrite headers or mass-convert Issues**. On the next natural status update, attach `Governance: GOV85-DEV` and a `GOV85 phase/status` view while retaining original Phase/Status for already-started items until their approved process transition; no reopening completed gates. Existing `LEGACY-ADAPTED` items preserve their execution contract until expressly converted. Parked/blocked work stays parked/blocked. TEST/PROD work does not become DEV by changing its label.
+
+**Three phases with independent controls:**
+- `DEFINE`: requirement approval, transfer if applicable, architecture approval **when triggered**, bounded ATC, and explicit `APPROVE_TASK_CONTRACT <ref>` before source changes.
+- `EXECUTE`: authorized implementation, CI/tests, immutable candidate identity, evidence, independent exact-SHA review for material implementation changes. Delta-only review can reuse unchanged evidence; a waiver must be narrowly and explicitly owner-approved and cannot stand in for a `REVIEW_PASS` on a new SHA.
+- `RELEASE`: DEV functional acceptance and rollback, then separately authorized TEST/PROD stages using `docs/software-delivery-lifecycle.md` G1-G5 / EFA-01..17. A `READY` or `VERIFIED` admin label cannot authorize build, deploy or promotion.
+
+**Mandatory orthogonal event register:** Keep original gate identifiers/verdicts, owner approval token/scope, risk classification, reviewer identity, root feature, ATC, source SHA and artifact digests, environment, blockers, evidence links, acceptance and rollback refs. Administrative mapping must never erase a FAIL, BLOCKED, INVALIDATED, DEFERRED or distinct environment verdict. All canonical events retain their existing semantics, including `REVIEW_PASS`, `DEV_PASS`, `TEST_PASS`, `PROD_GO`, `PROD_SMOKE_PASS`.
+
+**Priority:** For new eligible DEV features, this section controls only the administrative Phase/Status header. Section 2.8 remains canonical for existing/non-GOV85/LEGACY-ADAPTED work and for the distinct technical gate vocabulary; clauses 2.5-2.9, `docs/agentflow.md`, and the release lifecycle keep their existing approval and technical requirements. The 62-to-9 mapping and M0-M2 evidence are preserved in the historical `docs/analysis/2026-11-13-gov85-dev-shadow-pilot.md`, not an executable authorization or source of new gate semantics.
+
+**No implicit privileges:** Tenant isolation/ADR-005, Retrieve, security, Nile/data integrity, exact SHA, reviewer independence, mandatory CI/EFA, G1-G5, rollback, `exit 86` blocks, parked #574 and workspace limits remain unchanged. `ai-github-bridge` O-01 and component CI trigger work #626 are separate; activating GOV-85 does not change Cloudflare/GCP provider settings, enable triggers or deploy the JSCC application.
+
+**Process rollback:** If GOV85 masks a blocker, causes missed approval/evidence, or breaks an active task contract, suspend GOV85 administration for the affected work and return to the previously effective canonical process/status recording. Preserve all approved artifacts and history; this is not an application rollback. Record the owner disposition and resume only after control parity is restored. No implicit DEV runtime or TEST/PROD mutation.
+
+**Measure, do not assume:** ~85% is an administrative complexity target (62 -> 9 statuses = 85.5%; 15 -> 3 phases = 80.0%). Time saved is unmeasured. Keep tracking administrative touches/time and control regressions for ongoing evaluation; measurable benefit is not a prerequisite for an expressly owner-authorized DEV administrative activation, but is required before claiming the target was achieved.

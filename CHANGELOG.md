@@ -37,6 +37,8 @@
 
 ### Guvernanta
 
+- #623 / GOV-85: owner activated GOV85-DEV administrative mode on 2026-11-13 for new and active DEV feature work; 3 phases / 9 statuses. Existing issue histories remain immutable; explicit ATC, independent review, security, EFA/G1-G5 and DEV→TEST→PROD approvals remain unchanged. This is a governance deployment to repository documentation, not an application runtime deployment. Administrative efficiency target remains unmeasured.
+
 - #623 / GOV-85: proposed DEV-only M0-M2 administrative simplification (3 phases / 9 states) documented as a **non-authoritative shadow pilot** with exact 62-status crosswalk and M0/M2 comparison examples. Existing AgentFlow status/approval/release gates unchanged; M3 activation, merge, build, deploy and TEST/PROD not authorized.
 
 - #545: adoptata regula `Feature-led closure / Return-to-root` si modelul hibrid de urmarire: observatii locale prin puncte si comentarii in root Issue, Issues separate doar pentru obiective independente/dependinte transversale/controale distincte; se pastreaza ATC, review, Functional Acceptance si gate-urile de release.

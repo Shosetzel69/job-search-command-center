@@ -1,14 +1,14 @@
 # GOV-85 — DEV governance simplification (M0-M2 shadow pilot)
-Status: WORKING
+Status: HISTORICAL
 Version: v0.1
-Applicability: CURRENT — SHADOW ONLY, NOT EXECUTABLE
-Applies to: AGENTFLOW (eligible new DEV work only after separate M3 approval)
+Applicability: HISTORICAL_ONLY — M0-M2 evidence
+Applies to: AGENTFLOW (historical shadow analysis; current DEV policy is GOVERNANCE.md §11)
 Date: 2026-11-13
 Root issue: #623
 Baseline: `main@ce9206644c4d0556b3852dfe50a6717ebd5c4615`
 Owner authorization: `APPROVE_GOV85_DEV_PILOT` — M0-M2 only
 
-> **NON-AUTHORITATIVE.** This is a proposed administrative view, not a change to effective approvals, release routing, pipeline, status semantics or environmental authority. Until separate M3 approval, the canonical Phase/Status in `GOVERNANCE.md` section 2.8 and `docs/software-delivery-lifecycle.md` remain controlling. Never execute a command based on shadow state alone.
+> **HISTORICAL M0-M2 EVIDENCE (as of pre-M3 approval).** GOV85-DEV was subsequently activated by the owner on 2026-11-13; the operative policy is `GOVERNANCE.md` §11. This dated original study remains non-authoritative and is not an operational gate. **NON-AUTHORITATIVE.** This is a proposed administrative view, not a change to effective approvals, release routing, pipeline, status semantics or environmental authority. Until separate M3 approval, the canonical Phase/Status in `GOVERNANCE.md` section 2.8 and `docs/software-delivery-lifecycle.md` remain controlling. Never execute a command based on shadow state alone.
 
 ## M0. Verified baseline and measurement
 
