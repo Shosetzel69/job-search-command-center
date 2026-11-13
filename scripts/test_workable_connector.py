@@ -77,7 +77,15 @@ class WorkableTests(unittest.TestCase):
         plan = orchestration.build_plan({"sources": [source]})
         expected = [engine.CollectionResult(
             "workable:qualcogroup", "public_account", True,
-            [{"id": "job-1", "job_title": "Project Manager"}], 1
+            [{
+                "id": "workable:qualcogroup:job-1",
+                "job_title": "Project Manager",
+                "company": "Qualco Group / Quento",
+                "description": "Lead delivery and technical projects",
+                "location": "Bucharest, Romania",
+                "source_url": "https://apply.workable.com/qualcogroup/j/ABC123/",
+                "date_posted": "2026-10-04",
+            }], 1
         )]
         with patch.object(orchestration.workable, "collect", return_value=expected):
             results, _, _ = orchestration.collect_sources(
