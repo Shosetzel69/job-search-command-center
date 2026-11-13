@@ -69,12 +69,16 @@ def _request_json(request, opener=urlopen, max_attempts=3):
             last_error = exc
             if exc.code != 429 or attempt + 1 >= max_attempts:
                 raise
+            # Honor the provider's Retry-After rather than retrying earlier.
+            # A long cooldown is deferred to the next authorized run.
             retry_after = 0
             try:
                 retry_after = int((exc.headers or {}).get("Retry-After") or 0)
             except (TypeError, ValueError):
                 retry_after = 0
-            time.sleep(min(5, max(1, retry_after or (attempt + 1))))
+            if retry_after > 20:
+                raise
+            time.sleep(max(1, retry_after or 2 ** attempt))
     else:
         raise last_error
     if len(body) > MAX_BYTES:
@@ -107,9 +111,18 @@ def _post_page(board, offset, opener=urlopen):
     return _request_json(request, opener=opener)
 
 
+def _valid_external_path(value):
+    """Accept only provider-local CXS paths; never construct external URLs."""
+    if not isinstance(value, str) or not value.startswith("/") or value.startswith("//"):
+        return False
+    if any(char in value for char in ("\\", "?", "#", "\r", "\n", "\t", " ")):
+        return False
+    return all(part not in {".", ".."} for part in value.split("/"))
+
+
 def _get_detail(board, external_path, opener=urlopen):
     path = str(external_path or "").strip()
-    if not path.startswith("/"):
+    if not _valid_external_path(path):
         raise ValueError("Malformed Workday posting: invalid externalPath")
     request = Request(
         board["cxs_base"] + path,
@@ -224,15 +237,29 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen,
         if not isinstance(summary, dict):
             raise ValueError("Malformed Workday posting summary")
 
+    # One stale/malformed CXS row must not discard the other valid jobs.
+    # Preserve a source-level partial diagnostic instead of silently hiding it.
+    invalid_paths = sum(not _valid_external_path(s.get("externalPath")) for s in selected)
+    valid = [s for s in selected if _valid_external_path(s.get("externalPath"))]
+    if selected and not valid:
+        raise ValueError("Malformed Workday posting: invalid externalPath")
+
     def load_record(summary):
         detail = _get_detail(board, summary.get("externalPath"), opener=opener)
         return normalize(detail, summary, board, company_name)
 
-    if detail_workers == 1 or len(selected) < 2:
-        records = [load_record(summary) for summary in selected]
+    if detail_workers == 1 or len(valid) < 2:
+        records = [load_record(summary) for summary in valid]
     else:
         with ThreadPoolExecutor(max_workers=detail_workers) as pool:
-            records = list(pool.map(load_record, selected))
+            records = list(pool.map(load_record, valid))
 
     connector = f"workday:{board['tenant']}:{board['site']}"
-    return [engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
+    result = [engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
+    if invalid_paths:
+        result.append(engine.CollectionResult(
+            connector, "invalid_externalPath", False, [], 0,
+            f"Skipped {invalid_paths} Workday posting(s) with invalid externalPath",
+            error_code="SCHEMA_ERROR", failure_stage="parse",
+        ))
+    return result
