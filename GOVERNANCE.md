@@ -639,4 +639,6 @@ Contractele JSON principale folosesc `schema_version`. Schimbarile incompatibile
 
 **No implicit privileges:** Tenant isolation/ADR-005, Retrieve, security, Nile/data integrity, exact SHA, reviewer independence, mandatory CI/EFA, G1-G5, rollback, `exit 86` blocks, parked #574 and workspace limits remain unchanged. `ai-github-bridge` O-01 and component CI trigger work #626 are separate; activating GOV-85 does not change Cloudflare/GCP provider settings, enable triggers or deploy the JSCC application.
 
+**Process rollback:** If GOV85 masks a blocker, causes missed approval/evidence, or breaks an active task contract, suspend GOV85 administration for the affected work and return to the previously effective canonical process/status recording. Preserve all approved artifacts and history; this is not an application rollback. Record the owner disposition and resume only after control parity is restored. No implicit DEV runtime or TEST/PROD mutation.
+
 **Measure, do not assume:** ~85% is an administrative complexity target (62 -> 9 statuses = 85.5%; 15 -> 3 phases = 80.0%). Time saved is unmeasured. Keep tracking administrative touches/time and control regressions for ongoing evaluation; measurable benefit is not a prerequisite for an expressly owner-authorized DEV administrative activation, but is required before claiming the target was achieved.
