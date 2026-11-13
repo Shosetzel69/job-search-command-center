@@ -196,7 +196,7 @@ Daca un Issue existent contine in sectiuni istorice statusuri vechi sau contradi
 
 Reguli:
 
-- `BLOCKED` singur nu este status canonic;
+- Pentru taxonomia din tabelul §2.8 (work non-GOV85), `BLOCKED` singur nu este status canonic. Pentru `Governance: GOV85-DEV`, `BLOCKED` este status administrativ valid exclusiv impreuna cu `Blocked by` si evenimentul/gate-ul tehnic distinct;
 - `READY FOR DEV`, `WAITING FOR ...`, `READY FOR REVIEW` si `READY FOR TEST` nu mai sunt statusuri canonice;
 - un blocker se exprima prin statusul fazei (`IMPLEMENTATION_BLOCKED`, `REVIEW_BLOCKED`, `TEST_BLOCKED` etc.) plus `Blocked by`;
 - `ARCHITECTURE_BLOCKED` se foloseste numai cand faza curenta este `ARCHITECTURE`; un task de implementare blocat de un architecture gate foloseste `IMPLEMENTATION_BLOCKED` + `Blocked by: #...`;
