@@ -135,7 +135,7 @@ Explicit semantic guards:
 | #515 / PR #615 | #515 contains noncanonical `REQUIREMENTS_DEFINED`; #615 is preparation-only, open/draft; no DEV deploy permission from its PR | `DEFINE / UNMAPPED` for #515; `EXECUTE / IN_PROGRESS` for documentation preparation as a descriptive view, not issue rewrite | Reconcile #515 canonical status; no build/deploy/acceptance inference |
 | PR #616 | Merged pagination source to `main` (merge SHA `58074d66...`) | `EXECUTE / VERIFIED` only if exact-SHA review evidence is retained; DEV gate `PENDING/UNKNOWN` until measured | Authenticated DEV E2E, exact runtime Service/Job identity and scope checks |
 | #87 / PR #620 / #621 | PR #620 merged to `main@ce9206644c4d0556b3852dfe50a6717ebd5c4615`; #621 R2 FAIL at `91ed389...`, later R3 PASS at `a83332c...` | `EXECUTE / VERIFIED` for R3 reviewed source only; later `RELEASE / READY` cannot mean DEV PASS | Distinguish reviewer identity from posting credential; prove DEV EFA separately |
-| #623 | Current governed work item is `DEVELOPMENT_ANALYSIS`; owner approved M0-M2 only | `DEFINE / IN_PROGRESS` | No pilot activation M3; no merge permitted |
+| #623 | GitHub read on 2026-11-13 (issue last updated 16:33:38 UTC): `Phase: REVIEW` / `Status: REVIEW_PENDING`; owner approved M0-M2 only | `EXECUTE / READY` (shadow only; canonical status unchanged) | No pilot activation M3; no merge permitted |
 
 These shadow readings are **analyst annotations only**, not machine statuses, independent verdicts, deployment authorizations or updates to referenced issues.
 
