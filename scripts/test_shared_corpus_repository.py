@@ -28,6 +28,132 @@ class FakeCursor:
 
 
 class SharedCorpusProjectionTests(unittest.TestCase):
+    def quality_record(self, **updates):
+        record = {
+            "_jscc_source_id": "src-quality",
+            "_jscc_source_name": "Luxoft",
+            "_jscc_run_id": "run-quality-1",
+            "id": "req-28810",
+            "title": "Technical Analyst - Data, Integration and APIs",
+            "company": "Luxoft",
+            "description": "Work with API design and integration quality.",
+            "location": "Bucharest, Romania",
+            "source_url": "https://career.luxoft.com/jobs/technical-analyst-28810",
+            "_jscc_field_provenance": {
+                "title": "JOB_DETAIL_JSONLD",
+                "description": "JOB_DETAIL_JSONLD",
+                "location": "JOB_DETAIL_JSONLD",
+                "date_posted": "JOB_DETAIL_JSONLD",
+            },
+        }
+        record.update(updates)
+        return record
+
+    def test_quality_verified_short_description_and_multisite_location_pass(self):
+        record = self.quality_record(
+            description="Own API delivery.",
+            location="Toronto; Atlanta; Chicago; New York; Seattle; South San Francisco HQ",
+        )
+        assessment = repository.assess_record_quality(record)
+        self.assertEqual(assessment["verdict"], "VALID")
+        self.assertEqual(assessment["issues"], [])
+        self.assertEqual(assessment["field_provenance"]["description"], "JOB_DETAIL_JSONLD")
+        self.assertEqual(assessment["source_id"], "src-quality")
+        self.assertEqual(assessment["run_id"], "run-quality-1")
+        self.assertEqual(len(assessment["posting_key"]), 20)
+
+    def test_quality_rejects_real_social_widget_contamination(self):
+        record = self.quality_record(
+            title="Technical Analyst Facebook Twitter LinkedIn Mail Add to favorites Share",
+            description="Facebook Twitter LinkedIn Mail Add to favorites Share",
+        )
+        assessment = repository.assess_record_quality(record)
+        self.assertEqual(assessment["verdict"], "INVALID")
+        self.assertIn("TITLE_UI_CHROME", assessment["issues"])
+        self.assertIn("DESCRIPTION_UI_CHROME", assessment["issues"])
+        self.assertIsNone(repository.prepare_posting(record))
+
+    def test_quality_missing_or_copied_description_is_not_trusted(self):
+        missing = self.quality_record(description="")
+        duplicated = self.quality_record(description="Technical Analyst - Data, Integration and APIs")
+        cross_card = self.quality_record(
+            description="Solutions Architect Toronto",
+            _jscc_field_provenance={
+                "title": "JOB_DETAIL_JSONLD",
+                "description": "LISTING_CARD",
+                "location": "LISTING_CARD",
+            },
+        )
+        for record, issue in (
+            (missing, "DESCRIPTION_EMPTY"),
+            (duplicated, "DESCRIPTION_EQUALS_TITLE"),
+            (cross_card, "DESCRIPTION_CARD_CONTEXT"),
+        ):
+            with self.subTest(issue=issue):
+                result = repository.assess_record_quality(record)
+                self.assertEqual(result["verdict"], "INCOMPLETE")
+                self.assertIn(issue, result["issues"])
+                posting = repository.prepare_posting(record)
+                self.assertEqual(posting.payload["job_quality"]["verdict"], "INCOMPLETE")
+                self.assertEqual(posting.payload.get("description"), record["description"])
+
+    def test_quality_detects_salary_as_location_and_suppresses_source_lifecycle(self):
+        contaminated = self.quality_record(
+            title="Guide II K-3",
+            description="School program lead",
+            location="$120,000 USD/year ($60 USD/hour)",
+        )
+        result = repository.assess_record_quality(contaminated)
+        self.assertEqual(result["verdict"], "INVALID")
+        self.assertIn("LOCATION_CONTAINS_SALARY", result["issues"])
+        self.assertIsNone(repository.prepare_posting(contaminated))
+
+        class Result:
+            ok = True
+            connector = "public_board"
+            records = [contaminated]
+
+        postings, skipped, incomplete, global_gap = repository.project_collection([Result()])
+        self.assertEqual(postings, [])
+        self.assertEqual(skipped, 1)
+        self.assertEqual(incomplete, {"src-quality"})
+        self.assertFalse(global_gap)
+
+    def test_quality_future_date_unknown_and_unsafe_url_invalid(self):
+        dated = self.quality_record(date_posted="2999-01-01T00:00:00Z")
+        assessment = repository.assess_record_quality(
+            dated, now=datetime(2026, 11, 13, tzinfo=timezone.utc),
+        )
+        self.assertEqual(assessment["verdict"], "INCOMPLETE")
+        self.assertIn("DATE_FUTURE", assessment["issues"])
+        posting = repository.prepare_posting(dated)
+        self.assertIsNone(posting.posted_at)
+        self.assertNotIn("date_posted", posting.payload)
+
+        unsafe = self.quality_record(source_url="https://user:secret@career.luxoft.com/jobs/28810")
+        bad = repository.assess_record_quality(unsafe)
+        self.assertEqual(bad["verdict"], "INVALID")
+        self.assertIn("URL_UNSAFE", bad["issues"])
+        self.assertNotIn("secret", str(bad))
+        self.assertIsNone(repository.prepare_posting(unsafe))
+
+    def test_quality_malformed_provenance_is_unknown_not_an_exception(self):
+        bad = self.quality_record(_jscc_field_provenance={"description": ["ATS_FIELD"]})
+        result = repository.assess_record_quality(bad)
+        self.assertEqual(result["verdict"], "INCOMPLETE")
+        self.assertEqual(result["field_provenance"]["description"], "UNKNOWN")
+        self.assertIn("DESCRIPTION_PROVENANCE_UNKNOWN", result["issues"])
+
+    def test_quality_unknown_provenance_is_never_claimed_valid(self):
+        record = self.quality_record()
+        record.pop("_jscc_field_provenance")
+        result = repository.assess_record_quality(record)
+        self.assertEqual(result["verdict"], "INCOMPLETE")
+        self.assertIn("DESCRIPTION_PROVENANCE_UNKNOWN", result["issues"])
+        posting = repository.prepare_posting(record)
+        self.assertEqual(posting.payload["job_quality"]["field_provenance"]["title"], "UNKNOWN")
+        self.assertEqual(posting.payload["job_quality"]["run_id"], "run-quality-1")
+
     def test_shared_collection_envelope_is_profile_independent(self):
         config = {
             "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"],

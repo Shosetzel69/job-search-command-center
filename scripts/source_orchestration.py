@@ -304,6 +304,8 @@ def emit_source_final(run_id, item):
         outcome=outcome,
         legacy_status=item.get("status"),
         records=item.get("records", 0),
+        quality_counts=item.get("quality_counts"),
+        quality_issues=item.get("quality_issues"),
         error_code=item.get("error_code"),
         failure_stage=item.get("failure_stage"),
         http_status=item.get("http_status"),
@@ -421,14 +423,35 @@ def build_plan(catalog):
     return plan
 
 
-def tag_collection_records(item, results):
-    """Attach stable Source Registry identity before shared persistence."""
+def tag_collection_records(item, results, run_id=None):
+    """Attach source identity, validate fields and isolate provably invalid jobs."""
+    quality_counts = {"VALID": 0, "INCOMPLETE": 0, "INVALID": 0}
+    issue_counts = {}
     for result in results:
+        if not result.ok:
+            continue
+        accepted = []
         for record in result.records or []:
             if not isinstance(record, dict):
+                accepted.append(record)
                 continue
             record.setdefault("_jscc_source_id", item.get("source_id"))
             record.setdefault("_jscc_source_name", item.get("source"))
+            if run_id:
+                record["_jscc_run_id"] = run_id
+            quality = shared_corpus.assess_record_quality(
+                record, source_hint=item.get("source"), run_id=run_id,
+            )
+            quality_counts[quality["verdict"]] += 1
+            for code in quality["issues"]:
+                issue_counts[code] = issue_counts.get(code, 0) + 1
+            if quality["verdict"] != "INVALID":
+                accepted.append(record)
+        result.records = accepted
+    item["quality_counts"] = quality_counts
+    item["quality_issues"] = dict(sorted(issue_counts.items()))
+    item["_jscc_quality_rejected"] = quality_counts["INVALID"]
+    item["_jscc_quality_accepted"] = quality_counts["VALID"] + quality_counts["INCOMPLETE"]
 
 
 def _posting_matches_scope(posting, scope):
@@ -590,7 +613,7 @@ def collect_sources(config, state, now, plan, run_id=None, progress_callback=Non
                 results = [failure_result("web:" + str(item["source_id"]), "collect", exc)]
                 item["web_outcome"] = "error"
                 item["failure_reason"] = diagnostics.sanitize_text(exc)
-            tag_collection_records(item, results)
+            tag_collection_records(item, results, run_id=run_id)
             results = apply_retrieve_scope(item, results, config)
             record_results(item, results)
             collection.extend(results)
@@ -647,6 +670,31 @@ def record_results(item, results):
         item["http_status"] = http_status
         item["error_code"] = first.error_code or error_code_for_http_status(http_status) or "CONNECTOR_ERROR"
         item["failure_stage"] = first.failure_stage or "fetch"
+
+    rejected = item.get("_jscc_quality_rejected", 0)
+    accepted = item.get("_jscc_quality_accepted", 0)
+    if rejected and ok:
+        if not accepted and not failed:
+            item["status"] = "failed"
+            item["outcome"] = "failed"
+            item["error_code"] = "SCHEMA_ERROR"
+            item["failure_stage"] = "parse"
+            item["error"] = f"All {rejected} collected job(s) failed field quality"
+        else:
+            if accepted and item["records"]:
+                item["status"] = "completed"
+                item["outcome"] = "partial"
+            elif accepted and not failed:
+                item["status"] = "completed"
+                item["outcome"] = "success_empty"
+            if failed:
+                first = failed[0]
+                item["error_code"] = first.error_code or error_code_for_http_status(first.http_status) or "CONNECTOR_ERROR"
+                item["failure_stage"] = first.failure_stage or "fetch"
+            item["error"] = "; ".join(filter(None, (
+                item.get("error"),
+                f"rejected {rejected} of {accepted + rejected} collected job(s) for field quality",
+            )))
 
     if item.get("error") and not item.get("failure_reason"):
         item["failure_reason"] = item["error"]
@@ -773,7 +821,7 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
                 )
         except Exception as exc:
             results = [failure_result(connector, "collect", exc)]
-        tag_collection_records(item, results)
+        tag_collection_records(item, results, run_id=run_id)
         results = apply_retrieve_scope(item, results, config)
         collection.extend(results)
         record_results(item, results)

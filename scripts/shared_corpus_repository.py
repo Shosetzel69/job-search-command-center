@@ -263,7 +263,8 @@ def _posted_at(record: Mapping[str, Any]) -> datetime | None:
         return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc)
+    normalized = parsed.astimezone(timezone.utc)
+    return normalized if normalized <= datetime.now(timezone.utc) else None
 
 
 def _external_job_id(record: Mapping[str, Any]) -> str | None:
@@ -288,7 +289,114 @@ def _payload(record: Mapping[str, Any], classification_status: str) -> dict[str,
     return payload
 
 
+QUALITY_PROVENANCE = frozenset({
+    "ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML", "LISTING_CARD",
+})
+QUALITY_FIELDS = ("title", "description", "location", "date_posted")
+SHARE_MARKUP = re.compile(
+    r"\bfacebook\s+twitter\s+linkedin\s+mail\b"
+    r"|\badd to favorites\s+share\b",
+    re.I,
+)
+SALARY_MARKUP = re.compile(
+    r"(?:[$€£]\s*[\d,]+|[\d,]+\s*(?:USD|EUR|GBP)\s*/\s*(?:year|hour|yr|hr))",
+    re.I,
+)
+
+
+def assess_record_quality(
+    record: Mapping[str, Any], *, source_hint: str | None = None,
+    run_id: str | None = None, now: datetime | None = None,
+) -> dict[str, Any]:
+    """Evaluate only verifiable signals; missing provenance is not trusted."""
+    title = _text(record.get("job_title") or record.get("title"))
+    description = _text(record.get("description"))
+    location = _text(record.get("location") or record.get("short_location"))
+    date = _text(record.get("date_posted") or record.get("posted_at"))
+    source_id = _text(record.get("_jscc_source_id") or source_hint)
+    raw_url = record.get("final_url") or record.get("source_url") or record.get("url")
+    url = _posting_url(record)
+    external_id = _external_job_id(record)
+    raw_provenance = record.get("_jscc_field_provenance")
+    if not isinstance(raw_provenance, Mapping):
+        raw_provenance = {}
+    provenance = {
+        field: (raw_provenance.get(field)
+                if isinstance(raw_provenance.get(field), str)
+                and raw_provenance.get(field) in QUALITY_PROVENANCE else "UNKNOWN")
+        for field in QUALITY_FIELDS
+    }
+    issues: set[str] = set()
+    invalid: set[str] = set()
+
+    if not title or not _text(record.get("company") or record.get("company_name")):
+        invalid.add("IDENTITY_MISSING")
+    if not external_id and not url:
+        invalid.add("IDENTITY_MISSING")
+    if raw_url:
+        try:
+            split = urlsplit(str(raw_url))
+            if (split.scheme != "https" or not split.hostname
+                    or split.username is not None or split.password is not None
+                    or split.port is not None):
+                invalid.add("URL_UNSAFE")
+        except ValueError:
+            invalid.add("URL_UNSAFE")
+    elif not url:
+        issues.add("URL_UNVERIFIED")
+
+    if SHARE_MARKUP.search(title):
+        invalid.add("TITLE_UI_CHROME")
+    if SHARE_MARKUP.search(description):
+        invalid.add("DESCRIPTION_UI_CHROME")
+    if not description:
+        issues.add("DESCRIPTION_EMPTY")
+    elif description.casefold() == title.casefold():
+        issues.add("DESCRIPTION_EQUALS_TITLE")
+    if description and provenance["description"] == "LISTING_CARD":
+        issues.add("DESCRIPTION_CARD_CONTEXT")
+    if location and provenance["location"] == "LISTING_CARD":
+        issues.add("LOCATION_UNSTRUCTURED_CONTEXT")
+    if location and SALARY_MARKUP.search(location):
+        invalid.add("LOCATION_CONTAINS_SALARY")
+
+    if date:
+        try:
+            parsed = datetime.fromisoformat(date.replace("Z", "+00:00"))
+            if parsed.tzinfo is None:
+                parsed = parsed.replace(tzinfo=timezone.utc)
+            if parsed.astimezone(timezone.utc) > (now or datetime.now(timezone.utc)):
+                issues.add("DATE_FUTURE")
+        except ValueError:
+            issues.add("DATE_INVALID")
+    for field, value in (
+        ("title", title), ("description", description), ("location", location),
+    ):
+        if value and provenance[field] == "UNKNOWN":
+            issues.add(f"{field.upper()}_PROVENANCE_UNKNOWN")
+    if date and provenance["date_posted"] == "UNKNOWN":
+        issues.add("DATE_PROVENANCE_UNKNOWN")
+    issues.update(invalid)
+
+    identity = _text(external_id or url)
+    fingerprint = hashlib.sha256(
+        f"{source_id}\0{identity}".encode("utf-8")
+    ).hexdigest()[:20] if identity else None
+    return {
+        "quality_version": "1",
+        "verdict": "INVALID" if invalid else ("INCOMPLETE" if issues else "VALID"),
+        "issues": sorted(issues),
+        "field_provenance": provenance,
+        "source_id": source_id or None,
+        "run_id": _text(run_id or record.get("_jscc_run_id")) or None,
+        "posting_key": fingerprint,
+    }
+
+
 def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -> SharedPosting | None:
+    quality = assess_record_quality(record, source_hint=source_hint)
+    if quality["verdict"] == "INVALID":
+        return None
     source_id = _text(record.get("_jscc_source_id"))
     source_name = _text(record.get("_jscc_source_name") or record.get("source") or source_hint)
     if not source_id:
@@ -343,6 +451,11 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         description=record.get("description"),
     )
     repost_of = _text(record.get("repost_of_external_job_id") or record.get("repost_of_id")) or None
+    payload = _payload(record, classification_status)
+    if {"DATE_FUTURE", "DATE_INVALID"} & set(quality["issues"]):
+        payload.pop("date_posted", None)
+        payload.pop("posted_at", None)
+    payload["job_quality"] = quality
 
     return SharedPosting(
         source_id=source_id,
@@ -359,7 +472,7 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         role_family=family,
         posted_at=_posted_at(record),
         repost_of_external_job_id=repost_of,
-        payload=_payload(record, classification_status),
+        payload=payload,
         role_subfamily=role_subfamily,
         seniority=seniority,
         contract_type=contract_type,
