@@ -12,7 +12,7 @@ steps:
       - -ceu
       - |
         [[ "${_GIT_SHA}" == "121f88e212013d2c4665bb70f881a3bcee365d21" ]] || { echo "GOV85_SHA_DENIED" >&2; exit 86; }
-        [[ "${_GOV85_TICKETS}" == "515,520,535" ]] || { echo "GOV85_SCOPE_DENIED" >&2; exit 86; }
+        [[ "${_GOV85_TICKETS}" == "515-520-535" ]] || { echo "GOV85_SCOPE_DENIED" >&2; exit 86; }
         [[ "$(cat /workspace/.gov85-source-sha)" == "${_GIT_SHA}" ]] || { echo "GOV85_SOURCE_BUNDLE_MISMATCH" >&2; exit 86; }
         if [[ -n "${COMMIT_SHA:-}" && "${COMMIT_SHA}" != "${_GIT_SHA}" ]]; then
           echo "GOV85_CLOUD_BUILD_COMMIT_SHA_MISMATCH" >&2
