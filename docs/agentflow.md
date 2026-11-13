@@ -3,7 +3,7 @@
 Status: **CANONICAL**  
 Version: **1.4**  
 Applies to: **AGENTFLOW**  
-Last verified: **2026-10-08**
+Last verified: **2026-11-13**
 
 ## 1. Purpose
 
@@ -55,6 +55,9 @@ AgentFlow este stage-bound:
 - promovarea TEST/PROD nu este executata ca extensie implicita a implementarii.
 
 ## 3. Canonical Issue header
+
+For **new eligible DEV feature work under GOV85-DEV**, use the administrative `Phase` and `Status` values from `GOVERNANCE.md` §11 and add `Governance: GOV85-DEV` to the header. Existing nonconverted Issues retain the §2.8 canonical header and are not rewritten solely for migration.
+
 
 Pentru work AgentFlow activ, headerul curent este:
 
@@ -279,6 +282,10 @@ Nu se incarca implicit istoricul, arhivele sau toate documentele proiectului.
 - `docs/documentation-policy.md` - context/documentation rules;
 - `.github/ISSUE_TEMPLATE/executable-task.yml` - executable task metadata.
 - `job-search-discovery/templates/DEVELOPMENT_TRANSFER_PACKAGE.md` - template DTP pentru handoff Discovery -> Development.
-## 16. GOV-85 administrative shadow model (DEV only; NOT active)
+## 16. GOV-85 active administrative track (DEV only)
 
-The owner-authorized M0-M2 pilot #623 observes an optional three-phase/nine-state administrative crosswalk in `docs/analysis/2026-11-13-gov85-dev-shadow-pilot.md`. It is documentation and shadow analysis only, **not** a substitute for this contract. `APPROVE_TASK_CONTRACT`, architecture delta triggers, stop/retry limits, separate independent review/evidence and DEV→TEST→PROD release gates keep their exact prior authority. A shadow `VERIFIED` is never a substitute for an environment functional PASS. The M3 activation decision is not granted.
+Owner activation 2026-11-13 (#623): new and ongoing DEV feature implementations use the three-phase/nine-state GOV-85 **administrative track** specified in `GOVERNANCE.md` §11. New work header: `Process: AGENTFLOW`, `Governance: GOV85-DEV`, `Phase: DEFINE|EXECUTE|RELEASE`, and a matching nine-state `Status`.
+
+Do not rewrite current Issues or silently convert LEGACY-ADAPTED contract semantics. Reuse valid requirement, architecture, ATC, exact-SHA review and QA evidence from existing implementations; use GOV85 as the current administration view only. The original 15-phase/62-status taxonomy remains applicable to pre-existing nonconverted items and to legacy technical gate events. Historical shadow mapping is in `docs/analysis/2026-11-13-gov85-dev-shadow-pilot.md`.
+
+`APPROVE_TASK_CONTRACT`, architecture triggers, stop/retry boundaries, separate independent review/evidence, candidate identity, EFA/G1-G5 and owner-governed DEV→TEST→PROD gates keep prior authority. `VERIFIED` is not `DEV_PASS`, `TEST_PASS` or Functional Acceptance. GOV-85 does not authorize any build or deploy and does not change TEST/PROD release gates.
