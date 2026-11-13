@@ -110,7 +110,15 @@ jobs:
           test -s /tmp/gov85-job || { echo GOV85_JOB_BASELINE_UNKNOWN >&2; exit 86; }
           echo "GOV85_SERVICE_REVISION=$(cat /tmp/gov85-service)" >> "$GITHUB_STEP_SUMMARY"
           echo "GOV85_JOB_ID=$(cat /tmp/gov85-job)" >> "$GITHUB_STEP_SUMMARY"
-          echo "GOV85_READ_ONLY_PREFLIGHT_ONLY; image/config rollback and quiescence remain separate release gates" >> "$GITHUB_STEP_SUMMARY"
+          # Capture only image identity and serving revisions. Never print a full
+          # Cloud Run resource: JSON resources include environment/secret bindings.
+          gcloud run services describe jscc-command-api-dev \
+            --project=jscc-dev --region=europe-west1 --format=json >/tmp/gov85-service.json
+          gcloud run jobs describe jscc-search-dev \
+            --project=jscc-dev --region=europe-west1 --format=json >/tmp/gov85-job.json
+          python3 control/scripts/gcp/gov85_sanitize_runtime_images.py \
+            /tmp/gov85-service.json /tmp/gov85-job.json >> "$GITHUB_STEP_SUMMARY"
+          echo "GOV85_READ_ONLY_PREFLIGHT_ONLY; image identity is NOT a complete rollback or quiescence attestation" >> "$GITHUB_STEP_SUMMARY"
       - name: Deny partial existing image pairs
         if: inputs.action == 'build-images'
         env:
