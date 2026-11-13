@@ -12,17 +12,20 @@ import sys
 
 CANDIDATE_SHA = "121f88e212013d2c4665bb70f881a3bcee365d21"
 ALLOWED_TICKETS = ("515", "520", "535")
-ALLOWED_ACTION = "preflight"
+ALLOWED_ACTIONS = ("preflight", "build-images")
+BUILD_CONFIRMATION = "APPROVE_GOV85_DEV_IMAGES_121F88"
 
 
-def admit(*, environment: str, candidate_sha: str, tickets: str, action: str) -> dict:
+def admit(*, environment: str, candidate_sha: str, tickets: str, action: str, owner_gate: str = "") -> dict:
     requested = tickets.split(",")
     if (
         environment != "dev"
         or candidate_sha != CANDIDATE_SHA
         or not re.fullmatch(r"[0-9a-f]{40}", candidate_sha)
         or tuple(requested) != ALLOWED_TICKETS
-        or action != ALLOWED_ACTION
+        or action not in ALLOWED_ACTIONS
+        or (action == "build-images" and owner_gate != BUILD_CONFIRMATION)
+        or (action == "preflight" and bool(owner_gate))
     ):
         raise ValueError("GOV85_DEV_EXCEPTION_DENIED")
     return {
@@ -35,8 +38,8 @@ def admit(*, environment: str, candidate_sha: str, tickets: str, action: str) ->
             "520: F520-06 only; F520-01 excluded",
             "535: pagination PR616 only; FIT PR591 excluded",
         ],
-        "allowed_action": ALLOWED_ACTION,
-        "build_authorized": False,
+        "allowed_action": action,
+        "build_authorized": action == "build-images",
         "deploy_authorized": False,
         "legacy_exit86_override": False,
         "database_migration_authorized": False,
@@ -51,6 +54,7 @@ def main(argv=None) -> int:
     parser.add_argument("--candidate-sha", required=True)
     parser.add_argument("--tickets", required=True)
     parser.add_argument("--action", required=True)
+    parser.add_argument("--owner-gate", default="")
     args = parser.parse_args(argv)
     try:
         proof = admit(
@@ -58,6 +62,7 @@ def main(argv=None) -> int:
             candidate_sha=args.candidate_sha,
             tickets=args.tickets,
             action=args.action,
+            owner_gate=args.owner_gate,
         )
     except ValueError:
         print("GOV85_DEV_EXCEPTION_DENIED", file=sys.stderr)
