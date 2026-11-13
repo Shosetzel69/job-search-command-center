@@ -304,6 +304,8 @@ def emit_source_final(run_id, item):
         outcome=outcome,
         legacy_status=item.get("status"),
         records=item.get("records", 0),
+        quality_counts=item.get("quality_counts"),
+        quality_issues=item.get("quality_issues"),
         error_code=item.get("error_code"),
         failure_stage=item.get("failure_stage"),
         http_status=item.get("http_status"),
@@ -436,7 +438,7 @@ def tag_collection_records(item, results, run_id=None):
             record.setdefault("_jscc_source_id", item.get("source_id"))
             record.setdefault("_jscc_source_name", item.get("source"))
             if run_id:
-                record.setdefault("_jscc_run_id", run_id)
+                record["_jscc_run_id"] = run_id
             quality = shared_corpus.assess_record_quality(
                 record, source_hint=item.get("source"), run_id=run_id,
             )
@@ -674,9 +676,9 @@ def record_results(item, results):
         if item["records"]:
             item["status"] = "completed"
             item["outcome"] = "partial"
-            item["error"] = (item.get("error") or "") + (
-                f"; rejected {rejected} contaminated job(s)"
-            )
+            item["error"] = "; ".join(filter(None, (
+                item.get("error"), f"rejected {rejected} contaminated job(s)"
+            )))
         else:
             item["status"] = "failed"
             item["outcome"] = "failed"
