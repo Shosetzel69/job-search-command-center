@@ -11,18 +11,18 @@ steps:
       - -ceu
       - |
         expected="121f88e212013d2c4665bb70f881a3bcee365d21"
-        [[ "${_GIT_SHA}" == "${expected}" ]] || { echo "GOV85_SOURCE_SHA_DENIED" >&2; exit 86; }
+        [[ "${_GIT_SHA}" == "121f88e212013d2c4665bb70f881a3bcee365d21" ]] || { echo "GOV85_SOURCE_SHA_DENIED" >&2; exit 86; }
         [[ "${_CONTROL_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "GOV85_CONTROL_SHA_MISSING" >&2; exit 86; }
         imm="$(gcloud artifacts repositories describe jscc --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
-        [[ "${imm}" == "True" || "${imm}" == "true" ]] || { echo "GOV85_IMMUTABLE_TAGS_REQUIRED" >&2; exit 86; }
+        [[ "$imm" == "True" || "$imm" == "true" ]] || { echo "GOV85_IMMUTABLE_TAGS_REQUIRED" >&2; exit 86; }
         for role in jscc jscc-service; do
-          image="europe-west1-docker.pkg.dev/jscc-shared/jscc/${role}:${_GIT_SHA}"
-          if gcloud artifacts docker images describe "${image}" --project=jscc-shared --format='value(image_summary.digest)' >/tmp/gov85-existing 2>/tmp/gov85-error; then
-            echo "GOV85_EXISTING_IMAGE_NO_REBUILD role=${role}" >&2
+          image="europe-west1-docker.pkg.dev/jscc-shared/jscc/$role:${_GIT_SHA}"
+          if gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)' >/tmp/gov85-existing 2>/tmp/gov85-error; then
+            echo "GOV85_EXISTING_IMAGE_NO_REBUILD role=$role" >&2
             exit 86
           fi
           if ! grep -Eiq '(not found|NOT_FOUND|404)' /tmp/gov85-error; then
-            echo "GOV85_IMAGE_STATE_UNVERIFIED role=${role}" >&2
+            echo "GOV85_IMAGE_STATE_UNVERIFIED role=$role" >&2
             exit 86
           fi
         done
@@ -63,10 +63,10 @@ steps:
       - -ceu
       - |
         for role in jscc jscc-service; do
-          image="europe-west1-docker.pkg.dev/jscc-shared/jscc/${role}:${_GIT_SHA}"
-          digest="$(gcloud artifacts docker images describe "${image}" --project=jscc-shared --format='value(image_summary.digest)')"
-          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "GOV85_DIGEST_NOT_PROVEN role=${role}" >&2; exit 86; }
-          echo "GOV85_DEV_IMAGE role=${role} digest=${digest} source=${_GIT_SHA}"
+          image="europe-west1-docker.pkg.dev/jscc-shared/jscc/$role:${_GIT_SHA}"
+          digest="$(gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)')"
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "GOV85_DIGEST_NOT_PROVEN role=$role" >&2; exit 86; }
+          echo "GOV85_DEV_IMAGE role=$role digest=$digest source=${_GIT_SHA}"
         done
         echo "GOV85_IMAGE_ONLY_COMPLETE_NO_DEPLOY"
 serviceAccount: projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com
