@@ -451,6 +451,7 @@ def tag_collection_records(item, results, run_id=None):
     item["quality_counts"] = quality_counts
     item["quality_issues"] = dict(sorted(issue_counts.items()))
     item["_jscc_quality_rejected"] = quality_counts["INVALID"]
+    item["_jscc_quality_accepted"] = quality_counts["VALID"] + quality_counts["INCOMPLETE"]
 
 
 def _posting_matches_scope(posting, scope):
@@ -671,20 +672,29 @@ def record_results(item, results):
         item["failure_stage"] = first.failure_stage or "fetch"
 
     rejected = item.get("_jscc_quality_rejected", 0)
+    accepted = item.get("_jscc_quality_accepted", 0)
     if rejected and ok:
-        # Provider transport success is not a clean data-quality success.
-        if item["records"]:
-            item["status"] = "completed"
-            item["outcome"] = "partial"
-            item["error"] = "; ".join(filter(None, (
-                item.get("error"), f"rejected {rejected} contaminated job(s)"
-            )))
-        else:
+        if not accepted and not failed:
             item["status"] = "failed"
             item["outcome"] = "failed"
             item["error_code"] = "SCHEMA_ERROR"
             item["failure_stage"] = "parse"
             item["error"] = f"All {rejected} collected job(s) failed field quality"
+        else:
+            if accepted and item["records"]:
+                item["status"] = "completed"
+                item["outcome"] = "partial"
+            elif accepted and not failed:
+                item["status"] = "completed"
+                item["outcome"] = "success_empty"
+            if failed:
+                first = failed[0]
+                item["error_code"] = first.error_code or error_code_for_http_status(first.http_status) or "CONNECTOR_ERROR"
+                item["failure_stage"] = first.failure_stage or "fetch"
+            item["error"] = "; ".join(filter(None, (
+                item.get("error"),
+                f"rejected {rejected} of {accepted + rejected} collected job(s) for field quality",
+            )))
 
     if item.get("error") and not item.get("failure_reason"):
         item["failure_reason"] = item["error"]
