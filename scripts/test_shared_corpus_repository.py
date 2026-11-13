@@ -126,7 +126,9 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         )
         self.assertEqual(assessment["verdict"], "INCOMPLETE")
         self.assertIn("DATE_FUTURE", assessment["issues"])
-        self.assertIsNone(repository.prepare_posting(dated).posted_at)
+        posting = repository.prepare_posting(dated)
+        self.assertIsNone(posting.posted_at)
+        self.assertNotIn("date_posted", posting.payload)
 
         unsafe = self.quality_record(source_url="https://user:secret@career.luxoft.com/jobs/28810")
         bad = repository.assess_record_quality(unsafe)
