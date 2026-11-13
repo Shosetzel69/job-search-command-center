@@ -29,6 +29,21 @@ class Gov85ExceptionAdmissionTests(unittest.TestCase):
         self.assertFalse(result["iam_change_authorized"])
         self.assertFalse(result["test_prod_authorized"])
 
+    def test_exact_build_requires_additional_explicit_owner_gate(self):
+        with self.assertRaisesRegex(ValueError, "DENIED"):
+            gate.admit(**{**VALID, "action": "build-images"})
+        with self.assertRaisesRegex(ValueError, "DENIED"):
+            gate.admit(**{**VALID, "action": "build-images", "owner_gate": "APPROVED"})
+        accepted = gate.admit(**{
+            **VALID, "action": "build-images",
+            "owner_gate": "APPROVE_GOV85_DEV_IMAGES_121F88",
+        })
+        self.assertTrue(accepted["build_authorized"])
+        self.assertFalse(accepted["deploy_authorized"])
+        self.assertFalse(accepted["legacy_exit86_override"])
+        with self.assertRaisesRegex(ValueError, "DENIED"):
+            gate.admit(**{**VALID, "owner_gate": "APPROVE_GOV85_DEV_IMAGES_121F88"})
+
     def test_out_of_scope_is_denied(self):
         mutations = [
             {"environment": "test"}, {"environment": "prod"},
