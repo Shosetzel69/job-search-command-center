@@ -29,12 +29,24 @@ body:
         - INHERIT-PARENT
     validations:
       required: true
+  - type: dropdown
+    id: governance
+    attributes:
+      label: Governance track
+      description: GOV85-DEV for new DEV feature work; preserve the existing mode for historical/legacy work.
+      options:
+        - GOV85-DEV
+        - EXISTING-AGENTFLOW
+        - LEGACY-ADAPTED
+    validations:
+      required: false
+
   - type: input
     id: phase
     attributes:
       label: Phase
-      description: Canonical workflow phase from GOVERNANCE.md section 2.8.
-      placeholder: DEVELOPMENT_ANALYSIS
+      description: GOV85-DEV uses DEFINE/EXECUTE/RELEASE (§11); otherwise use canonical §2.8.
+      placeholder: DEFINE
     validations:
       required: true
 
@@ -42,8 +54,8 @@ body:
     id: status
     attributes:
       label: Status
-      description: Canonical status valid for the selected Phase. Do not use BLOCKED/READY FOR DEV/WAITING FOR as free-form aliases.
-      placeholder: DEVELOPMENT_ANALYSIS
+      description: GOV85-DEV uses one of nine §11 admin states; otherwise use a canonical §2.8 status. Gate verdicts remain separate.
+      placeholder: PROPOSED
     validations:
       required: true
 
