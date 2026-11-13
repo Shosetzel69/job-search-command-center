@@ -9,7 +9,7 @@ test('ADMIN UI renders real run progress from the canonical model', () => {
   assert.match(main, /Progres actualizare surse/);
   assert.match(main, /GOOD \{progress\.good\}/);
   assert.match(main, /FAIL \{progress\.failed\}/);
-  assert.match(main, /\{progress\.processed\} din \{progress\.total\} surse procesate/);
+  assert.match(main, /\{progress\.processed\} din \{progress\.total\} surse planificate procesate/);
 });
 
 test('ADMIN refresh polls even before the active run pointer becomes visible', () => {
