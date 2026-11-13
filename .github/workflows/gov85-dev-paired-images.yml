@@ -31,14 +31,14 @@ jobs:
     environment: dev
     timeout-minutes: 50
     env:
-      GCP_WIF_PROVIDER: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }
-      GCP_WIF_SA: ${{ vars.JSCC_DEV_GCP_WIF_SERVICE_ACCOUNT }
+      GCP_WIF_PROVIDER: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }}
+      GCP_WIF_SA: ${{ vars.JSCC_DEV_GCP_WIF_SERVICE_ACCOUNT }}
       CANDIDATE_SHA: "121f88e212013d2c4665bb70f881a3bcee365d21"
     steps:
       - name: Check out reviewed control plane
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ github.sha }
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
       - name: Check out EXACT application source
@@ -50,16 +50,16 @@ jobs:
       - name: Fail-closed owner, SHA, tickets and intent gate
         shell: bash
         env:
-          INPUT_SHA: ${{ inputs.source_sha }
-          INPUT_ACTION: ${{ inputs.action }
-          INPUT_GATE: ${{ inputs.owner_gate }
-          ACTOR: ${{ github.actor }
+          INPUT_SHA: ${{ inputs.source_sha }}
+          INPUT_ACTION: ${{ inputs.action }}
+          INPUT_GATE: ${{ inputs.owner_gate }}
+          ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
           test "$ACTOR" = Shosetzel69 || { echo GOV85_OWNER_ONLY >&2; exit 86; }
           test "$INPUT_SHA" = "$CANDIDATE_SHA" || { echo GOV85_WRONG_APP_SHA >&2; exit 86; }
           test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA" || exit 86
-          test "$(git -C control rev-parse HEAD)" = "${{ github.sha }" || exit 86
+          test "$(git -C control rev-parse HEAD)" = "${{ github.sha }}" || exit 86
           test -z "$(git -C candidate status --porcelain)" || exit 86
           python3 control/scripts/gcp/gov85_dev_scoped_exception.py \
             --environment dev --candidate-sha "$INPUT_SHA" --tickets 515,520,535 \
@@ -69,13 +69,13 @@ jobs:
             exit 86
           }
           echo "GOV85_APP_SHA=$INPUT_SHA" >> "$GITHUB_STEP_SUMMARY"
-          echo "GOV85_CONTROL_SHA=${{ github.sha }" >> "$GITHUB_STEP_SUMMARY"
+          echo "GOV85_CONTROL_SHA=${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
       - name: Authenticate via existing Workload Identity Federation
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           project_id: jscc-shared
-          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }
-          service_account: ${{ env.GCP_WIF_SA }
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_WIF_SA }}
       - name: Set up Google Cloud SDK
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
       - name: Read-only Artifact Registry plus canonical DEV Service and Job
@@ -114,8 +114,8 @@ jobs:
       - name: Deny partial existing image pairs
         if: inputs.action == 'build-images'
         env:
-          SEARCH_STATE: ${{ steps.preflight.outputs.jscc_state }
-          SERVICE_STATE: ${{ steps.preflight.outputs.jscc_service_state }
+          SEARCH_STATE: ${{ steps.preflight.outputs.jscc_state }}
+          SERVICE_STATE: ${{ steps.preflight.outputs.jscc_service_state }}
         shell: bash
         run: |
           test "$SEARCH_STATE" = "$SERVICE_STATE" || {
@@ -128,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           control_sha="$(git -C control rev-parse HEAD)"
-          test "$control_sha" = "${{ github.sha }" || exit 86
+          test "$control_sha" = "${{ github.sha }}" || exit 86
           # The uploaded Cloud Build source is solely candidate/ at the approved app SHA.
           # The control recipe is from the separately reviewed GitHub control SHA.
           gcloud builds submit candidate \
