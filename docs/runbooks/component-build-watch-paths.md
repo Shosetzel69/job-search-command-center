@@ -1,5 +1,8 @@
 # JSCC — Component-scoped automatic triggers (Variant B)
-# Status: IMPLEMENTATION PARTIAL / EXTERNAL CONFIG PENDING
+Status: WORKING
+Applicability: CURRENT — not an active external trigger configuration
+Applies to: AGENTFLOW / DEV preparation
+Implementation: PARTIAL / EXTERNAL CONFIG PENDING
 Date: 2026-11-13
 Owner decision: Variant B for all JSCC components
 Root: #626; related GOV-85 #623 / O-01
