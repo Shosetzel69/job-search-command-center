@@ -405,6 +405,51 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(item["error_code"], "SCHEMA_ERROR")
         self.assertEqual(item["failure_stage"], "parse")
 
+    def test_quality_scoped_valid_outside_scope_and_invalid_is_success_empty(self):
+        valid = record("Jobicy", "valid")
+        valid["_jscc_field_provenance"] = {
+            "title": "ATS_FIELD", "description": "ATS_FIELD",
+            "location": "ATS_FIELD", "date_posted": "ATS_FIELD",
+        }
+        invalid = record("Jobicy", "invalid")
+        invalid["location"] = "$120,000 USD/year"
+        item = {"source_id": "src-jobicy", "source": "Jobicy", "status": "pending"}
+        results = [engine.CollectionResult("jobicy", "q", True, [valid, invalid], 2)]
+        orchestration.tag_collection_records(item, results, run_id="run-quality")
+        scoped = orchestration.apply_retrieve_scope(item, results, {
+            "_jscc_retrieve_scope": {"scopes": [{
+                "role_family": "NOT_THIS_FAMILY",
+                "target_country_codes": ["ZZ"],
+            }]}
+        })
+        orchestration.record_results(item, scoped)
+        self.assertEqual(item["_jscc_quality_accepted"], 1)
+        self.assertEqual(item["records"], 0)
+        self.assertEqual(item["status"], "completed")
+        self.assertEqual(item["outcome"], "success_empty")
+        self.assertIsNone(item["error_code"])
+        self.assertIn("rejected 1 of 2 collected job(s)", item["error"])
+
+    def test_quality_rejection_preserves_transport_failure(self):
+        invalid = record("Jobicy", "invalid")
+        invalid["location"] = "$120,000 USD/year"
+        item = {"source_id": "src-jobicy", "source": "Jobicy", "status": "pending"}
+        results = [
+            engine.CollectionResult("jobicy", "ok", True, [invalid], 1),
+            engine.CollectionResult("jobicy", "fail", False, [], 0,
+                                    "Transport timed out", error_code="TIMEOUT",
+                                    failure_stage="fetch", http_status=504),
+        ]
+        orchestration.tag_collection_records(item, results, run_id="run-quality")
+        orchestration.record_results(item, results)
+        self.assertEqual(item["outcome"], "partial")
+        self.assertEqual(item["status"], "completed")
+        self.assertEqual(item["error_code"], "TIMEOUT")
+        self.assertEqual(item["failure_stage"], "fetch")
+        self.assertEqual(item["http_status"], 504)
+        self.assertIn("Transport timed out", item["error"])
+        self.assertIn("rejected 1 of 1 collected job(s)", item["error"])
+
     def test_quality_missing_provenance_reports_incomplete_without_false_valid(self):
         item = {"source_id": "src-jobicy", "source": "Jobicy", "status": "pending"}
         results = [engine.CollectionResult("jobicy", "q", True, [record("Jobicy", "1")], 1)]
