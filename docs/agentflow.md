@@ -68,7 +68,7 @@ Status: <canonical status>
 Blocked by: <issue/gate/reason sau NONE>
 ```
 
-Taxonomia completa `Phase` / `Status` este definita numai in `GOVERNANCE.md` sectiunea 2.8. Nu se mentine o copie separata aici.
+Taxonomia `Phase` / `Status` este definita numai in `GOVERNANCE.md`: §11 pentru work nou `Governance: GOV85-DEV`, respectiv §2.8 pentru work existent neconvertit si legacy. Nu se mentine o copie separata aici.
 
 Headerul canonic cel mai recent are precedenta fata de statusurile istorice ramase in body.
 
