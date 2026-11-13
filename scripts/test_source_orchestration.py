@@ -366,6 +366,56 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(item["error_code"], "TIMEOUT")
         self.assertEqual(item["outcome"], "failed")
 
+    def test_quality_mixed_batch_rejects_invalid_and_keeps_partial(self):
+        valid = record("Jobicy", "valid")
+        valid["_jscc_field_provenance"] = {
+            "title": "ATS_FIELD", "description": "ATS_FIELD",
+            "location": "ATS_FIELD", "date_posted": "ATS_FIELD",
+        }
+        contaminated = record("Jobicy", "contaminated")
+        contaminated["location"] = "$120,000 USD/year ($60 USD/hour)"
+        item = {"source_id": "src-jobicy", "source": "Jobicy", "status": "pending"}
+        results = [engine.CollectionResult("jobicy", "q", True, [valid, contaminated], 2)]
+        orchestration.tag_collection_records(item, results, run_id="run-quality")
+        orchestration.record_results(item, results)
+
+        self.assertEqual(len(results[0].records), 1)
+        self.assertEqual(results[0].records[0]["id"], "valid")
+        self.assertEqual(results[0].records[0]["_jscc_run_id"], "run-quality")
+        self.assertEqual(item["quality_counts"], {
+            "VALID": 1, "INCOMPLETE": 0, "INVALID": 1,
+        })
+        self.assertEqual(item["quality_issues"]["LOCATION_CONTAINS_SALARY"], 1)
+        self.assertEqual(item["outcome"], "partial")
+        self.assertEqual(item["records"], 1)
+        self.assertIsNone(item["error_code"])
+        self.assertNotIn("$120,000", item["error"])
+
+    def test_quality_all_invalid_does_not_become_success_empty(self):
+        bad = record("Jobicy", "invalid")
+        bad["title"] = "IT Project Manager Facebook Twitter Linkedin Mail"
+        item = {"source_id": "src-jobicy", "source": "Jobicy", "status": "pending"}
+        results = [engine.CollectionResult("jobicy", "q", True, [bad], 1)]
+        orchestration.tag_collection_records(item, results, run_id="run-quality")
+        orchestration.record_results(item, results)
+        self.assertEqual(results[0].records, [])
+        self.assertEqual(item["records"], 0)
+        self.assertEqual(item["quality_counts"]["INVALID"], 1)
+        self.assertEqual(item["outcome"], "failed")
+        self.assertEqual(item["error_code"], "SCHEMA_ERROR")
+        self.assertEqual(item["failure_stage"], "parse")
+
+    def test_quality_missing_provenance_reports_incomplete_without_false_valid(self):
+        item = {"source_id": "src-jobicy", "source": "Jobicy", "status": "pending"}
+        results = [engine.CollectionResult("jobicy", "q", True, [record("Jobicy", "1")], 1)]
+        orchestration.tag_collection_records(item, results, run_id="run-quality")
+        orchestration.record_results(item, results)
+        self.assertEqual(item["quality_counts"]["INCOMPLETE"], 1)
+        self.assertEqual(item["quality_counts"]["VALID"], 0)
+        self.assertEqual(item["outcome"], "success")
+        self.assertEqual(len(results[0].records), 1)
+        self.assertIn("DESCRIPTION_PROVENANCE_UNKNOWN", item["quality_issues"])
+
     def test_source_aggregates_separate_outcomes_and_failure_dimensions(self):
         plan = [
             {"outcome": "success"},
