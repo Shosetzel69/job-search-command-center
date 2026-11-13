@@ -1,0 +1,142 @@
+# New GOV85 DEV-only image lane. Does NOT call legacy promotion, migrations or IAM.
+name: GOV85 DEV paired image preflight and build
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        type: choice
+        options: [preflight, build-images]
+        required: true
+        default: preflight
+      source_sha:
+        description: Exact 40-hex approved application SHA
+        type: string
+        required: true
+      owner_gate:
+        description: Required for build-images only
+        type: string
+        required: false
+        default: ""
+permissions:
+  contents: read
+  id-token: write
+concurrency:
+  group: gov85-dev-515-520-535-images
+  cancel-in-progress: false
+jobs:
+  paired-images:
+    name: DEV-only immutable images, never Cloud Run deployment
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    environment: dev
+    timeout-minutes: 50
+    env:
+      GCP_WIF_PROVIDER: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }
+      GCP_WIF_SA: ${{ vars.JSCC_DEV_GCP_WIF_SERVICE_ACCOUNT }
+      CANDIDATE_SHA: "121f88e212013d2c4665bb70f881a3bcee365d21"
+    steps:
+      - name: Check out reviewed control plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }
+          path: control
+          persist-credentials: false
+      - name: Check out EXACT application source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: 121f88e212013d2c4665bb70f881a3bcee365d21
+          path: candidate
+          persist-credentials: false
+      - name: Fail-closed owner, SHA, tickets and intent gate
+        shell: bash
+        env:
+          INPUT_SHA: ${{ inputs.source_sha }
+          INPUT_ACTION: ${{ inputs.action }
+          INPUT_GATE: ${{ inputs.owner_gate }
+          ACTOR: ${{ github.actor }
+        run: |
+          set -euo pipefail
+          test "$ACTOR" = Shosetzel69 || { echo GOV85_OWNER_ONLY >&2; exit 86; }
+          test "$INPUT_SHA" = "$CANDIDATE_SHA" || { echo GOV85_WRONG_APP_SHA >&2; exit 86; }
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA" || exit 86
+          test "$(git -C control rev-parse HEAD)" = "${{ github.sha }" || exit 86
+          test -z "$(git -C candidate status --porcelain)" || exit 86
+          python3 control/scripts/gcp/gov85_dev_scoped_exception.py \
+            --environment dev --candidate-sha "$INPUT_SHA" --tickets 515,520,535 \
+            --action "$INPUT_ACTION" --owner-gate "$INPUT_GATE"
+          test -n "$GCP_WIF_PROVIDER" && test -n "$GCP_WIF_SA" || {
+            echo GOV85_EXISTING_GCP_WIF_CONFIGURATION_REQUIRED >&2
+            exit 86
+          }
+          echo "GOV85_APP_SHA=$INPUT_SHA" >> "$GITHUB_STEP_SUMMARY"
+          echo "GOV85_CONTROL_SHA=${{ github.sha }" >> "$GITHUB_STEP_SUMMARY"
+      - name: Authenticate via existing Workload Identity Federation
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: jscc-shared
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }
+          service_account: ${{ env.GCP_WIF_SA }
+      - name: Set up Google Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Read-only Artifact Registry plus canonical DEV Service and Job
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          immutable="$(gcloud artifacts repositories describe jscc --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+          [[ "$immutable" == True || "$immutable" == true ]] || { echo GOV85_IMMUTABLE_TAGS_REQUIRED >&2; exit 86; }
+          for role in jscc jscc-service; do
+            image="europe-west1-docker.pkg.dev/jscc-shared/jscc/$role:$CANDIDATE_SHA"
+            if digest="$(gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)' 2>/tmp/gov85-error)"; then
+              [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo GOV85_BAD_DIGEST >&2; exit 86; }
+              state=FOUND
+              echo "GOV85_IMAGE role=$role state=FOUND digest=$digest" >> "$GITHUB_STEP_SUMMARY"
+            elif grep -Eiq '(not found|NOT_FOUND|404)' /tmp/gov85-error; then
+              state=MISSING
+              echo "GOV85_IMAGE role=$role state=MISSING" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "GOV85_IMAGE_ACCESS_UNVERIFIED role=$role" >&2
+              exit 86
+            fi
+            key="$(echo "$role" | tr - _)"
+            echo "$key""_state=$state" >> "$GITHUB_OUTPUT"
+          done
+          # Never print environment variables or secrets from the Cloud Run resources.
+          gcloud run services describe jscc-command-api-dev --project=jscc-dev --region=europe-west1 \
+            --format='value(status.latestReadyRevisionName)' >/tmp/gov85-service
+          gcloud run jobs describe jscc-search-dev --project=jscc-dev --region=europe-west1 \
+            --format='value(metadata.name)' >/tmp/gov85-job
+          test -s /tmp/gov85-service || { echo GOV85_SERVICE_BASELINE_UNKNOWN >&2; exit 86; }
+          test -s /tmp/gov85-job || { echo GOV85_JOB_BASELINE_UNKNOWN >&2; exit 86; }
+          echo "GOV85_SERVICE_REVISION=$(cat /tmp/gov85-service)" >> "$GITHUB_STEP_SUMMARY"
+          echo "GOV85_JOB_ID=$(cat /tmp/gov85-job)" >> "$GITHUB_STEP_SUMMARY"
+          echo "GOV85_READ_ONLY_PREFLIGHT_ONLY; image/config rollback and quiescence remain separate release gates" >> "$GITHUB_STEP_SUMMARY"
+      - name: Deny partial existing image pairs
+        if: inputs.action == 'build-images'
+        env:
+          SEARCH_STATE: ${{ steps.preflight.outputs.jscc_state }
+          SERVICE_STATE: ${{ steps.preflight.outputs.jscc_service_state }
+        shell: bash
+        run: |
+          test "$SEARCH_STATE" = "$SERVICE_STATE" || {
+            echo GOV85_PARTIAL_PAIR_MANUAL_REVIEW_REQUIRED >&2
+            exit 86
+          }
+      - name: Build exact paired images once without runtime change
+        if: inputs.action == 'build-images' && steps.preflight.outputs.jscc_state == 'MISSING' && steps.preflight.outputs.jscc_service_state == 'MISSING'
+        shell: bash
+        run: |
+          set -euo pipefail
+          control_sha="$(git -C control rev-parse HEAD)"
+          test "$control_sha" = "${{ github.sha }" || exit 86
+          # The uploaded Cloud Build source is solely candidate/ at the approved app SHA.
+          # The control recipe is from the separately reviewed GitHub control SHA.
+          gcloud builds submit candidate \
+            --project=jscc-shared --region=europe-west1 \
+            --config=control/cloudbuild.gov85.dev-paired-images.yaml \
+            --substitutions="_GIT_SHA=$CANDIDATE_SHA,_CONTROL_SHA=$control_sha" \
+            --quiet
+          echo "GOV85_PAIRED_IMAGE_BUILD_COMPLETED; NO_DEPLOY" >> "$GITHUB_STEP_SUMMARY"
+      - name: Reuse already present immutable image pair
+        if: inputs.action == 'build-images' && steps.preflight.outputs.jscc_state == 'FOUND' && steps.preflight.outputs.jscc_service_state == 'FOUND'
+        run: echo "GOV85_BOTH_IMAGES_REUSED; NO_BUILD_OR_DEPLOY" >> "$GITHUB_STEP_SUMMARY"
