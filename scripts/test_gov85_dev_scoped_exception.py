@@ -68,6 +68,19 @@ class Gov85ExceptionAdmissionTests(unittest.TestCase):
         self.assertEqual(result.returncode, 86)
         self.assertIn("GOV85_DEV_EXCEPTION_DENIED", result.stderr)
 
+    def test_workflow_github_actions_expressions_are_balanced(self):
+        # GitHub rejects malformed expressions before creating any jobs,
+        # which is not detected by ordinary Python/Node application tests.
+        import re
+        workflow = (
+            ROOT / ".github/workflows/gov85-dev-paired-images.yml"
+        ).read_text(encoding="utf-8")
+        starts = workflow.count("${{")
+        complete = re.findall(r"\$\{\{[^\n]*?\}\}", workflow)
+        self.assertGreaterEqual(starts, 10)
+        self.assertEqual(len(complete), starts)
+        self.assertEqual(workflow.count("}}"), starts)
+
     def test_manual_github_lane_is_owner_and_sha_bound(self):
         workflow = (ROOT / ".github/workflows/gov85-dev-paired-images.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
