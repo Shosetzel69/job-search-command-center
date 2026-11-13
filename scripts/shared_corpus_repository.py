@@ -383,7 +383,7 @@ def assess_record_quality(
         f"{source_id}\0{identity}".encode("utf-8")
     ).hexdigest()[:20] if identity else None
     return {
-        "version": "1",
+        "quality_version": "1",
         "verdict": "INVALID" if invalid else ("INCOMPLETE" if issues else "VALID"),
         "issues": sorted(issues),
         "field_provenance": provenance,
