@@ -451,6 +451,11 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         description=record.get("description"),
     )
     repost_of = _text(record.get("repost_of_external_job_id") or record.get("repost_of_id")) or None
+    payload = _payload(record, classification_status)
+    if {"DATE_FUTURE", "DATE_INVALID"} & set(quality["issues"]):
+        payload.pop("date_posted", None)
+        payload.pop("posted_at", None)
+    payload["job_quality"] = quality
 
     return SharedPosting(
         source_id=source_id,
@@ -467,7 +472,7 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         role_family=family,
         posted_at=_posted_at(record),
         repost_of_external_job_id=repost_of,
-        payload={**_payload(record, classification_status), "job_quality": quality},
+        payload=payload,
         role_subfamily=role_subfamily,
         seniority=seniority,
         contract_type=contract_type,
