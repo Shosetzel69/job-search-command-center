@@ -135,6 +135,13 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         self.assertNotIn("secret", str(bad))
         self.assertIsNone(repository.prepare_posting(unsafe))
 
+    def test_quality_malformed_provenance_is_unknown_not_an_exception(self):
+        bad = self.quality_record(_jscc_field_provenance={"description": ["ATS_FIELD"]})
+        result = repository.assess_record_quality(bad)
+        self.assertEqual(result["verdict"], "INCOMPLETE")
+        self.assertEqual(result["field_provenance"]["description"], "UNKNOWN")
+        self.assertIn("DESCRIPTION_PROVENANCE_UNKNOWN", result["issues"])
+
     def test_quality_unknown_provenance_is_never_claimed_valid(self):
         record = self.quality_record()
         record.pop("_jscc_field_provenance")
