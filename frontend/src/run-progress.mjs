@@ -9,8 +9,8 @@ export function runProgressModel(status) {
   const failed = Math.max(0, Number(progress.sources_failed ?? status.sources_failed ?? 0) || 0);
   const skipped = Math.max(0, Number(progress.sources_skipped ?? status.sources_skipped ?? 0) || 0);
   const preflightSkipped = Math.max(0, Number(progress.sources_skipped_preflight ?? 0) || 0);
-  const blocked = Math.max(0, Number(progress.sources_blocked ?? status.sources_blocked ?? 0) || 0);
-  const noExtractable = Math.max(0, Number(progress.sources_no_extractable_jobs ?? status.sources_no_extractable_jobs ?? 0) || 0);
+  const blocked = Math.max(0, Number(progress.sources_blocked ?? 0) || 0);
+  const noExtractable = Math.max(0, Number(progress.sources_no_extractable_jobs ?? 0) || 0);
   const partial = Math.max(0, Number(progress.sources_partial ?? status.sources_partial ?? 0) || 0);
   const derived = total > 0 ? Math.floor(Math.min(total, processed) * 100 / total) : (processed > 0 ? 100 : 0);
   const percent = Math.max(0, Math.min(100, Number(progress.percent ?? derived) || 0));
