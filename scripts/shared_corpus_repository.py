@@ -294,10 +294,9 @@ QUALITY_PROVENANCE = frozenset({
 })
 QUALITY_FIELDS = ("title", "description", "location", "date_posted")
 SHARE_MARKUP = re.compile(
-    r"(?:\bfacebook\b.{0,65}\btwitter\b.{0,65}\blinkedin\b)"
-    r"|(?:\badd to favorites\b.{0,55}\bshare\b)"
-    r"|(?:\btwitter\b.{0,50}\blinkedin\b.{0,35}\bmail\b)",
-    re.I | re.S,
+    r"\bfacebook\s+twitter\s+linkedin\s+mail\b"
+    r"|\badd to favorites\s+share\b",
+    re.I,
 )
 SALARY_MARKUP = re.compile(
     r"(?:[$€£]\s*[\d,]+|[\d,]+\s*(?:USD|EUR|GBP)\s*/\s*(?:year|hour|yr|hr))",
@@ -322,8 +321,9 @@ def assess_record_quality(
     if not isinstance(raw_provenance, Mapping):
         raw_provenance = {}
     provenance = {
-        field: (raw_provenance.get(field) if raw_provenance.get(field) in QUALITY_PROVENANCE
-                else "UNKNOWN")
+        field: (raw_provenance.get(field)
+                if isinstance(raw_provenance.get(field), str)
+                and raw_provenance.get(field) in QUALITY_PROVENANCE else "UNKNOWN")
         for field in QUALITY_FIELDS
     }
     issues: set[str] = set()
