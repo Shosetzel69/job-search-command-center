@@ -36,7 +36,7 @@ test('legacy migration promotion guards remain intact', () => {
 test('dedicated exception is build-only; no jobs, service, DB or IAM mutation in Cloud Build', () => {
   const config=readFileSync(new URL('../cloudbuild.gov85.dev-images.yaml',import.meta.url),'utf8');
   assert.match(config,/121f88e212013d2c4665bb70f881a3bcee365d21/);
-  assert.match(config,/515,520,535/);
+  assert.match(config,/515-520-535/);
   assert.doesNotMatch(config,/gcloud run (jobs|services|deploy)|gcloud sql |db-migrate|promote\.sh|cloudbuild\.promotion\.yaml|_TARGET.*test/);
   assert.match(config,/docker build/);
   assert.match(config,/immutableTags/);
