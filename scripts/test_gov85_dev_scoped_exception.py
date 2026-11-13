@@ -84,8 +84,10 @@ class Gov85ExceptionAdmissionTests(unittest.TestCase):
     def test_manual_github_lane_is_owner_and_sha_bound(self):
         workflow = (ROOT / ".github/workflows/gov85-dev-paired-images.yml").read_text(encoding="utf-8")
         self.assertIn("workflow_dispatch:", workflow)
-        self.assertNotIn("\\n  push:", workflow)
-        self.assertNotIn("\\n  schedule:", workflow)
+        self.assertNotIn("\n  push:", workflow)
+        self.assertNotIn("\n  schedule:", workflow)
+        self.assertNotIn("\n  pull_request:", workflow)
+        self.assertNotIn("\n  issue_comment:", workflow)
         self.assertIn("121f88e212013d2c4665bb70f881a3bcee365d21", workflow)
         self.assertIn('test "$ACTOR" = Shosetzel69', workflow)
         self.assertIn("gov85_dev_scoped_exception.py", workflow)
