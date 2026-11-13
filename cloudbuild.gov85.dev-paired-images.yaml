@@ -1,0 +1,75 @@
+# GOV85-DEV #515/#520 F520-06/#535 pagination: image-only, never a promotion.
+# This is a NEW path; legacy cloudbuild.promotion.yaml / promote.sh remain exit 86.
+substitutions:
+  _GIT_SHA: ""
+  _CONTROL_SHA: ""
+steps:
+  - id: verify-exact-source-and-registry
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        expected="121f88e212013d2c4665bb70f881a3bcee365d21"
+        [[ "${_GIT_SHA}" == "${expected}" ]] || { echo "GOV85_SOURCE_SHA_DENIED" >&2; exit 86; }
+        [[ "${_CONTROL_SHA}" =~ ^[0-9a-f]{40}$ ]] || { echo "GOV85_CONTROL_SHA_MISSING" >&2; exit 86; }
+        imm="$(gcloud artifacts repositories describe jscc --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+        [[ "${imm}" == "True" || "${imm}" == "true" ]] || { echo "GOV85_IMMUTABLE_TAGS_REQUIRED" >&2; exit 86; }
+        for role in jscc jscc-service; do
+          image="europe-west1-docker.pkg.dev/jscc-shared/jscc/${role}:${_GIT_SHA}"
+          if gcloud artifacts docker images describe "${image}" --project=jscc-shared --format='value(image_summary.digest)' >/tmp/gov85-existing 2>/tmp/gov85-error; then
+            echo "GOV85_EXISTING_IMAGE_NO_REBUILD role=${role}" >&2
+            exit 86
+          fi
+          if ! grep -Eiq '(not found|NOT_FOUND|404)' /tmp/gov85-error; then
+            echo "GOV85_IMAGE_STATE_UNVERIFIED role=${role}" >&2
+            exit 86
+          fi
+        done
+        echo "GOV85_DEV_IMAGE_ONLY_APPROVED_SOURCE=${_GIT_SHA}"
+        echo "GOV85_TRUSTED_CONTROL_SHA=${_CONTROL_SHA}"
+  - id: test-python-collection-contract
+    name: python:3.12-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        cd scripts
+        python -m unittest -v test_source_orchestration test_role_taxonomy
+  - id: test-frontend-pagination-progress
+    name: node:22-bookworm-slim
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        cd frontend
+        node --test test/job-page-model.test.mjs test/run-progress.test.mjs test/run-progress-ui.test.mjs
+  - id: build-search-job
+    name: gcr.io/cloud-builders/docker
+    args: [build, --pull, --build-arg, "GIT_SHA=${_GIT_SHA}", -t, "europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}", .]
+  - id: build-service
+    name: gcr.io/cloud-builders/docker
+    args: [build, --pull, -f, Dockerfile.service, --build-arg, "GIT_SHA=${_GIT_SHA}", -t, "europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}", .]
+  - id: push-search-job
+    name: gcr.io/cloud-builders/docker
+    args: [push, "europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}"]
+  - id: push-service
+    name: gcr.io/cloud-builders/docker
+    args: [push, "europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}"]
+  - id: verify-two-digests
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        for role in jscc jscc-service; do
+          image="europe-west1-docker.pkg.dev/jscc-shared/jscc/${role}:${_GIT_SHA}"
+          digest="$(gcloud artifacts docker images describe "${image}" --project=jscc-shared --format='value(image_summary.digest)')"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "GOV85_DIGEST_NOT_PROVEN role=${role}" >&2; exit 86; }
+          echo "GOV85_DEV_IMAGE role=${role} digest=${digest} source=${_GIT_SHA}"
+        done
+        echo "GOV85_IMAGE_ONLY_COMPLETE_NO_DEPLOY"
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 1800s
