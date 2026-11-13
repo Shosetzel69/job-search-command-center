@@ -1,0 +1,96 @@
+# GOV85 DEV-only authorization escape: build/reuse two immutable images; never deploy.
+# Independent of the legacy promotion pipeline; its exit 86 guard remains intact.
+substitutions:
+  _GIT_SHA: ""
+  _GOV85_TICKETS: ""
+
+steps:
+  - id: scope-and-source-boundary
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        [[ "${_GIT_SHA}" == "121f88e212013d2c4665bb70f881a3bcee365d21" ]] || { echo "GOV85_SHA_DENIED" >&2; exit 86; }
+        [[ "${_GOV85_TICKETS}" == "515,520,535" ]] || { echo "GOV85_SCOPE_DENIED" >&2; exit 86; }
+        [[ "$(cat /workspace/.gov85-source-sha)" == "${_GIT_SHA}" ]] || { echo "GOV85_SOURCE_BUNDLE_MISMATCH" >&2; exit 86; }
+        if [[ -n "${COMMIT_SHA:-}" && "${COMMIT_SHA}" != "${_GIT_SHA}" ]]; then
+          echo "GOV85_CLOUD_BUILD_COMMIT_SHA_MISMATCH" >&2
+          exit 86
+        fi
+        immutable="$(gcloud artifacts repositories describe jscc --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+        [[ "${immutable}" == "True" || "${immutable}" == "true" ]] || { echo "GOV85_IMMUTABLE_TAGS_REQUIRED" >&2; exit 86; }
+        echo "GOV85_IMAGE_ONLY_SOURCE_SCOPE_PASS"
+
+  - id: immutable-artifact-inventory
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        for role in jscc jscc-service; do
+          image="europe-west1-docker.pkg.dev/jscc-shared/jscc/${role}:${_GIT_SHA}"
+          if digest="$(gcloud artifacts docker images describe "${image}" --project=jscc-shared --format='value(image_summary.digest)' 2>/workspace/probe-error.txt)"; then
+            [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "GOV85_EXISTING_DIGEST_INVALID: ${role}" >&2; exit 86; }
+            echo REUSE > "/workspace/gov85-${role}-action"
+            echo "GOV85_EXISTING_IMAGE_${role}=${digest}"
+          elif grep -Eqi 'NOT_FOUND|not found|404' /workspace/probe-error.txt; then
+            echo BUILD > "/workspace/gov85-${role}-action"
+            echo "GOV85_IMAGE_NOT_FOUND_${role}"
+          else
+            echo "GOV85_REGISTRY_PROBE_DENIED: ${role}" >&2
+            cat /workspace/probe-error.txt >&2
+            exit 86
+          fi
+        done
+
+  - id: build-or-reuse-job
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:${_GIT_SHA}"
+        if [[ "$(cat /workspace/gov85-jscc-action)" == "REUSE" ]]; then
+          docker pull "${image}"
+          revision="$(docker image inspect "${image}" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+          [[ "${revision}" == "${_GIT_SHA}" ]] || { echo "GOV85_REUSED_JOB_PROVENANCE_MISMATCH" >&2; exit 86; }
+        else
+          docker build --pull --file Dockerfile --build-arg "GIT_SHA=${_GIT_SHA}" --tag "${image}" .
+          docker push "${image}"
+        fi
+
+  - id: build-or-reuse-service
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service:${_GIT_SHA}"
+        if [[ "$(cat /workspace/gov85-jscc-service-action)" == "REUSE" ]]; then
+          docker pull "${image}"
+          revision="$(docker image inspect "${image}" --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')"
+          [[ "${revision}" == "${_GIT_SHA}" ]] || { echo "GOV85_REUSED_SERVICE_PROVENANCE_MISMATCH" >&2; exit 86; }
+        else
+          docker build --pull --file Dockerfile.service --build-arg "GIT_SHA=${_GIT_SHA}" --tag "${image}" .
+          docker push "${image}"
+        fi
+
+  - id: record-both-immutable-digests
+    name: gcr.io/cloud-builders/gcloud
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        for role in jscc jscc-service; do
+          image="europe-west1-docker.pkg.dev/jscc-shared/jscc/${role}:${_GIT_SHA}"
+          digest="$(gcloud artifacts docker images describe "${image}" --project=jscc-shared --format='value(image_summary.digest)')"
+          [[ "${digest}" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "GOV85_ARTIFACT_DIGEST_MISSING: ${role}" >&2; exit 86; }
+          echo "GOV85_IMMUTABLE_IMAGE ${role}@${digest}"
+        done
+        echo "GOV85_DEV_PAIRED_IMAGES_ONLY_PASS; NO_CLOUD_RUN_MUTATION"
+
+serviceAccount: projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com
+options:
+  logging: CLOUD_LOGGING_ONLY
+timeout: 2400s
