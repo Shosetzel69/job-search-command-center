@@ -37,6 +37,8 @@
 
 ### Guvernanta
 
+- #626 / Variant B: component-scoped automatic CI trigger paths for AI bridge and Ops Remote Executor, with a per-component Cloudflare/GCP trigger inventory and external activation runbook. Existing global gitleaks/ADR-009 checks, explicit release/paired Service+Job rules and exit-86 guards remain unchanged. **External provider settings NOT changed; no merge/build/deploy authorized.**
+
 - #545: adoptata regula `Feature-led closure / Return-to-root` si modelul hibrid de urmarire: observatii locale prin puncte si comentarii in root Issue, Issues separate doar pentru obiective independente/dependinte transversale/controale distincte; se pastreaza ATC, review, Functional Acceptance si gate-urile de release.
 - Aplicare operationala §2.9 (2026-10-12): preflight root-first obligatoriu in `.ai-instructions.md` inainte de orice creare Issue; template-ul `executable-task.yml` cere motivul unei exceptii. Nu schimba procesul, aprobarile, rolurile sau conectorul GitHub API.
 

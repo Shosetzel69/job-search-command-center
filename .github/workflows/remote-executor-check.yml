@@ -6,9 +6,6 @@ on:
       - "ops/**"
       - "cloudbuild.ops.yaml"
       - "scripts/gcp/*remote_executor_dev.sh"
-      - "docs/runbooks/remote-executor-dev.md"
-      - "docs/adr/ADR-006-google-cloud-runtime.md"
-      - "ARCHITECTURE.md"
       - ".github/workflows/remote-executor-check.yml"
   push:
     branches: [main]
@@ -16,9 +13,6 @@ on:
       - "ops/**"
       - "cloudbuild.ops.yaml"
       - "scripts/gcp/*remote_executor_dev.sh"
-      - "docs/runbooks/remote-executor-dev.md"
-      - "docs/adr/ADR-006-google-cloud-runtime.md"
-      - "ARCHITECTURE.md"
       - ".github/workflows/remote-executor-check.yml"
   workflow_dispatch:
 
