@@ -1,12 +1,12 @@
 # GOVERNANCE.md - Job Search Command Center
 
 Status: `CANONICAL`
-Version: `v1.15`
+Version: `v1.16`
 Applicability: `CURRENT`
 Applies to: `BOTH`
 Effective from: `2026-09-23`
-Supersedes: `v1.14`
-Last updated: `2026-10-11`
+Supersedes: `v1.15`
+Last updated: `2026-11-13`
 
 ## 1. Principiu
 
@@ -616,3 +616,9 @@ In perioada de tranzitie AgentFlow:
 - nu se face retrofit in masa; markerul de aplicabilitate se adauga cand documentul este creat sau modificat material.
 
 Contractele JSON principale folosesc `schema_version`. Schimbarile incompatibile necesita versiune noua de contract.
+
+## 11. GOV-85 DEV shadow pilot (proposal only)
+
+Owner approval `APPROVE_GOV85_DEV_PILOT` (2026-11-13) authorizes read-only baseline, documentation PR, independent review and shadow mapping M0-M2 only (root #623). Proposed three-phase/nine-state design and the complete crosswalk: `docs/analysis/2026-11-13-gov85-dev-shadow-pilot.md`.
+
+**Non-executable:** Section 2.8 remains the canonical operational Phase/Status vocabulary; sections 2.5-2.9, explicit implementation/architecture approval, independent review, G1-G5, EFA, exact SHA, rollback, DEV/TEST/PROD segregation and `exit 86` blocking guards remain unchanged. Shadow observations must not mutate source issues or authorize anything. Activation M3 requires a separate owner decision. No TEST/PROD scope.
