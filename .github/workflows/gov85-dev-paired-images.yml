@@ -36,9 +36,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Checkout trusted control plane (main)
+      - name: Checkout trusted control plane (workflow event SHA)
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
+          ref: ${{ github.sha }}
           fetch-depth: 0
           path: control
           persist-credentials: false
@@ -155,7 +156,7 @@ jobs:
         if: ${{ inputs.action == 'images-only' }}
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
-          ref: main
+          ref: ${{ github.sha }}
           path: control
           persist-credentials: false
 
@@ -168,7 +169,7 @@ jobs:
           set -euo pipefail
           [[ "$(git -C candidate rev-parse HEAD)" == "$CANDIDATE" ]] || { echo "GOV85_CANDIDATE_CHECKOUT_MISMATCH" >&2; exit 86; }
           [[ -z "$(git -C candidate status --porcelain)" ]] || { echo "GOV85_CANDIDATE_DIRTY" >&2; exit 86; }
-          cmp control/cloudbuild.gov85.dev-images.yaml control/cloudbuild.gov85.dev-images.yaml
+          test -s control/cloudbuild.gov85.dev-images.yaml
           cp control/cloudbuild.gov85.dev-images.yaml candidate/cloudbuild.gov85.dev-images.yaml
           printf '%s\n' "$CANDIDATE" > candidate/.gov85-source-sha
           echo "GOV85_IMAGE_ONLY_BUILD_SUBMIT_BEGIN ${CANDIDATE}"
