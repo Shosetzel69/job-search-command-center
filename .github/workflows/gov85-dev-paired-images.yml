@@ -118,6 +118,30 @@ jobs:
             --project=jscc-dev --region=europe-west1 --format=json >/tmp/gov85-job.json
           python3 control/scripts/gcp/gov85_sanitize_runtime_images.py \
             /tmp/gov85-service.json /tmp/gov85-job.json >> "$GITHUB_STEP_SUMMARY"
+          # The Service template is not necessarily the revision serving traffic.
+          # Resolve each live revision by read-only describe; never dump full JSON
+          # or environment/secret bindings to the Action log or step summary.
+          python3 control/scripts/gcp/gov85_serving_revision_evidence.py \
+            --active-names /tmp/gov85-service.json > /tmp/gov85-active-names
+          active_count=0
+          while IFS= read -r active_revision; do
+            [[ "$active_revision" =~ ^jscc-command-api-dev-[a-z0-9-]+$ ]] || {
+              echo GOV85_UNTRUSTED_REVISION_NAME >&2; exit 86;
+            }
+            active_count=$((active_count + 1))
+            (( active_count <= 20 )) || { echo GOV85_TOO_MANY_ACTIVE_REVISIONS >&2; exit 86; }
+            revision_json="/tmp/gov85-active-revision-$active_count.json"
+            gcloud run revisions describe "$active_revision" \
+              --project=jscc-dev --region=europe-west1 --format=json \
+              >"$revision_json" 2>/tmp/gov85-revision-error || {
+                echo GOV85_ACTIVE_REVISION_ACCESS_DENIED_OR_NOT_FOUND >&2; exit 86;
+              }
+            python3 control/scripts/gcp/gov85_serving_revision_evidence.py \
+              --revision-digest "$active_revision" "$revision_json" >> "$GITHUB_STEP_SUMMARY"
+          done < /tmp/gov85-active-names
+          (( active_count >= 1 )) || { echo GOV85_NO_ACTIVE_REVISION >&2; exit 86; }
+          echo "GOV85_ACTIVE_DIGESTS_COLLECTED=$active_count" >> "$GITHUB_STEP_SUMMARY"
+          echo "GOV85_ROLLBACK_ATTESTED=false; no full configuration snapshot or Job quiescence evidence" >> "$GITHUB_STEP_SUMMARY"
           echo "GOV85_READ_ONLY_PREFLIGHT_ONLY; image identity is NOT a complete rollback or quiescence attestation" >> "$GITHUB_STEP_SUMMARY"
       - name: Deny partial existing image pairs
         if: inputs.action == 'build-images'
