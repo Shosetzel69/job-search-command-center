@@ -251,6 +251,15 @@ class OrchestrationTests(unittest.TestCase):
         self.jobicy.assert_called_once()
         self.assertEqual(status["sources"], ["Jobicy"])
         self.assertEqual(status["sources_skipped"], 1)
+        # F520-06: disabled transport is retained as a catalog skip but
+        # is NEVER part of the executable progress denominator.
+        progress = status["progress"]
+        self.assertEqual(progress["sources_total"], 1)
+        self.assertEqual(progress["sources_processed"], 1)
+        self.assertEqual(progress["sources_good"], 1)
+        self.assertEqual(progress["sources_skipped"], 0)
+        self.assertEqual(progress["sources_skipped_preflight"], 1)
+        self.assertEqual(progress["percent"], 100)
         jobs_pipe = next(item for item in status["source_results"] if item["source"] == "JobsPipe")
         self.assertEqual(jobs_pipe["outcome"], "disabled_config")
 
@@ -967,6 +976,49 @@ class SourceProgressContractTests(unittest.TestCase):
         self.assertEqual(progress["sources_skipped"], 1)
         self.assertEqual(progress["sources_partial"], 1)
         self.assertEqual(progress["percent"], 100)
+
+    def test_preflight_disabled_jobs_pipe_is_excluded_before_first_checkpoint(self):
+        plan = [
+            {"source_id":"pipe", "connector":"jobspipe", "status":"pending", "outcome":None},
+            {"source_id":"board", "connector":"public_board", "status":"pending", "outcome":None},
+            {"source_id":"inactive", "connector":"web", "status":"inactive", "outcome":"disabled_config"},
+        ]
+        orchestration.exclude_preflight_disabled_sources(plan, {"jobspipe_mode":"disabled"})
+        self.assertEqual(plan[0]["status"], "skipped")
+        self.assertEqual(plan[0]["outcome"], "disabled_config")
+        planned_ids = {row["source_id"] for row in plan if row["status"] == "pending"}
+        progress = orchestration.source_progress(plan, planned_ids)
+        self.assertEqual(progress["sources_total"], 1)
+        self.assertEqual(progress["sources_processed"], 0)
+        self.assertEqual(progress["sources_skipped"], 0)
+        self.assertEqual(progress["sources_skipped_preflight"], 1)
+        self.assertEqual(progress["percent"], 0)
+        # A direct execution path remains protected by its existing check.
+        orchestration.exclude_preflight_disabled_sources(plan, {"jobspipe_mode":"disabled"})
+        self.assertEqual(plan[0]["status"], "skipped")
+
+    def test_progress_blocks_and_non_extractable_are_not_success(self):
+        plan = [
+            {"source_id":"ok","status":"completed","outcome":"success"},
+            {"source_id":"bad","status":"failed","outcome":"failed"},
+            {"source_id":"blocked","status":"completed","outcome":"blocked"},
+            {"source_id":"empty_html","status":"completed","outcome":"no_extractable_jobs"},
+            {"source_id":"partial","status":"completed","outcome":"partial"},
+            {"source_id":"config_skip","status":"skipped","outcome":"disabled_config"},
+            {"source_id":"pending","status":"pending","outcome":None},
+        ]
+        ids = {"ok","bad","blocked","empty_html","partial","pending"}
+        progress = orchestration.source_progress(plan, ids)
+        self.assertEqual(progress["sources_total"], 6)
+        self.assertEqual(progress["sources_processed"], 5)
+        self.assertEqual(progress["sources_good"], 2)
+        self.assertEqual(progress["sources_failed"], 1)
+        self.assertEqual(progress["sources_blocked"], 1)
+        self.assertEqual(progress["sources_no_extractable_jobs"], 1)
+        self.assertEqual(progress["sources_partial"], 1)
+        self.assertEqual(progress["sources_skipped"], 0)
+        self.assertEqual(progress["sources_skipped_preflight"], 1)
+        self.assertEqual(progress["percent"], 83)
 
     def test_live_checkpoint_is_non_terminal_and_contains_progress(self):
         with tempfile.TemporaryDirectory() as root:

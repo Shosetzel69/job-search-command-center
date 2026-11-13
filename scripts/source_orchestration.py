@@ -528,15 +528,38 @@ def apply_retrieve_scope(item, results, config):
     return scoped_results
 
 
+SUCCESSFUL_SOURCE_OUTCOMES = frozenset({"success", "success_empty", "partial"})
+
+
+def exclude_preflight_disabled_sources(plan, config):
+    """Keep config-disabled JobsPipe visible in diagnostics, but not in the executable X/Y."""
+    mode = str(config.get("jobspipe_mode") or
+               ("direct" if config.get("jobspipe_enabled", True) else "disabled")).lower()
+    if mode != "disabled":
+        return
+    for item in plan:
+        if item.get("status") == "pending" and item.get("connector") == "jobspipe":
+            reason = "JobsPipe disabled by configuration"
+            item.update(status="skipped", outcome="disabled_config",
+                        error=reason, failure_reason=reason)
+
+
 def source_progress(plan, planned_source_ids):
     planned = [item for item in plan if item.get("source_id") in planned_source_ids]
     terminal = [item for item in planned if item.get("status") != "pending"]
     total = len(planned)
     processed = len(terminal)
-    completed = sum(item.get("status") == "completed" for item in terminal)
+    completed = sum(item.get("status") == "completed"
+                    and item.get("outcome") in SUCCESSFUL_SOURCE_OUTCOMES for item in terminal)
     failed = sum(item.get("status") == "failed" for item in terminal)
     skipped = sum(item.get("status") == "skipped" for item in terminal)
     partial = sum(item.get("outcome") == "partial" for item in terminal)
+    blocked = sum(item.get("outcome") == "blocked" for item in terminal)
+    no_extractable = sum(item.get("outcome") == "no_extractable_jobs" for item in terminal)
+    # Top-level sources_skipped counts ALL catalog skips; this progress field
+    # explicitly accounts for the subset not admitted to executable X/Y.
+    preflight_skipped = sum(item.get("status") == "skipped"
+                           and item.get("source_id") not in planned_source_ids for item in plan)
     percent = 100 if total == 0 else min(100, (processed * 100) // total)
     return {
         "sources_total": total,
@@ -544,7 +567,10 @@ def source_progress(plan, planned_source_ids):
         "sources_good": completed,
         "sources_failed": failed,
         "sources_skipped": skipped,
+        "sources_skipped_preflight": preflight_skipped,
         "sources_partial": partial,
+        "sources_blocked": blocked,
+        "sources_no_extractable_jobs": no_extractable,
         "percent": percent,
     }
 
@@ -861,6 +887,7 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         item["request_signature"] = request_signature
         item["retrieve_scope_role_families"] = scope_families
     prepare_source_execution_ids(plan, run_id)
+    exclude_preflight_disabled_sources(plan, config)
     planned_source_ids = {item.get("source_id") for item in plan if item.get("status") == "pending"}
     write_progress_status(now, run_id, plan, planned_source_ids, retrieve_scope, request_signature)
     progress_callback = lambda: write_progress_status(
@@ -941,7 +968,13 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
                    "sources_attempted": len(attempted), "sources_processed": len(attempted),
                    "sources": [item["source"] for item in attempted], "source_results": plan,
                    "failed_sources": [item["source"] for item in plan if item["status"] == "failed"]})
-    for field, value in (("succeeded", "completed"), ("failed", "failed"), ("unsupported", "unsupported"),
+    # "completed" is a legacy transport state: blocked/non-extractable
+    # outcomes must not be advertised as successful collection.
+    status["sources_succeeded"] = sum(
+        item.get("status") == "completed"
+        and item.get("outcome") in SUCCESSFUL_SOURCE_OUTCOMES for item in plan
+    )
+    for field, value in (("failed", "failed"), ("unsupported", "unsupported"),
                          ("skipped", "skipped"), ("inactive", "inactive")):
         status["sources_" + field] = sum(item["status"] == value for item in plan)
     status["sources_with_records"] = sum(item["records"] > 0 for item in plan)

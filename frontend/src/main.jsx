@@ -230,7 +230,7 @@ function RunProgressPanel({status}) {
   const title=progress.active?'Actualizare joburi in curs':status?.status==='completed'?'Ultima actualizare finalizata':status?.status==='completed_with_errors'?'Ultima actualizare cu erori':'Ultima actualizare esuata';
   return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Progres actualizare surse">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><div className="text-sm font-semibold text-slate-900">{title}</div><div className="mt-1 text-xs text-slate-500">{progress.processed} din {progress.total} surse procesate</div></div>
+      <div><div className="text-sm font-semibold text-slate-900">{title}</div><div className="mt-1 text-xs text-slate-500">{progress.processed} din {progress.total} surse planificate procesate</div></div>
       <div className="text-2xl font-bold tabular-nums text-slate-950">{progress.percent}%</div>
     </div>
     <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600 transition-[width] duration-500" style={{width:`${progress.percent}%`}}/></div>
@@ -238,6 +238,9 @@ function RunProgressPanel({status}) {
       <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-emerald-700">GOOD {progress.good}</span>
       <span className="rounded-full bg-red-50 px-2.5 py-1 text-red-700">FAIL {progress.failed}</span>
       {progress.skipped>0&&<span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">SKIP {progress.skipped}</span>}
+      {progress.preflightSkipped>0&&<span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">SKIP CONFIG {progress.preflightSkipped}</span>}
+      {progress.blocked>0&&<span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">BLOCKED {progress.blocked}</span>}
+      {progress.noExtractable>0&&<span className="rounded-full bg-slate-100 px-2.5 py-1 text-slate-600">FARA EXTRACTIE {progress.noExtractable}</span>}
       {progress.partial>0&&<span className="rounded-full bg-amber-50 px-2.5 py-1 text-amber-700">PARTIAL {progress.partial}</span>}
       {progress.terminal&&<span className="rounded-full bg-blue-50 px-2.5 py-1 text-blue-700">JOBURI {progress.jobsPublished}</span>}
     </div>
