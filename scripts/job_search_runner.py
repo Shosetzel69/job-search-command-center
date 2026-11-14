@@ -204,6 +204,8 @@ def append_run_history() -> None:
         "source_results": status.get("source_results") or [],
         "source_outcome_counts": status.get("source_outcome_counts") or {},
         "source_record_totals": status.get("source_record_totals") or {},
+        "provider_scope_inventory": status.get("provider_scope_inventory") or {},
+        "canonical_publication": status.get("canonical_publication"),
         "coverage_before": status.get("coverage_before"),
         "coverage_after": status.get("coverage_after"),
         "source_failure_codes": status.get("source_failure_codes") or {},
