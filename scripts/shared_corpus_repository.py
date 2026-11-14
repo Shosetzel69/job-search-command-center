@@ -918,6 +918,9 @@ def _complete_source_ids(plan: Sequence[Mapping[str, Any]]) -> set[str]:
         _text(item.get("source_id"))
         for item in plan
         if item.get("outcome") in COMPLETE_SOURCE_OUTCOMES and _text(item.get("source_id"))
+        and not (item.get("quality_counts") or {}).get("INVALID")
+        and not (item.get("quality_counts") or {}).get("INCOMPLETE")
+        and not item.get("records_malformed")
     }
 
 
