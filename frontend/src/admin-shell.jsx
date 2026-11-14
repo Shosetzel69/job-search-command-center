@@ -477,7 +477,8 @@ function CoverageAdmin({ token, notify }) {
     </div>
     <Panel title="Collection Policy" note="Threshold-urile sunt globale/system; Coverage nu reprezinta oportunitati USER.">
       <div className="grid gap-3 text-sm sm:grid-cols-2 xl:grid-cols-4">
-        <div><span className="text-slate-400">Freshness:</span> {policy.collection_freshness_hours ?? '—'}h</div>
+        <div><span className="text-slate-400">Coverage freshness:</span> {policy.collection_freshness_hours ?? '—'}h</div>
+      <div><span className="text-slate-400">Posting max age:</span> {policy.posting_max_age_hours ?? 24}h</div>
         <div><span className="text-slate-400">Corpus minim:</span> {policy.coverage_min_corpus_volume ?? '—'}</div>
         <div><span className="text-slate-400">Diversitate minima:</span> {policy.coverage_min_source_diversity ?? '—'}</div>
         <div><span className="text-slate-400">Cooldown:</span> {policy.coverage_refresh_cooldown_hours ?? 0}h</div>
