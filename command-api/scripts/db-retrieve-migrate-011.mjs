@@ -34,12 +34,17 @@ export function assertRetrieve011Ledger(migrations, rows, objects) {
     return String(r.version)!==expected.version || r.name!==expected.name || r.checksum!==expected.checksum;
   })) fail('RETRIEVE011_LEDGER_MISMATCH');
   if (rows.length===10 && (objects.table_present || objects.index_present)) fail('RETRIEVE011_UNTRACKED_OBJECT');
-  if (rows.length===11 && (!objects.table_present || !objects.index_present || !objects.tenant_id_ready)) fail('RETRIEVE011_SCHEMA_DRIFT');
+  if (rows.length===11 && (!objects.table_present || !objects.index_present || !objects.tenant_id_ready)) {
+    // Return bounded schema evidence, no raw catalog/credentials.
+    fail('RETRIEVE011_SCHEMA_DRIFT_'+[objects.table_present,objects.index_present,objects.tenant_id_ready].map(Boolean).map(Number).join(''));
+  }
   return rows.length===11 ? 'ALREADY_APPLIED' : 'PENDING_011';
 }
 
 async function getState(client, migrations) {
   const rows=(await client.query('SELECT version, name, checksum FROM schema_migrations ORDER BY version')).rows;
+  // Native Nile catalog visibility for tenant DDL is reliable in a fresh
+  // transaction after commit; use information_schema for the table's shape.
   const objects=(await client.query(`
     SELECT to_regclass('public.refresh_requests') IS NOT NULL AS table_present,
            to_regclass('public.refresh_requests_profile_idx') IS NOT NULL AS index_present,
@@ -56,6 +61,7 @@ export async function prepareOrApplyRetrieve011({env=process.env,buildIdentity,d
   const files=migrations || await loadMigrations();
   const pool=db || getMigrationPool(env);
   const client=await pool.connect();
+  let committed=false;
   try {
     await client.query(admitted.mode==='inspect' ? 'BEGIN READ ONLY' : 'BEGIN');
     const actual=(await client.query('SELECT current_database() AS database_name')).rows[0]?.database_name;
@@ -69,15 +75,20 @@ export async function prepareOrApplyRetrieve011({env=process.env,buildIdentity,d
       await client.query(migration.sql);
       await client.query('INSERT INTO schema_migrations(version, name, checksum) VALUES ($1, $2, $3)',
         [migration.version,migration.name,migration.checksum]);
-      after=await getState(client,files);
-      if(after!=='ALREADY_APPLIED') fail('RETRIEVE011_POSTCHECK_FAILED');
       applied=true;
     }
     await client.query('COMMIT');
+    committed=true;
+    if (applied) {
+      // DDL and ledger write are atomic. Distributed schema metadata must be
+      // checked after commit on Nile; failure here blocks rollout, never DROP.
+      after=await getState(client,files);
+      if(after!=='ALREADY_APPLIED') fail('RETRIEVE011_POSTCHECK_FAILED');
+    }
     return {status:'ok',environment:'dev',source_sha:admitted.source,mode:admitted.mode,
       before,after,applied,migration:TARGET,checksum:files.at(-1).checksum};
   } catch(error) {
-    await client.query('ROLLBACK').catch(()=>{});
+    if (!committed) await client.query('ROLLBACK').catch(()=>{});
     throw error;
   } finally { client.release(); }
 }
@@ -89,7 +100,7 @@ if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
     process.stdout.write(JSON.stringify(result)+'\n');
   } catch(error) {
     // Never print raw SQL, database URL, credentials, or provider exception text.
-    const code=typeof error?.code==='string' && /^RETRIEVE011_[A-Z_]+$/.test(error.code) ? error.code : 'RETRIEVE011_EXECUTION_FAILED';
+    const code=typeof error?.code==='string' && /^RETRIEVE011_[A-Z_0-9]+$/.test(error.code) ? error.code : 'RETRIEVE011_EXECUTION_FAILED';
     process.stderr.write(code+'\n');
     process.exitCode=86;
   } finally { await closeMigrationPool(); }
