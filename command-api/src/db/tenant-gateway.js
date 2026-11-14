@@ -10,6 +10,7 @@ export const PERSONAL_TABLES = Object.freeze([
   'applications',
   'profile_notes',
   'profile_ui_preferences',
+  'refresh_requests',
 ]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -158,7 +159,8 @@ export async function verifyTenantPersonalResidue(
        (SELECT count(*)::integer FROM profile_job_evaluation WHERE tenant_id=$1) AS evaluations,
        (SELECT count(*)::integer FROM applications WHERE tenant_id=$1) AS applications,
        (SELECT count(*)::integer FROM profile_notes WHERE tenant_id=$1) AS notes,
-       (SELECT count(*)::integer FROM profile_ui_preferences WHERE tenant_id=$1) AS ui_preferences`,
+       (SELECT count(*)::integer FROM profile_ui_preferences WHERE tenant_id=$1) AS ui_preferences,
+       (SELECT count(*)::integer FROM refresh_requests WHERE tenant_id=$1) AS refresh_requests`,
     [tenantId],
   );
   const counts = result.rows?.[0] || {};
