@@ -965,6 +965,7 @@ def persist_collection(
 
     created = 0
     updated = 0
+    per_source = {}
     with connect(connection_string) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT current_database()")
@@ -977,10 +978,13 @@ def persist_collection(
 
             for posting in postings:
                 _, was_created = _upsert_posting(cursor, posting, run_id, now)
+                counts = per_source.setdefault(posting.source_id, {"postings_created": 0, "postings_updated": 0})
                 if was_created:
                     created += 1
+                    counts["postings_created"] += 1
                 else:
                     updated += 1
+                    counts["postings_updated"] += 1
 
             advanced = _advance_lifecycle(cursor, complete_source_ids, run_id, now)
 
@@ -990,6 +994,7 @@ def persist_collection(
         "records_skipped": skipped,
         "postings_created": created,
         "postings_updated": updated,
+        "per_source_postings": per_source,
         "lifecycle_advanced": advanced,
         "complete_sources": len(complete_source_ids),
         "lifecycle_suppressed_sources": sorted(incomplete_source_ids),
