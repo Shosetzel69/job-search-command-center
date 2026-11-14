@@ -924,6 +924,30 @@ def _complete_source_ids(plan: Sequence[Mapping[str, Any]]) -> set[str]:
     }
 
 
+def _canonical_publication_counts(cursor, run_id):
+    """Count distinct active shared jobs actually touched by this run.
+
+    Source attribution follows /me/jobs' preferred-posting ordering. These
+    are shared corpus counts, not tenant/profile opportunities or UI page sizes.
+    The same canonical job is counted once even if several sources saw it.
+    """
+    cursor.execute("""
+        SELECT preferred.source_id, count(*)::integer
+          FROM (SELECT DISTINCT job_id FROM source_postings WHERE seen_run_id=%s) touched
+          JOIN canonical_jobs j ON j.job_id=touched.job_id AND j.lifecycle_status='ACTIVE'
+          JOIN LATERAL (
+              SELECT source_id
+                FROM source_postings
+               WHERE job_id=j.job_id
+               ORDER BY CASE lifecycle_status WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
+                        last_seen_at DESC, posting_id ASC
+               LIMIT 1
+          ) preferred ON true
+         GROUP BY preferred.source_id
+    """, (run_id,))
+    return {str(source_id): int(count) for source_id, count in cursor.fetchall()}
+
+
 def persist_collection(
     collection: Sequence[object],
     plan: Sequence[Mapping[str, Any]],
@@ -987,6 +1011,7 @@ def persist_collection(
                     counts["postings_updated"] += 1
 
             advanced = _advance_lifecycle(cursor, complete_source_ids, run_id, now)
+            publication = _canonical_publication_counts(cursor, run_id) if postings else {}
 
     return {
         "status": "persisted",
@@ -995,6 +1020,8 @@ def persist_collection(
         "postings_created": created,
         "postings_updated": updated,
         "per_source_postings": per_source,
+        "canonical_jobs_published_this_run": sum(publication.values()),
+        "canonical_publication_by_preferred_source": publication,
         "lifecycle_advanced": advanced,
         "complete_sources": len(complete_source_ids),
         "lifecycle_suppressed_sources": sorted(incomplete_source_ids),
