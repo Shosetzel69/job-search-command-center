@@ -83,6 +83,11 @@ def normalize(item, board_name, company_name):
         "date_posted": item.get("publishedAt"),
         "source_url": source_url,
         "sources": [{"provider": "Ashby", "board_name": board_name}],
+        "_jscc_field_provenance": {"title":"ATS_FIELD",
+            **({"description":"ATS_FIELD"} if item.get("descriptionPlain") else {}),
+            **({"location":"ATS_FIELD"} if locations else {}),
+            **({"date_posted":"ATS_FIELD"} if item.get("publishedAt") else {}),
+        },
         "department": item.get("department"),
         "team": item.get("team"),
     }
