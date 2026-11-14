@@ -215,5 +215,57 @@ class WorkdayConnectorTests(unittest.TestCase):
             )
 
 
+    def test_malformed_workday_row_is_isolated_and_reported_partial(self):
+        opener = Mock(side_effect=[
+            FakeResponse({"total": 2, "jobPostings": [
+                {"title": "Bad", "externalPath": "https://evil.example/job"},
+                {"title": "Delivery Manager", "externalPath": "/job/Bucharest/Delivery-Manager_R-123"},
+            ]}),
+            FakeResponse({"jobPostingInfo": {
+                "jobReqId": "R-123", "title": "Delivery Manager",
+                "jobDescription": "<p>Lead delivery</p>", "location": "Bucharest",
+            }}),
+        ])
+        results = workday.collect(
+            "https://example.wd3.myworkdayjobs.com/External", "Example Co", opener=opener
+        )
+        self.assertEqual(len(results), 2)
+        self.assertTrue(results[0].ok)
+        self.assertEqual(len(results[0].records), 1)
+        self.assertEqual(results[0].records[0]["job_title"], "Delivery Manager")
+        self.assertFalse(results[1].ok)
+        self.assertEqual(results[1].error_code, "SCHEMA_ERROR")
+        self.assertEqual(results[1].failure_stage, "parse")
+        self.assertEqual(opener.call_count, 2)
+
+    def test_workday_external_path_rejects_cross_origin_and_traversal(self):
+        for path in ("//example.com/jobs", "/../jobs", "/job/../other", "/job/role?redirect=foo",
+                     "https://example.com/job", "/job/\\\\evil"):
+            with self.subTest(path=path):
+                self.assertFalse(workday._valid_external_path(path))
+        self.assertTrue(workday._valid_external_path("/job/Bucharest/Role_R-2"))
+
+    def test_workday_429_respects_retry_after(self):
+        from urllib.error import HTTPError
+        error = HTTPError("https://example.com", 429, "Too Many Requests",
+                          {"Retry-After": "10"}, None)
+        opener = Mock(side_effect=[error, FakeResponse({"ok": True})])
+        with patch.object(workday.time, "sleep") as sleep:
+            self.assertEqual(workday._request_json(workday.Request("https://example.com"),
+                                                   opener=opener), {"ok": True})
+        sleep.assert_called_once_with(10)
+
+    def test_workday_429_long_cooldown_fails_closed(self):
+        from urllib.error import HTTPError
+        error = HTTPError("https://example.com", 429, "Too Many Requests",
+                          {"Retry-After": "120"}, None)
+        opener = Mock(side_effect=[error])
+        with patch.object(workday.time, "sleep") as sleep:
+            with self.assertRaises(HTTPError):
+                workday._request_json(workday.Request("https://example.com"), opener=opener)
+        sleep.assert_not_called()
+        self.assertEqual(opener.call_count, 1)
+
+
 if __name__ == "__main__":
     unittest.main()
