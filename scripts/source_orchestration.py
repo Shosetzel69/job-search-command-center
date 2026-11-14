@@ -316,9 +316,12 @@ def emit_source_final(run_id, item):
 
 def aggregate_source_results(plan):
     outcome_counts = {}
+    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope")}
     error_code_counts = {}
     failure_stage_counts = {}
     for item in plan:
+        for key in record_totals:
+            record_totals[key] += int(item.get(key) or 0)
         outcome = item.get("outcome") or "unknown"
         outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
         if outcome != "failed":
@@ -328,6 +331,7 @@ def aggregate_source_results(plan):
         error_code_counts[error_code] = error_code_counts.get(error_code, 0) + 1
         failure_stage_counts[failure_stage] = failure_stage_counts.get(failure_stage, 0) + 1
     return {
+        "source_record_totals": record_totals,
         "source_outcome_counts": dict(sorted(outcome_counts.items())),
         "source_failure_codes": dict(sorted(error_code_counts.items())),
         "source_failure_stages": dict(sorted(failure_stage_counts.items())),
@@ -427,12 +431,17 @@ def tag_collection_records(item, results, run_id=None):
     """Attach source identity, validate fields and isolate provably invalid jobs."""
     quality_counts = {"VALID": 0, "INCOMPLETE": 0, "INVALID": 0}
     issue_counts = {}
+    rejected_evidence = []
+    collected = 0
+    malformed = 0
     for result in results:
         if not result.ok:
             continue
         accepted = []
         for record in result.records or []:
+            collected += 1
             if not isinstance(record, dict):
+                malformed += 1
                 accepted.append(record)
                 continue
             record.setdefault("_jscc_source_id", item.get("source_id"))
@@ -447,7 +456,15 @@ def tag_collection_records(item, results, run_id=None):
                 issue_counts[code] = issue_counts.get(code, 0) + 1
             if quality["verdict"] != "INVALID":
                 accepted.append(record)
+            else:
+                # Sanitized evidence only; never persist raw rejected posting content.
+                rejected_evidence.append(quality)
         result.records = accepted
+    item["records_collected_raw"] = collected
+    item["records_malformed"] = malformed
+    item["records_quality_excluded"] = quality_counts["INVALID"]
+    item["records_scope_excluded"] = 0
+    item["rejected_quality_evidence"] = rejected_evidence
     item["quality_counts"] = quality_counts
     item["quality_issues"] = dict(sorted(issue_counts.items()))
     item["_jscc_quality_rejected"] = quality_counts["INVALID"]
@@ -503,6 +520,7 @@ def apply_retrieve_scope(item, results, config):
         return results
 
     scoped_results = []
+    excluded = 0
     for result in results:
         if not result.ok:
             scoped_results.append(result)
@@ -514,6 +532,8 @@ def apply_retrieve_scope(item, results, config):
             posting = shared_corpus.prepare_posting(record, source_hint=item.get("source"))
             if posting and any(_posting_matches_scope(posting, scope) for scope in scopes if isinstance(scope, dict)):
                 records.append(record)
+            else:
+                excluded += 1
         scoped_results.append(engine.CollectionResult(
             result.connector,
             result.query,
@@ -525,6 +545,7 @@ def apply_retrieve_scope(item, results, config):
             result.failure_stage,
             result.http_status,
         ))
+    item["records_scope_excluded"] = excluded
     return scoped_results
 
 
@@ -652,6 +673,7 @@ def record_results(item, results):
     ok = [result for result in results if result.ok]
     failed = [result for result in results if not result.ok]
     item["records"] = sum(len(result.records) for result in ok)
+    item["records_after_scope"] = item["records"]
     item["error"] = "; ".join(
         diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
     ) or None
