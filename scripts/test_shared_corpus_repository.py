@@ -26,6 +26,10 @@ class FakeCursor:
     def fetchone(self):
         return self.rows.pop(0) if self.rows else None
 
+    def fetchall(self):
+        rows, self.rows = self.rows, []
+        return rows
+
 
 class SharedCorpusProjectionTests(unittest.TestCase):
     def quality_record(self, **updates):
@@ -605,3 +609,14 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class RetrieveCoverageSnapshotTests(unittest.TestCase):
+    def test_snapshot_preserves_missing_and_observed_scope(self):
+        now = datetime(2026, 11, 14, tzinfo=timezone.utc)
+        key = "a" * 64
+        missing = "b" * 64
+        cursor = FakeCursor([({"collection_freshness_hours": 24},), (key, "run-1", now, 5, 2)])
+        result = repository._coverage_snapshot(cursor, {"scopes": [{"scope_key": key}, {"scope_key": missing}]}, now)
+        self.assertEqual([x["state"] for x in result], ["SUFFICIENT", "INSUFFICIENT"])
+        self.assertEqual(result[0]["last_usable_run_id"], "run-1")
+        self.assertIsNone(result[1]["last_usable_run_id"])
