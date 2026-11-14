@@ -114,7 +114,7 @@ class JobsPipeConnector:
         if not titles:
             raise RuntimeError("No enabled role titles")
         collection_hours = int(config.get("collection_freshness_hours", config.get("freshness_hours", 24)))
-        freshness_days = max(1, math.ceil(collection_hours / 24))
+        freshness_days = max(1, math.ceil(int(config.get('posting_max_age_hours', collection_hours)) / 24))
         common = {
             "job_title_or": titles,
             "posted_at_max_age_days": freshness_days,
@@ -478,6 +478,7 @@ def canonical_source_name(connector: str | None) -> str:
 def process_records(config: dict[str, Any], collection: list[CollectionResult], now: datetime) -> dict[str, Any]:
     display_freshness_hours = int(config.get("freshness_hours", 24))
     collection_freshness_hours = int(config.get("collection_freshness_hours", display_freshness_hours))
+    posting_age_hours = int(config.get("posting_max_age_hours", collection_freshness_hours))
     fit_threshold = int(config.get("fit_threshold", 80))
     keep_reposts = bool(config.get("keep_reposts", True))
     work_modes = config.get("work_modes") or {}
@@ -614,8 +615,8 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
             reason = "outside target or excluded geography"
         if reason is None and not keep_reposts and bool(job.get("reposted")):
             reason = "repost disabled by configuration"
-        if reason is None and posted_dt and (now - posted_dt).total_seconds() > collection_freshness_hours * 3600:
-            reason = f"older than {collection_freshness_hours} hours"
+        if reason is None and posted_dt and (now - posted_dt).total_seconds() > posting_age_hours * 3600:
+            reason = f"older than {posting_age_hours} hours"
 
         if reason:
             excluded.append({"title": title, "company": company, "reason": reason})
@@ -727,8 +728,9 @@ def process_records(config: dict[str, Any], collection: list[CollectionResult], 
     return {
         "schema_version": SCHEMA_VERSION,
         "generated_at": now.isoformat(),
-        "freshness_hours": collection_freshness_hours,
+        "freshness_hours": posting_age_hours,
         "collection_freshness_hours": collection_freshness_hours,
+        "posting_max_age_hours": posting_age_hours,
         "criteria": {
             "roles": configured_titles(config),
             "geography": {
