@@ -314,3 +314,26 @@ test('SA-B01/B02 USER refresh: explicit empty DEV sources blocks; a changed gene
     collectionFreshnessHours:24,sourceCatalog,sourceCatalogGeneration:'7'});
   assert.notEqual(old.request_signature,captured.request_signature);
 });
+
+
+test('explicit DEV manual Retrieve starts for sufficient coverage and automatic cooldown', async () => {
+  for (const snapshot of [coverage(), {...coverage('STALE'), refresh_scopes:[], blocked_by_cooldown:true}]) {
+    const calls=[];
+    const result=await userRefresh(user,baseEnv,deps({intent:'manual',readCoverage:async()=>snapshot,
+      dispatch:async(...args)=>{calls.push(args);return {name:'op',run_id:'run-manual'};},
+    }));
+    assert.equal(result.outcome,'STARTED_RUN');
+    assert.equal(result.run_id,'run-manual');
+    assert.equal(calls.length,1);
+    assert.equal(calls[0][5].retrieve_scope.scopes.length,1);
+  }
+});
+
+test('manual Retrieve still coalesces equivalent active work and blocks empty sources', async () => {
+  const equivalent=request();
+  const joined=await userRefresh(user,baseEnv,deps({intent:'manual',getActive:async()=>({run_id:'active',request_signature:equivalent.request_signature}),dispatch:async()=>{throw Error('must not dispatch twice');}}));
+  assert.equal(joined.outcome,'JOINED_EXISTING_RUN');
+  assert.equal(joined.run_id,'active');
+  const blocked=await userRefresh(user,baseEnv,deps({intent:'manual',readCatalog:async()=>({catalog:{schema_version:'1.0',sources:[]},generation:'7'}),dispatch:async()=>{throw Error('must not dispatch empty source set');}}));
+  assert.equal(blocked.reason,'NO_ACTIVE_SOURCES');
+});
