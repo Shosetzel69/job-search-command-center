@@ -1031,11 +1031,23 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         + (shared_corpus_result or {}).get("postings_updated", 0)
     )
     per_source = (shared_corpus_result or {}).get("per_source_postings", {})
+    publication = (shared_corpus_result or {}).get("canonical_publication_by_preferred_source")
+    publication_known = isinstance(publication, dict)
+    planned_ids = {item["source_id"] for item in plan}
     for item in plan:
         counts = per_source.get(item["source_id"], {})
         item["postings_created"] = int(counts.get("postings_created", 0))
         item["postings_updated"] = int(counts.get("postings_updated", 0))
+        item["canonical_jobs_published_this_run"] = int(publication.get(item["source_id"], 0)) if publication_known else None
     status.update(aggregate_source_results(plan))
+    status["canonical_publication"] = {
+        "basis": "distinct_active_shared_jobs_by_api_preferred_source",
+        "measured": publication_known,
+        "canonical_jobs_published_this_run": sum(publication.values()) if publication_known else None,
+        "attributed_to_planned_sources": sum(value for key, value in publication.items() if key in planned_ids) if publication_known else None,
+        "attributed_to_other_sources": sum(value for key, value in publication.items() if key not in planned_ids) if publication_known else None,
+        "profile_opportunities": None,
+    }
     attempted = [item for item in plan if item["status"] in {"completed", "failed"}]
     status.update({"source_strategy": config.get("source_strategy") or "all active sources equally",
                    "sources_configured": len(plan), "sources_active": sum(item["active"] for item in plan),
