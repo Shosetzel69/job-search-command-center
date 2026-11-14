@@ -332,7 +332,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
             role_family="PROJECT_DELIVERY_MANAGEMENT",
             posted_at=NOW,
             repost_of_external_job_id=None,
-            payload={},
+            payload={"job_quality": {"verdict": "VALID"}},
         )
 
     def test_new_source_posting_creates_canonical_job(self):
@@ -530,6 +530,28 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         )
         self.assertEqual(result["status"], "persisted")
         self.assertEqual(seen["connection_string"], url)
+
+    def test_incomplete_posting_retains_existing_content(self):
+        posting = self.posting()
+        posting = repository.SharedPosting(**{
+            **posting.__dict__, "payload": {"job_quality": {"verdict": "INCOMPLETE"}},
+        })
+        cursor = FakeCursor([("post-1", "job-1")])
+        self.assertEqual(repository._upsert_posting(cursor, posting, "run", NOW), ("job-1", False))
+        updates = [sql for sql, _ in cursor.queries if sql.startswith("UPDATE")]
+        self.assertEqual(len(updates), 2)
+        self.assertTrue(all("last_seen_at" in sql for sql in updates))
+        self.assertTrue(all("payload =" not in sql and "location =" not in sql for sql in updates))
+
+    def test_incomplete_cross_source_posting_does_not_replace_canonical_content(self):
+        posting = self.posting(source_id="src-b")
+        posting = repository.SharedPosting(**{
+            **posting.__dict__, "payload": {"job_quality": {"verdict": "INCOMPLETE"}},
+        })
+        cursor = FakeCursor([None, None, ("job-1",)])
+        self.assertEqual(repository._upsert_posting(cursor, posting, "run", NOW), ("job-1", True))
+        update = next(sql for sql, _ in cursor.queries if sql.startswith("UPDATE canonical_jobs"))
+        self.assertNotIn("payload =", update)
 
     def test_canonical_upsert_versions_only_on_semantic_basis_change(self):
         cursor = FakeCursor([("post-1", "job-1")])
