@@ -863,11 +863,19 @@ def _luxoft_details(html, link, *, now=None):
     location = f"{city}, {country}"
     remote = str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE"
     employment = engine.list_values(posting.get("employmentType"))
-    return _record(
+    record = _record(
         "Luxoft", identity, title, "Luxoft", description, link,
         date_posted=posted, location=location, countries=[country],
         remote=remote, employment_statuses=employment,
     )
+    record["_jscc_field_provenance"] = {
+        "title": "JOB_DETAIL_JSONLD",
+        "description": "JOB_DETAIL_JSONLD",
+        "location": "JOB_DETAIL_JSONLD",
+        **({"date_posted": "JOB_DETAIL_JSONLD"} if posted else {}),
+    }
+    return record
+
 
 
 def _luxoft(url, max_details=60, max_seconds=35, diagnostics=None):
@@ -961,13 +969,21 @@ def _stripe_details(html, link, *, now=None):
             posted = parsed.isoformat()
     except ValueError:
         pass
-    return _record(
+    record = _record(
         "Stripe", link.rstrip("/").split("/")[-1], title, "Stripe",
         description, link, date_posted=posted, location="; ".join(cities),
         countries=countries,
         remote=str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE",
         employment_statuses=engine.list_values(posting.get("employmentType")),
     )
+    record["_jscc_field_provenance"] = {
+        "title": "JOB_DETAIL_JSONLD",
+        "description": "JOB_DETAIL_JSONLD",
+        "location": "JOB_DETAIL_JSONLD",
+        **({"date_posted": "JOB_DETAIL_JSONLD"} if posted else {}),
+    }
+    return record
+
 
 
 def _stripe(url, max_details=30, max_seconds=30, diagnostics=None):
