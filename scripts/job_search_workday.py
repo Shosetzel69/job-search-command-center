@@ -89,12 +89,12 @@ def _request_json(request, opener=urlopen, max_attempts=3):
     return payload
 
 
-def _post_page(board, offset, opener=urlopen):
+def _post_page(board, offset, opener=urlopen, search_text=""):
     payload = json.dumps({
         "appliedFacets": {},
         "limit": PAGE_SIZE,
         "offset": offset,
-        "searchText": "",
+        "searchText": search_text,
     }).encode("utf-8")
     request = Request(
         board["cxs_base"] + "/jobs",
@@ -202,10 +202,80 @@ def normalize(detail, summary, board, company_name):
         "date_posted": info.get("startDate"),
         "source_url": source_url,
         "sources": [{"provider": "Workday", "tenant": board["tenant"], "site": board["site"]}],
+        "_jscc_field_provenance": {
+            **({"title": "ATS_FIELD"} if title else {}),
+            **({"description": "ATS_FIELD"} if info.get("jobDescription") else {}),
+            **({"location": "ATS_FIELD"} if location else {}),
+            **({"date_posted": "ATS_FIELD"} if info.get("startDate") else {}),
+        },
     }
 
 
-def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1):
+# Broad tokens cover all known title alternatives in the canonical subfamily
+# contract. Never silently truncate a mixed scope to a subset of the terms.
+SCOPE_TERMS = {
+    "project_management": ("project",), "program_management": ("program", "programme"),
+    "pmo": ("pmo", "project"), "delivery_management": ("delivery",),
+    "service_management": ("service",), "it_operations": ("operation",),
+    "support_management": ("support",), "product_management": ("product",),
+    "product_owner": ("product",), "agile_scrum": ("scrum", "agile"),
+    "business_analysis": ("business",), "transformation": ("transformation",),
+    "change_management": ("change",), "customer_success": ("customer",),
+    "technical_account_management": ("account",), "technical_customer_management": ("customer",),
+    "implementation": ("implementation",), "professional_services": ("professional",),
+    "engineering_management": ("engineering",), "technical_leadership": ("technical", "tech"),
+    "solution_architecture": ("architect",), "enterprise_architecture": ("architect",),
+}
+
+
+def scope_search_terms(config):
+    if not (config or {}).get("_jscc_targeted_collection"):
+        return ()
+    subfamilies = config.get("target_role_subfamilies") or []
+    if not subfamilies or any(code not in SCOPE_TERMS for code in subfamilies):
+        return ()
+    terms = tuple(sorted({term for code in subfamilies for term in SCOPE_TERMS[code]}))
+    return terms if len(terms) <= 8 else ()
+
+
+def _scoped_summaries(board, terms, max_postings, opener):
+    """Round-robin CXS search, with the same total paging and detail budget.
+    A capped or failed search is partial, never authoritative absence.
+    """
+    active = {term: 0 for term in terms}
+    unique = {}
+    pages_left = (max_postings + PAGE_SIZE - 1) // PAGE_SIZE
+    partial = False
+    while active and pages_left and len(unique) < max_postings:
+        for term, offset in list(active.items()):
+            if not pages_left or len(unique) >= max_postings:
+                break
+            pages_left -= 1
+            page = _post_page(board, offset, opener=opener, search_text=term)
+            rows = page.get("jobPostings")
+            if not isinstance(rows, list):
+                raise ValueError("Workday jobs response must contain a jobPostings array")
+            for row in rows:
+                if not isinstance(row, dict):
+                    partial = True
+                    continue
+                path = row.get("externalPath")
+                if not _valid_external_path(path):
+                    partial = True
+                    continue
+                if len(unique) < max_postings:
+                    unique[path] = row
+                elif path not in unique:
+                    partial = True
+            total = page.get("total")
+            if len(rows) < PAGE_SIZE or (isinstance(total, int) and offset + PAGE_SIZE >= total):
+                active.pop(term)
+            else:
+                active[term] += PAGE_SIZE
+    return list(unique.values()), partial or bool(active)
+
+
+def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1, search_terms=()):
     company_name = str(company_name or "").strip()
     if not company_name:
         raise ValueError("Workday company_name is required")
@@ -216,9 +286,15 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen,
 
     board = parse_career_url(career_url)
     summaries = []
+    scoped_partial = False
+    if search_terms:
+        terms = tuple(sorted(set(search_terms)))
+        if len(terms) > 8 or any(term not in {v for values in SCOPE_TERMS.values() for v in values} for term in terms):
+            raise ValueError("Invalid Workday search terms")
+        summaries, scoped_partial = _scoped_summaries(board, terms, max_postings, opener)
     offset = 0
     total = None
-    while len(summaries) < max_postings:
+    while not search_terms and len(summaries) < max_postings:
         payload = _post_page(board, offset, opener=opener)
         postings = payload.get("jobPostings")
         if not isinstance(postings, list):
@@ -256,6 +332,10 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen,
 
     connector = f"workday:{board['tenant']}:{board['site']}"
     result = [engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
+    if scoped_partial:
+        result.append(engine.CollectionResult(connector, "bounded_search_partial", False, [], 0,
+            "Workday scoped search incomplete within existing request cap or malformed rows",
+            error_code="SCHEMA_ERROR", failure_stage="parse"))
     if invalid_paths:
         result.append(engine.CollectionResult(
             connector, "invalid_externalPath", False, [], 0,
