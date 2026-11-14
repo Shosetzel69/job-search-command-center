@@ -98,6 +98,11 @@ def normalize(summary, detail, subdomain, company_name):
         "date_posted": info.get("datePosted"),
         "source_url": source_url,
         "sources": [{"provider": "BambooHR", "subdomain": subdomain}],
+        "_jscc_field_provenance": {"title":"ATS_FIELD",
+            **({"description":"ATS_FIELD"} if info.get("description") else {}),
+            **({"location":"ATS_FIELD"} if location else {}),
+            **({"date_posted":"ATS_FIELD"} if info.get("datePosted") else {}),
+        },
         "department": info.get("departmentLabel") or summary.get("departmentLabel"),
     }
 
