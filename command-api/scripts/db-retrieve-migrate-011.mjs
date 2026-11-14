@@ -56,9 +56,17 @@ async function getState(client, migrations) {
   // logical catalog. Require affirmative evidence from the table-scoped
   // PostgreSQL index view instead; an empty result is not a PASS.
   if (!objects.index_present) {
-    const indexes=await client.query(
-      "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='refresh_requests' AND indexname='refresh_requests_profile_idx'"
-    );
+    // Bind index evidence to the OID resolved by the actual logical table
+    // in this database. Nile may rewrite the public schema to a physical
+    // namespace; do not scan or trust same-named indexes in other schemas.
+    const indexes=await client.query(`
+      SELECT idx.relname AS indexname, pg_get_indexdef(i.indexrelid) AS indexdef
+        FROM pg_catalog.pg_index i
+        JOIN pg_catalog.pg_class idx ON idx.oid=i.indexrelid
+       WHERE i.indrelid=to_regclass('public.refresh_requests')
+         AND idx.relname='refresh_requests_profile_idx'
+         AND i.indisvalid AND i.indisready
+    `);
     objects.index_present=indexes.rows?.some(row =>
       row.indexname==='refresh_requests_profile_idx' &&
       /\(\s*tenant_id\s*,\s*search_profile_id\s*,\s*created_at\s+DESC\s*\)/i.test(String(row.indexdef||''))
