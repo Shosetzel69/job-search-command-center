@@ -10,6 +10,7 @@ import {
   sortSourceResultRows,
   sourceSummaryRows,
   runSummaryLabel,
+  sourceAccountingLabel,
 } from '../src/admin-log-model.mjs';
 
 test('exclusion grouping sorts dominant categories and exact reasons by count', () => {
@@ -178,4 +179,13 @@ test('source result rows sort deterministically by all displayed columns', () =>
   assert.deepEqual(sortSourceResultRows(rows,'jobs','desc').map(x=>x.source),['Alpha','Zulu','Beta']);
   assert.deepEqual(sortSourceResultRows(rows,'status','asc').map(x=>x.source),['Beta','Alpha','Zulu']);
   assert.deepEqual(sortSourceResultRows(rows,'detail','asc').map(x=>x.source),['Zulu','Alpha','Beta']);
+});
+
+
+test('canonical accounting is distinct from legacy snapshot and unknown is not zero',()=>{
+  const run={sources_attempted:2,jobs_published:99,canonical_publication:{measured:true,canonical_jobs_published_this_run:3},source_results:[{source:'A',outcome:'success',records:7,provider_scope_mode:'QUERY_BOUNDED',records_collected_raw:12,records_scope_excluded:4,records_quality_excluded:1,canonical_jobs_published_this_run:3},{source:'B',outcome:'skipped',provider_scope_mode:'NOT_EXECUTED',canonical_jobs_published_this_run:null}]};
+  assert.match(runSummaryLabel(run),/3 joburi canonice/);
+  const rows=sourceResultRows(run);
+  assert.match(sourceAccountingLabel(rows[0]),/brut 12.*scope 4.*calitate 1.*3 canonice/);
+  assert.match(sourceAccountingLabel(rows[1]),/— canonice/);
 });
