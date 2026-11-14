@@ -280,7 +280,9 @@ export async function handleAuthenticatedRoute(request, env, context) {
 
   if (request.method === 'POST' && url.pathname === '/me/refresh') {
     requireSameOrigin(request, env);
-    const result = await userRefresh(context, env);
+    const result = url.searchParams.get('intent') === 'manual'
+      ? await userRefresh(context, env, {intent:'manual'})
+      : await userRefresh(context, env);
     const status = ['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome) ? 202 : 200;
     return json(result, status);
   }
@@ -379,7 +381,9 @@ export async function handleAuthenticatedRoute(request, env, context) {
   if (request.method === 'POST' && url.pathname === '/admin/refresh') {
     requireSameOrigin(request, env);
     requireAdmin(context);
-    const result = await adminRefresh(context, env);
+    const result = url.searchParams.get('intent') === 'manual'
+      ? await adminRefresh(context, env, {intent:'manual'})
+      : await adminRefresh(context, env);
     const status = ['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome) ? 202 : 200;
     return json(result, status);
   }
