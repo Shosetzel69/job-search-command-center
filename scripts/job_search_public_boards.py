@@ -5,6 +5,7 @@ canonical filtering/FIT engine. It never bypasses login, CAPTCHA, robots or payw
 """
 
 import hashlib
+from concurrent.futures import ThreadPoolExecutor
 import json
 import re
 import time
@@ -14,12 +15,12 @@ from email.utils import parsedate_to_datetime
 from html import unescape
 from html.entities import html5
 from html.parser import HTMLParser
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 import job_search as engine
 import web_browser as browser
-from web_transport import PublicClient
+from web_transport import PublicClient, FetchError
 
 USER_AGENT = "job-search-command-center/1.0"
 MAX_BYTES = 12 * 1024 * 1024
@@ -37,7 +38,7 @@ PUBLIC_BOARD_SOURCES = {
     "NoDesk": {"kind": "rss", "url": "https://nodesk.co/remote-jobs/index.xml"},
     "EU Remote Jobs": {"kind": "eu_remote", "url": "https://euremotejobs.com/", "feed_url": "https://euremotejobs.com/feed/"},
     "Remote in Europe": {"kind": "rss", "url": "https://remoteineurope.com/feed/"},
-    "EU Careers / EPSO": {"kind": "eu_careers", "url": "https://eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast"},
+    "EU Careers / EPSO": {"kind": "eu_careers", "url": "https://selection.eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast"},
     "Remote.co": {"kind": "rendered_heading_list", "url": "https://remote.co/remote-jobs/project-manager", "default_remote": True},
     "Remotive": {"kind": "remotive", "url": "https://remotive.com/api/remote-jobs"},
     "Atos": {"kind": "atos", "url": "https://jobs.atos.net/go/Jobs-in-Romania/3686501/"},
@@ -92,7 +93,7 @@ PUBLIC_BOARD_SOURCES = {
     "Upwork": {"kind": "linked_jobs", "url": "https://www.upwork.com/freelance-jobs/project-management/", "job_path": r"/freelance-jobs/apply/[^/?#]+_~\d+/"},
     "Hubstaff Talent": {"kind": "rendered_links", "url": "https://hubstafftalent.net/search/jobs?search%5Bkeywords%5D=project%20manager", "job_path": r"/jobs/[^/?#]+"},
     "FlexJobs": {"kind": "rendered_heading_list", "url": "https://www.flexjobs.com/remote-jobs/project-manager"},
-    "Torre": {"kind": "rendered_links", "url": "https://app.torre.ai/search-job?query=project%20manager", "job_path": r"(?:https://torre\.ai)?/post/[^/?#]+"},
+    "Torre": {"kind": "rendered_links", "url": "https://torre.ai/app/search-job?query=project%20manager", "job_path": r"(?:https://torre\.ai)?/post/[^/?#]+"},
     "Hirexa Solutions": {"kind": "hirexa", "url": "https://hirexa.com/careers/"},
     "Pangian": {"kind": "pangian_rss", "url": "https://pangian.com/feed/?post_type=job_listing"},
     "Worldpay / Global Payments": {"kind": "rendered_links", "url": "https://jobs.globalpayments.com/jobs", "job_path": r"/(?:en/)?jobs/r\d+(?:-\d+)?(?:/[^?#]+/?)?"},
@@ -783,7 +784,226 @@ def _linked_job_board(url, provider, job_path):
         )
         records[record["id"]] = record
     if not records:
+        # The official GitHub careers board explicitly distinguishes zero open
+        # positions from an inaccessible or malformed response. Do not turn
+        # unknown/blocked pages into a false authoritative empty result.
+        if (provider == "GitHub" and
+                "There are currently no jobs that match your search criteria" in
+                    body.decode("utf-8", errors="replace") and
+                "0 results" in body.decode("utf-8", errors="replace").lower()):
+            return []
         raise ValueError(f"{provider} jobs page contained no extractable job links")
+    return list(records.values())
+
+
+
+class _LuxoftJobPosting(HTMLParser):
+    """Read first-party JobPosting JSON-LD, not social-sharing or page chrome."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.active = False
+        self.parts = []
+        self.scripts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script" and dict(attrs).get("type", "").lower() == "application/ld+json":
+            self.active = True
+            self.parts = []
+
+    def handle_data(self, data):
+        if self.active:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script" and self.active:
+            self.scripts.append("".join(self.parts))
+            self.active = False
+
+
+def _luxoft_details(html, link, *, now=None):
+    if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "career.luxoft.com":
+        raise ValueError("Luxoft detail URL must stay on the first-party HTTPS host")
+    parser = _LuxoftJobPosting()
+    parser.feed(html)
+    postings = []
+    for text in parser.scripts:
+        candidate = json.loads(text)
+        values = candidate if isinstance(candidate, list) else [candidate]
+        for value in values:
+            if isinstance(value, dict) and value.get("@type") == "JobPosting":
+                postings.append(value)
+    if len(postings) != 1:
+        raise ValueError("Luxoft detail must contain exactly one JobPosting")
+    posting = postings[0]
+    title = plain_text(posting.get("title"))
+    description = plain_text(posting.get("description"))
+    # A listing snippet or a share widget is never an acceptable description.
+    if not title or len(description) < 150:
+        raise ValueError("Luxoft job has incomplete title or description")
+    address = (posting.get("jobLocation") or {}).get("address") or {}
+    if not isinstance(address, dict):
+        raise ValueError("Luxoft job location is not a structured address")
+    city = plain_text(address.get("addressLocality"))
+    country_code = plain_text(address.get("addressCountry")).upper()
+    if len(country_code) != 2 or country_code not in engine.COUNTRY_NAMES or not city:
+        raise ValueError("Luxoft job location missing city or recognized country")
+    identity = link.rstrip("/").rsplit("/", 1)[-1]
+    if not re.search(r"-\d+$", identity):
+        raise ValueError("Luxoft job has no stable public detail identity")
+    posted = None
+    value = str(posting.get("datePosted") or "").strip()
+    if re.fullmatch(r"\d{4}-\d{2}-\d{2}(?:[ T].*)?", value):
+        try:
+            parsed = datetime.strptime(value[:10], "%Y-%m-%d").replace(tzinfo=timezone.utc)
+            if parsed <= (now or datetime.now(timezone.utc)):
+                posted = parsed.isoformat()
+        except ValueError:
+            pass
+    country = engine.COUNTRY_NAMES[country_code]
+    location = f"{city}, {country}"
+    remote = str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE"
+    employment = engine.list_values(posting.get("employmentType"))
+    return _record(
+        "Luxoft", identity, title, "Luxoft", description, link,
+        date_posted=posted, location=location, countries=[country],
+        remote=remote, employment_statuses=employment,
+    )
+
+
+def _luxoft(url, max_details=60, max_seconds=35, diagnostics=None):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Luxoft jobs page HTTP {status}")
+    links = _JobLinkCollector(r"/jobs/[^/?#]+-\d+")
+    links.feed(body.decode("utf-8", errors="replace"))
+    links.close()
+    if not links.links:
+        raise ValueError("Luxoft jobs listing contains no valid detail links")
+    deadline = time.monotonic() + max_seconds
+
+    def read_detail(href):
+        link = urljoin(url, href)
+        if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "career.luxoft.com":
+            return None
+        try:
+            # Independent transport per worker; no shared mutable client state.
+            final_url, html = PublicClient(deadline).get(link)
+            return _luxoft_details(html, final_url)
+        except (ValueError, json.JSONDecodeError, FetchError, OSError):
+            return None
+
+    records = {}
+    rejected = 0
+    # Bounded to three first-party workers. All requests retain robots/TLS checks.
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        for record in pool.map(read_detail, links.links[:max_details]):
+            if record is None:
+                rejected += 1
+            else:
+                records[record["id"]] = record
+    if diagnostics is not None:
+        diagnostics["invalid_postings"] = rejected
+        diagnostics["unprocessed_postings"] = max(0, len(links.links) - max_details)
+    if not records:
+        raise ValueError("Luxoft jobs listing has no verified, fully parsed details")
+    return list(records.values())
+
+
+
+def _stripe_details(html, link, *, now=None):
+    if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "stripe.com":
+        raise ValueError("Stripe detail URL must stay on the first-party HTTPS host")
+    if not re.fullmatch(r"/careers/listing/[^/]+/\d+", urlsplit(link).path):
+        raise ValueError("Stripe detail URL missing stable job identity")
+    parser = _LuxoftJobPosting()
+    parser.feed(html)
+    jobs = []
+    for text in parser.scripts:
+        value = json.loads(text)
+        values = value if isinstance(value, list) else [value]
+        jobs.extend(row for row in values
+                    if isinstance(row, dict) and row.get("@type") == "JobPosting")
+    if len(jobs) != 1:
+        raise ValueError("Stripe detail must contain exactly one JobPosting")
+    posting = jobs[0]
+    title = plain_text(posting.get("title"))
+    description = plain_text(posting.get("description"))
+    if not title or len(description) < 150:
+        raise ValueError("Stripe job has incomplete title or description")
+    raw_locations = posting.get("jobLocation")
+    locations = raw_locations if isinstance(raw_locations, list) else [raw_locations]
+    cities = []
+    countries = []
+    for loc in locations:
+        addr = loc.get("address") if isinstance(loc, dict) else None
+        if not isinstance(addr, dict):
+            continue
+        city = plain_text(addr.get("addressLocality"))
+        country_code = plain_text(addr.get("addressCountry")).upper()
+        if not city or not re.fullmatch(r"[A-Z]{2}", country_code):
+            continue
+        if city not in cities:
+            cities.append(city)
+        # Preserve source geography even when the target-country nomenclature
+        # excludes that country (for example Canada).
+        country = engine.COUNTRY_NAMES.get(country_code, {"CA": "Canada"}.get(country_code, country_code))
+        if country not in countries:
+            countries.append(country)
+    if not cities or not countries:
+        raise ValueError("Stripe detail missing structured job locations")
+    posted = None
+    raw_date = str(posting.get("datePosted") or "").strip()
+    try:
+        parsed = datetime.fromisoformat(raw_date.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        if parsed <= (now or datetime.now(timezone.utc)):
+            posted = parsed.isoformat()
+    except ValueError:
+        pass
+    return _record(
+        "Stripe", link.rstrip("/").split("/")[-1], title, "Stripe",
+        description, link, date_posted=posted, location="; ".join(cities),
+        countries=countries,
+        remote=str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE",
+        employment_statuses=engine.list_values(posting.get("employmentType")),
+    )
+
+
+def _stripe(url, max_details=30, max_seconds=30, diagnostics=None):
+    status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
+    if status != 200:
+        raise RuntimeError(f"Stripe jobs page HTTP {status}")
+    links = _JobLinkCollector(r"/careers/listing/[^/?#]+/\d+")
+    links.feed(body.decode("utf-8", errors="replace"))
+    links.close()
+    if not links.links:
+        raise ValueError("Stripe listing contains no valid first-party job links")
+    deadline = time.monotonic() + max_seconds
+
+    def read_detail(href):
+        link = urljoin(url, href)
+        if urlsplit(link).scheme != "https" or urlsplit(link).hostname != "stripe.com":
+            return None
+        try:
+            final_url, html = PublicClient(deadline).get(link)
+            return _stripe_details(html, final_url)
+        except (ValueError, json.JSONDecodeError, FetchError, OSError):
+            return None
+
+    records = {}
+    rejected = 0
+    with ThreadPoolExecutor(max_workers=3) as pool:
+        for record in pool.map(read_detail, links.links[:max_details]):
+            if record is None:
+                rejected += 1
+            else:
+                records[record["id"]] = record
+    if diagnostics is not None:
+        diagnostics["invalid_postings"] = rejected
+        diagnostics["unprocessed_postings"] = max(0, len(links.links) - max_details)
+    if not records:
+        raise ValueError("Stripe listing has no fully parsed job details")
     return list(records.values())
 
 
@@ -2371,9 +2591,91 @@ class _EpamJobs(HTMLParser):
         self._flush()
 
 
-def _epam(url, max_seconds=20):
+class _EpamNextData(HTMLParser):
+    """Read the first-party, server-rendered EPAM Next.js jobs listing."""
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_next_data = False
+        self.parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "script" and dict(attrs).get("id") == "__NEXT_DATA__":
+            self.in_next_data = True
+
+    def handle_data(self, data):
+        if self.in_next_data:
+            self.parts.append(data)
+
+    def handle_endtag(self, tag):
+        if tag == "script":
+            self.in_next_data = False
+
+
+def _epam_embedded(html, base_url, diagnostics=None):
+    parser = _EpamNextData()
+    parser.feed(html)
+    if not parser.parts:
+        return None
+    payload = json.loads("".join(parser.parts))
+    props = (payload.get("props") or {}).get("pageProps") or {}
+    listing = props.get("jobs")
+    if not isinstance(listing, dict) or not isinstance(listing.get("jobs"), list):
+        raise ValueError("EPAM Next.js public listing missing jobs array")
+    jobs = listing["jobs"]
+    records = {}
+    rejected = 0
+    for raw in jobs:
+        if not isinstance(raw, dict):
+            rejected += 1
+            continue
+        if raw.get("is_hidden") is True or raw.get("is_expired") is True:
+            continue
+        title = str(raw.get("name") or "").strip()
+        identity = str(raw.get("unique_id") or raw.get("uid") or "").strip()
+        seo = raw.get("seo")
+        relative = seo.get("url") if isinstance(seo, dict) else ""
+        if not (title and identity and isinstance(relative, str)
+                and relative.startswith("/en/vacancy/")
+                and not relative.startswith("//")
+                and not any(ch in relative for ch in ("?", "#", "\\", "\r", "\n"))):
+            rejected += 1
+            continue
+        link = urljoin(base_url, relative)
+        if not link.startswith("https://careers.epam.com/en/vacancy/"):
+            rejected += 1
+            continue
+        countries = [
+            str(item.get("name") or "").strip()
+            for item in (raw.get("country") or [])
+            if isinstance(item, dict) and str(item.get("name") or "").strip()
+        ] if isinstance(raw.get("country"), list) else []
+        city = str(raw.get("city") or "").strip()
+        remote = str(raw.get("vacancy_type") or "").casefold() == "remote"
+        description = plain_text(raw.get("description") or "")
+        if not description:
+            rejected += 1
+            continue
+        record = _record(
+            "EPAM", identity, title, "EPAM", description, link,
+            location=city, countries=countries, remote=remote,
+        )
+        records[record["id"]] = record
+    if diagnostics is not None:
+        diagnostics["invalid_postings"] = rejected
+    if not records and not (not jobs and listing.get("total") == 0):
+        raise ValueError("EPAM Next.js public listing had no valid extractable jobs")
+    return list(records.values())
+
+
+def _epam(url, max_seconds=20, diagnostics=None):
     deadline = time.monotonic() + max_seconds
     client = PublicClient(deadline)
+    final_url, html = client.get(url)
+    embedded = _epam_embedded(html, final_url, diagnostics)
+    if embedded is not None:
+        return embedded
+    # Keep the legacy rendered route only when the official server does not
+    # expose Next.js listing data. Browser safety/robots gates are unchanged.
     final_url, rendered_html, _meta = browser.render(url, deadline, client)
     parser = _EpamJobs()
     parser.feed(rendered_html)
@@ -2443,7 +2745,7 @@ class _SocGenJobs(HTMLParser):
         self._flush()
 
 
-def _socgen(url, max_seconds=30):
+def _socgen(url, max_seconds=30, diagnostics=None):
     deadline = time.monotonic() + max_seconds
     client = PublicClient(deadline)
     final_url, html = client.get(url)
@@ -2451,6 +2753,7 @@ def _socgen(url, max_seconds=30):
     parser.feed(html)
     parser.close()
     records = {}
+    rejected = 0
     for href, item in parser.jobs.items():
         title = item.get("title") or ""
         context = item.get("context") or ""
@@ -2460,13 +2763,21 @@ def _socgen(url, max_seconds=30):
         identity = link.rstrip("/").rsplit("/", 1)[-1]
         countries = _country_names_from_text(context)
         location = context
-        record = _record(
-            "Societe Generale", identity, title, "Societe Generale",
-            context or title, link,
-            location=location, countries=countries,
-            remote=bool(re.search(r"\b(remote|hybrid|telework)\b", context, re.I)),
-        )
+        try:
+            record = _record(
+                "Societe Generale", identity, title, "Societe Generale",
+                context or title, link,
+                location=location, countries=countries,
+                remote=bool(re.search(r"\b(remote|hybrid|telework)\b", context, re.I)),
+            )
+        except ValueError:
+            # An individual invalid posting must not discard other valid jobs.
+            # Record the loss for the parent CollectionResult partial outcome.
+            rejected += 1
+            continue
         records[record["id"]] = record
+    if diagnostics is not None:
+        diagnostics["invalid_postings"] = rejected
     if not records:
         raise ValueError("Societe Generale all-jobs page contained no extractable job links")
     return list(records.values())
@@ -3071,6 +3382,7 @@ def collect(source, config=None):
     if not spec:
         raise ValueError(f"Unsupported public-board source: {name}")
     kind, url = spec["kind"], spec["url"]
+    partial_diagnostics = {}
     if kind == "softgarden_feed":
         status, _content_type, body = _fetch(url, "application/json")
         if status != 200:
@@ -3107,11 +3419,11 @@ def collect(source, config=None):
     elif kind == "eurobrussels":
         records = _eurobrussels(url)
     elif kind == "socgen":
-        records = _socgen(url)
+        records = _socgen(url, diagnostics=partial_diagnostics)
     elif kind == "softserve":
         records = _softserve(url)
     elif kind == "epam":
-        records = _epam(url)
+        records = _epam(url, diagnostics=partial_diagnostics)
     elif kind == "hirexa":
         records = _hirexa(url)
     elif kind == "rendered_links":
@@ -3133,7 +3445,12 @@ def collect(source, config=None):
     elif kind == "bizneo":
         records = _bizneo_job_board(url, name)
     elif kind == "linked_jobs":
-        records = _linked_job_board(url, name, spec["job_path"])
+        if name == "Luxoft":
+            records = _luxoft(url, diagnostics=partial_diagnostics)
+        elif name == "Stripe":
+            records = _stripe(url, diagnostics=partial_diagnostics)
+        else:
+            records = _linked_job_board(url, name, spec["job_path"])
     elif kind == "squareone":
         records = _squareone(url)
     elif kind == "prohuman":
@@ -3177,4 +3494,12 @@ def collect(source, config=None):
                 "remotive": _remotive,
             }[kind]
             records = parser(payload)
-    return [engine.CollectionResult("public_board", kind, True, records, len(records))]
+    result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
+    invalid = partial_diagnostics.get("invalid_postings", 0) + partial_diagnostics.get("unprocessed_postings", 0)
+    if invalid:
+        result.append(engine.CollectionResult(
+            "public_board", kind, False, [], 0,
+            f"Skipped {invalid} malformed {name} posting(s)",
+            error_code="SCHEMA_ERROR", failure_stage="parse",
+        ))
+    return result
