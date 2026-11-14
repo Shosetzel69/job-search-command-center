@@ -360,8 +360,17 @@ def provider_scope_capability(item, config):
         return "QUERY_BOUNDED", "JOBSPIPE_EXISTING_ROLE_GEO_QUERY"
     if connector == "workday" and workday.scope_search_terms(config):
         return "QUERY_BOUNDED", "WORKDAY_CXS_SEARCH_TEXT_ROLE_TERMS"
+    if connector == "smartrecruiters" and smartrecruiters.bounded_terms(config):
+        return "QUERY_BOUNDED", "SMARTRECRUITERS_PUBLIC_Q_ROLE_TERMS"
+    if connector == "public_board" and public_boards.scoped_public_query(item.get("source"), config):
+        return "QUERY_BOUNDED", "PUBLIC_KEYWORD_SINGLE_COMMON_ROLE_TERM"
     if connector == "public_board" and item.get("source") == "Freelancer.com":
         return "QUERY_BOUNDED", "FREELANCER_OR_SEARCH_QUERY_ROLE_TERMS"
+    if connector == "public_board":
+        spec = public_boards.PUBLIC_BOARD_SOURCES.get(item.get("source"), {})
+        url = str(spec.get("url", "")).lower()
+        if any(token in url for token in ("project-manager", "project_manager", "project%20manager", "project-management", "project%20management", "/pm?", "it-project-manager")):
+            return "STATIC_PRESELECTED", "LEGACY_ROLE_ROUTE_NOT_DYNAMIC"
     return "ENUMERATION_ONLY", "NO_VERIFIED_DYNAMIC_QUERY_IN_ADAPTER"
 
 
@@ -779,7 +788,8 @@ def collect_ats(item, role_family=None, config=None):
     connector = item["connector"]
     company = item["source"]
     if connector == "smartrecruiters":
-        return smartrecruiters.collect(route["company_identifier"])
+        terms = smartrecruiters.bounded_terms(config)
+        return smartrecruiters.collect(route["company_identifier"], **({"search_terms": terms} if terms else {}))
     if connector == "workday":
         terms = workday.scope_search_terms(config)
         query_kwargs = {"search_terms": terms} if terms else {}
