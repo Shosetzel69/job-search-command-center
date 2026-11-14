@@ -1056,3 +1056,19 @@ class RetrieveScopeEvidenceTests(unittest.TestCase):
         self.assertEqual(orchestration.provider_scope_capability({"connector": "public_board", "source": "Freelancer.com"}, config)[0], "QUERY_BOUNDED")
         self.assertEqual(orchestration.provider_scope_capability({"connector": "jobicy"}, config)[0], "ENUMERATION_ONLY")
         self.assertEqual(orchestration.provider_scope_capability({"connector": "workday"}, config)[0], "ENUMERATION_ONLY")
+
+
+class WorkdayBoundedQueryTests(unittest.TestCase):
+    def test_bounded_terms_and_unknown_fallback(self):
+        config = {"_jscc_targeted_collection": True, "target_role_subfamilies": ["project_management", "program_management"]}
+        self.assertEqual(orchestration.workday.scope_search_terms(config), ("program", "programme", "project"))
+        self.assertEqual(orchestration.provider_scope_capability({"connector":"workday"}, config)[0], "QUERY_BOUNDED")
+        self.assertEqual(orchestration.workday.scope_search_terms({**config, "target_role_subfamilies":["unknown"]}), ())
+    def test_query_page_budget_and_dedup(self):
+        adapter = orchestration.workday
+        item = {"externalPath":"/job/shared"}
+        with patch.object(adapter, "_post_page", return_value={"jobPostings":[item], "total":1}) as post:
+            rows, partial = adapter._scoped_summaries({}, ("program", "project"), adapter.PAGE_SIZE*2, None)
+        self.assertEqual(post.call_count, 2)
+        self.assertEqual(rows, [item])
+        self.assertFalse(partial)
