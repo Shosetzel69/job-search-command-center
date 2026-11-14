@@ -1622,3 +1622,46 @@ class PublicBoardAdapterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RetrievePublicDetailTests(unittest.TestCase):
+    def test_dynamic_eures_keyword_and_mixed_scope_do_not_use_pm_default(self):
+        one = {"_jscc_targeted_collection":True,"target_role_subfamilies":["product_owner"]}
+        mixed = {"_jscc_targeted_collection":True,"target_role_subfamilies":["product_owner","project_management"]}
+        with patch.object(boards,"_post_json",return_value={"jvs":[]}) as post:
+            boards.collect({"name":"EURES"},one)
+            boards.collect({"name":"EURES"},mixed)
+        self.assertEqual(post.call_args_list[0].args[1]["keywords"],[{"keyword":"product","specificSearchCode":"EVERYWHERE"}])
+        self.assertEqual(post.call_args_list[1].args[1]["keywords"],[])
+
+    def test_crossover_card_salary_never_becomes_description_location_or_employer(self):
+        raw = {"id":"legacy-1","job_title":"Project Manager","company":"$100,000 USD/year","source_url":"https://www.crossover.com/jobs","description":"$100,000 USD/year","location":"$100,000 USD/year","date_posted":"2026-11-14"}
+        rows, unresolved = boards.protect_context_records([raw],"Crossover","heading_list","https://www.crossover.com/jobs")
+        self.assertEqual(unresolved,1)
+        self.assertEqual(rows[0]["id"],"legacy-1")
+        self.assertEqual(rows[0]["company"],"Crossover")
+        self.assertEqual(rows[0]["location"],"")
+        self.assertEqual(rows[0]["description"],"")
+        self.assertIsNone(rows[0]["date_posted"])
+        self.assertNotIn("salary_display",rows[0])
+
+    def test_crossover_links_only_from_individual_heading(self):
+        parser = boards._HeadingListJobs()
+        parser.feed('<h4><a href="/jobs/5437/trilogy/technical-project-manager">Project Manager</a></h4><a href="/jobs/999/other/other-job">Next job</a>')
+        parser.close()
+        self.assertEqual(boards._crossover_detail_link(parser.jobs[0],"https://www.crossover.com/jobs"),"https://www.crossover.com/jobs/5437/trilogy/technical-project-manager")
+        self.assertIsNone(boards._crossover_detail_link({"heading_links":["https://evil.example/jobs/5437/trilogy/technical-project-manager"]},"https://www.crossover.com/jobs"))
+
+    def test_orange_exact_offer_identity_and_description_only_enrichment(self):
+        import json
+        import job_search_softgarden as orange
+        link = "https://skk.erecruiter.pl/Offer.aspx?oid=42&cfg=public"
+        row = {"id":"orange-42","source_url":link,"job_title":"Project Manager","location":"Bucharest, Romania","description":"","_jscc_field_provenance":{"location":"ATS_FIELD"}}
+        detail = '<script type="application/ld+json">'+json.dumps({"@type":"JobPosting","title":"Project Manager","description":"Lead delivery.","jobLocation":{"address":{"addressCountry":"US"}}})+'</script>'
+        with patch.object(orange.PublicClient,"get",return_value=(link,detail)):
+            remaining = orange.enrich_orange_descriptions([row])
+        self.assertEqual(remaining,0)
+        self.assertEqual(row["description"],"Lead delivery.")
+        self.assertEqual(row["location"],"Bucharest, Romania")
+        self.assertEqual(row["_jscc_field_provenance"]["description"],"JOB_DETAIL_JSONLD")
+        self.assertIsNone(orange._orange_offer_identity("https://evil.example/Offer.aspx?oid=42"))
