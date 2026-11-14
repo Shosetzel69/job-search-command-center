@@ -19,6 +19,7 @@ from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 import job_search as engine
+from retrieve_provider_queries import scope_search_terms
 import web_browser as browser
 from web_transport import PublicClient, FetchError
 
@@ -3580,6 +3581,14 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
     return result, unresolved
 
 
+def scoped_public_query(name, config):
+    # Remotive and EURES existing transports support keyword search. Only
+    # use one term when it covers the entire requested role union; otherwise
+    # do not invent multi-term OR semantics or increase provider calls.
+    terms = scope_search_terms(config)
+    return terms[0] if name in {"Remotive", "EURES"} and len(terms) == 1 else None
+
+
 def scoped_freelancer_url(url, config):
     """Use the existing provider OR query field, not a new transport."""
     if not (config or {}).get("_jscc_targeted_collection"):
@@ -3606,9 +3615,13 @@ def collect(source, config=None):
             raise RuntimeError(f"{name} public feed HTTP {status}")
         records = _softgarden_feed(json.loads(body.decode("utf-8", errors="replace")), name, url)
     elif kind == "eures":
+        term = scoped_public_query(name, config)
+        keywords = ([{"keyword": term, "specificSearchCode": "EVERYWHERE"}] if term else
+                    [] if (config or {}).get("_jscc_targeted_collection") else
+                    [{"keyword": "project manager", "specificSearchCode": "EVERYWHERE"}])
         payload = _post_json(url, {
             "resultsPerPage": 50, "page": 1, "sortSearch": "MOST_RECENT",
-            "keywords": [{"keyword": "project manager", "specificSearchCode": "EVERYWHERE"}],
+            "keywords": keywords,
             "publicationPeriod": None, "occupationUris": [], "skillUris": [],
             "requiredExperienceCodes": [], "positionScheduleCodes": [], "sectorCodes": [],
             "educationAndQualificationLevelCodes": [], "positionOfferingCodes": [],
@@ -3693,6 +3706,9 @@ def collect(source, config=None):
             raise RuntimeError(f"Freelancer public API HTTP {status}")
         records = _freelancer_api(json.loads(body.decode("utf-8", errors="replace")))
     else:
+        term = scoped_public_query(name, config)
+        if kind == "remotive" and term:
+            url += ("&" if "?" in url else "?") + urlencode({"search": term})
         accept = "application/json" if kind not in {"rss", "pangian_rss"} else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
         if status != 200:
