@@ -1163,6 +1163,46 @@ def apply_collection_policy(
     return merged
 
 
+def _coverage_snapshot(cursor: Any, retrieve_scope, observed_at: datetime) -> list[dict]:
+    """Non-personal snapshot of the existing Coverage authority, scoped by signed keys."""
+    scopes = (retrieve_scope or {}).get("scopes") or [] if isinstance(retrieve_scope, Mapping) else []
+    keys = sorted({_text(item.get("scope_key")).casefold() for item in scopes
+                   if isinstance(item, Mapping) and re.fullmatch(r"[0-9a-f]{64}", _text(item.get("scope_key")).casefold())})
+    if not keys:
+        return []
+    cursor.execute("SELECT policy FROM collection_policy WHERE singleton=true")
+    row = cursor.fetchone()
+    policy = row[0] if row and isinstance(row[0], Mapping) else {}
+    def bounded(key, fallback, low, high):
+        try:
+            value = float(policy.get(key, fallback))
+            return value if low <= value <= high else fallback
+        except (ValueError, TypeError):
+            return fallback
+    freshness = bounded("collection_freshness_hours", 24, .001, 8760)
+    minimum = bounded("coverage_min_corpus_volume", 1, 0, 1000000)
+    diversity_min = bounded("coverage_min_source_diversity", 1, 0, 10000)
+    cursor.execute(
+        """SELECT scope_key,last_usable_run_id,last_usable_at,corpus_volume,source_diversity
+             FROM coverage_scope_state WHERE scope_key=ANY(%s::text[])""", (keys,),
+    )
+    rows = {str(row[0]): row for row in cursor.fetchall()}
+    snapshot = []
+    for key in keys:
+        prior = rows.get(key)
+        seen = prior[2] if prior else None
+        age = max(0, (observed_at-seen).total_seconds()/3600) if isinstance(seen, datetime) else None
+        volume = int(prior[3] or 0) if prior else 0
+        diversity = int(prior[4] or 0) if prior else 0
+        state = "STALE" if age is not None and age > freshness else (
+            "SUFFICIENT" if age is not None and volume >= minimum and diversity >= diversity_min else "INSUFFICIENT")
+        snapshot.append({"scope_key":key,"state":state,"corpus_volume":volume,
+                         "source_diversity":diversity,"last_usable_run_id":prior[1] if prior else None,
+                         "last_usable_at":seen.isoformat() if isinstance(seen, datetime) else None,
+                         "observed_at":observed_at.isoformat()})
+    return snapshot
+
+
 def persist_run_started(
     run_id: str,
     started_at: datetime,
@@ -1197,6 +1237,7 @@ def persist_run_started(
             row = cursor.fetchone()
             if not row or str(row[0]) != expected:
                 raise SharedCorpusError(f"Connected database does not match environment binding: expected {expected}")
+            payload["coverage_before"] = _coverage_snapshot(cursor, payload.get("retrieve_scope"), started_at)
             cursor.execute(
                 """
                 INSERT INTO search_runs(
@@ -1397,6 +1438,12 @@ def persist_operational_run(
             if not row or str(row[0]) != expected:
                 raise SharedCorpusError(f"Connected database does not match environment binding: expected {expected}")
 
+            terminal_payload = dict(status)
+            scoped = isinstance(status.get("retrieve_scope"), Mapping) and bool(status["retrieve_scope"].get("scopes"))
+            if scoped:
+                cursor.execute("SELECT payload->'coverage_before' FROM search_runs WHERE run_id=%s", (run_id,))
+                previous = cursor.fetchone()
+                terminal_payload["coverage_before"] = previous[0] if previous and isinstance(previous[0], list) else None
             cursor.execute(
                 """
                 INSERT INTO search_runs(
@@ -1421,7 +1468,7 @@ def persist_operational_run(
                     int(status.get("records_inspected") or 0),
                     int(status.get("jobs_published") or 0),
                     int(status.get("excluded") or 0),
-                    json.dumps(_json_safe(dict(status)), ensure_ascii=False),
+                    json.dumps(_json_safe(terminal_payload), ensure_ascii=False),
                 ),
             )
 
@@ -1464,6 +1511,10 @@ def persist_operational_run(
                 )
 
             coverage_updated = _persist_coverage_observations(cursor, status)
+            if scoped:
+                terminal_payload["coverage_after"] = _coverage_snapshot(cursor, status.get("retrieve_scope"), datetime.now(timezone.utc))
+                cursor.execute("UPDATE search_runs SET payload=%s::jsonb WHERE run_id=%s",
+                               (json.dumps(_json_safe(terminal_payload), ensure_ascii=False), run_id))
 
             cursor.execute(
                 """
@@ -1485,4 +1536,5 @@ def persist_operational_run(
                 ),
             )
 
-    return {"status": "persisted", "run_id": run_id, "coverage_updated": coverage_updated}
+    return {"status": "persisted", "run_id": run_id, "coverage_updated": coverage_updated,
+            **({key: terminal_payload[key] for key in ("coverage_before", "coverage_after")} if scoped else {})}
