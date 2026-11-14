@@ -38,6 +38,7 @@ const PERSONAL_CONFIG_KEYS = Object.freeze([
 
 const SYSTEM_CONFIG_KEYS = Object.freeze([
   'collection_freshness_hours',
+  'posting_max_age_hours',
   'source_strategy',
   'web_browser_fallback_enabled',
   'jobspipe_credit_budget_per_run',
@@ -795,6 +796,7 @@ export async function readCollectionPolicy(env = process.env, { db = getPool(env
 export async function saveCollectionPolicy(authContext, policy, env = process.env, { db = getPool(env) } = {}) {
   if (authContext?.role !== 'ADMIN') throw httpError('ADMIN role required', 403);
   const system = selectKeys(policy, SYSTEM_CONFIG_KEYS);
+  if (Object.hasOwn(system,'posting_max_age_hours') && (!Number.isInteger(system.posting_max_age_hours) || system.posting_max_age_hours<1 || system.posting_max_age_hours>8760)) throw httpError('Invalid posting_max_age_hours',400);
   await db.query(
     `INSERT INTO collection_policy(singleton, policy, updated_at)
      VALUES (true, $1::jsonb, now())
