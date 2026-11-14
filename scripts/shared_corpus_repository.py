@@ -355,6 +355,10 @@ def assess_record_quality(
         issues.add("DESCRIPTION_EQUALS_TITLE")
     if description and provenance["description"] == "LISTING_CARD":
         issues.add("DESCRIPTION_CARD_CONTEXT")
+    if not location:
+        issues.add("LOCATION_EMPTY")
+    if provenance["title"] == "LISTING_CARD":
+        issues.add("TITLE_LISTING_ONLY")
     if location and provenance["location"] == "LISTING_CARD":
         issues.add("LOCATION_UNSTRUCTURED_CONTEXT")
     if location and SALARY_MARKUP.search(location):
@@ -671,7 +675,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                SET source_name = %s,
                    external_job_id = COALESCE(%s, external_job_id),
                    canonical_url = %s,
-                   posted_at = %s,
+                   posted_at = COALESCE(%s, posted_at),
                    lifecycle_status = 'ACTIVE',
                    last_seen_at = %s,
                    inactive_at = NULL,
