@@ -184,6 +184,14 @@ def normalize(detail, summary, board, company_name):
             location = "; ".join([value for value in [location, *extra_locations] if value])
 
     country = _country_from_detail(info)
+    countries = [country] if country else []
+    additional_verified = isinstance(additional, list)
+    for item in additional if isinstance(additional, list) else []:
+        extra_country = _country_from_detail(item) if isinstance(item, dict) else None
+        if not extra_country:
+            additional_verified = False
+        elif extra_country not in countries:
+            countries.append(extra_country)
     remote_text = " ".join(str(info.get(key) or "") for key in ("remoteType", "workplaceType"))
     remote = bool(re.search(r"\bremote\b", remote_text, re.I) or re.search(r"\bremote\b", location, re.I))
     employment = info.get("timeType") or info.get("employmentType")
@@ -195,7 +203,8 @@ def normalize(detail, summary, board, company_name):
         "company": str(company_name).strip(),
         "description": plain_text(info.get("jobDescription")),
         "location": location,
-        "countries": [country] if country else [],
+        "countries": countries,
+        "_jscc_country_scope_complete": bool(country and additional_verified),
         "remote": remote,
         "work_arrangement": "remote" if remote else "onsite",
         "employment_statuses": engine.list_values(employment),
