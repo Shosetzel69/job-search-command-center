@@ -123,7 +123,7 @@ class _HeadingListJobs(HTMLParser):
             title = " ".join(self.current.get("title_parts") or []).strip()
             context = " ".join(self.current.get("context_parts") or []).strip()
             if title:
-                self.jobs.append({"title": title, "context": context})
+                self.jobs.append({"title": title, "context": context, "heading_links": self.current.get("heading_links", [])})
         self.current = None
         self.in_heading = False
         self.heading_parts = []
@@ -131,8 +131,12 @@ class _HeadingListJobs(HTMLParser):
     def handle_starttag(self, tag, attrs):
         if tag in {"h2","h3","h4"}:
             self._flush()
-            self.current = {"title_parts": [], "context_parts": []}
+            self.current = {"title_parts": [], "context_parts": [], "heading_links": []}
             self.in_heading = True
+        elif tag == "a" and self.current and self.in_heading:
+            href = dict(attrs).get("href")
+            if href:
+                self.current["heading_links"].append(href)
 
     def handle_data(self, data):
         text = " ".join(str(data or "").split())
@@ -156,6 +160,22 @@ _HEADING_LIST_NOISE = {
     "featured", "all listings", "applicant locations", "filters", "technology",
     "receive our latest jobs to your inbox", "search and find it jobs in belgium",
 }
+
+
+def _crossover_detail_link(item, listing_url):
+    links = set()
+    for href in item.get("heading_links") or []:
+        try:
+            link = urljoin(listing_url, href)
+            parts = urlsplit(link)
+            if (parts.scheme == "https" and parts.hostname == "www.crossover.com"
+                    and not parts.username and not parts.password and not parts.port
+                    and not parts.query and not parts.fragment
+                    and re.fullmatch(r"/jobs/\d+/[^/]+/[^/]+/?", parts.path)):
+                links.add(link)
+        except ValueError:
+            continue
+    return next(iter(links)) if len(links) == 1 else None
 
 
 def _heading_list_board(url, provider, *, default_remote=False, default_country=None):
@@ -198,6 +218,11 @@ def _heading_list_board(url, provider, *, default_remote=False, default_country=
             remote=remote,
             employment_statuses=employment,
         )
+        if provider == "Crossover":
+            # Retain the legacy external ID until historical repair is authorized.
+            link = _crossover_detail_link(item, url)
+            if link:
+                record["source_url"] = link
         records[record["id"]] = record
     if not records:
         raise ValueError(f"{provider} public list contained no extractable jobs")
@@ -3563,6 +3588,7 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
             context = str(record.get("description") or "")
             location = str(record.get("location") or "")
             record["description"] = ""
+            record["date_posted"] = None
             provenance = {"title": "LISTING_CARD", "description": "LISTING_CARD"}
             if kind in CONTEXT_LOCATION_KINDS or location == context or shared_corpus.SALARY_MARKUP.search(location):
                 record.update(location="", countries=[], remote=False, work_arrangement="", employment_statuses=[])
@@ -3572,10 +3598,10 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
             if name == "Crossover":
                 # The confirmed salary-in-company/list-context route does not
                 # establish a separate employer. Preserve source identity only.
-                if shared_corpus.SALARY_MARKUP.search(context):
-                    record["salary_display"] = shared_corpus.SALARY_MARKUP.search(context).group()
-                if shared_corpus.SALARY_MARKUP.search(str(record.get("company") or "")):
-                    record["company"] = name
+                # No salary or employer attribution from adjacency: the
+                # list context can contain fields from the next card.
+                record.pop("salary_display", None)
+                record["company"] = name
             record["_jscc_field_provenance"] = provenance
         result.append(record)
     return result, unresolved
