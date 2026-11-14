@@ -3612,7 +3612,7 @@ def scoped_public_query(name, config):
     # use one term when it covers the entire requested role union; otherwise
     # do not invent multi-term OR semantics or increase provider calls.
     terms = scope_search_terms(config)
-    return terms[0] if name in {"Remotive", "EURES"} and len(terms) == 1 else None
+    return terms[0] if name in {"Remotive", "EURES", "Himalayas"} and len(terms) == 1 else None
 
 
 def scoped_freelancer_url(url, config):
@@ -3735,6 +3735,9 @@ def collect(source, config=None):
         term = scoped_public_query(name, config)
         if kind == "remotive" and term:
             url += ("&" if "?" in url else "?") + urlencode({"search": term})
+        elif kind == "himalayas" and term:
+            # Public search API has the same job shape and 20 results/page.
+            url = "https://himalayas.app/jobs/api/search?" + urlencode({"q":term,"sort":"recent","page":1})
         accept = "application/json" if kind not in {"rss", "pangian_rss"} else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
         if status != 200:
