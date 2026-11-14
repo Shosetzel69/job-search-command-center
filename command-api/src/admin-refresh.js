@@ -112,6 +112,7 @@ export async function adminRefresh(
   let request = buildRequest({
     scopes:manual ? aggregate?.scopes : initialCoverage.refresh_scopes,
     collectionFreshnessHours:initialState.collection_freshness_hours,
+    postingMaxAgeHours:initialState.policy?.posting_max_age_hours,
     ...catalogOption,
   });
 
@@ -133,6 +134,7 @@ export async function adminRefresh(
   request = buildRequest({
     scopes:manual ? aggregate?.scopes : currentCoverage.refresh_scopes,
     collectionFreshnessHours:currentState.collection_freshness_hours,
+    postingMaxAgeHours:currentState.policy?.posting_max_age_hours,
     ...catalogOption,
   });
   decision = decideAdminRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, aggregate, request, manual });
