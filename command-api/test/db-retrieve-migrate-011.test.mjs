@@ -58,7 +58,9 @@ test('apply executes only immutable 011 and records the exact checksum in one tr
  assert.equal(queries.filter(q=>q.sql===files.at(-1).sql).length,1);
  assert.deepEqual(queries.find(q=>q.sql.startsWith('INSERT INTO schema_migrations')).params,['011',files.at(-1).name,files.at(-1).checksum]);
  assert.ok(queries.some(q=>q.sql.includes('pg_advisory_xact_lock')));
- assert.equal(queries.at(-2).sql,'COMMIT');
+ const commit=queries.findIndex(q=>q.sql==='COMMIT');
+ assert.ok(commit>queries.findIndex(q=>q.sql.startsWith('INSERT INTO schema_migrations')));
+ assert.ok(commit<queries.findLastIndex(q=>q.sql.startsWith('SELECT version')));
 });
 
 test('already applied is idempotent and DDL failure rolls back',async()=>{
