@@ -831,7 +831,7 @@ def collect_ats(item, role_family=None, config=None):
     if connector == "workable":
         return workable.collect(route["subdomain"], company)
     if connector == "softgarden":
-        return softgarden.collect(route["feed_url"], company, **({"regional_scope": True} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
+        return softgarden.collect(route["feed_url"], company, **({"regional_scope": True, "role_terms": workday.scope_search_terms(config)} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
     if connector == "eightfold_public":
         return eightfold_public.collect(route["base_url"], route["domain"], company)
     raise ValueError(f"Unsupported ATS connector: {connector}")
@@ -971,8 +971,10 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
     for item in plan:
         if item.get("status") == "pending":
             mode_name, evidence = provider_scope_capability(item, collection_config)
-            item["provider_scope_mode"] = mode_name
-            item["provider_scope_evidence"] = evidence
+        else:
+            mode_name, evidence = "NOT_EXECUTED", str(item.get("outcome") or item.get("status") or "unknown")
+        item["provider_scope_mode"] = mode_name
+        item["provider_scope_evidence"] = evidence
     collection, metadata, mode = collect_sources(
         collection_config, state, now, plan, run_id, progress_callback
     )
@@ -1040,6 +1042,7 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         item["postings_updated"] = int(counts.get("postings_updated", 0))
         item["canonical_jobs_published_this_run"] = int(publication.get(item["source_id"], 0)) if publication_known else None
     status.update(aggregate_source_results(plan))
+    status["provider_scope_inventory"] = dict(sorted(__import__("collections").Counter(item.get("provider_scope_mode", "UNKNOWN") for item in plan).items()))
     status["canonical_publication"] = {
         "basis": "distinct_active_shared_jobs_by_api_preferred_source",
         "measured": publication_known,
