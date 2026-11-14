@@ -119,8 +119,19 @@ export function sourceResultRows(run) {
       failureStage:item?.failure_stage || null,
       httpStatus:item?.http_status ?? null,
       message:item?.error || item?.failure_reason || null,
+      scopeMode:item?.provider_scope_mode || null,
+      rawRecords:Number.isInteger(item?.records_collected_raw) ? item.records_collected_raw : null,
+      scopeExcluded:Number.isInteger(item?.records_scope_excluded) ? item.records_scope_excluded : null,
+      qualityExcluded:Number.isInteger(item?.records_quality_excluded) ? item.records_quality_excluded : null,
+      canonicalPublished:Number.isInteger(item?.canonical_jobs_published_this_run) ? item.canonical_jobs_published_this_run : null,
     };
   });
+}
+
+export function sourceAccountingLabel(item) {
+  if (!item || !item.scopeMode) return null;
+  const fmt = value => Number.isInteger(value) ? String(value) : '—';
+  return `${item.scopeMode} · brut ${fmt(item.rawRecords)} · scope ${fmt(item.scopeExcluded)} excluse · calitate ${fmt(item.qualityExcluded)} excluse · ${fmt(item.canonicalPublished)} canonice`;
 }
 
 export function sourceResultDetail(item) {
@@ -157,6 +168,10 @@ export function sortSourceResultRows(rows = [], key = 'source', direction = 'asc
 
 export function runSummaryLabel(run) {
   const sources = Number(run?.sources_attempted ?? run?.sources_processed ?? 0);
+  const canonical = run?.canonical_publication;
+  if (canonical?.measured === true && Number.isInteger(canonical.canonical_jobs_published_this_run)) {
+    return `${sources} surse evaluate · ${canonical.canonical_jobs_published_this_run} joburi canonice colectate/actualizate`;
+  }
   const jobs = Number(run?.jobs_published ?? 0);
   return `${sources} surse evaluate · ${jobs} joburi publicate`;
 }
