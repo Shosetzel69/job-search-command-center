@@ -916,6 +916,16 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("Romania",by_title["IT Project Manager"]["countries"])
         self.assertNotIn("Electrician",by_title)
 
+    def test_freelancer_query_is_derived_from_scope(self):
+        from urllib.parse import parse_qs, urlsplit
+        url = boards.PUBLIC_BOARD_SOURCES["Freelancer.com"]["url"]
+        config = {"_jscc_targeted_collection": True}
+        with patch.object(boards.engine, "configured_titles", return_value=["Business Analysis", "Product Owner"]):
+            scoped = boards.scoped_freelancer_url(url, config)
+        self.assertEqual(parse_qs(urlsplit(scoped).query)["or_search_query"], ["Business Analysis Product Owner"])
+        self.assertEqual(parse_qs(urlsplit(scoped).query)["limit"], ["100"])
+        self.assertEqual(boards.scoped_freelancer_url(url, {}), url)
+
     def test_freelancer_api_normalizes_active_projects(self):
         payload={"result":{"projects":[{
             "id":123456,
