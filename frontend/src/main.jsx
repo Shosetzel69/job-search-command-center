@@ -555,6 +555,28 @@ function App(){
   const pollRun=useCallback(async(previousRunId,previousCompletedAt)=>{const generation=++pollGenerationRef.current;const baseline={runId:previousRunId??null,completedAt:previousCompletedAt??null};for(let attempt=0;generation===pollGenerationRef.current;attempt+=1){await new Promise(resolve=>setTimeout(resolve,pollingDelayMs(attempt)));if(generation!==pollGenerationRef.current)return null;try{const status=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);setRunStatus(status);if(!terminalForBaseline(status,baseline))continue;await loadData(auth.token,auth.role);const notice=completionNotice(status);notify(notice.message,notice.type);return status;}catch(error){if(error?.status===401||error?.status===403){notify('Urmarirea rularii s-a oprit deoarece sesiunea nu mai este autorizata.','error');return null;}}}return null;},[auth.token,auth.role,loadData,notify]);
   useEffect(()=>{if(auth.status!=='authenticated'||auth.role!=='ADMIN'||!auth.token||dataState.status!=='ready'||running||!isActiveRunStatus(runStatus?.status))return undefined;setRunning(true);pollRun(runStatus?.run_id??null,runStatus?.completed_at??null).finally(()=>setRunning(false));return undefined;},[auth.status,auth.role,auth.token,dataState.status,runStatus?.status,runStatus?.run_id,runStatus?.completed_at,running,pollRun]);
 
+  const pollOwnRefresh=useCallback(async(id)=>{
+    const generation=++pollGenerationRef.current;
+    const deadline=Date.now()+60*60*1000;
+    for(let attempt=0;generation===pollGenerationRef.current&&Date.now()<deadline;attempt+=1){
+      await new Promise(resolve=>setTimeout(resolve,pollingDelayMs(attempt)));
+      if(generation!==pollGenerationRef.current)return;
+      try{
+        const status=await commandApi('/me/refresh/'+encodeURIComponent(id),auth.token);
+        if(generation!==pollGenerationRef.current)return;
+        if(!status.terminal)continue;
+        if(status.status==='completed'||status.status==='completed_with_errors'){
+          await loadJobsPage(auth.token,savedCriteria,filtersRef.current);
+          notify(status.status==='completed'?'Actualizare finalizata.':'Actualizare finalizata cu erori partiale.',status.status==='completed'?'success':'info');
+        }else notify('Actualizarea nu a putut fi confirmata ca finalizata.','error');
+        return;
+      }catch(error){
+        if([401,403,404].includes(error?.status)){notify('Urmarirea solicitarii nu mai este disponibila.','error');return;}
+      }
+    }
+    if(generation===pollGenerationRef.current)notify('Statusul final al solicitarii nu a fost confirmat.','info');
+  },[auth.token,savedCriteria,loadJobsPage,notify]);
+
   const runSearch=useCallback(async()=>{
     if(!auth.token||running)return;
     if(!isSearchProfileConfigured(savedCriteria)){setView('criteria');notify('Configureaza familia, subfamilia si restul Search Profile-ului inainte de actualizare.','error');return;}
@@ -567,10 +589,12 @@ function App(){
       else if(auth.role==='ADMIN'&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome)){
         try{const currentStatus=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);setRunStatus(currentStatus);}catch(statusError){notify('Actualizarea a fost acceptata; astept statusul live al executiei.','info');}
         await pollRun(previousRunId,previousCompletedAt);
+      }else if(auth.role==='USER'&&result.request_id&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome)){
+        await pollOwnRefresh(result.request_id);
       }
     }catch(error){notify('Nu am putut actualiza joburile: '+error.message,'error');}
     finally{setRunning(false);}
-  },[auth.token,auth.role,running,savedCriteria,runStatus,notify,loadJobsPage,pollRun]);
+  },[auth.token,auth.role,running,savedCriteria,runStatus,notify,loadJobsPage,pollRun,pollOwnRefresh]);
 
   const saveCriteria=useCallback(async()=>{if(!auth.token||saving)return;if(geographyConflicts(draftCriteria)){notify('Rezolva conflictul dintre includerile si excluderile teritoriale.','error');return;}if(!hasTargetGeography(draftCriteria)){notify('Selecteaza cel putin o tara sau regiune tinta.','error');return;}if(!hasSelectedRole(draftCriteria)){notify('Selecteaza cel putin o familie si o subfamilie pentru Retrieve.','error');return;}if(!hasSelectedWorkMode(draftCriteria)){notify('Selecteaza cel putin un mod de lucru pentru Retrieve.','error');return;}if(!hasSelectedContractType(draftCriteria)){notify('Selecteaza cel putin un tip de contract pentru Retrieve.','error');return;}setSaving(true);try{const result=await commandApi('/me/preferences',auth.token,{method:'PUT',body:JSON.stringify(preferencePatchFromCriteria(draftCriteria))});setSavedCriteria(draftCriteria);setCanonicalConfig(result?.preferences||canonicalConfig);const nextFilters={...filtersRef.current,freshness:filtersRef.current.freshness??draftCriteria.freshness};setFilters(nextFilters);await loadJobsPage(auth.token,draftCriteria,nextFilters);notify('Preferintele au fost salvate. Nu a fost pornit niciun Retrieve.','success');}catch(error){notify('Preferintele nu au putut fi salvate: '+error.message,'error');}finally{setSaving(false);}},[auth.token,saving,draftCriteria,notify,loadJobsPage,canonicalConfig]);
 
