@@ -351,6 +351,18 @@ def _dev_osf_override(source, route):
             and route.get("career_url") == "https://osf-global.zohorecruit.com/careers")
 
 
+def provider_scope_capability(item, config):
+    """Report actual execution behavior, not speculative provider capabilities."""
+    connector = item.get("connector")
+    if not (config or {}).get("_jscc_targeted_collection"):
+        return "ENUMERATION_ONLY", "NO_BOUNDED_SCOPE"
+    if connector == "jobspipe" and (config or {}).get("jobspipe_mode", "direct") in {"direct", "apify"}:
+        return "QUERY_BOUNDED", "JOBSPIPE_EXISTING_ROLE_GEO_QUERY"
+    if connector == "public_board" and item.get("source") == "Freelancer.com":
+        return "QUERY_BOUNDED", "FREELANCER_OR_SEARCH_QUERY_ROLE_TERMS"
+    return "ENUMERATION_ONLY", "NO_VERIFIED_DYNAMIC_QUERY_IN_ADAPTER"
+
+
 def build_plan(catalog):
     if not isinstance(catalog, dict) or not isinstance(catalog.get("sources"), list):
         raise ValueError("Source catalog must contain a sources array")
@@ -926,6 +938,11 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         sources_configured=len(plan),
         sources_active=sum(item["active"] for item in plan),
     )
+    for item in plan:
+        if item.get("status") == "pending":
+            mode_name, evidence = provider_scope_capability(item, collection_config)
+            item["provider_scope_mode"] = mode_name
+            item["provider_scope_evidence"] = evidence
     collection, metadata, mode = collect_sources(
         collection_config, state, now, plan, run_id, progress_callback
     )
