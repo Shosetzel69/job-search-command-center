@@ -825,6 +825,77 @@ export async function userRefreshScope(
   }, { env, db });
 }
 
+// WP5: the mapping is tenant-owned; the shared Run remains system-owned.
+export async function beginRefreshRequest(authContext, intent, env = process.env, { db = getPool(env) } = {}) {
+  if (!['USER','ADMIN'].includes(authContext?.role) || authContext.status !== 'ACTIVE'
+      || !['manual','coverage'].includes(intent)) {
+    throw Object.assign(new Error('Invalid refresh request context'), {status:403});
+  }
+  const requestId = randomUUID();
+  return withTenantTransaction(authContext, async tx => {
+    const profile = authContext.role === 'USER' ? await resolveActiveSearchProfileTx(tx) : null;
+    await tx.query(
+      `INSERT INTO refresh_requests
+         (tenant_id, request_id, search_profile_id, actor_role, intent, outcome)
+       VALUES ($1,$2,$3,$4,$5,'PENDING')`,
+      [tx.tenantId, requestId, profile?.search_profile_id || null, authContext.role, intent],
+    );
+    return requestId;
+  }, {env,db});
+}
+
+export async function finishRefreshRequest(authContext, requestId, result, env = process.env, {db=getPool(env)} = {}) {
+  const id = requireUuid(requestId,'request_id');
+  const outcome = result?.outcome;
+  if (!['STARTED_RUN','JOINED_EXISTING_RUN','REUSED_CORPUS','BLOCKED_BY_POLICY','DISPATCH_UNKNOWN'].includes(outcome)) {
+    throw Object.assign(new Error('Invalid refresh outcome'), {status:500});
+  }
+  const runId = ['STARTED_RUN','JOINED_EXISTING_RUN'].includes(outcome) ? String(result.run_id || '') : null;
+  const correlated = runId && /^run-[0-9a-f-]{36}$/i.test(runId);
+  const safeOutcome = runId !== null && !correlated ? 'DISPATCH_UNKNOWN' : outcome;
+  const reason = /^[A-Z0-9_]{1,80}$/.test(String(result?.reason || '')) ? result.reason : null;
+  return withTenantTransaction(authContext, async tx => {
+    const updated = await tx.query(
+      `UPDATE refresh_requests
+          SET outcome=$3, run_id=$4, reason=$5, updated_at=now()
+        WHERE tenant_id=$1 AND request_id=$2 AND outcome='PENDING' AND actor_role=$6
+        RETURNING request_id`,
+      [tx.tenantId,id,safeOutcome,correlated ? runId : null,reason,authContext.role],
+    );
+    if (updated.rows?.length !== 1) throw Object.assign(new Error('Refresh request mapping unavailable'), {status:503});
+    return {request_id:id,outcome:safeOutcome,run_id:correlated ? runId : null,reason};
+  }, {env,db});
+}
+
+export async function refreshRequestStatus(authContext, requestId, env = process.env, {db=getPool(env),now=new Date()} = {}) {
+  const id = requireUuid(requestId,'request_id');
+  const row = await withTenantTransaction(authContext, async tx => {
+    const profile = authContext.role === 'USER' ? await resolveActiveSearchProfileTx(tx) : null;
+    const result = await tx.query(
+      `SELECT request_id, outcome, run_id, reason, created_at, updated_at
+         FROM refresh_requests
+        WHERE tenant_id=$1 AND request_id=$2 AND actor_role=$3
+          AND search_profile_id IS NOT DISTINCT FROM $4::uuid`,
+      [tx.tenantId,id,authContext.role,profile?.search_profile_id || null],
+    );
+    return result.rows?.[0] || null;
+  }, {env,db});
+  if (!row) throw Object.assign(new Error('Refresh request not found'),{status:404});
+  // Only lookup the run linked by the authorized mapping. Never return global
+  // payload, scopes, provider counts, other request IDs or another active run.
+  const run = row.run_id ? (await db.query(
+    'SELECT status, started_at, completed_at FROM search_runs WHERE run_id=$1',
+    [row.run_id],
+  )).rows?.[0] : null;
+  const expired = now.getTime()-new Date(row.created_at).getTime()>60*60*1000;
+  const accepted = ['STARTED_RUN','JOINED_EXISTING_RUN'].includes(row.outcome);
+  const status = run ? String(run.status) : accepted || row.outcome==='PENDING'
+    ? (expired ? 'unknown' : 'queued') : row.outcome==='DISPATCH_UNKNOWN' ? 'unknown' : 'completed';
+  return {request_id:id,run_id:row.run_id || null,outcome:row.outcome,reason:row.reason || null,
+    status,terminal:['completed','completed_with_errors','failed','cancelled','unknown'].includes(status),
+    created_at:row.created_at,started_at:run?.started_at || null,completed_at:run?.completed_at || null};
+}
+
 export async function sharedCorpusRefreshState(
   env = process.env,
   { db = getPool(env), now = new Date() } = {},
