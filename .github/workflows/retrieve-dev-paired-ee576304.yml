@@ -1,0 +1,114 @@
+# One-release #520 build-only lane; never deploy or migrate.
+name: Retrieve DEV exact paired build
+on:
+  issue_comment:
+    types: [created]
+permissions:
+  contents: read
+  actions: read
+  id-token: write
+concurrency:
+  group: retrieve-dev-paired-ee576304
+  cancel-in-progress: false
+jobs:
+  paired:
+    if: >-
+      github.repository == 'Shosetzel69/job-search-command-center' &&
+      github.ref == 'refs/heads/main' &&
+      github.actor == 'Shosetzel69' &&
+      github.event.comment.user.login == 'Shosetzel69' &&
+      github.event.comment.author_association == 'OWNER' &&
+      github.event.issue.number == 520 &&
+      !github.event.issue.pull_request &&
+      github.event.comment.body == '/jscc-paired-build ee576304cb4ae1a59ff6f0dc6b173234be78bd52'
+    runs-on: ubuntu-latest
+    environment: dev
+    timeout-minutes: 60
+    env:
+      CANDIDATE_SHA: ee576304cb4ae1a59ff6f0dc6b173234be78bd52
+      CANDIDATE_TREE: 0ed1f12c1d0e8723a3bd893d794ee537d276105b
+      SOURCE_REPO: projects/jscc-shared/locations/europe-west1/connections/github-jscc/repositories/Shosetzel69-job-search-command-center
+      BUILD_SA: projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com
+      GCP_WIF_PROVIDER: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }}
+      GCP_WIF_SA: ${{ vars.JSCC_DEV_GCP_WIF_SERVICE_ACCOUNT }}
+    steps:
+      - name: Checkout immutable approved app source (no control changes)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ee576304cb4ae1a59ff6f0dc6b173234be78bd52
+          persist-credentials: false
+          path: candidate
+      - name: Exact candidate, recipe and postmerge CI gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$CANDIDATE_SHA"
+          test "$(git -C candidate rev-parse 'HEAD^{tree}')" = "$CANDIDATE_TREE"
+          test -z "$(git -C candidate status --porcelain)"
+          test "$(git -C candidate hash-object cloudbuild.yaml)" = 106140ce381bab36c7641b1522a92df36aae8bf7
+          test "$(git -C candidate hash-object cloudbuild.service.yaml)" = 7474b224015c65405b46be542841e9ea58099ad0
+          for id in 43648055119 43648055120 43648055170 43648055154; do
+            gh api "repos/Shosetzel69/job-search-command-center/actions/runs/$id" |
+              jq -e --arg sha "$CANDIDATE_SHA" '.head_sha==$sha and .status=="completed" and .conclusion=="success" and .event=="push"' >/dev/null
+          done
+          test -n "$GCP_WIF_PROVIDER" && test -n "$GCP_WIF_SA" || {
+            echo EXISTING_WIF_REQUIRED >&2; exit 86;
+          }
+      - name: Authenticate with existing DEV WIF only
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          project_id: jscc-shared
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_WIF_SA }}
+      - name: Set up Cloud SDK
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+      - name: Preflight and execute only the approved image builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          dir="$(mktemp -d)"
+          trap 'rm -rf "$dir"' EXIT
+          registry=europe-west1-docker.pkg.dev/jscc-shared/jscc
+          immutable="$(gcloud artifacts repositories describe jscc --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+          [[ "$immutable" == True || "$immutable" == true ]] || { echo IMMUTABILITY_REQUIRED >&2; exit 86; }
+          actual_repo="$(gcloud builds repositories describe Shosetzel69-job-search-command-center --connection=github-jscc --project=jscc-shared --region=europe-west1 --format='value(name)')"
+          test "$actual_repo" = "$SOURCE_REPO" || { echo REPOSITORY_BINDING_UNVERIFIED >&2; exit 86; }
+          for role in jscc jscc-service; do
+            image="$registry/$role:$CANDIDATE_SHA"
+            if gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)' >"$dir/digest" 2>"$dir/error"; then
+              echo "EXISTING_IMAGE_REQUIRES_PROVENANCE_CHECK role=$role" >&2
+              exit 86
+            elif ! grep -Eiq 'NOT_FOUND|not found|\b404\b' "$dir/error"; then
+              echo "IMAGE_STATE_UNVERIFIED role=$role" >&2
+              exit 86
+            fi
+          done
+          for role in jscc jscc-service; do
+            cfg=cloudbuild.yaml
+            [[ "$role" != jscc-service ]] || cfg=cloudbuild.service.yaml
+            gcloud builds submit "$SOURCE_REPO" --project=jscc-shared --region=europe-west1 \
+              --revision="$CANDIDATE_SHA" --config="candidate/$cfg" \
+              --service-account="$BUILD_SA" --substitutions="_GIT_SHA=$CANDIDATE_SHA,COMMIT_SHA=$CANDIDATE_SHA" \
+              --async --suppress-logs --timeout=1500s --format=json >"$dir/submit"
+            build_id="$(jq -er '.id // .metadata.build.id' "$dir/submit")"
+            [[ "$build_id" =~ ^[a-f0-9-]{36}$ ]] || { echo BUILD_ID_UNVERIFIED >&2; exit 86; }
+            printf 'BUILD_ID role=%s id=%s\n' "$role" "$build_id" >> "$GITHUB_STEP_SUMMARY"
+            for ((i=0;i<180;i++)); do
+              gcloud builds describe "$build_id" --project=jscc-shared --region=europe-west1 --format=json >"$dir/build"
+              state="$(jq -er .status "$dir/build")"
+              case "$state" in
+                SUCCESS) break ;;
+                QUEUED|PENDING|WORKING) sleep 10 ;;
+                *) echo "BUILD_FAILED role=$role status=$state id=$build_id" >&2; exit 86 ;;
+              esac
+            done
+            jq -e --arg sha "$CANDIDATE_SHA" --arg repo "$SOURCE_REPO" --arg sa "$BUILD_SA" \
+              '.status=="SUCCESS" and .projectId=="jscc-shared" and .serviceAccount==$sa and .sourceProvenance.resolvedConnectedRepository.repository==$repo and .sourceProvenance.resolvedConnectedRepository.revision==$sha' \
+              "$dir/build" >/dev/null || { echo BUILD_PROVENANCE_UNVERIFIED >&2; exit 86; }
+            digest="$(gcloud artifacts docker images describe "$registry/$role:$CANDIDATE_SHA" --project=jscc-shared --format='value(image_summary.digest)')"
+            [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]] || { echo IMAGE_DIGEST_UNVERIFIED >&2; exit 86; }
+            printf 'IMAGE role=%s source=%s digest=%s\n' "$role" "$CANDIDATE_SHA" "$digest" | tee -a "$GITHUB_STEP_SUMMARY"
+          done
+          echo 'PAIRED_BUILD_PASS_NO_DEPLOY' | tee -a "$GITHUB_STEP_SUMMARY"
