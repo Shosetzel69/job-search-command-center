@@ -795,7 +795,8 @@ def collect_ats(item, role_family=None, config=None):
                     filtered = []
                     for row in result.records:
                         posting = shared_corpus.prepare_posting(row, source_hint=company)
-                        if posting is None or not posting.country_codes or "RO" in posting.country_codes:
+                        if (posting is None or not row.get("_jscc_country_scope_complete")
+                                or not posting.country_codes or "RO" in posting.country_codes):
                             filtered.append(row)
                     result.records = filtered
         return results
