@@ -6,6 +6,7 @@ from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 import job_search as engine
+from retrieve_provider_queries import scope_search_terms
 
 MAX_BYTES = 12 * 1024 * 1024
 PAGE_SIZE = 10
@@ -131,12 +132,12 @@ def normalize(item, base_url, domain, company_name):
     }
 
 
-def _request_page(base_url, domain, start, opener=urlopen):
+def _request_page(base_url, domain, start, opener=urlopen, search_text=""):
     params = urlencode({
         "domain": domain,
         "start": start,
         "num": PAGE_SIZE,
-        "query": "",
+        "query": search_text,
         "location": "",
     })
     url = base_url.rstrip("/") + "/api/pcsx/search?" + params
@@ -163,7 +164,12 @@ def _request_page(base_url, domain, start, opener=urlopen):
     return positions, total
 
 
-def collect(base_url, domain, company_name, max_pages=MAX_PAGES, opener=urlopen):
+def bounded_terms(config, max_pages=MAX_PAGES):
+    terms = scope_search_terms(config)
+    return terms if len(terms) <= max_pages else ()
+
+
+def collect(base_url, domain, company_name, max_pages=MAX_PAGES, opener=urlopen, search_terms=()):
     parsed = urlsplit(str(base_url or "").strip())
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Eightfold PCSX base_url must be public HTTPS")
@@ -175,6 +181,32 @@ def collect(base_url, domain, company_name, max_pages=MAX_PAGES, opener=urlopen)
         raise ValueError(f"max_pages must be between 1 and {MAX_PAGES}")
 
     records = {}
+    if search_terms:
+        terms = tuple(sorted(set(search_terms)))
+        if len(terms) > max_pages:
+            raise ValueError("Eightfold search terms exceed the existing request budget")
+        active = {term: 0 for term in terms}
+        budget = max_pages
+        while active and budget:
+            for term, offset in list(active.items()):
+                if not budget:
+                    break
+                budget -= 1
+                positions, count = _request_page(base_url, domain, offset, opener=opener, search_text=term)
+                for item in positions:
+                    record = normalize(item, base_url, domain, company_name)
+                    records[record["id"]] = record
+                if len(positions) < PAGE_SIZE or (count is not None and offset + len(positions) >= count):
+                    active.pop(term)
+                else:
+                    active[term] += PAGE_SIZE
+        connector = f"eightfold-public:{domain}"
+        results = [engine.CollectionResult(connector, "pcsx_scoped_search", True, list(records.values()), len(records))]
+        if active:
+            results.append(engine.CollectionResult(connector, "bounded_search_partial", False, [], 0,
+                "Eightfold scoped search incomplete within existing page cap", error_code="SCHEMA_ERROR", failure_stage="parse"))
+        return results
+
     total_available = None
     for page in range(max_pages):
         positions, count = _request_page(base_url, domain, page * PAGE_SIZE, opener=opener)
