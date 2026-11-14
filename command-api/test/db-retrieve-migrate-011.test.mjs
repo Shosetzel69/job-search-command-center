@@ -12,13 +12,14 @@ const files=await loadMigrations();
 const prior=files.slice(0,10).map(({version,name,checksum})=>({version,name,checksum}));
 const absent={table_present:false,index_present:false,tenant_id_ready:false};
 const present={table_present:true,index_present:true,tenant_id_ready:true};
-function fakeDb({rows=prior,objects=absent,database='jobsearch_dev',failDDL=false}={}) {
+function fakeDb({rows=prior,objects=absent,database='jobsearch_dev',failDDL=false,catalogIndex=null}={}) {
  const queries=[];let ledger=[...rows],schema={...objects};
  const client={async query(sql,params){
    queries.push({sql,params});
    if(sql.includes('current_database()'))return {rows:[{database_name:database}]};
    if(sql.startsWith('SELECT version'))return {rows:[...ledger]};
-   if(sql.includes("to_regclass('public.refresh_requests')"))return {rows:[schema]};
+   if(sql.includes("to_regclass('public.refresh_requests')"))return {rows:[{...schema}]};
+   if(sql.includes('FROM pg_indexes'))return {rows:catalogIndex?[catalogIndex]:[]};
    if(sql===files.at(-1).sql){if(failDDL)throw Error('DDL failed');schema={...present};}
    if(sql.startsWith('INSERT INTO schema_migrations'))ledger.push({version:params[0],name:params[1],checksum:params[2]});
    return {rows:[]};
@@ -74,4 +75,17 @@ test('already applied is idempotent and DDL failure rolls back',async()=>{
  const other=fakeDb({database:'jobsearch_test'});
  await assert.rejects(prepareOrApplyRetrieve011({env,buildIdentity:identity,db:other.db,migrations:files}),/DATABASE_DENIED/);
  assert.ok(!other.queries.some(q=>q.sql===files.at(-1).sql));
+});
+
+
+test('logical catalog fallback requires exact affirmative index evidence',async()=>{
+ const proof={indexname:'refresh_requests_profile_idx',indexdef:'CREATE INDEX refresh_requests_profile_idx ON public.refresh_requests USING btree (tenant_id, search_profile_id, created_at DESC)'};
+ const inspect={...env,RETRIEVE011_MODE:'inspect',RETRIEVE011_OWNER_GATE:''};
+ const rows=[...prior,files.at(-1)],objects={...present,index_present:false};
+ const good=fakeDb({rows,objects,catalogIndex:proof});
+ assert.equal((await prepareOrApplyRetrieve011({env:inspect,buildIdentity:identity,db:good.db,migrations:files})).before,'ALREADY_APPLIED');
+ for(const catalogIndex of [null,{...proof,indexdef:'CREATE INDEX refresh_requests_profile_idx ON public.refresh_requests (tenant_id)'}]) {
+   const bad=fakeDb({rows,objects,catalogIndex});
+   await assert.rejects(prepareOrApplyRetrieve011({env:inspect,buildIdentity:identity,db:bad.db,migrations:files}),/SCHEMA_DRIFT/);
+ }
 });
