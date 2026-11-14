@@ -75,9 +75,10 @@ def build_query_specs(config: dict[str, Any], state: dict[str, Any], now: dateti
 
     target_countries = engine.resolve_target_country_codes(config)
     collection_hours = int(config.get("collection_freshness_hours", config.get("freshness_hours", 24)))
-    freshness_days = max(1, math.ceil(collection_hours / 24))
+    posting_hours = int(config.get('posting_max_age_hours', collection_hours))
+    freshness_days = max(1, math.ceil(posting_hours / 24))
     overlap_minutes = max(0, int(config.get("jobspipe_incremental_overlap_minutes", 2)))
-    fallback = now - timedelta(hours=collection_hours)
+    fallback = now - timedelta(hours=posting_hours)
 
     def incremental_fields(name: str) -> dict[str, Any]:
         progress = state.setdefault("query_progress", {}).setdefault(query_progress_key(config, name), {})
@@ -380,7 +381,8 @@ def merge_with_existing(
     for job in new_output.get("jobs") or []:
         merged[job_key(job)] = job
 
-    collection_hours = int(config.get("collection_freshness_hours", config.get("freshness_hours", 24)))
+    cadence_hours = int(config.get("collection_freshness_hours", config.get("freshness_hours", 24)))
+    collection_hours = int(config.get("posting_max_age_hours", cadence_hours))
     first_seen = state.setdefault("job_first_seen", {})
     retained: list[dict[str, Any]] = []
     retained_keys: set[str] = set()
@@ -427,7 +429,8 @@ def merge_with_existing(
     new_output["jobs"] = retained
     new_output["results"] = len(retained)
     new_output["freshness_hours"] = collection_hours
-    new_output["collection_freshness_hours"] = collection_hours
+    new_output["collection_freshness_hours"] = cadence_hours
+    new_output["posting_max_age_hours"] = collection_hours
     new_output["incremental_sync"] = True
     new_output["expired_pruned"] = expired
     new_output["criteria_revalidated_pruned"] = criteria_pruned
