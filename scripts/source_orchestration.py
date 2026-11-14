@@ -781,10 +781,12 @@ def collect_ats(item, role_family=None, config=None):
     if connector == "smartrecruiters":
         return smartrecruiters.collect(route["company_identifier"])
     if connector == "workday":
+        terms = workday.scope_search_terms(config)
+        query_kwargs = {"search_terms": terms} if terms else {}
         results = workday.collect(
             route["career_url"], company,
             detail_workers=route.get("detail_workers", 4),
-            search_terms=workday.scope_search_terms(config),
+            **query_kwargs,
         )
         if company == "NTT DATA Romania" and (config or {}).get("_jscc_targeted_collection"):
             # The approved Workday URL is global. Keep only explicitly local
