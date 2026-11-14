@@ -2675,6 +2675,7 @@ def _epam_embedded(html, base_url, diagnostics=None):
             "EPAM", identity, title, "EPAM", description, link,
             location=city, countries=countries, remote=remote,
         )
+        record["_jscc_field_provenance"] = {"title":"ATS_FIELD","description":"ATS_FIELD", **({"location":"ATS_FIELD"} if city else {})}
         records[record["id"]] = record
     if diagnostics is not None:
         diagnostics["invalid_postings"] = rejected
@@ -3392,6 +3393,193 @@ def _nato_taleo(url, portal="101430233", section="2"):
     return list(records.values())
 
 
+# 48 structural-risk routes from the canonical 2026-11-12 source audit,
+# plus the confirmed Crossover listing contamination. Do not infer that
+# every row from these providers is corrupt.
+CONTEXT_RISK_SOURCES = frozenset((
+    "Hipo",
+    "EuroBrussels",
+    "eFinancialCareers",
+    "Remote.co",
+    "Wellfound",
+    "Flexa",
+    "No Fluff Jobs",
+    "Just Join IT",
+    "awork.ro",
+    "JustRemote",
+    "DailyRemote",
+    "PowerToFly",
+    "Dynamite Jobs",
+    "Torre",
+    "Techjobs.be",
+    "FlexJobs",
+    "SkipTheDrive",
+    "Freelancermap",
+    "PeoplePerHour",
+    "Hubstaff Talent",
+    "Altia",
+    "Vector Synergy",
+    "Serco Europe",
+    "Societe Generale",
+    "Worldpay / Global Payments",
+    "Mantu",
+    "Cegeka",
+    "Computacenter",
+    "SoftServe",
+    "EPAM",
+    "Eviden",
+    "HARMAN",
+    "Prohuman",
+    "GitHub",
+    "RED Global",
+    "Salt",
+    "Square One Resources",
+    "Source Group International",
+    "Montreal Associates",
+    "Brains Consulting",
+    "Next Ventures",
+    "Lawrence Harvey",
+    "Proactive.IT",
+    "W Talent",
+    "KEYES / NRB",
+    "Trasys International",
+    "Thaleria",
+    "Fujitsu Belgium",
+    "Crossover",
+))
+CONTEXT_LOCATION_KINDS = frozenset((
+    "linked_jobs", "rendered_links", "heading_list", "rendered_heading_list",
+    "hipo", "awork", "dailyremote", "bizneo", "socgen", "softserve", "epam",
+    "prohuman", "squareone", "montreal_associates", "brains", "nextventures",
+    "wordpress_archive", "trasys_keyes",
+))
+
+
+def _single_detail_jobposting(html, expected_title):
+    parser = _LuxoftJobPosting()
+    parser.feed(html)
+    jobs = []
+    for script in parser.scripts:
+        try:
+            data = json.loads(script)
+        except (ValueError, TypeError):
+            continue
+        candidates = data if isinstance(data, list) else [data]
+        for item in candidates:
+            if isinstance(item, dict):
+                graph = item.get("@graph")
+                for node in ([item] + (graph if isinstance(graph, list) else [])):
+                    if isinstance(node, dict) and node.get("@type") == "JobPosting":
+                        jobs.append(node)
+    if len(jobs) != 1:
+        return None
+    job = jobs[0]
+    title = plain_text(job.get("title"))
+    description = plain_text(job.get("description"))
+    # Same-title corroboration prevents a redirected or adjacent vacancy
+    # from being attached to the stable listing identity.
+    if not title or title.casefold() != plain_text(expected_title).casefold() or not description:
+        return None
+    organization = job.get("hiringOrganization")
+    company = plain_text(organization.get("name")) if isinstance(organization, dict) else ""
+    locations = job.get("jobLocation")
+    locations = locations if isinstance(locations, list) else [locations]
+    labels, countries = [], []
+    for location in locations:
+        address = location.get("address") if isinstance(location, dict) else None
+        if not isinstance(address, dict):
+            continue
+        country = address.get("addressCountry")
+        if isinstance(country, dict):
+            country = country.get("name") or country.get("identifier")
+        country = plain_text(country)
+        if len(country) == 2:
+            country = engine.COUNTRY_NAMES.get(country.upper(), country.upper())
+        label = ", ".join(x for x in (plain_text(address.get("addressLocality")),
+                                      plain_text(address.get("addressRegion")), country) if x)
+        if label and label not in labels:
+            labels.append(label)
+        if country and country not in countries:
+            countries.append(country)
+    remote = str(job.get("jobLocationType") or "").upper() == "TELECOMMUTE"
+    result = {"job_title": title, "description": description[:100000],
+              "location": "; ".join(labels) or ("Remote" if remote else ""),
+              "countries": countries, "remote": remote,
+              "work_arrangement": "remote" if remote else "",
+              "employment_statuses": engine.list_values(job.get("employmentType")),
+              "date_posted": job.get("datePosted"),
+              "_jscc_field_provenance": {
+                  "title": "JOB_DETAIL_JSONLD", "description": "JOB_DETAIL_JSONLD",
+                  **({"location": "JOB_DETAIL_JSONLD"} if labels or remote else {}),
+                  **({"date_posted": "JOB_DETAIL_JSONLD"} if job.get("datePosted") else {}),
+              }}
+    if company:
+        result["company"] = company
+    if isinstance(job.get("baseSalary"), dict):
+        result["salary"] = job["baseSalary"]
+    return result
+
+
+def protect_context_records(records, name, kind, listing_url, *, max_details=4, max_seconds=10):
+    """Try only bounded same-origin individual detail URLs; otherwise keep
+    the title/identity and make unverified fields unknown, never reuse card prose.
+    """
+    if name not in CONTEXT_RISK_SOURCES:
+        return records, 0
+    result = []
+    unresolved = 0
+    deadline = time.monotonic() + max_seconds
+    listing = urlsplit(listing_url)
+    attempted = 0
+    import shared_corpus_repository as shared_corpus
+    for raw in records:
+        record = dict(raw)
+        if (record.get("_jscc_field_provenance") or {}).get("description") in {"ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML"}:
+            result.append(record)
+            continue
+        link = str(record.get("source_url") or "")
+        try:
+            parts = urlsplit(link)
+            same_detail = (parts.scheme == "https" and parts.hostname == listing.hostname
+                           and not parts.username and not parts.password and not parts.port
+                           and not parts.fragment and parts.path.rstrip("/") != listing.path.rstrip("/"))
+        except ValueError:
+            same_detail = False
+        detail = None
+        if same_detail and attempted < max_details and time.monotonic() < deadline:
+            attempted += 1
+            try:
+                final, html = PublicClient(deadline).get(link)
+                target = urlsplit(final)
+                if (target.scheme, target.netloc, target.path, target.query) == (parts.scheme, parts.netloc, parts.path, parts.query):
+                    detail = _single_detail_jobposting(html, record.get("job_title"))
+            except (FetchError, OSError, ValueError, TypeError):
+                pass
+        if detail:
+            record.update(detail)
+        else:
+            unresolved += 1
+            context = str(record.get("description") or "")
+            location = str(record.get("location") or "")
+            record["description"] = ""
+            provenance = {"title": "LISTING_CARD", "description": "LISTING_CARD"}
+            if kind in CONTEXT_LOCATION_KINDS or location == context or shared_corpus.SALARY_MARKUP.search(location):
+                record.update(location="", countries=[], remote=False, work_arrangement="", employment_statuses=[])
+                provenance["location"] = "LISTING_CARD"
+            elif location:
+                provenance["location"] = "LISTING_CARD"
+            if name == "Crossover":
+                # The confirmed salary-in-company/list-context route does not
+                # establish a separate employer. Preserve source identity only.
+                if shared_corpus.SALARY_MARKUP.search(context):
+                    record["salary_display"] = shared_corpus.SALARY_MARKUP.search(context).group()
+                if shared_corpus.SALARY_MARKUP.search(str(record.get("company") or "")):
+                    record["company"] = name
+            record["_jscc_field_provenance"] = provenance
+        result.append(record)
+    return result, unresolved
+
+
 def scoped_freelancer_url(url, config):
     """Use the existing provider OR query field, not a new transport."""
     if not (config or {}).get("_jscc_targeted_collection"):
@@ -3524,7 +3712,16 @@ def collect(source, config=None):
                 "remotive": _remotive,
             }[kind]
             records = parser(payload)
+    unresolved = 0
+    if (config or {}).get("_jscc_targeted_collection"):
+        records, unresolved = protect_context_records(records, name, kind, url)
     result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
+    if unresolved:
+        result.append(engine.CollectionResult(
+            "public_board", "unverified_detail", False, [], 0,
+            f"{unresolved} job(s) have unverified individual detail fields",
+            error_code="SCHEMA_ERROR", failure_stage="parse",
+        ))
     invalid = partial_diagnostics.get("invalid_postings", 0) + partial_diagnostics.get("unprocessed_postings", 0)
     if invalid:
         result.append(engine.CollectionResult(
