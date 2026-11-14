@@ -50,6 +50,7 @@ const SYSTEM_PATCH_KEYS = new Set([
   'jobspipeDirectRunBudget',
   'jobspipeDirectMonthlyGuard',
   'collection_freshness_hours',
+  'posting_max_age_hours',
   'source_strategy',
   'web_browser_fallback_enabled',
   'jobspipe_credit_budget_per_run',
