@@ -3,7 +3,7 @@ import { sourceCollectionMethod } from '../../shared/source-connectors.mjs';
 import NomenclaturesAdmin from './nomenclatures-admin.jsx';
 import ActionDialog from './action-dialog.jsx';
 import { createSingleFireGuard } from './action-dialog-guard.mjs';
-import { exclusionGroupRows, failureGroupRows, runSummaryLabel, sourceResultDetail, sourceResultRows, sortSourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
+import { exclusionGroupRows, failureGroupRows, runSummaryLabel, sourceAccountingLabel, sourceResultDetail, sourceResultRows, sortSourceResultRows, sourceSummaryRows } from './admin-log-model.mjs';
 import {
   ADMIN_SECTIONS,
   SOURCE_SECTIONS,
@@ -426,7 +426,7 @@ function Logs({ runs }) {
               const warning=['partial','blocked','no_extractable_jobs'].includes(item.outcome);
               return <article key={`${item.source}-compact-${index}`} className="rounded-xl border border-slate-200 bg-white p-3">
                 <div className="flex items-start justify-between gap-2"><div className="font-semibold text-slate-700">{item.source}</div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div>
-                <div className="mt-2 text-xs text-slate-500">Joburi: <strong className="text-slate-700">{item.jobsLabel}</strong></div>
+                <div className="mt-2 text-xs text-slate-500">Joburi: <strong className="text-slate-700">{item.jobsLabel}</strong></div>{sourceAccountingLabel(item)&&<div className="text-xs text-slate-500 mt-1">{sourceAccountingLabel(item)}</div>}
                 <div className={cx('mt-2 break-words text-xs',item.outcome === 'failed' ? 'text-red-700' : warning ? 'text-amber-700' : 'text-slate-500')}>{detail}</div>
               </article>;
             })}
@@ -438,7 +438,7 @@ function Logs({ runs }) {
             <div className="divide-y divide-slate-100">{sourceRows.map((item,index) => {
               const detail=sourceResultDetail(item);
               const warning=['partial','blocked','no_extractable_jobs'].includes(item.outcome);
-              return <div key={`${item.source}-${index}`} className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 px-3 py-2"><div className="font-medium text-slate-700">{item.source}</div><div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div><div>{item.jobsLabel}</div><div className={item.outcome === 'failed' ? 'text-red-700' : warning ? 'text-amber-700' : 'text-slate-500'} title={item.message || undefined}>{detail}</div></div>;
+              return <div key={`${item.source}-${index}`} className="grid grid-cols-[minmax(180px,1fr)_180px_80px_minmax(220px,1fr)] gap-3 px-3 py-2"><div className="font-medium text-slate-700">{item.source}</div><div><Pill tone={item.outcomeMeta.tone}>{item.outcomeMeta.label}</Pill></div><div>{item.jobsLabel}</div><div className={item.outcome === 'failed' ? 'text-red-700' : warning ? 'text-amber-700' : 'text-slate-500'} title={item.message || undefined}>{detail}{sourceAccountingLabel(item)&&<div className="text-xs text-slate-500 mt-1">{sourceAccountingLabel(item)}</div>}</div></div>;
             })}</div>
           </div>
         </div>}
