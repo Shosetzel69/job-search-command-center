@@ -26,7 +26,7 @@ function metadata(state, coverage, request = null) {
   };
 }
 
-export function decideUserRefresh({ state, coverage, runtime, activeRun, request }) {
+export function decideUserRefresh({ state, coverage, runtime, activeRun, request, manual = false }) {
   if (!state?.user_refresh_enabled) {
     return { outcome:'BLOCKED_BY_POLICY', reason:'USER_REFRESH_DISABLED', ...metadata(state, coverage, request) };
   }
@@ -37,7 +37,7 @@ export function decideUserRefresh({ state, coverage, runtime, activeRun, request
   if (!executionMode) {
     return { outcome:'BLOCKED_BY_POLICY', reason:'RETRIEVE_NOT_ALLOWED', ...metadata(state, coverage, request) };
   }
-  if (coverage?.all_sufficient) {
+  if (!manual && coverage?.all_sufficient) {
     return { outcome:'REUSED_CORPUS', reason:null, execution_mode:executionMode, ...metadata(state, coverage, request) };
   }
   if (request?.retrieve_scope?.effective_source_ids?.length === 0) {
@@ -45,7 +45,7 @@ export function decideUserRefresh({ state, coverage, runtime, activeRun, request
       ...metadata(state, coverage, request) };
   }
   if (!request?.retrieve_scope?.scopes?.length) {
-    const reason = coverage?.blocked_by_cooldown ? 'COVERAGE_REFRESH_COOLDOWN' : 'NO_ACTIVE_REFRESH_SCOPE';
+    const reason = !manual && coverage?.blocked_by_cooldown ? 'COVERAGE_REFRESH_COOLDOWN' : 'NO_ACTIVE_REFRESH_SCOPE';
     return { outcome:'BLOCKED_BY_POLICY', reason, execution_mode:executionMode, ...metadata(state, coverage, request) };
   }
   if (activeRun) {
@@ -81,6 +81,7 @@ export async function userRefresh(
     buildRequest = buildRetrieveRequest,
     readCatalog = loadSourceCatalogForRefresh,
     buildIdentity = BUILD_IDENTITY,
+    intent = 'coverage',
   } = {},
 ) {
   if (!authContext?.user_id || authContext?.status !== 'ACTIVE') {
@@ -88,6 +89,8 @@ export async function userRefresh(
   }
 
   const runtime = assertEnvironmentConfig(env, buildIdentity);
+  // Manual intent is enabled only in DEV; scope and policy remain server-owned.
+  const manual = runtime.appEnv === 'dev' && intent === 'manual';
   let sourceSnapshot = await readCatalog(env, runtime);
   let catalogOption = sourceSnapshot ? {
     sourceCatalog:sourceSnapshot.catalog,
@@ -97,16 +100,16 @@ export async function userRefresh(
   const initialState = await readState(env);
   const initialCoverage = await readCoverage(scope?.scopes, env);
   let request = buildRequest({
-    scopes:initialCoverage.refresh_scopes,
+    scopes:manual ? scope?.scopes : initialCoverage.refresh_scopes,
     collectionFreshnessHours:initialState.collection_freshness_hours,
     ...catalogOption,
   });
 
-  let decision = decideUserRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun:null, request });
+  let decision = decideUserRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun:null, request, manual });
   if (decision.outcome !== 'STARTED_RUN') return decision;
 
   const activeRun = await getActive(env, runtime);
-  if (activeRun) return decideUserRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun, request });
+  if (activeRun) return decideUserRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun, request, manual });
 
   // Re-read before signing the final request. A concurrent ADMIN edit must
   // change the source generation/signature or fail closed at Job admission.
@@ -118,11 +121,11 @@ export async function userRefresh(
   const currentState = await readState(env);
   const currentCoverage = await readCoverage(scope?.scopes, env);
   request = buildRequest({
-    scopes:currentCoverage.refresh_scopes,
+    scopes:manual ? scope?.scopes : currentCoverage.refresh_scopes,
     collectionFreshnessHours:currentState.collection_freshness_hours,
     ...catalogOption,
   });
-  decision = decideUserRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, request });
+  decision = decideUserRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, request, manual });
   if (decision.outcome !== 'STARTED_RUN') return decision;
 
   try {
