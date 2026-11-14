@@ -52,6 +52,18 @@ async function getState(client, migrations) {
                    WHERE table_schema='public' AND table_name='refresh_requests'
                      AND column_name='tenant_id' AND data_type='uuid' AND is_nullable='NO') AS tenant_id_ready
   `)).rows[0];
+  // Nile's tenant-aware index may not resolve through to_regclass in the
+  // logical catalog. Require affirmative evidence from the table-scoped
+  // PostgreSQL index view instead; an empty result is not a PASS.
+  if (!objects.index_present) {
+    const indexes=await client.query(
+      "SELECT indexname, indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='refresh_requests' AND indexname='refresh_requests_profile_idx'"
+    );
+    objects.index_present=indexes.rows?.some(row =>
+      row.indexname==='refresh_requests_profile_idx' &&
+      /\(\s*tenant_id\s*,\s*search_profile_id\s*,\s*created_at\s+DESC\s*\)/i.test(String(row.indexdef||''))
+    )===true;
+  }
   return assertRetrieve011Ledger(migrations,rows,objects);
 }
 
