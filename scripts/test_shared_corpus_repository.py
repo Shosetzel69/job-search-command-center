@@ -620,3 +620,16 @@ class RetrieveCoverageSnapshotTests(unittest.TestCase):
         self.assertEqual([x["state"] for x in result], ["SUFFICIENT", "INSUFFICIENT"])
         self.assertEqual(result[0]["last_usable_run_id"], "run-1")
         self.assertIsNone(result[1]["last_usable_run_id"])
+
+
+class CanonicalPublicationCountTests(unittest.TestCase):
+    def test_canonical_publication_uses_exact_run_and_preferred_posting_order(self):
+        cursor = FakeCursor([("src-a",2),("src-b",1)])
+        counts = repository._canonical_publication_counts(cursor,"run-42")
+        self.assertEqual(counts,{"src-a":2,"src-b":1})
+        sql,params = cursor.queries[0]
+        self.assertEqual(params,("run-42",))
+        self.assertIn("SELECT DISTINCT job_id",sql)
+        self.assertIn("seen_run_id=%s",sql)
+        self.assertIn("last_seen_at DESC, posting_id ASC",sql)
+        self.assertIn("j.lifecycle_status='ACTIVE'",sql)
