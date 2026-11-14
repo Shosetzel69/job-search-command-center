@@ -203,6 +203,9 @@ def append_run_history() -> None:
         "shared_corpus": status.get("shared_corpus") or {},
         "source_results": status.get("source_results") or [],
         "source_outcome_counts": status.get("source_outcome_counts") or {},
+        "source_record_totals": status.get("source_record_totals") or {},
+        "coverage_before": status.get("coverage_before"),
+        "coverage_after": status.get("coverage_after"),
         "source_failure_codes": status.get("source_failure_codes") or {},
         "source_failure_stages": status.get("source_failure_stages") or {},
         "limitations": status.get("limitations") or [],
@@ -223,6 +226,18 @@ def append_run_history() -> None:
         encoding="utf-8",
     )
 
+
+
+def persist_terminal_evidence():
+    """Persist the terminal Run, then mirror its authoritative Coverage snapshot."""
+    append_run_history()
+    status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+    evidence = shared_corpus.persist_operational_run(status)
+    if isinstance(evidence, dict) and "coverage_after" in evidence:
+        for key in ("coverage_before", "coverage_after"):
+            status[key] = evidence.get(key)
+        engine.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        append_run_history()
 
 
 def stamp_jobs_provenance() -> bool:
@@ -313,17 +328,13 @@ def main() -> int:
         )
     except Exception as exc:
         terminal_failure_status(now, run_id, request_signature, retrieve_scope, exc)
-        append_run_history()
-        status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
-        shared_corpus.persist_operational_run(status)
+        persist_terminal_evidence()
         stamp_jobs_provenance()
         validate_history()
         print(f"Run failed: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
 
-    append_run_history()
-    status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
-    shared_corpus.persist_operational_run(status)
+    persist_terminal_evidence()
     stamp_jobs_provenance()
     if code == 0:
         engine.validate_output()
