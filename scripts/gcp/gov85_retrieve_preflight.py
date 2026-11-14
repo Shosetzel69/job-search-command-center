@@ -13,7 +13,10 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-from cloud_run_v2_read import fetch_v2, fetch_revision, primary_revision, revision_image, stage_preflight, get
+try:
+    from .cloud_run_v2_read import fetch_v2, fetch_revision, primary_revision, revision_image, stage_preflight, get
+except ImportError:
+    from cloud_run_v2_read import fetch_v2, fetch_revision, primary_revision, revision_image, stage_preflight, get
 
 APP = "ee576304cb4ae1a59ff6f0dc6b173234be78bd52"
 BUILD_CONTROL = "774fc34d0617b85ae2253db5333a869e399405e0"
