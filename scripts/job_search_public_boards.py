@@ -15,7 +15,7 @@ from email.utils import parsedate_to_datetime
 from html import unescape
 from html.entities import html5
 from html.parser import HTMLParser
-from urllib.parse import urljoin, urlsplit
+from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request, urlopen
 
 import job_search as engine
@@ -3392,6 +3392,19 @@ def _nato_taleo(url, portal="101430233", section="2"):
     return list(records.values())
 
 
+def scoped_freelancer_url(url, config):
+    """Use the existing provider OR query field, not a new transport."""
+    if not (config or {}).get("_jscc_targeted_collection"):
+        return url
+    terms = engine.configured_titles(config)
+    if not terms:
+        raise ValueError("Scoped Freelancer collection requires canonical role terms")
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query["or_search_query"] = " ".join(terms)
+    return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
+
+
 def collect(source, config=None):
     name = str(source.get("name") or "")
     spec = PUBLIC_BOARD_SOURCES.get(name)
@@ -3486,6 +3499,7 @@ def collect(source, config=None):
     elif kind == "awork":
         records = _awork(url)
     elif kind == "freelancer_api":
+        url = scoped_freelancer_url(url, config)
         status, _content_type, body = _fetch(url, "application/json")
         if status != 200:
             raise RuntimeError(f"Freelancer public API HTTP {status}")
