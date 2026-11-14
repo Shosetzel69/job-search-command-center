@@ -561,7 +561,7 @@ function App(){
     setRunning(true);
     const previousRunId=runStatus?.run_id||null,previousCompletedAt=runStatus?.completed_at||null;
     try{
-      const result=await commandApi(auth.role==='ADMIN'?'/admin/refresh':'/me/refresh',auth.token,{method:'POST'});
+      const result=await commandApi(auth.role==='ADMIN'?'/admin/refresh?intent=manual':'/me/refresh?intent=manual',auth.token,{method:'POST'});
       const notice=refreshOutcomeNotice(result);notify(notice.message,notice.type);
       if(result.outcome==='REUSED_CORPUS'){await loadJobsPage(auth.token,savedCriteria,filtersRef.current);}
       else if(auth.role==='ADMIN'&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome)){
