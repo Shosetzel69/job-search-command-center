@@ -821,7 +821,7 @@ def collect_ats(item, role_family=None, config=None):
     if connector == "workable":
         return workable.collect(route["subdomain"], company)
     if connector == "softgarden":
-        return softgarden.collect(route["feed_url"], company, regional_scope=bool((config or {}).get("_jscc_targeted_collection")))
+        return softgarden.collect(route["feed_url"], company, **({"regional_scope": True} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
     if connector == "eightfold_public":
         return eightfold_public.collect(route["base_url"], route["domain"], company)
     raise ValueError(f"Unsupported ATS connector: {connector}")
