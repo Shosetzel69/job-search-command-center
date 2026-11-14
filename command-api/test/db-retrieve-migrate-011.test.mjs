@@ -19,7 +19,7 @@ function fakeDb({rows=prior,objects=absent,database='jobsearch_dev',failDDL=fals
    if(sql.includes('current_database()'))return {rows:[{database_name:database}]};
    if(sql.startsWith('SELECT version'))return {rows:[...ledger]};
    if(sql.includes("to_regclass('public.refresh_requests')"))return {rows:[{...schema}]};
-   if(sql.includes('FROM pg_indexes'))return {rows:catalogIndex?[catalogIndex]:[]};
+   if(sql.includes('FROM pg_catalog.pg_index'))return {rows:catalogIndex?[catalogIndex]:[]};
    if(sql===files.at(-1).sql){if(failDDL)throw Error('DDL failed');schema={...present};}
    if(sql.startsWith('INSERT INTO schema_migrations'))ledger.push({version:params[0],name:params[1],checksum:params[2]});
    return {rows:[]};
@@ -84,6 +84,9 @@ test('logical catalog fallback requires exact affirmative index evidence',async(
  const rows=[...prior,files.at(-1)],objects={...present,index_present:false};
  const good=fakeDb({rows,objects,catalogIndex:proof});
  assert.equal((await prepareOrApplyRetrieve011({env:inspect,buildIdentity:identity,db:good.db,migrations:files})).before,'ALREADY_APPLIED');
+ const probe=good.queries.find(q=>q.sql.includes('FROM pg_catalog.pg_index'));
+ assert.match(probe.sql,/i\.indrelid=to_regclass\('public\.refresh_requests'\)/);
+ assert.match(probe.sql,/i\.indisvalid AND i\.indisready/);
  for(const catalogIndex of [null,{...proof,indexdef:'CREATE INDEX refresh_requests_profile_idx ON public.refresh_requests (tenant_id)'}]) {
    const bad=fakeDb({rows,objects,catalogIndex});
    await assert.rejects(prepareOrApplyRetrieve011({env:inspect,buildIdentity:identity,db:bad.db,migrations:files}),/SCHEMA_DRIFT/);
