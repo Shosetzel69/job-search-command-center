@@ -122,6 +122,11 @@ def normalize(item, base_url, domain, company_name):
         ),
         "source_url": source_url,
         "sources": [{"provider": "Eightfold PCSX", "domain": domain}],
+        "_jscc_field_provenance": {"title":"ATS_FIELD",
+            **({"description":"ATS_FIELD"} if item.get("job_description") or item.get("jobDescription") else {}),
+            **({"location":"ATS_FIELD"} if location else {}),
+            **({"date_posted":"ATS_FIELD"} if item.get("postedTs") or item.get("posted_ts") else {}),
+        },
         "department": item.get("department") or item.get("team") or item.get("businessUnit"),
     }
 
