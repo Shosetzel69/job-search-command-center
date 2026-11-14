@@ -4,6 +4,7 @@ import hashlib
 import os
 import json
 import socket
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -1045,7 +1046,11 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         item["postings_updated"] = int(counts.get("postings_updated", 0))
         item["canonical_jobs_published_this_run"] = int(publication.get(item["source_id"], 0)) if publication_known else None
     status.update(aggregate_source_results(plan))
-    status["provider_scope_inventory"] = dict(sorted(__import__("collections").Counter(item.get("provider_scope_mode", "UNKNOWN") for item in plan).items()))
+    for item in plan:
+        if item.get("status") in {"skipped", "inactive", "unsupported"}:
+            item["provider_scope_mode"] = "NOT_EXECUTED"
+            item["provider_scope_evidence"] = str(item.get("outcome") or item.get("status"))
+    status["provider_scope_inventory"] = dict(sorted(Counter(item.get("provider_scope_mode", "UNKNOWN") for item in plan).items()))
     status["canonical_publication"] = {
         "basis": "distinct_active_shared_jobs_by_api_preferred_source",
         "measured": publication_known,
