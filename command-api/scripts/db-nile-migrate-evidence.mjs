@@ -2,8 +2,9 @@
 import {admitNileCi,attestNativeDatabase} from './nile-ci-local-admission.mjs';
 // Never accept a local, non-CI, or incomplete runner invocation: fail before importing pg.
 admitNileCi();
-const [{default:pg},{migrate,loadMigrations}]=await Promise.all([
-  import('pg'), import('../src/db/migrations.js')
+const [{default:pg},{migrate,loadMigrations},{prepareOrApplyRetrieve011},{mkdtemp,writeFile,rm},{tmpdir},{join}]=await Promise.all([
+  import('pg'), import('../src/db/migrations.js'), import('./db-retrieve-migrate-011.mjs'),
+  import('node:fs/promises'), import('node:os'), import('node:path'),
 ]);
 const url=String(process.env.NILE_TEST_DATABASE_URL||'').trim();
 if(!url)throw new Error('NILE_TEST_DATABASE_URL is required');
@@ -13,8 +14,28 @@ try {
   const items=await loadMigrations();
   const expected=Array.from({length:11},(_,i)=>String(i+1).padStart(3,'0'));
   if(items.length!==11||items.some((m,i)=>m.version!==expected[i]))throw new Error('W025_M01 invalid migration inventory');
-  const first=await migrate({db});
-  if(first.applied.length!==11||first.current!=='011')throw new Error('W025_M01 first migration mismatch');
+  // Exercise the real 010 -> 011 DEV release path on the attested disposable
+  // native Nile instance, not against managed DEV. Retain the complete
+  // ledger, cardinality, schema and idempotence oracles below.
+  const prefix=await mkdtemp(join(tmpdir(),'jscc-nile-010-'));
+  let first;
+  try {
+    for (const item of items.slice(0,10)) await writeFile(join(prefix,item.name),item.sql,{flag:'wx'});
+    first=await migrate({db,dir:prefix});
+  } finally { await rm(prefix,{recursive:true,force:true}); }
+  if(first.applied.length!==10||first.current!=='010')throw new Error('W025_M01 prefix migration mismatch');
+  const source='a'.repeat(40);
+  const buildIdentity={sourceSha:source,runtimeDataSha:source};
+  const releaseEnv={APP_ENV:'dev',CLOUD_RUN_JOB:'jscc-db-migrate-dev',SOURCE_SHA:source,
+    NILE_MIGRATION_DATABASE_URL:url,RETRIEVE011_MODE:'inspect'};
+  const inspected=await prepareOrApplyRetrieve011({env:releaseEnv,buildIdentity,db});
+  if(inspected.before!=='PENDING_011'||inspected.applied)throw new Error('W025_M01 011 precheck mismatch');
+  const applyEnv={...releaseEnv,RETRIEVE011_MODE:'apply',RETRIEVE011_OWNER_GATE:'APPROVE_RETRIEVE_DEV_NILE_011_'+source};
+  const applied=await prepareOrApplyRetrieve011({env:applyEnv,buildIdentity,db});
+  if(!applied.applied||applied.before!=='PENDING_011'||applied.after!=='ALREADY_APPLIED')throw new Error('W025_M01 011 apply mismatch');
+  const retry=await prepareOrApplyRetrieve011({env:applyEnv,buildIdentity,db});
+  if(retry.applied||retry.after!=='ALREADY_APPLIED')throw new Error('W025_M02 011 retry mismatch');
+  console.log('RETRIEVE011_NATIVE_PREFIX_APPLY_RETRY=PASS');
   const stored=await db.query('SELECT version,checksum FROM schema_migrations ORDER BY version');
   if(stored.rows.length!==11||stored.rows.some((r,i)=>r.version!==items[i].version||r.checksum!==items[i].checksum))
     throw new Error('W025_M01 checksum mismatch');
