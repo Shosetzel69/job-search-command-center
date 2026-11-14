@@ -637,6 +637,31 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
         existing = cursor.fetchone()
 
     repost_of_posting_id = _resolve_repost(cursor, posting)
+    # Unverified detail must not replace an existing canonical/source record.
+    # All projected postings carry job_quality; a missing verdict is unverified.
+    verified = (posting.payload.get("job_quality") or {}).get("verdict") == "VALID"
+
+    if existing and not verified:
+        posting_id, job_id = str(existing[0]), str(existing[1])
+        cursor.execute(
+            """
+            UPDATE source_postings
+               SET lifecycle_status = 'ACTIVE', last_seen_at = %s,
+                   inactive_at = NULL, seen_run_id = %s
+             WHERE posting_id = %s
+            """,
+            (now, run_id, posting_id),
+        )
+        cursor.execute(
+            """
+            UPDATE canonical_jobs
+               SET lifecycle_status = 'ACTIVE', last_seen_at = %s,
+                   inactive_at = NULL, retention_until = NULL
+             WHERE job_id = %s
+            """,
+            (now, job_id),
+        )
+        return job_id, False
 
     if existing:
         posting_id, job_id = str(existing[0]), str(existing[1])
@@ -756,6 +781,20 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
             ),
         )
         created = True
+
+    if not verified:
+        # New posting may reference an existing canonical job from another
+        # source. Do not replace that job's content with unverified fields.
+        cursor.execute(
+            """
+            UPDATE canonical_jobs
+               SET lifecycle_status = 'ACTIVE', last_seen_at = %s,
+                   inactive_at = NULL, retention_until = NULL
+             WHERE job_id = %s
+            """,
+            (now, job_id),
+        )
+        return job_id, created
 
     cursor.execute(
         """
