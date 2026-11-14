@@ -33,7 +33,7 @@ function metadata(state, coverage, aggregate, request = null) {
   };
 }
 
-export function decideAdminRefresh({ state, coverage, runtime, activeRun, aggregate, request }) {
+export function decideAdminRefresh({ state, coverage, runtime, activeRun, aggregate, request, manual = false }) {
   if (runtime?.appEnv === 'prod') {
     return { outcome:'BLOCKED_BY_POLICY', reason:'PROD_NOT_AUTHORIZED', ...metadata(state, coverage, aggregate, request) };
   }
@@ -44,7 +44,7 @@ export function decideAdminRefresh({ state, coverage, runtime, activeRun, aggreg
   if (!aggregate?.scope_count) {
     return { outcome:'BLOCKED_BY_POLICY', reason:'NO_ACTIVE_REFRESH_SCOPES', execution_mode:executionMode, ...metadata(state, coverage, aggregate, request) };
   }
-  if (coverage?.all_sufficient) {
+  if (!manual && coverage?.all_sufficient) {
     return { outcome:'REUSED_CORPUS', reason:null, execution_mode:executionMode, ...metadata(state, coverage, aggregate, request) };
   }
   if (request?.retrieve_scope?.effective_source_ids?.length === 0) {
@@ -52,7 +52,7 @@ export function decideAdminRefresh({ state, coverage, runtime, activeRun, aggreg
       ...metadata(state, coverage, aggregate, request) };
   }
   if (!request?.retrieve_scope?.scopes?.length) {
-    const reason = coverage?.blocked_by_cooldown ? 'COVERAGE_REFRESH_COOLDOWN' : 'NO_ACTIVE_REFRESH_SCOPES';
+    const reason = !manual && coverage?.blocked_by_cooldown ? 'COVERAGE_REFRESH_COOLDOWN' : 'NO_ACTIVE_REFRESH_SCOPES';
     return { outcome:'BLOCKED_BY_POLICY', reason, execution_mode:executionMode, ...metadata(state, coverage, aggregate, request) };
   }
   if (activeRun) {
@@ -88,6 +88,7 @@ export async function adminRefresh(
     buildRequest = buildRetrieveRequest,
     readCatalog = loadSourceCatalogForRefresh,
     buildIdentity = BUILD_IDENTITY,
+    intent = 'coverage',
   } = {},
 ) {
   if (!authContext?.user_id || authContext?.status !== 'ACTIVE') {
@@ -98,6 +99,8 @@ export async function adminRefresh(
   }
 
   const runtime = assertEnvironmentConfig(env, buildIdentity);
+  // Manual intent is enabled only in DEV; scope and policy remain server-owned.
+  const manual = runtime.appEnv === 'dev' && intent === 'manual';
   let sourceSnapshot = await readCatalog(env, runtime);
   let catalogOption = sourceSnapshot ? {
     sourceCatalog:sourceSnapshot.catalog,
@@ -107,16 +110,17 @@ export async function adminRefresh(
   const initialState = await readState(env);
   const initialCoverage = await readCoverage(aggregate?.scopes, env);
   let request = buildRequest({
-    scopes:initialCoverage.refresh_scopes,
+    scopes:manual ? aggregate?.scopes : initialCoverage.refresh_scopes,
     collectionFreshnessHours:initialState.collection_freshness_hours,
+    postingMaxAgeHours:initialState.policy?.posting_max_age_hours,
     ...catalogOption,
   });
 
-  let decision = decideAdminRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun:null, aggregate, request });
+  let decision = decideAdminRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun:null, aggregate, request, manual });
   if (decision.outcome !== 'STARTED_RUN') return decision;
 
   const activeRun = await getActive(env, runtime);
-  if (activeRun) return decideAdminRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun, aggregate, request });
+  if (activeRun) return decideAdminRefresh({ state:initialState, coverage:initialCoverage, runtime, activeRun, aggregate, request, manual });
 
   // Re-read before signing the final request. A concurrent ADMIN edit must
   // change the source generation/signature or fail closed at Job admission.
@@ -128,11 +132,12 @@ export async function adminRefresh(
   const currentState = await readState(env);
   const currentCoverage = await readCoverage(aggregate?.scopes, env);
   request = buildRequest({
-    scopes:currentCoverage.refresh_scopes,
+    scopes:manual ? aggregate?.scopes : currentCoverage.refresh_scopes,
     collectionFreshnessHours:currentState.collection_freshness_hours,
+    postingMaxAgeHours:currentState.policy?.posting_max_age_hours,
     ...catalogOption,
   });
-  decision = decideAdminRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, aggregate, request });
+  decision = decideAdminRefresh({ state:currentState, coverage:currentCoverage, runtime, activeRun:null, aggregate, request, manual });
   if (decision.outcome !== 'STARTED_RUN') return decision;
 
   try {

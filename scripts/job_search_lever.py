@@ -85,6 +85,10 @@ def normalize(item, site, company_name, region):
         "date_posted": None,
         "source_url": source_url,
         "sources": [{"provider": "Lever", "site": site, "region": region}],
+        "_jscc_field_provenance": {"title":"ATS_FIELD",
+            **({"description":"ATS_FIELD"} if any(str(value or "").strip() for value in description_parts) else {}),
+            **({"location":"ATS_FIELD"} if locations else {}),
+        },
         "department": categories.get("department"),
         "team": categories.get("team"),
     }

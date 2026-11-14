@@ -26,6 +26,10 @@ class FakeCursor:
     def fetchone(self):
         return self.rows.pop(0) if self.rows else None
 
+    def fetchall(self):
+        rows, self.rows = self.rows, []
+        return rows
+
 
 class SharedCorpusProjectionTests(unittest.TestCase):
     def quality_record(self, **updates):
@@ -143,6 +147,14 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         self.assertEqual(result["verdict"], "INCOMPLETE")
         self.assertEqual(result["field_provenance"]["description"], "UNKNOWN")
         self.assertIn("DESCRIPTION_PROVENANCE_UNKNOWN", result["issues"])
+
+    def test_missing_location_and_listing_title_are_not_fully_verified(self):
+        missing = repository.assess_record_quality(self.quality_record(location=""))
+        self.assertEqual(missing["verdict"], "INCOMPLETE")
+        self.assertIn("LOCATION_EMPTY", missing["issues"])
+        listing = self.quality_record()
+        listing["_jscc_field_provenance"]["title"] = "LISTING_CARD"
+        self.assertIn("TITLE_LISTING_ONLY", repository.assess_record_quality(listing)["issues"])
 
     def test_quality_unknown_provenance_is_never_claimed_valid(self):
         record = self.quality_record()
@@ -332,7 +344,7 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
             role_family="PROJECT_DELIVERY_MANAGEMENT",
             posted_at=NOW,
             repost_of_external_job_id=None,
-            payload={},
+            payload={"job_quality": {"verdict": "VALID"}},
         )
 
     def test_new_source_posting_creates_canonical_job(self):
@@ -531,6 +543,28 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertEqual(result["status"], "persisted")
         self.assertEqual(seen["connection_string"], url)
 
+    def test_incomplete_posting_retains_existing_content(self):
+        posting = self.posting()
+        posting = repository.SharedPosting(**{
+            **posting.__dict__, "payload": {"job_quality": {"verdict": "INCOMPLETE"}},
+        })
+        cursor = FakeCursor([("post-1", "job-1")])
+        self.assertEqual(repository._upsert_posting(cursor, posting, "run", NOW), ("job-1", False))
+        updates = [sql for sql, _ in cursor.queries if sql.startswith("UPDATE")]
+        self.assertEqual(len(updates), 2)
+        self.assertTrue(all("last_seen_at" in sql for sql in updates))
+        self.assertTrue(all("payload =" not in sql and "location =" not in sql for sql in updates))
+
+    def test_incomplete_cross_source_posting_does_not_replace_canonical_content(self):
+        posting = self.posting(source_id="src-b")
+        posting = repository.SharedPosting(**{
+            **posting.__dict__, "payload": {"job_quality": {"verdict": "INCOMPLETE"}},
+        })
+        cursor = FakeCursor([None, None, ("job-1",)])
+        self.assertEqual(repository._upsert_posting(cursor, posting, "run", NOW), ("job-1", True))
+        update = next(sql for sql, _ in cursor.queries if sql.startswith("UPDATE canonical_jobs"))
+        self.assertNotIn("payload =", update)
+
     def test_canonical_upsert_versions_only_on_semantic_basis_change(self):
         cursor = FakeCursor([("post-1", "job-1")])
         posting = self.posting()
@@ -583,3 +617,27 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class RetrieveCoverageSnapshotTests(unittest.TestCase):
+    def test_snapshot_preserves_missing_and_observed_scope(self):
+        now = datetime(2026, 11, 14, tzinfo=timezone.utc)
+        key = "a" * 64
+        missing = "b" * 64
+        cursor = FakeCursor([({"collection_freshness_hours": 24},), (key, "run-1", now, 5, 2)])
+        result = repository._coverage_snapshot(cursor, {"scopes": [{"scope_key": key}, {"scope_key": missing}]}, now)
+        self.assertEqual([x["state"] for x in result], ["SUFFICIENT", "INSUFFICIENT"])
+        self.assertEqual(result[0]["last_usable_run_id"], "run-1")
+        self.assertIsNone(result[1]["last_usable_run_id"])
+
+
+class CanonicalPublicationCountTests(unittest.TestCase):
+    def test_canonical_publication_uses_exact_run_and_preferred_posting_order(self):
+        cursor = FakeCursor([("src-a",2),("src-b",1)])
+        counts = repository._canonical_publication_counts(cursor,"run-42")
+        self.assertEqual(counts,{"src-a":2,"src-b":1})
+        sql,params = cursor.queries[0]
+        self.assertEqual(params,("run-42",))
+        self.assertIn("SELECT DISTINCT job_id",sql)
+        self.assertIn("seen_run_id=%s",sql)
+        self.assertIn("last_seen_at DESC, posting_id ASC",sql)
+        self.assertIn("j.lifecycle_status='ACTIVE'",sql)

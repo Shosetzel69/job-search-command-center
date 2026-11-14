@@ -4,6 +4,7 @@ import hashlib
 import os
 import json
 import socket
+from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
@@ -316,9 +317,12 @@ def emit_source_final(run_id, item):
 
 def aggregate_source_results(plan):
     outcome_counts = {}
+    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope")}
     error_code_counts = {}
     failure_stage_counts = {}
     for item in plan:
+        for key in record_totals:
+            record_totals[key] += int(item.get(key) or 0)
         outcome = item.get("outcome") or "unknown"
         outcome_counts[outcome] = outcome_counts.get(outcome, 0) + 1
         if outcome != "failed":
@@ -328,6 +332,7 @@ def aggregate_source_results(plan):
         error_code_counts[error_code] = error_code_counts.get(error_code, 0) + 1
         failure_stage_counts[failure_stage] = failure_stage_counts.get(failure_stage, 0) + 1
     return {
+        "source_record_totals": record_totals,
         "source_outcome_counts": dict(sorted(outcome_counts.items())),
         "source_failure_codes": dict(sorted(error_code_counts.items())),
         "source_failure_stages": dict(sorted(failure_stage_counts.items())),
@@ -345,6 +350,31 @@ def _dev_osf_override(source, route):
             and route is not None
             and route.get("connector") == "zoho_recruit"
             and route.get("career_url") == "https://osf-global.zohorecruit.com/careers")
+
+
+def provider_scope_capability(item, config):
+    """Report actual execution behavior, not speculative provider capabilities."""
+    connector = item.get("connector")
+    if not (config or {}).get("_jscc_targeted_collection"):
+        return "ENUMERATION_ONLY", "NO_BOUNDED_SCOPE"
+    if connector == "jobspipe" and (config or {}).get("jobspipe_mode", "direct") in {"direct", "apify"}:
+        return "QUERY_BOUNDED", "JOBSPIPE_EXISTING_ROLE_GEO_QUERY"
+    if connector == "workday" and workday.scope_search_terms(config):
+        return "QUERY_BOUNDED", "WORKDAY_CXS_SEARCH_TEXT_ROLE_TERMS"
+    if connector == "eightfold_public" and eightfold_public.bounded_terms(config):
+        return "QUERY_BOUNDED", "EIGHTFOLD_EXISTING_PCSX_QUERY_TERMS"
+    if connector == "smartrecruiters" and smartrecruiters.bounded_terms(config):
+        return "QUERY_BOUNDED", "SMARTRECRUITERS_PUBLIC_Q_ROLE_TERMS"
+    if connector == "public_board" and public_boards.scoped_public_query(item.get("source"), config):
+        return "QUERY_BOUNDED", "PUBLIC_KEYWORD_SINGLE_COMMON_ROLE_TERM"
+    if connector == "public_board" and item.get("source") == "Freelancer.com":
+        return "QUERY_BOUNDED", "FREELANCER_OR_SEARCH_QUERY_ROLE_TERMS"
+    if connector == "public_board":
+        spec = public_boards.PUBLIC_BOARD_SOURCES.get(item.get("source"), {})
+        url = str(spec.get("url", "")).lower()
+        if any(token in url for token in ("project-manager", "project_manager", "project%20manager", "project-management", "project%20management", "/pm?", "it-project-manager")):
+            return "STATIC_PRESELECTED", "LEGACY_ROLE_ROUTE_NOT_DYNAMIC"
+    return "ENUMERATION_ONLY", "NO_VERIFIED_DYNAMIC_QUERY_IN_ADAPTER"
 
 
 def build_plan(catalog):
@@ -427,12 +457,17 @@ def tag_collection_records(item, results, run_id=None):
     """Attach source identity, validate fields and isolate provably invalid jobs."""
     quality_counts = {"VALID": 0, "INCOMPLETE": 0, "INVALID": 0}
     issue_counts = {}
+    rejected_evidence = []
+    collected = 0
+    malformed = 0
     for result in results:
         if not result.ok:
             continue
         accepted = []
         for record in result.records or []:
+            collected += 1
             if not isinstance(record, dict):
+                malformed += 1
                 accepted.append(record)
                 continue
             record.setdefault("_jscc_source_id", item.get("source_id"))
@@ -447,7 +482,15 @@ def tag_collection_records(item, results, run_id=None):
                 issue_counts[code] = issue_counts.get(code, 0) + 1
             if quality["verdict"] != "INVALID":
                 accepted.append(record)
+            else:
+                # Sanitized evidence only; never persist raw rejected posting content.
+                rejected_evidence.append(quality)
         result.records = accepted
+    item["records_collected_raw"] = collected
+    item["records_malformed"] = malformed
+    item["records_quality_excluded"] = quality_counts["INVALID"]
+    item["records_scope_excluded"] = 0
+    item["rejected_quality_evidence"] = rejected_evidence
     item["quality_counts"] = quality_counts
     item["quality_issues"] = dict(sorted(issue_counts.items()))
     item["_jscc_quality_rejected"] = quality_counts["INVALID"]
@@ -503,6 +546,7 @@ def apply_retrieve_scope(item, results, config):
         return results
 
     scoped_results = []
+    excluded = 0
     for result in results:
         if not result.ok:
             scoped_results.append(result)
@@ -514,6 +558,8 @@ def apply_retrieve_scope(item, results, config):
             posting = shared_corpus.prepare_posting(record, source_hint=item.get("source"))
             if posting and any(_posting_matches_scope(posting, scope) for scope in scopes if isinstance(scope, dict)):
                 records.append(record)
+            else:
+                excluded += 1
         scoped_results.append(engine.CollectionResult(
             result.connector,
             result.query,
@@ -525,6 +571,7 @@ def apply_retrieve_scope(item, results, config):
             result.failure_stage,
             result.http_status,
         ))
+    item["records_scope_excluded"] = excluded
     return scoped_results
 
 
@@ -652,6 +699,8 @@ def record_results(item, results):
     ok = [result for result in results if result.ok]
     failed = [result for result in results if not result.ok]
     item["records"] = sum(len(result.records) for result in ok)
+    item["records_after_scope"] = item["records"]
+    item["provider_reported_total"] = sum(int(result.total_available or 0) for result in ok)
     item["error"] = "; ".join(
         diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
     ) or None
@@ -737,17 +786,35 @@ def record_results(item, results):
     } for result in results]
 
 
-def collect_ats(item, role_family=None):
+def collect_ats(item, role_family=None, config=None):
     route = item.get("connector_config") or {}
     connector = item["connector"]
     company = item["source"]
     if connector == "smartrecruiters":
-        return smartrecruiters.collect(route["company_identifier"])
+        terms = smartrecruiters.bounded_terms(config)
+        return smartrecruiters.collect(route["company_identifier"], **({"search_terms": terms} if terms else {}))
     if connector == "workday":
-        return workday.collect(
+        terms = workday.scope_search_terms(config)
+        query_kwargs = {"search_terms": terms} if terms else {}
+        results = workday.collect(
             route["career_url"], company,
             detail_workers=route.get("detail_workers", 4),
+            **query_kwargs,
         )
+        if company == "NTT DATA Romania" and (config or {}).get("_jscc_targeted_collection"):
+            # The approved Workday URL is global. Keep only explicitly local
+            # postings or unverified geography; never rewrite US into RO.
+            # Mixed country postings with any Romanian location remain eligible.
+            for result in results:
+                if result.ok:
+                    filtered = []
+                    for row in result.records:
+                        posting = shared_corpus.prepare_posting(row, source_hint=company)
+                        if (posting is None or not row.get("_jscc_country_scope_complete")
+                                or not posting.country_codes or "RO" in posting.country_codes):
+                            filtered.append(row)
+                    result.records = filtered
+        return results
     if connector == "greenhouse":
         return greenhouse.collect(route["board_token"], company)
     if connector == "ashby":
@@ -767,9 +834,10 @@ def collect_ats(item, role_family=None):
     if connector == "workable":
         return workable.collect(route["subdomain"], company)
     if connector == "softgarden":
-        return softgarden.collect(route["feed_url"], company)
+        return softgarden.collect(route["feed_url"], company, **({"regional_scope": True, "role_terms": workday.scope_search_terms(config)} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
     if connector == "eightfold_public":
-        return eightfold_public.collect(route["base_url"], route["domain"], company)
+        terms = eightfold_public.bounded_terms(config)
+        return eightfold_public.collect(route["base_url"], route["domain"], company, **({"search_terms": terms} if terms else {}))
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
@@ -817,7 +885,7 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
                 # without widening this provider-specific filter to mixed families.
                 pm_family_only = families == {'PROJECT_DELIVERY_MANAGEMENT'}
                 family = 'PROJECT_MANAGEMENT' if pm_family_only else None
-                results = collect_ats(item, role_family=family)
+                results = collect_ats(item, role_family=family, config=config)
             elif connector == "traefik":
                 results = traefik.collect(item["url"], item["source"])
             elif connector == "jobicy":
@@ -904,6 +972,13 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         sources_configured=len(plan),
         sources_active=sum(item["active"] for item in plan),
     )
+    for item in plan:
+        if item.get("status") == "pending":
+            mode_name, evidence = provider_scope_capability(item, collection_config)
+        else:
+            mode_name, evidence = "NOT_EXECUTED", str(item.get("outcome") or item.get("status") or "unknown")
+        item["provider_scope_mode"] = mode_name
+        item["provider_scope_evidence"] = evidence
     collection, metadata, mode = collect_sources(
         collection_config, state, now, plan, run_id, progress_callback
     )
@@ -961,7 +1036,29 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         (shared_corpus_result or {}).get("postings_created", 0)
         + (shared_corpus_result or {}).get("postings_updated", 0)
     )
+    per_source = (shared_corpus_result or {}).get("per_source_postings", {})
+    publication = (shared_corpus_result or {}).get("canonical_publication_by_preferred_source")
+    publication_known = isinstance(publication, dict)
+    planned_ids = {item["source_id"] for item in plan}
+    for item in plan:
+        counts = per_source.get(item["source_id"], {})
+        item["postings_created"] = int(counts.get("postings_created", 0))
+        item["postings_updated"] = int(counts.get("postings_updated", 0))
+        item["canonical_jobs_published_this_run"] = int(publication.get(item["source_id"], 0)) if publication_known else None
     status.update(aggregate_source_results(plan))
+    for item in plan:
+        if item.get("status") in {"skipped", "inactive", "unsupported"}:
+            item["provider_scope_mode"] = "NOT_EXECUTED"
+            item["provider_scope_evidence"] = str(item.get("outcome") or item.get("status"))
+    status["provider_scope_inventory"] = dict(sorted(Counter(item.get("provider_scope_mode", "UNKNOWN") for item in plan).items()))
+    status["canonical_publication"] = {
+        "basis": "distinct_active_shared_jobs_by_api_preferred_source",
+        "measured": publication_known,
+        "canonical_jobs_published_this_run": sum(publication.values()) if publication_known else None,
+        "attributed_to_planned_sources": sum(value for key, value in publication.items() if key in planned_ids) if publication_known else None,
+        "attributed_to_other_sources": sum(value for key, value in publication.items() if key not in planned_ids) if publication_known else None,
+        "profile_opportunities": None,
+    }
     attempted = [item for item in plan if item["status"] in {"completed", "failed"}]
     status.update({"source_strategy": config.get("source_strategy") or "all active sources equally",
                    "sources_configured": len(plan), "sources_active": sum(item["active"] for item in plan),

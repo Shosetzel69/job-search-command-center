@@ -124,9 +124,15 @@ def normalize(item, tenant, company_name):
         "employment_statuses": engine.list_values(
             item.get("type") or item.get("employment_type") or item.get("employmentType")
         ),
-        "date_posted": item.get("published_date") or item.get("publishedAt") or item.get("created_at"),
+        "date_posted": item.get("published_date") or item.get("publishedAt"),
+        "source_created_at": item.get("created_at"),
         "source_url": str(source_url),
         "sources": [{"provider": "BreezyHR", "tenant": tenant}],
+        "_jscc_field_provenance": {"title":"ATS_FIELD",
+            **({"description":"ATS_FIELD"} if item.get("description") or item.get("description_html") or item.get("descriptionHtml") else {}),
+            **({"location":"ATS_FIELD"} if location else {}),
+            **({"date_posted":"ATS_FIELD"} if item.get("published_date") or item.get("publishedAt") else {}),
+        },
         "department": department,
     }
 

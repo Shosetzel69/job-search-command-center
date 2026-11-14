@@ -126,6 +126,7 @@ export function coverageScopeKey(scope) {
 export function buildRetrieveRequest({
   scopes,
   collectionFreshnessHours,
+  postingMaxAgeHours = 24,
   sourceCatalog = sourcesCatalog,
   sourceCatalogGeneration = null,
 } = {}) {
@@ -137,6 +138,8 @@ export function buildRetrieveRequest({
   const sourceIds = effectiveSourceIds(sourceCatalog);
   const freshness = Number(collectionFreshnessHours);
   const safeFreshness = Number.isFinite(freshness) && freshness > 0 ? Math.min(freshness, 24 * 365) : 24;
+  const postingAge = Number(postingMaxAgeHours);
+  const safePostingAge = Number.isInteger(postingAge) && postingAge >= 1 && postingAge <= 8760 ? postingAge : 24;
   const generation = sourceCatalogGeneration === null ? null : String(sourceCatalogGeneration);
   if (generation !== null && !/^(?:0|[1-9][0-9]*)$/.test(generation)) {
     throw Object.assign(new Error('Invalid operational source catalog generation'), {status:409});
@@ -146,7 +149,7 @@ export function buildRetrieveRequest({
     scopes:keyedScopes,
     effective_source_ids:sourceIds,
     ...(generation === null ? {} : {source_catalog_generation:generation}),
-    freshness:{ collection_freshness_hours:safeFreshness },
+    freshness:{ collection_freshness_hours:safeFreshness, posting_max_age_hours:safePostingAge },
   });
   const canonical = JSON.stringify(stablePayload(scope));
   const requestSignature = createHash('sha256').update(canonical, 'utf8').digest('hex');

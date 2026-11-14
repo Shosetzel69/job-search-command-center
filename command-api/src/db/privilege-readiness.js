@@ -11,6 +11,7 @@ export const TENANT_AWARE_TABLES = Object.freeze([
   'applications',
   'profile_notes',
   'profile_ui_preferences',
+  'refresh_requests',
 ]);
 
 // Compatibility alias for older callers/tests; RLS is no longer the enforcement model.

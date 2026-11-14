@@ -188,3 +188,12 @@ test('signed source generation changes signature even when active IDs do not cha
   assert.notEqual(zero.request_signature,a.request_signature);
   assert.throws(()=>buildRetrieveRequest({...input,sourceCatalogGeneration:'-1'}),/generation/);
 });
+
+ test('posting age is signed independently of frequency', () => {
+  const input={scopes:[{role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamilies:['project_management']}],collectionFreshnessHours:48};
+  const a=buildRetrieveRequest({...input,postingMaxAgeHours:12});
+  const b=buildRetrieveRequest({...input,postingMaxAgeHours:72});
+  assert.equal(a.retrieve_scope.freshness.collection_freshness_hours,48);
+  assert.equal(a.retrieve_scope.freshness.posting_max_age_hours,12);
+  assert.notEqual(a.request_signature,b.request_signature);
+});

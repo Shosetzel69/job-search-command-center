@@ -57,7 +57,7 @@ def _query_specs(config: dict[str, Any]) -> list[tuple[str, dict[str, Any]]]:
         raise RuntimeError("No enabled role titles")
     target_countries = engine.resolve_target_country_codes(config)
     collection_hours = int(config.get("collection_freshness_hours", config.get("freshness_hours", 24)))
-    posted_days = max(1, math.ceil(collection_hours / 24))
+    posted_days = max(1, math.ceil(int(config.get('posting_max_age_hours', collection_hours)) / 24))
     max_items = max(100, min(20000, int(config.get("jobspipe_apify_max_items_per_run", 5000))))
     target_limit = max(1, int(round(max_items * 0.4))) if target_countries else 0
     remote_limit = max_items - target_limit

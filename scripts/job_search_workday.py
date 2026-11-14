@@ -69,12 +69,16 @@ def _request_json(request, opener=urlopen, max_attempts=3):
             last_error = exc
             if exc.code != 429 or attempt + 1 >= max_attempts:
                 raise
+            # Honor the provider's Retry-After rather than retrying earlier.
+            # A long cooldown is deferred to the next authorized run.
             retry_after = 0
             try:
                 retry_after = int((exc.headers or {}).get("Retry-After") or 0)
             except (TypeError, ValueError):
                 retry_after = 0
-            time.sleep(min(5, max(1, retry_after or (attempt + 1))))
+            if retry_after > 20:
+                raise
+            time.sleep(max(1, retry_after or 2 ** attempt))
     else:
         raise last_error
     if len(body) > MAX_BYTES:
@@ -85,12 +89,12 @@ def _request_json(request, opener=urlopen, max_attempts=3):
     return payload
 
 
-def _post_page(board, offset, opener=urlopen):
+def _post_page(board, offset, opener=urlopen, search_text=""):
     payload = json.dumps({
         "appliedFacets": {},
         "limit": PAGE_SIZE,
         "offset": offset,
-        "searchText": "",
+        "searchText": search_text,
     }).encode("utf-8")
     request = Request(
         board["cxs_base"] + "/jobs",
@@ -107,9 +111,18 @@ def _post_page(board, offset, opener=urlopen):
     return _request_json(request, opener=opener)
 
 
+def _valid_external_path(value):
+    """Accept only provider-local CXS paths; never construct external URLs."""
+    if not isinstance(value, str) or not value.startswith("/") or value.startswith("//"):
+        return False
+    if any(char in value for char in ("\\", "?", "#", "\r", "\n", "\t", " ")):
+        return False
+    return all(part not in {".", ".."} for part in value.split("/"))
+
+
 def _get_detail(board, external_path, opener=urlopen):
     path = str(external_path or "").strip()
-    if not path.startswith("/"):
+    if not _valid_external_path(path):
         raise ValueError("Malformed Workday posting: invalid externalPath")
     request = Request(
         board["cxs_base"] + path,
@@ -171,6 +184,14 @@ def normalize(detail, summary, board, company_name):
             location = "; ".join([value for value in [location, *extra_locations] if value])
 
     country = _country_from_detail(info)
+    countries = [country] if country else []
+    additional_verified = isinstance(additional, list)
+    for item in additional if isinstance(additional, list) else []:
+        extra_country = _country_from_detail(item) if isinstance(item, dict) else None
+        if not extra_country:
+            additional_verified = False
+        elif extra_country not in countries:
+            countries.append(extra_country)
     remote_text = " ".join(str(info.get(key) or "") for key in ("remoteType", "workplaceType"))
     remote = bool(re.search(r"\bremote\b", remote_text, re.I) or re.search(r"\bremote\b", location, re.I))
     employment = info.get("timeType") or info.get("employmentType")
@@ -182,17 +203,66 @@ def normalize(detail, summary, board, company_name):
         "company": str(company_name).strip(),
         "description": plain_text(info.get("jobDescription")),
         "location": location,
-        "countries": [country] if country else [],
+        "countries": countries,
+        "_jscc_country_scope_complete": bool(country and additional_verified),
         "remote": remote,
         "work_arrangement": "remote" if remote else "onsite",
         "employment_statuses": engine.list_values(employment),
         "date_posted": info.get("startDate"),
         "source_url": source_url,
         "sources": [{"provider": "Workday", "tenant": board["tenant"], "site": board["site"]}],
+        "_jscc_field_provenance": {
+            **({"title": "ATS_FIELD"} if title else {}),
+            **({"description": "ATS_FIELD"} if info.get("jobDescription") else {}),
+            **({"location": "ATS_FIELD"} if location else {}),
+            **({"date_posted": "ATS_FIELD"} if info.get("startDate") else {}),
+        },
     }
 
 
-def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1):
+# Broad tokens cover all known title alternatives in the canonical subfamily
+# contract. Never silently truncate a mixed scope to a subset of the terms.
+from retrieve_provider_queries import SCOPE_TERMS, scope_search_terms
+
+
+def _scoped_summaries(board, terms, max_postings, opener):
+    """Round-robin CXS search, with the same total paging and detail budget.
+    A capped or failed search is partial, never authoritative absence.
+    """
+    active = {term: 0 for term in terms}
+    unique = {}
+    pages_left = (max_postings + PAGE_SIZE - 1) // PAGE_SIZE
+    partial = False
+    while active and pages_left and len(unique) < max_postings:
+        for term, offset in list(active.items()):
+            if not pages_left or len(unique) >= max_postings:
+                break
+            pages_left -= 1
+            page = _post_page(board, offset, opener=opener, search_text=term)
+            rows = page.get("jobPostings")
+            if not isinstance(rows, list):
+                raise ValueError("Workday jobs response must contain a jobPostings array")
+            for row in rows:
+                if not isinstance(row, dict):
+                    partial = True
+                    continue
+                path = row.get("externalPath")
+                if not _valid_external_path(path):
+                    partial = True
+                    continue
+                if len(unique) < max_postings:
+                    unique[path] = row
+                elif path not in unique:
+                    partial = True
+            total = page.get("total")
+            if len(rows) < PAGE_SIZE or (isinstance(total, int) and offset + PAGE_SIZE >= total):
+                active.pop(term)
+            else:
+                active[term] += PAGE_SIZE
+    return list(unique.values()), partial or bool(active)
+
+
+def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1, search_terms=()):
     company_name = str(company_name or "").strip()
     if not company_name:
         raise ValueError("Workday company_name is required")
@@ -203,9 +273,15 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen,
 
     board = parse_career_url(career_url)
     summaries = []
+    scoped_partial = False
+    if search_terms:
+        terms = tuple(sorted(set(search_terms)))
+        if len(terms) > 8 or any(term not in {v for values in SCOPE_TERMS.values() for v in values} for term in terms):
+            raise ValueError("Invalid Workday search terms")
+        summaries, scoped_partial = _scoped_summaries(board, terms, max_postings, opener)
     offset = 0
     total = None
-    while len(summaries) < max_postings:
+    while not search_terms and len(summaries) < max_postings:
         payload = _post_page(board, offset, opener=opener)
         postings = payload.get("jobPostings")
         if not isinstance(postings, list):
@@ -224,15 +300,33 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen,
         if not isinstance(summary, dict):
             raise ValueError("Malformed Workday posting summary")
 
+    # One stale/malformed CXS row must not discard the other valid jobs.
+    # Preserve a source-level partial diagnostic instead of silently hiding it.
+    invalid_paths = sum(not _valid_external_path(s.get("externalPath")) for s in selected)
+    valid = [s for s in selected if _valid_external_path(s.get("externalPath"))]
+    if selected and not valid:
+        raise ValueError("Malformed Workday posting: invalid externalPath")
+
     def load_record(summary):
         detail = _get_detail(board, summary.get("externalPath"), opener=opener)
         return normalize(detail, summary, board, company_name)
 
-    if detail_workers == 1 or len(selected) < 2:
-        records = [load_record(summary) for summary in selected]
+    if detail_workers == 1 or len(valid) < 2:
+        records = [load_record(summary) for summary in valid]
     else:
         with ThreadPoolExecutor(max_workers=detail_workers) as pool:
-            records = list(pool.map(load_record, selected))
+            records = list(pool.map(load_record, valid))
 
     connector = f"workday:{board['tenant']}:{board['site']}"
-    return [engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
+    result = [engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
+    if scoped_partial:
+        result.append(engine.CollectionResult(connector, "bounded_search_partial", False, [], 0,
+            "Workday scoped search incomplete within existing request cap or malformed rows",
+            error_code="SCHEMA_ERROR", failure_stage="parse"))
+    if invalid_paths:
+        result.append(engine.CollectionResult(
+            connector, "invalid_externalPath", False, [], 0,
+            f"Skipped {invalid_paths} Workday posting(s) with invalid externalPath",
+            error_code="SCHEMA_ERROR", failure_stage="parse",
+        ))
+    return result

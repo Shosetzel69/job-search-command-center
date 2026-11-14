@@ -355,6 +355,10 @@ def assess_record_quality(
         issues.add("DESCRIPTION_EQUALS_TITLE")
     if description and provenance["description"] == "LISTING_CARD":
         issues.add("DESCRIPTION_CARD_CONTEXT")
+    if not location:
+        issues.add("LOCATION_EMPTY")
+    if provenance["title"] == "LISTING_CARD":
+        issues.add("TITLE_LISTING_ONLY")
     if location and provenance["location"] == "LISTING_CARD":
         issues.add("LOCATION_UNSTRUCTURED_CONTEXT")
     if location and SALARY_MARKUP.search(location):
@@ -637,6 +641,31 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
         existing = cursor.fetchone()
 
     repost_of_posting_id = _resolve_repost(cursor, posting)
+    # Unverified detail must not replace an existing canonical/source record.
+    # All projected postings carry job_quality; a missing verdict is unverified.
+    verified = (posting.payload.get("job_quality") or {}).get("verdict") == "VALID"
+
+    if existing and not verified:
+        posting_id, job_id = str(existing[0]), str(existing[1])
+        cursor.execute(
+            """
+            UPDATE source_postings
+               SET lifecycle_status = 'ACTIVE', last_seen_at = %s,
+                   inactive_at = NULL, seen_run_id = %s
+             WHERE posting_id = %s
+            """,
+            (now, run_id, posting_id),
+        )
+        cursor.execute(
+            """
+            UPDATE canonical_jobs
+               SET lifecycle_status = 'ACTIVE', last_seen_at = %s,
+                   inactive_at = NULL, retention_until = NULL
+             WHERE job_id = %s
+            """,
+            (now, job_id),
+        )
+        return job_id, False
 
     if existing:
         posting_id, job_id = str(existing[0]), str(existing[1])
@@ -646,7 +675,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                SET source_name = %s,
                    external_job_id = COALESCE(%s, external_job_id),
                    canonical_url = %s,
-                   posted_at = %s,
+                   posted_at = COALESCE(%s, posted_at),
                    lifecycle_status = 'ACTIVE',
                    last_seen_at = %s,
                    inactive_at = NULL,
@@ -756,6 +785,20 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
             ),
         )
         created = True
+
+    if not verified:
+        # New posting may reference an existing canonical job from another
+        # source. Do not replace that job's content with unverified fields.
+        cursor.execute(
+            """
+            UPDATE canonical_jobs
+               SET lifecycle_status = 'ACTIVE', last_seen_at = %s,
+                   inactive_at = NULL, retention_until = NULL
+             WHERE job_id = %s
+            """,
+            (now, job_id),
+        )
+        return job_id, created
 
     cursor.execute(
         """
@@ -879,7 +922,34 @@ def _complete_source_ids(plan: Sequence[Mapping[str, Any]]) -> set[str]:
         _text(item.get("source_id"))
         for item in plan
         if item.get("outcome") in COMPLETE_SOURCE_OUTCOMES and _text(item.get("source_id"))
+        and not (item.get("quality_counts") or {}).get("INVALID")
+        and not (item.get("quality_counts") or {}).get("INCOMPLETE")
+        and not item.get("records_malformed")
     }
+
+
+def _canonical_publication_counts(cursor, run_id):
+    """Count distinct active shared jobs actually touched by this run.
+
+    Source attribution follows /me/jobs' preferred-posting ordering. These
+    are shared corpus counts, not tenant/profile opportunities or UI page sizes.
+    The same canonical job is counted once even if several sources saw it.
+    """
+    cursor.execute("""
+        SELECT preferred.source_id, count(*)::integer
+          FROM (SELECT DISTINCT job_id FROM source_postings WHERE seen_run_id=%s) touched
+          JOIN canonical_jobs j ON j.job_id=touched.job_id AND j.lifecycle_status='ACTIVE'
+          JOIN LATERAL (
+              SELECT source_id
+                FROM source_postings
+               WHERE job_id=j.job_id
+               ORDER BY CASE lifecycle_status WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
+                        last_seen_at DESC, posting_id ASC
+               LIMIT 1
+          ) preferred ON true
+         GROUP BY preferred.source_id
+    """, (run_id,))
+    return {str(source_id): int(count) for source_id, count in cursor.fetchall()}
 
 
 def persist_collection(
@@ -923,6 +993,7 @@ def persist_collection(
 
     created = 0
     updated = 0
+    per_source = {}
     with connect(connection_string) as connection:
         with connection.cursor() as cursor:
             cursor.execute("SELECT current_database()")
@@ -935,12 +1006,16 @@ def persist_collection(
 
             for posting in postings:
                 _, was_created = _upsert_posting(cursor, posting, run_id, now)
+                counts = per_source.setdefault(posting.source_id, {"postings_created": 0, "postings_updated": 0})
                 if was_created:
                     created += 1
+                    counts["postings_created"] += 1
                 else:
                     updated += 1
+                    counts["postings_updated"] += 1
 
             advanced = _advance_lifecycle(cursor, complete_source_ids, run_id, now)
+            publication = _canonical_publication_counts(cursor, run_id) if postings else {}
 
     return {
         "status": "persisted",
@@ -948,6 +1023,9 @@ def persist_collection(
         "records_skipped": skipped,
         "postings_created": created,
         "postings_updated": updated,
+        "per_source_postings": per_source,
+        "canonical_jobs_published_this_run": sum(publication.values()),
+        "canonical_publication_by_preferred_source": publication,
         "lifecycle_advanced": advanced,
         "complete_sources": len(complete_source_ids),
         "lifecycle_suppressed_sources": sorted(incomplete_source_ids),
@@ -1043,6 +1121,10 @@ def shared_collection_config(
         })
         shared["_jscc_shared_collection"] = False
         shared["_jscc_targeted_collection"] = True
+        signed_age = (retrieve_scope.get("freshness") or {}).get("posting_max_age_hours", 24)
+        if isinstance(signed_age, bool) or not isinstance(signed_age, int) or not 1 <= signed_age <= 8760:
+            raise SharedCorpusError("Invalid signed posting age")
+        shared["posting_max_age_hours"] = signed_age
         shared["_jscc_retrieve_scope"] = _json_safe(retrieve_scope)
         shared["_jscc_request_signature"] = _text(request_signature).casefold()
     else:
@@ -1060,6 +1142,7 @@ def shared_collection_config(
 
 SYSTEM_COLLECTION_KEYS = (
     "collection_freshness_hours",
+    "posting_max_age_hours",
     "source_strategy",
     "web_browser_fallback_enabled",
     "jobspipe_credit_budget_per_run",
@@ -1116,9 +1199,49 @@ def apply_collection_policy(
 
     merged = dict(config)
     for key in SYSTEM_COLLECTION_KEYS:
-        if key in policy:
+        if key in policy and not (key == "posting_max_age_hours" and config.get("_jscc_targeted_collection")):
             merged[key] = policy[key]
     return merged
+
+
+def _coverage_snapshot(cursor: Any, retrieve_scope, observed_at: datetime) -> list[dict]:
+    """Non-personal snapshot of the existing Coverage authority, scoped by signed keys."""
+    scopes = (retrieve_scope or {}).get("scopes") or [] if isinstance(retrieve_scope, Mapping) else []
+    keys = sorted({_text(item.get("scope_key")).casefold() for item in scopes
+                   if isinstance(item, Mapping) and re.fullmatch(r"[0-9a-f]{64}", _text(item.get("scope_key")).casefold())})
+    if not keys:
+        return []
+    cursor.execute("SELECT policy FROM collection_policy WHERE singleton=true")
+    row = cursor.fetchone()
+    policy = row[0] if row and isinstance(row[0], Mapping) else {}
+    def bounded(key, fallback, low, high):
+        try:
+            value = float(policy.get(key, fallback))
+            return value if low <= value <= high else fallback
+        except (ValueError, TypeError):
+            return fallback
+    freshness = bounded("collection_freshness_hours", 24, .001, 8760)
+    minimum = bounded("coverage_min_corpus_volume", 1, 0, 1000000)
+    diversity_min = bounded("coverage_min_source_diversity", 1, 0, 10000)
+    cursor.execute(
+        """SELECT scope_key,last_usable_run_id,last_usable_at,corpus_volume,source_diversity
+             FROM coverage_scope_state WHERE scope_key=ANY(%s::text[])""", (keys,),
+    )
+    rows = {str(row[0]): row for row in cursor.fetchall()}
+    snapshot = []
+    for key in keys:
+        prior = rows.get(key)
+        seen = prior[2] if prior else None
+        age = max(0, (observed_at-seen).total_seconds()/3600) if isinstance(seen, datetime) else None
+        volume = int(prior[3] or 0) if prior else 0
+        diversity = int(prior[4] or 0) if prior else 0
+        state = "STALE" if age is not None and age > freshness else (
+            "SUFFICIENT" if age is not None and volume >= minimum and diversity >= diversity_min else "INSUFFICIENT")
+        snapshot.append({"scope_key":key,"state":state,"corpus_volume":volume,
+                         "source_diversity":diversity,"last_usable_run_id":prior[1] if prior else None,
+                         "last_usable_at":seen.isoformat() if isinstance(seen, datetime) else None,
+                         "observed_at":observed_at.isoformat()})
+    return snapshot
 
 
 def persist_run_started(
@@ -1155,6 +1278,7 @@ def persist_run_started(
             row = cursor.fetchone()
             if not row or str(row[0]) != expected:
                 raise SharedCorpusError(f"Connected database does not match environment binding: expected {expected}")
+            payload["coverage_before"] = _coverage_snapshot(cursor, payload.get("retrieve_scope"), started_at)
             cursor.execute(
                 """
                 INSERT INTO search_runs(
@@ -1355,6 +1479,12 @@ def persist_operational_run(
             if not row or str(row[0]) != expected:
                 raise SharedCorpusError(f"Connected database does not match environment binding: expected {expected}")
 
+            terminal_payload = dict(status)
+            scoped = isinstance(status.get("retrieve_scope"), Mapping) and bool(status["retrieve_scope"].get("scopes"))
+            if scoped:
+                cursor.execute("SELECT payload->'coverage_before' FROM search_runs WHERE run_id=%s", (run_id,))
+                previous = cursor.fetchone()
+                terminal_payload["coverage_before"] = previous[0] if previous and isinstance(previous[0], list) else None
             cursor.execute(
                 """
                 INSERT INTO search_runs(
@@ -1379,7 +1509,7 @@ def persist_operational_run(
                     int(status.get("records_inspected") or 0),
                     int(status.get("jobs_published") or 0),
                     int(status.get("excluded") or 0),
-                    json.dumps(_json_safe(dict(status)), ensure_ascii=False),
+                    json.dumps(_json_safe(terminal_payload), ensure_ascii=False),
                 ),
             )
 
@@ -1422,6 +1552,10 @@ def persist_operational_run(
                 )
 
             coverage_updated = _persist_coverage_observations(cursor, status)
+            if scoped:
+                terminal_payload["coverage_after"] = _coverage_snapshot(cursor, status.get("retrieve_scope"), datetime.now(timezone.utc))
+                cursor.execute("UPDATE search_runs SET payload=%s::jsonb WHERE run_id=%s",
+                               (json.dumps(_json_safe(terminal_payload), ensure_ascii=False), run_id))
 
             cursor.execute(
                 """
@@ -1443,4 +1577,5 @@ def persist_operational_run(
                 ),
             )
 
-    return {"status": "persisted", "run_id": run_id, "coverage_updated": coverage_updated}
+    return {"status": "persisted", "run_id": run_id, "coverage_updated": coverage_updated,
+            **({key: terminal_payload[key] for key in ("coverage_before", "coverage_after")} if scoped else {})}

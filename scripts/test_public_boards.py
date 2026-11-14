@@ -491,6 +491,9 @@ class PublicBoardAdapterTests(unittest.TestCase):
           <div>Hybrid in Romania Data Delivery Management</div>
         </section>'''
         fake_client=Mock()
+        fake_client.get.return_value=(
+            "https://careers.epam.com/en/jobs/romania", "<html>no embedded data</html>"
+        )
         with patch.object(boards,"PublicClient",return_value=fake_client), \
              patch.object(boards.browser,"render",return_value=(
                  "https://careers.epam.com/en/jobs/romania",html,{"browser_status":"rendered"}
@@ -499,6 +502,51 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(len(rows),2)
         self.assertIn("Romania",rows[0]["countries"])
         self.assertTrue(any(row["remote"] for row in rows))
+
+    def test_epam_first_party_next_data_preserves_jobs_and_partial_diagnostics(self):
+        payload = {"props": {"pageProps": {"jobs": {"total": 3, "jobs": [
+            {"uid": "id-1", "unique_id": "epam-id1", "name": "Delivery Manager",
+             "seo": {"url": "/en/vacancy/delivery-manager-id1"},
+             "description": "<p>Lead global project delivery</p>",
+             "country": [{"name": "Romania"}], "vacancy_type": "Hybrid"},
+            {"uid": "id-2", "unique_id": "epam-id2", "name": "Wrong URL",
+             "seo": {"url": "https://untrusted.example/jobs/1"},
+             "description": "<p>Should be rejected</p>"},
+            {"uid": "id-3", "unique_id": "epam-id3", "name": "Hidden",
+             "seo": {"url": "/en/vacancy/hidden-id3"},
+             "description": "<p>Hidden role</p>", "is_hidden": True},
+        ]}}}}
+        html = '<script id="__NEXT_DATA__" type="application/json">' + boards.json.dumps(payload) + '</script>'
+        fake_client = Mock()
+        fake_client.get.return_value = ("https://careers.epam.com/en/jobs/romania", html)
+        with patch.object(boards, "PublicClient", return_value=fake_client):
+            with patch.object(boards.browser, "render") as browser_render:
+                result = boards.collect({"name": "EPAM"})
+        browser_render.assert_not_called()
+        self.assertEqual(len(result), 2)
+        self.assertTrue(result[0].ok)
+        self.assertEqual(len(result[0].records), 1)
+        record = result[0].records[0]
+        self.assertEqual(record["job_title"], "Delivery Manager")
+        self.assertEqual(record["description"], "Lead global project delivery")
+        self.assertEqual(record["source_url"],
+                         "https://careers.epam.com/en/vacancy/delivery-manager-id1")
+        self.assertIn("Romania", record["countries"])
+        self.assertFalse(result[1].ok)
+        self.assertEqual(result[1].error_code, "SCHEMA_ERROR")
+
+    def test_epam_next_data_all_invalid_does_not_claim_empty_board(self):
+        payload = {"props": {"pageProps": {"jobs": {"total": 1, "jobs": [
+            {"name": "Invalid", "uid": "id-1",
+             "seo": {"url": "https://example.net/out"},
+             "description": "Description"},
+        ]}}}}
+        html = '<script id="__NEXT_DATA__">' + boards.json.dumps(payload) + '</script>'
+        fake_client = Mock()
+        fake_client.get.return_value = ("https://careers.epam.com/en/jobs/romania", html)
+        with patch.object(boards, "PublicClient", return_value=fake_client):
+            with self.assertRaisesRegex(ValueError, "no valid extractable jobs"):
+                boards.collect({"name": "EPAM"})
 
     def test_orange_softgarden_feed_normalizes_jobs(self):
         payload={
@@ -867,6 +915,16 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertEqual(by_title["IT Project Manager"]["date_posted"],"2026-03-03T00:00:00+00:00")
         self.assertIn("Romania",by_title["IT Project Manager"]["countries"])
         self.assertNotIn("Electrician",by_title)
+
+    def test_freelancer_query_is_derived_from_scope(self):
+        from urllib.parse import parse_qs, urlsplit
+        url = boards.PUBLIC_BOARD_SOURCES["Freelancer.com"]["url"]
+        config = {"_jscc_targeted_collection": True}
+        with patch.object(boards.engine, "configured_titles", return_value=["Business Analysis", "Product Owner"]):
+            scoped = boards.scoped_freelancer_url(url, config)
+        self.assertEqual(parse_qs(urlsplit(scoped).query)["or_search_query"], ["Business Analysis Product Owner"])
+        self.assertEqual(parse_qs(urlsplit(scoped).query)["limit"], ["100"])
+        self.assertEqual(boards.scoped_freelancer_url(url, {}), url)
 
     def test_freelancer_api_normalizes_active_projects(self):
         payload={"result":{"projects":[{
@@ -1383,6 +1441,174 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(result.records[0]["remote"])
         self.assertTrue(boards.browser_required("Torre"))
 
+    def test_eu_careers_route_uses_current_selection_portal(self):
+        self.assertEqual(
+            boards.PUBLIC_BOARD_SOURCES["EU Careers / EPSO"]["url"],
+            "https://selection.eu-careers.europa.eu/en/job-opportunities/open-vacancies/cast",
+        )
+
+    def test_torre_route_uses_first_party_parent_host_for_browser_scope(self):
+        from urllib.parse import urlsplit
+        url = boards.PUBLIC_BOARD_SOURCES["Torre"]["url"]
+        self.assertEqual(urlsplit(url).hostname, "torre.ai")
+        self.assertEqual(boards.browser._site_root(urlsplit(url).hostname), "torre.ai")
+
+    def test_github_careers_authoritative_zero_is_not_schema_error(self):
+        html = b"""<html><body><h2>0 results</h2>
+          There are currently no jobs that match your search criteria.
+        </body></html>"""
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html)):
+            rows = boards._linked_job_board(
+                "https://www.github.careers/careers-home/jobs",
+                "GitHub", r"/careers-home/jobs/\\d+",
+            )
+        self.assertEqual(rows, [])
+
+    def test_github_careers_missing_jobs_without_zero_proof_is_schema_error(self):
+        html = b"<html><body>Access pending verification</body></html>"
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", html)):
+            with self.assertRaisesRegex(ValueError, "no extractable job links"):
+                boards._linked_job_board(
+                    "https://www.github.careers/careers-home/jobs",
+                    "GitHub", r"/careers-home/jobs/\\d+",
+                )
+
+    def test_socgen_malformed_posting_keeps_valid_rows_and_reports_partial(self):
+        html = '''<section>
+            <a href="/en/job-offers/invalid-1-en">Bad Posting</a>
+            <a href="/en/job-offers/valid-2-en">Delivery Manager</a>
+            Romania
+        </section>'''
+        fake_client = Mock()
+        fake_client.get.return_value = (
+            "https://careers.societegenerale.com/en/Technical/all-job-offers", html
+        )
+        original_record = boards._record
+
+        def fail_one_record(provider, identity, title, company, description, url, **kw):
+            if title == "Bad Posting":
+                raise ValueError("Malformed Societe Generale listing: missing title/url")
+            return original_record(provider, identity, title, company, description, url, **kw)
+
+        with patch.object(boards, "PublicClient", return_value=fake_client):
+            with patch.object(boards, "_record", side_effect=fail_one_record):
+                results = boards.collect({"name": "Societe Generale"})
+        self.assertEqual(len(results), 2)
+        self.assertTrue(results[0].ok)
+        self.assertEqual(len(results[0].records), 1)
+        self.assertEqual(results[0].records[0]["job_title"], "Delivery Manager")
+        self.assertFalse(results[1].ok)
+        self.assertEqual(results[1].error_code, "SCHEMA_ERROR")
+        self.assertEqual(results[1].failure_stage, "parse")
+
+    def test_socgen_all_malformed_still_fails(self):
+        html = '<a href="/en/job-offers/invalid-1-en">Bad Posting</a>'
+        fake_client = Mock()
+        fake_client.get.return_value = (
+            "https://careers.societegenerale.com/en/Technical/all-job-offers", html
+        )
+        with patch.object(boards, "PublicClient", return_value=fake_client):
+            with patch.object(boards, "_record", side_effect=ValueError("invalid")):
+                with self.assertRaisesRegex(ValueError, "no extractable job links"):
+                    boards.collect({"name": "Societe Generale"})
+
+    def test_luxoft_uses_first_party_jobposting_not_social_title_or_card_context(self):
+        data = {
+            "@type": "JobPosting",
+            "title": "Technical Analyst - Data, Integration and APIs (Aladdin Wealth)",
+            "description": "<p>Own technical analysis of data mappings, integration APIs and reconciliation.</p>"
+                           "<p>Develop detailed integration specifications and testing plans.</p>"
+                           "<p>Coordinate complex delivery, data quality, solution design and testing.</p>",
+            "jobLocation": {"address": {"addressLocality": "Bucharest",
+                                        "addressCountry": "RO"}},
+            "datePosted": "2027-01-01 00:00:00",
+            "employmentType": "FULL_TIME",
+        }
+        link = "https://career.luxoft.com/jobs/technical-analyst-data-integration-and-apis-aladdin-wealth-28810"
+        html = '<script type="application/ld+json">' + boards.json.dumps(data) + '</script>'
+        result = boards._luxoft_details(html, link, now=boards.datetime(2026, 11, 12, tzinfo=boards.timezone.utc))
+        self.assertEqual(result["job_title"], data["title"])
+        self.assertGreater(len(result["description"]), 150)
+        self.assertEqual(result["location"], "Bucharest, Romania")
+        self.assertEqual(result["countries"], ["Romania"])
+        self.assertEqual(result["date_posted"], None)
+        self.assertNotIn("Facebook", result["job_title"])
+
+    def test_luxoft_rejects_bad_schema_no_detail_and_cross_origin(self):
+        link = "https://career.luxoft.com/jobs/example-28810"
+        bad = {"@type": "JobPosting", "title": "Share Facebook Twitter",
+               "description": "Twitter LinkedIn", "jobLocation": {}}
+        html = '<script type="application/ld+json">' + boards.json.dumps(bad) + '</script>'
+        with self.assertRaises(ValueError):
+            boards._luxoft_details(html, link)
+        with self.assertRaises(ValueError):
+            boards._luxoft_details(html, "https://evil.example/jobs/example-28810")
+
+    def test_luxoft_collector_uses_detail_page_not_list_card(self):
+        link = "/jobs/technical-analyst-data-integration-and-apis-aladdin-wealth-28810"
+        listing = f'<a href="{link}">Share Facebook Twitter LinkedIn Mail</a>'
+        data = {"@type": "JobPosting", "title": "Technical Analyst - Data Integration",
+                "description": "<p>" + ("Analyze integrations and API contracts. " * 7) + "</p>",
+                "jobLocation": {"address": {"addressLocality": "Bucharest",
+                                             "addressCountry": "RO"}}}
+        detail = '<script type="application/ld+json">' + boards.json.dumps(data) + '</script>'
+        fake_client = Mock()
+        fake_client.get.return_value = ("https://career.luxoft.com" + link, detail)
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", listing.encode())):
+            with patch.object(boards, "PublicClient", return_value=fake_client):
+                result = boards.collect({"name": "Luxoft"})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(len(result[0].records), 1)
+        self.assertEqual(result[0].records[0]["job_title"], data["title"])
+        self.assertEqual(result[0].records[0]["location"], "Bucharest, Romania")
+        self.assertNotIn("Facebook", result[0].records[0]["description"])
+
+    def test_stripe_detail_uses_jsonld_full_description_and_city_array(self):
+        data = {"@type": "JobPosting", "title": "AI Engineer",
+                "description": "<article><h2>About the Team</h2><p>" + ("Build production AI systems and APIs. " * 9) + "</p></article>",
+                "datePosted": "2026-10-07T15:39:36.146Z",
+                "jobLocation": [
+                    {"address": {"addressLocality": "Toronto", "addressCountry": "CA"}},
+                    {"address": {"addressLocality": "Chicago", "addressCountry": "US"}},
+                ],
+                "employmentType": "FULL_TIME"}
+        url = "https://stripe.com/careers/listing/ai-engineer/8144196"
+        html = '<script type="application/ld+json">' + boards.json.dumps(data) + '</script>'
+        record = boards._stripe_details(html, url, now=boards.datetime(2026, 11, 12, tzinfo=boards.timezone.utc))
+        self.assertEqual(record["job_title"], "AI Engineer")
+        self.assertIn("Toronto", record["location"])
+        self.assertIn("Chicago", record["location"])
+        self.assertEqual(set(record["countries"]), {"Canada", "Statele Unite"})
+        self.assertGreater(len(record["description"]), 150)
+        self.assertNotIn("Solutions Architect Toronto", record["description"])
+        self.assertIsNotNone(record["date_posted"])
+
+    def test_stripe_detail_rejects_list_context_and_invalid_host(self):
+        link = "https://stripe.com/careers/listing/ai-engineer/8144196"
+        html = '<h1>AI Engineer</h1>Solutions Architect Toronto'
+        with self.assertRaises(ValueError):
+            boards._stripe_details(html, link)
+        with self.assertRaises(ValueError):
+            boards._stripe_details(html, "https://untrusted.example/careers/listing/ai-engineer/8144196")
+
+    def test_stripe_collector_fetches_listing_detail(self):
+        link = "/careers/listing/ai-engineer/8144196"
+        listing = f'<a href="{link}">AI Engineer</a> Solutions Architect Toronto'
+        data = {"@type": "JobPosting", "title": "AI Engineer",
+                "description": "<p>" + ("Implement real API and ML systems. " * 8) + "</p>",
+                "jobLocation": [{"address": {"addressLocality": "Toronto",
+                                              "addressCountry": "CA"}}]}
+        detail = '<script type="application/ld+json">' + boards.json.dumps(data) + '</script>'
+        fake_client = Mock()
+        fake_client.get.return_value = ("https://stripe.com" + link, detail)
+        with patch.object(boards, "_fetch", return_value=(200, "text/html", listing.encode())):
+            with patch.object(boards, "PublicClient", return_value=fake_client):
+                result = boards.collect({"name": "Stripe"})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0].records[0]["job_title"], "AI Engineer")
+        self.assertEqual(result[0].records[0]["location"], "Toronto")
+        self.assertNotIn("Solutions Architect Toronto", result[0].records[0]["description"])
+
     def test_supported_sources_are_explicit(self):
         for name in ["EURES","Remote OK","Himalayas","Working Nomads","Jobgether",
                      "Landing.Jobs","We Work Remotely","NoDesk","EU Remote Jobs","Remote in Europe",
@@ -1396,3 +1622,46 @@ class PublicBoardAdapterTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RetrievePublicDetailTests(unittest.TestCase):
+    def test_dynamic_eures_keyword_and_mixed_scope_do_not_use_pm_default(self):
+        one = {"_jscc_targeted_collection":True,"target_role_subfamilies":["product_owner"]}
+        mixed = {"_jscc_targeted_collection":True,"target_role_subfamilies":["product_owner","project_management"]}
+        with patch.object(boards,"_post_json",return_value={"jvs":[]}) as post:
+            boards.collect({"name":"EURES"},one)
+            boards.collect({"name":"EURES"},mixed)
+        self.assertEqual(post.call_args_list[0].args[1]["keywords"],[{"keyword":"product","specificSearchCode":"EVERYWHERE"}])
+        self.assertEqual(post.call_args_list[1].args[1]["keywords"],[])
+
+    def test_crossover_card_salary_never_becomes_description_location_or_employer(self):
+        raw = {"id":"legacy-1","job_title":"Project Manager","company":"$100,000 USD/year","source_url":"https://www.crossover.com/jobs","description":"$100,000 USD/year","location":"$100,000 USD/year","date_posted":"2026-11-14"}
+        rows, unresolved = boards.protect_context_records([raw],"Crossover","heading_list","https://www.crossover.com/jobs")
+        self.assertEqual(unresolved,1)
+        self.assertEqual(rows[0]["id"],"legacy-1")
+        self.assertEqual(rows[0]["company"],"Crossover")
+        self.assertEqual(rows[0]["location"],"")
+        self.assertEqual(rows[0]["description"],"")
+        self.assertIsNone(rows[0]["date_posted"])
+        self.assertNotIn("salary_display",rows[0])
+
+    def test_crossover_links_only_from_individual_heading(self):
+        parser = boards._HeadingListJobs()
+        parser.feed('<h4><a href="/jobs/5437/trilogy/technical-project-manager">Project Manager</a></h4><a href="/jobs/999/other/other-job">Next job</a>')
+        parser.close()
+        self.assertEqual(boards._crossover_detail_link(parser.jobs[0],"https://www.crossover.com/jobs"),"https://www.crossover.com/jobs/5437/trilogy/technical-project-manager")
+        self.assertIsNone(boards._crossover_detail_link({"heading_links":["https://evil.example/jobs/5437/trilogy/technical-project-manager"]},"https://www.crossover.com/jobs"))
+
+    def test_orange_exact_offer_identity_and_description_only_enrichment(self):
+        import json
+        import job_search_softgarden as orange
+        link = "https://skk.erecruiter.pl/Offer.aspx?oid=42&cfg=public"
+        row = {"id":"orange-42","source_url":link,"job_title":"Project Manager","location":"Bucharest, Romania","description":"","_jscc_field_provenance":{"location":"ATS_FIELD"}}
+        detail = '<script type="application/ld+json">'+json.dumps({"@type":"JobPosting","title":"Project Manager","description":"Lead delivery.","jobLocation":{"address":{"addressCountry":"US"}}})+'</script>'
+        with patch.object(orange.PublicClient,"get",return_value=(link,detail)):
+            remaining = orange.enrich_orange_descriptions([row])
+        self.assertEqual(remaining,0)
+        self.assertEqual(row["description"],"Lead delivery.")
+        self.assertEqual(row["location"],"Bucharest, Romania")
+        self.assertEqual(row["_jscc_field_provenance"]["description"],"JOB_DETAIL_JSONLD")
+        self.assertIsNone(orange._orange_offer_identity("https://evil.example/Offer.aspx?oid=42"))

@@ -7,6 +7,9 @@ import {
   validateUserConfigPatch,
 } from './index.js';
 import {
+  beginRefreshRequest,
+  finishRefreshRequest,
+  refreshRequestStatus,
   capacityStatus,
   createApplication,
   createSession,
@@ -47,6 +50,7 @@ const SYSTEM_PATCH_KEYS = new Set([
   'jobspipeDirectRunBudget',
   'jobspipeDirectMonthlyGuard',
   'collection_freshness_hours',
+  'posting_max_age_hours',
   'source_strategy',
   'web_browser_fallback_enabled',
   'jobspipe_credit_budget_per_run',
@@ -243,6 +247,23 @@ function jobSearchQuery(url) {
   };
 }
 
+// Mapping is written before invoking the heavy path. A dispatch error means
+// unknown, never assert that no run was started after an ambiguous transport failure.
+export async function trackedRefresh(context, env, invoke, {
+  begin=beginRefreshRequest, finish=finishRefreshRequest,
+}={}) {
+  const id=await begin(context,'manual',env);
+  let result;
+  try {
+    result=await invoke();
+  } catch (error) {
+    const mapping=await finish(context,id,{outcome:'DISPATCH_UNKNOWN',reason:'DISPATCH_ERROR'},env);
+    return {...mapping,error:'Retrieve dispatch could not be confirmed',http_status:503};
+  }
+  const mapping=await finish(context,id,result,env);
+  return context.role==='ADMIN' ? {...result,...mapping} : mapping;
+}
+
 export async function handleAuthenticatedRoute(request, env, context) {
   const url = new URL(request.url);
 
@@ -280,9 +301,17 @@ export async function handleAuthenticatedRoute(request, env, context) {
 
   if (request.method === 'POST' && url.pathname === '/me/refresh') {
     requireSameOrigin(request, env);
-    const result = await userRefresh(context, env);
+    const manual = String(env.APP_ENV || '').toLowerCase()==='dev' && url.searchParams.get('intent') === 'manual';
+    const result = manual
+      ? await trackedRefresh(context,env,()=>userRefresh(context,env,{intent:'manual'}))
+      : await userRefresh(context, env);
     const status = ['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome) ? 202 : 200;
-    return json(result, status);
+    return json(result, result.http_status || status);
+  }
+
+  if (request.method === 'GET' && /^\/me\/refresh\/[^/]+$/.test(url.pathname)
+      && String(env.APP_ENV || '').toLowerCase()==='dev') {
+    return json(await refreshRequestStatus(context,url.pathname.split('/').at(-1),env));
   }
 
   if (request.method === 'GET' && url.pathname === '/me/jobs') {
@@ -379,9 +408,12 @@ export async function handleAuthenticatedRoute(request, env, context) {
   if (request.method === 'POST' && url.pathname === '/admin/refresh') {
     requireSameOrigin(request, env);
     requireAdmin(context);
-    const result = await adminRefresh(context, env);
+    const manual = String(env.APP_ENV || '').toLowerCase()==='dev' && url.searchParams.get('intent') === 'manual';
+    const result = manual
+      ? await trackedRefresh(context,env,()=>adminRefresh(context,env,{intent:'manual'}))
+      : await adminRefresh(context, env);
     const status = ['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome) ? 202 : 200;
-    return json(result, status);
+    return json(result, result.http_status || status);
   }
 
   if (request.method === 'GET' && url.pathname === '/admin/collection-policy') {

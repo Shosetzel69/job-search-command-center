@@ -122,9 +122,15 @@ def normalize(item, subdomain, company_name):
         "remote": remote,
         "work_arrangement": arrangement,
         "employment_statuses": engine.list_values(item.get("employment_type") or item.get("employmentType")),
-        "date_posted": item.get("published_at") or item.get("publishedAt") or item.get("created_at"),
+        "date_posted": item.get("published_at") or item.get("publishedAt"),
+        "source_created_at": item.get("created_at"),
         "source_url": source_url,
         "sources": [{"provider": "Recruitee", "subdomain": subdomain}],
+        "_jscc_field_provenance": {"title":"ATS_FIELD",
+            **({"description":"ATS_FIELD"} if description else {}),
+            **({"location":"ATS_FIELD"} if location_text else {}),
+            **({"date_posted":"ATS_FIELD"} if item.get("published_at") or item.get("publishedAt") else {}),
+        },
         "department": (item.get("department") or {}).get("name") if isinstance(item.get("department"), dict) else item.get("department"),
     }
 
