@@ -1,7 +1,9 @@
 """Softgarden public schema.org DataFeed adapter."""
 
 import json
-from urllib.parse import urlsplit
+import time
+from urllib.parse import parse_qsl, urlsplit
+from web_transport import PublicClient, FetchError
 from urllib.request import Request, urlopen
 
 import job_search as engine
@@ -22,6 +24,10 @@ def _country(value):
     # The official Orange feed uses Polish country labels.
     if text.casefold() in {"rumunia", "românia", "romania", "ro"}:
         return engine.COUNTRY_NAMES.get("RO", "Romania")
+    if text.casefold() in {"polska", "poland", "pl"}:
+        return engine.COUNTRY_NAMES.get("PL", "Poland")
+    if text.casefold() in {"mołdawia", "moldova", "md"}:
+        return engine.COUNTRY_NAMES.get("MD", "Moldova")
     code = engine.COUNTRY_NAME_TO_CODE.get(text.lower())
     if code:
         return engine.COUNTRY_NAMES.get(code, text)
@@ -129,7 +135,54 @@ def _jobs(payload):
     return jobs
 
 
-def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, regional_scope=False):
+def _orange_offer_identity(url):
+    try:
+        parts = urlsplit(url)
+        if (parts.scheme != "https" or parts.hostname != "skk.erecruiter.pl"
+                or parts.username or parts.password or parts.port or parts.fragment
+                or parts.path.casefold() != "/offer.aspx"):
+            return None
+        pairs = parse_qsl(parts.query, keep_blank_values=True)
+        if len(dict(pairs)) != len(pairs):
+            return None
+        oid = dict(pairs).get("oid", "")
+        return tuple(sorted(pairs)) if oid.isdigit() else None
+    except ValueError:
+        return None
+
+
+def enrich_orange_descriptions(records, *, max_details=4, max_seconds=10, role_terms=()):
+    """Only follow exact offers advertised by the official feed. Do not
+    promote an unverified description or replace the structured feed location."""
+    from job_search_public_boards import _single_detail_jobposting
+    deadline = time.monotonic() + max_seconds
+    ordered = sorted(records, key=lambda record: (
+        not any(term in str(record.get("job_title","")).casefold() for term in role_terms),
+        record.get("id", ""),
+    ))
+    attempted = 0
+    for record in ordered:
+        if record.get("description") or attempted >= max_details or time.monotonic() >= deadline:
+            continue
+        link = record["source_url"]
+        identity = _orange_offer_identity(link)
+        if identity is None:
+            continue
+        attempted += 1
+        try:
+            final_url, html = PublicClient(deadline).get(link)
+            if _orange_offer_identity(final_url) != identity:
+                continue
+            detail = _single_detail_jobposting(html, record["job_title"])
+        except (FetchError, OSError, ValueError, TypeError):
+            continue
+        if detail:
+            record["description"] = detail["description"]
+            record["_jscc_field_provenance"]["description"] = "JOB_DETAIL_JSONLD"
+    return sum(not record.get("description") for record in records)
+
+
+def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, regional_scope=False, role_terms=()):
     parsed = urlsplit(str(feed_url or "").strip())
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Softgarden feed_url must be a public HTTPS URL")
@@ -157,8 +210,9 @@ def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, r
                    or any(engine.COUNTRY_NAME_TO_CODE.get(str(country).casefold(), str(country).upper()) == "RO"
                           or str(country).casefold() in {"romania","românia"}
                           for country in record["countries"])]
+    unresolved = enrich_orange_descriptions(records, role_terms=role_terms) if regional_scope and company_name == "Orange Romania" else 0
     result = [engine.CollectionResult("softgarden", "schema_org_datafeed", True, records, len(jobs))]
-    if regional_scope and company_name == "Orange Romania" and any(not record["description"] for record in records):
+    if unresolved:
         # Feed has no description; never promote its title or external card
         # as a fabricated detail. The linked external detail needs verification.
         result.append(engine.CollectionResult("softgarden","missing_individual_description",False,[],0,
