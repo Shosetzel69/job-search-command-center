@@ -688,6 +688,7 @@ def record_results(item, results):
     failed = [result for result in results if not result.ok]
     item["records"] = sum(len(result.records) for result in ok)
     item["records_after_scope"] = item["records"]
+    item["provider_reported_total"] = sum(int(result.total_available or 0) for result in ok)
     item["error"] = "; ".join(
         diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
     ) or None
@@ -780,11 +781,24 @@ def collect_ats(item, role_family=None, config=None):
     if connector == "smartrecruiters":
         return smartrecruiters.collect(route["company_identifier"])
     if connector == "workday":
-        return workday.collect(
+        results = workday.collect(
             route["career_url"], company,
             detail_workers=route.get("detail_workers", 4),
             search_terms=workday.scope_search_terms(config),
         )
+        if company == "NTT DATA Romania" and (config or {}).get("_jscc_targeted_collection"):
+            # The approved Workday URL is global. Keep only explicitly local
+            # postings or unverified geography; never rewrite US into RO.
+            # Mixed country postings with any Romanian location remain eligible.
+            for result in results:
+                if result.ok:
+                    filtered = []
+                    for row in result.records:
+                        posting = shared_corpus.prepare_posting(row, source_hint=company)
+                        if posting is None or not posting.country_codes or "RO" in posting.country_codes:
+                            filtered.append(row)
+                    result.records = filtered
+        return results
     if connector == "greenhouse":
         return greenhouse.collect(route["board_token"], company)
     if connector == "ashby":
@@ -804,7 +818,7 @@ def collect_ats(item, role_family=None, config=None):
     if connector == "workable":
         return workable.collect(route["subdomain"], company)
     if connector == "softgarden":
-        return softgarden.collect(route["feed_url"], company)
+        return softgarden.collect(route["feed_url"], company, regional_scope=bool((config or {}).get("_jscc_targeted_collection")))
     if connector == "eightfold_public":
         return eightfold_public.collect(route["base_url"], route["domain"], company)
     raise ValueError(f"Unsupported ATS connector: {connector}")
