@@ -7,38 +7,40 @@ import { loadMigrations } from '../src/db/migrations.js';
 import { closeMigrationPool, getMigrationPool } from '../src/db/pool.js';
 import { migrationDatabaseConfig } from '../src/db/config.js';
 
-const TARGET = '011_refresh_requests.sql';
+const TARGET = '012_refresh_requests.sql';
 const SHA = /^[0-9a-f]{40}$/;
 const fail = code => { throw Object.assign(new Error(code), { code }); };
 
-export function admitRetrieve011(env, buildIdentity) {
+export function admitRetrieve012(env, buildIdentity) {
   const source = buildIdentity?.sourceSha;
   if (env.APP_ENV !== 'dev' || env.CLOUD_RUN_JOB !== 'jscc-db-migrate-dev' ||
       !SHA.test(source || '') || !SHA.test(env.SOURCE_SHA || '') || source !== env.SOURCE_SHA ||
-      buildIdentity.runtimeDataSha !== source) fail('RETRIEVE011_SCOPE_DENIED');
-  const mode = env.RETRIEVE011_MODE;
+      buildIdentity.runtimeDataSha !== source) fail('RETRIEVE012_SCOPE_DENIED');
+  const mode = env.RETRIEVE012_MODE;
   if (mode === 'inspect') {
-    if (env.RETRIEVE011_OWNER_GATE) fail('RETRIEVE011_INSPECT_GATE_UNEXPECTED');
+    if (env.RETRIEVE012_OWNER_GATE) fail('RETRIEVE012_INSPECT_GATE_UNEXPECTED');
   } else if (mode === 'apply') {
-    if (env.RETRIEVE011_OWNER_GATE !== 'APPROVE_RETRIEVE_DEV_NILE_011_' + source) fail('RETRIEVE011_OWNER_GATE_DENIED');
-  } else fail('RETRIEVE011_MODE_DENIED');
+    if (env.RETRIEVE012_OWNER_GATE !== 'APPROVE_RETRIEVE_DEV_NILE_012_' + source) fail('RETRIEVE012_OWNER_GATE_DENIED');
+  } else fail('RETRIEVE012_MODE_DENIED');
   return Object.freeze({ mode, source });
 }
 
-export function assertRetrieve011Ledger(migrations, rows, objects) {
-  const versions = Array.from({length:11},(_,i)=>String(i+1).padStart(3,'0'));
-  if (migrations.length !== 11 || migrations.some((m,i)=>m.version !== versions[i]) ||
-      migrations.at(-1).name !== TARGET) fail('RETRIEVE011_CANDIDATE_MIGRATIONS_DENIED');
-  if (![10,11].includes(rows.length) || rows.some((r,i)=>{
+export function assertRetrieve012Ledger(migrations, rows, objects) {
+  const versions = Array.from({length:12},(_,i)=>String(i+1).padStart(3,'0'));
+  if (migrations.length !== 12 || migrations.some((m,i)=>m.version !== versions[i]) ||
+      migrations.at(-1).name !== TARGET) fail('RETRIEVE012_CANDIDATE_MIGRATIONS_DENIED');
+  if (migrations[10].name !== '011_profile_job_count_snapshots.sql' ||
+      migrations[10].checksum !== 'c6cb6ac52c9a717a5dc452b38fb0874be51896190dc24beab01babfafe623f0e') fail('RETRIEVE012_HISTORICAL_011_MISMATCH');
+  if (![11,12].includes(rows.length) || rows.some((r,i)=>{
     const expected=migrations[i];
     return String(r.version)!==expected.version || r.name!==expected.name || r.checksum!==expected.checksum;
-  })) fail('RETRIEVE011_LEDGER_MISMATCH');
-  if (rows.length===10 && (objects.table_present || objects.index_present)) fail('RETRIEVE011_UNTRACKED_OBJECT');
-  if (rows.length===11 && (!objects.table_present || !objects.index_present || !objects.tenant_id_ready)) {
+  })) fail('RETRIEVE012_LEDGER_MISMATCH');
+  if (rows.length===11 && (objects.table_present || objects.index_present)) fail('RETRIEVE012_UNTRACKED_OBJECT');
+  if (rows.length===12 && (!objects.table_present || !objects.index_present || !objects.tenant_id_ready)) {
     // Return bounded schema evidence, no raw catalog/credentials.
-    fail('RETRIEVE011_SCHEMA_DRIFT_'+[objects.table_present,objects.index_present,objects.tenant_id_ready].map(Boolean).map(Number).join(''));
+    fail('RETRIEVE012_SCHEMA_DRIFT_'+[objects.table_present,objects.index_present,objects.tenant_id_ready].map(Boolean).map(Number).join(''));
   }
-  return rows.length===11 ? 'ALREADY_APPLIED' : 'PENDING_011';
+  return rows.length===12 ? 'ALREADY_APPLIED' : 'PENDING_012';
 }
 
 async function getState(client, migrations) {
@@ -72,11 +74,26 @@ async function getState(client, migrations) {
       /\(\s*tenant_id\s*,\s*search_profile_id\s*,\s*created_at\s+DESC\s*\)/i.test(String(row.indexdef||''))
     )===true;
   }
-  return assertRetrieve011Ledger(migrations,rows,objects);
+  const state=assertRetrieve012Ledger(migrations,rows,objects);
+  const historical=(await client.query(`
+    SELECT to_regclass('public.profile_job_count_snapshots') IS NOT NULL AS table_present,
+           (SELECT count(*)::int FROM information_schema.columns
+             WHERE table_schema='public' AND table_name='profile_job_count_snapshots'
+              AND column_name IN ('tenant_id','search_profile_id','scope_key','profile_version','fit_algorithm_version','totals','evaluated_at')) AS column_count,
+           EXISTS(SELECT 1 FROM pg_catalog.pg_index i
+             JOIN pg_catalog.pg_class idx ON idx.oid=i.indexrelid
+             WHERE i.indrelid=to_regclass('public.profile_job_count_snapshots')
+               AND idx.relname='profile_job_count_snapshots_version_idx'
+               AND i.indisvalid AND i.indisready
+               AND pg_get_indexdef(i.indexrelid) ~* '\\(tenant_id, search_profile_id, profile_version\\)') AS index_present
+  `)).rows[0];
+  if (!historical?.table_present || Number(historical.column_count)!==7 || !historical.index_present)
+    fail('RETRIEVE012_HISTORICAL_011_SCHEMA_DRIFT');
+  return state;
 }
 
-export async function prepareOrApplyRetrieve011({env=process.env,buildIdentity,db,migrations}={}) {
-  const admitted=admitRetrieve011(env,buildIdentity);
+export async function prepareOrApplyRetrieve012({env=process.env,buildIdentity,db,migrations}={}) {
+  const admitted=admitRetrieve012(env,buildIdentity);
   migrationDatabaseConfig(env);
   const files=migrations || await loadMigrations();
   const pool=db || getMigrationPool(env);
@@ -85,12 +102,12 @@ export async function prepareOrApplyRetrieve011({env=process.env,buildIdentity,d
   try {
     await client.query(admitted.mode==='inspect' ? 'BEGIN READ ONLY' : 'BEGIN');
     const actual=(await client.query('SELECT current_database() AS database_name')).rows[0]?.database_name;
-    if (actual!=='jobsearch_dev') fail('RETRIEVE011_DATABASE_DENIED');
+    if (actual!=='jobsearch_dev') fail('RETRIEVE012_DATABASE_DENIED');
     if (admitted.mode==='apply') await client.query("SELECT pg_advisory_xact_lock(hashtext('jscc-schema-migrate'))");
     const before=await getState(client,files);
     let after=before;
     let applied=false;
-    if (admitted.mode==='apply' && before==='PENDING_011') {
+    if (admitted.mode==='apply' && before==='PENDING_012') {
       const migration=files.at(-1);
       await client.query(migration.sql);
       await client.query('INSERT INTO schema_migrations(version, name, checksum) VALUES ($1, $2, $3)',
@@ -103,7 +120,7 @@ export async function prepareOrApplyRetrieve011({env=process.env,buildIdentity,d
       // DDL and ledger write are atomic. Distributed schema metadata must be
       // checked after commit on Nile; failure here blocks rollout, never DROP.
       after=await getState(client,files);
-      if(after!=='ALREADY_APPLIED') fail('RETRIEVE011_POSTCHECK_FAILED');
+      if(after!=='ALREADY_APPLIED') fail('RETRIEVE012_POSTCHECK_FAILED');
     }
     return {status:'ok',environment:'dev',source_sha:admitted.source,mode:admitted.mode,
       before,after,applied,migration:TARGET,checksum:files.at(-1).checksum};
@@ -116,11 +133,11 @@ export async function prepareOrApplyRetrieve011({env=process.env,buildIdentity,d
 if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
   try {
     const {BUILD_IDENTITY}=await import('../src/build-identity.generated.js');
-    const result=await prepareOrApplyRetrieve011({buildIdentity:BUILD_IDENTITY});
+    const result=await prepareOrApplyRetrieve012({buildIdentity:BUILD_IDENTITY});
     process.stdout.write(JSON.stringify(result)+'\n');
   } catch(error) {
     // Never print raw SQL, database URL, credentials, or provider exception text.
-    const code=typeof error?.code==='string' && /^RETRIEVE011_[A-Z_0-9]+$/.test(error.code) ? error.code : 'RETRIEVE011_EXECUTION_FAILED';
+    const code=typeof error?.code==='string' && /^RETRIEVE012_[A-Z_0-9]+$/.test(error.code) ? error.code : 'RETRIEVE012_EXECUTION_FAILED';
     process.stderr.write(code+'\n');
     process.exitCode=86;
   } finally { await closeMigrationPool(); }
