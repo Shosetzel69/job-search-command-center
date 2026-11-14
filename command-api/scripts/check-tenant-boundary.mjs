@@ -13,6 +13,7 @@ const PERSONAL_TABLES = [
   'applications',
   'profile_notes',
   'profile_ui_preferences',
+  'refresh_requests',
 ];
 
 const PERSONAL_SQL_ALLOWED = new Set([
@@ -94,6 +95,9 @@ for (const fn of [
   'savePreferences',
   'listProfileJobs',
   'setJobState',
+  'beginRefreshRequest',
+  'finishRefreshRequest',
+  'refreshRequestStatus',
   'listApplications',
   'createApplication',
   'updateApplication',
