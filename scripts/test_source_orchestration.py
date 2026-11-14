@@ -1072,3 +1072,24 @@ class WorkdayBoundedQueryTests(unittest.TestCase):
         self.assertEqual(post.call_count, 2)
         self.assertEqual(rows, [item])
         self.assertFalse(partial)
+
+
+class RetrieveRemainingGapTests(unittest.TestCase):
+    def test_smartrecruiters_bounded_budget_and_unique_rows(self):
+        from urllib.parse import parse_qs, urlsplit
+        adapter = orchestration.smartrecruiters
+        config = {"_jscc_targeted_collection": True, "target_role_subfamilies": ["project_management", "program_management"]}
+        self.assertEqual(adapter.bounded_terms(config), ("program", "programme", "project"))
+        shared = {"id": "same"}
+        with patch.object(adapter, "_request_json", return_value={"content":[shared], "totalFound":1}) as fetch:
+            rows, partial = adapter._bounded_summaries("Example", ("program", "project"), 200, None)
+        self.assertEqual(rows, [shared])
+        self.assertFalse(partial)
+        self.assertEqual([parse_qs(urlsplit(call.args[0]).query)["q"][0] for call in fetch.call_args_list], ["program", "project"])
+        self.assertFalse(adapter.bounded_terms(config, 100))
+        self.assertEqual(orchestration.provider_scope_capability({"connector":"smartrecruiters"},config)[0],"QUERY_BOUNDED")
+
+    def test_static_route_is_not_claimed_as_dynamic_scope(self):
+        config = {"_jscc_targeted_collection": True, "target_role_subfamilies":["product_owner"]}
+        self.assertEqual(orchestration.provider_scope_capability({"connector":"public_board","source":"Wellfound"},config)[0],"STATIC_PRESELECTED")
+        self.assertEqual(orchestration.provider_scope_capability({"connector":"public_board","source":"Remotive"},config)[0],"QUERY_BOUNDED")
