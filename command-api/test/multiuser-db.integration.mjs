@@ -6,6 +6,9 @@ admitNileCi();
 const {default:pg}=await import('pg');
 
 const {
+  beginRefreshRequest,
+  finishRefreshRequest,
+  refreshRequestStatus,
   createApplication,
   createSession,
   deleteAccount,
@@ -116,6 +119,31 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.notEqual(userFoundation.candidate_profile_id, user.profile_id);
     assert.notEqual(userFoundation.search_profile_id, ownerFoundationA.search_profile_id);
 
+    });
+    await t.test('Retrieve mapping is tenant/profile scoped, coalesces to shared run and exposes only lifecycle',async()=>{
+      const runId='run-12345678-1234-4234-8234-123456789abc';
+      const own=await beginRefreshRequest(user,'manual',env,{db:runtimeDb});
+      const adminId=await beginRefreshRequest(ownerA,'manual',env,{db:runtimeDb});
+      await finishRefreshRequest(user,own,{outcome:'STARTED_RUN',run_id:runId},env,{db:runtimeDb});
+      await finishRefreshRequest(ownerA,adminId,{outcome:'JOINED_EXISTING_RUN',run_id:runId},env,{db:runtimeDb});
+      const queued=await refreshRequestStatus(user,own,env,{db:runtimeDb});
+      assert.equal(queued.status,'queued');
+      assert.equal(queued.run_id,runId);
+      await assert.rejects(refreshRequestStatus(user,adminId,env,{db:runtimeDb}),e=>e.status===404);
+      await assert.rejects(refreshRequestStatus(ownerA,own,env,{db:runtimeDb}),e=>e.status===404);
+      await runtimeDb.query(
+        `INSERT INTO search_runs(run_id,status,started_at,completed_at,payload)
+         VALUES ($1,'completed',now(),now(),$2::jsonb)`,
+        [runId,JSON.stringify({private_marker:'DO_NOT_EXPOSE',source_results:[{source:'secret'}]})],
+      );
+      try{
+        const status=await refreshRequestStatus(user,own,env,{db:runtimeDb});
+        assert.equal(status.terminal,true);
+        assert.equal(status.status,'completed');
+        assert.equal(JSON.stringify(status).includes('DO_NOT_EXPOSE'),false);
+        assert.equal(Object.hasOwn(status,'source_results'),false);
+        assert.equal((await refreshRequestStatus(ownerA,adminId,env,{db:runtimeDb})).run_id,runId);
+      }finally{await runtimeDb.query('DELETE FROM search_runs WHERE run_id=$1',[runId]);}
     });
     await t.test('W025-U02 native preserved assertions',async()=>{
     const ownerProfileProbe = await withTenantTransaction(user, async tx => {
