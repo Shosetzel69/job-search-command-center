@@ -148,6 +148,14 @@ class SharedCorpusProjectionTests(unittest.TestCase):
         self.assertEqual(result["field_provenance"]["description"], "UNKNOWN")
         self.assertIn("DESCRIPTION_PROVENANCE_UNKNOWN", result["issues"])
 
+    def test_missing_location_and_listing_title_are_not_fully_verified(self):
+        missing = repository.assess_record_quality(self.quality_record(location=""))
+        self.assertEqual(missing["verdict"], "INCOMPLETE")
+        self.assertIn("LOCATION_EMPTY", missing["issues"])
+        listing = self.quality_record()
+        listing["_jscc_field_provenance"]["title"] = "LISTING_CARD"
+        self.assertIn("TITLE_LISTING_ONLY", repository.assess_record_quality(listing)["issues"])
+
     def test_quality_unknown_provenance_is_never_claimed_valid(self):
         record = self.quality_record()
         record.pop("_jscc_field_provenance")
