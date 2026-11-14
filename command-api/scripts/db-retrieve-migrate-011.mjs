@@ -33,16 +33,16 @@ export function assertRetrieve011Ledger(migrations, rows, objects) {
     const expected=migrations[i];
     return String(r.version)!==expected.version || r.name!==expected.name || r.checksum!==expected.checksum;
   })) fail('RETRIEVE011_LEDGER_MISMATCH');
-  if (rows.length===10 && (objects.table || objects.index)) fail('RETRIEVE011_UNTRACKED_OBJECT');
-  if (rows.length===11 && (!objects.table || !objects.index || !objects.tenant_id_ready)) fail('RETRIEVE011_SCHEMA_DRIFT');
+  if (rows.length===10 && (objects.table_present || objects.index_present)) fail('RETRIEVE011_UNTRACKED_OBJECT');
+  if (rows.length===11 && (!objects.table_present || !objects.index_present || !objects.tenant_id_ready)) fail('RETRIEVE011_SCHEMA_DRIFT');
   return rows.length===11 ? 'ALREADY_APPLIED' : 'PENDING_011';
 }
 
 async function getState(client, migrations) {
   const rows=(await client.query('SELECT version, name, checksum FROM schema_migrations ORDER BY version')).rows;
   const objects=(await client.query(`
-    SELECT to_regclass('public.refresh_requests') IS NOT NULL AS table,
-           to_regclass('public.refresh_requests_profile_idx') IS NOT NULL AS index,
+    SELECT to_regclass('public.refresh_requests') IS NOT NULL AS table_present,
+           to_regclass('public.refresh_requests_profile_idx') IS NOT NULL AS index_present,
            EXISTS(SELECT 1 FROM information_schema.columns
                    WHERE table_schema='public' AND table_name='refresh_requests'
                      AND column_name='tenant_id' AND data_type='uuid' AND is_nullable='NO') AS tenant_id_ready
