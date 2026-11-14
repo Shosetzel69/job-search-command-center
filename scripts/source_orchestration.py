@@ -1018,6 +1018,11 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         (shared_corpus_result or {}).get("postings_created", 0)
         + (shared_corpus_result or {}).get("postings_updated", 0)
     )
+    per_source = (shared_corpus_result or {}).get("per_source_postings", {})
+    for item in plan:
+        counts = per_source.get(item["source_id"], {})
+        item["postings_created"] = int(counts.get("postings_created", 0))
+        item["postings_updated"] = int(counts.get("postings_updated", 0))
     status.update(aggregate_source_results(plan))
     attempted = [item for item in plan if item["status"] in {"completed", "failed"}]
     status.update({"source_strategy": config.get("source_strategy") or "all active sources equally",
