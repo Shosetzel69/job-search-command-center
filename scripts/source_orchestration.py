@@ -358,6 +358,8 @@ def provider_scope_capability(item, config):
         return "ENUMERATION_ONLY", "NO_BOUNDED_SCOPE"
     if connector == "jobspipe" and (config or {}).get("jobspipe_mode", "direct") in {"direct", "apify"}:
         return "QUERY_BOUNDED", "JOBSPIPE_EXISTING_ROLE_GEO_QUERY"
+    if connector == "workday" and workday.scope_search_terms(config):
+        return "QUERY_BOUNDED", "WORKDAY_CXS_SEARCH_TEXT_ROLE_TERMS"
     if connector == "public_board" and item.get("source") == "Freelancer.com":
         return "QUERY_BOUNDED", "FREELANCER_OR_SEARCH_QUERY_ROLE_TERMS"
     return "ENUMERATION_ONLY", "NO_VERIFIED_DYNAMIC_QUERY_IN_ADAPTER"
@@ -771,7 +773,7 @@ def record_results(item, results):
     } for result in results]
 
 
-def collect_ats(item, role_family=None):
+def collect_ats(item, role_family=None, config=None):
     route = item.get("connector_config") or {}
     connector = item["connector"]
     company = item["source"]
@@ -781,6 +783,7 @@ def collect_ats(item, role_family=None):
         return workday.collect(
             route["career_url"], company,
             detail_workers=route.get("detail_workers", 4),
+            search_terms=workday.scope_search_terms(config),
         )
     if connector == "greenhouse":
         return greenhouse.collect(route["board_token"], company)
@@ -851,7 +854,7 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
                 # without widening this provider-specific filter to mixed families.
                 pm_family_only = families == {'PROJECT_DELIVERY_MANAGEMENT'}
                 family = 'PROJECT_MANAGEMENT' if pm_family_only else None
-                results = collect_ats(item, role_family=family)
+                results = collect_ats(item, role_family=family, config=config)
             elif connector == "traefik":
                 results = traefik.collect(item["url"], item["source"])
             elif connector == "jobicy":
