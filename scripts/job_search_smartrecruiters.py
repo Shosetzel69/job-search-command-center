@@ -10,6 +10,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 import job_search as engine
+from retrieve_provider_queries import scope_search_terms
 
 BASE_URL = "https://api.smartrecruiters.com/v1/companies"
 PAGE_SIZE = 100
@@ -98,10 +99,55 @@ def normalize(detail, company_identifier, fallback=None):
         "date_posted": detail.get("releasedDate") or fallback.get("releasedDate"),
         "source_url": source_url,
         "sources": [{"provider": "SmartRecruiters", "company_identifier": company_identifier}],
+        "_jscc_field_provenance": {"title":"ATS_FIELD",
+            **({"description":"ATS_FIELD"} if _description(detail) else {}),
+            **({"location":"ATS_FIELD"} if location_parts else {}),
+            **({"date_posted":"ATS_FIELD"} if detail.get("releasedDate") or fallback.get("releasedDate") else {})},
     }
 
 
-def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen):
+def bounded_terms(config, max_postings=MAX_POSTINGS):
+    terms = scope_search_terms(config)
+    # No additional list-call budget; don't silently drop any selected role.
+    pages = (max_postings + PAGE_SIZE - 1) // PAGE_SIZE
+    return terms if len(terms) <= pages else ()
+
+
+def _bounded_summaries(company_path, terms, max_postings, opener):
+    # Public Posting API: q is title/location text search. A single canonical
+    # term per request avoids assuming undocumented OR syntax.
+    active = {term: 0 for term in terms}
+    unique = {}
+    budget = (max_postings + PAGE_SIZE - 1) // PAGE_SIZE
+    partial = False
+    while active and budget and len(unique) < max_postings:
+        for term, offset in list(active.items()):
+            if not budget or len(unique) >= max_postings:
+                break
+            budget -= 1
+            limit = min(PAGE_SIZE, max_postings - len(unique))
+            query = urlencode({"destination":"PUBLIC","limit":limit,"offset":offset,"q":term})
+            payload = _request_json(f"{BASE_URL}/{company_path}/postings?{query}", opener=opener)
+            rows = payload.get("content")
+            if not isinstance(rows, list):
+                raise ValueError("SmartRecruiters postings response must contain a content array")
+            for row in rows:
+                identity = (row.get("id") or row.get("uuid")) if isinstance(row, dict) else None
+                if not identity:
+                    partial = True
+                elif len(unique) < max_postings:
+                    unique[str(identity)] = row
+                elif str(identity) not in unique:
+                    partial = True
+            total = payload.get("totalFound")
+            if len(rows) < limit or (isinstance(total, int) and offset + len(rows) >= total):
+                active.pop(term)
+            else:
+                active[term] += len(rows)
+    return list(unique.values()), bool(active) or partial
+
+
+def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, search_terms=()):
     company_identifier = str(company_identifier or "").strip()
     if not company_identifier:
         raise ValueError("SmartRecruiters company_identifier is required")
@@ -110,10 +156,16 @@ def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen):
 
     company_path = quote(company_identifier, safe="")
     summaries = []
+    partial = False
+    if search_terms:
+        terms = tuple(sorted(set(search_terms)))
+        if len(terms) > (max_postings + PAGE_SIZE - 1) // PAGE_SIZE:
+            raise ValueError('Search terms exceed the existing list request budget')
+        summaries, partial = _bounded_summaries(company_path, terms, max_postings, opener)
     offset = 0
     total_found = None
 
-    while len(summaries) < max_postings:
+    while not search_terms and len(summaries) < max_postings:
         limit = min(PAGE_SIZE, max_postings - len(summaries))
         query = urlencode({"destination": "PUBLIC", "limit": limit, "offset": offset})
         payload = _request_json(f"{BASE_URL}/{company_path}/postings?{query}", opener=opener)
@@ -141,4 +193,9 @@ def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen):
         records.append(normalize(detail, company_identifier, fallback=summary))
 
     connector = f"smartrecruiters:{company_identifier}"
-    return [engine.CollectionResult(connector, "public_postings", True, records, len(records))]
+    results = [engine.CollectionResult(connector, "public_postings", True, records, len(records))]
+    if partial:
+        results.append(engine.CollectionResult(connector,"bounded_search_partial",False,[],0,
+            "SmartRecruiters bounded query did not exhaust every result within the existing cap",
+            error_code="SCHEMA_ERROR",failure_stage="parse"))
+    return results
