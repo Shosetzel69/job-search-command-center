@@ -19,6 +19,9 @@ def _country(value):
     text = _plain(value)
     if not text:
         return None
+    # The official Orange feed uses Polish country labels.
+    if text.casefold() in {"rumunia", "românia", "romania", "ro"}:
+        return engine.COUNTRY_NAMES.get("RO", "Romania")
     code = engine.COUNTRY_NAME_TO_CODE.get(text.lower())
     if code:
         return engine.COUNTRY_NAMES.get(code, text)
@@ -94,6 +97,10 @@ def normalize(job, company_name):
         "date_posted": job.get("datePosted"),
         "source_url": source_url,
         "sources": [{"provider": "Softgarden"}],
+        "_jscc_field_provenance": {"title":"ATS_FIELD",
+            **({"description":"ATS_FIELD"} if job.get("description") else {}),
+            **({"location":"ATS_FIELD"} if location or remote else {}),
+            **({"date_posted":"ATS_FIELD"} if job.get("datePosted") else {})},
     }
 
 
@@ -122,7 +129,7 @@ def _jobs(payload):
     return jobs
 
 
-def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen):
+def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, regional_scope=False):
     parsed = urlsplit(str(feed_url or "").strip())
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Softgarden feed_url must be a public HTTPS URL")
@@ -143,4 +150,18 @@ def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen):
     payload = json.loads(body.decode("utf-8", errors="replace"))
     jobs = _jobs(payload)
     records = [normalize(job, company_name) for job in jobs[:max_postings]]
-    return [engine.CollectionResult("softgarden", "schema_org_datafeed", True, records, len(jobs))]
+    if regional_scope and company_name == "Orange Romania":
+        # Exclude only explicit non-Romanian feed entries. Do not guess a
+        # country when the feed omits it or discard Romanian multi-locations.
+        records = [record for record in records if not record.get("countries")
+                   or any(engine.COUNTRY_NAME_TO_CODE.get(str(country).casefold(), str(country).upper()) == "RO"
+                          or str(country).casefold() in {"romania","românia"}
+                          for country in record["countries"])]
+    result = [engine.CollectionResult("softgarden", "schema_org_datafeed", True, records, len(jobs))]
+    if regional_scope and company_name == "Orange Romania" and any(not record["description"] for record in records):
+        # Feed has no description; never promote its title or external card
+        # as a fabricated detail. The linked external detail needs verification.
+        result.append(engine.CollectionResult("softgarden","missing_individual_description",False,[],0,
+            "Orange Romania feed contains postings without individual descriptions",
+            error_code="SCHEMA_ERROR",failure_stage="parse"))
+    return result
