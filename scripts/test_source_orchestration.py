@@ -438,6 +438,13 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(item["outcome"], "success_empty")
         self.assertIsNone(item["error_code"])
         self.assertIn("rejected 1 of 2 collected job(s)", item["error"])
+        self.assertEqual(item["records_collected_raw"], 2)
+        self.assertEqual(item["records_quality_excluded"], 1)
+        self.assertEqual(item["records_scope_excluded"], 1)
+        self.assertEqual(item["records_after_scope"], 0)
+        self.assertEqual(item["rejected_quality_evidence"][0]["verdict"], "INVALID")
+        self.assertNotIn("$120,000", str(item["rejected_quality_evidence"]))
+
 
     def test_quality_rejection_preserves_transport_failure(self):
         invalid = record("Jobicy", "invalid")
@@ -1040,3 +1047,12 @@ class SourceProgressContractTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class RetrieveScopeEvidenceTests(unittest.TestCase):
+    def test_effective_scope_mode_reports_only_implemented_query_routes(self):
+        config = {"_jscc_targeted_collection": True, "jobspipe_mode": "direct"}
+        self.assertEqual(orchestration.provider_scope_capability({"connector": "jobspipe"}, config)[0], "QUERY_BOUNDED")
+        self.assertEqual(orchestration.provider_scope_capability({"connector": "public_board", "source": "Freelancer.com"}, config)[0], "QUERY_BOUNDED")
+        self.assertEqual(orchestration.provider_scope_capability({"connector": "jobicy"}, config)[0], "ENUMERATION_ONLY")
+        self.assertEqual(orchestration.provider_scope_capability({"connector": "workday"}, config)[0], "ENUMERATION_ONLY")
