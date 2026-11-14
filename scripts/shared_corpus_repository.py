@@ -1085,6 +1085,10 @@ def shared_collection_config(
         })
         shared["_jscc_shared_collection"] = False
         shared["_jscc_targeted_collection"] = True
+        signed_age = (retrieve_scope.get("freshness") or {}).get("posting_max_age_hours", 24)
+        if isinstance(signed_age, bool) or not isinstance(signed_age, int) or not 1 <= signed_age <= 8760:
+            raise SharedCorpusError("Invalid signed posting age")
+        shared["posting_max_age_hours"] = signed_age
         shared["_jscc_retrieve_scope"] = _json_safe(retrieve_scope)
         shared["_jscc_request_signature"] = _text(request_signature).casefold()
     else:
@@ -1102,6 +1106,7 @@ def shared_collection_config(
 
 SYSTEM_COLLECTION_KEYS = (
     "collection_freshness_hours",
+    "posting_max_age_hours",
     "source_strategy",
     "web_browser_fallback_enabled",
     "jobspipe_credit_budget_per_run",
@@ -1158,7 +1163,7 @@ def apply_collection_policy(
 
     merged = dict(config)
     for key in SYSTEM_COLLECTION_KEYS:
-        if key in policy:
+        if key in policy and not (key == "posting_max_age_hours" and config.get("_jscc_targeted_collection")):
             merged[key] = policy[key]
     return merged
 
