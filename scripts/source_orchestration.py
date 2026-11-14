@@ -360,6 +360,8 @@ def provider_scope_capability(item, config):
         return "QUERY_BOUNDED", "JOBSPIPE_EXISTING_ROLE_GEO_QUERY"
     if connector == "workday" and workday.scope_search_terms(config):
         return "QUERY_BOUNDED", "WORKDAY_CXS_SEARCH_TEXT_ROLE_TERMS"
+    if connector == "eightfold_public" and eightfold_public.bounded_terms(config):
+        return "QUERY_BOUNDED", "EIGHTFOLD_EXISTING_PCSX_QUERY_TERMS"
     if connector == "smartrecruiters" and smartrecruiters.bounded_terms(config):
         return "QUERY_BOUNDED", "SMARTRECRUITERS_PUBLIC_Q_ROLE_TERMS"
     if connector == "public_board" and public_boards.scoped_public_query(item.get("source"), config):
@@ -833,7 +835,8 @@ def collect_ats(item, role_family=None, config=None):
     if connector == "softgarden":
         return softgarden.collect(route["feed_url"], company, **({"regional_scope": True, "role_terms": workday.scope_search_terms(config)} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
     if connector == "eightfold_public":
-        return eightfold_public.collect(route["base_url"], route["domain"], company)
+        terms = eightfold_public.bounded_terms(config)
+        return eightfold_public.collect(route["base_url"], route["domain"], company, **({"search_terms": terms} if terms else {}))
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 
