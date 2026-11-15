@@ -252,6 +252,8 @@ def failure_result(connector, query, exc):
         error_code=error_code,
         failure_stage=failure_stage,
         http_status=http_status,
+        provider_request_attempts=getattr(exc, "provider_request_attempts", None),
+        provider_request_measurement=getattr(exc, "provider_request_measurement", None),
     )
 
 
