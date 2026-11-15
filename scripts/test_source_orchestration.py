@@ -498,6 +498,20 @@ class OrchestrationTests(unittest.TestCase):
         self.assertIn("Transport timed out", item["error"])
         self.assertIn("rejected 1 of 1 collected job(s)", item["error"])
 
+    def test_dev_missing_essential_fields_are_partial_not_valid_success(self):
+        runtime = {"APP_ENV": "dev", "CLOUD_RUN_JOB": "jscc-search-dev",
+                   "GCP_RUNTIME_BUCKET": "jscc-dev-runtime-828902654738"}
+        item = {"source_id": "src-jobicy", "source": "Jobicy", "status": "pending"}
+        row = record("Jobicy", "1")
+        row["description"] = ""
+        results = [engine.CollectionResult("jobicy", "q", True, [row], 1)]
+        with patch.dict(os.environ, runtime):
+            orchestration.tag_collection_records(item, results, run_id="run-quality")
+            orchestration.record_results(item, results)
+        self.assertEqual(item["quality_disposition"], "NO_VALID_FIELDS")
+        self.assertEqual(item["outcome"], "partial")
+        self.assertEqual(item["records"], 1)
+
     def test_quality_missing_provenance_reports_incomplete_without_false_valid(self):
         item = {"source_id": "src-jobicy", "source": "Jobicy", "status": "pending"}
         results = [engine.CollectionResult("jobicy", "q", True, [record("Jobicy", "1")], 1)]
