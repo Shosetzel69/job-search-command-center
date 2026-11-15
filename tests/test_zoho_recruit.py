@@ -109,6 +109,36 @@ class PaginationSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "pagination required"):
             zoho.collect(BOARD, "Acme", opener=lambda req,timeout:Resp(links,req.full_url))
 
+    def test_capped_portal_uses_verified_expanded_public_metadata_and_reports_partial(self):
+        import json
+        from html import escape
+        from unittest.mock import patch
+        links = "".join('<a href="/recruit/PortalDetail.na?jobid={0}&digest=tok_{0}&widgetid=123456">Engineer</a>'.format(100000+i) for i in range(100)).encode()
+        metadata = [{"id":str(100000+i),"Posting_Title":"Engineer","Publish":True} for i in range(101)]
+        modern = ('<input id="jobs" value="' + escape(json.dumps(metadata),quote=True) + '">').encode()
+        calls = []
+        def mock(req,timeout):
+            calls.append(req.full_url)
+            return Resp(links if req.full_url.endswith("/careers") else modern if req.full_url.endswith("/jobs/Careers") else DETAIL,req.full_url)
+        with patch.object(zoho,"MAX_REQUESTS_PER_SOURCE",5):
+            results = zoho.collect_result(BOARD,"Acme",opener=mock)
+        self.assertEqual(len(calls),5)
+        self.assertEqual(len(results[0].records),101)
+        self.assertEqual(len({row["id"] for row in results[0].records}),101)
+        self.assertEqual(sum(row["description_completeness"]=="missing" for row in results[0].records),98)
+        self.assertFalse(results[1].ok)
+        self.assertIn("98 selected",results[1].error)
+        self.assertNotIn("digest=",str(results[0].records))
+
+    def test_capped_portal_refuses_unproven_expanded_inventory(self):
+        import json
+        from html import escape
+        links = "".join('<a href="/recruit/PortalDetail.na?jobid={0}&digest=tok_{0}&widgetid=123456">Engineer</a>'.format(100000+i) for i in range(100)).encode()
+        metadata = [{"id":str(100000+i),"Posting_Title":"Engineer"} for i in range(100)]
+        modern = ('<input id="jobs" value="' + escape(json.dumps(metadata),quote=True) + '">').encode()
+        with self.assertRaisesRegex(ValueError,"expanded public inventory not verified"):
+            zoho.collect(BOARD,"Acme",opener=lambda req,timeout:Resp(links if req.full_url.endswith("/careers") else modern, req.full_url))
+
 class PrescreenTests(unittest.TestCase):
     def test_conservative_scope(self):
         rows = [{"job_title":"IT Project Manager"}, {"job_title":"Android Developer"},

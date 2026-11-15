@@ -127,7 +127,7 @@ def mark_careers_board_fallback(records, board):
     return records
 
 
-def collect(board_url, company_name, opener=None, role_family=None):
+def collect(board_url, company_name, opener=None, role_family=None, diagnostics=None):
     opener = opener or _safe_opener
     board = validate_board(board_url)
     if not isinstance(company_name, str) or not company_name.strip():
@@ -136,25 +136,42 @@ def collect(board_url, company_name, opener=None, role_family=None):
     started = time.monotonic()
     board_html = _fetch(board, tenant, opener)
     summaries = enumerate_board(board_html, board)
-    if summaries and str(role_family or "").upper() in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}:
-        # Do not silently drop a relevant portal job when the modern listing is
-        # stale, blocked or inconsistent. Unknown titles must remain in scope.
+    capped = len(summaries) >= 100
+    scoped = str(role_family or "").upper() in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}
+    if summaries and (scoped or capped):
+        # Existing public modern listing is the only alternative to the capped
+        # portal. Never guess page/API parameters or bypass the provider.
         from zoho_public_jobs import embedded_jobs
-        metadata = embedded_jobs(_fetch("https://" + tenant + "/jobs/Careers", tenant, opener))
+        try:
+            metadata = embedded_jobs(_fetch("https://" + tenant + "/jobs/Careers", tenant, opener))
+        except ValueError as exc:
+            if capped:
+                raise ValueError("Zoho public careers page reached 100 postings; pagination required; public metadata not verified") from exc
+            raise
         selected = prefilter_public_metadata(metadata, role_family=role_family)
         selected_ids = {item["jobid"] for item in selected}
         relevant_portal = prefilter_public_metadata(summaries, role_family=role_family)
         if any(item["jobid"] not in selected_ids for item in relevant_portal):
             raise ValueError("inconsistent Zoho public listing surfaces; relevant portal posting missing from metadata")
+        if capped:
+            portal_ids = {item["jobid"] for item in summaries}
+            metadata_ids = {item["jobid"] for item in metadata}
+            if not portal_ids.issubset(metadata_ids) or len(metadata_ids) <= len(portal_ids):
+                raise ValueError("Zoho public careers page reached 100 postings; pagination required; expanded public inventory not verified")
+        summaries = [item for item in summaries if item["jobid"] in selected_ids]
+        if capped:
+            # Reserve two requests for the listing surfaces; preserve explicit
+            # metadata for rows without a detail link or outside the budget.
+            summaries = summaries[:MAX_REQUESTS_PER_SOURCE - 2]
         available_ids = {item["jobid"] for item in summaries}
         missing_selected = [row for row in selected if row["jobid"] not in available_ids]
-        summaries = [item for item in summaries if item["jobid"] in selected_ids]
+        if diagnostics is not None:
+            diagnostics.update(portal_capped=capped, public_metadata_count=len(metadata),
+                               selected_count=len(selected), missing_detail_count=len(missing_selected))
+        if not summaries and not missing_selected:
+            return []
     else:
         missing_selected = []
-    # A capped public board is usable only if all relevant metadata records
-    # have been accounted for through detail links or explicit missing records.
-    if len(summaries) == 100 and not missing_selected:
-        raise ValueError("Zoho public careers page reached 100 postings; pagination required")
     if not summaries and not missing_selected:
         # Some modern Zoho tenants publish an embedded JSON jobs list, not portal links.
         # Only emit records if the public description field is present; classify its
@@ -206,9 +223,15 @@ def collect(board_url, company_name, opener=None, role_family=None):
     if len(summaries) + 2 > MAX_REQUESTS_PER_SOURCE:
         raise ValueError('Zoho request budget exceeded')
     records = []
-    for item in summaries:
+    for index, item in enumerate(summaries):
         if time.monotonic() - started > MAX_ELAPSED_SECONDS:
-            raise TimeoutError("Zoho source collection exceeded wall-time budget")
+            if not capped:
+                raise TimeoutError("Zoho source collection exceeded wall-time budget")
+            deferred = {row["jobid"] for row in summaries[index:]}
+            missing_selected.extend(row for row in selected if row["jobid"] in deferred)
+            if diagnostics is not None:
+                diagnostics["missing_detail_count"] = len(missing_selected)
+            break
         detail = extract_detail(_fetch(item["source_url"], tenant, opener),
                                 expected_title=item["job_title"] or None)
         records.append({
@@ -247,9 +270,16 @@ def collect(board_url, company_name, opener=None, role_family=None):
 def collect_result(board_url, company_name, opener=None, role_family=None):
     """Adapt public postings to the JSCC canonical CollectionResult boundary."""
     import job_search as engine
-    records = collect(board_url, company_name, opener=opener, role_family=role_family)
+    evidence = {}
+    records = collect(board_url, company_name, opener=opener, role_family=role_family, diagnostics=evidence)
     tenant = urlsplit(validate_board(board_url)).hostname
-    return [engine.CollectionResult(f"zoho_recruit:{tenant}", "public_postings", True, records, len(records))]
+    connector = f"zoho_recruit:{tenant}"
+    result = [engine.CollectionResult(connector, "public_postings", True, records, len(records))]
+    if evidence.get("missing_detail_count"):
+        result.append(engine.CollectionResult(connector, "public_inventory_partial", False, [], 0,
+            f"{evidence['missing_detail_count']} selected public posting(s) lack verified detail within existing budget",
+            error_code="SCHEMA_ERROR", failure_stage="parse"))
+    return result
 
 def collect_public_metadata(board_url, company_name, opener=None):
     """Stage 1 only: real public listing metadata, NOT full job records."""
