@@ -27,7 +27,7 @@ export function runProgressModel(status) {
     blocked,
     noExtractable,
     partial,
-    percent: terminal && total > 0 ? 100 : percent,
+    percent: terminal && normalizedStatus!=='failed' && total > 0 ? 100 : percent,
     active,
     terminal,
     jobsPublished: Math.max(0, Number(status.jobs_published ?? 0) || 0),
