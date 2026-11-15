@@ -517,8 +517,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(incompatibleRemote.eligible, false);
   assert.equal(incompatibleRemote.exclusionReason, 'remote eligibility geography incompatible');
-  assert.equal(EVALUATION_VERSION, 'fit-v1-scope-3');
-  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1-scope-3');
+  assert.equal(EVALUATION_VERSION, 'fit-v2');
+  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v2');
 });
 
 test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {
