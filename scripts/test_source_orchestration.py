@@ -1323,3 +1323,37 @@ class D2ScopeTriageTests(unittest.TestCase):
         verify_dev_worker_ownership(env,Store(descriptor))
         with self.assertRaisesRegex(RuntimeError,"ownership denied"):
             verify_dev_worker_ownership(env,Store({"purpose":"DEV_DB_PURGE"}))
+
+
+class D2NativeProviderGeoTests(unittest.TestCase):
+    def test_himalayas_one_country_for_all_remote_tuples(self):
+        from urllib.parse import urlsplit,parse_qs
+        first={"role_family":"PROJECT_DELIVERY_MANAGEMENT","role_subfamilies":["project_management"],"work_modes":["remote"],"remote_eligible_country_codes":["RO"],"target_regions":["EU"]}
+        second={**first,"role_subfamilies":["delivery_management"]}
+        config={"_jscc_targeted_collection":True,"target_role_subfamilies":["project_management","delivery_management"],"_jscc_retrieve_scope":{"scopes":[first,second]}}
+        self.assertEqual(orchestration.public_boards.himalayas_native_query(config),{"country":"RO"})
+        self.assertEqual(orchestration.provider_scope_capability({"connector":"public_board","source":"Himalayas"},config)[0],"QUERY_BOUNDED")
+        adapter=orchestration.public_boards
+        with patch.object(adapter,"_fetch",return_value=(200,"application/json",b'{"jobs":[],"nextCursor":"next"}')) as fetch:
+            results=adapter.collect({"name":"Himalayas"},config)
+        fetch.assert_called_once()
+        query=parse_qs(urlsplit(fetch.call_args.args[0]).query)
+        self.assertEqual(query["country"],["RO"])
+        self.assertNotIn("exclude_worldwide",query)
+        self.assertTrue(results[0].provider_scope_details["listing_cap_reached"])
+        self.assertFalse(results[1].ok)
+        config["_jscc_retrieve_scope"]["scopes"][1]={**second,"remote_eligible_country_codes":["DE"]}
+        self.assertEqual(adapter.himalayas_native_query(config),{})
+        self.assertEqual(orchestration.provider_scope_capability({"connector":"public_board","source":"Himalayas"},config)[0],"ENUMERATION_ONLY")
+
+    def test_observed_parameters_differ_from_attempt_count_and_capability(self):
+        from urllib.request import Request
+        import job_search as engine
+        request=Request("https://board.example/wday/cxs/tenant/site/jobs",data=b'{"searchText":"project","limit":20,"offset":0,"secret":"not-logged","appliedFacets":{"secret":["x"]}}')
+        self.assertEqual(engine._observed_scope_request(request),{"searchText":"project","limit":20,"offset":0})
+        self.assertEqual(engine._observed_scope_request(Request("https://board.example/api/pcsx/search?query=delivery&start=0&num=20&domain=private")) ,{"query":"delivery","num":20,"start":0})
+        self.assertIsNone(engine._observed_scope_request(Request("https://board.example/secret?query=project")))
+        caps=orchestration.provider_scope_dimensions({"connector":"workday"})
+        self.assertIsNone(caps["geography"])
+        self.assertEqual(caps["role"],"searchText")
+        self.assertIsNone(orchestration.provider_scope_dimensions({"connector":"jobicy"})["geography"])
