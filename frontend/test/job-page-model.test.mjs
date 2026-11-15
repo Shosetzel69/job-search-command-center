@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { JOBS_PAGE_SIZE, JOBS_PAGE_SIZES, jobPageSize, buildJobsPath, ignorePageResponse, navigateJobPage, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
+import { JOBS_PAGE_SIZE, JOBS_PAGE_SIZES, jobPageSize, buildJobsPath, ignorePageResponse, navigateJobPage, pageRequestKey, scanResultCount, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
 
 test('canonical job query is bounded, profile-scoped and provider-free', () => {
   const path = buildJobsPath({
@@ -180,4 +180,20 @@ test('N5: context-ignored navigation settles loading without moving page', async
   assert.equal(result.outcome,'ignored');
   assert.equal(page.loadingMore,false);
   assert.equal(page.nextCursor,'next-1');
+});
+
+test('bounded exact count never publishes stale, partial or looping scans',async()=>{
+  const basis='a'.repeat(64),anchor='2026-11-15T14:30:00.000Z';
+  const response=(results,next_cursor,count_basis=basis)=>({count_only:true,results,next_cursor,count_basis,generated_at:anchor});
+  let calls=0;
+  const total=await scanResultCount({basis,anchor,load:async cursor=>{calls++;return cursor?response(17,null):response(40,'next');}});
+  assert.equal(total,57);assert.equal(calls,2);
+  assert.equal(await scanResultCount({basis,anchor,maxBatches:1,load:async()=>response(40,'next')}),null);
+  assert.equal(await scanResultCount({basis,anchor,load:async()=>response(5,null,'b'.repeat(64))}),null);
+  assert.equal(await scanResultCount({basis,anchor,load:async()=>response(40,'same')}),null);
+  const url=new URL(buildJobsPath({filters:{pageSize:30,quick:'b2b'},view:'review',countOnly:true,asOf:anchor,countBasis:basis}),'https://example.test');
+  assert.equal(url.searchParams.get('limit'),'30');
+  assert.equal(url.searchParams.get('result_view'),'review');
+  assert.equal(url.searchParams.get('quick'),'b2b');
+  assert.equal(url.searchParams.get('count_only'),'true');
 });
