@@ -869,7 +869,7 @@ def collect_ats(item, role_family=None, config=None):
     if connector == "workable":
         return workable.collect(route["subdomain"], company)
     if connector == "softgarden":
-        return softgarden.collect(route["feed_url"], company, **({"regional_scope": True, "role_terms": workday.scope_search_terms(config)} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
+        return softgarden.collect(route["feed_url"], company, enrich_details=company == "Orange Romania", **({"regional_scope": True, "role_terms": workday.scope_search_terms(config)} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
     if connector == "eightfold_public":
         terms = eightfold_public.bounded_terms(config)
         return eightfold_public.collect(route["base_url"], route["domain"], company, **({"search_terms": terms} if terms else {}), enrich_details=company == "Vodafone / VOIS")
