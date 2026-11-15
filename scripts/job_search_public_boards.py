@@ -863,16 +863,18 @@ def _luxoft_details(html, link, *, now=None):
     posting = postings[0]
     title = plain_text(posting.get("title"))
     description = plain_text(posting.get("description"))
-    # A listing snippet or a share widget is never an acceptable description.
-    if not title or len(description) < 150:
-        raise ValueError("Luxoft job has incomplete title or description")
+    # A short structured description is retained; page chrome is not.
+    if not title:
+        raise ValueError("Luxoft job has missing title")
+    from zoho_detail import reject_access_gateway_text
+    reject_access_gateway_text(description)
+    if re.search(r"facebook\s+twitter\s+linkedin\s+mail|add to favorites\s+share", description, re.I):
+        raise ValueError("Luxoft job description contains UI chrome")
     address = (posting.get("jobLocation") or {}).get("address") or {}
     if not isinstance(address, dict):
         raise ValueError("Luxoft job location is not a structured address")
     city = plain_text(address.get("addressLocality"))
     country_code = plain_text(address.get("addressCountry")).upper()
-    if len(country_code) != 2 or country_code not in engine.COUNTRY_NAMES or not city:
-        raise ValueError("Luxoft job location missing city or recognized country")
     identity = link.rstrip("/").rsplit("/", 1)[-1]
     if not re.search(r"-\d+$", identity):
         raise ValueError("Luxoft job has no stable public detail identity")
@@ -885,15 +887,19 @@ def _luxoft_details(html, link, *, now=None):
                 posted = parsed.isoformat()
         except ValueError:
             pass
-    country = engine.COUNTRY_NAMES[country_code]
-    location = f"{city}, {country}"
+    country = engine.COUNTRY_NAMES.get(country_code, "")
+    location = ", ".join(part for part in (city, country) if part)
     remote = str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE"
     employment = engine.list_values(posting.get("employmentType"))
     record = _record(
         "Luxoft", identity, title, "Luxoft", description, link,
-        date_posted=posted, location=location, countries=[country],
+        date_posted=posted, location=location, countries=[country] if country else [],
         remote=remote, employment_statuses=employment,
     )
+    record["description"] = description
+    record["description_completeness"] = "missing" if not description else ("partial" if len(description) < 150 else "full")
+    if not location:
+        record["location"] = ""
     record["_jscc_field_provenance"] = {
         "title": "JOB_DETAIL_JSONLD",
         "description": "JOB_DETAIL_JSONLD",
@@ -962,8 +968,12 @@ def _stripe_details(html, link, *, now=None):
     posting = jobs[0]
     title = plain_text(posting.get("title"))
     description = plain_text(posting.get("description"))
-    if not title or len(description) < 150:
-        raise ValueError("Stripe job has incomplete title or description")
+    if not title:
+        raise ValueError("Stripe job has missing title")
+    from zoho_detail import reject_access_gateway_text
+    reject_access_gateway_text(description)
+    if re.search(r"facebook\s+twitter\s+linkedin\s+mail|add to favorites\s+share", description, re.I):
+        raise ValueError("Stripe job description contains UI chrome")
     raw_locations = posting.get("jobLocation")
     locations = raw_locations if isinstance(raw_locations, list) else [raw_locations]
     cities = []
@@ -983,8 +993,6 @@ def _stripe_details(html, link, *, now=None):
         country = engine.COUNTRY_NAMES.get(country_code, {"CA": "Canada"}.get(country_code, country_code))
         if country not in countries:
             countries.append(country)
-    if not cities or not countries:
-        raise ValueError("Stripe detail missing structured job locations")
     posted = None
     raw_date = str(posting.get("datePosted") or "").strip()
     try:
@@ -1002,6 +1010,10 @@ def _stripe_details(html, link, *, now=None):
         remote=str(posting.get("jobLocationType") or "").upper() == "TELECOMMUTE",
         employment_statuses=engine.list_values(posting.get("employmentType")),
     )
+    record["description"] = description
+    record["description_completeness"] = "missing" if not description else ("partial" if len(description) < 150 else "full")
+    if not cities:
+        record["location"] = ""
     record["_jscc_field_provenance"] = {
         "title": "JOB_DETAIL_JSONLD",
         "description": "JOB_DETAIL_JSONLD",
@@ -3617,7 +3629,15 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
             unresolved += 1
             context = str(record.get("description") or "")
             location = str(record.get("location") or "")
-            record["description"] = ""
+            # Preserve only an explicitly isolated per-posting description.
+            # Generic adjacency context remains untrusted and is cleared.
+            explicit_preview = (record.get("description_provenance") == "public_job_card_description"
+                                and record.get("description_completeness") in {"partial", "summary"}
+                                and context and context.casefold() != str(record.get("job_title") or "").casefold()
+                                and not shared_corpus.SHARE_MARKUP.search(context)
+                                and name != "Crossover")
+            if not explicit_preview:
+                record["description"] = ""
             record["date_posted"] = None
             provenance = {"title": "LISTING_CARD", "description": "LISTING_CARD"}
             if kind in CONTEXT_LOCATION_KINDS or location == context or shared_corpus.SALARY_MARKUP.search(location):
