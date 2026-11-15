@@ -503,6 +503,7 @@ def tag_collection_records(item, results, run_id=None):
                         record["source_url_label"] = "Source page (not a direct job link)"
                 except (web.FetchError, ValueError, TypeError):
                     pass
+            shared_corpus.apply_explicit_remote(record)
             quality = shared_corpus.assess_record_quality(
                 record, source_hint=item.get("source"), run_id=run_id,
             )
