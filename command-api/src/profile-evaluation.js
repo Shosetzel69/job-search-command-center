@@ -1,8 +1,9 @@
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
+import { ROLE_TAXONOMY, normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
 import { canonicalPostedDate, postedAgeHours, parsePostedDate } from './posted-date.mjs';
 
-export const FIT_ALGORITHM_VERSION = 'fit-v1-scope-2';
+export const FIT_ALGORITHM_VERSION = 'fit-v1-scope-3';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
 
@@ -125,6 +126,26 @@ export function sourcePostingDates(row, now=new Date()) {
   };
 }
 
+// A stored classification cannot corroborate itself. Use the existing shared
+// taxonomy as a conservative title-evidence gate, without changing the corpus.
+export function titleRoleEvidence(title, row, preferences) {
+  const selected=normalizeRoleFamilies(preferences?.target_role_families);
+  if(!selected.length)return true;
+  const normalized=String(title||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+  const matches=[];
+  for(const [family,definition] of Object.entries(ROLE_TAXONOMY.families)){
+    for(const member of definition.members||[]){
+      if(member.include_patterns.some(p=>new RegExp(p,'iu').test(normalized)) &&
+         !member.exclude_patterns.some(p=>new RegExp(p,'iu').test(normalized)))matches.push({family,code:member.code});
+    }
+  }
+  const families=new Set(matches.map(m=>m.family));
+  const family=String(row.role_family||'UNKNOWN').toUpperCase();
+  if(families.size!==1||!families.has(family)||!selected.includes(family))return false;
+  const members=normalizeRoleSubfamilies(preferences.target_role_subfamilies,family);
+  return !members.length||matches.some(m=>members.includes(m.code));
+}
+
 export function evaluateSharedJob(row, preferences, nomenclatures, now = new Date()) {
   const payload = { ...(row.payload || {}), ...(row.posting_payload || {}) };
   const title = String(row.title || payload.job_title || payload.title || '').trim();
@@ -193,6 +214,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   if (/bank|financial|compliance|regulated|governance/i.test(text)) score += 5;
   if (/Dutch|German|native French|fluent French/i.test(text)) score -= 7;
   score = Math.max(40, Math.min(96, score));
+  const roleCorroborated=titleRoleEvidence(title,row,preferences);
+  if(!roleCorroborated)score=null;
 
   const pros = [];
   if (remote) pros.push('Remote');
@@ -204,6 +227,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   const risks = [];
   if (/Dutch|German|native French|fluent French/i.test(text)) risks.push('Cerinta lingvistica trebuie verificata');
   if (!['contract','freelance'].includes(type) && !/contract|freelance|b2b/i.test(text)) risks.push('Forma B2B nu este confirmata');
+  if (!roleCorroborated) risks.unshift('Clasificarea rolului nu este confirmata de titlu');
   if (!risks.length) risks.push('Conditiile contractuale trebuie confirmate');
 
   const posted = canonicalPostedDate(row, now);
@@ -214,8 +238,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
 
   return {
     eligible:true,
-    eligibilityState:eligibility.state,
-    eligibilityReasonCode:eligibility.reason_code,
+    eligibilityState:roleCorroborated?eligibility.state:'UNKNOWN',
+    eligibilityReasonCode:roleCorroborated?eligibility.reason_code:'ROLE_TITLE_UNCONFIRMED',
     score,
     pros:pros.slice(0, 2),
     risks:risks.slice(0, 2),
@@ -238,7 +262,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       remote,
       b2b:['contract','freelance'].includes(type) || /contract|freelance|b2b/i.test(text),
       repost,
-      status:score >= threshold ? 'new' : 'review',
+      status:score != null && score >= threshold ? 'new' : 'review',
       pros:pros.slice(0,2),
       risks:risks.slice(0,2),
       url,
