@@ -77,6 +77,66 @@ def enumerate_board(html, board_url):
         raise ValueError("unsupported Zoho board link structure")
     return list(found.values())
 
+
+class _NextControl(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.controls = []
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if "jobNextNav" in (attrs.get("class") or "").split():
+            self.controls.append((attrs.get("data-wid"), attrs.get("data-findex")))
+
+
+def _public_next_url(html, summaries, tenant):
+    parser = _NextControl()
+    parser.feed(html)
+    if not parser.controls:
+        return None
+    if len(set(parser.controls)) != 1:
+        raise ValueError("ambiguous Zoho next control")
+    widget, index = parser.controls[0]
+    if not JOB_ID.fullmatch(widget or "") or not re.fullmatch(r"[0-9]{1,6}", index or ""):
+        raise ValueError("invalid Zoho next control")
+    # Only reuse public parameters from the matching widget's validated links.
+    context = set()
+    for row in summaries:
+        params = parse_qs(urlsplit(row["source_url"]).query)
+        if params.get("widgetid") == [widget]:
+            context.add((params["digest"][0], params.get("iframe", ["false"])[0]))
+    if len(context) != 1:
+        raise ValueError("unverified Zoho paging context")
+    digest, iframe = context.pop()
+    return "https://" + tenant + "/recruit/Portal.na?" + urlencode({
+        "iframe": iframe, "digest": digest, "widgetid": widget,
+        "findex": index, "mode": "next", "searchval": "",
+        "myjob": "false", "isremote": "false",
+    })
+
+
+def _expand_public_links(html, summaries, board, tenant, opener, deadline, inventory_ids):
+    found = {row["jobid"]: row for row in summaries}
+    seen = set()
+    requests = 0
+    # Preserve existing network budget; never guess offsets or retry denied pages.
+    while requests < 5 and set(found) != inventory_ids:
+        url = _public_next_url(html, summaries, tenant)
+        if url is None:
+            break
+        if url in seen:
+            raise ValueError("repeated Zoho pagination cursor")
+        seen.add(url)
+        html = _fetch(url, tenant, opener, deadline=deadline)
+        requests += 1
+        summaries = enumerate_board(html, board)
+        ids = {row["jobid"] for row in summaries}
+        if not ids or not ids.issubset(inventory_ids) or ids.issubset(found):
+            raise ValueError("inconsistent Zoho pagination response")
+        for row in summaries:
+            found.setdefault(row["jobid"], row)
+    return list(found.values()), requests
+
+
 class _NoRedirect(HTTPRedirectHandler):
     def redirect_request(self, req, fp, code, msg, headers, newurl):
         return None
@@ -201,6 +261,7 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
     deadline = time.monotonic() + MAX_ELAPSED_SECONDS
     board_html = _fetch(board, tenant, opener, deadline=deadline)
     summaries = enumerate_board(board_html, board)
+    paging_requests = 0
     capped = len(summaries) >= 100
     scoped = str(role_family or "").upper() in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}
     if summaries and (scoped or capped):
@@ -223,11 +284,16 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
             metadata_ids = {item["jobid"] for item in metadata}
             if not portal_ids.issubset(metadata_ids) or len(metadata_ids) <= len(portal_ids):
                 raise ValueError("Zoho public careers page reached 100 postings; pagination required; expanded public inventory not verified")
+        if capped:
+            summaries, paging_requests = _expand_public_links(
+                board_html, summaries, board, tenant, opener, deadline, metadata_ids)
+            if diagnostics is not None:
+                diagnostics.update(public_link_count=len(summaries), paging_requests=paging_requests)
         summaries = [item for item in summaries if item["jobid"] in selected_ids]
         if capped:
             # Reserve two requests for the listing surfaces; preserve explicit
             # metadata for rows without a detail link or outside the budget.
-            summaries = _rotating_details(summaries)[:MAX_REQUESTS_PER_SOURCE - 2]
+            summaries = _rotating_details(summaries)[:MAX_REQUESTS_PER_SOURCE - 2 - paging_requests]
         available_ids = {item["jobid"] for item in summaries}
         missing_selected = [row for row in selected if row["jobid"] not in available_ids]
         if diagnostics is not None:
@@ -285,7 +351,7 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
                 "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
             })
         return mark_careers_board_fallback(records, board)
-    if len(summaries) + 2 > MAX_REQUESTS_PER_SOURCE:
+    if len(summaries) + 2 + paging_requests > MAX_REQUESTS_PER_SOURCE:
         raise ValueError('Zoho request budget exceeded')
     records = []
     for index, item in enumerate(summaries):
