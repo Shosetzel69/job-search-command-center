@@ -3721,6 +3721,7 @@ def collect(source, config=None):
             "sessionId": "jscc-global-collection", "requestLanguage": "en",
         })
         records = _eures(payload)
+        if term:scope_evidence={'requests':[{'keywords':[term],'page':1,'resultsPerPage':50}],'applied_dimensions':['keywords']}
     elif kind == "eu_careers":
         records = _eu_careers(url)
     elif kind == "remote_co":
@@ -3792,6 +3793,8 @@ def collect(source, config=None):
         records = _awork(url)
     elif kind == "freelancer_api":
         url = scoped_freelancer_url(url, config)
+        if (config or {}).get("_jscc_targeted_collection"):
+            scope_evidence={"requests":[{"or_search_query":engine.configured_titles(config)}],"applied_dimensions":["or_search_query"]}
         status, _content_type, body = _fetch(url, "application/json")
         if status != 200:
             raise RuntimeError(f"Freelancer public API HTTP {status}")
@@ -3800,6 +3803,7 @@ def collect(source, config=None):
         term = scoped_public_query(name, config)
         if kind == "remotive" and term:
             url += ("&" if "?" in url else "?") + urlencode({"search": term})
+            scope_evidence={"requests":[{"search":term}],"applied_dimensions":["search"]}
         elif kind == "himalayas":
             native=himalayas_native_query(config)
             params={**native,"sort":"recent","page":1} if native else {"limit":20}
