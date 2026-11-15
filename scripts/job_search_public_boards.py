@@ -1914,22 +1914,14 @@ def _softgarden_feed(payload, provider, feed_url):
         description = plain_text(item.get("description") or item.get("descriptionHtml") or "")
         job_location_type = str(item.get("jobLocationType") or "").upper()
         remote = "TELECOMMUTE" in job_location_type or bool(re.search(r"\bremote\b", " ".join(location_parts), re.I))
-        record = _record(
+        records.append(_record(
             provider, identity, str(title), company, description or str(title), str(url),
             date_posted=item.get("datePosted"),
             location="; ".join(location_parts),
             countries=countries,
             remote=remote,
             employment_statuses=engine.list_values(item.get("employmentType")),
-        )
-        # Feed fields alone do not establish full detail parity.
-        record["description"] = description
-        record["_jscc_field_provenance"] = {
-            "title": "LISTING_CARD", "description": "LISTING_CARD",
-            **({"location": "LISTING_CARD"} if location_parts else {}),
-            **({"date_posted": "LISTING_CARD"} if item.get("datePosted") else {}),
-        }
-        records.append(record)
+        ))
     if not records:
         raise ValueError(f"{provider} Softgarden feed contained no extractable jobs")
     return records
@@ -3499,7 +3491,6 @@ CONTEXT_RISK_SOURCES = frozenset((
     "Fujitsu Belgium",
     "Crossover",
     "NATO Careers",
-    "Orange Romania",
 ))
 CONTEXT_LOCATION_KINDS = frozenset((
     "linked_jobs", "rendered_links", "heading_list", "rendered_heading_list",
@@ -3797,7 +3788,7 @@ def collect(source, config=None):
             }[kind]
             records = parser(payload)
     unresolved = 0
-    if (config or {}).get("_jscc_targeted_collection") or name in {"NATO Careers", "Orange Romania", "Societe Generale", "Source Group International"}:
+    if (config or {}).get("_jscc_targeted_collection") or name in {"NATO Careers", "Societe Generale", "Source Group International"}:
         records, unresolved = protect_context_records(records, name, kind, url, config=config)
     result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
     if unresolved:
