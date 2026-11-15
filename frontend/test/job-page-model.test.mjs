@@ -197,3 +197,23 @@ test('bounded exact count never publishes stale, partial or looping scans',async
   assert.equal(url.searchParams.get('quick'),'b2b');
   assert.equal(url.searchParams.get('count_only'),'true');
 });
+
+
+test('interactive page fetch can disable synchronous extra FIT work for all page sizes',()=>{
+  for(const size of JOBS_PAGE_SIZES){
+    const url=new URL(buildJobsPath({filters:{pageSize:size},limit:size,prefetch:0,view:'jobs'}),'https://example.test');
+    assert.equal(url.searchParams.get('limit'),String(size));
+    assert.equal(url.searchParams.get('prefetch'),'0');
+  }
+});
+
+test('count scan stops after cancellation while a batch is in flight',async()=>{
+  const basis='a'.repeat(64),anchor='2026-11-15T14:30:00.000Z';
+  let current=true,calls=0;
+  const result=await scanResultCount({basis,anchor,isCurrent:()=>current,load:async()=>{
+    calls++;current=false;
+    return {count_only:true,count_basis:basis,generated_at:anchor,results:40,next_cursor:'next'};
+  }});
+  assert.equal(result,null);
+  assert.equal(calls,1);
+});
