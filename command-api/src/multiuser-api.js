@@ -40,6 +40,8 @@ import { clearSessionCookie, cookieValue, sessionCookie } from './session-cookie
 import { userRefresh } from './user-refresh.js';
 import { adminCoverageSnapshot } from './coverage.js';
 import { adminRefresh } from './admin-refresh.js';
+import { adminDbPurge } from './admin-db-purge.js';
+import { devPurgeActive } from './runtime-gcp.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const COOKIE_SENTINEL = '__JSCC_COOKIE_SESSION__';
@@ -301,6 +303,7 @@ export async function handleAuthenticatedRoute(request, env, context) {
 
   if (request.method === 'POST' && url.pathname === '/me/refresh') {
     requireSameOrigin(request, env);
+    if (await devPurgeActive(env)) throw Object.assign(new Error('DEV DB Purge in progress'),{status:409});
     const manual = String(env.APP_ENV || '').toLowerCase()==='dev' && url.searchParams.get('intent') === 'manual';
     const result = manual
       ? await trackedRefresh(context,env,()=>userRefresh(context,env,{intent:'manual'}))
@@ -405,9 +408,16 @@ export async function handleAuthenticatedRoute(request, env, context) {
     return json({ status:'saved', scheduler:await saveSchedulerConfig(context, await request.json(), env) });
   }
 
+  if (request.method === 'POST' && url.pathname === '/admin/db-purge') {
+    requireSameOrigin(request, env);
+    requireAdmin(context);
+    return json(await adminDbPurge(context,env,await request.json()));
+  }
+
   if (request.method === 'POST' && url.pathname === '/admin/refresh') {
     requireSameOrigin(request, env);
     requireAdmin(context);
+    if (await devPurgeActive(env)) throw Object.assign(new Error('DEV DB Purge in progress'),{status:409});
     const manual = String(env.APP_ENV || '').toLowerCase()==='dev' && url.searchParams.get('intent') === 'manual';
     const result = manual
       ? await trackedRefresh(context,env,()=>adminRefresh(context,env,{intent:'manual'}))
