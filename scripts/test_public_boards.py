@@ -1754,3 +1754,42 @@ class ConsolidatedDetailRecoveryTests(unittest.TestCase):
         self.assertEqual(len(results),2)
         self.assertEqual(results[0].records[0]["description"],"")
         self.assertEqual(results[0].records[0]["location"],"")
+
+
+class RiskInventoryRegressionTests(unittest.TestCase):
+    def test_all_48_risk_routes_reject_unverified_listing_context(self):
+        names = ["Hipo","EuroBrussels","eFinancialCareers","Remote.co","Wellfound","Flexa","No Fluff Jobs","Just Join IT","awork.ro","JustRemote","DailyRemote","PowerToFly","Dynamite Jobs","Torre","Techjobs.be","FlexJobs","SkipTheDrive","Freelancermap","PeoplePerHour","Hubstaff Talent","Altia","Vector Synergy","Serco Europe","Societe Generale","Worldpay / Global Payments","Mantu","Cegeka","Computacenter","SoftServe","EPAM","Eviden","HARMAN","Prohuman","GitHub","RED Global","Salt","Square One Resources","Source Group International","Montreal Associates","Brains Consulting","Next Ventures","Lawrence Harvey","Proactive.IT","W Talent","KEYES / NRB","Trasys International","Thaleria","Fujitsu Belgium"]
+        self.assertEqual(len(set(names)),48)
+        for name in names:
+            with self.subTest(source=name):
+                self.assertIn(name,boards.CONTEXT_RISK_SOURCES)
+                spec=boards.PUBLIC_BOARD_SOURCES[name]
+                raw={"id":"fixture-1","job_title":"Project Manager","company":name,
+                     "source_url":spec["url"],"description":"Unverified adjacent card",
+                     "location":"Unverified adjacent card","date_posted":"2026-11-01",
+                     "remote":True,"countries":["Romania"],"employment_statuses":["contract"]}
+                with patch.object(boards.PublicClient,"get") as get:
+                    records,unresolved=boards.protect_context_records([raw],name,spec["kind"],spec["url"])
+                get.assert_not_called()
+                self.assertEqual(unresolved,1)
+                self.assertEqual(records[0]["id"],"fixture-1")
+                self.assertEqual(records[0]["description"],"")
+                self.assertEqual(records[0]["location"],"")
+                self.assertIsNone(records[0]["date_posted"])
+                self.assertEqual(records[0]["countries"],[])
+                self.assertFalse(records[0]["remote"])
+
+    def test_all_48_risk_routes_preserve_verified_detail(self):
+        from pathlib import Path
+        inventory=Path(__file__).resolve().parents[1]/"docs"/"retrieve-d3-source-dispositions.md"
+        names=[line.split("|")[1].strip() for line in inventory.read_text(encoding="utf-8").splitlines() if line.startswith("| ") and "src-" in line]
+        self.assertEqual(len(set(names)),48)
+        for name in names:
+            with self.subTest(source=name):
+                spec=boards.PUBLIC_BOARD_SOURCES[name]
+                raw={"id":"fixture-2","job_title":"Project Manager","company":"Verified Employer",
+                     "source_url":spec["url"],"description":"Verified detail",
+                     "_jscc_field_provenance":{"description":"JOB_DETAIL_JSONLD"}}
+                records,unresolved=boards.protect_context_records([raw],name,spec["kind"],spec["url"])
+                self.assertEqual(unresolved,0)
+                self.assertEqual(records,[raw])
