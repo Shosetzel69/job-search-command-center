@@ -3595,7 +3595,7 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
                 provenance["location"] = "LISTING_CARD"
             elif location:
                 provenance["location"] = "LISTING_CARD"
-            if name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo"}:
+            if name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo"} or (kind in {"linked_jobs", "rendered_links"} and str(record.get("company") or "").casefold() == name.casefold()):
                 record["company"] = "Nespecificata"
                 record["company_provenance"] = "UNKNOWN"
             if name == "Crossover":
@@ -3788,7 +3788,8 @@ def collect(source, config=None):
                 scope_evidence["listing_cap_reached"]=bool(payload.get("nextCursor") or payload.get("hasMore") is True or len(payload.get("jobs") or [])>=20)
                 scope_evidence["listing_valid"]=len(records)
     unresolved = 0
-    if (config or {}).get("_jscc_targeted_collection") or name in {"NATO Careers", "Societe Generale", "Source Group International", "Hipo", "Just Join IT", "SkipTheDrive", "Wellfound"}:
+    if name in CONTEXT_RISK_SOURCES:
+        # Every collection mode uses the same bounded provenance gate.
         records, unresolved = protect_context_records(records, name, kind, url, config=config)
     result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
     if scope_evidence is not None:
