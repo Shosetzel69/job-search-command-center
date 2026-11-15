@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, navigateJobPage, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
+import { JOBS_PAGE_SIZE, JOBS_PAGE_SIZES, jobPageSize, buildJobsPath, ignorePageResponse, navigateJobPage, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
 
 test('canonical job query is bounded, profile-scoped and provider-free', () => {
   const path = buildJobsPath({
@@ -40,9 +40,12 @@ test('refresh outcome mapping distinguishes reuse, join, start and policy block'
   assert.equal(refreshOutcomeNotice({outcome:'STARTED_RUN'}).terminal,false);
   assert.equal(refreshOutcomeNotice({outcome:'BLOCKED_BY_POLICY'}).type,'error');
 });
-test('pagination is 20 per page without FIT ranking or provider requests', () => {
+test('pagination supports user-selected 20/30/40 per page without FIT ranking or provider requests', () => {
   assert.equal(JOBS_PAGE_SIZE,20);
-  for (const [limit,prefetch,expectedLimit,expectedPrefetch] of [[undefined,undefined,20,20],[500,100,20,20],[1,0,1,0]]) {
+  assert.deepEqual(JOBS_PAGE_SIZES,[20,30,40]);
+  for(const n of JOBS_PAGE_SIZES){const u=new URL(buildJobsPath({filters:{pageSize:n}}),'https://jscc.example');assert.equal(u.searchParams.get('limit'),String(n));assert.equal(u.searchParams.get('prefetch'),String(n));}
+  assert.equal(jobPageSize(39),20);
+  for (const [limit,prefetch,expectedLimit,expectedPrefetch] of [[undefined,undefined,20,20],[500,100,40,40],[1,0,1,0]]) {
     const url=new URL(buildJobsPath({limit,prefetch}), 'https://jscc.example');
     assert.equal(url.searchParams.get('limit'),String(expectedLimit));
     assert.equal(url.searchParams.get('prefetch'),String(expectedPrefetch));
@@ -55,6 +58,7 @@ test('cursor context changes whenever visible filters, sort or view change', () 
   const key=pageRequestKey(baseline);
   for(const modified of [
     {...baseline,view:'review'},
+    {...baseline,filters:{...baseline.filters,pageSize:40}},
     {...baseline,kpiFilter:'high'},
     {...baseline,filters:{...baseline.filters,quick:'b2b'}},
     {...baseline,filters:{...baseline.filters,sort:'fit-desc'}},
