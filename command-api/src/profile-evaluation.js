@@ -1,6 +1,6 @@
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
-import { canonicalPostedDate, postedAgeHours } from './posted-date.mjs';
+import { canonicalPostedDate, postedAgeHours, parsePostedDate } from './posted-date.mjs';
 
 export const FIT_ALGORITHM_VERSION = 'fit-v1-scope-2';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
@@ -109,6 +109,20 @@ function remoteEligibilityMatches({ countryCodes, remoteScope, remote }, prefere
   }
   if (!countryCodes.length) return true;
   return countryCodes.some(code => eligible.has(code));
+}
+
+export function sourcePostingDates(row, now=new Date()) {
+  const p=row.posting_payload||{};
+  // Never replace an absent source publication date with a canonical age, retrieval timestamp, or another posting.
+  const raw=[p.date_posted,p.posted_at].find(x=>parsePostedDate(x,now));
+  const fromPosting=parsePostedDate(row.posted_at,now);
+  const parsed=fromPosting||parsePostedDate(raw,now);
+  const originalDay=typeof raw==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(raw)&&parsePostedDate(raw,now)===parsed;
+  return {
+    retrieve_date:parsePostedDate(row.posting_last_seen_at,now),
+    publication_date:originalDay?raw:parsed,
+    publication_precision:parsed?(originalDay?'date':'timestamp'):null,
+  };
 }
 
 export function evaluateSharedJob(row, preferences, nomenclatures, now = new Date()) {
@@ -229,6 +243,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       risks:risks.slice(0,2),
       url,
       description,
+      ...sourcePostingDates(row,now),
       date_posted:posted,
       age_basis:posted ? 'posted_at' : 'unknown',
       source:row.source_name || payload.source || 'Nespecificata',
@@ -285,6 +300,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     risks:risks.slice(0,2),
     url,
     description,
+    ...sourcePostingDates(row,now),
     date_posted:posted,
     age_basis:posted ? 'posted_at' : 'unknown',
     source:row.source_name || payload.source || 'Nespecificata',
