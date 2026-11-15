@@ -70,6 +70,8 @@ class CollectionResult:
     error_code: str | None = None
     failure_stage: str | None = None
     http_status: int | None = None
+    provider_request_attempts: int | None = None
+    provider_request_measurement: str | None = None
 
 
 class JobsPipeConnector:
