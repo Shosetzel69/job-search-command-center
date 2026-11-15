@@ -516,6 +516,21 @@ class OrchestrationTests(unittest.TestCase):
         result = orchestration.failure_result("demo","collect",caught.exception)
         self.assertEqual(result.provider_request_attempts,1)
 
+    def test_parallel_public_requests_share_only_own_source_counter(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from web_transport import request_measurement, note_request_attempt, measured_pool_map
+        def read(_):
+            note_request_attempt()
+            note_request_attempt()
+        with request_measurement() as count:
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                list(measured_pool_map(pool,read,range(12)))
+            self.assertEqual(count[0],24)
+            with request_measurement() as inner:
+                note_request_attempt()
+                self.assertEqual(inner[0],1)
+            self.assertEqual(count[0],24)
+
     def test_provider_request_measurement_is_not_record_count(self):
         item = {"source":"Example","source_id":"src-example"}
         result = engine.CollectionResult("example","q",True,[],100,
