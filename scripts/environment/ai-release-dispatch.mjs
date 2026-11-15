@@ -76,7 +76,7 @@ export function parseValidationCommand(body, { actor, issueNumber, commentId } =
   if (!Number.isSafeInteger(Number(issueNumber)) || Number(issueNumber) < 1) throw new Error("Valid issue number is required.");
   if (!Number.isSafeInteger(Number(commentId)) || Number(commentId) < 1) throw new Error("Valid comment id is required.");
   const text = typeof body === "string" ? body.trim() : "";
-  const match = text.match(/^\/jscc-validate[ \t]+dev[ \t]+([0-9a-fA-F]{40})[ \t]+(src-[a-z0-9]+(?:,src-[a-z0-9]+){0,19})$/);
+  const match = text.match(/^\/jscc-validate[ \t]+dev[ \t]+([0-9a-fA-F]{40})[ \t]+(src-[a-z0-9]+(?:-[a-z0-9]+)*(?:,src-[a-z0-9]+(?:-[a-z0-9]+)*){0,19})$/);
   if (!match) throw new Error("Invalid validation command. Use /jscc-validate dev <40-char-sha> <comma-separated-source-ids>.");
   const sourceIds = match[2].split(",");
   if (new Set(sourceIds).size !== sourceIds.length) throw new Error("Source IDs must be unique.");
@@ -87,7 +87,7 @@ export function validationWorkflowDispatchPayload(command) {
   if (!command || command.environment !== "dev") throw new Error("Only DEV source validation is supported.");
   if (!/^[0-9a-f]{40}$/.test(command.sourceSha || "")) throw new Error("Invalid source SHA.");
   if (!Array.isArray(command.sourceIds) || command.sourceIds.length < 1 || command.sourceIds.length > 20 ||
-      command.sourceIds.some(id => !/^src-[a-z0-9]+$/.test(id)) ||
+      command.sourceIds.some(id => !/^src-[a-z0-9]+(?:-[a-z0-9]+)*$/.test(id)) ||
       new Set(command.sourceIds).size !== command.sourceIds.length) {
     throw new Error("Invalid source IDs.");
   }

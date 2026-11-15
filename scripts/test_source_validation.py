@@ -106,6 +106,24 @@ class SourceValidationTests(unittest.TestCase):
         self.assertEqual(prepared["validation_override"], "validation_pending")
         self.assertFalse(route["enabled"])
 
+    def test_zoho_exact_five_boards_validation_only(self):
+        for source_id, (name, url) in validation.ZOHO_VALIDATION_BOARDS.items():
+            with self.subTest(source_id=source_id):
+                original = source(source_id, name=name, url=url, active=False,
+                                  approval_status="pending")
+                route = {"connector": "zoho_recruit", "career_url": url,
+                         "enabled": False,
+                         "disabled_reason": "Outside owner-approved Option A pilot; activation not authorized"}
+                with patch.dict(orchestration.ATS_ROUTES, {name: route}, clear=False):
+                    item = validation.prepare_validation_items(catalog(original), [source_id])[0]
+                    self.assertEqual(item["validation_override"], "zoho_read_only_cohort")
+                    self.assertEqual(item["status"], "pending")
+                    self.assertFalse(original["active"])
+                    self.assertFalse(route["enabled"])
+                    route["career_url"] = "https://different.zohorecruit.com/careers"
+                    with self.assertRaises(validation.ValidationError):
+                        validation.prepare_validation_items(catalog(original), [source_id])
+
     def test_jobspipe_is_rejected(self):
         item = source("jobspipe", name="JobsPipe", url="https://jobspipe.dev/")
         with self.assertRaisesRegex(validation.ValidationError, "prohibited connector"):
