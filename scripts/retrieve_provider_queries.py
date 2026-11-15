@@ -53,3 +53,46 @@ def listing_role_excluded(title, scopes):
         (not scope.get("role_subfamilies") or not members or members.intersection(scope["role_subfamilies"]))
         for scope in scopes if isinstance(scope, dict)
     )
+
+
+def signed_scopes(config):
+    scope=(config or {}).get("_jscc_retrieve_scope") or {}
+    return tuple(s for s in scope.get("scopes",[]) if isinstance(s,dict))
+
+
+def scope_terms(scope):
+    members=scope.get("role_subfamilies") or []
+    if not members or any(member not in SCOPE_TERMS for member in members):
+        return ("",)
+    return tuple(sorted({term for member in members for term in SCOPE_TERMS[member]}))
+
+
+def scope_country_codes(scope, regions, known_codes):
+    countries=set(scope.get("target_country_codes") or [])
+    for region in scope.get("target_regions") or []:
+        if not regions.get(region):
+            return ()
+        countries.update(regions[region])
+    if not countries or not countries.issubset(known_codes):
+        return ()
+    return tuple(sorted(countries))
+
+
+def remote_eligibility_country(config, regions, known_codes):
+    """A single public search is safe only when every remote tuple shares
+    the same singleton eligibility country. Never expand the request budget.
+    Country includes worldwide jobs on Himalayas (not employer location).
+    """
+    scopes=signed_scopes(config)
+    relevant=[s for s in scopes if not s.get("work_modes") or "remote" in s["work_modes"]]
+    if not relevant:
+        return None
+    values=set()
+    for scope in relevant:
+        authorized=set(scope.get("remote_eligible_country_codes") or [])
+        if not authorized:
+            authorized=set(scope_country_codes(scope,regions,known_codes))
+        if len(authorized)!=1 or not authorized.issubset(known_codes):
+            return None
+        values.update(authorized)
+    return next(iter(values)) if len(values)==1 else None
