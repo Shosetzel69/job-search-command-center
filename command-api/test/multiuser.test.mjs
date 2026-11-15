@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 import { internalAuthContext, withInternalAuthContext } from '../src/internal-auth-context.js';
-import { EVALUATION_VERSION, FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from '../src/profile-evaluation.js';
+import { EVALUATION_VERSION, FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob, sourcePostingDates } from '../src/profile-evaluation.js';
 import { evaluateEligibility } from '../src/eligibility.js';
 import { classifyCanonicalJob } from '../../shared/job-classification.mjs';
 import {
@@ -12,6 +12,7 @@ import {
   encodeJobCursor,
   mergeEffectiveConfig,
   normalizeJobSearchQuery,
+  matchesResultView,
   ownerBootstrapPending,
   resolveOrProvisionGoogleIdentity,
   resolveSession,
@@ -773,4 +774,22 @@ test('preference response changed flag reflects semantic personal change only', 
     false,
     'system collection policy must not affect personal semantic changed flag',
   );
+});
+
+test('preferred source dates preserve day-only precision and never substitute a canonical date',()=>{
+  const now=new Date('2026-11-15T14:30:00Z');
+  const row={posted_at:new Date('2026-11-13T00:00:00Z'),posting_payload:{date_posted:'2026-11-13'},posting_last_seen_at:new Date('2026-11-15T13:00:00Z')};
+  assert.deepEqual(sourcePostingDates(row,now),{retrieve_date:'2026-11-15T13:00:00.000Z',publication_date:'2026-11-13',publication_precision:'date'});
+  assert.deepEqual(sourcePostingDates({payload:{date_posted:'2026-11-13'},posting_last_seen_at:row.posting_last_seen_at},now),{retrieve_date:'2026-11-15T13:00:00.000Z',publication_date:null,publication_precision:null});
+});
+test('visible result and count predicates match; unclassified never scores as a recommendation',()=>{
+  const job={fit:82,b2b:true,remote:true,repost:false,age:5};
+  const eligible={eligible:true,eligibilityState:'ELIGIBLE'};
+  assert.equal(matchesResultView(job,eligible,{result_view:'jobs',quick:'high',kpi:'remote'},80),true);
+  assert.equal(matchesResultView(job,eligible,{result_view:'review',quick:'all',kpi:'all'},80),false);
+  assert.equal(matchesResultView(job,eligible,{result_view:'jobs',quick:'all',kpi:'repost'},80),false);
+  const unresolved={eligible:false,eligibilityState:'UNKNOWN',eligibilityReasonCode:'ROLE_FAMILY_UNKNOWN'};
+  assert.equal(matchesResultView({...job,fit:null},unresolved,{result_view:'unclassified'},80),true);
+  assert.equal(matchesResultView(job,unresolved,{result_view:'jobs'},80),false);
+  assert.throws(()=>normalizeJobSearchQuery({count_only:'true'}),/Result view required/);
 });
