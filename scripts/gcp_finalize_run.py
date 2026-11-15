@@ -11,7 +11,10 @@ def finalize(*, env=None, request=None):
     request = urllib.request.urlopen if request is None else request
     run_id = env["JSCC_RUN_ID"]
     bucket = env["GCP_RUNTIME_BUCKET"]
-    generation = env["GCP_CURRENT_GENERATION"]
+    nile_only = (env.get("APP_ENV") == "dev"
+                 and env.get("CLOUD_RUN_JOB") == "jscc-search-dev"
+                 and bucket == "jscc-dev-runtime-828902654738")
+    generation = None if nile_only else env["GCP_CURRENT_GENERATION"]
     with open(os.path.join(env["JSCC_RUNTIME_DATA_DIR"], "run-status.json"), encoding="utf-8") as stream:
         status = json.load(stream)
     if status.get("run_id") != run_id:
@@ -49,7 +52,7 @@ def finalize(*, env=None, request=None):
             raise
         expected = "0"
     upload("latest-run.json", record, expected)
-    if status.get("status") not in ("completed", "completed_with_errors"):
+    if nile_only or status.get("status") not in ("completed", "completed_with_errors"):
         return
     upload("current.json", {
         "run_id": run_id, "artifact_identity": "runs/" + run_id + "/jobs.json",

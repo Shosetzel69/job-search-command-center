@@ -22,7 +22,7 @@ class SupervisorTest(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.root=Path(self.tmp.name)
         (self.root/"seed").mkdir()
-        for name in ("search-config.json","jobs.json","run-history.json","search-state.json"):
+        for name in ("search-config.json","run-history.json","search-state.json"):
             (self.root/"seed"/name).write_text("{}")
         (self.root/"seed"/"run-status.json").write_text('{"run_id":"old","status":"completed","jobs_published":110}')
         self.id="run-00000000-0000-4000-8000-000000000001"
@@ -80,4 +80,20 @@ class SupervisorTest(unittest.TestCase):
             return SimpleNamespace(returncode=0)
         self.assertEqual(self.call(execute=execute),0)
         self.assertEqual(self.published[0]["jobs_published"],7)
+        self.assertFalse((self.path.parent/"jobs.json").exists())
         self.assertEqual(self.store.deleted,[(supervisor.ACTIVE,"12"),(supervisor.LOCK,"11")])
+
+    def test_dev_finalizer_publishes_completion_not_current(self):
+        import io
+        self.path.parent.mkdir(parents=True)
+        self.path.write_text(json.dumps({"run_id":self.id,"status":"completed","completed_at":"2026-11-15T00:00:00+00:00"}))
+        calls=[]
+        def request(req):
+            calls.append(req.full_url)
+            if "metadata.google.internal" in req.full_url:
+                return io.BytesIO(b'{"access_token":"fake"}')
+            return io.BytesIO(b'{"generation":"1"}')
+        supervisor.finalize(env={**self.env,"JSCC_RUNTIME_DATA_DIR":str(self.path.parent)},request=request)
+        self.assertTrue(any("run-completions" in url for url in calls))
+        self.assertTrue(any("latest-run.json" in url for url in calls))
+        self.assertFalse(any("current.json" in url or "jobs.json" in url for url in calls))
