@@ -24,8 +24,8 @@ test('profile jobs are bounded and paginated in the UI', () => {
   assert.match(main, /rezultate pe pagina/);
 });
 
-test('page-local filters never hide next/previous pagination on empty matches', () => {
-  assert.match(main, /Filtrele rapide, indicatoarele si sortarea FIT se aplica doar joburilor din pagina curenta/);
+test('global result filters preserve next/previous pagination on empty matches', () => {
+  assert.match(main, /Filtrele se aplica tuturor rezultatelor/);
   assert.match(main, /Nicio potrivire pe aceasta pagina/);
   assert.match(main, /navigate?aza|navigheaza/);
   assert.ok(main.includes('paginate&&controls("sus")'));
