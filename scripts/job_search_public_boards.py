@@ -864,8 +864,8 @@ def _luxoft_details(html, link, *, now=None):
     title = plain_text(posting.get("title"))
     description = plain_text(posting.get("description"))
     # A short structured description is retained; page chrome is not.
-    if not title:
-        raise ValueError("Luxoft job has missing title")
+    if not title or re.fullmatch(r"(?:share|facebook|twitter|linkedin|mail|\s|[·|,])+", title, re.I):
+        raise ValueError("Luxoft job has missing or contaminated title")
     from zoho_detail import reject_access_gateway_text
     reject_access_gateway_text(description)
     if re.search(r"facebook\s+twitter\s+linkedin\s+mail|add to favorites\s+share", description, re.I):
@@ -968,8 +968,8 @@ def _stripe_details(html, link, *, now=None):
     posting = jobs[0]
     title = plain_text(posting.get("title"))
     description = plain_text(posting.get("description"))
-    if not title:
-        raise ValueError("Stripe job has missing title")
+    if not title or re.fullmatch(r"(?:share|facebook|twitter|linkedin|mail|\s|[·|,])+", title, re.I):
+        raise ValueError("Stripe job has missing or contaminated title")
     from zoho_detail import reject_access_gateway_text
     reject_access_gateway_text(description)
     if re.search(r"facebook\s+twitter\s+linkedin\s+mail|add to favorites\s+share", description, re.I):
