@@ -1,5 +1,8 @@
 """Bounded public HTTP transport with pinned DNS and per-origin robots rules."""
 
+from contextvars import ContextVar
+from contextlib import contextmanager
+from functools import wraps
 import http.client
 import ipaddress
 import re
@@ -15,6 +18,48 @@ MAX_BYTES = 2 * 1024 * 1024
 HOST_LOCKS = {}
 HOST_LAST = {}
 LOCK = threading.Lock()
+
+
+_REQUEST_MEASUREMENT = ContextVar("provider_requests", default=None)
+
+
+@contextmanager
+def request_measurement():
+    count = [0]
+    token = _REQUEST_MEASUREMENT.set(count)
+    try:
+        yield count
+    finally:
+        _REQUEST_MEASUREMENT.reset(token)
+
+
+def note_request_attempt():
+    count = _REQUEST_MEASUREMENT.get()
+    if count is not None:
+        count[0] += 1
+
+
+def measured_urlopen(*args, **kwargs):
+    from urllib.request import urlopen
+    note_request_attempt()
+    return urlopen(*args, **kwargs)
+
+
+def measure_public_collection(collector):
+    @wraps(collector)
+    def measured(*args, **kwargs):
+        with request_measurement() as count:
+            try:
+                results = collector(*args, **kwargs)
+            except Exception as exc:
+                exc.provider_request_attempts = count[0]
+                exc.provider_request_measurement = "public_transport_attempts"
+                raise
+        if isinstance(results, list) and results:
+            results[0].provider_request_attempts = count[0]
+            results[0].provider_request_measurement = "public_transport_attempts"
+        return results
+    return measured
 
 
 class FetchError(Exception):
@@ -169,6 +214,7 @@ class PublicClient:
 
     def _request_once(self, url, delay=0.5):
         self.request_attempts += 1
+        note_request_attempt()
         return request_once(url, self.deadline, delay)
 
     def policy(self, url):
