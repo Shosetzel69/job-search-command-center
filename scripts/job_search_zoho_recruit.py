@@ -434,7 +434,12 @@ def collect_result(board_url, company_name, opener=None, role_family=None):
     """Adapt public postings to the JSCC canonical CollectionResult boundary."""
     import job_search as engine
     evidence = {}
-    records = collect(board_url, company_name, opener=opener, role_family=role_family, diagnostics=evidence)
+    try:
+        records = collect(board_url, company_name, opener=opener, role_family=role_family, diagnostics=evidence)
+    except Exception as exc:
+        exc.provider_request_attempts = evidence.get("provider_request_attempts")
+        exc.provider_request_measurement = evidence.get("provider_request_measurement")
+        raise
     tenant = urlsplit(validate_board(board_url)).hostname
     connector = f"zoho_recruit:{tenant}"
     result = [engine.CollectionResult(connector, "public_postings", True, records, len(records))]
