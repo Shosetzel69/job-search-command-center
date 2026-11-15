@@ -1552,6 +1552,47 @@ def _persist_coverage_observations(cursor: Any, status: Mapping[str, Any]) -> in
     return updated
 
 
+def persist_run_progress(status: Mapping[str, Any], *, env=None, connect=None) -> None:
+    """Update the existing running row; never resurrect a terminal run."""
+    runtime_env = os.environ if env is None else env
+    expected, connection_string, connector = _db_connect(runtime_env, connect)
+    run_id = _text(status.get("run_id"))
+    if not run_id or status.get("status") != "in_progress":
+        raise SharedCorpusError("Invalid progress identity or phase")
+    with connector(connection_string) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            row = cursor.fetchone()
+            if not row or str(row[0]) != expected:
+                raise SharedCorpusError("Connected database does not match environment binding")
+            cursor.execute(
+                """UPDATE search_runs SET payload=payload || %s::jsonb,
+                           records_inspected=%s
+                    WHERE run_id=%s AND status='running'""",
+                (json.dumps(_json_safe(dict(status)), ensure_ascii=False),
+                 int(status.get("records_inspected") or 0), run_id),
+            )
+            if cursor.rowcount != 1:
+                raise SharedCorpusError("Progress update requires an owned running row")
+
+
+def read_operational_run(run_id: str, *, env=None, connect=None) -> dict:
+    """Read the exact canonical operational row for worker validation."""
+    runtime_env = os.environ if env is None else env
+    expected, connection_string, connector = _db_connect(runtime_env, connect)
+    with connector(connection_string) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            row = cursor.fetchone()
+            if not row or str(row[0]) != expected:
+                raise SharedCorpusError("Connected database does not match environment binding")
+            cursor.execute("SELECT payload FROM search_runs WHERE run_id=%s", (run_id,))
+            row = cursor.fetchone()
+            if not row or not isinstance(row[0], dict) or row[0].get("run_id") != run_id:
+                raise SharedCorpusError("Run evidence missing or mismatched")
+            return row[0]
+
+
 def persist_operational_run(
     status: Mapping[str, Any],
     *,
