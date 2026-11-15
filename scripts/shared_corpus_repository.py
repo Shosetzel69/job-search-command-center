@@ -142,28 +142,80 @@ def _normalize_remote_scope(value: object) -> str:
     return "unknown"
 
 
+def _trusted_posting_description(record: Mapping[str, Any]) -> str:
+    provenance = record.get("_jscc_field_provenance")
+    if not isinstance(provenance, Mapping):
+        return ""
+    origin = provenance.get("description")
+    trusted = origin in {"ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML"}
+    trusted = trusted or (origin == "LISTING_CARD" and record.get("description_provenance") in {
+        "public_modern_jobs_json", "public_job_card_description"})
+    description = _text(record.get("description"))
+    return description if trusted and not SHARE_MARKUP.search(description) else ""
+
+
+def _explicit_remote_geography(record: Mapping[str, Any]) -> tuple[str, tuple[str, ...], str]:
+    """Recognize affirmative, bounded eligibility clauses, not company geography."""
+    description = _trusted_posting_description(record)
+    if not description:
+        return "unknown", (), ""
+    aliases = canonical_nomenclatures.country_name_to_code(_nomenclatures())
+    active = canonical_nomenclatures.active_country_codes(_nomenclatures())
+    matches = []
+    for sentence in re.split(r"(?<=[.!?;])\s+|\n+", description):
+        clause = sentence.strip().rstrip(".;!").strip()
+        match = re.fullmatch(
+            r"(?:only\s+(?P<resident>.+?)\s+residents\s+(?:are\s+eligible|may\s+apply|will\s+be\s+considered)"
+            r"|(?:candidates|applicants|you)\s+must\s+(?:reside|live|be\s+based|be\s+located)\s+in\s+(?P<reside>.+?)"
+            r"|(?:we|the\s+company)\s+(?:only\s+hire|hire\s+only)\s+(?:candidates\s+)?(?:in|from)\s+(?P<hire>.+?)"
+            r"|(?:candidates|applicants)\s+(?:from|based\s+in)\s+(?P<eligible>.+?)\s+(?:are\s+eligible|may\s+apply)"
+            r"|(?:this\s+(?:role|position|job)\s+is\s+open\s+to|we\s+accept)\s+(?:candidates|applicants)\s+(?:from\s+)?(?P<open>.+?)"
+            r"|(?:you|candidates)\s+(?:can|may)\s+work\s+(?:remotely\s+)?from\s+(?P<work>anywhere\s+in\s+the\s+world|anywhere|worldwide))",
+            clause, re.I,
+        )
+        if not match:
+            continue
+        place = next(value for value in match.groupdict().values() if value)
+        place = re.sub(r"^(?:the\s+)", "", place.strip(), flags=re.I)
+        place = re.sub(r"\s+only$", "", place, flags=re.I)
+        key = place.casefold()
+        if key in {"worldwide", "anywhere", "anywhere in the world"}:
+            matches.append(("Worldwide", (), clause))
+        elif key == "emea":
+            matches.append(("EMEA", (), clause))
+        elif key in {"eu", "european union"}:
+            matches.append(("EU", (), clause))
+        else:
+            code = aliases.get(key) or (place.upper() if place.upper() in active else None)
+            if code:
+                matches.append(("Country", (code,), clause))
+    distinct = {(scope, codes) for scope, codes, _ in matches}
+    if len(distinct) != 1:
+        return "unknown", (), ""
+    return matches[0]
+
+
 def _remote_scope(record: Mapping[str, Any], work_mode: str, country_codes: tuple[str, ...]) -> str:
+    if work_mode != "remote":
+        return "unknown"
     explicit = _text(record.get("remote_scope"))
     if explicit:
         return _normalize_remote_scope(explicit)
-    if work_mode != "remote":
-        return "unknown"
+    scope, codes, _ = _explicit_remote_geography(record)
+    if scope != "unknown":
+        if country_codes and (scope != "Country" or set(codes) != set(country_codes)):
+            return "unknown"
+        return scope
     if country_codes:
         return "Country"
-    countries = record.get("countries") if isinstance(record.get("countries"), list) else []
-    remote_locations = record.get("remote_locations") if isinstance(record.get("remote_locations"), list) else []
-    text = " ".join([
-        _text(record.get("location")),
-        *(_text(value) for value in countries),
-        *(_text(value) for value in remote_locations),
-        _text(record.get("description"))[:5000],
-    ])
-    if re.search(r"worldwide|work from anywhere|anywhere in the world|global remote", text, re.I):
-        return "Worldwide"
-    if re.search(r"\bEMEA\b", text, re.I):
-        return "EMEA"
-    if re.search(r"\b(EU|European Union|Europe only|within Europe|across Europe|Europe)\b", text, re.I):
-        return "EU"
+    # Dedicated remote-location labels are allowed; ordinary description words
+    # and general office/client locations cannot imply worldwide eligibility.
+    values = record.get("remote_locations")
+    if isinstance(values, list):
+        scopes = {_normalize_remote_scope(_text(value)) for value in values}
+        scopes.discard("unknown")
+        if len(scopes) == 1:
+            return scopes.pop()
     return "unknown"
 
 
@@ -473,6 +525,12 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         }
     country_codes = _country_codes(record)
     work_mode = _work_mode(record)
+    if work_mode == "remote":
+        geo_scope, geo_codes, geo_evidence = _explicit_remote_geography(record)
+        if geo_scope != "unknown" and geo_evidence:
+            record["remote_eligibility_evidence"] = geo_evidence
+            if not country_codes and geo_scope == "Country":
+                country_codes = geo_codes
     contract_type = _contract_type(record)
     remote_scope = _remote_scope(record, work_mode, country_codes)
     seniority = _seniority(record)
