@@ -1012,7 +1012,18 @@ export function normalizeJobSearchQuery(input = {}) {
     JOB_PREFETCH_MAX,
     'prefetch',
   );
+  const resultView=String(source.result_view||'');
+  const quick=String(source.quick||'all'),kpi=String(source.kpi||'all');
+  if(resultView&&!['jobs','review','unclassified'].includes(resultView))throw httpError('Invalid result view',400);
+  if(!['all','high','b2b'].includes(quick)||!['all','new','high','repost','remote'].includes(kpi))throw httpError('Invalid result filter',400);
+  const countOnly=String(source.count_only||'')==='true';
+  if(countOnly&&!resultView)throw httpError('Result view required for counting',400);
+  const countBasis=String(source.count_basis||'');
+  if(countBasis&&!/^[a-f0-9]{64}$/.test(countBasis))throw httpError('Invalid count basis',400);
   return Object.freeze({
+    result_view:resultView,quick,kpi,count_only:countOnly,count_basis:countBasis,
+    as_of:countOnly&&source.as_of?String(source.as_of):null,
+    empty_modes:String(source.empty_modes||'')==='true',
     limit,
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
@@ -1090,6 +1101,33 @@ function cachedEvaluation(row) {
   });
 }
 
+// One predicate for page retrieval and the read-only count scan.
+export function matchesResultView(job,evaluation,spec,threshold) {
+  if(!job)return false;
+  if(spec.result_view==='unclassified')return evaluation.eligibilityState==='UNKNOWN'&&evaluation.eligibilityReasonCode==='ROLE_FAMILY_UNKNOWN';
+  if(!evaluation.eligible)return false;
+  if(spec.result_view==='review'&&job.fit!=null&&job.fit>=threshold)return false;
+  if(spec.quick==='high'&&!(job.fit!=null&&job.fit>=threshold))return false;
+  if(spec.quick==='b2b'&&!job.b2b)return false;
+  if(spec.kpi==='high'&&!(job.fit!=null&&job.fit>=threshold))return false;
+  if(spec.kpi==='new'&&!(job.age!=null&&job.age<=24))return false;
+  if(spec.kpi==='repost'&&!job.repost)return false;
+  if(spec.kpi==='remote'&&!job.remote)return false;
+  return true;
+}
+async function resultCountBasis(tx,foundation) {
+  const r=await tx.query(`SELECT
+    (SELECT count(*)::int FROM search_runs) AS runs,
+    (SELECT max(created_at) FROM search_runs) AS last_run,
+    (SELECT max(completed_at) FROM search_runs) AS last_completion,
+    (SELECT count(*)::int FROM search_runs WHERE status NOT IN ('completed','completed_with_errors','failed','cancelled','canceled','timed_out')) AS active_runs,
+    (SELECT count(*)::int FROM profile_job_state WHERE tenant_id=$1) AS state_count,
+    (SELECT max(updated_at) FROM profile_job_state WHERE tenant_id=$1) AS state_updated`,[tx.tenantId]);
+  if(!r.rows?.[0])throw httpError('Count basis unavailable',503);
+  const row=r.rows[0];
+  return {key:createHash('sha256').update(JSON.stringify([foundation.search_profile_id,foundation.profile_version,FIT_ALGORITHM_VERSION,row])).digest('hex'),active:Number(row.active_runs)>0};
+}
+
 export async function listProfileJobs(
   authContext,
   preferences,
@@ -1099,12 +1137,14 @@ export async function listProfileJobs(
   { db = getPool(env), now = new Date() } = {},
 ) {
   const spec = normalizeJobSearchQuery(query);
-  const anchor = spec.cursor ? new Date(spec.cursor.as_of) : new Date(now);
-  if (!Number.isFinite(anchor.getTime())) throw httpError('STALE_CURSOR', 400);
+  const anchor = spec.cursor ? new Date(spec.cursor.as_of) : new Date(spec.as_of||now);
+  if (!Number.isFinite(anchor.getTime())||anchor.getTime()>new Date(now).getTime()) throw httpError('STALE_CURSOR', 400);
 
   return withTenantTransaction(authContext, async tx => {
     await guardDevProjectionWrite(tx,env);
     const foundation = await resolveActiveSearchProfileTx(tx);
+    const basis=spec.result_view?await resultCountBasis(tx,foundation):null;
+    if(spec.count_only&&(!basis||basis.active||basis.key!==spec.count_basis))throw httpError('Count basis changed or Retrieve active',409);
     const params = [tx.tenantId, anchor, foundation.search_profile_id];
     const where = [
       `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`,
@@ -1145,6 +1185,8 @@ export async function listProfileJobs(
     }
 
     // Temporary view filters. These do not mutate Selection Criteria or evaluation versions.
+    if(spec.empty_modes)where.push('false');
+    if(spec.result_view==='unclassified')where.push("j.role_family='UNKNOWN'");
     if (!spec.include_archived) where.push('state.archived_at IS NULL');
     if (spec.role_family.length) {
       const p = add(spec.role_family);
@@ -1182,7 +1224,7 @@ export async function listProfileJobs(
       )`);
     }
 
-    const candidateLimit = Math.min(
+    const candidateLimit = spec.count_only?JOB_CANDIDATE_WINDOW_MAX:Math.min(
       Math.max(spec.limit * 8, spec.limit + spec.prefetch, 100),
       JOB_CANDIDATE_WINDOW_MAX,
     );
@@ -1304,25 +1346,29 @@ export async function listProfileJobs(
       }
       evaluationsComputed += 1;
       const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
-      await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
+      if(!spec.count_only)await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
       return { evaluation, job:evaluation.job };
     };
 
+    let matched=0;
     for (let index = 0; index < rows.length; index += 1) {
       const resolved = await resolveRow(rows[index]);
       inspected += 1;
       pageEndIndex = index;
-      if (!resolved.evaluation.eligible) {
+      const viewJob=spec.result_view==='unclassified'&&resolved.evaluation.eligibilityReasonCode==='ROLE_FAMILY_UNKNOWN'
+        ? {...materializeCachedJob(rows[index],resolved.evaluation,preferences,anchor),fit:null,eligibility_reason:'ROLE_FAMILY_UNKNOWN'} : resolved.job;
+      if (spec.result_view? !matchesResultView(viewJob,resolved.evaluation,spec,Number(preferences.fit_threshold??80)):!resolved.evaluation.eligible) {
         excluded += 1;
         continue;
       }
       if (spec.min_fit != null && Number(resolved.evaluation.score ?? -1) < spec.min_fit) continue;
-      jobs.push(resolved.job);
-      if (jobs.length >= spec.limit) break;
+      matched++;
+      if(!spec.count_only)jobs.push(viewJob);
+      if (!spec.count_only&&jobs.length >= spec.limit) break;
     }
 
     let prefetched = 0;
-    if (pageEndIndex >= 0 && spec.prefetch > 0) {
+    if (!spec.count_only && pageEndIndex >= 0 && spec.prefetch > 0) {
       for (let index = pageEndIndex + 1; index < rows.length && prefetched < spec.prefetch; index += 1) {
         await resolveRow(rows[index]);
         prefetched += 1;
@@ -1334,6 +1380,9 @@ export async function listProfileJobs(
     const hasMore = Boolean(cursorRow)
       && (!exhaustedWindow || pageEndIndex < rows.length - 1);
     const nextCursor = hasMore ? encodeJobCursor({ ...cursorRow, anchor }) : null;
+    const after=spec.result_view?await resultCountBasis(tx,foundation):null;
+    const stable=Boolean(basis&&!basis.active&&after&&!after.active&&basis.key===after.key);
+    if(spec.count_only&&!stable)throw httpError('Count basis changed',409);
 
     return {
       schema_version:'2.0',
@@ -1353,7 +1402,9 @@ export async function listProfileJobs(
       cache_hits:cacheHits,
       evaluations_computed:evaluationsComputed,
       prefetched,
-      results:jobs.length,
+      results:spec.count_only?matched:jobs.length,
+      count_only:spec.count_only,
+      count_basis:stable?basis.key:null,
       jobs,
     };
   }, { env, db });
