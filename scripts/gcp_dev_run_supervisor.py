@@ -129,7 +129,7 @@ def run(env=None, *, root=Path("/runtime"), storage=None, execute=subprocess.run
     rc = 1
     phase = "seed"
     try:
-        for name in ("search-config.json", "run-history.json", "search-state.json"):
+        for name in ("search-config.json", "search-state.json"):
             shutil.copyfile(root / "seed" / name, run_dir / name)
         phase = "snapshot"
         print("DEV_RUN_PHASE=snapshot", flush=True)
@@ -152,6 +152,17 @@ def run(env=None, *, root=Path("/runtime"), storage=None, execute=subprocess.run
     # Never publish or unlock if ownership has changed, or if finalization fails.
     if store.read(LOCK) != (lock_generation, descriptor) or store.read(ACTIVE) != (active_generation, active):
         raise RuntimeError("DEV run ownership changed before finalization")
+    if rc != 0 and env.get("NILE_DATABASE_URL"):
+        # Never import native DB libraries into the supervisor. A child can
+        # fail safely; exact-run GCS completion remains available for recovery.
+        try:
+            recovered = execute([sys.executable, "-X", "faulthandler",
+                                 "scripts/job_search_runner.py", "--persist-recovery-status"], env=env)
+            print("DEV_NILE_FAILURE_EVIDENCE=" + ("PASS" if recovered.returncode == 0 else "RECOVERY_ONLY"), flush=True)
+        except Exception:
+            print("DEV_NILE_FAILURE_EVIDENCE=RECOVERY_ONLY", flush=True)
+        if store.read(LOCK) != (lock_generation, descriptor) or store.read(ACTIVE) != (active_generation, active):
+            raise RuntimeError("DEV run ownership changed during recovery")
     publish(env=env)
     store.delete(ACTIVE, active_generation)
     store.delete(LOCK, lock_generation)

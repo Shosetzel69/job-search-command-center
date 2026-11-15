@@ -137,6 +137,7 @@ def normalize(item, tenant, company_name):
     }
 
 
+@engine.measure_provider_opener
 def collect(tenant, company_name, max_postings=MAX_POSTINGS, opener=urlopen):
     tenant = str(tenant or "").strip().lower()
     company_name = str(company_name or "").strip()

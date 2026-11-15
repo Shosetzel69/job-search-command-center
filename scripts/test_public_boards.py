@@ -1507,13 +1507,13 @@ class PublicBoardAdapterTests(unittest.TestCase):
         with patch.object(boards, "PublicClient", return_value=fake_client):
             with patch.object(boards, "_record", side_effect=fail_one_record):
                 results = boards.collect({"name": "Societe Generale"})
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
         self.assertTrue(results[0].ok)
         self.assertEqual(len(results[0].records), 1)
         self.assertEqual(results[0].records[0]["job_title"], "Delivery Manager")
-        self.assertFalse(results[1].ok)
-        self.assertEqual(results[1].error_code, "SCHEMA_ERROR")
-        self.assertEqual(results[1].failure_stage, "parse")
+        self.assertEqual(results[0].records[0]["description"], "")
+        self.assertTrue(all(not result.ok for result in results[1:]))
+        self.assertTrue(any(result.error_code == "SCHEMA_ERROR" and result.failure_stage == "parse" for result in results[1:]))
 
     def test_socgen_all_malformed_still_fails(self):
         html = '<a href="/en/job-offers/invalid-1-en">Bad Posting</a>'
@@ -1692,3 +1692,47 @@ class RetrievePublicDetailTests(unittest.TestCase):
         self.assertEqual(row["location"],"Bucharest, Romania")
         self.assertEqual(row["_jscc_field_provenance"]["description"],"JOB_DETAIL_JSONLD")
         self.assertIsNone(orange._orange_offer_identity("https://evil.example/Offer.aspx?oid=42"))
+
+
+class ConsolidatedDetailRecoveryTests(unittest.TestCase):
+
+    def test_short_jsonld_description_and_missing_location_are_retained(self):
+        import json
+        import shared_corpus_repository as corpus
+        html = '<script type="application/ld+json">' + json.dumps({
+            "@type":"JobPosting","title":"Project Manager","description":"Manage delivery and project risks."}) + '</script>'
+        for parse, link in ((boards._luxoft_details,"https://career.luxoft.com/jobs/project-manager-123"),
+                            (boards._stripe_details,"https://stripe.com/careers/listing/project-manager/123")):
+            row = parse(html,link)
+            self.assertEqual(row["description"],"Manage delivery and project risks.")
+            self.assertEqual(row["location"],"")
+            self.assertEqual(row["description_completeness"],"partial")
+            self.assertEqual(corpus.assess_record_quality(row)["verdict"],"INCOMPLETE")
+            self.assertIsNotNone(corpus.prepare_posting(row,source_hint="Example"))
+
+
+    def test_nato_verified_detail_recovery(self):
+        import json
+        listing = boards.PUBLIC_BOARD_SOURCES["NATO Careers"]["url"]
+        link = "https://nato.taleo.net/careersection/2/jobdetail.ftl?job=123&lang=en"
+        raw = {"id":"nato:123","job_title":"Project Manager","source_url":link,
+               "description":"Project Manager","_jscc_field_provenance":{"description":"LISTING_CARD"}}
+        html = '<script type="application/ld+json">' + json.dumps({
+            "@type":"JobPosting","title":"Project Manager","description":"Manage delivery and project risks.",
+            "jobLocation":{"address":{"addressLocality":"Brussels","addressCountry":"BE"}},
+            "datePosted":"2026-11-01"}) + '</script>'
+        with patch.object(boards.PublicClient,"get",return_value=(link,html)):
+            rows, unresolved = boards.protect_context_records([raw],"NATO Careers","nato_taleo",listing)
+        self.assertEqual(unresolved,0)
+        self.assertEqual(rows[0]["_jscc_field_provenance"]["description"],"JOB_DETAIL_JSONLD")
+        self.assertEqual(rows[0]["id"],"nato:123")
+
+    def test_unscoped_sgi_is_not_allowed_to_publish_context(self):
+        spec = boards.PUBLIC_BOARD_SOURCES["Source Group International"]
+        row = {"id":"sgi:1","job_title":"Project Manager","description":"Salary EUR 100000",
+               "location":"Salary EUR 100000","source_url":spec["url"]}
+        with patch.object(boards,"_linked_job_board",return_value=[row]):
+            results = boards.collect({"name":"Source Group International"})
+        self.assertEqual(len(results),2)
+        self.assertEqual(results[0].records[0]["description"],"")
+        self.assertEqual(results[0].records[0]["location"],"")

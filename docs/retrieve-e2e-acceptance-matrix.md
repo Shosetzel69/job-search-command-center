@@ -21,7 +21,7 @@ PR #633. Implementation status only, **zero runtime PASS claimed**. `IMPLEMENTED
 | D2-AC07 | IMPLEMENTED | Existing canonical/source identity upsert retained | Shared corpus regression |
 | D2-AC08 | BLOCKED | Persistence/UI visibility for new real postings | D5 live UI acceptance |
 | D2-AC09 | IMPLEMENTED | Per-source failure/partial results | Worker regression |
-| D2-AC10 | BLOCKED | Raw/excluded/after-scope and per-source inserts/updates plus distinct canonical publication attribution implemented; actual provider request counts not uniformly available | Live per-source reconciliation and provider request evidence |
+| D2-AC10 | BLOCKED | Raw/excluded/after-scope and per-source inserts/updates plus distinct canonical publication attribution implemented; per-eligible-transport request-attempt instrumentation in #652, including failed calls and browser request events; not wire-level accounting | Live per-source reconciliation and provider request evidence |
 | D2-AC11 | IMPLEMENTED | No registry activation changes; existing validation gates | Routing regression |
 | D3-AC01 | BLOCKED | Individual detail where verified; listing title provisional | Live original comparisons |
 | D3-AC02 | BLOCKED | Bounded individual-detail guard; unresolved description unknown | 48 individual live comparisons |
@@ -40,13 +40,13 @@ PR #633. Implementation status only, **zero runtime PASS claimed**. `IMPLEMENTED
 | D3-AC15 | IMPLEMENTED | Partial and failed sources excluded from lifecycle advancement | Shared corpus tests |
 | D4-AC01 | IMPLEMENTED | Manual request outcome feedback | Frontend tests; DEV pending |
 | D4-AC02 | IMPLEMENTED | Tenant-native request_id → run_id mapping; uncertain dispatch explicit | Native request mapping tests |
-| D4-AC03 | IMPLEMENTED | Existing worker progress callback and own request polling | Worker/frontend regression; DEV pending |
+| D4-AC03 | IMPLEMENTED | Worker progress callback persists exact running row in Nile; GCS ownership/recovery marker preserved; own request polling unchanged | Worker/frontend regression; DEV pending |
 | D4-AC04 | IMPLEMENTED | Planned-source denominator retained | F520-06 regression |
 | D4-AC05 | IMPLEMENTED | Outcome categories retained | Source orchestration regression |
 | D4-AC06 | IMPLEMENTED | Config skips separate | Source orchestration regression |
 | D4-AC07 | IMPLEMENTED | Source progress denominator reconciliation | Source orchestration regression |
 | D4-AC08 | IMPLEMENTED | Raw/scope/quality/created/updated plus distinct active canonical jobs touched by run, attributed by API preferred source; ADMIN history/UI shows counts; not USER opportunities | SQL/ADMIN regression; D5 live reconciliation pending |
-| D4-AC09 | IMPLEMENTED | Existing terminal run persistence/history retained | Worker/native regression |
+| D4-AC09 | IMPLEMENTED | DEV terminal Nile evidence and history read; legacy history JSON seed/write retired; GCS exact-run recovery retained | Worker/native regression |
 | D4-AC10 | IMPLEMENTED | Coverage before/after observed by signed scope; request origin via mapping | Coverage snapshot test; native/live verification pending |
 | D4-AC11 | IMPLEMENTED | Own status only, no global source/tenant data in USER mapping response | Native isolation test |
 | D4-AC12 | IMPLEMENTED | Admin per-source outcome/reason evidence | Admin history regression; DEV pending |
@@ -76,10 +76,18 @@ PR #633. Implementation status only, **zero runtime PASS claimed**. `IMPLEMENTED
 
 ## Release boundary
 
-Additive migration `011_refresh_requests.sql` is necessary for the private request mapping. Existing E86 promotion/migration controls remain unchanged. Before D5, establish the authorized DEV schema migration route, verification and rollback compatibility; do not bypass E86 implicitly. No DEV database migration or image deployment performed in this development cycle. No TEST/PROD, new IAM, WIF or historical data writes.
+Additive migration `012_refresh_requests.sql` is necessary for the private request mapping. Existing E86 promotion/migration controls remain unchanged. Before D5, establish the authorized DEV schema migration route, verification and rollback compatibility; do not bypass E86 implicitly. No DEV database migration or image deployment performed in this development cycle. No TEST/PROD, new IAM, WIF or historical data writes.
 
 CI on prior checkpoint c50f8fb passed. Later checkpoint 5dfbc79 search regression found two existing unscoped adapter call-contract failures; candidate corrections preserve those invocation shapes. Exact final SHA must be rerun and checked. Native CI and live source evidence must be verified separately.
 
 ## Follow-up D2–D4 candidate
 
 Role-query budgets remain bounded; no sources activated, no credentials or new infrastructure. Nine ATS adapters now preserve explicit field provenance and distinguish supplied posting dates from update/creation dates where supported. Missing location and listing-only titles cause INCOMPLETE quality; missing incoming posting dates do not erase known values. Crossover and Orange enrichment intentionally remains incomplete when a verified detail cannot be obtained. Canonical publication counts reflect exact run-touched shared jobs, not profile-visible opportunities. The release gate is unchanged: the prior GOV85 exception is scoped to SHA 121f88 and excludes database migration. A new exact-SHA DEV release route and explicit migration 011 authorization are necessary. No runtime acceptance claimed.
+
+
+## #652 final review remediation — DEV candidate
+
+- H1: explicit posting-specific remote work and separate candidate eligibility, with contextual/negative text tests; unknown geography stays unknown. H2: individual Zoho link requires exact final route, structured job ID and matching title; board fallback remains honest.
+- M1: per-invocation ATS opener attempts, public transport and browser request events (including failed/aborted attempts), preserved across scoped projections and failed results. Measurements explicitly identify their transport; no claim of packet-level requests or concealed redirect/retry accounting. JobsPipe is disabled in DEV.
+- M2: Nile run-progress updates require the owned existing running row; operational terminal evidence and history are Nile-first; DEV run-history JSON seed/write dependency removed. Run-specific GCS status/completion snapshots and generation-owned lock markers remain exclusively for bootstrap/crash recovery, including the native-driver failure case. No schema, permissions, architecture or historical-data change.
+- H1/H2/M1/M2 code and regression tests are candidates; exact-head CI and source validation plus authenticated DEV acceptance required. No merge or deployment implied.

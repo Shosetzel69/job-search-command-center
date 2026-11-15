@@ -204,9 +204,17 @@ class OrchestrationTests(unittest.TestCase):
                    "GCP_RUNTIME_BUCKET": "jscc-dev-runtime-828902654738"}
         with patch.dict(os.environ, runtime), patch.object(
                 orchestration.shared_corpus, "persist_collection", return_value=evidence), patch.object(
+                orchestration.shared_corpus, "persist_run_progress") as progress, patch.object(
+                orchestration.shared_corpus, "persist_operational_run", return_value={"status":"persisted"}) as persist, patch.object(
+                orchestration.shared_corpus, "read_operational_run", side_effect=lambda run_id:json.loads(engine.STATUS_PATH.read_text())), patch.object(
                 engine, "process_records", side_effect=AssertionError("legacy processing")), patch.object(
                 optimized, "merge_with_existing", side_effect=AssertionError("legacy merge")):
-            code, status = self.run_search()
+            code = orchestration.run(CONFIG, NOW)
+            runner.persist_terminal_evidence()
+            status = json.loads(engine.STATUS_PATH.read_text())
+            progress.assert_called()
+            persist.assert_called_once()
+            self.assertFalse(runner.HISTORY_PATH.exists())
             self.assertEqual(code, 0)
             self.assertFalse(engine.JOBS_PATH.exists())
             self.assertEqual(status["jobs_published"], 1)
@@ -221,7 +229,8 @@ class OrchestrationTests(unittest.TestCase):
         runtime = {"APP_ENV": "dev", "CLOUD_RUN_JOB": "jscc-search-dev",
                    "GCP_RUNTIME_BUCKET": "jscc-dev-runtime-828902654738"}
         with patch.dict(os.environ, runtime), patch.object(
-                orchestration.shared_corpus, "persist_collection", return_value={"status": "local_not_configured"}):
+                orchestration.shared_corpus, "persist_collection", return_value={"status": "local_not_configured"}), patch.object(
+                orchestration.shared_corpus, "persist_run_progress"):
             with self.assertRaisesRegex(RuntimeError, "publication evidence unavailable"):
                 orchestration.run(CONFIG, NOW)
             self.assertFalse(engine.JOBS_PATH.exists())
@@ -406,6 +415,132 @@ class OrchestrationTests(unittest.TestCase):
         orchestration.record_results(item, [result])
         self.assertEqual(item["error_code"], "TIMEOUT")
         self.assertEqual(item["outcome"], "failed")
+
+
+    def test_incomplete_with_source_fallback_is_retained_without_invented_fields(self):
+        item = {"source_id":"src-example","source":"Example","url":"https://example.com/careers"}
+        row = {"id":"job-42","job_title":"Project Manager","company":"Example",
+               "description":"Manage delivery.","location":None,
+               "_jscc_field_provenance":{"title":"ATS_FIELD","description":"LISTING_CARD"}}
+        unsafe = dict(row, id="unsafe", source_url="https://user:password@example.com/job")
+        results = [engine.CollectionResult("example","q",True,[row,unsafe],2)]
+        orchestration.tag_collection_records(item,results)
+        self.assertEqual(len(results[0].records),1)
+        self.assertEqual(row["description"],"Manage delivery.")
+        self.assertIsNone(row["location"])
+        self.assertEqual(row["source_url"],item["url"])
+        self.assertEqual(row["source_url_kind"],"careers_board_fallback")
+        self.assertEqual(item["quality_counts"],{"VALID":0,"INCOMPLETE":1,"INVALID":1})
+
+
+    def test_explicit_remote_description_cross_adapter(self):
+        import shared_corpus_repository as corpus
+        base = {"id":"remote-42","job_title":"Project Manager","company":"Example",
+                "source_url":"https://example.com/jobs/42",
+                "description":"Job Description This is a remote position.",
+                "location":None,"countries":[],
+                "_jscc_field_provenance":{"title":"ATS_FIELD","description":"ATS_FIELD"}}
+        item = {"source":"Example","source_id":"src-example"}
+        row = dict(base)
+        results = [engine.CollectionResult("example","q",True,[row],1)]
+        orchestration.tag_collection_records(item,results)
+        self.assertEqual(row["location"],"Remote")
+        self.assertTrue(row["remote"])
+        self.assertEqual(row["work_arrangement"],"remote")
+        self.assertEqual(row["countries"],[])
+        posting = corpus.prepare_posting(row)
+        self.assertEqual(posting.work_mode,"remote")
+        self.assertEqual(posting.remote_scope,"unknown")
+        for changes in (
+            {"description":"This is not a remote position."},
+            {"description":"Experience managing remote teams."},
+            {"work_arrangement":"hybrid"},
+            {"_jscc_field_provenance":{"description":"LISTING_CARD"}},
+        ):
+            other = dict(base,**changes)
+            corpus.apply_explicit_remote(other)
+            self.assertIsNone(other["location"])
+        geo = dict(base,location="Bucharest")
+        corpus.apply_explicit_remote(geo)
+        self.assertEqual(geo["location"],"Bucharest")
+        self.assertTrue(geo["remote"])
+
+    def test_remote_geography_requires_candidate_eligibility(self):
+        import shared_corpus_repository as corpus
+        base = {"id":"r-42","job_title":"Project Manager","company":"Example","_jscc_source_id":"src-remote-test","_jscc_source_name":"Example",
+                "source_url":"https://example.com/jobs/42","location":None,
+                "_jscc_field_provenance":{"title":"ATS_FIELD","description":"ATS_FIELD"}}
+        for context in ("Our clients are worldwide.", "We support customers across Europe.",
+                        "We do not offer worldwide remote work.", "Our EMEA office is in Paris."):
+            with self.subTest(context=context):
+                posting = corpus.prepare_posting(dict(base, description="This is a remote position. "+context))
+                self.assertEqual(posting.remote_scope,"unknown")
+                self.assertEqual(posting.country_codes,())
+        for context, expected, codes in (
+            ("Only US residents are eligible.", "Country", ("US",)),
+            ("Candidates must reside in Romania.", "Country", ("RO",)),
+            ("Applicants from the European Union may apply.", "EU", ()),
+            ("You may work from anywhere in the world.", "Worldwide", ()),
+        ):
+            with self.subTest(context=context):
+                posting = corpus.prepare_posting(dict(base, description="This is a remote position. "+context))
+                self.assertEqual(posting.remote_scope,expected)
+                self.assertEqual(posting.country_codes,codes)
+                self.assertIn("remote_eligibility_evidence",posting.payload)
+        conflict = corpus.prepare_posting(dict(base, description="This is a remote position. Only US residents are eligible. You may work from anywhere in the world."))
+        self.assertEqual(conflict.remote_scope,"unknown")
+
+    def test_provider_transport_attempts_survive_failure_and_scope(self):
+        from web_transport import PublicClient
+        def ok_opener(*args, **kwargs):
+            return object()
+        @engine.measure_provider_opener
+        def adapter(opener=ok_opener):
+            opener("first")
+            opener("second")
+            with patch("web_transport.request_once", return_value=None):
+                PublicClient(1)._request_once("https://example.com")
+            return [engine.CollectionResult("demo","a",True,[],100),
+                    engine.CollectionResult("demo","b",True,[],200)]
+        results = adapter()
+        self.assertEqual(results[0].provider_request_attempts,3)
+        self.assertIsNone(results[1].provider_request_attempts)
+        scoped = orchestration.apply_retrieve_scope({}, results, {"_jscc_retrieve_scope":{"scopes":[{}]}})
+        self.assertEqual(scoped[0].provider_request_attempts,3)
+        @engine.measure_provider_opener
+        def failed(opener=ok_opener):
+            opener("first")
+            raise ValueError("parse failed")
+        with self.assertRaises(ValueError) as caught:
+            failed()
+        result = orchestration.failure_result("demo","collect",caught.exception)
+        self.assertEqual(result.provider_request_attempts,1)
+
+    def test_parallel_public_requests_share_only_own_source_counter(self):
+        from concurrent.futures import ThreadPoolExecutor
+        from web_transport import request_measurement, note_request_attempt, measured_pool_map
+        def read(_):
+            note_request_attempt()
+            note_request_attempt()
+        with request_measurement() as count:
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                list(measured_pool_map(pool,read,range(12)))
+            self.assertEqual(count[0],24)
+            with request_measurement() as inner:
+                note_request_attempt()
+                self.assertEqual(inner[0],1)
+            self.assertEqual(count[0],24)
+
+    def test_provider_request_measurement_is_not_record_count(self):
+        item = {"source":"Example","source_id":"src-example"}
+        result = engine.CollectionResult("example","q",True,[],100,
+            provider_request_attempts=3, provider_request_measurement="zoho_opener_calls")
+        orchestration.record_results(item,[result])
+        self.assertEqual(item["provider_request_attempts"],3)
+        self.assertEqual(item["provider_reported_total"],100)
+        unknown = {"source":"Other","source_id":"src-other"}
+        orchestration.record_results(unknown,[engine.CollectionResult("other","q",True,[],0)])
+        self.assertIsNone(unknown["provider_request_attempts"])
 
     def test_quality_mixed_batch_rejects_invalid_and_keeps_partial(self):
         valid = record("Jobicy", "valid")

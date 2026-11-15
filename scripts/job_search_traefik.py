@@ -121,6 +121,9 @@ def _job_record(url, html, company_name):
     }
 
 
+from web_transport import measure_public_collection
+
+@measure_public_collection
 def collect(careers_url=CAREERS_URL, company_name="Traefik Labs", max_postings=MAX_POSTINGS, client=None):
     careers_url = _validate_root(careers_url)
     company_name = str(company_name or "").strip()

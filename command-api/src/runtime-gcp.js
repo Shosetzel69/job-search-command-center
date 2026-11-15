@@ -226,6 +226,13 @@ function devSourcesEnabled(env) {
     && env.JSCC_RUNTIME_BACKEND === 'gcp';
 }
 
+// Read the operational source of truth; GCS remains an exact-run recovery
+// channel for failures before the native database driver starts.
+export async function readNileRunPayload(env,runId,db) {
+  const {readOperationalRun}=await import('./db/operational-run-repository.js');
+  return readOperationalRun(env,runId,db);
+}
+
 export async function readRuntimeJson(env, runtime, path) {
   const name = path.split('/').pop();
   if (name === 'jobs.json' && devSourcesEnabled(env)) {
@@ -245,13 +252,31 @@ export async function readRuntimeJson(env, runtime, path) {
   }
   if (name==='run-status.json' && devSourcesEnabled(env)) {
     const lock=await readVersionedRunObject(env,'locks/heavy-search.lock');
-    const descriptor=lock?.payload;
+    const marker=lock || await readVersionedRunObject(env,'latest-run.json');
+    const descriptor=marker?.payload;
     if (RUN_ID.test(String(descriptor?.run_id||''))) {
-      const live=await readVersionedRunObject(env,'runs/'+descriptor.run_id+'/run-status.json');
-      if (live?.payload?.run_id===descriptor.run_id) return live;
-      // Never relabel a previous run or serve its counters during startup.
-      return {sha:lock.sha,payload:queuedRunStatus(descriptor)};
+      const runId=descriptor.run_id;
+      const {operationalDbConfigured}=await import('./db/operational-run-repository.js');
+      if (operationalDbConfigured(env)) {
+        try {
+          const canonical=await readNileRunPayload(env,runId);
+          if (canonical && !(descriptor.status==='failed' && canonical.payload.status!=='failed')) return canonical;
+        } catch (error) {
+          // A known failed attempt may have died before the DB driver began.
+          // Other database faults stay visible, rather than silently serving stale data.
+          if (descriptor.status!=='failed') throw error;
+        }
+      }
+      // Bootstrap/native-driver failure recovery, never a different run.
+      const live=await readVersionedRunObject(env,'runs/'+runId+'/run-status.json');
+      if (live?.payload?.run_id===runId) return live;
+      if (lock) return {sha:lock.sha,payload:queuedRunStatus(descriptor)};
+      throw runtimeError('Exact run evidence unavailable',503);
     }
+  }
+  if (name==='run-history.json' && devSourcesEnabled(env)) {
+    const {operationalDbConfigured,readOperationalHistory}=await import('./db/operational-run-repository.js');
+    if (operationalDbConfigured(env)) return readOperationalHistory(env);
   }
   return readObjectJson(env, await runtimeObjectForRead(env, path));
 }

@@ -94,6 +94,7 @@ def normalize(item, site, company_name, region):
     }
 
 
+@engine.measure_provider_opener
 def collect(site, company_name, region="global", max_postings=MAX_POSTINGS, opener=urlopen):
     site = str(site or "").strip()
     company_name = str(company_name or "").strip()

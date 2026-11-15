@@ -4,7 +4,8 @@ import json
 import re
 from html import unescape
 from html.parser import HTMLParser
-from urllib.request import Request, urlopen
+from urllib.request import Request
+from web_transport import measured_urlopen as urlopen
 
 import job_search as engine
 
@@ -52,6 +53,9 @@ def normalize(item):
     }
 
 
+from web_transport import measure_public_collection
+
+@measure_public_collection
 def collect(config):
     request = Request(ENDPOINT, headers={"Accept": "application/json", "User-Agent": "job-search-command-center/1.0"})
     with urlopen(request, timeout=30) as response:

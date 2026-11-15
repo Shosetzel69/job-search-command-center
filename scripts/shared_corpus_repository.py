@@ -142,28 +142,86 @@ def _normalize_remote_scope(value: object) -> str:
     return "unknown"
 
 
+def _trusted_posting_description(record: Mapping[str, Any]) -> str:
+    provenance = record.get("_jscc_field_provenance")
+    if not isinstance(provenance, Mapping):
+        return ""
+    origin = provenance.get("description")
+    trusted = origin in {"ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML"}
+    trusted = trusted or (origin == "LISTING_CARD" and record.get("description_provenance") in {
+        "public_modern_jobs_json", "public_job_card_description"})
+    description = _text(record.get("description"))
+    return description if trusted and not SHARE_MARKUP.search(description) else ""
+
+
+def _explicit_remote_geography(record: Mapping[str, Any]) -> tuple[str, tuple[str, ...], str]:
+    """Recognize affirmative, bounded eligibility clauses, not company geography."""
+    description = _trusted_posting_description(record)
+    if not description:
+        return "unknown", (), ""
+    aliases = canonical_nomenclatures.country_name_to_code(_nomenclatures())
+    active = canonical_nomenclatures.active_country_codes(_nomenclatures())
+    matches = []
+    for sentence in re.split(r"(?<=[.!?;])\s+|\n+", description):
+        clause = sentence.strip().rstrip(".;!").strip()
+        match = re.fullmatch(
+            r"(?:only\s+(?P<resident>.+?)\s+residents\s+(?:are\s+eligible|may\s+apply|will\s+be\s+considered)"
+            r"|(?:candidates|applicants|you)\s+must\s+(?:reside|live|be\s+based|be\s+located)\s+in\s+(?P<reside>.+?)"
+            r"|(?:we|the\s+company)\s+(?:only\s+hire|hire\s+only)\s+(?:candidates\s+)?(?:in|from)\s+(?P<hire>.+?)"
+            r"|(?:candidates|applicants)\s+(?:from|based\s+in)\s+(?P<eligible>.+?)\s+(?:are\s+eligible|may\s+apply)"
+            r"|(?:this\s+(?:role|position|job)\s+is\s+open\s+to|we\s+accept)\s+(?:candidates|applicants)\s+(?:from\s+)?(?P<open>.+?)"
+            r"|(?:you|candidates)\s+(?:can|may)\s+work\s+(?:remotely\s+)?from\s+(?P<work>anywhere\s+in\s+the\s+world|anywhere|worldwide))",
+            clause, re.I,
+        )
+        if not match:
+            continue
+        place = next(value for value in match.groupdict().values() if value)
+        place = re.sub(r"^(?:the\s+)", "", place.strip(), flags=re.I)
+        place = re.sub(r"\s+only$", "", place, flags=re.I)
+        key = place.casefold()
+        if key in {"worldwide", "anywhere", "anywhere in the world"}:
+            matches.append(("Worldwide", (), clause))
+        elif key == "emea":
+            matches.append(("EMEA", (), clause))
+        elif key in {"eu", "european union"}:
+            matches.append(("EU", (), clause))
+        else:
+            code = aliases.get(key) or (place.upper() if place.upper() in active else None)
+            if code:
+                matches.append(("Country", (code,), clause))
+    distinct = {(scope, codes) for scope, codes, _ in matches}
+    if len(distinct) != 1:
+        return "unknown", (), ""
+    return matches[0]
+
+
 def _remote_scope(record: Mapping[str, Any], work_mode: str, country_codes: tuple[str, ...]) -> str:
+    if work_mode != "remote":
+        return "unknown"
     explicit = _text(record.get("remote_scope"))
     if explicit:
         return _normalize_remote_scope(explicit)
-    if work_mode != "remote":
-        return "unknown"
+    scope, codes, _ = _explicit_remote_geography(record)
+    if scope != "unknown":
+        if country_codes and (scope != "Country" or set(codes) != set(country_codes)):
+            return "unknown"
+        return scope
     if country_codes:
         return "Country"
-    countries = record.get("countries") if isinstance(record.get("countries"), list) else []
-    remote_locations = record.get("remote_locations") if isinstance(record.get("remote_locations"), list) else []
-    text = " ".join([
-        _text(record.get("location")),
-        *(_text(value) for value in countries),
-        *(_text(value) for value in remote_locations),
-        _text(record.get("description"))[:5000],
-    ])
-    if re.search(r"worldwide|work from anywhere|anywhere in the world|global remote", text, re.I):
-        return "Worldwide"
-    if re.search(r"\bEMEA\b", text, re.I):
-        return "EMEA"
-    if re.search(r"\b(EU|European Union|Europe only|within Europe|across Europe|Europe)\b", text, re.I):
-        return "EU"
+    # Only an exact dedicated location label is accepted, not arbitrary text.
+    location = _text(record.get("location") or record.get("short_location"))
+    location = re.sub(r"^remote\s*[-:,/]\s*", "", location, flags=re.I)
+    exact_location_scope = _normalize_remote_scope(location)
+    if exact_location_scope in {"Worldwide", "EMEA", "EU"}:
+        return exact_location_scope
+    # Dedicated remote-location labels are allowed; ordinary description words
+    # and general office/client locations cannot imply worldwide eligibility.
+    values = record.get("remote_locations")
+    if isinstance(values, list):
+        scopes = {_normalize_remote_scope(_text(value)) for value in values}
+        scopes.discard("unknown")
+        if len(scopes) == 1:
+            return scopes.pop()
     return "unknown"
 
 
@@ -290,7 +348,7 @@ def _payload(record: Mapping[str, Any], classification_status: str) -> dict[str,
 
 
 QUALITY_PROVENANCE = frozenset({
-    "ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML", "LISTING_CARD",
+    "ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML", "LISTING_CARD", "EXPLICIT_DESCRIPTION",
 })
 QUALITY_FIELDS = ("title", "description", "location", "date_posted")
 SHARE_MARKUP = re.compile(
@@ -302,6 +360,38 @@ SALARY_MARKUP = re.compile(
     r"(?:[$€£]\s*[\d,]+|[\d,]+\s*(?:USD|EUR|GBP)\s*/\s*(?:year|hour|yr|hr))",
     re.I,
 )
+
+
+def apply_explicit_remote(record):
+    """Use affirmative, posting-specific statements, never contextual guesses."""
+    provenance = record.get("_jscc_field_provenance") or {}
+    if not isinstance(provenance, Mapping):
+        return record
+    trusted = provenance.get("description") in {"ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML"}
+    trusted = trusted or (provenance.get("description") == "LISTING_CARD"
+                          and record.get("description_provenance") in {
+                              "public_modern_jobs_json", "public_job_card_description"})
+    description = _text(record.get("description"))
+    if not trusted or not description or SHARE_MARKUP.search(description):
+        return record
+    mode = _text(record.get("work_arrangement") or record.get("work_mode") or record.get("mode")).casefold()
+    if mode in {"hybrid", "onsite", "on-site", "on site"} or record.get("hybrid") is True:
+        return record
+    if re.search(r"\b(?:not|never)\s+(?:a\s+)?(?:fully\s+)?remote\b|\bno\s+remote\b|\bremote\s+(?:work\s+)?(?:is\s+)?not\s+(?:available|allowed|permitted)\b", description, re.I):
+        return record
+    match = re.search(r"\b(?:this|the)\s+(?:is\s+(?:a\s+)?|(?:position|role|job)\s+is\s+(?:a\s+)?)(?:fully\s+|100%\s+)?remote(?:\s+(?:position|role|job))?\s*(?:[.!;\n]|$)", description, re.I)
+    if not match:
+        return record
+    record["remote"] = True
+    record["work_arrangement"] = "remote"
+    record["work_arrangement_evidence"] = match.group(0).strip()
+    if not _text(record.get("location") or record.get("short_location")):
+        record["location"] = "Remote"
+        record["_jscc_field_provenance"] = {**provenance, "location": "EXPLICIT_DESCRIPTION"}
+    if isinstance(record.get("missing_fields"), list):
+        record["missing_fields"] = [field for field in record["missing_fields"]
+                                    if field not in {"location", "remote", "work_arrangement"}]
+    return record
 
 
 def assess_record_quality(
@@ -331,7 +421,7 @@ def assess_record_quality(
 
     if not title or not _text(record.get("company") or record.get("company_name")):
         invalid.add("IDENTITY_MISSING")
-    if not external_id and not url:
+    if not external_id and (not url or record.get("source_url_kind") == "careers_board_fallback"):
         invalid.add("IDENTITY_MISSING")
     if raw_url:
         try:
@@ -403,6 +493,7 @@ def assess_record_quality(
 
 
 def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -> SharedPosting | None:
+    record = apply_explicit_remote(dict(record))
     quality = assess_record_quality(record, source_hint=source_hint)
     if quality["verdict"] == "INVALID":
         return None
@@ -440,6 +531,12 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
         }
     country_codes = _country_codes(record)
     work_mode = _work_mode(record)
+    if work_mode == "remote":
+        geo_scope, geo_codes, geo_evidence = _explicit_remote_geography(record)
+        if geo_scope != "unknown" and geo_evidence:
+            record["remote_eligibility_evidence"] = geo_evidence
+            if not country_codes and geo_scope == "Country":
+                country_codes = geo_codes
     contract_type = _contract_type(record)
     remote_scope = _remote_scope(record, work_mode, country_codes)
     seniority = _seniority(record)
@@ -601,7 +698,8 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
     # If a provider upgrades a posting from URL-only identity to an external ID,
     # promote the existing same-source row instead of manufacturing a duplicate.
     # External ID remains the authoritative identity after this transition.
-    if not existing and posting.identity_kind == "EXTERNAL_ID" and posting.canonical_url:
+    direct_url = posting.canonical_url and posting.payload.get("source_url_kind") != "careers_board_fallback"
+    if not existing and posting.identity_kind == "EXTERNAL_ID" and direct_url:
         cursor.execute(
             """
             SELECT posting_id, job_id
@@ -626,7 +724,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 (posting.external_job_id, posting.external_job_id, str(url_identity[0])),
             )
 
-    if not existing and posting.identity_kind == "CANONICAL_URL" and posting.canonical_url:
+    if not existing and posting.identity_kind == "CANONICAL_URL" and direct_url:
         # External ID remains authoritative when a later provider response omits
         # it. Reuse a same-source URL only when that URL is unambiguous.
         cursor.execute(
@@ -637,6 +735,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 FROM source_postings
                 WHERE source_id = %s
                   AND canonical_url = %s
+                  AND COALESCE(payload->>'source_url_kind', '') <> 'careers_board_fallback'
             ) AS candidate
             WHERE match_count = 1
             LIMIT 1
@@ -704,13 +803,14 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
         created = False
     else:
         job_id: str | None = None
-        if posting.canonical_url:
+        if direct_url:
             cursor.execute(
                 """
                 SELECT job_id
                 FROM source_postings
                 WHERE canonical_url = %s
                   AND source_id <> %s
+                  AND COALESCE(payload->>'source_url_kind', '') <> 'careers_board_fallback'
                 ORDER BY first_seen_at ASC, posting_id ASC
                 LIMIT 1
                 """,
@@ -1456,6 +1556,47 @@ def _persist_coverage_observations(cursor: Any, status: Mapping[str, Any]) -> in
         )
         updated += 1
     return updated
+
+
+def persist_run_progress(status: Mapping[str, Any], *, env=None, connect=None) -> None:
+    """Update the existing running row; never resurrect a terminal run."""
+    runtime_env = os.environ if env is None else env
+    expected, connection_string, connector = _db_connect(runtime_env, connect)
+    run_id = _text(status.get("run_id"))
+    if not run_id or status.get("status") != "in_progress":
+        raise SharedCorpusError("Invalid progress identity or phase")
+    with connector(connection_string) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            row = cursor.fetchone()
+            if not row or str(row[0]) != expected:
+                raise SharedCorpusError("Connected database does not match environment binding")
+            cursor.execute(
+                """UPDATE search_runs SET payload=payload || %s::jsonb,
+                           records_inspected=%s
+                    WHERE run_id=%s AND status='running'""",
+                (json.dumps(_json_safe(dict(status)), ensure_ascii=False),
+                 int(status.get("records_inspected") or 0), run_id),
+            )
+            if cursor.rowcount != 1:
+                raise SharedCorpusError("Progress update requires an owned running row")
+
+
+def read_operational_run(run_id: str, *, env=None, connect=None) -> dict:
+    """Read the exact canonical operational row for worker validation."""
+    runtime_env = os.environ if env is None else env
+    expected, connection_string, connector = _db_connect(runtime_env, connect)
+    with connector(connection_string) as connection:
+        with connection.cursor() as cursor:
+            cursor.execute("SELECT current_database()")
+            row = cursor.fetchone()
+            if not row or str(row[0]) != expected:
+                raise SharedCorpusError("Connected database does not match environment binding")
+            cursor.execute("SELECT payload FROM search_runs WHERE run_id=%s", (run_id,))
+            row = cursor.fetchone()
+            if not row or not isinstance(row[0], dict) or row[0].get("run_id") != run_id:
+                raise SharedCorpusError("Run evidence missing or mismatched")
+            return row[0]
 
 
 def persist_operational_run(

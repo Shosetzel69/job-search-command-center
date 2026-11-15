@@ -252,6 +252,8 @@ def failure_result(connector, query, exc):
         error_code=error_code,
         failure_stage=failure_stage,
         http_status=http_status,
+        provider_request_attempts=getattr(exc, "provider_request_attempts", None),
+        provider_request_measurement=getattr(exc, "provider_request_measurement", None),
     )
 
 
@@ -320,6 +322,8 @@ def emit_source_final(run_id, item):
         records_scope_excluded=item.get("records_scope_excluded", 0),
         records_quality_excluded=item.get("records_quality_excluded", 0),
         records_malformed=item.get("records_malformed", 0),
+        provider_request_attempts=item.get("provider_request_attempts"),
+        provider_request_measurement=item.get("provider_request_measurement"),
         provider_scope_mode=item.get("provider_scope_mode"),
         provider_scope_evidence=item.get("provider_scope_evidence"),
         quality_disposition=item.get("quality_disposition"),
@@ -492,6 +496,18 @@ def tag_collection_records(item, results, run_id=None):
             record.setdefault("_jscc_source_name", item.get("source"))
             if run_id:
                 record["_jscc_run_id"] = run_id
+            # Missing individual links may use the configured public source only
+            # with independent posting identity. Never replace an unsafe supplied URL.
+            if not any(record.get(key) for key in ("final_url", "source_url", "url")) and shared_corpus._external_job_id(record):
+                try:
+                    fallback = web.public_url(item.get("url") or "")
+                    if isinstance(fallback, str) and urlsplit(fallback).scheme == "https":
+                        record["source_url"] = fallback
+                        record["source_url_kind"] = "careers_board_fallback"
+                        record["source_url_label"] = "Source page (not a direct job link)"
+                except (web.FetchError, ValueError, TypeError):
+                    pass
+            shared_corpus.apply_explicit_remote(record)
             quality = shared_corpus.assess_record_quality(
                 record, source_hint=item.get("source"), run_id=run_id,
             )
@@ -588,6 +604,8 @@ def apply_retrieve_scope(item, results, config):
             result.error_code,
             result.failure_stage,
             result.http_status,
+            result.provider_request_attempts,
+            result.provider_request_measurement,
         ))
     item["records_scope_excluded"] = excluded
     return scoped_results
@@ -672,6 +690,8 @@ def write_progress_status(now, run_id, plan, planned_source_ids, retrieve_scope=
         "request_signature": request_signature,
         "retrieve_scope": retrieve_scope,
     }
+    if nile_only_dev_retrieve():
+        shared_corpus.persist_run_progress(payload)
     engine.STATUS_PATH.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
@@ -716,6 +736,13 @@ def collect_sources(config, state, now, plan, run_id=None, progress_callback=Non
 def record_results(item, results):
     ok = [result for result in results if result.ok]
     failed = [result for result in results if not result.ok]
+    measured = [r for r in results if isinstance(getattr(r, "provider_request_attempts", None), int)]
+    if measured:
+        item["provider_request_attempts"] = sum(r.provider_request_attempts for r in measured)
+        item["provider_request_measurement"] = "+".join(sorted({r.provider_request_measurement or "unspecified" for r in measured}))
+    else:
+        item.setdefault("provider_request_attempts", None)
+        item.setdefault("provider_request_measurement", "not_measured")
     item["records"] = sum(len(result.records) for result in ok)
     item["records_after_scope"] = item["records"]
     item["provider_reported_total"] = sum(int(result.total_available or 0) for result in ok)
@@ -869,10 +896,10 @@ def collect_ats(item, role_family=None, config=None):
     if connector == "workable":
         return workable.collect(route["subdomain"], company)
     if connector == "softgarden":
-        return softgarden.collect(route["feed_url"], company, **({"regional_scope": True, "role_terms": workday.scope_search_terms(config)} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
+        return softgarden.collect(route["feed_url"], company, enrich_details=company == "Orange Romania", **({"regional_scope": True, "role_terms": workday.scope_search_terms(config)} if (config or {}).get("_jscc_targeted_collection") and company == "Orange Romania" else {}))
     if connector == "eightfold_public":
         terms = eightfold_public.bounded_terms(config)
-        return eightfold_public.collect(route["base_url"], route["domain"], company, **({"search_terms": terms} if terms else {}))
+        return eightfold_public.collect(route["base_url"], route["domain"], company, **({"search_terms": terms} if terms else {}), enrich_details=company == "Vodafone / VOIS")
     raise ValueError(f"Unsupported ATS connector: {connector}")
 
 

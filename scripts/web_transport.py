@@ -1,5 +1,8 @@
 """Bounded public HTTP transport with pinned DNS and per-origin robots rules."""
 
+from contextvars import ContextVar, copy_context
+from contextlib import contextmanager
+from functools import wraps
 import http.client
 import ipaddress
 import re
@@ -15,6 +18,57 @@ MAX_BYTES = 2 * 1024 * 1024
 HOST_LOCKS = {}
 HOST_LAST = {}
 LOCK = threading.Lock()
+
+
+_REQUEST_MEASUREMENT = ContextVar("provider_requests", default=None)
+_MEASUREMENT_LOCK = threading.Lock()
+
+
+@contextmanager
+def request_measurement():
+    count = [0]
+    token = _REQUEST_MEASUREMENT.set(count)
+    try:
+        yield count
+    finally:
+        _REQUEST_MEASUREMENT.reset(token)
+
+
+def note_request_attempt():
+    count = _REQUEST_MEASUREMENT.get()
+    if count is not None:
+        with _MEASUREMENT_LOCK:
+            count[0] += 1
+
+
+def measured_pool_map(pool, fn, values):
+    # ContextVars do not propagate to ThreadPoolExecutor threads implicitly.
+    # Each task gets its own context but shares this source's protected counter.
+    futures = [pool.submit(copy_context().run, fn, value) for value in values]
+    return (future.result() for future in futures)
+
+
+def measured_urlopen(*args, **kwargs):
+    from urllib.request import urlopen
+    note_request_attempt()
+    return urlopen(*args, **kwargs)
+
+
+def measure_public_collection(collector):
+    @wraps(collector)
+    def measured(*args, **kwargs):
+        with request_measurement() as count:
+            try:
+                results = collector(*args, **kwargs)
+            except Exception as exc:
+                exc.provider_request_attempts = count[0]
+                exc.provider_request_measurement = "public_transport_attempts"
+                raise
+        if isinstance(results, list) and results:
+            results[0].provider_request_attempts = count[0]
+            results[0].provider_request_measurement = "public_transport_attempts"
+        return results
+    return measured
 
 
 class FetchError(Exception):
@@ -165,6 +219,12 @@ class PublicClient:
         self.last_url = None
         self.last_status = None
         self.last_robots_status = None
+        self.request_attempts = 0
+
+    def _request_once(self, url, delay=0.5):
+        self.request_attempts += 1
+        note_request_attempt()
+        return request_once(url, self.deadline, delay)
 
     def policy(self, url):
         parsed = urlsplit(url)
@@ -173,7 +233,7 @@ class PublicClient:
             robots_url = origin + "/robots.txt"
             # Robots redirects use the same public-IP validation as page requests.
             for _ in range(4):
-                status, headers, body = request_once(robots_url, self.deadline)
+                status, headers, body = self._request_once(robots_url)
                 self.last_robots_status = status
                 if status not in {301, 302, 303, 307, 308}:
                     break
@@ -206,7 +266,7 @@ class PublicClient:
         url = requested
         for _ in range(6):
             delay = self.policy(url)
-            status, headers, body = request_once(url, self.deadline, delay)
+            status, headers, body = self._request_once(url, delay)
             self.last_status = status
             self.last_url = url
             if status in {301, 302, 303, 307, 308}:

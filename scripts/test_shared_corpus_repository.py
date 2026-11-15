@@ -543,6 +543,32 @@ class SharedCorpusRepositoryTests(unittest.TestCase):
         self.assertEqual(result["status"], "persisted")
         self.assertEqual(seen["connection_string"], url)
 
+    def test_dev_progress_updates_only_existing_running_row(self):
+        from contextlib import nullcontext
+        class ProgressCursor(FakeCursor):
+            def execute(self, sql, params=None):
+                super().execute(sql, params)
+                if sql.lstrip().startswith("UPDATE"):
+                    self.rowcount = count
+                return self
+        class Connection:
+            def cursor(self):
+                return nullcontext(cursor)
+        env = {"APP_ENV":"dev","NILE_DATABASE_URL":"postgresql://u:p@db.example/jobsearch_dev"}
+        snapshot = {"run_id":"owned-run","status":"in_progress","records_inspected":12}
+        count = 1
+        cursor = ProgressCursor([("jobsearch_dev",)])
+        repository.persist_run_progress(snapshot,env=env,connect=lambda _:nullcontext(Connection()))
+        sql, params = cursor.queries[-1]
+        self.assertIn("WHERE run_id=%s AND status='running'",sql)
+        self.assertEqual(params[1:],(12,"owned-run"))
+        count = 0
+        cursor = ProgressCursor([("jobsearch_dev",)])
+        with self.assertRaisesRegex(repository.SharedCorpusError,"owned running row"):
+            repository.persist_run_progress(snapshot,env=env,connect=lambda _:nullcontext(Connection()))
+        cursor = ProgressCursor([("jobsearch_dev",),(snapshot,)])
+        self.assertEqual(repository.read_operational_run("owned-run",env=env,connect=lambda _:nullcontext(Connection())),snapshot)
+
     def test_incomplete_posting_retains_existing_content(self):
         posting = self.posting()
         posting = repository.SharedPosting(**{

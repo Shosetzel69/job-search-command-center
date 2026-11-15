@@ -63,6 +63,25 @@ class TestZoho(unittest.TestCase):
 
 
 class ModernZohoTests(unittest.TestCase):
+    def test_direct_detail_requires_exact_route_and_structured_identity(self):
+        import json
+        import time
+        row = {"jobid":"866885000000930001","job_title":"IT Project Manager"}
+        tenant = "alpha.zohorecruit.com"
+        payload = {"jobId":row["jobid"],"jobTitle":row["job_title"],
+                   "jobDescriptionDetails":[{"richText":{"fieldLabel":"Job Description","value":"Plan delivery."}}]}
+        def html(value):
+            return ('<h1>IT Project Manager</h1><script>data = '+json.dumps(value)+';</script>').encode()
+        accepted = zoho._modern_detail_link(row,tenant,
+            lambda req,timeout:Resp(html(payload),req.full_url),time.monotonic()+10)
+        self.assertIn(row["jobid"],accepted)
+        for bad in (
+            lambda req,timeout:Resp(html({**payload,"jobId":"999999999999999999"})+row["jobid"].encode(),req.full_url),
+            lambda req,timeout:Resp(html(payload),"https://"+tenant+"/careers"),
+            lambda req,timeout:Resp(html({**payload,"jobTitle":"Other role"}),req.full_url),
+        ):
+            self.assertIsNone(zoho._modern_detail_link(row,tenant,bad,time.monotonic()+10))
+
     def test_modern_public_jobs_with_description(self):
         import json
         from html import escape
@@ -88,7 +107,7 @@ class ModernZohoTests(unittest.TestCase):
         self.assertIn("remote", rows[0]["missing_fields"])
         self.assertNotIn("<p>", rows[0]["description"])
 
-    def test_modern_without_description_rejected(self):
+    def test_modern_without_description_retained_as_incomplete(self):
         import json
         from html import escape
         modern = ('<input id="jobs" value="' + escape(json.dumps([
@@ -96,8 +115,15 @@ class ModernZohoTests(unittest.TestCase):
         ]), quote=True) + '">').encode()
         def mock(req, timeout):
             return Resp(b"<html>Modern careers</html>" if req.full_url.endswith("/careers") else modern, req.full_url)
-        with self.assertRaisesRegex(ValueError, "lacks descriptions"):
-            zoho.collect(BOARD, "MADIFF", opener=mock)
+        import shared_corpus_repository as corpus
+        rows = zoho.collect(BOARD, "MADIFF", opener=mock)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["description"], "")
+        self.assertIsNone(rows[0]["location"])
+        self.assertEqual(rows[0]["source_url"], BOARD)
+        self.assertEqual(rows[0]["source_url_kind"], "careers_board_fallback")
+        self.assertEqual(corpus.assess_record_quality(rows[0])["verdict"], "INCOMPLETE")
+        self.assertIsNotNone(corpus.prepare_posting(rows[0], source_hint="MADIFF"))
 
 class PaginationSafetyTests(unittest.TestCase):
 
@@ -108,6 +134,86 @@ class PaginationSafetyTests(unittest.TestCase):
         ).encode()
         with self.assertRaisesRegex(ValueError, "pagination required"):
             zoho.collect(BOARD, "Acme", opener=lambda req,timeout:Resp(links,req.full_url))
+
+    def test_capped_portal_uses_verified_expanded_public_metadata_and_reports_partial(self):
+        import json
+        from html import escape
+        from unittest.mock import patch
+        links = "".join('<a href="/recruit/PortalDetail.na?jobid={0}&digest=tok_{0}&widgetid=123456">Engineer</a>'.format(100000+i) for i in range(100)).encode()
+        metadata = [{"id":str(100000+i),"Posting_Title":"Engineer","Publish":True} for i in range(101)]
+        modern = ('<input id="jobs" value="' + escape(json.dumps(metadata),quote=True) + '">').encode()
+        calls = []
+        def mock(req,timeout):
+            calls.append(req.full_url)
+            return Resp(links if req.full_url.endswith("/careers") else modern if req.full_url.endswith("/jobs/Careers") else DETAIL,req.full_url)
+        with patch.object(zoho,"MAX_REQUESTS_PER_SOURCE",5):
+            results = zoho.collect_result(BOARD,"Acme",opener=mock)
+        self.assertEqual(len(calls),5)
+        self.assertEqual(len(results[0].records),101)
+        self.assertEqual(len({row["id"] for row in results[0].records}),101)
+        self.assertEqual(sum(row["description_completeness"]=="missing" for row in results[0].records),98)
+        self.assertFalse(results[1].ok)
+        self.assertIn("98 selected",results[1].error)
+        self.assertNotIn("digest=",str(results[0].records))
+
+    def test_capped_portal_refuses_unproven_expanded_inventory(self):
+        import json
+        from html import escape
+        links = "".join('<a href="/recruit/PortalDetail.na?jobid={0}&digest=tok_{0}&widgetid=123456">Engineer</a>'.format(100000+i) for i in range(100)).encode()
+        metadata = [{"id":str(100000+i),"Posting_Title":"Engineer"} for i in range(100)]
+        modern = ('<input id="jobs" value="' + escape(json.dumps(metadata),quote=True) + '">').encode()
+        with self.assertRaisesRegex(ValueError,"expanded public inventory not verified"):
+            zoho.collect(BOARD,"Acme",opener=lambda req,timeout:Resp(links if req.full_url.endswith("/careers") else modern, req.full_url))
+
+    def test_rotation_is_stable_and_covers_all_available_portal_ids(self):
+        rows = [{"jobid":str(100000+i)} for i in range(100)]
+        first = zoho._rotating_details(rows, slot=0)[:99]
+        second = zoho._rotating_details(list(reversed(rows)), slot=1)[:99]
+        self.assertNotEqual(first, second)
+        self.assertEqual(len({row["jobid"] for row in first+second}),100)
+        self.assertEqual(zoho._rotating_details(rows, slot=17),
+                         zoho._rotating_details(list(reversed(rows)), slot=17))
+
+    def test_fetch_clamps_timeout_and_does_not_start_after_deadline(self):
+        from unittest.mock import patch
+        calls = []
+        def opening(req, timeout):
+            calls.append(timeout)
+            return Resp(b"ok", req.full_url)
+        with patch.object(zoho.time, "monotonic", return_value=178):
+            self.assertEqual(zoho._fetch(BOARD,"alpha.zohorecruit.com",opening,deadline=180),"ok")
+        self.assertEqual(calls,[2])
+        with patch.object(zoho.time, "monotonic", return_value=180):
+            with self.assertRaises(TimeoutError):
+                zoho._fetch(BOARD,"alpha.zohorecruit.com",opening,deadline=180)
+        self.assertEqual(calls,[2])
+
+    def test_deadline_during_capped_detail_retains_metadata_and_partial(self):
+        from unittest.mock import patch
+        import json
+        from html import escape
+        links = "".join('<a href="/recruit/PortalDetail.na?jobid={0}&digest=tok_{0}&widgetid=123456">Engineer</a>'.format(100000+i) for i in range(100)).encode()
+        modern = ('<input id="jobs" value="' + escape(json.dumps([
+            {"id":str(100000+i),"Posting_Title":"Engineer","Job_Description":"<p>Public preview.</p>","State":"Mazovia"}
+            for i in range(101)]),quote=True) + '">').encode()
+        clock = [0]
+        calls = []
+        def opening(req,timeout):
+            calls.append((req.full_url,timeout))
+            if req.full_url.endswith("/careers"):
+                return Resp(links,req.full_url)
+            if req.full_url.endswith("/jobs/Careers"):
+                return Resp(modern,req.full_url)
+            clock[0] = 180
+            return Resp(DETAIL,req.full_url)
+        with patch.object(zoho.time,"monotonic",side_effect=lambda:clock[0]):
+            result = zoho.collect_result(BOARD,"Acme",opener=opening)
+        self.assertEqual(len(calls),3)
+        self.assertEqual(len(result[0].records),101)
+        self.assertFalse(result[1].ok)
+        self.assertEqual(result[1].error_code,"TIMEOUT")
+        self.assertTrue(all(row["description_completeness"]=="partial" for row in result[0].records))
+        self.assertTrue(all(row["location"]=="Mazovia" for row in result[0].records))
 
 class PrescreenTests(unittest.TestCase):
     def test_conservative_scope(self):
@@ -435,3 +541,52 @@ class ProvenanceQualityTests(unittest.TestCase):
         self.assertEqual(quality["verdict"],"INCOMPLETE")
         self.assertIn("TITLE_LISTING_ONLY",quality["issues"])
         self.assertNotIn("digest=",str(row))
+
+
+class PublicPaginationTests(unittest.TestCase):
+    @staticmethod
+    def page(ids, next_index=None):
+        links = "".join(
+            '<a href="/recruit/PortalDetail.na?jobid=%s&amp;digest=public_token&amp;widgetid=123456&amp;iframe=false">Engineer</a>' % jobid
+            for jobid in ids)
+        if next_index is not None:
+            links += '<div class="jobNextNav" data-wid="123456" data-findex="%s"></div>' % next_index
+        return links
+
+    def test_public_next_pages_and_budget(self):
+        import time
+        from urllib.parse import parse_qs, urlsplit
+        first = self.page(["123450"], 100)
+        calls = []
+        def opening(req, timeout):
+            calls.append(req.full_url)
+            query = parse_qs(urlsplit(req.full_url).query)
+            self.assertEqual(query["mode"], ["next"])
+            self.assertEqual(query["digest"], ["public_token"])
+            return Resp(self.page(["123451"], 200).encode()
+                        if query["findex"] == ["100"]
+                        else self.page(["123452"]).encode(), req.full_url)
+        rows, requests = zoho._expand_public_links(
+            first, zoho.enumerate_board(first, BOARD), BOARD,
+            urlsplit(BOARD).hostname, opening, time.monotonic()+30,
+            {"123450", "123451", "123452"})
+        self.assertEqual({r["jobid"] for r in rows}, {"123450", "123451", "123452"})
+        self.assertEqual(requests, 2)
+        self.assertEqual(len(calls), 2)
+
+    def test_repeated_page_fails_closed(self):
+        import time
+        from urllib.parse import urlsplit
+        first = self.page(["123450"], 100)
+        def opening(req, timeout):
+            return Resp(first.encode(), req.full_url)
+        with self.assertRaisesRegex(ValueError, "inconsistent Zoho pagination"):
+            zoho._expand_public_links(first, zoho.enumerate_board(first, BOARD),
+                BOARD, urlsplit(BOARD).hostname, opening, time.monotonic()+30,
+                {"123450", "123451"})
+
+    def test_untrusted_widget_is_not_requested(self):
+        from urllib.parse import urlsplit
+        first = self.page(["123450"], 100).replace('data-wid="123456"', 'data-wid="999999"')
+        with self.assertRaisesRegex(ValueError, "unverified Zoho paging context"):
+            zoho._public_next_url(first, zoho.enumerate_board(first, BOARD), urlsplit(BOARD).hostname)

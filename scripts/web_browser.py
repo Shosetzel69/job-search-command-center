@@ -9,7 +9,7 @@ import time
 from threading import BoundedSemaphore
 from urllib.parse import urlsplit
 
-from web_transport import FetchError, public_addresses, public_url
+from web_transport import FetchError, public_addresses, public_url, note_request_attempt
 
 MAX_RENDER_SECONDS = 8
 BROWSER_SLOTS = BoundedSemaphore(2)
@@ -69,6 +69,14 @@ def render(url, deadline, client, roots=None):
                 try:
                     context = browser.new_context()
                     page = context.new_page()
+
+                    def count_request(request):
+                        # Playwright request events include failed/aborted requests;
+                        # they are attempts, not a claim of successful HTTP traffic.
+                        client.browser_request_attempts = getattr(client, "browser_request_attempts", 0) + 1
+                        note_request_attempt()
+
+                    context.on("request", count_request)
 
                     def guard(route, request):
                         try:

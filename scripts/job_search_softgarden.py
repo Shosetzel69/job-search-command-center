@@ -155,6 +155,7 @@ def enrich_orange_descriptions(records, *, max_details=4, max_seconds=10, role_t
     """Only follow exact offers advertised by the official feed. Do not
     promote an unverified description or replace the structured feed location."""
     from job_search_public_boards import _single_detail_jobposting
+    from zoho_detail import reject_access_gateway_text
     deadline = time.monotonic() + max_seconds
     ordered = sorted(records, key=lambda record: (
         not any(term in str(record.get("job_title","")).casefold() for term in role_terms),
@@ -174,6 +175,8 @@ def enrich_orange_descriptions(records, *, max_details=4, max_seconds=10, role_t
             if _orange_offer_identity(final_url) != identity:
                 continue
             detail = _single_detail_jobposting(html, record["job_title"])
+            if detail:
+                reject_access_gateway_text(detail["description"])
         except (FetchError, OSError, ValueError, TypeError):
             continue
         if detail:
@@ -182,7 +185,8 @@ def enrich_orange_descriptions(records, *, max_details=4, max_seconds=10, role_t
     return sum(not record.get("description") for record in records)
 
 
-def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, regional_scope=False, role_terms=()):
+@engine.measure_provider_opener
+def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, regional_scope=False, role_terms=(), enrich_details=False):
     parsed = urlsplit(str(feed_url or "").strip())
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Softgarden feed_url must be a public HTTPS URL")
@@ -210,7 +214,7 @@ def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, r
                    or any(engine.COUNTRY_NAME_TO_CODE.get(str(country).casefold(), str(country).upper()) == "RO"
                           or str(country).casefold() in {"romania","românia"}
                           for country in record["countries"])]
-    unresolved = enrich_orange_descriptions(records, role_terms=role_terms) if regional_scope and company_name == "Orange Romania" else 0
+    unresolved = enrich_orange_descriptions(records, role_terms=role_terms) if (regional_scope or enrich_details) and company_name == "Orange Romania" else 0
     result = [engine.CollectionResult("softgarden", "schema_org_datafeed", True, records, len(jobs))]
     if unresolved:
         # Feed has no description; never promote its title or external card
