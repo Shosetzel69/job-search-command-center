@@ -491,11 +491,13 @@ test('same shared job can produce different per-profile eligibility without prov
     excluded_regions:[],
     keep_reposts:true,
     fit_threshold:80,
+    fit_config:{compensation:{weight:0},work_mode:{weight:0},contract_type:{weight:0},industry:{weight:0},career:{weight:0},company:{weight:100,ratings:{example:5,'example bank':5}}},
   };
   const allowed = evaluateSharedJob(row, base, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   const blocked = evaluateSharedJob(row, { ...base, work_modes:{ ...base.work_modes, remote:false } }, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   assert.equal(allowed.eligible, true);
-  assert.equal(typeof allowed.score, 'number');
+  assert.equal(allowed.score,100);
+  assert.equal(evaluateSharedJob(row,{...base,fit_config:null},nomenclatures).score,null);
   assert.equal(blocked.eligible, false);
   assert.equal(blocked.exclusionReason, 'remote disabled');
   const unknownRole = evaluateSharedJob(
@@ -795,7 +797,7 @@ test('visible result and count predicates match; unclassified never scores as a 
 });
 
 test('#520: uncorroborated persisted role cannot receive a High FIT score',()=>{
- const preferences={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],fit_threshold:68};
+ const preferences={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],fit_threshold:68,fit_config:{compensation:{weight:0},work_mode:{weight:0},contract_type:{weight:0},industry:{weight:0},career:{weight:0},company:{weight:100,ratings:{example:5,'example bank':5}}},};
  const row={job_id:'00000000-0000-0000-0000-000000000001',company:'Example Bank',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:['project_management'],payload:{description:'Bank governance B2B project'}};
  for(const title of ['IAM Support Engineer','IT System Engineer','2028 Bernstein Summer Research Associate','Director of Engineering','Data Engineer','Senior Developer Fullstack']){
   const input={...row,title};
@@ -807,5 +809,5 @@ test('#520: uncorroborated persisted role cannot receive a High FIT score',()=>{
   assert.equal(matchesResultView(evaluation.job,evaluation,{result_view:'jobs',quick:'high'},68),false);
  }
  const good=evaluateSharedJob({...row,title:'Technical Project Manager'},preferences,nomenclatures);
- assert.ok(good.score>=68);
+ assert.equal(good.score,100);
 });
