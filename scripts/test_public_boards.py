@@ -373,6 +373,20 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertIn("job=261453",rows[0]["source_url"])
         self.assertIn("portal=101430233",post.call_args.args[0])
 
+    def test_nato_malformed_listing_does_not_discard_valid_row(self):
+        payload = {"requisitionList": [
+            {"jobId":"broken", "column":["", "Belgium-Mons"]},
+            {"jobId":"valid", "column":["Delivery Manager", "Belgium-Mons", "Sep 27, 2026"]},
+        ], "pagingData":{"pageSize":25,"totalCount":2}}
+        diagnostics = {}
+        with patch.object(boards, "_taleo_post_json", return_value=payload):
+            rows = boards._nato_taleo("https://nato.taleo.net/careersection/2/jobsearch.ftl?lang=en",
+                                     diagnostics=diagnostics)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["job_title"], "Delivery Manager")
+        self.assertEqual(rows[0]["_jscc_field_provenance"]["description"], "LISTING_CARD")
+        self.assertEqual(diagnostics["invalid_postings"], 1)
+
     def test_atos_table_parser_extracts_public_job_rows(self):
         html='''<table><tr>
           <td><a href="/job/Timisoara-Project-Manager/123456/">Project Manager</a></td>
@@ -1633,6 +1647,19 @@ class RetrievePublicDetailTests(unittest.TestCase):
             boards.collect({"name":"EURES"},mixed)
         self.assertEqual(post.call_args_list[0].args[1]["keywords"],[{"keyword":"product","specificSearchCode":"EVERYWHERE"}])
         self.assertEqual(post.call_args_list[1].args[1]["keywords"],[])
+
+    def test_detail_budget_prioritizes_scope_without_discarding_other_rows(self):
+        rows = [{"id":str(i),"job_title":title,"company":"Example",
+                 "source_url":f"https://example.com/jobs/{i}","description":title}
+                for i,title in enumerate(["Software Engineer","Delivery Manager"])]
+        config = {"target_role_families":["PROJECT_DELIVERY_MANAGEMENT"],
+                  "target_role_subfamilies":["delivery_management"]}
+        with patch.object(boards.PublicClient, "get", side_effect=ValueError("detail unavailable")) as get:
+            result, unresolved = boards.protect_context_records(rows, "Societe Generale", "socgen",
+                "https://example.com/jobs", max_details=1, config=config)
+        self.assertEqual(get.call_args.args[0], "https://example.com/jobs/1")
+        self.assertEqual({row["id"] for row in result}, {"0","1"})
+        self.assertEqual(unresolved,2)
 
     def test_crossover_card_salary_never_becomes_description_location_or_employer(self):
         raw = {"id":"legacy-1","job_title":"Project Manager","company":"$100,000 USD/year","source_url":"https://www.crossover.com/jobs","description":"$100,000 USD/year","location":"$100,000 USD/year","date_posted":"2026-11-14"}

@@ -4,6 +4,8 @@ import hashlib
 import os
 import json
 import socket
+import ssl
+import http.client
 from collections import Counter
 from concurrent.futures import ThreadPoolExecutor
 from urllib.error import HTTPError, URLError
@@ -203,6 +205,15 @@ def error_code_for_http_status(status):
 def classify_exception(exc):
     if isinstance(exc, ClassifiedSourceError):
         return exc.error_code, exc.failure_stage, exc.http_status
+    if isinstance(exc, web.FetchError):
+        status = exc.status_code
+        if exc.kind == "blocked":
+            return error_code_for_http_status(status) or "ACCESS_DENIED", "fetch", status
+        if status:
+            return error_code_for_http_status(status) or "CONNECTOR_ERROR", "fetch", status
+        return "CONNECTOR_ERROR", "fetch", None
+    if isinstance(exc, (ssl.SSLError, http.client.RemoteDisconnected)):
+        return "NETWORK_ERROR", "fetch", None
     if isinstance(exc, HTTPError):
         code = error_code_for_http_status(exc.code) or "HTTP_CLIENT_ERROR"
         stage = "authentication" if exc.code in {401, 403} else "fetch"
