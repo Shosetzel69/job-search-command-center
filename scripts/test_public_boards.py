@@ -1206,19 +1206,37 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertTrue(all("Belgia" in row["countries"] for row in rows))
 
     def test_hipo_project_manager_list(self):
-        html='''<h2>Project Manager</h2>
+        html = """<h2>1042 Joburi project manager</h2><div>1</div>
+        <h2><a href="/locuri-de-munca/locuri_de_munca/263823/Example/Project-Manager">Project Manager</a></h2>
         <div>Siemens Energy</div><div>03-10-2026</div><div>BUCURESTI</div>
-        <h2>Project Manager with French</h2>
-        <div>Societe Generale Global Solution Centre</div><div>03-10-2026</div><div>Hybrid</div>'''
+        <h2><a href="/locuri-de-munca/locuri_de_munca/263824/Example/Project-Manager-French">Project Manager with French</a></h2>
+        <div>Other employer</div><div>Hybrid</div>"""
         with patch.object(boards,"_fetch",return_value=(200,"text/html",html.encode())):
-            rows=boards._hipo(
-                "https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager"
-            )
+            rows=boards._hipo("https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager")
         self.assertEqual(len(rows),2)
-        self.assertEqual(rows[0]["company"],"Siemens Energy")
-        self.assertEqual(rows[0]["date_posted"],"2026-10-03T00:00:00+00:00")
-        self.assertIn("Romania",rows[0]["countries"])
-        self.assertTrue(rows[1]["remote"])
+        self.assertEqual(rows[0]["id"],"hipo:263823")
+        self.assertEqual(rows[0]["company"],"Nespecificata")
+        self.assertIsNone(rows[0]["date_posted"])
+        self.assertEqual(rows[0]["countries"],[])
+        self.assertFalse(rows[1]["remote"])
+        self.assertIn("/263823/",rows[0]["source_url"])
+
+    def test_hipo_rejects_heading_only_inventory(self):
+        with patch.object(boards,"_fetch",return_value=(200,"text/html",b"<h2>1042 Joburi project manager</h2><div>1</div>")):
+            with self.assertRaisesRegex(ValueError,"individual job links"):
+                boards._hipo("https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager")
+
+    def test_unverified_board_employer_does_not_become_company(self):
+        for name in ("Just Join IT","SkipTheDrive","Wellfound","Hipo"):
+            raw={"id":"1","job_title":"Project Manager","company":name,
+                 "source_url":"https://example.com/jobs/1","description":"Card context"}
+            with patch.object(boards.PublicClient,"get",side_effect=ValueError("unavailable")):
+                rows,unresolved=boards.protect_context_records([raw],name,"linked_jobs","https://example.com/jobs")
+            self.assertEqual(unresolved,1)
+            self.assertEqual(rows[0]["company"],"Nespecificata")
+            self.assertEqual(rows[0]["company_provenance"],"UNKNOWN")
+            self.assertEqual(rows[0]["description"],"")
+
 
     def test_float_authoritative_empty_and_open_role(self):
         empty_html='''<h2>Current open roles</h2>
@@ -1446,13 +1464,19 @@ class PublicBoardAdapterTests(unittest.TestCase):
             "https://app.torre.ai/search-job?query=project%20manager",
             html,
             {"browser_status":"rendered"},
-        )):
-            result=boards.collect({"name":"Torre","url":"https://torre.ai/"})[0]
+        )), patch.object(boards.PublicClient,"get",side_effect=ValueError("detail unavailable")):
+            results=boards.collect({"name":"Torre","url":"https://torre.ai/"})
+        result=results[0]
         self.assertTrue(result.ok)
         self.assertEqual(len(result.records),1)
         self.assertEqual(result.records[0]["job_title"],"Project Manager")
         self.assertEqual(result.records[0]["source_url"],"https://torre.ai/post/kWR9gZ0r-gotofrcom-project-manager")
-        self.assertTrue(result.records[0]["remote"])
+        self.assertFalse(result.records[0]["remote"])
+        self.assertEqual(result.records[0]["work_arrangement"],"")
+        self.assertEqual(result.records[0]["location"],"")
+        self.assertEqual(result.records[0]["employment_statuses"],[])
+        self.assertIsNone(result.records[0]["date_posted"])
+        self.assertFalse(results[1].ok)
         self.assertTrue(boards.browser_required("Torre"))
 
     def test_eu_careers_route_uses_current_selection_portal(self):
@@ -1736,3 +1760,42 @@ class ConsolidatedDetailRecoveryTests(unittest.TestCase):
         self.assertEqual(len(results),2)
         self.assertEqual(results[0].records[0]["description"],"")
         self.assertEqual(results[0].records[0]["location"],"")
+
+
+class RiskInventoryRegressionTests(unittest.TestCase):
+    def test_all_48_risk_routes_reject_unverified_listing_context(self):
+        names = ["Hipo","EuroBrussels","eFinancialCareers","Remote.co","Wellfound","Flexa","No Fluff Jobs","Just Join IT","awork.ro","JustRemote","DailyRemote","PowerToFly","Dynamite Jobs","Torre","Techjobs.be","FlexJobs","SkipTheDrive","Freelancermap","PeoplePerHour","Hubstaff Talent","Altia","Vector Synergy","Serco Europe","Societe Generale","Worldpay / Global Payments","Mantu","Cegeka","Computacenter","SoftServe","EPAM","Eviden","HARMAN","Prohuman","GitHub","RED Global","Salt","Square One Resources","Source Group International","Montreal Associates","Brains Consulting","Next Ventures","Lawrence Harvey","Proactive.IT","W Talent","KEYES / NRB","Trasys International","Thaleria","Fujitsu Belgium"]
+        self.assertEqual(len(set(names)),48)
+        for name in names:
+            with self.subTest(source=name):
+                self.assertIn(name,boards.CONTEXT_RISK_SOURCES)
+                spec=boards.PUBLIC_BOARD_SOURCES[name]
+                raw={"id":"fixture-1","job_title":"Project Manager","company":name,
+                     "source_url":spec["url"],"description":"Unverified adjacent card",
+                     "location":"Unverified adjacent card","date_posted":"2026-11-01",
+                     "remote":True,"countries":["Romania"],"employment_statuses":["contract"]}
+                with patch.object(boards.PublicClient,"get") as get:
+                    records,unresolved=boards.protect_context_records([raw],name,spec["kind"],spec["url"])
+                get.assert_not_called()
+                self.assertEqual(unresolved,1)
+                self.assertEqual(records[0]["id"],"fixture-1")
+                self.assertEqual(records[0]["description"],"")
+                self.assertEqual(records[0]["location"],"")
+                self.assertIsNone(records[0]["date_posted"])
+                self.assertEqual(records[0]["countries"],[])
+                self.assertFalse(records[0]["remote"])
+
+    def test_all_48_risk_routes_preserve_verified_detail(self):
+        from pathlib import Path
+        inventory=Path(__file__).resolve().parents[1]/"docs"/"retrieve-d3-source-dispositions.md"
+        names=[line.split("|")[1].strip() for line in inventory.read_text(encoding="utf-8").splitlines() if line.startswith("| ") and "src-" in line]
+        self.assertEqual(len(set(names)),48)
+        for name in names:
+            with self.subTest(source=name):
+                spec=boards.PUBLIC_BOARD_SOURCES[name]
+                raw={"id":"fixture-2","job_title":"Project Manager","company":"Verified Employer",
+                     "source_url":spec["url"],"description":"Verified detail",
+                     "_jscc_field_provenance":{"description":"JOB_DETAIL_JSONLD"}}
+                records,unresolved=boards.protect_context_records([raw],name,spec["kind"],spec["url"])
+                self.assertEqual(unresolved,0)
+                self.assertEqual(records,[raw])

@@ -435,6 +435,10 @@ def assess_record_quality(
     elif not url:
         issues.add("URL_UNVERIFIED")
 
+    if re.match(r"^(?:\d[\d., ]*\s+)?(?:locuri de munc[aă]|joburi)\b", title, re.I):
+        invalid.add("TITLE_SEARCH_RESULTS_HEADING")
+    if _text(record.get("company_provenance")).upper() == "UNKNOWN":
+        issues.add("COMPANY_PROVENANCE_UNKNOWN")
     if SHARE_MARKUP.search(title):
         invalid.add("TITLE_UI_CHROME")
     if SHARE_MARKUP.search(description):
