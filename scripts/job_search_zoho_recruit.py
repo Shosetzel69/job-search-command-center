@@ -151,7 +151,7 @@ def _remaining(deadline):
     return remaining
 
 
-def _fetch(url, tenant, opener, *, deadline=None):
+def _fetch(url, tenant, opener, *, deadline=None, require_exact_detail=False):
     p = urlsplit(url)
     if (p.scheme != "https" or p.hostname != tenant or p.username or
         p.password or p.port or p.fragment):
@@ -165,6 +165,8 @@ def _fetch(url, tenant, opener, *, deadline=None):
         if (final.scheme != "https" or final.hostname != tenant or final.username or
             final.password or final.port):
             raise ValueError("off-tenant Zoho redirect rejected")
+        if require_exact_detail and (final.path != p.path or final.query != p.query or final.fragment):
+            raise ValueError("Zoho detail redirected away from exact posting")
         # Bound each read by the remaining shared budget, not a fresh 25s.
         chunks, length = [], 0
         reader = getattr(response, "read1", response.read)
@@ -273,14 +275,28 @@ def _modern_detail_link(row, tenant, opener, deadline):
         return None
     url = f"https://{tenant}/jobs/careers/{jobid}/{slug}?source=CareerSite"
     try:
-        html = _fetch(url, tenant, opener, deadline=deadline)
-        from zoho_detail import Text
+        html = _fetch(url, tenant, opener, deadline=deadline, require_exact_detail=True)
+        from zoho_detail import Text, embedded_full_description
         parser = Text()
         parser.feed(html)
         reject_access_gateway_text(" ".join(parser.parts))
         if not any(heading.casefold() == title.casefold() for heading in parser.h1_headings):
             return None
-        if not re.search(r"(?<![0-9])" + re.escape(jobid) + r"(?![0-9])", html):
+        # The requested ID must belong to a detail-scoped structured record,
+        # never merely appear among links or related job cards.
+        import json
+        data = re.search(r'\bdata\s*=\s*(\{.*?\})\s*;', html, re.S)
+        if not data:
+            return None
+        raw = data.group(1).replace('\\-', '-')
+        raw = re.sub(r'\\x([0-9a-fA-F]{2})', lambda x: '\\u00' + x.group(1), raw)
+        payload = json.loads(raw)
+        if not isinstance(payload, dict):
+            return None
+        ids = {str(payload[key]) for key in ("jobId", "jobid", "jobOpeningId", "jobOpeningID")
+               if payload.get(key) is not None}
+        detail = embedded_full_description(html)
+        if ids != {jobid} or not detail or str(detail.get("job_title") or "").strip().casefold() != title.strip().casefold():
             return None
         return url
     except (OSError, ValueError, TimeoutError):
