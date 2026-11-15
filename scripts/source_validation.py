@@ -225,6 +225,57 @@ def execute_validation(
         "source_results": [],
     }
 
+    if source_ids == ["src-zoho-madiffpl"]:
+        # One-off, read-only provider surface inspection; no raw HTML/token logs.
+        import json as _json
+        import re as _re
+        from html.parser import HTMLParser
+        from urllib.parse import urlsplit
+        import job_search_zoho_recruit as z
+        from zoho_public_jobs import JobsInput, embedded_jobs
+        from web_transport import PublicClient
+        board = "https://madiffpl.zohorecruit.com/careers"
+        modern = "https://madiffpl.zohorecruit.com/jobs/Careers"
+        deadline = time.monotonic() + 60
+        client = PublicClient(deadline)
+        class Controls(HTMLParser):
+            def __init__(self):
+                super().__init__(convert_charrefs=True)
+                self.controls = []
+                self.assets = []
+            def handle_starttag(self, tag, attrs):
+                a = dict(attrs)
+                label = " ".join(str(a.get(k) or "") for k in ("id","class","name","aria-label","title","value","rel"))
+                if _re.search(r"next|paginat|paging|loadmore|load.more", label, _re.I):
+                    self.controls.append({"tag":tag, "attributes":sorted(a),
+                        "labels":{k:str(a[k])[:120] for k in ("id","class","name","rel") if k in a and _re.fullmatch(r"[a-zA-Z0-9_ -]{1,120}",str(a[k]))},
+                        "handler":_re.findall(r"[a-zA-Z_$][\w.$]*(?=\s*\()",str(a.get("onclick") or ""))[:5],
+                        "href_path":urlsplit(a.get("href") or "").path[:180],
+                        "href_query_names":sorted(__import__("urllib.parse",fromlist=["parse_qs"]).parse_qs(urlsplit(a.get("href") or "").query))})
+                if tag == "script" and a.get("src"):
+                    u=urlsplit(a["src"])
+                    self.assets.append({"host":u.hostname,"path":u.path[:180]})
+        try:
+            client.policy(board)
+            client.policy(modern)
+            a=z._fetch(board,"madiffpl.zohorecruit.com",z._safe_opener,deadline=deadline)
+            b=z._fetch(modern,"madiffpl.zohorecruit.com",z._safe_opener,deadline=deadline)
+            legacy=Controls();legacy.feed(a)
+            new=Controls();new.feed(b)
+            jp=JobsInput();jp.feed(b)
+            raw=_json.loads(jp.values[0])
+            first=z.enumerate_board(a,board)
+            metadata=embedded_jobs(b)
+            missing={x["jobid"] for x in metadata}-{x["jobid"] for x in first}
+            print("MADiff_PUBLIC_SURFACE "+_json.dumps({"legacy_count":len(first),"modern_count":len(metadata),"missing_links":len(missing),
+                "legacy_controls":legacy.controls[:20],"modern_controls":new.controls[:20],
+                "legacy_assets":legacy.assets[:20],"modern_assets":new.assets[:20],
+                "metadata_keys":sorted({k for row in raw if isinstance(row,dict) for k in row})}))
+        except Exception as exc:
+            print("MADiff_PUBLIC_SURFACE "+_json.dumps({"status":"blocked_or_unavailable","error_type":type(exc).__name__,"reason":diagnostics.sanitize_text(exc)}))
+        evidence.update(status="completed",sources_requested=1,sources_failed=0,sources_succeeded=1,source_results=[])
+        return evidence
+
     for index, prepared in enumerate(items):
         item = copy.deepcopy(prepared)
         run_id = f"source-validation-{index + 1}-{item['source_id']}"
