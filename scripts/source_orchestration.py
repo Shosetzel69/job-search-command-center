@@ -320,6 +320,9 @@ def emit_source_final(run_id, item):
         records=item.get("records", 0),
         records_collected_raw=item.get("records_collected_raw", 0),
         records_scope_excluded=item.get("records_scope_excluded", 0),
+        records_role_matched=item.get("records_role_matched",0),
+        records_role_unresolved=item.get("records_role_unresolved",0),
+        provider_scope_details=item.get("provider_scope_details"),
         records_quality_excluded=item.get("records_quality_excluded", 0),
         records_malformed=item.get("records_malformed", 0),
         provider_request_attempts=item.get("provider_request_attempts"),
@@ -339,7 +342,7 @@ def emit_source_final(run_id, item):
 
 def aggregate_source_results(plan):
     outcome_counts = {}
-    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope")}
+    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope", "records_role_matched", "records_role_unresolved")}
     error_code_counts = {}
     failure_stage_counts = {}
     for item in plan:
@@ -630,6 +633,7 @@ def apply_retrieve_scope(item, results, config):
             result.http_status,
             result.provider_request_attempts,
             result.provider_request_measurement,
+            result.provider_scope_details,
         ))
     item["records_scope_excluded"] = excluded
     item["records_role_unresolved"] = unresolved_roles
@@ -771,6 +775,9 @@ def record_results(item, results):
         item.setdefault("provider_request_measurement", "not_measured")
     item["records"] = sum(len(result.records) for result in ok)
     item["records_after_scope"] = item["records"]
+    evidence=[r.provider_scope_details for r in results if r.provider_scope_details]
+    if evidence:item['provider_scope_details']=evidence
+    item['provider_scope_requests_observed']=bool(item.get('provider_request_attempts')) if item.get('provider_request_attempts') is not None else None
     item["provider_reported_total"] = sum(int(result.total_available or 0) for result in ok)
     item["error"] = "; ".join(
         diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
@@ -878,16 +885,18 @@ def collect_ats(item, role_family=None, config=None):
     route = item.get("connector_config") or {}
     connector = item["connector"]
     company = item["source"]
+    role_scopes=(config or {}).get("_jscc_retrieve_scope",{}).get("scopes") or []
+    scope_kwargs={"role_scopes":role_scopes} if role_scopes else {}
     if connector == "smartrecruiters":
         terms = smartrecruiters.bounded_terms(config)
-        return smartrecruiters.collect(route["company_identifier"], **({"search_terms": terms} if terms else {}))
+        return smartrecruiters.collect(route["company_identifier"], **({"search_terms": terms} if terms else {}), **scope_kwargs)
     if connector == "workday":
         terms = workday.scope_search_terms(config)
         query_kwargs = {"search_terms": terms} if terms else {}
         results = workday.collect(
             route["career_url"], company,
             detail_workers=route.get("detail_workers", 4),
-            **query_kwargs,
+            **query_kwargs, **scope_kwargs,
         )
         if company == "NTT DATA Romania" and (config or {}).get("_jscc_targeted_collection"):
             # The approved Workday URL is global. Keep only explicitly local
