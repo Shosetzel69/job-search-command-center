@@ -198,3 +198,48 @@ export async function resolveAccountDeletionTarget(
     deletion_initiated_by:row.deletion_initiated_by || null,
   });
 }
+
+
+// Owner-authorized, DEV-only corpus maintenance. No caller-supplied tenant,
+// table or SQL; only job-derived projections are reset, never personal content.
+export async function purgeDevJobProjections(authContext, env = process.env, { db, assertHeld } = {}) {
+  if (authContext?.role !== 'ADMIN' || authContext?.status !== 'ACTIVE' || !authContext?.user_id) {
+    throw httpError('Active ADMIN required', 403);
+  }
+  requireUuid(authContext.user_id, 'user_id');
+  if (env.APP_ENV !== 'dev' || env.GCP_PROJECT_ID !== 'jscc-dev' || env.JSCC_RUNTIME_BACKEND !== 'gcp') {
+    throw httpError('DB Purge is DEV only', 403);
+  }
+  if (typeof assertHeld !== 'function') throw httpError('Maintenance lock required', 503);
+  db ||= getPool(env);
+  await assertHeld();
+  const guard = await db.query('SELECT current_database() AS database');
+  if (guard.rows?.[0]?.database !== 'jobsearch_dev') throw httpError('DEV database required', 503);
+  const tenants = await db.query('SELECT id FROM tenants ORDER BY id');
+  const counts = { profile_job_evaluation:0, profile_job_state:0, profile_job_count_snapshots:0, refresh_requests:0 };
+  for (const row of tenants.rows || []) {
+    await assertHeld();
+    const tenantId = requireUuid(row.id, 'maintenance tenant');
+    const removed = await withTransaction(async tx => {
+      await establishTenantContext(tx, tenantId);
+      return {
+        profile_job_evaluation:(await tx.query('DELETE FROM profile_job_evaluation WHERE tenant_id=$1',[tenantId])).rowCount,
+        profile_job_state:(await tx.query('DELETE FROM profile_job_state WHERE tenant_id=$1',[tenantId])).rowCount,
+        profile_job_count_snapshots:(await tx.query('DELETE FROM profile_job_count_snapshots WHERE tenant_id=$1',[tenantId])).rowCount,
+        refresh_requests:(await tx.query('DELETE FROM refresh_requests WHERE tenant_id=$1',[tenantId])).rowCount,
+      };
+    }, { env, db });
+    for (const key of Object.keys(counts)) counts[key] += Number(removed[key] || 0);
+  }
+  await assertHeld();
+  // Global mode only for aggregate verification; no identifiers or payloads returned.
+  const residue = await db.query(`SELECT
+    (SELECT count(*)::int FROM profile_job_evaluation) AS evaluations,
+    (SELECT count(*)::int FROM profile_job_state) AS states,
+    (SELECT count(*)::int FROM profile_job_count_snapshots) AS snapshots,
+    (SELECT count(*)::int FROM refresh_requests) AS requests`);
+  if (!residue.rows?.[0] || Object.values(residue.rows[0]).some(n => Number(n) !== 0)) {
+    throw httpError('Job projection residue; maintenance lock retained', 503);
+  }
+  return counts;
+}
