@@ -208,11 +208,9 @@ def mark_careers_board_fallback(records, board):
         else:
             parts = urlsplit(link or "")
             jobid = record["id"].rsplit(":", 1)[-1]
-            portal = (parts.path == "/recruit/PortalDetail.na"
-                      and parse_qs(parts.query).get("jobid") == [jobid])
             modern = bool(re.fullmatch(r"/jobs/careers/" + re.escape(jobid) + r"/[^/]+", parts.path, re.I))
             if (parts.scheme != "https" or parts.hostname != tenant or parts.username
-                    or parts.password or parts.port or parts.fragment or not (portal or modern)):
+                    or parts.password or parts.port or parts.fragment or not modern or parts.query not in {"", "source=CareerSite"}):
                 raise ValueError("unverified Zoho individual job URL")
             record["source_url_kind"] = "direct_job"
             record["source_url_label"] = "Original job posting"
@@ -398,7 +396,7 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
             "description_provenance": detail["description_provenance"], "location": detail["location"],
             "countries": [detail["country"]] if detail.get("country") else [], "remote": None, "work_arrangement": None,
             "employment_statuses": [detail["employment_type"]] if detail["employment_type"] else [],
-            "date_posted": detail["date_posted"], "source_url": item["source_url"],
+            "date_posted": detail["date_posted"], "source_url": board,
             "_jscc_field_provenance": dict(detail.get("_jscc_field_provenance") or {}),
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
