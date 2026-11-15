@@ -1,3 +1,4 @@
+import { normalizeFitConfig } from '../../shared/fit-v2.mjs';
 import { createRemoteJWKSet, decodeJwt, jwtVerify } from 'jose';
 import { activeCodes, assertNomenclatures, geographyIndex } from '../../shared/nomenclatures.mjs';
 import { ROLE_FAMILY_CODES, familyForSubfamily, normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
@@ -237,7 +238,7 @@ function assertGeographyNoConflict(patch, nomenclatures) {
 const SUPPORTED_CONFIG_PATCH_KEYS = new Set([
   'roleFamilies','roleSubfamilies',
   'workRemote','workHybrid','workOnsite','keepReposts','immediateStart',
-  'contractTypes','freshness','fitThreshold','rateMin','rateMax','exclusions',
+  'fitConfig','contractTypes','freshness','fitThreshold','rateMin','rateMax','exclusions',
   'targetRegions','targetCountries','excludedRegions','excludedCountries',
   'jobspipeEnabled','jobspipeMode','jobspipeApifyMaxItems',
   'jobspipeDirectRunBudget','jobspipeDirectMonthlyGuard',
@@ -310,6 +311,7 @@ function validateUserConfigPatch(input, nomenclatures) {
     if (![24,36,48,120,720].includes(value)) throw Object.assign(new Error('freshness must be 24, 36, 48, 120 or 720'), { status: 400 });
     output.freshness = value;
   }
+  if ('fitConfig' in input) output.fitConfig=normalizeFitConfig(input.fitConfig);
   if ('fitThreshold' in input) {
     const value = Number(input.fitThreshold);
     if (!Number.isInteger(value) || value < 50 || value > 100) throw Object.assign(new Error('fitThreshold must be 50-100'), { status: 400 });
@@ -342,6 +344,7 @@ function applyUserConfigPatch(config, patch) {
   if ('workOnsite' in patch) config.work_modes.onsite = patch.workOnsite;
   if ('contractTypes' in patch) config.contract_types = patch.contractTypes;
   if ('freshness' in patch) config.freshness_hours = patch.freshness;
+  if ('fitConfig' in patch) config.fit_config=patch.fitConfig;
   if ('fitThreshold' in patch) config.fit_threshold = patch.fitThreshold;
   if ('keepReposts' in patch) config.keep_reposts = patch.keepReposts;
   if ('rateMin' in patch) config.rate_min_eur_day = patch.rateMin;
