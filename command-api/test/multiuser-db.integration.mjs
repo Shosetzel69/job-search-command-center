@@ -384,7 +384,7 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(Number(cacheRow.rows[0].profile_version),
       (await resolveActiveSearchProfile(user, env, { db:runtimeDb })).profile_version);
     assert.equal(Number(cacheRow.rows[0].job_version), 1);
-    assert.equal(cacheRow.rows[0].fit_algorithm_version, 'fit-v2');
+    assert.equal(cacheRow.rows[0].fit_algorithm_version, 'fit-v2-eligibility-1');
     assert.equal(cacheRow.rows[0].eligibility_state, 'ELIGIBLE');
 
     });
