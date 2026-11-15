@@ -456,6 +456,57 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(geo["location"],"Bucharest")
         self.assertTrue(geo["remote"])
 
+    def test_remote_geography_requires_candidate_eligibility(self):
+        import shared_corpus_repository as corpus
+        base = {"id":"r-42","job_title":"Project Manager","company":"Example",
+                "source_url":"https://example.com/jobs/42","location":None,
+                "_jscc_field_provenance":{"title":"ATS_FIELD","description":"ATS_FIELD"}}
+        for context in ("Our clients are worldwide.", "We support customers across Europe.",
+                        "We do not offer worldwide remote work.", "Our EMEA office is in Paris."):
+            with self.subTest(context=context):
+                posting = corpus.prepare_posting(dict(base, description="This is a remote position. "+context))
+                self.assertEqual(posting.remote_scope,"unknown")
+                self.assertEqual(posting.country_codes,())
+        for context, expected, codes in (
+            ("Only US residents are eligible.", "Country", ("US",)),
+            ("Candidates must reside in Romania.", "Country", ("RO",)),
+            ("Applicants from the European Union may apply.", "EU", ()),
+            ("You may work from anywhere in the world.", "Worldwide", ()),
+        ):
+            with self.subTest(context=context):
+                posting = corpus.prepare_posting(dict(base, description="This is a remote position. "+context))
+                self.assertEqual(posting.remote_scope,expected)
+                self.assertEqual(posting.country_codes,codes)
+                self.assertIn("remote_eligibility_evidence",posting.payload)
+        conflict = corpus.prepare_posting(dict(base, description="This is a remote position. Only US residents are eligible. You may work from anywhere in the world."))
+        self.assertEqual(conflict.remote_scope,"unknown")
+
+    def test_provider_transport_attempts_survive_failure_and_scope(self):
+        from web_transport import PublicClient
+        def ok_opener(*args, **kwargs):
+            return object()
+        @engine.measure_provider_opener
+        def adapter(opener=ok_opener):
+            opener("first")
+            opener("second")
+            with patch("web_transport.request_once", return_value=None):
+                PublicClient(1)._request_once("https://example.com")
+            return [engine.CollectionResult("demo","a",True,[],100),
+                    engine.CollectionResult("demo","b",True,[],200)]
+        results = adapter()
+        self.assertEqual(results[0].provider_request_attempts,3)
+        self.assertIsNone(results[1].provider_request_attempts)
+        scoped = orchestration.apply_retrieve_scope({}, results, {"_jscc_retrieve_scope":{"scopes":[{}]}})
+        self.assertEqual(scoped[0].provider_request_attempts,3)
+        @engine.measure_provider_opener
+        def failed(opener=ok_opener):
+            opener("first")
+            raise ValueError("parse failed")
+        with self.assertRaises(ValueError) as caught:
+            failed()
+        result = orchestration.failure_result("demo","collect",caught.exception)
+        self.assertEqual(result.provider_request_attempts,1)
+
     def test_provider_request_measurement_is_not_record_count(self):
         item = {"source":"Example","source_id":"src-example"}
         result = engine.CollectionResult("example","q",True,[],100,
