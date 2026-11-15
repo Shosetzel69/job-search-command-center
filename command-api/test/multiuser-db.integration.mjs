@@ -606,6 +606,18 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     await deleteAccount(ownerA, resignedUser.user_id, env, { db:runtimeDb });
 
     });
+    await t.test('DEV corpus purge stages native tenant and shared transactions and preserves accounts/applications',async()=>{
+      const {adminDbPurge}=await import('../src/admin-db-purge.js');
+      const count=async table=>Number((await adminDb.query('SELECT count(*)::int AS count FROM '+table)).rows[0].count);
+      const kept=['tenants','app_user','profile','search_profile','search_profile_preferences','applications','profile_notes','collection_policy','scheduler_config'];
+      const before=Object.fromEntries(await Promise.all(kept.map(async table=>[table,await count(table)])));
+      const order=[];
+      const lock={assertIdle:async()=>{},assertHeld:async()=>{},clearLatest:async()=>order.push('latest'),release:async()=>order.push('release')};
+      const result=await adminDbPurge({...ownerA,status:'ACTIVE'}, {...env,GCP_PROJECT_ID:'jscc-dev',JSCC_RUNTIME_BACKEND:'gcp'}, {confirmation:'PURGE DEV'}, {database:runtimeDb,acquire:async()=>lock});
+      assert.equal(result.status,'completed');assert.deepEqual(order,['latest','release']);
+      for(const table of ['canonical_jobs','source_postings','profile_job_evaluation','profile_job_state','profile_job_count_snapshots','refresh_requests','coverage_scope_state','search_runs','source_run_results'])assert.equal(await count(table),0,table);
+      for(const table of kept)assert.equal(await count(table),before[table],table+' preserved');
+    });
     await t.test('W025-L02 native preserved assertions',async()=>{
     const ownerApps = (await listApplications(ownerA, env, { db:runtimeDb })).applications;
     for (const application of ownerApps) {
