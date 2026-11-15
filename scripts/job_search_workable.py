@@ -105,6 +105,7 @@ def normalize(item, subdomain, company_name):
     }
 
 
+@engine.measure_provider_opener
 def collect(subdomain, company_name, max_postings=MAX_POSTINGS, opener=urlopen):
     subdomain = str(subdomain or "").strip().lower()
     company_name = str(company_name or "").strip()
