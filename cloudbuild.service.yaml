@@ -41,6 +41,9 @@ steps:
     args:
       - -ceu
       - |
+        apt-get update
+        apt-get install -y --no-install-recommends python3
+        python3 --version
         node scripts/check_cloud_run_api_version.mjs
         node --test scripts/test_cloud_run_api_version.mjs
         cd command-api
