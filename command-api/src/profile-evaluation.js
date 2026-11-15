@@ -4,7 +4,7 @@ import { evaluateEligibility } from './eligibility.js';
 import { ROLE_TAXONOMY, normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
 import { canonicalPostedDate, postedAgeHours, parsePostedDate } from './posted-date.mjs';
 
-export const FIT_ALGORITHM_VERSION = 'fit-v2';
+export const FIT_ALGORITHM_VERSION = 'fit-v2-eligibility-1';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
 
@@ -213,7 +213,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   }
 
   const roleCorroborated=titleRoleEvidence(title,row,preferences);
-  const fit=roleCorroborated?evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type)):{score:null,matrix:[]};
+  const fit=roleCorroborated&&eligibility.state==='ELIGIBLE'?evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type)):{score:null,matrix:[]};
   const score=fit.score;
   const pros=fit.matrix.filter(v=>v.weight&&v.grade===5).map(v=>v.criterion+': preferinta confirmata');
   const risks=fit.matrix.filter(v=>v.weight&&v.reason==='MISSING_DATA').map(v=>v.criterion+': date lipsa');
@@ -285,7 +285,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
   const repost = Boolean(row.repost_of_posting_id || payload.reposted || payload.repost);
   const posted = canonicalPostedDate(row, now);
   const age = postedAgeHours(posted, now);
-  const score = cached.score == null ? null : Number(cached.score);
+  const score = cached.eligibilityState === 'ELIGIBLE' && cached.score != null ? Number(cached.score) : null;
   const threshold = Number(preferences.fit_threshold ?? 80);
   const url = row.canonical_url || payload.final_url || payload.source_url || payload.url || null;
   const modeLabel = workMode === 'remote' ? 'Remote' : workMode === 'hybrid' ? 'Hybrid' : workMode === 'onsite' ? 'Onsite' : 'N/A';
