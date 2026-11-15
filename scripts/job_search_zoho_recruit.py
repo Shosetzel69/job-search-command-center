@@ -288,7 +288,16 @@ def _modern_detail_link(row, tenant, opener, deadline):
 
 
 def collect(board_url, company_name, opener=None, role_family=None, diagnostics=None):
-    opener = opener or _safe_opener
+    original_opener = opener or _safe_opener
+    request_attempts = 0
+    def counted_opener(*args, **kwargs):
+        nonlocal request_attempts
+        request_attempts += 1
+        if diagnostics is not None:
+            diagnostics["provider_request_attempts"] = request_attempts
+            diagnostics["provider_request_measurement"] = "zoho_opener_calls"
+        return original_opener(*args, **kwargs)
+    opener = counted_opener
     board = validate_board(board_url)
     if not isinstance(company_name, str) or not company_name.strip():
         raise ValueError("company_name is required")
@@ -413,6 +422,8 @@ def collect_result(board_url, company_name, opener=None, role_family=None):
     tenant = urlsplit(validate_board(board_url)).hostname
     connector = f"zoho_recruit:{tenant}"
     result = [engine.CollectionResult(connector, "public_postings", True, records, len(records))]
+    result[0].provider_request_attempts = evidence.get("provider_request_attempts")
+    result[0].provider_request_measurement = evidence.get("provider_request_measurement")
     if evidence.get("missing_detail_count"):
         result.append(engine.CollectionResult(connector, "public_inventory_partial", False, [], 0,
             f"{evidence['missing_detail_count']} selected public posting(s) lack verified detail within existing budget",
