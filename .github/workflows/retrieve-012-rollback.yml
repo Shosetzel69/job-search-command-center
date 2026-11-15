@@ -1,0 +1,136 @@
+name: Retrieve 012 native rollback compatibility
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/retrieve-012-rollback.yml'
+      - 'scripts/gcp/retrieve_012_rollback_evidence.mjs'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  rollback:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      APP_ENV: dev
+      NILE_TESTING_DB_NAME: jobsearch_dev
+      JSCC_ALLOW_DEV_TEST_SHARED_DB_ROLE: "true"
+      NILE_TEST_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      NILE_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      NILE_MIGRATION_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      JSCC_INTEGRATION_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+      JSCC_TEST_ADMIN_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
+    steps:
+      - name: Checkout evidence harness
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          path: evidence
+      - name: Checkout exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: 03bf424864e021d7ed02c2fc1ff028e20e0b2579
+          path: candidate
+      - name: Checkout exact rollback runtime
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          ref: 121f88e212013d2c4665bb70f881a3bcee365d21
+          path: rollback
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install dependencies
+        working-directory: candidate/command-api
+        run: npm install --ignore-scripts --no-audit --no-fund
+      - name: Start official immutable Nile testing image
+        id: nile
+        shell: bash
+        run: |
+          set -euo pipefail
+          image=ghcr.io/niledatabase/testingcontainer@sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869
+          docker pull "$image"
+          docker buildx imagetools inspect "$image" | grep -F 'sha256:8e670df2a40b0cde96e01cccd62fc34d93bf97c065307d653a5cac940a82b869'
+          id="$(docker run -d --name "w025-nile-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" -e NILE_TESTING_DB_NAME=jobsearch_dev -p 127.0.0.1:55432:5432 "$image")"
+          echo "W025_NILE_CONTAINER_ID=$id" >> "$GITHUB_ENV"
+          for i in $(seq 1 90); do
+            if docker logs "$id" 2>&1 | grep -q 'Database has been created and is ready'; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs "$id"
+          exit 1
+      - name: Admit exact runner container and all database bindings
+        working-directory: candidate/command-api
+        run: node scripts/nile-ci-local-admission.mjs
+      - name: Verify live Nile SQL readiness before native test suites
+        working-directory: candidate/command-api
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import {randomBytes} from 'node:crypto';
+          import pg from 'pg';
+          import {admitNileCi,attestNativeDatabase} from './scripts/nile-ci-local-admission.mjs';
+          // Readiness does not replace independent per-suite native attestations.
+          admitNileCi();
+          let consecutive=0;
+          for(let attempt=1;attempt<=45;attempt++){
+            const pool=new pg.Pool({connectionString:process.env.NILE_TEST_DATABASE_URL,max:1,connectionTimeoutMillis:3000});
+            try{
+              await attestNativeDatabase(pool,{env:{...process.env,
+                W025_NATIVE_RUN_ID:'migration',
+                W025_NATIVE_CHALLENGE:randomBytes(16).toString('hex')
+              }});
+              consecutive++;
+              if(consecutive===3){
+                console.log('W025_SQL_READINESS=PASS attempts='+attempt);
+                break;
+              }
+            }catch(error){
+              consecutive=0;
+              console.error('W025_SQL_READINESS_RETRY attempt='+attempt+' reason='+String(error?.message||'unknown').slice(0,160));
+            }finally{
+              await pool.end();
+            }
+            if(attempt<45) await new Promise(resolve=>setTimeout(resolve,2000));
+          }
+          if(consecutive!==3) throw Error('W025_SQL_READINESS_FAIL: no three consecutive verified native SQL sessions');
+          NODE
+      - name: Verify exact sources and install rollback dependencies
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "03bf424864e021d7ed02c2fc1ff028e20e0b2579"
+          test "$(git -C rollback rev-parse HEAD)" = "121f88e212013d2c4665bb70f881a3bcee365d21"
+          npm --prefix rollback/command-api install --ignore-scripts --no-audit --no-fund
+      - name: Initialize isolated Nile through exact corrected 011 to 012 runner
+        working-directory: candidate/command-api
+        run: |
+          export W025_NATIVE_RUN_ID=migration
+          export W025_NATIVE_CHALLENGE="$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")"
+          node scripts/db-nile-migrate-evidence.mjs
+      - name: Replay exact old runtime readiness and tenant deletion with new rows
+        run: |
+          export W025_NATIVE_RUN_ID=multiuser
+          export W025_NATIVE_CHALLENGE="$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")"
+          node evidence/scripts/gcp/retrieve_012_rollback_evidence.mjs rollback
+      - name: Replay exact old multiuser integration suite on expanded schema
+        working-directory: rollback/command-api
+        run: |
+          export W025_NATIVE_RUN_ID=multiuser
+          export W025_NATIVE_CHALLENGE="$(node -e "console.log(require('crypto').randomBytes(16).toString('hex'))")"
+          node --test --test-reporter=tap test/multiuser-db.integration.mjs
+      - name: Remove disposable Nile container
+        if: always()
+        run: |
+          if [ -n "${W025_NILE_CONTAINER_ID:-}" ]; then
+            docker rm -f "$W025_NILE_CONTAINER_ID"
+            ! docker inspect "$W025_NILE_CONTAINER_ID" >/dev/null 2>&1
+          fi
