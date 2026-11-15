@@ -473,6 +473,7 @@ test('same shared job can produce different per-profile eligibility without prov
     country_codes:['RO'],
     work_mode:'remote',
     role_family:'PROJECT_DELIVERY_MANAGEMENT',
+    role_subfamily:['project_management'],
     source_name:'Example',
     canonical_url:'https://example.test/job',
     posted_at:'2026-10-01T00:00:00Z',
@@ -496,6 +497,8 @@ test('same shared job can produce different per-profile eligibility without prov
   const allowed = evaluateSharedJob(row, base, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   const blocked = evaluateSharedJob(row, { ...base, work_modes:{ ...base.work_modes, remote:false } }, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   assert.equal(allowed.eligible, true);
+  assert.equal(allowed.eligibilityState, 'ELIGIBLE');
+  assert.equal(evaluateSharedJob({...row,role_subfamily:[]},base,nomenclatures).score,null);
   assert.equal(allowed.score,100);
   assert.equal(evaluateSharedJob(row,{...base,fit_config:null},nomenclatures).score,null);
   assert.equal(blocked.eligible, false);
@@ -517,8 +520,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(incompatibleRemote.eligible, false);
   assert.equal(incompatibleRemote.exclusionReason, 'remote eligibility geography incompatible');
-  assert.equal(EVALUATION_VERSION, 'fit-v2');
-  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v2');
+  assert.equal(EVALUATION_VERSION, 'fit-v2-eligibility-1');
+  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v2-eligibility-1');
 });
 
 test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {
@@ -810,4 +813,20 @@ test('#520: uncorroborated persisted role cannot receive a High FIT score',()=>{
  }
  const good=evaluateSharedJob({...row,title:'Technical Project Manager'},preferences,nomenclatures);
  assert.equal(good.score,100);
+});
+
+test('#520 unknown geography or contract cannot receive FIT, including cached reads',()=>{
+ const preferences={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],target_country_codes:['RO'],contract_types:['contract'],work_modes:{remote:true,hybrid:false,onsite:false},fit_threshold:60,fit_config:{compensation:{weight:0},work_mode:{weight:0},contract_type:{weight:0},industry:{weight:0},career:{weight:0},company:{weight:100,ratings:{example:5}}}};
+ const base={job_id:'00000000-0000-0000-0000-000000000001',title:'Technical Project Manager',company:'Example',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:['project_management'],work_mode:'remote',remote_scope:'Country',contract_type:'contract',country_codes:['RO'],payload:{description:'Project delivery',contract_type:'contract'}};
+ const now=new Date('2026-11-15T12:00:00Z');
+ assert.equal(evaluateSharedJob(base,preferences,nomenclatures,now).score,100);
+ for(const row of [{...base,country_codes:[]},{...base,contract_type:'unknown',payload:{description:'Project delivery'}},{...base,work_mode:'unknown'}]){
+  const e=evaluateSharedJob(row,preferences,nomenclatures,now);
+  assert.equal(e.eligibilityState,'UNKNOWN');
+  assert.equal(e.score,null);
+  assert.deepEqual(e.job.fit_matrix,[]);
+  assert.equal(matchesResultView(e.job,e,{result_view:'jobs',quick:'high'},60),false);
+  assert.deepEqual(materializeCachedJob(row,e,preferences,now),e.job);
+  assert.equal(materializeCachedJob(row,{...e,score:100},preferences,now).fit,null);
+ }
 });

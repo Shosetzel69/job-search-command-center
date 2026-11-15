@@ -347,7 +347,7 @@ def emit_source_final(run_id, item):
 
 def aggregate_source_results(plan):
     outcome_counts = {}
-    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope", "records_role_matched", "records_role_unresolved", "records_scope_matched", "records_scope_unresolved")}
+    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope", "records_role_matched", "records_role_unresolved", "records_scope_matched", "records_scope_unresolved", "records_scope_unprojectable")}
     error_code_counts = {}
     failure_stage_counts = {}
     for item in plan:
@@ -632,6 +632,7 @@ def apply_retrieve_scope(item, results, config):
 
     scoped_results = []
     excluded = 0
+    unprojectable = 0
     unresolved_roles = 0
     matched_roles = 0
     matched_scope = 0
@@ -645,7 +646,10 @@ def apply_retrieve_scope(item, results, config):
             if not isinstance(record, dict):
                 continue
             posting = shared_corpus.prepare_posting(record, source_hint=item.get("source"))
-            decisions = {_posting_scope_decision(posting, scope) for scope in scopes if isinstance(scope, dict)} if posting else set()
+            if posting is None:
+                unprojectable += 1
+                continue
+            decisions = {_posting_scope_decision(posting, scope) for scope in scopes if isinstance(scope, dict)}
             if decisions.intersection({'MATCHED','UNRESOLVED'}):
                 if 'MATCHED' in decisions:
                     matched_scope += 1
@@ -673,6 +677,8 @@ def apply_retrieve_scope(item, results, config):
             result.provider_scope_details,
         ))
     item["records_scope_excluded"] = excluded
+    item["records_scope_unprojectable"] = unprojectable
+    item["scope_accounted"] = True
     item["records_role_unresolved"] = unresolved_roles
     item["records_role_matched"] = matched_roles
     item["records_scope_matched"] = matched_scope
@@ -820,8 +826,24 @@ def record_results(item, results):
     # Counts of requests are not proof of their query parameters. Only allowlisted
     # adapter evidence supports observed native scope; other routes stay unverified.
     item["provider_scope_verification"]="PARAMETERS_OBSERVED" if any(d.get("requests") for d in evidence) else "ATTEMPTS_ONLY" if item["provider_scope_requests_observed"] else "NOT_VERIFIED"
-    item["provider_scope_applied_dimensions"]=sorted({dim for d in evidence for dim in d.get("applied_dimensions",[])})
+    item["provider_scope_applied_dimensions"]=sorted({dim for d in evidence if d.get("requests") for dim in d.get("applied_dimensions",[])})
+    planned = item.get("provider_scope_mode")
+    item["provider_scope_observed_mode"] = (
+        "NATIVE_FILTER_OBSERVED" if item["provider_scope_applied_dimensions"] else
+        "ENUMERATION_ONLY" if planned == "ENUMERATION_ONLY" and item["provider_scope_requests_observed"] else
+        "STATIC_PRESELECTED" if planned == "STATIC_PRESELECTED" and item["provider_scope_requests_observed"] else
+        "NOT_VERIFIED"
+    )
+    item["provider_scope_limitation"] = (
+        "NO_NATIVE_FILTER_OBSERVED" if planned == "QUERY_BOUNDED" and not item["provider_scope_applied_dimensions"] else
+        "DOWNSTREAM_FILTER_REQUIRED" if planned in {"ENUMERATION_ONLY", "STATIC_PRESELECTED", "QUERY_BOUNDED"} else None
+    )
     item["provider_reported_total"] = sum(int(result.total_available or 0) for result in ok)
+    if item.get("scope_accounted"):
+        raw = item["records_collected_raw"]
+        accounted = sum(item.get(k, 0) for k in ("records_malformed", "records_quality_excluded", "records_scope_unprojectable", "records_scope_excluded", "records_scope_matched", "records_scope_unresolved"))
+        retained = item.get("records_scope_matched", 0) + item.get("records_scope_unresolved", 0)
+        item["scope_reconciliation"] = {"raw": raw, "accounted": accounted, "retained": retained, "delta": raw-accounted, "status": "PASS" if raw == accounted and retained == item["records"] else "MISMATCH"}
     item["error"] = "; ".join(
         diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
     ) or None
@@ -1224,6 +1246,24 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
             item["provider_scope_verification"] = "NOT_EXECUTED"
     status["provider_scope_inventory"] = dict(sorted(Counter(item.get("provider_scope_mode", "UNKNOWN") for item in plan).items()))
     status["provider_scope_verification_inventory"]=dict(sorted(Counter(item.get("provider_scope_verification","NOT_VERIFIED") for item in plan).items()))
+    status["provider_scope_observed_inventory"] = dict(sorted(Counter(item.get("provider_scope_observed_mode", "NOT_EXECUTED" if item.get("provider_scope_mode") == "NOT_EXECUTED" else "NOT_VERIFIED") for item in plan).items()))
+    scope_checks = [item["scope_reconciliation"] for item in plan if item.get("scope_reconciliation")]
+    persisted = (shared_corpus_result or {}).get("status") == "persisted"
+    projection = (shared_corpus_result or {}).get("records_projected") if persisted else None
+    writes = (shared_corpus_result or {}).get("postings_created", 0) + (shared_corpus_result or {}).get("postings_updated", 0) if persisted else None
+    attempted_rows = sum(item.get("records_after_scope", 0) for item in plan)
+    projection_skips = (shared_corpus_result or {}).get("records_skipped") if persisted else None
+    status["retrieve_reconciliation"] = {
+        "source_checks": len(scope_checks),
+        "source_mismatches": sum(c["status"] != "PASS" for c in scope_checks),
+        "retained_records": attempted_rows,
+        "projected_records": projection,
+        "projection_skips": projection_skips,
+        "posting_writes": writes,
+        "projection_delta": attempted_rows - projection - projection_skips if persisted else None,
+        "write_delta": projection - writes if persisted else None,
+        "status": "MISMATCH" if any(c["status"] != "PASS" for c in scope_checks) or (persisted and (attempted_rows != projection + projection_skips or projection != writes)) else "PASS" if persisted and scope_checks else "NOT_MEASURED",
+    }
     status["canonical_publication"] = {
         "basis": "distinct_active_shared_jobs_by_api_preferred_source",
         "measured": publication_known,

@@ -1237,6 +1237,34 @@ class SourceProgressContractTests(unittest.TestCase):
         self.assertEqual(payload["records_inspected"], 3)
 
 
+
+class D2ObservedAccountingTests(unittest.TestCase):
+    def test_planned_query_is_not_observed_native_filter(self):
+        for details,expected in [
+            ({"requests":[{"offset":0}],"applied_dimensions":[]},"NOT_VERIFIED"),
+            ({"applied_dimensions":["q"]},"NOT_VERIFIED"),
+            ({"requests":[{"q":"project"}],"applied_dimensions":["q"]},"NATIVE_FILTER_OBSERVED"),
+        ]:
+            item={"provider_scope_mode":"QUERY_BOUNDED"}
+            result=engine.CollectionResult("example","q",True,[],0,provider_request_attempts=1,provider_scope_details=details)
+            orchestration.record_results(item,[result])
+            self.assertEqual(item["provider_scope_observed_mode"],expected)
+            self.assertEqual(item["provider_scope_applied_dimensions"],["q"] if expected=="NATIVE_FILTER_OBSERVED" else [])
+
+    def test_scope_accounting_separates_malformed_invalid_unprojectable_and_unresolved(self):
+        item={"scope_accounted":True,"records_collected_raw":10,"records_malformed":1,
+              "records_quality_excluded":2,"records_scope_unprojectable":1,
+              "records_scope_excluded":2,"records_scope_matched":3,"records_scope_unresolved":1}
+        result=engine.CollectionResult("example","q",True,[{}]*4,10)
+        orchestration.record_results(item,[result])
+        self.assertEqual(item["scope_reconciliation"],{"raw":10,"accounted":10,"retained":4,"delta":0,"status":"PASS"})
+        self.assertEqual(orchestration.aggregate_source_results([item])["source_record_totals"]["records_scope_unprojectable"],1)
+        item["records_collected_raw"]=11
+        orchestration.record_results(item,[result])
+        self.assertEqual(item["scope_reconciliation"]["status"],"MISMATCH")
+        self.assertEqual(item["scope_reconciliation"]["delta"],1)
+
+
 if __name__ == "__main__":
     unittest.main()
 
