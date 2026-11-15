@@ -252,3 +252,42 @@ test('Nile operational status uses exact owned run and maps internal running sta
   assert.equal(called,1);
   assert.equal(await readNileRunPayload(gcp,id,{query:async()=>({rows:[{payload:{run_id:'other'}}]})}),null);
 });
+
+test('DEV missing authoritative markers never read synthetic seed status',async()=>{
+ const {readRuntimeJson}=await import('../src/runtime-gcp.js');
+ const old=globalThis.fetch;
+ try{
+  globalThis.fetch=async input=>{
+   const u=new URL(String(input));
+   if(u.hostname==='metadata.google.internal')return Response.json({access_token:'inert'});
+   const name=decodeURIComponent(u.pathname.split('/o/').at(-1));
+   assert.ok(['locks/heavy-search.lock','latest-run.json'].includes(name),name);
+   return new Response('',{status:404});
+  };
+  const result=await readRuntimeJson(gcp,{sourceSha:SHA},'data/run-status.json');
+  assert.equal(result.payload.status,'idle');
+  assert.equal(result.payload.run_id,null);
+  assert.equal(result.payload.jobs_published,0);
+ }finally{globalThis.fetch=old;}
+});
+
+test('DEV latest marker cannot revive a running status after lock removal',async()=>{
+ const {readRuntimeJson}=await import('../src/runtime-gcp.js');
+ const old=globalThis.fetch;
+ const id='run-00000000-0000-4000-8000-000000000001';
+ let status='running';
+ try{
+  globalThis.fetch=async input=>{
+   const u=new URL(String(input));
+   if(u.hostname==='metadata.google.internal')return Response.json({access_token:'inert'});
+   const name=decodeURIComponent(u.pathname.split('/o/').at(-1));
+   if(name==='locks/heavy-search.lock')return new Response('',{status:404});
+   if(name==='latest-run.json')return Response.json(u.search?{run_id:id,status:'completed'}:{generation:'11'});
+   assert.equal(name,'runs/'+id+'/run-status.json');
+   return Response.json(u.search?{run_id:id,status}:{generation:'12'});
+  };
+  await assert.rejects(readRuntimeJson(gcp,{sourceSha:SHA},'data/run-status.json'),e=>e.status===503);
+  status='completed';
+  assert.equal((await readRuntimeJson(gcp,{sourceSha:SHA},'data/run-status.json')).payload.status,'completed');
+ }finally{globalThis.fetch=old;}
+});
