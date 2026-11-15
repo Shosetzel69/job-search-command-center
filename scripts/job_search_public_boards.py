@@ -16,7 +16,8 @@ from html import unescape
 from html.entities import html5
 from html.parser import HTMLParser
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
-from urllib.request import Request, urlopen
+from urllib.request import Request
+from web_transport import measured_urlopen as urlopen
 
 import job_search as engine
 from retrieve_provider_queries import scope_search_terms
@@ -3678,6 +3679,9 @@ def scoped_freelancer_url(url, config):
     return urlunsplit((parts.scheme, parts.netloc, parts.path, urlencode(query), parts.fragment))
 
 
+from web_transport import measure_public_collection
+
+@measure_public_collection
 def collect(source, config=None):
     name = str(source.get("name") or "")
     spec = PUBLIC_BOARD_SOURCES.get(name)
