@@ -467,7 +467,7 @@ class OrchestrationTests(unittest.TestCase):
 
     def test_remote_geography_requires_candidate_eligibility(self):
         import shared_corpus_repository as corpus
-        base = {"id":"r-42","job_title":"Project Manager","company":"Example",
+        base = {"id":"r-42","job_title":"Project Manager","company":"Example","_jscc_source_id":"src-remote-test","_jscc_source_name":"Example",
                 "source_url":"https://example.com/jobs/42","location":None,
                 "_jscc_field_provenance":{"title":"ATS_FIELD","description":"ATS_FIELD"}}
         for context in ("Our clients are worldwide.", "We support customers across Europe.",
