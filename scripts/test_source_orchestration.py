@@ -407,6 +407,22 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(item["error_code"], "TIMEOUT")
         self.assertEqual(item["outcome"], "failed")
 
+
+    def test_incomplete_with_source_fallback_is_retained_without_invented_fields(self):
+        item = {"source_id":"src-example","source":"Example","url":"https://example.com/careers"}
+        row = {"id":"job-42","job_title":"Project Manager","company":"Example",
+               "description":"Manage delivery.","location":None,
+               "_jscc_field_provenance":{"title":"ATS_FIELD","description":"LISTING_CARD"}}
+        unsafe = dict(row, id="unsafe", source_url="https://user:password@example.com/job")
+        results = [engine.CollectionResult("example","q",True,[row,unsafe],2)]
+        orchestration.tag_collection_records(item,results)
+        self.assertEqual(len(results[0].records),1)
+        self.assertEqual(row["description"],"Manage delivery.")
+        self.assertIsNone(row["location"])
+        self.assertEqual(row["source_url"],item["url"])
+        self.assertEqual(row["source_url_kind"],"careers_board_fallback")
+        self.assertEqual(item["quality_counts"],{"VALID":0,"INCOMPLETE":1,"INVALID":1})
+
     def test_quality_mixed_batch_rejects_invalid_and_keeps_partial(self):
         valid = record("Jobicy", "valid")
         valid["_jscc_field_provenance"] = {
