@@ -204,9 +204,17 @@ class OrchestrationTests(unittest.TestCase):
                    "GCP_RUNTIME_BUCKET": "jscc-dev-runtime-828902654738"}
         with patch.dict(os.environ, runtime), patch.object(
                 orchestration.shared_corpus, "persist_collection", return_value=evidence), patch.object(
+                orchestration.shared_corpus, "persist_run_progress") as progress, patch.object(
+                orchestration.shared_corpus, "persist_operational_run", return_value={"status":"persisted"}) as persist, patch.object(
+                orchestration.shared_corpus, "read_operational_run", side_effect=lambda run_id:json.loads(engine.STATUS_PATH.read_text())), patch.object(
                 engine, "process_records", side_effect=AssertionError("legacy processing")), patch.object(
                 optimized, "merge_with_existing", side_effect=AssertionError("legacy merge")):
-            code, status = self.run_search()
+            code = orchestration.run(CONFIG, NOW)
+            runner.persist_terminal_evidence()
+            status = json.loads(engine.STATUS_PATH.read_text())
+            progress.assert_called()
+            persist.assert_called_once()
+            self.assertFalse(runner.HISTORY_PATH.exists())
             self.assertEqual(code, 0)
             self.assertFalse(engine.JOBS_PATH.exists())
             self.assertEqual(status["jobs_published"], 1)
@@ -221,7 +229,8 @@ class OrchestrationTests(unittest.TestCase):
         runtime = {"APP_ENV": "dev", "CLOUD_RUN_JOB": "jscc-search-dev",
                    "GCP_RUNTIME_BUCKET": "jscc-dev-runtime-828902654738"}
         with patch.dict(os.environ, runtime), patch.object(
-                orchestration.shared_corpus, "persist_collection", return_value={"status": "local_not_configured"}):
+                orchestration.shared_corpus, "persist_collection", return_value={"status": "local_not_configured"}), patch.object(
+                orchestration.shared_corpus, "persist_run_progress"):
             with self.assertRaisesRegex(RuntimeError, "publication evidence unavailable"):
                 orchestration.run(CONFIG, NOW)
             self.assertFalse(engine.JOBS_PATH.exists())
