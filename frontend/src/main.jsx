@@ -10,7 +10,7 @@ import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES
 import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline, statusForTrackedRun, initialTrackedRun } from './run-polling.mjs';
 import { runProgressModel } from './run-progress.mjs';
-import { JOBS_PAGE_SIZE, JOBS_PAGE_SIZES, jobPageSize, buildJobsPath, ignorePageResponse, isSearchProfileConfigured, navigateJobPage, needsPageReload, pageRequestKey, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
+import { JOBS_PAGE_SIZE, JOBS_PAGE_SIZES, jobPageSize, buildJobsPath, ignorePageResponse, isSearchProfileConfigured, navigateJobPage, needsPageReload, pageRequestKey, scanResultCount, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
 import { readUiState, writeUiState } from './ui-state.mjs';
 import { registerPwa } from './pwa.mjs';
 import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
@@ -169,7 +169,7 @@ function SignedOutScreen({clientId,loginHint,allowAutoRestore,authError,authStat
 
 function SidebarBadge({value,active}){return<span className={cx('ml-auto min-w-6 rounded-full px-2 py-0.5 text-center text-xs font-semibold text-white',active?'bg-blue-500':'bg-slate-700')}>{value}</span>;}
 function Sidebar({view,onView,counts,runStatus,role}) {
-  const items=[['jobs','Joburi noi','jobs',counts.jobs],['review','De evaluat','review',counts.review],['applications','Aplicari','applications',counts.applications],['criteria','Criterii de selectie','criteria',null],...(role==='ADMIN'?[['admin','Administrare','admin',null]]:[])];
+  const items=[['jobs','Joburi noi','jobs',counts.jobs],['review','De evaluat','review',counts.review],['unclassified','Neclasificate','review',null],['applications','Aplicari','applications',counts.applications],['criteria','Criterii de selectie','criteria',null],...(role==='ADMIN'?[['admin','Administrare','admin',null]]:[])];
   const progress=runProgressModel(runStatus);
   const statusTone=runStatus?.status==='completed'?'bg-emerald-500':isActiveRunStatus(runStatus?.status)?'bg-blue-500':runStatus?.status==='completed_with_errors'?'bg-amber-500':'bg-slate-500';
   return <aside className="hidden bg-slate-950 text-slate-300 md:sticky md:top-14 md:flex md:h-[calc(100vh-3.5rem)] md:w-64 md:shrink-0 md:flex-col">
@@ -182,10 +182,11 @@ function BottomNav({view,onView,counts,role,onLogout}) {
   const[moreOpen,setMoreOpen]=useState(false);
   const primary=[['jobs','Joburi','jobs',counts.jobs],['review','Review','review',counts.review],['applications','Aplicari','applications',counts.applications]];
   const choose=key=>{setMoreOpen(false);onView(key);};
-  const moreActive=['criteria','admin'].includes(view);
+  const moreActive=['criteria','admin','unclassified'].includes(view);
   return <>
     {moreOpen&&<button type="button" aria-label="Inchide meniul More" onClick={()=>setMoreOpen(false)} className="fixed inset-0 z-40 bg-slate-950/20 md:hidden"/>}
     {moreOpen&&<section aria-label="Mai multe optiuni" className="safe-bottom fixed inset-x-3 bottom-[4.75rem] z-50 rounded-2xl border border-slate-200 bg-white p-2 shadow-2xl md:hidden">
+      <button type="button" onClick={()=>choose('unclassified')} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"><Icon name="review"/> Neclasificate</button>
       <button type="button" onClick={()=>choose('criteria')} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"><Icon name="criteria"/> Criterii de selectie</button>
       {role==='ADMIN'&&<button type="button" onClick={()=>choose('admin')} className="flex min-h-12 w-full items-center gap-3 rounded-xl px-3 text-left text-sm font-semibold text-slate-700 hover:bg-slate-50"><Icon name="admin"/> Administrare</button>}
       <div className="my-1 border-t border-slate-100"/>
@@ -213,7 +214,7 @@ function ApplicationHeader({email,onLogout,onDeleteAccount,environment}) {
 }
 
 function Header({view,running,onRun,refreshDisabled=false,metrics}) {
-  const titles={jobs:'Joburi noi',review:'De evaluat',applications:'Aplicari',criteria:'Criterii de selectie',admin:'Administrare'};
+  const titles={jobs:'Joburi noi',review:'De evaluat',unclassified:'Neclasificate',applications:'Aplicari',criteria:'Criterii de selectie',admin:'Administrare'};
   const date=new Intl.DateTimeFormat('ro-RO',{weekday:'long',day:'numeric',month:'long',timeZone:'Europe/Bucharest'}).format(new Date()).toUpperCase();
   const summary=view==='jobs'&&metrics?`${metrics.jobs} noi · ${metrics.high} fit · ${metrics.remote} remote`:view==='review'&&metrics?`${metrics.high} fit ridicat · ${metrics.scope}`:'';
   return <header className="flex items-center justify-between gap-3">
@@ -262,7 +263,7 @@ function FilterButton({active,onClick,children,count}){return<button onClick={on
 function WorkModeDropdown({selected,onChange}){const[open,setOpen]=useState(false),ref=useRef(null);useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)};document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h)},[]);const label=selected.length===ALL_WORK_MODES.length?'Toate':selected.length===0?'Niciunul':selected.map(mode=>mode==='Hybrid'?'Hibrid':mode).join(', ');const toggle=mode=>onChange(selected.includes(mode)?selected.filter(x=>x!==mode):[...selected,mode]);return<div className="relative" ref={ref}><button onClick={()=>setOpen(v=>!v)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600">Mod lucru: <span className="max-w-36 truncate text-slate-800">{label}</span><Icon name="chevronDown" className="h-4 w-4 text-slate-400"/></button>{open&&<div className="absolute left-0 z-40 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">{ALL_WORK_MODES.map(mode=><label key={mode} className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-700 hover:bg-slate-50"><input type="checkbox" checked={selected.includes(mode)} onChange={()=>toggle(mode)} className="h-4 w-4 rounded border-slate-300"/>{mode==='Hybrid'?'Hibrid':mode}</label>)}</div>}</div>;}
 function Filters({filters,setFilters,counts,defaultFreshness,onResetKpi}) {
   const[mobileOpen,setMobileOpen]=useState(false);
-  const reset=()=>{setFilters({search:'',quick:'all',freshness:defaultFreshness||24,workModes:[...ALL_WORK_MODES],sort:'fit-desc'});onResetKpi?.();};
+  const reset=()=>{setFilters({search:'',quick:'all',freshness:defaultFreshness||24,workModes:[...ALL_WORK_MODES],sort:'fit-desc',pageSize:jobPageSize(filters.pageSize)});onResetKpi?.();};
   const secondaryCount=(filters.freshness!==(defaultFreshness||24)?1:0)+(filters.workModes.length!==ALL_WORK_MODES.length?1:0)+(filters.sort!=='fit-desc'?1:0);
   const secondary=<><label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Vechime<select value={filters.freshness} onChange={e=>setFilters(v=>({...v,freshness:Number(e.target.value)}))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"><option value={24}>24h</option><option value={36}>36h</option><option value={48}>48h</option><option value={120}>5 zile</option><option value={720}>30 zile</option></select></label><div><div className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-slate-500">Mod lucru</div><WorkModeDropdown selected={filters.workModes} onChange={workModes=>setFilters(v=>({...v,workModes}))}/></div><label className="block text-xs font-semibold uppercase tracking-wide text-slate-500">Sortare pe pagina<select value={filters.sort} onChange={e=>setFilters(v=>({...v,sort:e.target.value}))} className="mt-1.5 h-11 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-700"><option value="fit-desc">FIT descrescator</option><option value="fit-asc">FIT crescator</option></select></label></>;
   return <>
@@ -305,7 +306,7 @@ function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=f
   return <div data-testid="job-table" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     {paginate&&controls("sus")}
     <div className="hidden xl:grid-cols-[minmax(10rem,1fr)_90px_55px_75px_112px_112px_180px] 2xl:grid-cols-[minmax(12rem,1fr)_100px_64px_85px_120px_120px_320px] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 xl:grid"><span>Rol</span><span>Tara</span><span>Fit</span><span>Mod lucru</span><span>Publication Date</span><span>Retrieve Date</span><span className="text-right">Actiuni</span></div>
-    {paginate&&<p className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-600" role="note">Filtrele rapide, indicatoarele si sortarea FIT se aplica doar joburilor din pagina curenta. Pentru alte rezultate foloseste Anterioara/Urmatoarea.</p>}
+    {paginate&&<p className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-600" role="note">Filtrele se aplica tuturor rezultatelor. Indicatoarele si sortarea FIT raman la nivelul paginii curente; totalul paginilor este afisat dupa verificarea completa.</p>}
     {!rows.length&&!loading&&<div role="status" className="px-4 py-10 text-center text-sm text-slate-600">Nicio potrivire pe aceasta pagina. Verifica filtrele sau navigheaza la alta pagina.</div>}
     <div>{rows.map((job,index)=><article data-testid="job-row" key={jobKey(job)} className={cx('border-b border-slate-100 px-3 py-3 transition last:border-b-0 xl:grid xl:grid-cols-[minmax(10rem,1fr)_90px_55px_75px_112px_112px_180px] 2xl:grid-cols-[minmax(12rem,1fr)_100px_64px_85px_120px_120px_320px] xl:items-center xl:gap-3 xl:px-5 xl:py-3',index%2===0?'bg-white':'bg-slate-50/70','hover:bg-blue-50/40')}>
       <button data-testid="job-role" type="button" onClick={()=>onDetails(job)} className="block w-full min-w-0 overflow-hidden text-left xl:flex xl:items-start xl:gap-3">
@@ -449,7 +450,7 @@ function App(){
   const[filters,setFilters]=useState(()=>({...initialUi.filters,workModes:[...(initialUi.filters?.workModes||ALL_WORK_MODES)]})),[kpiFilter,setKpiFilter]=useState('all'),[detailJob,setDetailJob]=useState(null),[running,setRunning]=useState(false),[saving,setSaving]=useState(false),[toast,setToast]=useState(null);
   const[deleteAccountOpen,setDeleteAccountOpen]=useState(false),[deleteAccountConfirmation,setDeleteAccountConfirmation]=useState(''),[deletingAccount,setDeletingAccount]=useState(false);
   const[jobPage,setJobPage]=useState({nextCursor:null,loading:false,loadingMore:false,results:0});
-  const[pageNumber,setPageNumber]=useState(1);
+  const[pageNumber,setPageNumber]=useState(1),[resultTotal,setResultTotal]=useState(null);
   const pageCursorHistory=useRef([null]),pageRequestSerialRef=useRef(0),pageNavigationPendingRef=useRef(false);
   const activeViewRef=useRef(view),activeKpiRef=useRef(kpiFilter);
   const[archivedKeys,setArchivedKeys]=useState([]);
@@ -483,19 +484,31 @@ function App(){
       setJobs([]);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';return null;
     }
     const requestSerial=++pageRequestSerialRef.current;
-    const path=buildJobsPath({filters:filterState,cursor,limit:jobPageSize(filterState.pageSize),prefetch:jobPageSize(filterState.pageSize)});
+    const size=jobPageSize(filterState.pageSize);
+    const viewScope=activeViewRef.current,kpiScope=activeKpiRef.current;
+    const pathFor=(nextCursor,limit,prefetch)=>buildJobsPath({filters:filterState,cursor:nextCursor,limit,prefetch,view:viewScope,kpiFilter:kpiScope});
     const navigationContext=append?pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current}):null;
     setJobPage(current=>({...current,loading:!append,loadingMore:append}));
     try{
-      const payload=validateJobsPage(await fetchJson(path,token));
+      const payload=validateJobsPage(await fetchJson(pathFor(cursor,size,size),token));
+      let batch=payload,next=payload.next_cursor;const collected=[...payload.jobs];
+      for(let i=1;collected.length<size&&next&&i<32;i++){
+        if(requestSerial!==pageRequestSerialRef.current)return {ignored:true};
+        const previous=next;
+        batch=validateJobsPage(await fetchJson(pathFor(next,size-collected.length,0),token));
+        if(batch.generated_at!==payload.generated_at||batch.profile_version!==payload.profile_version||batch.count_basis!==payload.count_basis||batch.next_cursor===previous)throw Object.assign(new Error('STALE_CURSOR: result scope changed'),{status:400});
+        collected.push(...batch.jobs);next=batch.next_cursor;
+      }
+      if(collected.length<size&&next)throw new Error('Limita de scanare a paginii a fost atinsa. Restrange filtrele.');
+      payload.jobs=collected;payload.next_cursor=next;payload.results=collected.length;
       if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
       const normalized=(payload.jobs||[]).map(normalizeJob);
       if(!append){pageCursorHistory.current=[null];setPageNumber(1);}
       // Navigation replaces the visible page; append would exceed the 20-row UI contract.
       setJobs(normalized);
       setArchivedKeys(current=>[...new Set([...current,...normalized.filter(job=>job.archivedAt).map(jobKey)])]);
-      setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results??normalized.length),totalPages:Number.isInteger(payload.total_pages)?payload.total_pages:null});
-      if(!append){jobQueryRef.current=pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current});serverQueryRef.current=buildJobsPath({filters:filterState});}
+      setJobPage({nextCursor:payload.next_cursor||null,loading:false,loadingMore:false,results:Number(payload.results??normalized.length),countBasis:payload.count_basis||null,generatedAt:payload.generated_at,scope:pageRequestKey({filters:filterState,view:viewScope,kpiFilter:kpiScope})});
+      if(!append){jobQueryRef.current=pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current});serverQueryRef.current=buildJobsPath({filters:filterState,view:viewScope,kpiFilter:kpiScope});}
       return payload;
     }catch(error){
       if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
@@ -532,17 +545,29 @@ function App(){
 
   const profileConfigured=isSearchProfileConfigured(savedCriteria);
   useEffect(()=>{
-    if(auth.status!=='authenticated'||dataState.status!=='ready'||!profileConfigured||!['jobs','review'].includes(view))return undefined;
+    if(auth.status!=='authenticated'||dataState.status!=='ready'||!profileConfigured||!['jobs','review','unclassified'].includes(view))return undefined;
     const key=pageRequestKey({filters,view,kpiFilter});
     if(key===jobQueryRef.current)return undefined;
     // Don't trigger another lazy/cached evaluation for GUI-only filter changes on page 1.
-    const serverPath=buildJobsPath({filters});
+    const serverPath=buildJobsPath({filters,view,kpiFilter});
     if(!needsPageReload({page:pageNumber,loadedServerPath:serverQueryRef.current,nextServerPath:serverPath})){
       jobQueryRef.current=key;return undefined;
     }
     const timer=setTimeout(()=>loadJobsPage(auth.token,savedCriteria,filters).catch(error=>notify('Lista de joburi nu a putut fi actualizata: '+error.message,'error')),250);
     return()=>clearTimeout(timer);
   },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),filters.pageSize,filters.quick,filters.sort,kpiFilter,pageNumber,savedCriteria,loadJobsPage,notify]);
+
+  useEffect(()=>{
+    setResultTotal(null);
+    if(dataState.status!=='ready'||!['jobs','review','unclassified'].includes(view)||!auth.token||!jobPage.countBasis||jobPage.loading||jobPage.loadingMore)return;
+    const scope=pageRequestKey({filters,view,kpiFilter});
+    if(scope!==jobPage.scope)return;
+    let current=true;
+    const basis=jobPage.countBasis,anchor=jobPage.generatedAt;
+    scanResultCount({basis,anchor,isCurrent:()=>current,load:cursor=>fetchJson(buildJobsPath({filters,view,kpiFilter,cursor,countOnly:true,asOf:anchor,countBasis:basis,prefetch:0}),auth.token)})
+      .then(total=>{if(current&&total!==null)setResultTotal({scope,basis,anchor,total});}).catch(()=>{});
+    return()=>{current=false;};
+  },[dataState.status,view,auth.token,jobPage.countBasis,jobPage.generatedAt,jobPage.scope,filters.search,filters.freshness,filters.workModes.join('|'),filters.pageSize,filters.quick,filters.sort,kpiFilter]);
 
   useEffect(()=>{if(dataState.status!=='ready'||restoredScrollRef.current)return;restoredScrollRef.current=true;requestAnimationFrame(()=>window.scrollTo({top:initialUi.scrollY||0,behavior:'auto'}));},[dataState.status,initialUi.scrollY]);
   useEffect(()=>{if(restoredJobRef.current||!initialUi.selectedJobId||!jobs.length)return;const found=jobs.find(job=>String(job.id)===String(initialUi.selectedJobId));if(found)setDetailJob(found);restoredJobRef.current=true;},[jobs,initialUi.selectedJobId]);
@@ -551,14 +576,14 @@ function App(){
   const threshold=savedCriteria.fitThreshold||80;
   const jobPopulation=useMemo(()=>jobViewPopulation(activeJobs,filters,ageHours),[activeJobs,filters.freshness,filters.workModes]);
   const reviewRows=useMemo(()=>reviewRowsForFilters(activeJobs,filters,ageHours,threshold),[activeJobs,filters.freshness,filters.workModes,threshold]);
-  const baseRows=useMemo(()=>view==='applications'?applications:view==='review'?reviewRows:jobPopulation,[view,applications,reviewRows,jobPopulation]);
-  const filteredRows=useMemo(()=>filterAndSortJobRows(baseRows,{view,filters,threshold,kpiFilter,ageHours}),[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
+  const baseRows=useMemo(()=>view==='applications'?applications:activeJobs,[view,applications,activeJobs]);
+  const filteredRows=useMemo(()=>filterAndSortJobRows(baseRows,{view,filters:{...filters,quick:'all',search:''},threshold,kpiFilter:'all',ageHours}),[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
   const canonicalCounts=useMemo(()=>jobViewCounts(jobPopulation,threshold,ageHours),[jobPopulation,threshold]);
   const quickCounts=useMemo(()=>({all:canonicalCounts.all,high:canonicalCounts.high,b2b:canonicalCounts.b2b}),[canonicalCounts]);
   const metrics=useMemo(()=>({jobs:canonicalCounts.new24h,high:canonicalCounts.high,reposts:canonicalCounts.reposts,remote:canonicalCounts.remote,threshold,scope:jobCountScopeLabel(filters.freshness)}),[canonicalCounts,threshold,filters.freshness]);
   const counts=useMemo(()=>({jobs:canonicalCounts.all,review:reviewRows.length,applications:applications.length}),[canonicalCounts,reviewRows,applications]);
 
-  const archiveJob=useCallback(async job=>{try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({archived:true})});setArchivedKeys(current=>[...new Set([...current,jobKey(job)])]);if(detailJob?.id===job.id)setDetailJob(null);notify('Job arhivat pentru profilul curent.','success');}catch(error){notify('Arhivarea a esuat: '+error.message,'error');}},[auth.token,detailJob,notify]);
+  const archiveJob=useCallback(async job=>{try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({archived:true})});setArchivedKeys(current=>[...new Set([...current,jobKey(job)])]);if(detailJob?.id===job.id)setDetailJob(null);setResultTotal(null);await loadJobsPage(auth.token,savedCriteria,filtersRef.current);notify('Job arhivat pentru profilul curent.','success');}catch(error){notify('Arhivarea a esuat: '+error.message,'error');}},[auth.token,detailJob,notify,loadJobsPage,savedCriteria]);
   const reviewJob=useCallback(async job=>{setDetailJob(job);try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({seen:true})});}catch(error){notify('Starea Review nu a putut fi salvata: '+error.message,'error');}},[auth.token,notify]);
   const applyJob=useCallback(job=>{writeUiState({view,filters,selectedJobId:job?.id||null,scrollY:window.scrollY});},[view,filters]);
 
@@ -647,8 +672,10 @@ function App(){
   const closeDetails=useCallback(()=>{setDetailJob(null);requestAnimationFrame(()=>window.scrollTo({top:detailScrollRef.current,behavior:'auto'}));},[]);
 
   if(auth.status!=='authenticated')return<><SignedOutScreen clientId={clientId} loginHint={loginHint} allowAutoRestore={allowAutoRestore} authError={auth.error} authStatus={auth.status} onCredential={handleCredential}/><EnvironmentMarker environment={environment} className="fixed left-4 top-4 z-50"/><Toast toast={toast}/></>;
-  const onboarding=!profileConfigured&&(view==='jobs'||view==='review');
-  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&(view==='jobs'||view==='review')&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&(view==='jobs'||view==='review')||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} paginate={view!=='applications'} page={pageNumber} onNext={loadMoreJobs} onPrevious={previousJobsPage} pageSize={jobPageSize(filters.pageSize)} onPageSize={value=>setFilters(current=>({...current,pageSize:jobPageSize(value)}))} totalPages={jobPage.totalPages??(!jobPage.nextCursor&&!jobPage.loading&&!jobPage.loadingMore?pageNumber:null)}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token} environment={environment} onPurged={async()=>{setDetailJob(null);setArchivedKeys([]);await loadData(auth.token,auth.role);}}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
+  const onboarding=!profileConfigured&&['jobs','review','unclassified'].includes(view);
+  const countMatches=resultTotal?.scope===pageRequestKey({filters,view,kpiFilter})&&resultTotal?.basis===jobPage.countBasis&&resultTotal?.anchor===jobPage.generatedAt;
+  const totalPages=countMatches?Math.max(1,Math.ceil(resultTotal.total/jobPageSize(filters.pageSize))):null;
+  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&['jobs','review','unclassified'].includes(view)&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&['jobs','review','unclassified'].includes(view)||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)&&(totalPages==null||pageNumber<totalPages)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} paginate={view!=='applications'} page={pageNumber} onNext={loadMoreJobs} onPrevious={previousJobsPage} pageSize={jobPageSize(filters.pageSize)} onPageSize={value=>{pageRequestSerialRef.current++;pageCursorHistory.current=[null];setPageNumber(1);setResultTotal(null);setJobPage(current=>({...current,nextCursor:null,loading:true}));setFilters(current=>({...current,pageSize:jobPageSize(value)}));}} totalPages={totalPages}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token} environment={environment} onPurged={async()=>{setDetailJob(null);setArchivedKeys([]);await loadData(auth.token,auth.role);}}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);
