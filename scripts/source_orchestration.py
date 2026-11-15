@@ -604,6 +604,8 @@ def apply_retrieve_scope(item, results, config):
             result.error_code,
             result.failure_stage,
             result.http_status,
+            result.provider_request_attempts,
+            result.provider_request_measurement,
         ))
     item["records_scope_excluded"] = excluded
     return scoped_results
