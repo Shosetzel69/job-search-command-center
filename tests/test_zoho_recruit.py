@@ -88,7 +88,7 @@ class ModernZohoTests(unittest.TestCase):
         self.assertIn("remote", rows[0]["missing_fields"])
         self.assertNotIn("<p>", rows[0]["description"])
 
-    def test_modern_without_description_rejected(self):
+    def test_modern_without_description_retained_as_incomplete(self):
         import json
         from html import escape
         modern = ('<input id="jobs" value="' + escape(json.dumps([
@@ -96,8 +96,15 @@ class ModernZohoTests(unittest.TestCase):
         ]), quote=True) + '">').encode()
         def mock(req, timeout):
             return Resp(b"<html>Modern careers</html>" if req.full_url.endswith("/careers") else modern, req.full_url)
-        with self.assertRaisesRegex(ValueError, "lacks descriptions"):
-            zoho.collect(BOARD, "MADIFF", opener=mock)
+        import shared_corpus_repository as corpus
+        rows = zoho.collect(BOARD, "MADIFF", opener=mock)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["description"], "")
+        self.assertIsNone(rows[0]["location"])
+        self.assertEqual(rows[0]["source_url"], BOARD)
+        self.assertEqual(rows[0]["source_url_kind"], "careers_board_fallback")
+        self.assertEqual(corpus.assess_record_quality(rows[0])["verdict"], "INCOMPLETE")
+        self.assertIsNotNone(corpus.prepare_posting(rows[0], source_hint="MADIFF"))
 
 class PaginationSafetyTests(unittest.TestCase):
 
