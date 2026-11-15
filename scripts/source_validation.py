@@ -267,6 +267,23 @@ def execute_validation(
             first=z.enumerate_board(a,board)
             metadata=embedded_jobs(b)
             missing={x["jobid"] for x in metadata}-{x["jobid"] for x in first}
+            # Read only the provider-published JavaScript assets referenced by the public page.
+            for asset in legacy.assets:
+                if asset["host"] != "static.zohocdn.com" or not _re.fullmatch(r"/recruit/javascript/portal(?:JS2?|LyteJS)\.[a-f0-9]+\.js",asset["path"]):
+                    continue
+                url = "https://"+asset["host"]+asset["path"]
+                try:
+                    client.policy(url)
+                    js = z._fetch(url,asset["host"],z._safe_opener,deadline=deadline)
+                    matches=[]
+                    for term in ("jobNextNav","data-findex","zr-joblist-next","joblist-next","jobPrevNav","getJobList"):
+                        for match in list(_re.finditer(_re.escape(term),js,_re.I))[:3]:
+                            snippet=js[max(0,match.start()-250):min(len(js),match.end()+650)]
+                            # Static vendor code only; no raw HTML, session data, or query values.
+                            matches.append({"term":term,"code":snippet})
+                    print("MADiff_PAGER_SCRIPT "+_json.dumps({"asset":asset["path"],"matches":matches}))
+                except Exception as exc:
+                    print("MADiff_PAGER_SCRIPT "+_json.dumps({"asset":asset["path"],"error_type":type(exc).__name__,"reason":diagnostics.sanitize_text(exc)}))
             print("MADiff_PUBLIC_SURFACE "+_json.dumps({"legacy_count":len(first),"modern_count":len(metadata),"missing_links":len(missing),
                 "legacy_controls":legacy.controls[:20],"modern_controls":new.controls[:20],
                 "legacy_assets":legacy.assets[:20],"modern_assets":new.assets[:20],
