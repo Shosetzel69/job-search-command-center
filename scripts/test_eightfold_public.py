@@ -79,5 +79,26 @@ class EightfoldPublicTests(unittest.TestCase):
             )
 
 
+
+    def test_vodafone_detail_budget_and_verified_identity(self):
+        from unittest.mock import patch
+        base = "https://jobs.vodafone.com"
+        domain = "vodafone.com"
+        row = eightfold.normalize({"id":"123","name":"Project Manager",
+                                    "positionUrl":"/careers/job/123"},base,domain,"Vodafone / VOIS")
+        link = row["source_url"]
+        detail = '<script type="application/ld+json">' + json.dumps({
+            "@type":"JobPosting","title":"Project Manager",
+            "description":"Manage project delivery and risk."}) + '</script>'
+        with patch.object(eightfold.PublicClient,"get",return_value=(link,detail)) as get:
+            self.assertEqual(eightfold._enrich_missing_details([row],base,domain,0),1)
+            get.assert_not_called()
+            self.assertEqual(eightfold._enrich_missing_details([row],base,domain,1),0)
+            get.assert_called_once_with(link)
+        self.assertEqual(row["_jscc_field_provenance"]["description"],"JOB_DETAIL_JSONLD")
+        row["source_url"] = base + "/careers/job/999"
+        self.assertIsNone(eightfold._verified_detail_url(row,base,domain))
+
+
 if __name__ == "__main__":
     unittest.main()
