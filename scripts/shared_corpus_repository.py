@@ -331,7 +331,7 @@ def assess_record_quality(
 
     if not title or not _text(record.get("company") or record.get("company_name")):
         invalid.add("IDENTITY_MISSING")
-    if not external_id and not url:
+    if not external_id and (not url or record.get("source_url_kind") == "careers_board_fallback"):
         invalid.add("IDENTITY_MISSING")
     if raw_url:
         try:
@@ -601,7 +601,8 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
     # If a provider upgrades a posting from URL-only identity to an external ID,
     # promote the existing same-source row instead of manufacturing a duplicate.
     # External ID remains the authoritative identity after this transition.
-    if not existing and posting.identity_kind == "EXTERNAL_ID" and posting.canonical_url:
+    direct_url = posting.canonical_url and posting.payload.get("source_url_kind") != "careers_board_fallback"
+    if not existing and posting.identity_kind == "EXTERNAL_ID" and direct_url:
         cursor.execute(
             """
             SELECT posting_id, job_id
@@ -626,7 +627,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 (posting.external_job_id, posting.external_job_id, str(url_identity[0])),
             )
 
-    if not existing and posting.identity_kind == "CANONICAL_URL" and posting.canonical_url:
+    if not existing and posting.identity_kind == "CANONICAL_URL" and direct_url:
         # External ID remains authoritative when a later provider response omits
         # it. Reuse a same-source URL only when that URL is unambiguous.
         cursor.execute(
@@ -637,6 +638,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
                 FROM source_postings
                 WHERE source_id = %s
                   AND canonical_url = %s
+                  AND COALESCE(payload->>'source_url_kind', '') <> 'careers_board_fallback'
             ) AS candidate
             WHERE match_count = 1
             LIMIT 1
@@ -704,13 +706,14 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
         created = False
     else:
         job_id: str | None = None
-        if posting.canonical_url:
+        if direct_url:
             cursor.execute(
                 """
                 SELECT job_id
                 FROM source_postings
                 WHERE canonical_url = %s
                   AND source_id <> %s
+                  AND COALESCE(payload->>'source_url_kind', '') <> 'careers_board_fallback'
                 ORDER BY first_seen_at ASC, posting_id ASC
                 LIMIT 1
                 """,
