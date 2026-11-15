@@ -515,3 +515,52 @@ class ProvenanceQualityTests(unittest.TestCase):
         self.assertEqual(quality["verdict"],"INCOMPLETE")
         self.assertIn("TITLE_LISTING_ONLY",quality["issues"])
         self.assertNotIn("digest=",str(row))
+
+
+class PublicPaginationTests(unittest.TestCase):
+    @staticmethod
+    def page(ids, next_index=None):
+        links = "".join(
+            '<a href="/recruit/PortalDetail.na?jobid=%s&amp;digest=public_token&amp;widgetid=123456&amp;iframe=false">Engineer</a>' % jobid
+            for jobid in ids)
+        if next_index is not None:
+            links += '<div class="jobNextNav" data-wid="123456" data-findex="%s"></div>' % next_index
+        return links
+
+    def test_public_next_pages_and_budget(self):
+        import time
+        from urllib.parse import parse_qs, urlsplit
+        first = self.page(["123450"], 100)
+        calls = []
+        def opening(req, timeout):
+            calls.append(req.full_url)
+            query = parse_qs(urlsplit(req.full_url).query)
+            self.assertEqual(query["mode"], ["next"])
+            self.assertEqual(query["digest"], ["public_token"])
+            return Resp(self.page(["123451"], 200).encode()
+                        if query["findex"] == ["100"]
+                        else self.page(["123452"]).encode(), req.full_url)
+        rows, requests = zoho._expand_public_links(
+            first, zoho.enumerate_board(first, BOARD), BOARD,
+            urlsplit(BOARD).hostname, opening, time.monotonic()+30,
+            {"123450", "123451", "123452"})
+        self.assertEqual({r["jobid"] for r in rows}, {"123450", "123451", "123452"})
+        self.assertEqual(requests, 2)
+        self.assertEqual(len(calls), 2)
+
+    def test_repeated_page_fails_closed(self):
+        import time
+        from urllib.parse import urlsplit
+        first = self.page(["123450"], 100)
+        def opening(req, timeout):
+            return Resp(first.encode(), req.full_url)
+        with self.assertRaisesRegex(ValueError, "inconsistent Zoho pagination"):
+            zoho._expand_public_links(first, zoho.enumerate_board(first, BOARD),
+                BOARD, urlsplit(BOARD).hostname, opening, time.monotonic()+30,
+                {"123450", "123451"})
+
+    def test_untrusted_widget_is_not_requested(self):
+        from urllib.parse import urlsplit
+        first = self.page(["123450"], 100).replace('data-wid="123456"', 'data-wid="999999"')
+        with self.assertRaisesRegex(ValueError, "unverified Zoho paging context"):
+            zoho._public_next_url(first, zoho.enumerate_board(first, BOARD), urlsplit(BOARD).hostname)
