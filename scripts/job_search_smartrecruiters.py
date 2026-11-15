@@ -10,7 +10,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 import job_search as engine
-from retrieve_provider_queries import scope_search_terms, listing_role_excluded
+from retrieve_provider_queries import scope_search_terms, listing_role_excluded, signed_scopes, scope_terms, scope_country_codes
 
 BASE_URL = "https://api.smartrecruiters.com/v1/companies"
 PAGE_SIZE = 100
@@ -83,7 +83,10 @@ def normalize(detail, company_identifier, fallback=None):
     location_parts = [str(location.get(key)).strip() for key in ("city", "region") if location.get(key)]
     if country:
         location_parts.append(country)
-    remote = bool(location.get("remote"))
+    remote = location.get("remote") is True
+    hybrid = location.get("hybrid") is True
+    arrangement = ('unknown' if remote and hybrid else 'remote' if remote else 'hybrid' if hybrid else
+                   'onsite' if location.get('remote') is False else 'unknown')
     employment = detail.get("typeOfEmployment") or fallback.get("typeOfEmployment") or {}
 
     return {
@@ -93,8 +96,8 @@ def normalize(detail, company_identifier, fallback=None):
         "description": _description(detail),
         "location": ", ".join(location_parts),
         "countries": [country] if country else [],
-        "remote": remote,
-        "work_arrangement": "remote" if remote else "onsite",
+        "remote": arrangement == "remote",
+        "work_arrangement": arrangement,
         "employment_statuses": engine.list_values(employment.get("label")),
         "date_posted": detail.get("releasedDate") or fallback.get("releasedDate"),
         "source_url": source_url,
@@ -113,21 +116,57 @@ def bounded_terms(config, max_postings=MAX_POSTINGS):
     return terms if len(terms) <= pages else ()
 
 
-def _bounded_summaries(company_path, terms, max_postings, opener):
-    # Public Posting API: q is title/location text search. A single canonical
-    # term per request avoids assuming undocumented OR syntax.
-    active = {term: 0 for term in terms}
+def native_query_plan(config, max_postings=MAX_POSTINGS):
+    """Documented q/country/locationType. Country is job location, not remote eligibility.
+    Preserve signed role/country tuples; if the old request cap cannot cover them,
+    fall back to the full role union (never drop a tuple silently).
+    """
+    scopes=signed_scopes(config)
+    cap=(max_postings+PAGE_SIZE-1)//PAGE_SIZE
+    if not scopes:
+        terms=bounded_terms(config,max_postings)
+        return tuple((term,"","") for term in terms), "ROLE_ONLY" if terms else "NO_VERIFIED_SCOPE"
+    specs=set()
+    for scope in scopes:
+        modes=set(scope.get("work_modes") or [])
+        physical=bool(modes) and modes.issubset({"onsite","hybrid"})
+        countries=scope_country_codes(scope,engine.REGION_COUNTRIES,set(engine.COUNTRY_NAMES)) if physical else ()
+        mode=next(iter(modes)).upper() if len(modes)==1 and modes.issubset({"onsite","hybrid","remote"}) else ""
+        for term in scope_terms(scope):
+            for country in countries or ("",):
+                specs.add((term,country,mode))
+    # A less restrictive query subsumes a more restrictive query only when
+    # every individual parameter is identical or absent in the broader query.
+    specs={spec for spec in specs if not any(other!=spec and
+        all(not a or a==b for a,b in zip(other,spec)) for other in specs)}
+    if specs and len(specs)<=cap and specs!={("","","")}:
+        return tuple(sorted(specs)), "SIGNED_TUPLES"
+    terms={term for scope in scopes for term in scope_terms(scope)}
+    if "" not in terms and 0<len(terms)<=cap:
+        return tuple((term,"","") for term in sorted(terms)), "QUERY_BUDGET_ROLE_ONLY"
+    return (), "QUERY_BUDGET_ENUMERATION"
+
+
+def _bounded_summaries(company_path, terms, max_postings, opener, *, native_plan=(), evidence=None):
+    specs=tuple(native_plan) or tuple((term,"","") for term in terms)
+    active = {spec: 0 for spec in specs}
     unique = {}
     budget = (max_postings + PAGE_SIZE - 1) // PAGE_SIZE
     partial = False
     while active and budget and len(unique) < max_postings:
-        for term, offset in list(active.items()):
+        for spec, offset in list(active.items()):
             if not budget or len(unique) >= max_postings:
                 break
             budget -= 1
+            term,country,mode=spec
             limit = min(PAGE_SIZE, max_postings - len(unique))
-            query = urlencode({"destination":"PUBLIC","limit":limit,"offset":offset,"q":term})
-            payload = _request_json(f"{BASE_URL}/{company_path}/postings?{query}", opener=opener)
+            params={"destination":"PUBLIC","limit":limit,"offset":offset}
+            if term:params["q"]=term
+            if country:params["country"]=country
+            if mode:params["locationType"]=mode
+            if evidence is not None:
+                evidence.append({k:params[k] for k in ("q","country","locationType","limit","offset") if k in params})
+            payload = _request_json(f"{BASE_URL}/{company_path}/postings?{urlencode(params)}", opener=opener)
             rows = payload.get("content")
             if not isinstance(rows, list):
                 raise ValueError("SmartRecruiters postings response must contain a content array")
@@ -141,14 +180,14 @@ def _bounded_summaries(company_path, terms, max_postings, opener):
                     partial = True
             total = payload.get("totalFound")
             if len(rows) < limit or (isinstance(total, int) and offset + len(rows) >= total):
-                active.pop(term)
+                active.pop(spec)
             else:
-                active[term] += len(rows)
+                active[spec] += len(rows)
     return list(unique.values()), bool(active) or partial
 
 
 @engine.measure_provider_opener
-def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, search_terms=(), role_scopes=()):
+def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, search_terms=(), role_scopes=(), native_plan=(), plan_reason=None):
     company_identifier = str(company_identifier or "").strip()
     if not company_identifier:
         raise ValueError("SmartRecruiters company_identifier is required")
@@ -158,16 +197,18 @@ def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, searc
     company_path = quote(company_identifier, safe="")
     summaries = []
     partial = False
-    if search_terms:
+    query_evidence=[]
+    if search_terms or native_plan:
         terms = tuple(sorted(set(search_terms)))
-        if len(terms) > (max_postings + PAGE_SIZE - 1) // PAGE_SIZE:
+        if max(len(terms),len(native_plan)) > (max_postings + PAGE_SIZE - 1) // PAGE_SIZE:
             raise ValueError('Search terms exceed the existing list request budget')
-        summaries, partial = _bounded_summaries(company_path, terms, max_postings, opener)
+        summaries, partial = _bounded_summaries(company_path, terms, max_postings, opener,native_plan=native_plan,evidence=query_evidence)
     offset = 0
     total_found = None
 
-    while not search_terms and len(summaries) < max_postings:
+    while not search_terms and not native_plan and len(summaries) < max_postings:
         limit = min(PAGE_SIZE, max_postings - len(summaries))
+        query_evidence.append({"limit":limit,"offset":offset})
         query = urlencode({"destination": "PUBLIC", "limit": limit, "offset": offset})
         payload = _request_json(f"{BASE_URL}/{company_path}/postings?{query}", opener=opener)
         content = payload.get("content")
@@ -200,7 +241,7 @@ def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, searc
 
     connector = f"smartrecruiters:{company_identifier}"
     results = [engine.CollectionResult(connector, "public_postings", True, records, len(records))]
-    results[0].provider_scope_details={'query_terms':list(search_terms),'listing_valid':len(selected),'details_skipped_out_of_scope':skipped_details}
+    results[0].provider_scope_details={'query_terms':sorted({q['q'] for q in query_evidence if q.get('q')}),'requests':query_evidence,'applied_dimensions':sorted({k for q in query_evidence for k in ('q','country','locationType') if k in q}),'plan_reason':plan_reason,'listing_valid':len(selected),'details_skipped_out_of_scope':skipped_details,'listing_cap_reached':partial}
     if partial:
         results.append(engine.CollectionResult(connector,"bounded_search_partial",False,[],0,
             "SmartRecruiters bounded query did not exhaust every result within the existing cap",
