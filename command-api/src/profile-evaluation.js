@@ -2,7 +2,7 @@ import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
 import { canonicalPostedDate, postedAgeHours } from './posted-date.mjs';
 
-export const FIT_ALGORITHM_VERSION = 'fit-v1';
+export const FIT_ALGORITHM_VERSION = 'fit-v1-scope-2';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
 
@@ -33,7 +33,7 @@ function countryScope(payload, countryCodes, remote) {
   if (/worldwide|work from anywhere|anywhere in the world|global remote/i.test(text)) return 'Worldwide';
   if (/\bEMEA\b/i.test(text)) return 'EMEA';
   if (/\b(EU|European Union|Europe only|within Europe|across Europe|Europe)\b/i.test(text)) return 'EU';
-  return 'Worldwide';
+  return 'Unknown';
 }
 
 function targetCountryCodes(preferences, nomenclatures) {
@@ -137,9 +137,10 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     payload,
   }, preferences, nomenclatures);
 
-  if (eligibility.state === 'INELIGIBLE') {
+  if (eligibility.state === 'INELIGIBLE' || eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN')) {
     const compatibilityReasons = {
       ROLE_FAMILY_EXCLUDED:'jobs family disabled',
+      ROLE_FAMILY_UNKNOWN:'role family unresolved',
       COMPANY_EXCLUDED:'excluded company',
       ROLE_EXCLUDED:'excluded role',
       HARD_EXCLUSION_MATCH:'deep ERP implementation',
