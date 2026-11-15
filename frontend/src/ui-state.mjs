@@ -1,6 +1,6 @@
 export const UI_STATE_KEY = 'jscc-ui-state-v1';
 
-const VIEWS = new Set(['jobs','review','applications','criteria','admin']);
+const VIEWS = new Set(['jobs','review','unclassified','applications','criteria','admin']);
 const QUICK = new Set(['all','high','b2b']);
 const SORTS = new Set(['fit-desc','fit-asc']);
 const MODES = new Set(['Remote','Hybrid','Onsite']);
@@ -20,6 +20,7 @@ function cleanFilters(input = {}) {
     freshness:finiteNumber(input.freshness, null),
     workModes:modes,
     sort:SORTS.has(input.sort) ? input.sort : 'fit-desc',
+    ...(input.pageSize!=null?{pageSize:[20,30,40].includes(Number(input.pageSize))?Number(input.pageSize):20}:{}),
   };
 }
 
