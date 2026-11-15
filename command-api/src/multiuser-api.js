@@ -246,6 +246,13 @@ function jobSearchQuery(url) {
     min_fit:url.searchParams.get('min_fit'),
     include_archived:url.searchParams.get('include_archived'),
     prefetch:url.searchParams.get('prefetch'),
+    result_view:url.searchParams.get('result_view'),
+    quick:url.searchParams.get('quick'),
+    kpi:url.searchParams.get('kpi'),
+    empty_modes:url.searchParams.get('empty_modes'),
+    count_only:url.searchParams.get('count_only'),
+    as_of:url.searchParams.get('as_of'),
+    count_basis:url.searchParams.get('count_basis'),
   };
 }
 
