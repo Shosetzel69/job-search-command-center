@@ -165,6 +165,11 @@ class PublicClient:
         self.last_url = None
         self.last_status = None
         self.last_robots_status = None
+        self.request_attempts = 0
+
+    def _request_once(self, url, delay=0.5):
+        self.request_attempts += 1
+        return request_once(url, self.deadline, delay)
 
     def policy(self, url):
         parsed = urlsplit(url)
@@ -173,7 +178,7 @@ class PublicClient:
             robots_url = origin + "/robots.txt"
             # Robots redirects use the same public-IP validation as page requests.
             for _ in range(4):
-                status, headers, body = request_once(robots_url, self.deadline)
+                status, headers, body = self._request_once(robots_url)
                 self.last_robots_status = status
                 if status not in {301, 302, 303, 307, 308}:
                     break
@@ -206,7 +211,7 @@ class PublicClient:
         url = requested
         for _ in range(6):
             delay = self.policy(url)
-            status, headers, body = request_once(url, self.deadline, delay)
+            status, headers, body = self._request_once(url, delay)
             self.last_status = status
             self.last_url = url
             if status in {301, 302, 303, 307, 308}:
