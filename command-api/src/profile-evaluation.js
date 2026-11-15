@@ -1,9 +1,10 @@
+import { evaluateFitV2 } from '../../shared/fit-v2.mjs';
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
 import { ROLE_TAXONOMY, normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
 import { canonicalPostedDate, postedAgeHours, parsePostedDate } from './posted-date.mjs';
 
-export const FIT_ALGORITHM_VERSION = 'fit-v1-scope-3';
+export const FIT_ALGORITHM_VERSION = 'fit-v2';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
 
@@ -146,6 +147,18 @@ export function titleRoleEvidence(title, row, preferences) {
   return !members.length||matches.some(m=>members.includes(m.code));
 }
 
+function fitEvidence(row,payload,company,workMode,type){
+  // Structured fields only; never infer compensation, industry or career from title/description.
+  return {
+    compensation:payload.compensation??payload.salary??null,
+    work_mode:workMode,
+    contract_type:type,
+    industry:payload.industry??null,
+    career:payload.career_opportunities??null,
+    company:company||null,
+  };
+}
+
 export function evaluateSharedJob(row, preferences, nomenclatures, now = new Date()) {
   const payload = { ...(row.payload || {}), ...(row.posting_payload || {}) };
   const title = String(row.title || payload.job_title || payload.title || '').trim();
@@ -199,36 +212,13 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     };
   }
 
-  let score = 68;
-  const lower = title.toLowerCase();
-  if (lower.includes('it project') || lower.includes('technical project')) score += 13;
-  else if (lower.includes('project manager')) score += 9;
-  if (lower.includes('delivery')) score += 9;
-  if (lower.includes('service')) score += 6;
-  if (/program|programme|pmo/.test(lower)) score += 6;
-  if (lower.includes('scrum')) score += 3;
-  if (remote) score += 8;
-  else if (hybrid) score += 4;
-  if (/contract|freelance|b2b/i.test(text) || ['contract','freelance'].includes(type)) score += 6;
-  if (/European Commission|European Parliament|EU institution|public sector/i.test(text)) score += 7;
-  if (/bank|financial|compliance|regulated|governance/i.test(text)) score += 5;
-  if (/Dutch|German|native French|fluent French/i.test(text)) score -= 7;
-  score = Math.max(40, Math.min(96, score));
   const roleCorroborated=titleRoleEvidence(title,row,preferences);
-  if(!roleCorroborated)score=null;
-
-  const pros = [];
-  if (remote) pros.push('Remote');
-  if (geographicEligibility({ countryCodes, remoteScope, remote }, preferences, nomenclatures)) pros.push('Geografie eligibila');
-  if (/bank|financial|compliance|regulated|governance/i.test(text)) pros.push('Mediu reglementat relevant');
-  if (/European Commission|European Parliament|EU institution|public sector/i.test(text)) pros.push('Context public sau institutii europene');
-  if (!pros.length) pros.push('Titlu si responsabilitati relevante pentru profil');
-
-  const risks = [];
-  if (/Dutch|German|native French|fluent French/i.test(text)) risks.push('Cerinta lingvistica trebuie verificata');
-  if (!['contract','freelance'].includes(type) && !/contract|freelance|b2b/i.test(text)) risks.push('Forma B2B nu este confirmata');
-  if (!roleCorroborated) risks.unshift('Clasificarea rolului nu este confirmata de titlu');
-  if (!risks.length) risks.push('Conditiile contractuale trebuie confirmate');
+  const fit=roleCorroborated?evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type)):{score:null,matrix:[]};
+  const score=fit.score;
+  const pros=fit.matrix.filter(v=>v.weight&&v.grade===5).map(v=>v.criterion+': preferinta confirmata');
+  const risks=fit.matrix.filter(v=>v.weight&&v.reason==='MISSING_DATA').map(v=>v.criterion+': date lipsa');
+  if(!roleCorroborated)risks.unshift('Clasificarea rolului nu este confirmata de titlu');
+  if(eligibility.state==='UNKNOWN')risks.unshift('Eligibilitate neconfirmata: '+eligibility.reason_code);
 
   const posted = canonicalPostedDate(row, now);
   const age = postedAgeHours(posted, now);
@@ -250,6 +240,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       company,
       initial:company.split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase() || '?',
       fit:score,
+      fit_matrix:fit.matrix,
       location:row.location || payload.location || payload.short_location || 'Nespecificat',
       countries,
       country_codes:countryCodes,
@@ -307,6 +298,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     company,
     initial:company.split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase() || '?',
     fit:score,
+    fit_matrix:score===null?[]:evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type)).matrix,
     location:row.location || payload.location || payload.short_location || 'Nespecificat',
     countries,
     country_codes:countryCodes,
