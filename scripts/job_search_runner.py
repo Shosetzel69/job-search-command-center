@@ -341,7 +341,26 @@ def validate_result():
         engine.validate_output()
 
 
+def verify_dev_worker_ownership(env=None, storage=None):
+    """No canonical Cloud Run DEV collector/recovery writes without its owned lock."""
+    env=dict(os.environ if env is None else env)
+    if env.get("APP_ENV")!="dev" or env.get("CLOUD_RUN_JOB")!="jscc-search-dev":
+        return
+    from gcp_dev_run_supervisor import admit, Storage, LOCK, ACTIVE
+    run_id=admit(env)
+    store=storage or Storage(env["GCP_RUNTIME_BUCKET"])
+    _, lock=store.read(LOCK)
+    _, active=store.read(ACTIVE)
+    if (lock!=active or lock.get("run_id")!=run_id
+            or lock.get("source_sha")!=env["SOURCE_SHA"]
+            or (lock.get("request_signature") or "")!=env.get("JSCC_REQUEST_SIGNATURE","")
+            or (lock.get("retrieve_scope") or {})!=json.loads(env.get("JSCC_RETRIEVE_SCOPE_JSON") or "{}")):
+        raise RuntimeError("DEV worker run ownership denied")
+
+
 def main() -> int:
+    if "--validate-only" not in sys.argv:
+        verify_dev_worker_ownership()
     if "--persist-recovery-status" in sys.argv:
         # Supervisor invokes this only after confirming the owned DEV lock.
         # A fresh process can repair a terminal failure even when collection
