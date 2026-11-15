@@ -1,6 +1,6 @@
 """Bounded public HTTP transport with pinned DNS and per-origin robots rules."""
 
-from contextvars import ContextVar
+from contextvars import ContextVar, copy_context
 from contextlib import contextmanager
 from functools import wraps
 import http.client
@@ -21,6 +21,7 @@ LOCK = threading.Lock()
 
 
 _REQUEST_MEASUREMENT = ContextVar("provider_requests", default=None)
+_MEASUREMENT_LOCK = threading.Lock()
 
 
 @contextmanager
@@ -36,7 +37,15 @@ def request_measurement():
 def note_request_attempt():
     count = _REQUEST_MEASUREMENT.get()
     if count is not None:
-        count[0] += 1
+        with _MEASUREMENT_LOCK:
+            count[0] += 1
+
+
+def measured_pool_map(pool, fn, values):
+    # ContextVars do not propagate to ThreadPoolExecutor threads implicitly.
+    # Each task gets its own context but shares this source's protected counter.
+    futures = [pool.submit(copy_context().run, fn, value) for value in values]
+    return (future.result() for future in futures)
 
 
 def measured_urlopen(*args, **kwargs):
