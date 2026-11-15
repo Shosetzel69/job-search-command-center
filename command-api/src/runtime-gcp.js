@@ -254,13 +254,22 @@ export async function readRuntimeJson(env, runtime, path) {
     const lock=await readVersionedRunObject(env,'locks/heavy-search.lock');
     const marker=lock || await readVersionedRunObject(env,'latest-run.json');
     const descriptor=marker?.payload;
+    if (!marker) {
+      // No authoritative active or latest marker: never expose a synthetic seed run.
+      return {sha:'0',payload:{...queuedRunStatus({run_id:null}),status:'idle',
+        limitations:['No authoritative Retrieve marker is available.']}};
+    }
+    if (lock && descriptor?.maintenance === true) {
+      return {sha:lock.sha,payload:{...queuedRunStatus({run_id:null}),status:'unavailable',
+        limitations:['Retrieve status is unavailable during maintenance.']}};
+    }
     if (RUN_ID.test(String(descriptor?.run_id||''))) {
       const runId=descriptor.run_id;
       const {operationalDbConfigured}=await import('./db/operational-run-repository.js');
       if (operationalDbConfigured(env)) {
         try {
           const canonical=await readNileRunPayload(env,runId);
-          if (canonical && !(descriptor.status==='failed' && canonical.payload.status!=='failed')) return canonical;
+          if (canonical && (lock || ['completed','completed_with_errors','failed'].includes(canonical.payload.status)) && !(descriptor.status==='failed' && canonical.payload.status!=='failed')) return canonical;
         } catch (error) {
           // A known failed attempt may have died before the DB driver began.
           // Other database faults stay visible, rather than silently serving stale data.
@@ -269,10 +278,12 @@ export async function readRuntimeJson(env, runtime, path) {
       }
       // Bootstrap/native-driver failure recovery, never a different run.
       const live=await readVersionedRunObject(env,'runs/'+runId+'/run-status.json');
-      if (live?.payload?.run_id===runId) return live;
+      if (live?.payload?.run_id===runId && (lock || ['completed','completed_with_errors','failed'].includes(live.payload.status))) return live;
       if (lock) return {sha:lock.sha,payload:queuedRunStatus(descriptor)};
       throw runtimeError('Exact run evidence unavailable',503);
     }
+    return {sha:marker.sha,payload:{...queuedRunStatus({run_id:null}),status:'unavailable',
+      limitations:['Retrieve marker does not identify an authoritative run.']}};
   }
   if (name==='run-history.json' && devSourcesEnabled(env)) {
     const {operationalDbConfigured,readOperationalHistory}=await import('./db/operational-run-repository.js');
