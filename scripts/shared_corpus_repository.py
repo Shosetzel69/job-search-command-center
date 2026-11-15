@@ -208,6 +208,12 @@ def _remote_scope(record: Mapping[str, Any], work_mode: str, country_codes: tupl
         return scope
     if country_codes:
         return "Country"
+    # Only an exact dedicated location label is accepted, not arbitrary text.
+    location = _text(record.get("location") or record.get("short_location"))
+    location = re.sub(r"^remote\s*[-:,/]\s*", "", location, flags=re.I)
+    exact_location_scope = _normalize_remote_scope(location)
+    if exact_location_scope in {"Worldwide", "EMEA", "EU"}:
+        return exact_location_scope
     # Dedicated remote-location labels are allowed; ordinary description words
     # and general office/client locations cannot imply worldwide eligibility.
     values = record.get("remote_locations")
