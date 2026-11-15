@@ -1243,11 +1243,11 @@ if __name__ == "__main__":
 
 class RetrieveScopeEvidenceTests(unittest.TestCase):
     def test_effective_scope_mode_reports_only_implemented_query_routes(self):
-        config = {"_jscc_targeted_collection": True, "jobspipe_mode": "direct"}
+        config = {"_jscc_targeted_collection": True, "jobspipe_mode": "direct", "target_role_families": ["PROJECT_DELIVERY_MANAGEMENT"], "target_role_subfamilies": ["project_management"]}
         self.assertEqual(orchestration.provider_scope_capability({"connector": "jobspipe"}, config)[0], "QUERY_BOUNDED")
         self.assertEqual(orchestration.provider_scope_capability({"connector": "public_board", "source": "Freelancer.com"}, config)[0], "QUERY_BOUNDED")
         self.assertEqual(orchestration.provider_scope_capability({"connector": "jobicy"}, config)[0], "ENUMERATION_ONLY")
-        self.assertEqual(orchestration.provider_scope_capability({"connector": "workday"}, config)[0], "ENUMERATION_ONLY")
+        self.assertEqual(orchestration.provider_scope_capability({"connector": "workday"}, config)[0], "QUERY_BOUNDED")
 
 
 class WorkdayBoundedQueryTests(unittest.TestCase):
@@ -1285,3 +1285,75 @@ class RetrieveRemainingGapTests(unittest.TestCase):
         config = {"_jscc_targeted_collection": True, "target_role_subfamilies":["product_owner"]}
         self.assertEqual(orchestration.provider_scope_capability({"connector":"public_board","source":"Wellfound"},config)[0],"STATIC_PRESELECTED")
         self.assertEqual(orchestration.provider_scope_capability({"connector":"public_board","source":"Remotive"},config)[0],"QUERY_BOUNDED")
+
+
+class D2ScopeTriageTests(unittest.TestCase):
+    def test_exact_tuple_and_remote_authorization(self):
+        from types import SimpleNamespace
+        base=dict(role_family="PROJECT_DELIVERY_MANAGEMENT",role_subfamily=["project_management"],work_mode="remote",contract_type="contract",country_codes=["CA"],remote_scope="Country")
+        scope={"role_family":"PROJECT_DELIVERY_MANAGEMENT","role_subfamilies":["project_management"],"target_country_codes":["RO"],"remote_eligible_country_codes":["RO"],"work_modes":["remote"],"contract_types":["contract"]}
+        self.assertEqual(orchestration._posting_scope_decision(SimpleNamespace(**base),scope),"EXCLUDED")
+        for change,expected in [
+            ({"country_codes":["RO"]},"MATCHED"),
+            ({"country_codes":[],"remote_scope":"Unknown"},"UNRESOLVED"),
+            ({"country_codes":["RO"],"role_family":"UNKNOWN"},"UNRESOLVED"),
+            ({"country_codes":["RO"],"contract_type":"unknown"},"UNRESOLVED"),
+            ({"country_codes":["CA"],"remote_scope":"EU"},"MATCHED"),
+        ]:
+            self.assertEqual(orchestration._posting_scope_decision(SimpleNamespace(**{**base,**change}),scope),expected)
+        other={**scope,"role_family":"PRODUCT_AGILE","role_subfamilies":["product_owner"],"target_country_codes":["CA"],"remote_eligible_country_codes":["CA"]}
+        self.assertFalse(any(orchestration._posting_matches_scope(SimpleNamespace(**base),s) for s in [scope,other]))
+
+    def test_conservative_listing_detail_admission(self):
+        from retrieve_provider_queries import listing_role_excluded
+        scopes=[{"role_family":"PROJECT_DELIVERY_MANAGEMENT","role_subfamilies":["project_management"]}]
+        self.assertFalse(listing_role_excluded("IT Project Manager",scopes))
+        self.assertTrue(listing_role_excluded("IT Service Manager",scopes))
+        self.assertFalse(listing_role_excluded("Data Engineer",scopes))
+        self.assertFalse(listing_role_excluded("Business Analyst / Product Owner",scopes))
+        self.assertFalse(listing_role_excluded("",scopes))
+
+    def test_worker_admission_refuses_purge_lock(self):
+        from job_search_runner import verify_dev_worker_ownership
+        env={"APP_ENV":"dev","CLOUD_RUN_JOB":"jscc-search-dev","GCP_RUNTIME_BUCKET":"jscc-dev-runtime-828902654738","JSCC_RUN_ID":"run-aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa","SOURCE_SHA":"a"*40,"JSCC_JOB_BUILD_SHA":"a"*40,"JSCC_REQUEST_SIGNATURE":"b"*64,"JSCC_RETRIEVE_SCOPE_JSON":"{}"}
+        descriptor={"run_id":env["JSCC_RUN_ID"],"source_sha":env["SOURCE_SHA"],"request_signature":env["JSCC_REQUEST_SIGNATURE"],"retrieve_scope":{}}
+        class Store:
+            def __init__(self,payload):self.payload=payload
+            def read(self,name):return ("1", self.payload)
+        verify_dev_worker_ownership(env,Store(descriptor))
+        with self.assertRaisesRegex(RuntimeError,"ownership denied"):
+            verify_dev_worker_ownership(env,Store({"purpose":"DEV_DB_PURGE"}))
+
+
+class D2NativeProviderGeoTests(unittest.TestCase):
+    def test_himalayas_one_country_for_all_remote_tuples(self):
+        from urllib.parse import urlsplit,parse_qs
+        first={"role_family":"PROJECT_DELIVERY_MANAGEMENT","role_subfamilies":["project_management"],"work_modes":["remote"],"remote_eligible_country_codes":["RO"],"target_regions":["EU"]}
+        second={**first,"role_subfamilies":["delivery_management"]}
+        config={"_jscc_targeted_collection":True,"target_role_subfamilies":["project_management","delivery_management"],"_jscc_retrieve_scope":{"scopes":[first,second]}}
+        self.assertEqual(orchestration.public_boards.himalayas_native_query(config),{"country":"RO"})
+        self.assertEqual(orchestration.provider_scope_capability({"connector":"public_board","source":"Himalayas"},config)[0],"QUERY_BOUNDED")
+        adapter=orchestration.public_boards
+        with patch.object(adapter,"_fetch",return_value=(200,"application/json",b'{"jobs":[],"nextCursor":"next"}')) as fetch:
+            results=adapter.collect({"name":"Himalayas"},config)
+        fetch.assert_called_once()
+        query=parse_qs(urlsplit(fetch.call_args.args[0]).query)
+        self.assertEqual(query["country"],["RO"])
+        self.assertNotIn("exclude_worldwide",query)
+        self.assertTrue(results[0].provider_scope_details["listing_cap_reached"])
+        self.assertFalse(results[1].ok)
+        config["_jscc_retrieve_scope"]["scopes"][1]={**second,"remote_eligible_country_codes":["DE"]}
+        self.assertEqual(adapter.himalayas_native_query(config),{})
+        self.assertEqual(orchestration.provider_scope_capability({"connector":"public_board","source":"Himalayas"},config)[0],"ENUMERATION_ONLY")
+
+    def test_observed_parameters_differ_from_attempt_count_and_capability(self):
+        from urllib.request import Request
+        import job_search as engine
+        request=Request("https://board.example/wday/cxs/tenant/site/jobs",data=b'{"searchText":"project","limit":20,"offset":0,"secret":"not-logged","appliedFacets":{"secret":["x"]}}')
+        self.assertEqual(engine._observed_scope_request(request),{"searchText":"project","limit":20,"offset":0})
+        self.assertEqual(engine._observed_scope_request(Request("https://board.example/api/pcsx/search?query=delivery&start=0&num=20&domain=private")) ,{"query":"delivery","num":20,"start":0})
+        self.assertIsNone(engine._observed_scope_request(Request("https://board.example/secret?query=project")))
+        caps=orchestration.provider_scope_dimensions({"connector":"workday"})
+        self.assertIsNone(caps["geography"])
+        self.assertEqual(caps["role"],"searchText")
+        self.assertIsNone(orchestration.provider_scope_dimensions({"connector":"jobicy"})["geography"])

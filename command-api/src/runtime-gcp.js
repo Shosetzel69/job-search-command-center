@@ -254,13 +254,22 @@ export async function readRuntimeJson(env, runtime, path) {
     const lock=await readVersionedRunObject(env,'locks/heavy-search.lock');
     const marker=lock || await readVersionedRunObject(env,'latest-run.json');
     const descriptor=marker?.payload;
+    if (!marker) {
+      // No authoritative active or latest marker: never expose a synthetic seed run.
+      return {sha:'0',payload:{...queuedRunStatus({run_id:null}),status:'idle',
+        limitations:['No authoritative Retrieve marker is available.']}};
+    }
+    if (lock && descriptor?.maintenance === true) {
+      return {sha:lock.sha,payload:{...queuedRunStatus({run_id:null}),status:'unavailable',
+        limitations:['Retrieve status is unavailable during maintenance.']}};
+    }
     if (RUN_ID.test(String(descriptor?.run_id||''))) {
       const runId=descriptor.run_id;
       const {operationalDbConfigured}=await import('./db/operational-run-repository.js');
       if (operationalDbConfigured(env)) {
         try {
           const canonical=await readNileRunPayload(env,runId);
-          if (canonical && !(descriptor.status==='failed' && canonical.payload.status!=='failed')) return canonical;
+          if (canonical && (lock || ['completed','completed_with_errors','failed'].includes(canonical.payload.status)) && !(descriptor.status==='failed' && canonical.payload.status!=='failed')) return canonical;
         } catch (error) {
           // A known failed attempt may have died before the DB driver began.
           // Other database faults stay visible, rather than silently serving stale data.
@@ -269,10 +278,12 @@ export async function readRuntimeJson(env, runtime, path) {
       }
       // Bootstrap/native-driver failure recovery, never a different run.
       const live=await readVersionedRunObject(env,'runs/'+runId+'/run-status.json');
-      if (live?.payload?.run_id===runId) return live;
+      if (live?.payload?.run_id===runId && (lock || ['completed','completed_with_errors','failed'].includes(live.payload.status))) return live;
       if (lock) return {sha:lock.sha,payload:queuedRunStatus(descriptor)};
       throw runtimeError('Exact run evidence unavailable',503);
     }
+    return {sha:marker.sha,payload:{...queuedRunStatus({run_id:null}),status:'unavailable',
+      limitations:['Retrieve marker does not identify an authoritative run.']}};
   }
   if (name==='run-history.json' && devSourcesEnabled(env)) {
     const {operationalDbConfigured,readOperationalHistory}=await import('./db/operational-run-repository.js');
@@ -400,4 +411,55 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
   }
   const operation = await response.json();
   return { ...operation, run_id:runId, request_signature:requestSignature || null };
+}
+
+
+// DEV-only maintenance shares the exact Retrieve generation lock. The caller
+// cannot supply a bucket, object name, generation or operation purpose.
+const PURGE_LOCK='locks/heavy-search.lock';
+function requireDevPurgeRuntime(env) {
+  if (!devSourcesEnabled(env) || bucket(env)!=='jscc-dev-runtime-828902654738' || job(env)!=='jscc-search-dev' || region(env)!=='europe-west1')
+    throw runtimeError('DB Purge is DEV only',403);
+}
+export async function devPurgeActive(env) {
+  if (!devSourcesEnabled(env)) return false;
+  const current=await readVersionedRunObject(env,PURGE_LOCK);
+  return current?.payload?.purpose==='DEV_DB_PURGE';
+}
+export async function acquireDevPurgeLock(env) {
+  requireDevPurgeRuntime(env);
+  const id=randomUUID();
+  await createLock(env,{purpose:'DEV_DB_PURGE',operation_id:id,started_at:new Date().toISOString()});
+  const current=await readVersionedRunObject(env,PURGE_LOCK);
+  if (current?.payload?.operation_id!==id) throw runtimeError('Maintenance lock ownership unverified',503);
+  const generation=current.sha;
+  const assertHeld=async()=>{
+    const held=await readVersionedRunObject(env,PURGE_LOCK);
+    if (held?.sha!==generation || held?.payload?.operation_id!==id)
+      throw runtimeError('Maintenance lock ownership lost',503);
+  };
+  return Object.freeze({
+    assertHeld,
+    async assertIdle(){
+      await assertHeld();
+      if (await objectMetadata(env,'active.json')) throw runtimeError('Retrieve active or unresolved',409);
+      // DEV worker admission verifies the exact owned Retrieve lock before any DB write.
+      // No run.executions.list privilege is required by the Service.
+      await assertHeld();
+    },
+    async clearLatest(){
+      await assertHeld();
+      const latest=await objectMetadata(env,'latest-run.json');
+      if (!latest) return;
+      const expected=String(latest.generation||'');
+      if (!/^[1-9][0-9]*$/.test(expected)) throw runtimeError('Latest run generation invalid',503);
+      const r=await authorizedFetch(objectMetadataUrl(env,'latest-run.json')+'?ifGenerationMatch='+encodeURIComponent(expected),{method:'DELETE'});
+      if (![200,204].includes(r.status)) throw runtimeError('Latest run pointer cleanup unverified',503);
+    },
+    async release(){
+      await assertHeld();
+      const r=await authorizedFetch(objectMetadataUrl(env,PURGE_LOCK)+'?ifGenerationMatch='+encodeURIComponent(generation),{method:'DELETE'});
+      if (![200,204].includes(r.status)) throw runtimeError('Maintenance lock release unverified',503);
+    },
+  });
 }

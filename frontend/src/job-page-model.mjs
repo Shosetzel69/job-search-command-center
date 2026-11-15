@@ -1,4 +1,6 @@
 export const JOBS_PAGE_SIZE = 20;
+export const JOBS_PAGE_SIZES = Object.freeze([20,30,40]);
+export const jobPageSize = value => JOBS_PAGE_SIZES.includes(Number(value)) ? Number(value) : JOBS_PAGE_SIZE;
 
 const MODE_CODE = Object.freeze({ Remote:'remote', Hybrid:'hybrid', Onsite:'onsite' });
 
@@ -12,10 +14,10 @@ export function isSearchProfileConfigured(criteria = {}) {
   return role && geography && workMode && contract;
 }
 
-export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_SIZE, prefetch = JOBS_PAGE_SIZE } = {}) {
+export function buildJobsPath({ filters = {}, cursor = null, limit = jobPageSize(filters.pageSize), prefetch = jobPageSize(filters.pageSize), view = null, kpiFilter = 'all', countOnly = false, asOf = null, countBasis = null } = {}) {
   const params = new URLSearchParams();
-  const boundedLimit = Math.min(JOBS_PAGE_SIZE, Math.max(1, Number.isFinite(Number(limit)) ? Math.trunc(Number(limit)) : JOBS_PAGE_SIZE));
-  const boundedPrefetch = Math.min(JOBS_PAGE_SIZE, Math.max(0, Number.isFinite(Number(prefetch)) ? Math.trunc(Number(prefetch)) : JOBS_PAGE_SIZE));
+  const boundedLimit = Math.min(40, Math.max(1, Number.isFinite(Number(limit)) ? Math.trunc(Number(limit)) : JOBS_PAGE_SIZE));
+  const boundedPrefetch = Math.min(40, Math.max(0, Number.isFinite(Number(prefetch)) ? Math.trunc(Number(prefetch)) : JOBS_PAGE_SIZE));
   params.set('limit', String(boundedLimit));
   params.set('prefetch', String(boundedPrefetch));
   const q = String(filters.search || '').trim();
@@ -26,6 +28,17 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_S
   if (modes.length > 0 && modes.length < Object.keys(MODE_CODE).length) {
     for (const mode of modes) if (MODE_CODE[mode]) params.append('work_mode', MODE_CODE[mode]);
   }
+  if (view) {
+    params.set('result_view',['jobs','review','unclassified'].includes(view)?view:'jobs');
+    params.set('quick',view==='unclassified'?'all':filters.quick||'all');
+    params.set('kpi',view==='jobs'?kpiFilter:'all');
+    if(Array.isArray(filters.workModes)&&filters.workModes.length===0)params.set('empty_modes','true');
+  }
+  if (countOnly) {
+    params.set('count_only','true');
+    if(asOf)params.set('as_of',asOf);
+    if(countBasis)params.set('count_basis',countBasis);
+  }
   if (cursor) params.set('cursor', String(cursor));
   return '/me/jobs?' + params.toString();
 }
@@ -33,12 +46,12 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_S
 // Any filter or view change invalidates cursor history, including GUI-only filters.
 export function pageRequestKey({filters = {}, view = 'jobs', kpiFilter = 'all'} = {}) {
   return JSON.stringify({
-    path:buildJobsPath({filters}),
+    path:buildJobsPath({filters,view,kpiFilter}),
     view, quick:filters.quick || 'all', sort:filters.sort || 'date', kpiFilter,
   });
 }
 
-// GUI-only filters change presentation, not the server cursor query.
+// Only an unchanged server path can reuse the current first page.
 export function needsPageReload({page = 1, loadedServerPath = '', nextServerPath = ''} = {}) {
   return page !== 1 || !loadedServerPath || loadedServerPath !== nextServerPath;
 }
@@ -95,4 +108,22 @@ export function refreshOutcomeNotice(result = {}) {
     default:
       return { type:'error', message:'Raspuns necunoscut de la actualizarea joburilor.', terminal:true };
   }
+}
+
+// Read-only count scan, same query scope as visible page, bounded per request
+// and overall. A partial or stale scan must never become a displayed total.
+export async function scanResultCount({load,basis,anchor,isCurrent=()=>true,maxBatches=32}) {
+  if(!basis||!anchor)return null;
+  let cursor=null,total=0;
+  const seen=new Set();
+  for(let batch=0;batch<maxBatches&&isCurrent();batch++){
+    const next=await load(cursor);
+    if(!isCurrent()||next?.count_only!==true||next.count_basis!==basis||next.generated_at!==anchor||!Number.isSafeInteger(next.results)||next.results<0)return null;
+    total+=next.results;
+    cursor=next.next_cursor||null;
+    if(!cursor)return total;
+    if(seen.has(cursor))return null;
+    seen.add(cursor);
+  }
+  return null;
 }

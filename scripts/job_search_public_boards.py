@@ -20,7 +20,7 @@ from urllib.request import Request
 from web_transport import measured_urlopen as urlopen, measured_pool_map
 
 import job_search as engine
-from retrieve_provider_queries import scope_search_terms
+from retrieve_provider_queries import scope_search_terms, remote_eligibility_country
 import web_browser as browser
 from web_transport import PublicClient, FetchError
 
@@ -32,7 +32,7 @@ BROWSER_REQUIRED_SOURCES = {"EPAM", "Mantu", "Serco Europe", "Prohuman", "Montre
 PUBLIC_BOARD_SOURCES = {
     "EURES": {"kind": "eures", "url": "https://europa.eu/eures/api/jv-searchengine/public/jv-search/search"},
     "Remote OK": {"kind": "remoteok", "url": "https://remoteok.com/api"},
-    "Himalayas": {"kind": "himalayas", "url": "https://himalayas.app/jobs/api?limit=100"},
+    "Himalayas": {"kind": "himalayas", "url": "https://himalayas.app/jobs/api?limit=20"},
     "Working Nomads": {"kind": "workingnomads", "url": "https://www.workingnomads.com/api/exposed_jobs/"},
     "Jobgether": {"kind": "jobgether", "url": "https://jobgether.com/api/v1/jobs?limit=25&sort=date"},
     "Landing.Jobs": {"kind": "landingjobs", "url": "https://landing.jobs/api/v1/jobs?limit=50&offset=0"},
@@ -3666,6 +3666,16 @@ def scoped_public_query(name, config):
     return terms[0] if name in {"Remotive", "EURES", "Himalayas"} and len(terms) == 1 else None
 
 
+def himalayas_native_query(config):
+    if not (config or {}).get("_jscc_targeted_collection"):
+        return {}
+    term=scoped_public_query("Himalayas",config)
+    country=remote_eligibility_country(config,engine.REGION_COUNTRIES,set(engine.COUNTRY_NAMES))
+    # The provider includes worldwide jobs when country is specified. Do not
+    # set exclude_worldwide, or fan out across several countries/role terms.
+    return {**({"q":term} if term else {}),**({"country":country} if country else {})}
+
+
 def scoped_freelancer_url(url, config):
     """Use the existing provider OR query field, not a new transport."""
     if not (config or {}).get("_jscc_targeted_collection"):
@@ -3689,6 +3699,7 @@ def collect(source, config=None):
         raise ValueError(f"Unsupported public-board source: {name}")
     kind, url = spec["kind"], spec["url"]
     partial_diagnostics = {}
+    scope_evidence = None
     if kind == "softgarden_feed":
         status, _content_type, body = _fetch(url, "application/json")
         if status != 200:
@@ -3710,6 +3721,7 @@ def collect(source, config=None):
             "sessionId": "jscc-global-collection", "requestLanguage": "en",
         })
         records = _eures(payload)
+        if term:scope_evidence={'requests':[{'keywords':[term],'page':1,'resultsPerPage':50}],'applied_dimensions':['keywords']}
     elif kind == "eu_careers":
         records = _eu_careers(url)
     elif kind == "remote_co":
@@ -3781,6 +3793,8 @@ def collect(source, config=None):
         records = _awork(url)
     elif kind == "freelancer_api":
         url = scoped_freelancer_url(url, config)
+        if (config or {}).get("_jscc_targeted_collection"):
+            scope_evidence={"requests":[{"or_search_query":engine.configured_titles(config)}],"applied_dimensions":["or_search_query"]}
         status, _content_type, body = _fetch(url, "application/json")
         if status != 200:
             raise RuntimeError(f"Freelancer public API HTTP {status}")
@@ -3789,9 +3803,14 @@ def collect(source, config=None):
         term = scoped_public_query(name, config)
         if kind == "remotive" and term:
             url += ("&" if "?" in url else "?") + urlencode({"search": term})
-        elif kind == "himalayas" and term:
-            # Public search API has the same job shape and 20 results/page.
-            url = "https://himalayas.app/jobs/api/search?" + urlencode({"q":term,"sort":"recent","page":1})
+            scope_evidence={"requests":[{"search":term}],"applied_dimensions":["search"]}
+        elif kind == "himalayas":
+            native=himalayas_native_query(config)
+            params={**native,"sort":"recent","page":1} if native else {"limit":20}
+            if native:
+                url="https://himalayas.app/jobs/api/search?"+urlencode(params)
+            scope_evidence={"requests":[params],"applied_dimensions":sorted(native),
+                "plan_reason":"SINGLE_REMOTE_ELIGIBILITY_COUNTRY" if native.get("country") else "ROLE_ONLY" if native else "ENUMERATION_SINGLE_REQUEST"}
         accept = "application/json" if kind not in {"rss", "pangian_rss"} else "application/rss+xml, application/atom+xml, application/xml, text/xml, */*"
         status, _content_type, body = _fetch(url, accept)
         if status != 200:
@@ -3811,10 +3830,21 @@ def collect(source, config=None):
                 "remotive": _remotive,
             }[kind]
             records = parser(payload)
+            if kind=="himalayas" and isinstance(payload,dict):
+                # Count is an estimate; a full page or continuation cannot prove
+                # exhaustion. Keep the existing single-call budget explicit.
+                scope_evidence["listing_cap_reached"]=bool(payload.get("nextCursor") or payload.get("hasMore") is True or len(payload.get("jobs") or [])>=20)
+                scope_evidence["listing_valid"]=len(records)
     unresolved = 0
     if (config or {}).get("_jscc_targeted_collection") or name in {"NATO Careers", "Societe Generale", "Source Group International"}:
         records, unresolved = protect_context_records(records, name, kind, url, config=config)
     result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
+    if scope_evidence is not None:
+        result[0].provider_scope_details=scope_evidence
+        if scope_evidence.get("listing_cap_reached"):
+            result.append(engine.CollectionResult("public_board","bounded_search_partial",False,[],0,
+                "Himalayas listing may continue beyond the existing single-request cap",
+                error_code="CONNECTOR_ERROR",failure_stage="fetch"))
     if unresolved:
         result.append(engine.CollectionResult(
             "public_board", "unverified_detail", False, [], 0,

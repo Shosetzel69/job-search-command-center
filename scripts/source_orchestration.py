@@ -254,6 +254,7 @@ def failure_result(connector, query, exc):
         http_status=http_status,
         provider_request_attempts=getattr(exc, "provider_request_attempts", None),
         provider_request_measurement=getattr(exc, "provider_request_measurement", None),
+        provider_scope_details=getattr(exc, "provider_scope_details", None),
     )
 
 
@@ -320,6 +321,13 @@ def emit_source_final(run_id, item):
         records=item.get("records", 0),
         records_collected_raw=item.get("records_collected_raw", 0),
         records_scope_excluded=item.get("records_scope_excluded", 0),
+        records_role_matched=item.get("records_role_matched",0),
+        provider_scope_verification=item.get("provider_scope_verification"),
+        provider_scope_applied_dimensions=item.get("provider_scope_applied_dimensions"),
+        records_role_unresolved=item.get("records_role_unresolved",0),
+        records_scope_matched=item.get("records_scope_matched",0),
+        records_scope_unresolved=item.get("records_scope_unresolved",0),
+        provider_scope_details=item.get("provider_scope_details"),
         records_quality_excluded=item.get("records_quality_excluded", 0),
         records_malformed=item.get("records_malformed", 0),
         provider_request_attempts=item.get("provider_request_attempts"),
@@ -339,7 +347,7 @@ def emit_source_final(run_id, item):
 
 def aggregate_source_results(plan):
     outcome_counts = {}
-    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope")}
+    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope", "records_role_matched", "records_role_unresolved", "records_scope_matched", "records_scope_unresolved")}
     error_code_counts = {}
     failure_stage_counts = {}
     for item in plan:
@@ -385,11 +393,19 @@ def provider_scope_capability(item, config):
         return "QUERY_BOUNDED", "WORKDAY_CXS_SEARCH_TEXT_ROLE_TERMS"
     if connector == "eightfold_public" and eightfold_public.bounded_terms(config):
         return "QUERY_BOUNDED", "EIGHTFOLD_EXISTING_PCSX_QUERY_TERMS"
-    if connector == "smartrecruiters" and smartrecruiters.bounded_terms(config):
-        return "QUERY_BOUNDED", "SMARTRECRUITERS_PUBLIC_Q_ROLE_TERMS"
+    if connector == "smartrecruiters":
+        specs,reason=smartrecruiters.native_query_plan(config)
+        if specs:
+            return "QUERY_BOUNDED", "SMARTRECRUITERS_PUBLIC_"+reason
+        return "ENUMERATION_ONLY", reason
+    if connector == "public_board" and item.get("source")=="Himalayas":
+        params=public_boards.himalayas_native_query(config)
+        if params:
+            return "QUERY_BOUNDED", "HIMALAYAS_PUBLIC_"+("REMOTE_ELIGIBILITY_COUNTRY" if params.get("country") else "ROLE_TERM")
+        return "ENUMERATION_ONLY", "SINGLE_REQUEST_SCOPE_CANNOT_BE_REPRESENTED"
     if connector == "public_board" and public_boards.scoped_public_query(item.get("source"), config):
         return "QUERY_BOUNDED", "PUBLIC_KEYWORD_SINGLE_COMMON_ROLE_TERM"
-    if connector == "public_board" and item.get("source") == "Freelancer.com":
+    if connector == "public_board" and item.get("source") == "Freelancer.com" and engine.configured_titles(config):
         return "QUERY_BOUNDED", "FREELANCER_OR_SEARCH_QUERY_ROLE_TERMS"
     if connector == "public_board":
         spec = public_boards.PUBLIC_BOARD_SOURCES.get(item.get("source"), {})
@@ -397,6 +413,26 @@ def provider_scope_capability(item, config):
         if any(token in url for token in ("project-manager", "project_manager", "project%20manager", "project-management", "project%20management", "/pm?", "it-project-manager")):
             return "STATIC_PRESELECTED", "LEGACY_ROLE_ROUTE_NOT_DYNAMIC"
     return "ENUMERATION_ONLY", "NO_VERIFIED_DYNAMIC_QUERY_IN_ADAPTER"
+
+
+def provider_scope_dimensions(item):
+    """Adapter-level verified capabilities, not the provider's entire API.
+    Unsupported/untested dimensions are never advertised as applied.
+    """
+    connector=item.get("connector")
+    if connector=="smartrecruiters":
+        return {"role":"q","geography":"country_job_location","work_mode":"locationType","contract":None}
+    if connector=="public_board" and item.get("source")=="Himalayas":
+        return {"role":"q","geography":"country_remote_eligibility","work_mode":None,"contract":None}
+    if connector=="jobspipe":
+        return {"role":"job_title_or","geography":"job_country_code_or","work_mode":"remote","contract":None}
+    if connector=="workday":
+        return {"role":"searchText","geography":None,"work_mode":None,"contract":None}
+    if connector=="eightfold_public":
+        return {"role":"query","geography":None,"work_mode":None,"contract":None}
+    if connector=="public_board" and item.get("source") in {"Remotive","EURES","Freelancer.com"}:
+        return {"role":{"Remotive":"search","EURES":"keywords","Freelancer.com":"or_search_query"}[item["source"]],"geography":None,"work_mode":None,"contract":None}
+    return {"role":None,"geography":None,"work_mode":None,"contract":None}
 
 
 def build_plan(catalog):
@@ -531,46 +567,61 @@ def tag_collection_records(item, results, run_id=None):
     item["_jscc_quality_accepted"] = quality_counts["VALID"] + quality_counts["INCOMPLETE"]
 
 
+def _posting_scope_decision(posting, scope):
+    """Per-tuple three-way scope membership; do not combine different tuples."""
+    unknown = posting.role_family == "UNKNOWN"
+    if not unknown and posting.role_family != str(scope.get("role_family") or "").strip().upper():
+        return "EXCLUDED"
+    members=set(posting.role_subfamily or [])
+    wanted=set(scope.get("role_subfamilies") or [])
+    if not unknown and wanted:
+        if members and not members.intersection(wanted):
+            return "EXCLUDED"
+        if not members:
+            unknown=True
+    for key,actual in (("work_modes",posting.work_mode),("contract_types",posting.contract_type)):
+        allowed=set(scope.get(key) or [])
+        if allowed:
+            if actual=="unknown":
+                unknown=True
+            elif actual not in allowed:
+                return "EXCLUDED"
+
+    allowed_countries=set(scope.get("target_country_codes") or [])
+    target_regions=set(scope.get("target_regions") or [])
+    for region in target_regions:
+        allowed_countries.update(engine.REGION_COUNTRIES.get(region,set()))
+    countries=set(posting.country_codes or [])
+    remote=posting.work_mode=="remote"
+    remote_scope=str(posting.remote_scope or "").casefold()
+    authorized=set(scope.get("remote_eligible_country_codes") or [])
+    if remote and remote_scope=="worldwide":
+        pass
+    elif remote and remote_scope in {"eu","emea"}:
+        region=remote_scope.upper()
+        members=set(engine.REGION_COUNTRIES.get(region,set()))
+        if region=="EMEA":
+            members.update(engine.REGION_COUNTRIES.get("EU",set()))
+        if allowed_countries and not (allowed_countries & members) and region not in target_regions:
+            if region=="EU":
+                return "EXCLUDED"
+            unknown=True
+        if authorized and not (authorized & members):
+            if region=="EU":
+                return "EXCLUDED"
+            unknown=True
+    elif countries:
+        if allowed_countries and not (countries & allowed_countries):
+            return "EXCLUDED"
+        if remote and authorized and not (countries & authorized):
+            return "EXCLUDED"
+    elif allowed_countries or target_regions or (remote and authorized):
+        unknown=True
+    return "UNRESOLVED" if unknown else "MATCHED"
+
+
 def _posting_matches_scope(posting, scope):
-    # A conflicted/undetermined family can carry nonempty member codes from
-    # multiple families. Keep UNKNOWN for canonical persistence and later
-    # tri-state eligibility; reject explicit mismatches for known families.
-    unknown_family = posting.role_family == "UNKNOWN"
-    if not unknown_family and posting.role_family != str(scope.get("role_family") or "").strip().upper():
-        return False
-
-    role_subfamilies = {
-        str(value).strip()
-        for value in (scope.get("role_subfamilies") or [])
-        if str(value).strip()
-    }
-    if not unknown_family and role_subfamilies and not (set(posting.role_subfamily or []) & role_subfamilies):
-        return False
-
-    work_modes = {str(value).strip().casefold() for value in (scope.get("work_modes") or []) if str(value).strip()}
-    if work_modes and posting.work_mode != "unknown" and posting.work_mode not in work_modes:
-        return False
-
-    contract_types = {str(value).strip().casefold() for value in (scope.get("contract_types") or []) if str(value).strip()}
-    if contract_types and posting.contract_type != "unknown" and posting.contract_type not in contract_types:
-        return False
-
-    allowed_countries = {
-        str(value).strip().upper()
-        for value in (scope.get("target_country_codes") or [])
-        if str(value).strip()
-    }
-    for region in scope.get("target_regions") or []:
-        allowed_countries.update(engine.REGION_COUNTRIES.get(str(region).strip().upper(), set()))
-
-    if allowed_countries and posting.country_codes:
-        if set(posting.country_codes) & allowed_countries:
-            return True
-        if posting.work_mode == "remote" and posting.remote_scope in {"Worldwide", "EMEA", "EU"}:
-            return True
-        return False
-
-    return True
+    return _posting_scope_decision(posting,scope)!="EXCLUDED"
 
 
 def apply_retrieve_scope(item, results, config):
@@ -581,6 +632,10 @@ def apply_retrieve_scope(item, results, config):
 
     scoped_results = []
     excluded = 0
+    unresolved_roles = 0
+    matched_roles = 0
+    matched_scope = 0
+    unresolved_scope = 0
     for result in results:
         if not result.ok:
             scoped_results.append(result)
@@ -590,7 +645,16 @@ def apply_retrieve_scope(item, results, config):
             if not isinstance(record, dict):
                 continue
             posting = shared_corpus.prepare_posting(record, source_hint=item.get("source"))
-            if posting and any(_posting_matches_scope(posting, scope) for scope in scopes if isinstance(scope, dict)):
+            decisions = {_posting_scope_decision(posting, scope) for scope in scopes if isinstance(scope, dict)} if posting else set()
+            if decisions.intersection({'MATCHED','UNRESOLVED'}):
+                if 'MATCHED' in decisions:
+                    matched_scope += 1
+                else:
+                    unresolved_scope += 1
+                if posting.role_family == "UNKNOWN":
+                    unresolved_roles += 1
+                else:
+                    matched_roles += 1
                 records.append(record)
             else:
                 excluded += 1
@@ -606,8 +670,13 @@ def apply_retrieve_scope(item, results, config):
             result.http_status,
             result.provider_request_attempts,
             result.provider_request_measurement,
+            result.provider_scope_details,
         ))
     item["records_scope_excluded"] = excluded
+    item["records_role_unresolved"] = unresolved_roles
+    item["records_role_matched"] = matched_roles
+    item["records_scope_matched"] = matched_scope
+    item["records_scope_unresolved"] = unresolved_scope
     return scoped_results
 
 
@@ -745,6 +814,13 @@ def record_results(item, results):
         item.setdefault("provider_request_measurement", "not_measured")
     item["records"] = sum(len(result.records) for result in ok)
     item["records_after_scope"] = item["records"]
+    evidence=[r.provider_scope_details for r in results if r.provider_scope_details]
+    if evidence:item['provider_scope_details']=evidence
+    item['provider_scope_requests_observed']=bool(item.get('provider_request_attempts')) if item.get('provider_request_attempts') is not None else None
+    # Counts of requests are not proof of their query parameters. Only allowlisted
+    # adapter evidence supports observed native scope; other routes stay unverified.
+    item["provider_scope_verification"]="PARAMETERS_OBSERVED" if any(d.get("requests") for d in evidence) else "ATTEMPTS_ONLY" if item["provider_scope_requests_observed"] else "NOT_VERIFIED"
+    item["provider_scope_applied_dimensions"]=sorted({dim for d in evidence for dim in d.get("applied_dimensions",[])})
     item["provider_reported_total"] = sum(int(result.total_available or 0) for result in ok)
     item["error"] = "; ".join(
         diagnostics.sanitize_text(result.error or "Collection failed") for result in failed
@@ -852,16 +928,20 @@ def collect_ats(item, role_family=None, config=None):
     route = item.get("connector_config") or {}
     connector = item["connector"]
     company = item["source"]
+    role_scopes=(config or {}).get("_jscc_retrieve_scope",{}).get("scopes") or []
+    scope_kwargs={"role_scopes":role_scopes} if role_scopes else {}
     if connector == "smartrecruiters":
-        terms = smartrecruiters.bounded_terms(config)
-        return smartrecruiters.collect(route["company_identifier"], **({"search_terms": terms} if terms else {}))
+        if not (config or {}).get("_jscc_targeted_collection"):
+            return smartrecruiters.collect(route["company_identifier"])
+        specs,reason=smartrecruiters.native_query_plan(config)
+        return smartrecruiters.collect(route["company_identifier"], native_plan=specs, plan_reason=reason, **scope_kwargs)
     if connector == "workday":
         terms = workday.scope_search_terms(config)
         query_kwargs = {"search_terms": terms} if terms else {}
         results = workday.collect(
             route["career_url"], company,
             detail_workers=route.get("detail_workers", 4),
-            **query_kwargs,
+            **query_kwargs, **scope_kwargs,
         )
         if company == "NTT DATA Romania" and (config or {}).get("_jscc_targeted_collection"):
             # The approved Workday URL is global. Keep only explicitly local
@@ -1049,6 +1129,9 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
             mode_name, evidence = "NOT_EXECUTED", str(item.get("outcome") or item.get("status") or "unknown")
         item["provider_scope_mode"] = mode_name
         item["provider_scope_evidence"] = evidence
+        item["provider_scope_verification"] = "PLANNED_NOT_OBSERVED" if mode_name!="NOT_EXECUTED" else "NOT_EXECUTED"
+        item["provider_scope_applied_dimensions"] = []
+        item["provider_scope_capability"] = provider_scope_dimensions(item)
     collection, metadata, mode = collect_sources(
         collection_config, state, now, plan, run_id, progress_callback
     )
@@ -1138,7 +1221,9 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         if item.get("status") in {"skipped", "inactive", "unsupported"}:
             item["provider_scope_mode"] = "NOT_EXECUTED"
             item["provider_scope_evidence"] = str(item.get("outcome") or item.get("status"))
+            item["provider_scope_verification"] = "NOT_EXECUTED"
     status["provider_scope_inventory"] = dict(sorted(Counter(item.get("provider_scope_mode", "UNKNOWN") for item in plan).items()))
+    status["provider_scope_verification_inventory"]=dict(sorted(Counter(item.get("provider_scope_verification","NOT_VERIFIED") for item in plan).items()))
     status["canonical_publication"] = {
         "basis": "distinct_active_shared_jobs_by_api_preferred_source",
         "measured": publication_known,

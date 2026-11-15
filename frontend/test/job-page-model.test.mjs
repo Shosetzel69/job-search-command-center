@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, navigateJobPage, pageRequestKey, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
+import { JOBS_PAGE_SIZE, JOBS_PAGE_SIZES, jobPageSize, buildJobsPath, ignorePageResponse, navigateJobPage, pageRequestKey, scanResultCount, needsPageReload, isSearchProfileConfigured, mergeJobPages, refreshOutcomeNotice, validateJobsPage } from '../src/job-page-model.mjs';
 
 test('canonical job query is bounded, profile-scoped and provider-free', () => {
   const path = buildJobsPath({
@@ -40,9 +40,12 @@ test('refresh outcome mapping distinguishes reuse, join, start and policy block'
   assert.equal(refreshOutcomeNotice({outcome:'STARTED_RUN'}).terminal,false);
   assert.equal(refreshOutcomeNotice({outcome:'BLOCKED_BY_POLICY'}).type,'error');
 });
-test('pagination is 20 per page without FIT ranking or provider requests', () => {
+test('pagination supports user-selected 20/30/40 per page without FIT ranking or provider requests', () => {
   assert.equal(JOBS_PAGE_SIZE,20);
-  for (const [limit,prefetch,expectedLimit,expectedPrefetch] of [[undefined,undefined,20,20],[500,100,20,20],[1,0,1,0]]) {
+  assert.deepEqual(JOBS_PAGE_SIZES,[20,30,40]);
+  for(const n of JOBS_PAGE_SIZES){const u=new URL(buildJobsPath({filters:{pageSize:n}}),'https://jscc.example');assert.equal(u.searchParams.get('limit'),String(n));assert.equal(u.searchParams.get('prefetch'),String(n));}
+  assert.equal(jobPageSize(39),20);
+  for (const [limit,prefetch,expectedLimit,expectedPrefetch] of [[undefined,undefined,20,20],[500,100,40,40],[1,0,1,0]]) {
     const url=new URL(buildJobsPath({limit,prefetch}), 'https://jscc.example');
     assert.equal(url.searchParams.get('limit'),String(expectedLimit));
     assert.equal(url.searchParams.get('prefetch'),String(expectedPrefetch));
@@ -55,6 +58,7 @@ test('cursor context changes whenever visible filters, sort or view change', () 
   const key=pageRequestKey(baseline);
   for(const modified of [
     {...baseline,view:'review'},
+    {...baseline,filters:{...baseline.filters,pageSize:40}},
     {...baseline,kpiFilter:'high'},
     {...baseline,filters:{...baseline.filters,quick:'b2b'}},
     {...baseline,filters:{...baseline.filters,sort:'fit-desc'}},
@@ -176,4 +180,20 @@ test('N5: context-ignored navigation settles loading without moving page', async
   assert.equal(result.outcome,'ignored');
   assert.equal(page.loadingMore,false);
   assert.equal(page.nextCursor,'next-1');
+});
+
+test('bounded exact count never publishes stale, partial or looping scans',async()=>{
+  const basis='a'.repeat(64),anchor='2026-11-15T14:30:00.000Z';
+  const response=(results,next_cursor,count_basis=basis)=>({count_only:true,results,next_cursor,count_basis,generated_at:anchor});
+  let calls=0;
+  const total=await scanResultCount({basis,anchor,load:async cursor=>{calls++;return cursor?response(17,null):response(40,'next');}});
+  assert.equal(total,57);assert.equal(calls,2);
+  assert.equal(await scanResultCount({basis,anchor,maxBatches:1,load:async()=>response(40,'next')}),null);
+  assert.equal(await scanResultCount({basis,anchor,load:async()=>response(5,null,'b'.repeat(64))}),null);
+  assert.equal(await scanResultCount({basis,anchor,load:async()=>response(40,'same')}),null);
+  const url=new URL(buildJobsPath({filters:{pageSize:30,quick:'b2b'},view:'review',countOnly:true,asOf:anchor,countBasis:basis}),'https://example.test');
+  assert.equal(url.searchParams.get('limit'),'30');
+  assert.equal(url.searchParams.get('result_view'),'review');
+  assert.equal(url.searchParams.get('quick'),'b2b');
+  assert.equal(url.searchParams.get('count_only'),'true');
 });

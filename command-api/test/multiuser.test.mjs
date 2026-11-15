@@ -3,7 +3,7 @@ import test from 'node:test';
 import { readFile } from 'node:fs/promises';
 
 import { internalAuthContext, withInternalAuthContext } from '../src/internal-auth-context.js';
-import { EVALUATION_VERSION, FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from '../src/profile-evaluation.js';
+import { EVALUATION_VERSION, FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob, sourcePostingDates } from '../src/profile-evaluation.js';
 import { evaluateEligibility } from '../src/eligibility.js';
 import { classifyCanonicalJob } from '../../shared/job-classification.mjs';
 import {
@@ -12,6 +12,7 @@ import {
   encodeJobCursor,
   mergeEffectiveConfig,
   normalizeJobSearchQuery,
+  matchesResultView,
   ownerBootstrapPending,
   resolveOrProvisionGoogleIdentity,
   resolveSession,
@@ -503,7 +504,9 @@ test('same shared job can produce different per-profile eligibility without prov
     nomenclatures,
     new Date('2026-10-01T12:00:00Z'),
   );
-  assert.equal(unknownRole.eligible, true, 'unknown is not an explicit incompatibility');
+  assert.equal(unknownRole.eligible, false, 'unresolved role is not a confirmed recommendation');
+  assert.equal(unknownRole.eligibilityState, 'UNKNOWN');
+  assert.equal(unknownRole.score, null);
   const incompatibleRemote = evaluateSharedJob(
     { ...row, country_codes:['US'], payload:{ ...row.payload, remote_scope:'Country' } },
     { ...base, target_country_codes:['US'], remote_eligible_country_codes:['RO'] },
@@ -512,8 +515,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(incompatibleRemote.eligible, false);
   assert.equal(incompatibleRemote.exclusionReason, 'remote eligibility geography incompatible');
-  assert.equal(EVALUATION_VERSION, 'fit-v1');
-  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1');
+  assert.equal(EVALUATION_VERSION, 'fit-v1-scope-3');
+  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1-scope-3');
 });
 
 test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {
@@ -771,4 +774,38 @@ test('preference response changed flag reflects semantic personal change only', 
     false,
     'system collection policy must not affect personal semantic changed flag',
   );
+});
+
+test('preferred source dates preserve day-only precision and never substitute a canonical date',()=>{
+  const now=new Date('2026-11-15T14:30:00Z');
+  const row={posted_at:new Date('2026-11-13T00:00:00Z'),posting_payload:{date_posted:'2026-11-13'},posting_last_seen_at:new Date('2026-11-15T13:00:00Z')};
+  assert.deepEqual(sourcePostingDates(row,now),{retrieve_date:'2026-11-15T13:00:00.000Z',publication_date:'2026-11-13',publication_precision:'date'});
+  assert.deepEqual(sourcePostingDates({payload:{date_posted:'2026-11-13'},posting_last_seen_at:row.posting_last_seen_at},now),{retrieve_date:'2026-11-15T13:00:00.000Z',publication_date:null,publication_precision:null});
+});
+test('visible result and count predicates match; unclassified never scores as a recommendation',()=>{
+  const job={fit:82,b2b:true,remote:true,repost:false,age:5};
+  const eligible={eligible:true,eligibilityState:'ELIGIBLE'};
+  assert.equal(matchesResultView(job,eligible,{result_view:'jobs',quick:'high',kpi:'remote'},80),true);
+  assert.equal(matchesResultView(job,eligible,{result_view:'review',quick:'all',kpi:'all'},80),false);
+  assert.equal(matchesResultView(job,eligible,{result_view:'jobs',quick:'all',kpi:'repost'},80),false);
+  const unresolved={eligible:false,eligibilityState:'UNKNOWN',eligibilityReasonCode:'ROLE_FAMILY_UNKNOWN'};
+  assert.equal(matchesResultView({...job,fit:null},unresolved,{result_view:'unclassified'},80),true);
+  assert.equal(matchesResultView(job,unresolved,{result_view:'jobs'},80),false);
+  assert.throws(()=>normalizeJobSearchQuery({count_only:'true'}),/Result view required/);
+});
+
+test('#520: uncorroborated persisted role cannot receive a High FIT score',()=>{
+ const preferences={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],fit_threshold:68};
+ const row={job_id:'00000000-0000-0000-0000-000000000001',company:'Example Bank',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:['project_management'],payload:{description:'Bank governance B2B project'}};
+ for(const title of ['IAM Support Engineer','IT System Engineer','2028 Bernstein Summer Research Associate','Director of Engineering','Data Engineer','Senior Developer Fullstack']){
+  const input={...row,title};
+  const evaluation=evaluateSharedJob(input,preferences,nomenclatures);
+  assert.equal(evaluation.score,null,title);
+  assert.equal(evaluation.eligibilityState,'UNKNOWN',title);
+  assert.equal(evaluation.eligibilityReasonCode,'ROLE_TITLE_UNCONFIRMED',title);
+  assert.deepEqual(materializeCachedJob(input,evaluation,preferences),evaluation.job);
+  assert.equal(matchesResultView(evaluation.job,evaluation,{result_view:'jobs',quick:'high'},68),false);
+ }
+ const good=evaluateSharedJob({...row,title:'Technical Project Manager'},preferences,nomenclatures);
+ assert.ok(good.score>=68);
 });

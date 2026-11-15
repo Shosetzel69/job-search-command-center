@@ -1,8 +1,9 @@
 import { geographyIndex } from '../../shared/nomenclatures.mjs';
 import { evaluateEligibility } from './eligibility.js';
-import { canonicalPostedDate, postedAgeHours } from './posted-date.mjs';
+import { ROLE_TAXONOMY, normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
+import { canonicalPostedDate, postedAgeHours, parsePostedDate } from './posted-date.mjs';
 
-export const FIT_ALGORITHM_VERSION = 'fit-v1';
+export const FIT_ALGORITHM_VERSION = 'fit-v1-scope-3';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
 
@@ -33,7 +34,7 @@ function countryScope(payload, countryCodes, remote) {
   if (/worldwide|work from anywhere|anywhere in the world|global remote/i.test(text)) return 'Worldwide';
   if (/\bEMEA\b/i.test(text)) return 'EMEA';
   if (/\b(EU|European Union|Europe only|within Europe|across Europe|Europe)\b/i.test(text)) return 'EU';
-  return 'Worldwide';
+  return 'Unknown';
 }
 
 function targetCountryCodes(preferences, nomenclatures) {
@@ -111,6 +112,40 @@ function remoteEligibilityMatches({ countryCodes, remoteScope, remote }, prefere
   return countryCodes.some(code => eligible.has(code));
 }
 
+export function sourcePostingDates(row, now=new Date()) {
+  const p=row.posting_payload||{};
+  // Never replace an absent source publication date with a canonical age, retrieval timestamp, or another posting.
+  const raw=[p.date_posted,p.posted_at].find(x=>parsePostedDate(x,now));
+  const fromPosting=parsePostedDate(row.posted_at,now);
+  const parsed=fromPosting||parsePostedDate(raw,now);
+  const originalDay=typeof raw==='string'&&/^\d{4}-\d{2}-\d{2}$/.test(raw)&&parsePostedDate(raw,now)===parsed;
+  return {
+    retrieve_date:parsePostedDate(row.posting_last_seen_at,now),
+    publication_date:originalDay?raw:parsed,
+    publication_precision:parsed?(originalDay?'date':'timestamp'):null,
+  };
+}
+
+// A stored classification cannot corroborate itself. Use the existing shared
+// taxonomy as a conservative title-evidence gate, without changing the corpus.
+export function titleRoleEvidence(title, row, preferences) {
+  const selected=normalizeRoleFamilies(preferences?.target_role_families);
+  if(!selected.length)return true;
+  const normalized=String(title||'').normalize('NFKC').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+  const matches=[];
+  for(const [family,definition] of Object.entries(ROLE_TAXONOMY.families)){
+    for(const member of definition.members||[]){
+      if(member.include_patterns.some(p=>new RegExp(p,'iu').test(normalized)) &&
+         !member.exclude_patterns.some(p=>new RegExp(p,'iu').test(normalized)))matches.push({family,code:member.code});
+    }
+  }
+  const families=new Set(matches.map(m=>m.family));
+  const family=String(row.role_family||'UNKNOWN').toUpperCase();
+  if(families.size!==1||!families.has(family)||!selected.includes(family))return false;
+  const members=normalizeRoleSubfamilies(preferences.target_role_subfamilies,family);
+  return !members.length||matches.some(m=>members.includes(m.code));
+}
+
 export function evaluateSharedJob(row, preferences, nomenclatures, now = new Date()) {
   const payload = { ...(row.payload || {}), ...(row.posting_payload || {}) };
   const title = String(row.title || payload.job_title || payload.title || '').trim();
@@ -137,9 +172,10 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     payload,
   }, preferences, nomenclatures);
 
-  if (eligibility.state === 'INELIGIBLE') {
+  if (eligibility.state === 'INELIGIBLE' || eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN')) {
     const compatibilityReasons = {
       ROLE_FAMILY_EXCLUDED:'jobs family disabled',
+      ROLE_FAMILY_UNKNOWN:'role family unresolved',
       COMPANY_EXCLUDED:'excluded company',
       ROLE_EXCLUDED:'excluded role',
       HARD_EXCLUSION_MATCH:'deep ERP implementation',
@@ -178,6 +214,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   if (/bank|financial|compliance|regulated|governance/i.test(text)) score += 5;
   if (/Dutch|German|native French|fluent French/i.test(text)) score -= 7;
   score = Math.max(40, Math.min(96, score));
+  const roleCorroborated=titleRoleEvidence(title,row,preferences);
+  if(!roleCorroborated)score=null;
 
   const pros = [];
   if (remote) pros.push('Remote');
@@ -189,6 +227,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   const risks = [];
   if (/Dutch|German|native French|fluent French/i.test(text)) risks.push('Cerinta lingvistica trebuie verificata');
   if (!['contract','freelance'].includes(type) && !/contract|freelance|b2b/i.test(text)) risks.push('Forma B2B nu este confirmata');
+  if (!roleCorroborated) risks.unshift('Clasificarea rolului nu este confirmata de titlu');
   if (!risks.length) risks.push('Conditiile contractuale trebuie confirmate');
 
   const posted = canonicalPostedDate(row, now);
@@ -199,8 +238,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
 
   return {
     eligible:true,
-    eligibilityState:eligibility.state,
-    eligibilityReasonCode:eligibility.reason_code,
+    eligibilityState:roleCorroborated?eligibility.state:'UNKNOWN',
+    eligibilityReasonCode:roleCorroborated?eligibility.reason_code:'ROLE_TITLE_UNCONFIRMED',
     score,
     pros:pros.slice(0, 2),
     risks:risks.slice(0, 2),
@@ -223,11 +262,12 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       remote,
       b2b:['contract','freelance'].includes(type) || /contract|freelance|b2b/i.test(text),
       repost,
-      status:score >= threshold ? 'new' : 'review',
+      status:score != null && score >= threshold ? 'new' : 'review',
       pros:pros.slice(0,2),
       risks:risks.slice(0,2),
       url,
       description,
+      ...sourcePostingDates(row,now),
       date_posted:posted,
       age_basis:posted ? 'posted_at' : 'unknown',
       source:row.source_name || payload.source || 'Nespecificata',
@@ -284,6 +324,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     risks:risks.slice(0,2),
     url,
     description,
+    ...sourcePostingDates(row,now),
     date_posted:posted,
     age_basis:posted ? 'posted_at' : 'unknown',
     source:row.source_name || payload.source || 'Nespecificata',

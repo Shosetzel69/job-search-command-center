@@ -233,7 +233,7 @@ def normalize(detail, summary, board, company_name):
 
 # Broad tokens cover all known title alternatives in the canonical subfamily
 # contract. Never silently truncate a mixed scope to a subset of the terms.
-from retrieve_provider_queries import SCOPE_TERMS, scope_search_terms
+from retrieve_provider_queries import SCOPE_TERMS, scope_search_terms, listing_role_excluded
 
 
 def _scoped_summaries(board, terms, max_postings, opener):
@@ -274,7 +274,7 @@ def _scoped_summaries(board, terms, max_postings, opener):
 
 
 @engine.measure_provider_opener
-def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1, search_terms=()):
+def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1, search_terms=(), role_scopes=()):
     company_name = str(company_name or "").strip()
     if not company_name:
         raise ValueError("Workday company_name is required")
@@ -319,6 +319,10 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen,
     if selected and not valid:
         raise ValueError("Malformed Workday posting: invalid externalPath")
 
+    listing_count=len(valid)
+    valid=[summary for summary in valid if not listing_role_excluded(summary.get('title'), role_scopes)]
+    skipped_details=listing_count-len(valid)
+
     def load_record(summary):
         detail = _get_detail(board, summary.get("externalPath"), opener=opener)
         return normalize(detail, summary, board, company_name)
@@ -348,6 +352,8 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen,
     # No usable detail after failures must remain a real failure, not empty success.
     result = ([engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
               if records or not detail_errors else [])
+    if result:
+        result[0].provider_scope_details={'query_terms':list(search_terms),'listing_valid':listing_count,'details_skipped_out_of_scope':skipped_details}
     if detail_errors:
         def failure_kind(error):
             if isinstance(error, HTTPError):

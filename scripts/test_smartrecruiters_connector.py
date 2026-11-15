@@ -107,5 +107,47 @@ class SmartRecruitersConnectorTests(unittest.TestCase):
             smartrecruiters.collect("Example", opener=opener)
 
 
+class NativeScopeTests(unittest.TestCase):
+    def scope(self,member,country,mode):
+        return {"role_family":"PROJECT_DELIVERY_MANAGEMENT","role_subfamilies":[member],
+            "target_country_codes":[country],"target_regions":[],"work_modes":[mode],
+            "remote_eligible_country_codes":["RO"]}
+
+    def config(self,*scopes):
+        return {"_jscc_targeted_collection":True,"_jscc_retrieve_scope":{"scopes":list(scopes)}}
+
+    def test_country_and_role_tuples_are_not_cross_joined(self):
+        config=self.config(self.scope("project_management","RO","onsite"),self.scope("delivery_management","DE","hybrid"))
+        plan,reason=smartrecruiters.native_query_plan(config)
+        self.assertEqual(reason,"SIGNED_TUPLES")
+        self.assertEqual(plan,(("delivery","DE","HYBRID"),("project","RO","ONSITE")))
+        from urllib.parse import parse_qs,urlsplit
+        opener=Mock(side_effect=[FakeResponse({"content":[],"totalFound":0}),FakeResponse({"content":[],"totalFound":0})])
+        results=smartrecruiters.collect("Example",opener=opener,native_plan=plan,plan_reason=reason)
+        queries=[parse_qs(urlsplit(call.args[0].full_url).query) for call in opener.call_args_list]
+        self.assertEqual([(q["q"][0],q["country"][0],q["locationType"][0]) for q in queries],list(plan))
+        self.assertEqual(opener.call_count,2)
+        self.assertEqual(results[0].provider_scope_details["applied_dimensions"],["country","locationType","q"])
+        self.assertEqual(results[0].provider_scope_details["requests"][0]["country"],"DE")
+
+    def test_remote_country_is_not_job_country_and_cap_fallback(self):
+        config=self.config(self.scope("project_management","RO","remote"),self.scope("delivery_management","DE","hybrid"))
+        plan,reason=smartrecruiters.native_query_plan(config)
+        self.assertIn(("project","","REMOTE"),plan)
+        self.assertIn(("delivery","DE","HYBRID"),plan)
+        wide=self.scope("project_management","RO","onsite")
+        wide["target_country_codes"]=["RO","DE","FR"]
+        plan,reason=smartrecruiters.native_query_plan(self.config(wide),max_postings=100)
+        self.assertEqual((plan,reason),((("project","",""),),"QUERY_BUDGET_ROLE_ONLY"))
+        plan,reason=smartrecruiters.native_query_plan(config,max_postings=100)
+        self.assertEqual((plan,reason),((),"QUERY_BUDGET_ENUMERATION"))
+
+    def test_hybrid_and_unknown_not_fabricated_as_onsite(self):
+        detail={"id":"1","name":"Project Manager","company":{"name":"Example"},"postingUrl":"https://jobs.smartrecruiters.com/example/1"}
+        for location,expected in [({"hybrid":True,"remote":False},"hybrid"),({},"unknown"),({"remote":True,"hybrid":True},"unknown")]:
+            with self.subTest(location=location):
+                self.assertEqual(smartrecruiters.normalize({**detail,"location":location},"Example")["work_arrangement"],expected)
+
+
 if __name__ == "__main__":
     unittest.main()
