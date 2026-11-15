@@ -226,6 +226,20 @@ function devSourcesEnabled(env) {
     && env.JSCC_RUNTIME_BACKEND === 'gcp';
 }
 
+// Read the operational source of truth; GCS remains an exact-run recovery
+// channel for failures before the native database driver starts.
+export async function readNileRunPayload(env, runId, db) {
+  if (!RUN_ID.test(String(runId||''))) return null;
+  if (!db) {
+    const {getPool}=await import('./db/pool.js');
+    db=getPool(env);
+  }
+  const result=await db.query('SELECT payload FROM search_runs WHERE run_id=$1',[runId]);
+  const payload=result.rows?.[0]?.payload;
+  if (!payload || payload.run_id!==runId) return null;
+  return {sha:'nile:'+runId,payload:{...payload,status:payload.status==='running'?'in_progress':payload.status}};
+}
+
 export async function readRuntimeJson(env, runtime, path) {
   const name = path.split('/').pop();
   if (name === 'jobs.json' && devSourcesEnabled(env)) {
@@ -245,13 +259,27 @@ export async function readRuntimeJson(env, runtime, path) {
   }
   if (name==='run-status.json' && devSourcesEnabled(env)) {
     const lock=await readVersionedRunObject(env,'locks/heavy-search.lock');
-    const descriptor=lock?.payload;
+    const marker=lock || await readVersionedRunObject(env,'latest-run.json');
+    const descriptor=marker?.payload;
     if (RUN_ID.test(String(descriptor?.run_id||''))) {
-      const live=await readVersionedRunObject(env,'runs/'+descriptor.run_id+'/run-status.json');
-      if (live?.payload?.run_id===descriptor.run_id) return live;
-      // Never relabel a previous run or serve its counters during startup.
-      return {sha:lock.sha,payload:queuedRunStatus(descriptor)};
+      const runId=descriptor.run_id;
+      if (env.NILE_DATABASE_URL) {
+        const canonical=await readNileRunPayload(env,runId);
+        if (canonical && !(descriptor.status==='failed' &&
+            !['completed','completed_with_errors','failed'].includes(canonical.payload.status))) return canonical;
+      }
+      // Bootstrap/native-driver failure recovery, never a different run.
+      const live=await readVersionedRunObject(env,'runs/'+runId+'/run-status.json');
+      if (live?.payload?.run_id===runId) return live;
+      if (lock) return {sha:lock.sha,payload:queuedRunStatus(descriptor)};
+      throw runtimeError('Exact run evidence unavailable',503);
     }
+  }
+  if (name==='run-history.json' && devSourcesEnabled(env) && env.NILE_DATABASE_URL) {
+    const {getPool}=await import('./db/pool.js');
+    const result=await getPool(env).query(
+      'SELECT payload FROM search_runs ORDER BY COALESCE(completed_at,started_at,created_at) DESC,run_id DESC LIMIT 10');
+    return {sha:'nile:history',payload:{schema_version:'1.0',runs:result.rows.map(row=>row.payload)}};
   }
   return readObjectJson(env, await runtimeObjectForRead(env, path));
 }
