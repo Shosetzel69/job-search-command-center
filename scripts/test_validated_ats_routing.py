@@ -106,7 +106,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         with patch.object(orchestration.softgarden, "collect", return_value=expected) as collect:
             self.assertEqual(orchestration.collect_ats(item), expected)
             collect.assert_called_once_with(
-                "https://cariere.orange.ro/jobs.feed.json", "Orange Romania"
+                "https://cariere.orange.ro/jobs.feed.json", "Orange Romania", enrich_details=True
             )
 
 
@@ -117,7 +117,7 @@ class ValidatedAtsRoutingTests(unittest.TestCase):
         with patch.object(orchestration.eightfold_public, "collect", return_value=expected) as collect:
             self.assertEqual(orchestration.collect_ats(item), expected)
             collect.assert_called_once_with(
-                "https://jobs.vodafone.com", "vodafone.com", "Vodafone / VOIS"
+                "https://jobs.vodafone.com", "vodafone.com", "Vodafone / VOIS", enrich_details=True
             )
 
 
