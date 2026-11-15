@@ -113,7 +113,15 @@ export async function prepareOrApplyRetrieve012({env=process.env,buildIdentity,d
     await client.query(admitted.mode==='inspect' ? 'BEGIN READ ONLY' : 'BEGIN');
     const actual=(await client.query('SELECT current_database() AS database_name')).rows[0]?.database_name;
     if (actual!=='jobsearch_dev') fail('RETRIEVE012_DATABASE_DENIED');
-    if (admitted.mode==='apply') await client.query("SELECT pg_advisory_xact_lock(hashtext('jscc-schema-migrate'))");
+    if (admitted.mode==='apply') {
+      // Managed Nile does not implement advisory or table locks (0A000).
+      // Serialize this narrowly scoped migration on the existing immutable 011
+      // ledger row, in the same transaction, before reading any schema state.
+      // The legacy migration path remains disabled in managed DEV.
+      const lock=await client.query("SELECT version FROM schema_migrations WHERE version='011' FOR UPDATE");
+      if (lock.rows?.length!==1 || String(lock.rows[0].version)!=='011')
+        fail('RETRIEVE012_LEDGER_LOCK_DENIED');
+    }
     const before=await getState(client,files);
     let after=before;
     let applied=false;
