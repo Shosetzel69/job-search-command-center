@@ -641,3 +641,38 @@ class CanonicalPublicationCountTests(unittest.TestCase):
         self.assertIn("seen_run_id=%s",sql)
         self.assertIn("last_seen_at DESC, posting_id ASC",sql)
         self.assertIn("j.lifecycle_status='ACTIVE'",sql)
+
+
+class DevNileProtocolTests(unittest.TestCase):
+    def test_dev_cloud_uses_safe_client_binding_at_all_repository_entrypoints(self):
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        driver = SimpleNamespace(connect=Mock(), ClientCursor=object())
+        dsn = "postgresql://user:inert@db.example/jobsearch_dev?sslmode=require"
+        with patch.dict(sys.modules, {"psycopg": driver}):
+            expected, actual, connect = repository._db_connect({
+                "APP_ENV": "dev", "JSCC_RUNTIME_MODE": "container",
+                "NILE_DATABASE_URL": dsn,
+            })
+            self.assertEqual((expected, actual), ("jobsearch_dev", dsn))
+            connect(actual)
+            driver.connect.assert_called_once_with(dsn, cursor_factory=driver.ClientCursor,
+                                                   prepare_threshold=None)
+            for environment in ("test", "prod"):
+                _, _, selected = repository._db_connect({
+                    "APP_ENV": environment, "JSCC_RUNTIME_MODE": "container",
+                    "NILE_DATABASE_URL": "postgresql://user:inert@db.example/jobsearch_"+environment,
+                })
+                self.assertIs(selected, driver.connect)
+            _, _, selected = repository._db_connect({"APP_ENV": "dev", "NILE_DATABASE_URL":dsn})
+            self.assertIs(selected, driver.connect)
+            injected = Mock()
+            _, _, selected = repository._db_connect({"APP_ENV":"dev",
+                "JSCC_RUNTIME_MODE":"container","NILE_DATABASE_URL":dsn}, injected)
+            self.assertIs(selected, injected)
+
+    def test_dev_binding_never_overrides_environment_database_guard(self):
+        with self.assertRaisesRegex(repository.SharedCorpusError, "mismatch"):
+            repository._db_connect({"APP_ENV":"dev","JSCC_RUNTIME_MODE":"container",
+                "NILE_DATABASE_URL":"postgresql://user:inert@db.example/jobsearch_prod"})
