@@ -445,7 +445,7 @@ jobs:
           writeFileSync('/tmp/w025-nile-process-evidence.json',JSON.stringify(evidence,null,2));
           if(!good)process.exitCode=1;
           NODE
-      - name: Verify Python worker client-side protocol on ephemeral Nile
+      - name: Verify pinned Python worker driver on ephemeral Nile
         shell: bash
         run: |
           set -euo pipefail

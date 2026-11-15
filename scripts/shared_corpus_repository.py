@@ -976,7 +976,13 @@ def persist_collection(
             "lifecycle_advanced": 0,
         }
 
-    expected, connection_string, connect = _db_connect(runtime_env, connect)
+    expected, connection_string = expected_database(runtime_env)
+    if connect is None:
+        try:
+            import psycopg
+        except ImportError as exc:
+            raise SharedCorpusError("psycopg is required for shared-corpus persistence") from exc
+        connect = psycopg.connect
 
     postings, skipped, incomplete_source_ids, global_projection_gap = project_collection(collection)
     complete_source_ids = _complete_source_ids(plan)
@@ -1158,17 +1164,7 @@ def _db_connect(runtime_env: Mapping[str, str], connect: Any | None = None):
             import psycopg
         except ImportError as exc:
             raise SharedCorpusError("psycopg is required for PostgreSQL persistence") from exc
-        if _text(runtime_env.get("APP_ENV")).casefold() == "dev" and _is_cloud_runtime(runtime_env):
-            # Managed Nile reproduced SIGSEGV inside the binary driver's
-            # extended-query result selection (even a parameterized SELECT).
-            # ClientCursor uses driver-escaped values and the simple protocol;
-            # keep SQL, transaction boundaries, credentials and DB guards intact.
-            # No automatic retry/fallback after an ambiguous write.
-            def connect(dsn):
-                return psycopg.connect(dsn, cursor_factory=psycopg.ClientCursor,
-                                       prepare_threshold=None)
-        else:
-            connect = psycopg.connect
+        connect = psycopg.connect
     return expected, connection_string, connect
 
 

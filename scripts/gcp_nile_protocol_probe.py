@@ -20,6 +20,8 @@ def run():
     env = dict(os.environ)
     assert env.get("APP_ENV") == "dev"
     env["JSCC_RUNTIME_MODE"] = "container"
+    assert psycopg.__version__ == "3.3.8", "Unexpected driver version"
+    assert psycopg.pq.__impl__ == "binary", "Unexpected driver implementation"
     expected, dsn, connect = repository._db_connect(env)
     assert expected == "jobsearch_dev"
     ci_write = sys.argv[1:] == ["--ci-native-write"]
@@ -41,7 +43,7 @@ def run():
     with connect(dsn) as c:
         c.read_only = True
         with c.cursor() as cur:
-            assert isinstance(cur, psycopg.ClientCursor)
+            assert isinstance(cur, psycopg.Cursor) and not isinstance(cur, psycopg.ClientCursor)
             assert cur.execute("SELECT current_database()").fetchone()[0] == expected
             row = cur.execute("SELECT %s::text, %s::timestamptz, %s::jsonb, %s::text[]",
                               (value, now, json.dumps(scope), [key, value])).fetchone()
@@ -49,7 +51,7 @@ def run():
             assert row[3] == [key, value]
             result = repository._coverage_snapshot(cur, scope, now)
             assert len(result) == 1 and result[0]["scope_key"] == key
-            print("DEV_NILE_CLIENT_BINDING_READONLY=PASS", flush=True)
+            print("DEV_NILE_DRIVER_338_READONLY=PASS", flush=True)
         c.rollback()
     if not ci_write:
         return
@@ -69,7 +71,7 @@ def run():
             row = cur.execute("SELECT status,payload FROM search_runs WHERE run_id=%s", (run_id,)).fetchone()
             assert row[0] == "failed" and row[1]["run_id"] == run_id
         c.rollback()
-    print("DEV_NILE_CLIENT_BINDING_REPOSITORY=PASS", flush=True)
+    print("DEV_NILE_DRIVER_338_REPOSITORY=PASS", flush=True)
 
 
 if __name__ == "__main__":
