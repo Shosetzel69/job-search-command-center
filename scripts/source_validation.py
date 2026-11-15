@@ -188,6 +188,10 @@ def _source_evidence(item: dict, duration_ms: int) -> dict:
         "connector": item.get("connector"),
         "outcome": item.get("outcome"),
         "records": int(item.get("records") or 0),
+        "provider_request_attempts": item.get("provider_request_attempts"),
+        "provider_request_measurement": item.get("provider_request_measurement", "not_measured"),
+        "provider_scope_mode": item.get("provider_scope_mode"),
+        "provider_scope_evidence": item.get("provider_scope_evidence"),
         "records_collected_raw": int(item.get("records_collected_raw") or 0),
         "records_malformed": int(item.get("records_malformed") or 0),
         "records_quality_excluded": int(item.get("records_quality_excluded") or 0),
@@ -228,6 +232,7 @@ def execute_validation(
     for index, prepared in enumerate(items):
         item = copy.deepcopy(prepared)
         run_id = f"source-validation-{index + 1}-{item['source_id']}"
+        item["provider_scope_mode"], item["provider_scope_evidence"] = orchestration.provider_scope_capability(item, config)
         started = time.monotonic()
         try:
             collector(config, {}, now, [item], run_id=run_id)
