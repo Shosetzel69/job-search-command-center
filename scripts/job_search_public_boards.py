@@ -3344,12 +3344,14 @@ def _taleo_location(value):
     return text
 
 
-def _nato_taleo(url, portal="101430233", section="2"):
+def _nato_taleo(url, portal="101430233", section="2", diagnostics=None):
     endpoint = (
         "https://nato.taleo.net/careersection/rest/jobboard/searchjobs"
         f"?lang=en&portal={portal}"
     )
     records = {}
+    invalid = 0
+    incomplete = False
     page = 1
     while page <= 20:
         payload = {
@@ -3387,12 +3389,17 @@ def _nato_taleo(url, portal="101430233", section="2"):
             raise ValueError("NATO Taleo response missing requisitionList[]")
         for item in rows:
             if not isinstance(item, dict):
+                invalid += 1
                 continue
             job_number = str(item.get("jobId") or item.get("contestNo") or "").strip()
             columns = item.get("column") or []
             if not job_number or not isinstance(columns, list) or not columns:
+                invalid += 1
                 continue
-            title = plain_text(columns[0])
+            title = plain_text(columns[0]) if isinstance(columns[0], str) else ""
+            if not title:
+                invalid += 1
+                continue
             location = _taleo_location(columns[1] if len(columns) > 1 else "")
             published = plain_text(columns[2] if len(columns) > 2 else "")
             link = (
@@ -3405,6 +3412,12 @@ def _nato_taleo(url, portal="101430233", section="2"):
                 countries=_country_names_from_text(location.replace("-", " ")),
                 remote=bool(re.search(r"\bremote\b", location, re.I)),
             )
+            record["_jscc_field_provenance"] = {
+                "title": "LISTING_CARD",
+                "description": "LISTING_CARD",
+                **({"location": "LISTING_CARD"} if location else {}),
+                **({"date_posted": "LISTING_CARD"} if record.get("date_posted") else {}),
+            }
             records[record["id"]] = record
 
         paging = data.get("pagingData") or {}
@@ -3413,6 +3426,11 @@ def _nato_taleo(url, portal="101430233", section="2"):
         if not rows or page * page_size >= total:
             break
         page += 1
+    if page > 20:
+        incomplete = True
+    if diagnostics is not None:
+        diagnostics['invalid_postings'] = invalid
+        diagnostics['pagination_incomplete'] = incomplete
 
     if not records:
         raise ValueError("NATO Taleo API returned no extractable job rows")
@@ -3546,7 +3564,7 @@ def _single_detail_jobposting(html, expected_title):
     return result
 
 
-def protect_context_records(records, name, kind, listing_url, *, max_details=4, max_seconds=10):
+def protect_context_records(records, name, kind, listing_url, *, max_details=4, max_seconds=10, config=None):
     """Try only bounded same-origin individual detail URLs; otherwise keep
     the title/identity and make unverified fields unknown, never reuse card prose.
     """
@@ -3558,7 +3576,18 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
     listing = urlsplit(listing_url)
     attempted = 0
     import shared_corpus_repository as shared_corpus
-    for raw in records:
+    # Prioritize matching title families for scarce detail requests. This is
+    # only scheduling: retain all rows, unknown titles, and downstream scope gates.
+    families = set((config or {}).get("target_role_families") or [])
+    members = set((config or {}).get("target_role_subfamilies") or [])
+    def priority(record):
+        classification = shared_corpus._role_classification(plain_text(record.get("job_title")))
+        family = classification["role_family"]
+        if family in families and (not members or members.intersection(classification["role_subfamily"])):
+            return 0
+        return 1 if family == "UNKNOWN" else 2
+    ordered = sorted(records, key=priority) if families else records
+    for raw in ordered:
         record = dict(raw)
         if (record.get("_jscc_field_provenance") or {}).get("description") in {"ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML"}:
             result.append(record)
@@ -3671,7 +3700,7 @@ def collect(source, config=None):
     elif kind == "eu_remote":
         records = _eu_remote_jobs(url, spec["feed_url"])
     elif kind == "nato_taleo":
-        records = _nato_taleo(url, spec.get("portal", "101430233"), spec.get("section", "2"))
+        records = _nato_taleo(url, spec.get("portal", "101430233"), spec.get("section", "2"), diagnostics=partial_diagnostics)
     elif kind == "eurobrussels":
         records = _eurobrussels(url)
     elif kind == "socgen":
@@ -3759,7 +3788,7 @@ def collect(source, config=None):
             records = parser(payload)
     unresolved = 0
     if (config or {}).get("_jscc_targeted_collection"):
-        records, unresolved = protect_context_records(records, name, kind, url)
+        records, unresolved = protect_context_records(records, name, kind, url, config=config)
     result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
     if unresolved:
         result.append(engine.CollectionResult(
@@ -3774,4 +3803,7 @@ def collect(source, config=None):
             f"Skipped {invalid} malformed {name} posting(s)",
             error_code="SCHEMA_ERROR", failure_stage="parse",
         ))
+    if partial_diagnostics.get("pagination_incomplete"):
+        result.append(engine.CollectionResult("public_board", "pagination_cap", False, [], 0,
+            "Provider listing incomplete at existing page budget", error_code="CONNECTOR_ERROR", failure_stage="fetch"))
     return result

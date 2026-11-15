@@ -552,6 +552,17 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(history["excluded_by_category"], status["excluded_by_category"])
         self.assertEqual(history["role_filter_audit"], status["role_filter_audit"])
 
+    def test_provider_access_and_tls_failures_are_not_unexpected(self):
+        import ssl
+        import http.client
+        blocked = orchestration.web.FetchError("robots unavailable", "blocked", status_code=403,
+                                               block_reason="ROBOTS_UNAVAILABLE")
+        self.assertEqual(orchestration.classify_exception(blocked), ("ACCESS_DENIED", "fetch", 403))
+        self.assertEqual(orchestration.classify_exception(ssl.SSLCertVerificationError("bad cert")),
+                         ("NETWORK_ERROR", "fetch", None))
+        self.assertEqual(orchestration.classify_exception(http.client.RemoteDisconnected("closed")),
+                         ("NETWORK_ERROR", "fetch", None))
+
     def test_structured_lifecycle_events_are_correlated(self):
         events = []
 
