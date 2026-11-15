@@ -104,14 +104,16 @@ def measure_provider_opener(collector):
 
         bound.arguments["opener"] = opener
         try:
-            results = collector(*bound.args, **bound.kwargs)
+            from web_transport import request_measurement
+            with request_measurement() as public:
+                results = collector(*bound.args, **bound.kwargs)
         except Exception as exc:
-            exc.provider_request_attempts = attempts
-            exc.provider_request_measurement = "adapter_opener_calls"
+            exc.provider_request_attempts = attempts + (public[0] if "public" in locals() else 0)
+            exc.provider_request_measurement = "adapter_opener_and_public_client_attempts"
             raise
         if isinstance(results, list) and results and isinstance(results[0], CollectionResult):
-            results[0].provider_request_attempts = attempts
-            results[0].provider_request_measurement = "adapter_opener_calls"
+            results[0].provider_request_attempts = attempts + public[0]
+            results[0].provider_request_measurement = "adapter_opener_and_public_client_attempts"
         return results
 
     return measured
