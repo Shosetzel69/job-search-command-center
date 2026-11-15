@@ -931,6 +931,8 @@ def collect_ats(item, role_family=None, config=None):
     role_scopes=(config or {}).get("_jscc_retrieve_scope",{}).get("scopes") or []
     scope_kwargs={"role_scopes":role_scopes} if role_scopes else {}
     if connector == "smartrecruiters":
+        if not (config or {}).get("_jscc_targeted_collection"):
+            return smartrecruiters.collect(route["company_identifier"])
         specs,reason=smartrecruiters.native_query_plan(config)
         return smartrecruiters.collect(route["company_identifier"], native_plan=specs, plan_reason=reason, **scope_kwargs)
     if connector == "workday":
