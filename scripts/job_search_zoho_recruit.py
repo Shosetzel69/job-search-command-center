@@ -2,7 +2,7 @@
 import re
 import time
 from html.parser import HTMLParser
-from urllib.parse import parse_qs, urljoin, urlsplit, urlencode
+from urllib.parse import parse_qs, urljoin, urlsplit, urlencode, quote
 from urllib.request import Request, urlopen, HTTPRedirectHandler, build_opener
 from zoho_detail import extract_detail, normalize_date, reject_access_gateway_text
 
@@ -198,12 +198,24 @@ def prefilter_public_metadata(rows, *, role_family=None):
             or not _NON_PM_TITLE.search(str(row.get("job_title") or ""))]
 
 def mark_careers_board_fallback(records, board):
-    """Retain explicit navigation and field-quality signals in persisted payloads."""
+    """Label navigation honestly; a verified portal URL takes precedence."""
+    tenant = urlsplit(board).hostname
     for record in records:
-        if record.get("source_url") != board:
-            raise ValueError("Zoho public job URL differs from validated careers board")
-        record["source_url_kind"] = "careers_board_fallback"
-        record["source_url_label"] = "Careers board (not a direct job link)"
+        link = record.get("source_url")
+        if link == board:
+            record["source_url_kind"] = "careers_board_fallback"
+            record["source_url_label"] = "Careers board (not a direct job link)"
+        else:
+            parts = urlsplit(link or "")
+            jobid = record["id"].rsplit(":", 1)[-1]
+            portal = (parts.path == "/recruit/PortalDetail.na"
+                      and parse_qs(parts.query).get("jobid") == [jobid])
+            modern = bool(re.fullmatch(r"/jobs/careers/" + re.escape(jobid) + r"/[^/]+", parts.path, re.I))
+            if (parts.scheme != "https" or parts.hostname != tenant or parts.username
+                    or parts.password or parts.port or parts.fragment or not (portal or modern)):
+                raise ValueError("unverified Zoho individual job URL")
+            record["source_url_kind"] = "direct_job"
+            record["source_url_label"] = "Original job posting"
         record["missing_fields"] = sorted(
             field for field in ("date_posted", "location", "remote", "work_arrangement")
             if record.get(field) is None or record.get(field) == ""
@@ -250,6 +262,31 @@ def _metadata_record(row, tenant, company_name, board):
         },
         "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
     }
+
+
+def _modern_detail_link(row, tenant, opener, deadline):
+    # Public career-site route, corroborated by the detail response. Never
+    # publish a constructed link without verifying the individual vacancy.
+    title = row["job_title"]
+    slug = re.sub(r"[\s]+", "-", title.strip())
+    slug = quote(slug, safe="-")
+    jobid = row["jobid"]
+    if not JOB_ID.fullmatch(jobid) or not slug or len(slug) > 300:
+        return None
+    url = f"https://{tenant}/jobs/careers/{jobid}/{slug}?source=CareerSite"
+    try:
+        html = _fetch(url, tenant, opener, deadline=deadline)
+        from zoho_detail import Text
+        parser = Text()
+        parser.feed(html)
+        reject_access_gateway_text(" ".join(parser.parts))
+        if not any(heading.casefold() == title.casefold() for heading in parser.h1_headings):
+            return None
+        if not re.search(r"(?<![0-9])" + re.escape(jobid) + r"(?![0-9])", html):
+            return None
+        return url
+    except (OSError, ValueError, TimeoutError):
+        return None
 
 
 def collect(board_url, company_name, opener=None, role_family=None, diagnostics=None):
@@ -325,6 +362,13 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
         # _metadata_record preserves only published description and location fields,
         # rejects access-gateway text and marks provenance/completeness explicitly.
         records = [_metadata_record(row, tenant, company_name, board) for row in modern]
+        # Limit to existing request/deadline budget; no retries or access bypass.
+        for row, record in zip(modern[:MAX_REQUESTS_PER_SOURCE - 2], records):
+            if time.monotonic() >= deadline:
+                break
+            link = _modern_detail_link(row, tenant, opener, deadline)
+            if link:
+                record["source_url"] = link
         if diagnostics is not None:
             diagnostics["missing_detail_count"] = len(records)
         return mark_careers_board_fallback(records, board)
@@ -354,7 +398,7 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
             "description_provenance": detail["description_provenance"], "location": detail["location"],
             "countries": [detail["country"]] if detail.get("country") else [], "remote": None, "work_arrangement": None,
             "employment_statuses": [detail["employment_type"]] if detail["employment_type"] else [],
-            "date_posted": detail["date_posted"], "source_url": board,
+            "date_posted": detail["date_posted"], "source_url": item["source_url"],
             "_jscc_field_provenance": dict(detail.get("_jscc_field_provenance") or {}),
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
