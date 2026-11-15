@@ -1194,7 +1194,7 @@ export async function listProfileJobs(
               j.remote_scope, j.job_version, j.classification_status,
               j.classification_confidence, j.classification_version,
               j.lifecycle_status, j.payload, j.last_seen_at,
-              sp.source_name, sp.canonical_url, sp.posted_at,
+              sp.source_name, sp.canonical_url, sp.posted_at, sp.last_seen_at AS posting_last_seen_at,
               publication.effective_posted_at,
               sp.repost_of_posting_id, sp.payload AS posting_payload,
               state.seen_at, state.archived_at,
@@ -1211,7 +1211,7 @@ export async function listProfileJobs(
               eval.fit_algorithm_version AS cached_fit_algorithm_version
          FROM canonical_jobs j
          JOIN LATERAL (
-           SELECT source_name, canonical_url, posted_at, repost_of_posting_id, payload
+           SELECT source_name, canonical_url, posted_at, last_seen_at, repost_of_posting_id, payload
              FROM source_postings
             WHERE job_id = j.job_id
             ORDER BY CASE lifecycle_status WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
