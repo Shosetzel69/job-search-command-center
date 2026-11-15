@@ -273,6 +273,7 @@ def _scoped_summaries(board, terms, max_postings, opener):
     return list(unique.values()), partial or bool(active)
 
 
+@engine.measure_provider_opener
 def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, detail_workers=1, search_terms=()):
     company_name = str(company_name or "").strip()
     if not company_name:
