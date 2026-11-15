@@ -84,20 +84,44 @@ class _NoRedirect(HTTPRedirectHandler):
 def _safe_opener(request, timeout):
     return build_opener(_NoRedirect).open(request, timeout=timeout)
 
-def _fetch(url, tenant, opener):
+def _remaining(deadline):
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("Zoho source collection exceeded wall-time budget")
+    return remaining
+
+
+def _fetch(url, tenant, opener, *, deadline=None):
     p = urlsplit(url)
     if (p.scheme != "https" or p.hostname != tenant or p.username or
         p.password or p.port or p.fragment):
         raise ValueError("off-tenant Zoho request rejected")
+    deadline = deadline if deadline is not None else time.monotonic() + MAX_ELAPSED_SECONDS
     with opener(Request(url, headers={"User-Agent": "job-search-command-center/1.0",
-                                      "Accept": "text/html"}), timeout=25) as response:
+                                      "Accept": "text/html"}), timeout=min(25, _remaining(deadline))) as response:
         # urlopen may follow redirects: reject untrusted final destinations.
         final_url = response.geturl() if hasattr(response, "geturl") else url
         final = urlsplit(final_url)
         if (final.scheme != "https" or final.hostname != tenant or final.username or
             final.password or final.port):
             raise ValueError("off-tenant Zoho redirect rejected")
-        body = response.read(MAX_BYTES + 1)
+        # Bound each read by the remaining shared budget, not a fresh 25s.
+        chunks, length = [], 0
+        reader = getattr(response, "read1", response.read)
+        while True:
+            remaining = _remaining(deadline)
+            sock = getattr(getattr(getattr(response, "fp", None), "raw", None), "_sock", None)
+            if sock is not None:
+                sock.settimeout(min(25, remaining))
+            chunk = reader(min(65536, MAX_BYTES + 1 - length))
+            _remaining(deadline)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            length += len(chunk)
+            if length > MAX_BYTES:
+                raise ValueError("oversized Zoho public HTML")
+        body = b"".join(chunks)
     if len(body) > MAX_BYTES:
         raise ValueError("oversized Zoho public HTML")
     return body.decode("utf-8", errors="strict")
@@ -127,14 +151,55 @@ def mark_careers_board_fallback(records, board):
     return records
 
 
+def _rotating_details(rows, *, slot=None):
+    # Stable ID ordering plus UTC minute rotation prevents a fixed prefix.
+    # This is not a claim of exhaustive provider pagination.
+    ordered = sorted(rows, key=lambda item: item["jobid"])
+    if not ordered:
+        return ordered
+    offset = (int(time.time() // 60) if slot is None else slot) % len(ordered)
+    return ordered[offset:] + ordered[:offset]
+
+
+def _metadata_record(row, tenant, company_name, board):
+    from zoho_public_jobs import _PlainText
+    description = ""
+    if row.get("description_available"):
+        parser = _PlainText()
+        parser.feed(row.get("description") or "")
+        description = " ".join("".join(parser.parts).split())
+        reject_access_gateway_text(description)
+    place = ", ".join(x for x in (row.get("city"), row.get("state"), row.get("country")) if x)
+    date = normalize_date(row.get("date_opened"))
+    return {
+        "id": f"zoho_recruit:{tenant}:{row['jobid']}",
+        "job_title": row["job_title"], "company": company_name.strip(),
+        "description": description,
+        "description_completeness": "partial" if description else "missing",
+        "description_provenance": "public_modern_jobs_json" if description else "public_listing_metadata_only",
+        "location": place or None,
+        "countries": [row["country"]] if row.get("country") else [],
+        "remote": None, "work_arrangement": None,
+        "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
+        "date_posted": date, "source_url": board,
+        "_jscc_field_provenance": {
+            "title": "ATS_FIELD",
+            **({"description": "LISTING_CARD"} if description else {}),
+            **({"location": "ATS_FIELD"} if place else {}),
+            **({"date_posted": "ATS_FIELD"} if date else {}),
+        },
+        "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
+    }
+
+
 def collect(board_url, company_name, opener=None, role_family=None, diagnostics=None):
     opener = opener or _safe_opener
     board = validate_board(board_url)
     if not isinstance(company_name, str) or not company_name.strip():
         raise ValueError("company_name is required")
     tenant = urlsplit(board).hostname
-    started = time.monotonic()
-    board_html = _fetch(board, tenant, opener)
+    deadline = time.monotonic() + MAX_ELAPSED_SECONDS
+    board_html = _fetch(board, tenant, opener, deadline=deadline)
     summaries = enumerate_board(board_html, board)
     capped = len(summaries) >= 100
     scoped = str(role_family or "").upper() in {"PROJECT_MANAGEMENT", "PROJECT_MANAGER"}
@@ -143,7 +208,7 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
         # portal. Never guess page/API parameters or bypass the provider.
         from zoho_public_jobs import embedded_jobs
         try:
-            metadata = embedded_jobs(_fetch("https://" + tenant + "/jobs/Careers", tenant, opener))
+            metadata = embedded_jobs(_fetch("https://" + tenant + "/jobs/Careers", tenant, opener, deadline=deadline))
         except ValueError as exc:
             if capped:
                 raise ValueError("Zoho public careers page reached 100 postings; pagination required; public metadata not verified") from exc
@@ -162,7 +227,7 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
         if capped:
             # Reserve two requests for the listing surfaces; preserve explicit
             # metadata for rows without a detail link or outside the budget.
-            summaries = summaries[:MAX_REQUESTS_PER_SOURCE - 2]
+            summaries = _rotating_details(summaries)[:MAX_REQUESTS_PER_SOURCE - 2]
         available_ids = {item["jobid"] for item in summaries}
         missing_selected = [row for row in selected if row["jobid"] not in available_ids]
         if diagnostics is not None:
@@ -180,7 +245,7 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
         from html import unescape
         from zoho_public_jobs import _PlainText
         modern_url = "https://" + tenant + "/jobs/Careers"
-        modern_html = _fetch(modern_url, tenant, opener)
+        modern_html = _fetch(modern_url, tenant, opener, deadline=deadline)
         if not re.search(r"""<input\b[^>]*(?:id|name)\s*=\s*["']jobs["']""", modern_html, re.I):
             # Unknown HTML (login page, access denied, JS shell, changed widget)
             # must never be interpreted as a genuine empty job board.
@@ -224,16 +289,20 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
         raise ValueError('Zoho request budget exceeded')
     records = []
     for index, item in enumerate(summaries):
-        if time.monotonic() - started > MAX_ELAPSED_SECONDS:
+        try:
+            _remaining(deadline)
+            detail = extract_detail(_fetch(item["source_url"], tenant, opener, deadline=deadline),
+                                    expected_title=item["job_title"] or None)
+            _remaining(deadline)
+        except TimeoutError:
             if not capped:
-                raise TimeoutError("Zoho source collection exceeded wall-time budget")
+                raise
             deferred = {row["jobid"] for row in summaries[index:]}
             missing_selected.extend(row for row in selected if row["jobid"] in deferred)
             if diagnostics is not None:
                 diagnostics["missing_detail_count"] = len(missing_selected)
+                diagnostics["deadline_exhausted"] = True
             break
-        detail = extract_detail(_fetch(item["source_url"], tenant, opener),
-                                expected_title=item["job_title"] or None)
         records.append({
             "id": f"zoho_recruit:{tenant}:{item['jobid']}",
             "job_title": detail["job_title"], "company": company_name.strip(),
@@ -247,23 +316,7 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
     for row in missing_selected:
-        records.append({
-            "id": f"zoho_recruit:{tenant}:{row['jobid']}",
-            "job_title": row["job_title"], "company": company_name.strip(),
-            "description": "", "description_completeness": "missing",
-            "description_provenance": "public_listing_metadata_only",
-            "location": ", ".join(x for x in (row.get("city"),row.get("country")) if x) or None,
-            "countries": [row["country"]] if row.get("country") else [],
-            "remote": None, "work_arrangement": None,
-            "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
-            "date_posted": normalize_date(row.get("date_opened")), "source_url": board,
-            "_jscc_field_provenance": {
-                "title": "ATS_FIELD",
-                **({"location": "ATS_FIELD"} if row.get("city") or row.get("country") else {}),
-                **({"date_posted": "ATS_FIELD"} if normalize_date(row.get("date_opened")) else {}),
-            },
-            "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
-        })
+        records.append(_metadata_record(row, tenant, company_name, board))
     return mark_careers_board_fallback(records, board)
 
 
@@ -278,7 +331,8 @@ def collect_result(board_url, company_name, opener=None, role_family=None):
     if evidence.get("missing_detail_count"):
         result.append(engine.CollectionResult(connector, "public_inventory_partial", False, [], 0,
             f"{evidence['missing_detail_count']} selected public posting(s) lack verified detail within existing budget",
-            error_code="SCHEMA_ERROR", failure_stage="parse"))
+            error_code="TIMEOUT" if evidence.get("deadline_exhausted") else "SCHEMA_ERROR",
+            failure_stage="fetch" if evidence.get("deadline_exhausted") else "parse"))
     return result
 
 def collect_public_metadata(board_url, company_name, opener=None):

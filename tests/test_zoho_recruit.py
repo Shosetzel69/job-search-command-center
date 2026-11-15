@@ -139,6 +139,56 @@ class PaginationSafetyTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError,"expanded public inventory not verified"):
             zoho.collect(BOARD,"Acme",opener=lambda req,timeout:Resp(links if req.full_url.endswith("/careers") else modern, req.full_url))
 
+    def test_rotation_is_stable_and_covers_all_available_portal_ids(self):
+        rows = [{"jobid":str(100000+i)} for i in range(100)]
+        first = zoho._rotating_details(rows, slot=0)[:99]
+        second = zoho._rotating_details(list(reversed(rows)), slot=1)[:99]
+        self.assertNotEqual(first, second)
+        self.assertEqual(len({row["jobid"] for row in first+second}),100)
+        self.assertEqual(zoho._rotating_details(rows, slot=17),
+                         zoho._rotating_details(list(reversed(rows)), slot=17))
+
+    def test_fetch_clamps_timeout_and_does_not_start_after_deadline(self):
+        from unittest.mock import patch
+        calls = []
+        def opening(req, timeout):
+            calls.append(timeout)
+            return Resp(b"ok", req.full_url)
+        with patch.object(zoho.time, "monotonic", return_value=178):
+            self.assertEqual(zoho._fetch(BOARD,"alpha.zohorecruit.com",opening,deadline=180),"ok")
+        self.assertEqual(calls,[2])
+        with patch.object(zoho.time, "monotonic", return_value=180):
+            with self.assertRaises(TimeoutError):
+                zoho._fetch(BOARD,"alpha.zohorecruit.com",opening,deadline=180)
+        self.assertEqual(calls,[2])
+
+    def test_deadline_during_capped_detail_retains_metadata_and_partial(self):
+        from unittest.mock import patch
+        import json
+        from html import escape
+        links = "".join('<a href="/recruit/PortalDetail.na?jobid={0}&digest=tok_{0}&widgetid=123456">Engineer</a>'.format(100000+i) for i in range(100)).encode()
+        modern = ('<input id="jobs" value="' + escape(json.dumps([
+            {"id":str(100000+i),"Posting_Title":"Engineer","Job_Description":"<p>Public preview.</p>","State":"Mazovia"}
+            for i in range(101)]),quote=True) + '">').encode()
+        clock = [0]
+        calls = []
+        def opening(req,timeout):
+            calls.append((req.full_url,timeout))
+            if req.full_url.endswith("/careers"):
+                return Resp(links,req.full_url)
+            if req.full_url.endswith("/jobs/Careers"):
+                return Resp(modern,req.full_url)
+            clock[0] = 180
+            return Resp(DETAIL,req.full_url)
+        with patch.object(zoho.time,"monotonic",side_effect=lambda:clock[0]):
+            result = zoho.collect_result(BOARD,"Acme",opener=opening)
+        self.assertEqual(len(calls),3)
+        self.assertEqual(len(result[0].records),101)
+        self.assertFalse(result[1].ok)
+        self.assertEqual(result[1].error_code,"TIMEOUT")
+        self.assertTrue(all(row["description_completeness"]=="partial" for row in result[0].records))
+        self.assertTrue(all(row["location"]=="Mazovia" for row in result[0].records))
+
 class PrescreenTests(unittest.TestCase):
     def test_conservative_scope(self):
         rows = [{"job_title":"IT Project Manager"}, {"job_title":"Android Developer"},
