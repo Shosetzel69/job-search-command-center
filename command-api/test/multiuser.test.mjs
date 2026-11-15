@@ -473,6 +473,7 @@ test('same shared job can produce different per-profile eligibility without prov
     country_codes:['RO'],
     work_mode:'remote',
     role_family:'PROJECT_DELIVERY_MANAGEMENT',
+    role_subfamily:['project_management'],
     source_name:'Example',
     canonical_url:'https://example.test/job',
     posted_at:'2026-10-01T00:00:00Z',
@@ -496,6 +497,8 @@ test('same shared job can produce different per-profile eligibility without prov
   const allowed = evaluateSharedJob(row, base, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   const blocked = evaluateSharedJob(row, { ...base, work_modes:{ ...base.work_modes, remote:false } }, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   assert.equal(allowed.eligible, true);
+  assert.equal(allowed.eligibilityState, 'ELIGIBLE');
+  assert.equal(evaluateSharedJob({...row,role_subfamily:[]},base,nomenclatures).score,null);
   assert.equal(allowed.score,100);
   assert.equal(evaluateSharedJob(row,{...base,fit_config:null},nomenclatures).score,null);
   assert.equal(blocked.eligible, false);
