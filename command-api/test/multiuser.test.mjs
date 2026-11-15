@@ -503,7 +503,9 @@ test('same shared job can produce different per-profile eligibility without prov
     nomenclatures,
     new Date('2026-10-01T12:00:00Z'),
   );
-  assert.equal(unknownRole.eligible, true, 'unknown is not an explicit incompatibility');
+  assert.equal(unknownRole.eligible, false, 'unresolved role is not a confirmed recommendation');
+  assert.equal(unknownRole.eligibilityState, 'UNKNOWN');
+  assert.equal(unknownRole.score, null);
   const incompatibleRemote = evaluateSharedJob(
     { ...row, country_codes:['US'], payload:{ ...row.payload, remote_scope:'Country' } },
     { ...base, target_country_codes:['US'], remote_eligible_country_codes:['RO'] },
@@ -512,8 +514,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(incompatibleRemote.eligible, false);
   assert.equal(incompatibleRemote.exclusionReason, 'remote eligibility geography incompatible');
-  assert.equal(EVALUATION_VERSION, 'fit-v1');
-  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1');
+  assert.equal(EVALUATION_VERSION, 'fit-v1-scope-2');
+  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1-scope-2');
 });
 
 test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {
