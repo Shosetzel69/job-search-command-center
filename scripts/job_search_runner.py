@@ -342,6 +342,18 @@ def validate_result():
 
 
 def main() -> int:
+    if "--persist-recovery-status" in sys.argv:
+        # Supervisor invokes this only after confirming the owned DEV lock.
+        # A fresh process can repair a terminal failure even when collection
+        # exited before its ordinary terminal persistence.
+        if not orchestration.nile_only_dev_retrieve():
+            raise RuntimeError("Recovery persistence is DEV-only")
+        status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+        if status.get("run_id") != os.environ.get("JSCC_RUN_ID") or status.get("status") != "failed":
+            raise RuntimeError("Recovery status ownership or phase mismatch")
+        persist_terminal_evidence()
+        validate_history()
+        return 0
     if "--validate-only" in sys.argv:
         validate_result()
         optimized.validate_state()
