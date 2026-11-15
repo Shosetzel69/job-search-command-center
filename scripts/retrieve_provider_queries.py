@@ -23,3 +23,33 @@ def scope_search_terms(config):
         return ()
     terms = tuple(sorted({term for code in subfamilies for term in SCOPE_TERMS[code]}))
     return terms if len(terms) <= 8 else ()
+
+
+from functools import lru_cache
+import json
+import role_taxonomy
+
+
+@lru_cache(maxsize=1)
+def _listing_taxonomy():
+    value = json.loads(role_taxonomy.DEFAULT_TAXONOMY_PATH.read_text(encoding="utf-8"))
+    role_taxonomy.validate_taxonomy(value)
+    return value
+
+
+def listing_role_excluded(title, scopes):
+    """Skip optional detail fetch only for an explicit taxonomy contradiction.
+    Missing title, unknown or conflicting classification must be retained.
+    """
+    if not title or not scopes:
+        return False
+    classification = role_taxonomy.classify_title(title, _listing_taxonomy())
+    family = classification.get("role_family")
+    members = set(classification.get("role_member") or [])
+    if not family or family == "UNKNOWN":
+        return False
+    return not any(
+        family == scope.get("role_family") and
+        (not scope.get("role_subfamilies") or not members or members.intersection(scope["role_subfamilies"]))
+        for scope in scopes if isinstance(scope, dict)
+    )
