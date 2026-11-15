@@ -290,7 +290,7 @@ def _payload(record: Mapping[str, Any], classification_status: str) -> dict[str,
 
 
 QUALITY_PROVENANCE = frozenset({
-    "ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML", "LISTING_CARD",
+    "ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML", "LISTING_CARD", "EXPLICIT_DESCRIPTION",
 })
 QUALITY_FIELDS = ("title", "description", "location", "date_posted")
 SHARE_MARKUP = re.compile(
@@ -302,6 +302,38 @@ SALARY_MARKUP = re.compile(
     r"(?:[$€£]\s*[\d,]+|[\d,]+\s*(?:USD|EUR|GBP)\s*/\s*(?:year|hour|yr|hr))",
     re.I,
 )
+
+
+def apply_explicit_remote(record):
+    """Use affirmative, posting-specific statements, never contextual guesses."""
+    provenance = record.get("_jscc_field_provenance") or {}
+    if not isinstance(provenance, Mapping):
+        return record
+    trusted = provenance.get("description") in {"ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML"}
+    trusted = trusted or (provenance.get("description") == "LISTING_CARD"
+                          and record.get("description_provenance") in {
+                              "public_modern_jobs_json", "public_job_card_description"})
+    description = _text(record.get("description"))
+    if not trusted or not description or SHARE_MARKUP.search(description):
+        return record
+    mode = _text(record.get("work_arrangement") or record.get("work_mode") or record.get("mode")).casefold()
+    if mode in {"hybrid", "onsite", "on-site", "on site"} or record.get("hybrid") is True:
+        return record
+    if re.search(r"\b(?:not|never)\s+(?:a\s+)?(?:fully\s+)?remote\b|\bno\s+remote\b|\bremote\s+(?:work\s+)?(?:is\s+)?not\s+(?:available|allowed|permitted)\b", description, re.I):
+        return record
+    match = re.search(r"\b(?:this|the)\s+(?:is\s+(?:a\s+)?|(?:position|role|job)\s+is\s+(?:a\s+)?)(?:fully\s+|100%\s+)?remote(?:\s+(?:position|role|job))?\s*(?:[.!;\n]|$)", description, re.I)
+    if not match:
+        return record
+    record["remote"] = True
+    record["work_arrangement"] = "remote"
+    record["work_arrangement_evidence"] = match.group(0).strip()
+    if not _text(record.get("location") or record.get("short_location")):
+        record["location"] = "Remote"
+        record["_jscc_field_provenance"] = {**provenance, "location": "EXPLICIT_DESCRIPTION"}
+    if isinstance(record.get("missing_fields"), list):
+        record["missing_fields"] = [field for field in record["missing_fields"]
+                                    if field not in {"location", "remote", "work_arrangement"}]
+    return record
 
 
 def assess_record_quality(
@@ -403,6 +435,7 @@ def assess_record_quality(
 
 
 def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -> SharedPosting | None:
+    record = apply_explicit_remote(dict(record))
     quality = assess_record_quality(record, source_hint=source_hint)
     if quality["verdict"] == "INVALID":
         return None
