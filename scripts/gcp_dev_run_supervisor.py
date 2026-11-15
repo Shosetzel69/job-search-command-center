@@ -129,7 +129,7 @@ def run(env=None, *, root=Path("/runtime"), storage=None, execute=subprocess.run
     rc = 1
     phase = "seed"
     try:
-        for name in ("search-config.json", "run-history.json", "search-state.json"):
+        for name in ("search-config.json", "search-state.json"):
             shutil.copyfile(root / "seed" / name, run_dir / name)
         phase = "snapshot"
         print("DEV_RUN_PHASE=snapshot", flush=True)
