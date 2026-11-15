@@ -10,7 +10,7 @@ from urllib.parse import quote, urlencode
 from urllib.request import Request, urlopen
 
 import job_search as engine
-from retrieve_provider_queries import scope_search_terms
+from retrieve_provider_queries import scope_search_terms, listing_role_excluded
 
 BASE_URL = "https://api.smartrecruiters.com/v1/companies"
 PAGE_SIZE = 100
@@ -148,7 +148,7 @@ def _bounded_summaries(company_path, terms, max_postings, opener):
 
 
 @engine.measure_provider_opener
-def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, search_terms=()):
+def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, search_terms=(), role_scopes=()):
     company_identifier = str(company_identifier or "").strip()
     if not company_identifier:
         raise ValueError("SmartRecruiters company_identifier is required")
@@ -183,7 +183,12 @@ def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, searc
             break
 
     records = []
-    for summary in summaries[:max_postings]:
+    selected=summaries[:max_postings]
+    skipped_details=0
+    for summary in selected:
+        if listing_role_excluded(summary.get('name') or summary.get('title'),role_scopes):
+            skipped_details+=1
+            continue
         posting_id = summary.get("id") or summary.get("uuid")
         if not posting_id:
             raise ValueError("Malformed SmartRecruiters posting summary: missing id")
@@ -195,6 +200,7 @@ def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, searc
 
     connector = f"smartrecruiters:{company_identifier}"
     results = [engine.CollectionResult(connector, "public_postings", True, records, len(records))]
+    results[0].provider_scope_details={'query_terms':list(search_terms),'listing_valid':len(selected),'details_skipped_out_of_scope':skipped_details}
     if partial:
         results.append(engine.CollectionResult(connector,"bounded_search_partial",False,[],0,
             "SmartRecruiters bounded query did not exhaust every result within the existing cap",
