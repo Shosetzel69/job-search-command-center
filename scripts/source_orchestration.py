@@ -320,6 +320,8 @@ def emit_source_final(run_id, item):
         records_scope_excluded=item.get("records_scope_excluded", 0),
         records_quality_excluded=item.get("records_quality_excluded", 0),
         records_malformed=item.get("records_malformed", 0),
+        provider_request_attempts=item.get("provider_request_attempts"),
+        provider_request_measurement=item.get("provider_request_measurement"),
         provider_scope_mode=item.get("provider_scope_mode"),
         provider_scope_evidence=item.get("provider_scope_evidence"),
         quality_disposition=item.get("quality_disposition"),
@@ -728,6 +730,13 @@ def collect_sources(config, state, now, plan, run_id=None, progress_callback=Non
 def record_results(item, results):
     ok = [result for result in results if result.ok]
     failed = [result for result in results if not result.ok]
+    measured = [r for r in results if isinstance(getattr(r, "provider_request_attempts", None), int)]
+    if measured:
+        item["provider_request_attempts"] = sum(r.provider_request_attempts for r in measured)
+        item["provider_request_measurement"] = "+".join(sorted({r.provider_request_measurement or "unspecified" for r in measured}))
+    else:
+        item.setdefault("provider_request_attempts", None)
+        item.setdefault("provider_request_measurement", "not_measured")
     item["records"] = sum(len(result.records) for result in ok)
     item["records_after_scope"] = item["records"]
     item["provider_reported_total"] = sum(int(result.total_available or 0) for result in ok)
