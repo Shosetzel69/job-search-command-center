@@ -1695,6 +1695,22 @@ class RetrievePublicDetailTests(unittest.TestCase):
 
 
 class ConsolidatedDetailRecoveryTests(unittest.TestCase):
+
+    def test_short_jsonld_description_and_missing_location_are_retained(self):
+        import json
+        import shared_corpus_repository as corpus
+        html = '<script type="application/ld+json">' + json.dumps({
+            "@type":"JobPosting","title":"Project Manager","description":"Manage delivery and project risks."}) + '</script>'
+        for parse, link in ((boards._luxoft_details,"https://career.luxoft.com/jobs/project-manager-123"),
+                            (boards._stripe_details,"https://stripe.com/careers/listing/project-manager/123")):
+            row = parse(html,link)
+            self.assertEqual(row["description"],"Manage delivery and project risks.")
+            self.assertEqual(row["location"],"")
+            self.assertEqual(row["description_completeness"],"partial")
+            self.assertEqual(corpus.assess_record_quality(row)["verdict"],"INCOMPLETE")
+            self.assertIsNotNone(corpus.prepare_posting(row,source_hint="Example"))
+
+
     def test_nato_verified_detail_recovery(self):
         import json
         listing = boards.PUBLIC_BOARD_SOURCES["NATO Careers"]["url"]
