@@ -211,12 +211,16 @@ def extract_detail(html, expected_title=None):
         reject_access_gateway_text(full.get("description"))
         # Structured public jobTitle takes precedence over the portal anchor.
         job_type = full.get("employment_type")
-        full["job_title"] = (
-            validated_job_title(full.get("job_title"), job_type=job_type)
-            or validated_job_title(expected_title, job_type=job_type)
-        )
+        structured_title = validated_job_title(full.get("job_title"), job_type=job_type)
+        full["job_title"] = structured_title or validated_job_title(expected_title, job_type=job_type)
         if not full["job_title"]:
             raise ValueError("Zoho detail lacks a valid job title")
+        full["_jscc_field_provenance"] = {
+            "title": "ATS_FIELD" if structured_title else "LISTING_CARD",
+            "description": "ATS_FIELD",
+            **({"location": "ATS_FIELD"} if full.get("location") else {}),
+            **({"date_posted": "ATS_FIELD"} if full.get("date_posted") else {}),
+        }
         return full
     lines = [" ".join(line.split()) for line in "".join(parser.parts).splitlines()]
     lines = [x for x in lines if x and x != "\u200b"]
@@ -240,7 +244,8 @@ def extract_detail(html, expected_title=None):
             return {"description": meta, "description_completeness": "summary", "description_provenance": "html_meta_description",
                     "location": "", "date_posted": None, "industry": None,
                     "job_title": title,
-                    "employment_type": None, "country": None}
+                    "employment_type": None, "country": None,
+                    "_jscc_field_provenance": {"title": "JOB_DETAIL_HTML", "description": "JOB_DETAIL_HTML"}}
         raise ValueError("Zoho detail lacks Job Description") from exc
     start = idx + 1
     finish = next((k for k in range(start, len(lines)) if lines[k] in {"Apply Now", "Apply", "Similar Jobs"}), len(lines))
@@ -272,4 +277,9 @@ def extract_detail(html, expected_title=None):
     result["job_title"] = title_headings[0]
     result["employment_type"] = meta.get("Job Type") or next((s.split("|")[0].strip() for s in lines[:idx] if "|" in s and "time" in s.lower()), None)
     result["country"] = meta.get("Country")
+    result["_jscc_field_provenance"] = {
+        "title": "JOB_DETAIL_HTML", "description": "JOB_DETAIL_HTML",
+        **({"location": "JOB_DETAIL_HTML"} if result.get("location") else {}),
+        **({"date_posted": "JOB_DETAIL_HTML"} if result.get("date_posted") else {}),
+    }
     return result

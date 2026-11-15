@@ -24,6 +24,13 @@ class TestZoho(unittest.TestCase):
         self.assertTrue(rows[0]["id"].endswith(":123456"))
         self.assertIn("Public role description", rows[0]["description"])
         self.assertIn("Python skills", rows[0]["description"])
+        self.assertEqual(rows[0]["_jscc_field_provenance"],
+                         {"title": "JOB_DETAIL_HTML", "description": "JOB_DETAIL_HTML"})
+        import shared_corpus_repository as corpus
+        quality = corpus.assess_record_quality(rows[0])
+        self.assertEqual(quality["verdict"], "INCOMPLETE")
+        self.assertIn("DESCRIPTION_NOT_FULL", quality["issues"])
+        self.assertNotIn("DESCRIPTION_PROVENANCE_UNKNOWN", quality["issues"])
         self.assertNotIn("digest=", rows[0]["source_url"])
         self.assertEqual(rows[0]["source_url_kind"], "careers_board_fallback")
         self.assertEqual(rows[0]["source_url_label"], "Careers board (not a direct job link)")
@@ -71,6 +78,10 @@ class ModernZohoTests(unittest.TestCase):
         self.assertEqual(rows[0]["job_title"], "IT Project Manager")
         self.assertEqual(rows[0]["description_completeness"], "partial")
         self.assertEqual(rows[0]["description_provenance"], "public_modern_jobs_json")
+        self.assertEqual(rows[0]["_jscc_field_provenance"], {
+            "title": "ATS_FIELD", "description": "LISTING_CARD", "date_posted": "ATS_FIELD"})
+        import shared_corpus_repository as corpus
+        self.assertIn("DESCRIPTION_NOT_FULL", corpus.assess_record_quality(rows[0])["issues"])
         self.assertEqual(rows[0]["date_posted"], "2026-09-02")
         self.assertEqual(rows[0]["source_url_kind"], "careers_board_fallback")
         self.assertEqual(rows[0]["source_url"], BOARD)
@@ -402,3 +413,25 @@ class R6GatewayCollectionTests(unittest.TestCase):
         self.assertEqual(len(records), 1)
         self.assertIn("SSO", records[0]["description"])
         self.assertEqual(records[0]["source_url_kind"], "careers_board_fallback")
+
+
+class ProvenanceQualityTests(unittest.TestCase):
+    def test_verified_embedded_job_is_valid_and_unknown_anchor_is_not(self):
+        import json
+        import shared_corpus_repository as corpus
+        payload = {"jobTitle":"Engineer", "postedOn":"14.10.2026", "location":"Bucharest",
+                   "country":"Romania", "jobDescriptionDetails":[{"richText":{
+                       "fieldLabel":"Job Description","value":"<p>Build and deliver software.</p>"}}]}
+        def get(req, timeout):
+            html = "<script>data="+json.dumps(payload)+";</script>"
+            return Resp(LIST if req.full_url.endswith("/careers") else html.encode(),req.full_url)
+        row = zoho.collect(BOARD,"Acme",opener=get)[0]
+        self.assertEqual(corpus.assess_record_quality(row)["verdict"],"VALID")
+        self.assertEqual(row["_jscc_field_provenance"], {
+            "title":"ATS_FIELD","description":"ATS_FIELD","location":"ATS_FIELD","date_posted":"ATS_FIELD"})
+        payload.pop("jobTitle")
+        row = zoho.collect(BOARD,"Acme",opener=get)[0]
+        quality = corpus.assess_record_quality(row)
+        self.assertEqual(quality["verdict"],"INCOMPLETE")
+        self.assertIn("TITLE_LISTING_ONLY",quality["issues"])
+        self.assertNotIn("digest=",str(row))

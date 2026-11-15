@@ -8,6 +8,9 @@ class DetailTests(unittest.TestCase):
         self.assertEqual(d["date_posted"],"2026-10-14")
         self.assertEqual(d["location"],"Hyderabad, Telangana")
         self.assertEqual(d["employment_type"],"Full time")
+        self.assertEqual(d["_jscc_field_provenance"], {
+            "title": "JOB_DETAIL_HTML", "description": "JOB_DETAIL_HTML",
+            "location": "JOB_DETAIL_HTML", "date_posted": "JOB_DETAIL_HTML"})
     def test_hr_plus(self):
         text='<h1>Operations Officer</h1><p>Full time | HR Plus Consultancy | Kuwait</p><p>Posted On 19/10/2026</p><h2>Job Description</h2><p>Admin role</p>'
         d=extract_detail(text)
@@ -56,6 +59,8 @@ class EmbeddedPublicDetailTests(unittest.TestCase):
         result = extract_detail(html, expected_title="Engineer")
         self.assertEqual(result["description_completeness"], "summary")
         self.assertEqual(result["description_provenance"], "html_meta_description")
+        self.assertEqual(result["_jscc_field_provenance"], {
+            "title": "JOB_DETAIL_HTML", "description": "JOB_DETAIL_HTML"})
 
 
 class DateSafetyTests(unittest.TestCase):
