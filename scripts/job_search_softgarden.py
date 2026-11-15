@@ -185,6 +185,7 @@ def enrich_orange_descriptions(records, *, max_details=4, max_seconds=10, role_t
     return sum(not record.get("description") for record in records)
 
 
+@engine.measure_provider_opener
 def collect(feed_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen, regional_scope=False, role_terms=(), enrich_details=False):
     parsed = urlsplit(str(feed_url or "").strip())
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
