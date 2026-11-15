@@ -93,6 +93,7 @@ def normalize(item, board_name, company_name):
     }
 
 
+@engine.measure_provider_opener
 def collect(board_name, company_name, max_postings=MAX_POSTINGS, opener=urlopen):
     board_name = str(board_name or "").strip()
     company_name = str(company_name or "").strip()
