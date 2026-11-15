@@ -124,6 +124,16 @@ test('W025 Nile 010 role families native functional contract',async t=>{
     assert.ok(row);assert.equal(row.eligibility_state,'UNKNOWN');
     assert.equal(row.eligibility_reason_code,'ROLE_FAMILY_UNKNOWN');assert.equal(row.eligible,false);assert.equal(row.score,null);
    }
+   const unclassified=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {result_view:'unclassified',limit:40,prefetch:0,q:'W025'},env,{db});
+   assert.deepEqual(unclassified.jobs.map(j=>j.id).sort(),unknown.map(j=>j.id).sort());
+   assert.ok(unclassified.jobs.every(j=>j.fit===null&&j.eligibility_reason==='ROLE_FAMILY_UNKNOWN'));
+   assert.ok(unclassified.count_basis);
+   const counted=await repository.listProfileJobs(ctx,stored,nomenclatures,
+     {result_view:'unclassified',count_only:'true',count_basis:unclassified.count_basis,as_of:unclassified.generated_at,q:'W025'},env,{db});
+   assert.equal(counted.results,unknown.length);
+   assert.deepEqual(counted.jobs,[]);
+   assert.equal(counted.next_cursor,null);
    const direct=await db.query('SELECT job_id,role_family,role_subfamily FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
      [seeded.map(j=>j.id)]);
    assert.equal(direct.rows.length,seeded.length);
