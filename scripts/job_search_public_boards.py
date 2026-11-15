@@ -17,7 +17,7 @@ from html.entities import html5
 from html.parser import HTMLParser
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
 from urllib.request import Request
-from web_transport import measured_urlopen as urlopen
+from web_transport import measured_urlopen as urlopen, measured_pool_map
 
 import job_search as engine
 from retrieve_provider_queries import scope_search_terms
@@ -937,7 +937,7 @@ def _luxoft(url, max_details=60, max_seconds=35, diagnostics=None):
     rejected = 0
     # Bounded to three first-party workers. All requests retain robots/TLS checks.
     with ThreadPoolExecutor(max_workers=3) as pool:
-        for record in pool.map(read_detail, links.links[:max_details]):
+        for record in measured_pool_map(pool, read_detail, links.links[:max_details]):
             if record is None:
                 rejected += 1
             else:
@@ -1049,7 +1049,7 @@ def _stripe(url, max_details=30, max_seconds=30, diagnostics=None):
     records = {}
     rejected = 0
     with ThreadPoolExecutor(max_workers=3) as pool:
-        for record in pool.map(read_detail, links.links[:max_details]):
+        for record in measured_pool_map(pool, read_detail, links.links[:max_details]):
             if record is None:
                 rejected += 1
             else:
