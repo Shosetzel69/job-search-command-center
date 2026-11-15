@@ -228,16 +228,9 @@ function devSourcesEnabled(env) {
 
 // Read the operational source of truth; GCS remains an exact-run recovery
 // channel for failures before the native database driver starts.
-export async function readNileRunPayload(env, runId, db) {
-  if (!RUN_ID.test(String(runId||''))) return null;
-  if (!db) {
-    const {getPool}=await import('./db/pool.js');
-    db=getPool(env);
-  }
-  const result=await db.query('SELECT payload FROM search_runs WHERE run_id=$1',[runId]);
-  const payload=result.rows?.[0]?.payload;
-  if (!payload || payload.run_id!==runId) return null;
-  return {sha:'nile:'+runId,payload:{...payload,status:payload.status==='running'?'in_progress':payload.status}};
+export async function readNileRunPayload(env,runId,db) {
+  const {readOperationalRun}=await import('./db/operational-run-repository.js');
+  return readOperationalRun(env,runId,db);
 }
 
 export async function readRuntimeJson(env, runtime, path) {
@@ -263,10 +256,16 @@ export async function readRuntimeJson(env, runtime, path) {
     const descriptor=marker?.payload;
     if (RUN_ID.test(String(descriptor?.run_id||''))) {
       const runId=descriptor.run_id;
-      if (env.NILE_DATABASE_URL) {
-        const canonical=await readNileRunPayload(env,runId);
-        if (canonical && !(descriptor.status==='failed' &&
-            !['completed','completed_with_errors','failed'].includes(canonical.payload.status))) return canonical;
+      const {operationalDbConfigured}=await import('./db/operational-run-repository.js');
+      if (operationalDbConfigured(env)) {
+        try {
+          const canonical=await readNileRunPayload(env,runId);
+          if (canonical && !(descriptor.status==='failed' && canonical.payload.status!=='failed')) return canonical;
+        } catch (error) {
+          // A known failed attempt may have died before the DB driver began.
+          // Other database faults stay visible, rather than silently serving stale data.
+          if (descriptor.status!=='failed') throw error;
+        }
       }
       // Bootstrap/native-driver failure recovery, never a different run.
       const live=await readVersionedRunObject(env,'runs/'+runId+'/run-status.json');
@@ -275,11 +274,9 @@ export async function readRuntimeJson(env, runtime, path) {
       throw runtimeError('Exact run evidence unavailable',503);
     }
   }
-  if (name==='run-history.json' && devSourcesEnabled(env) && env.NILE_DATABASE_URL) {
-    const {getPool}=await import('./db/pool.js');
-    const result=await getPool(env).query(
-      'SELECT payload FROM search_runs ORDER BY COALESCE(completed_at,started_at,created_at) DESC,run_id DESC LIMIT 10');
-    return {sha:'nile:history',payload:{schema_version:'1.0',runs:result.rows.map(row=>row.payload)}};
+  if (name==='run-history.json' && devSourcesEnabled(env)) {
+    const {operationalDbConfigured,readOperationalHistory}=await import('./db/operational-run-repository.js');
+    if (operationalDbConfigured(env)) return readOperationalHistory(env);
   }
   return readObjectJson(env, await runtimeObjectForRead(env, path));
 }
