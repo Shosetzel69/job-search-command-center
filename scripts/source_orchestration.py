@@ -688,6 +688,8 @@ def write_progress_status(now, run_id, plan, planned_source_ids, retrieve_scope=
         "request_signature": request_signature,
         "retrieve_scope": retrieve_scope,
     }
+    if nile_only_dev_retrieve():
+        shared_corpus.persist_run_progress(payload)
     engine.STATUS_PATH.write_text(
         json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
