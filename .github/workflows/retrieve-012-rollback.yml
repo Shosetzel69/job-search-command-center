@@ -22,19 +22,19 @@ jobs:
       JSCC_TEST_ADMIN_DATABASE_URL: postgresql://00000000-0000-0000-0000-000000000000:password@127.0.0.1:55432/jobsearch_dev
     steps:
       - name: Checkout evidence harness
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           path: evidence
       - name: Checkout exact candidate
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: 03bf424864e021d7ed02c2fc1ff028e20e0b2579
           path: candidate
       - name: Checkout exact rollback runtime
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
           ref: 121f88e212013d2c4665bb70f881a3bcee365d21
