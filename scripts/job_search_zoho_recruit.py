@@ -195,6 +195,11 @@ def collect(board_url, company_name, opener=None, role_family=None):
                 "remote": None, "work_arrangement": None,
                 "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
                 "date_posted": normalize_date(row.get("date_opened")), "source_url": board,
+                "_jscc_field_provenance": {
+                    "title": "ATS_FIELD", "description": "LISTING_CARD",
+                    **({"location": "ATS_FIELD"} if place else {}),
+                    **({"date_posted": "ATS_FIELD"} if normalize_date(row.get("date_opened")) else {}),
+                },
                 "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
             })
         return mark_careers_board_fallback(records, board)
@@ -215,6 +220,7 @@ def collect(board_url, company_name, opener=None, role_family=None):
             "countries": [detail["country"]] if detail.get("country") else [], "remote": None, "work_arrangement": None,
             "employment_statuses": [detail["employment_type"]] if detail["employment_type"] else [],
             "date_posted": detail["date_posted"], "source_url": board,
+            "_jscc_field_provenance": dict(detail.get("_jscc_field_provenance") or {}),
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
     for row in missing_selected:
@@ -228,6 +234,11 @@ def collect(board_url, company_name, opener=None, role_family=None):
             "remote": None, "work_arrangement": None,
             "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
             "date_posted": normalize_date(row.get("date_opened")), "source_url": board,
+            "_jscc_field_provenance": {
+                "title": "ATS_FIELD",
+                **({"location": "ATS_FIELD"} if row.get("city") or row.get("country") else {}),
+                **({"date_posted": "ATS_FIELD"} if normalize_date(row.get("date_opened")) else {}),
+            },
             "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
         })
     return mark_careers_board_fallback(records, board)

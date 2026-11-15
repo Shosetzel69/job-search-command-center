@@ -355,6 +355,11 @@ def assess_record_quality(
         issues.add("DESCRIPTION_EQUALS_TITLE")
     if description and provenance["description"] == "LISTING_CARD":
         issues.add("DESCRIPTION_CARD_CONTEXT")
+    # Explicit completeness evidence cannot be upgraded solely because its
+    # origin is known. Zoho currently supplies this field; other adapters
+    # which do not declare completeness retain their established contract.
+    if description and _text(record.get("description_completeness")).casefold() in {"partial", "summary", "missing"}:
+        issues.add("DESCRIPTION_NOT_FULL")
     if not location:
         issues.add("LOCATION_EMPTY")
     if provenance["title"] == "LISTING_CARD":
