@@ -147,6 +147,7 @@ def _bounded_summaries(company_path, terms, max_postings, opener):
     return list(unique.values()), bool(active) or partial
 
 
+@engine.measure_provider_opener
 def collect(company_identifier, max_postings=MAX_POSTINGS, opener=urlopen, search_terms=()):
     company_identifier = str(company_identifier or "").strip()
     if not company_identifier:
