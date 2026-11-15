@@ -1,6 +1,9 @@
 """Eightfold PCSX public career-site adapter (zero-auth)."""
 
 import json
+import re
+import time
+from web_transport import PublicClient, FetchError
 from datetime import datetime, timezone
 from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import Request, urlopen
@@ -175,7 +178,61 @@ def bounded_terms(config, max_pages=MAX_PAGES):
     return terms if len(terms) <= max_pages else ()
 
 
-def collect(base_url, domain, company_name, max_pages=MAX_PAGES, opener=urlopen, search_terms=()):
+
+def _verified_detail_url(record, base_url, domain):
+    try:
+        target = urlsplit(record["source_url"])
+        base = urlsplit(base_url)
+        prefix = f"eightfold-public:{domain}:"
+        identity = str(record["id"])
+        if not identity.startswith(prefix):
+            return None
+        position = identity[len(prefix):]
+        if (not re.fullmatch(r"[0-9]+", position) or target.scheme != "https"
+                or target.netloc != base.netloc or target.username or target.password
+                or target.port or target.fragment
+                or not re.fullmatch(r"/careers/job/" + re.escape(position) + r"(?:-[^/]+)?/?", target.path)):
+            return None
+        return record["source_url"]
+    except (ValueError, KeyError):
+        return None
+
+
+def _enrich_missing_details(records, base_url, domain, budget, *, max_seconds=10):
+    from job_search_public_boards import _single_detail_jobposting
+    from zoho_detail import reject_access_gateway_text
+    deadline = time.monotonic() + max_seconds
+    attempted = 0
+    for record in records:
+        if record.get("description") or attempted >= min(4, budget) or time.monotonic() >= deadline:
+            continue
+        link = _verified_detail_url(record, base_url, domain)
+        if not link:
+            continue
+        attempted += 1
+        try:
+            final, html = PublicClient(deadline).get(link)
+            if final != link:
+                continue
+            detail = _single_detail_jobposting(html, record["job_title"])
+            if detail:
+                reject_access_gateway_text(detail["description"])
+                record["description"] = detail["description"]
+                record["_jscc_field_provenance"]["description"] = "JOB_DETAIL_JSONLD"
+        except (FetchError, OSError, ValueError, TypeError):
+            continue
+    return sum(not row.get("description") for row in records)
+
+
+def _detail_outcome(results, records, base_url, domain, budget):
+    missing = _enrich_missing_details(records, base_url, domain, budget)
+    if missing:
+        results.append(engine.CollectionResult(f"eightfold-public:{domain}", "missing_individual_description",
+            False, [], 0, f"{missing} Eightfold postings lack verified descriptions",
+            error_code="SCHEMA_ERROR", failure_stage="parse"))
+    return results
+
+def collect(base_url, domain, company_name, max_pages=MAX_PAGES, opener=urlopen, search_terms=(), enrich_details=False):
     parsed = urlsplit(str(base_url or "").strip())
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
         raise ValueError("Eightfold PCSX base_url must be public HTTPS")
@@ -211,7 +268,7 @@ def collect(base_url, domain, company_name, max_pages=MAX_PAGES, opener=urlopen,
         if active:
             results.append(engine.CollectionResult(connector, "bounded_search_partial", False, [], 0,
                 "Eightfold scoped search incomplete within existing page cap", error_code="SCHEMA_ERROR", failure_stage="parse"))
-        return results
+        return _detail_outcome(results, list(records.values()), base_url, domain, budget) if enrich_details else results
 
     total_available = None
     for page in range(max_pages):
@@ -232,10 +289,11 @@ def collect(base_url, domain, company_name, max_pages=MAX_PAGES, opener=urlopen,
         raise RuntimeError(
             f"Eightfold PCSX pagination cap reached: retrieved {len(records)} of {total_available}"
         )
-    return [engine.CollectionResult(
+    results = [engine.CollectionResult(
         f"eightfold-public:{domain}",
         "pcsx_public_search",
         True,
         list(records.values()),
         total_available if total_available is not None else len(records),
     )]
+    return _detail_outcome(results, list(records.values()), base_url, domain, max_pages - page - 1) if enrich_details else results
