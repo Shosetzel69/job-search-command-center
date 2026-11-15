@@ -234,3 +234,21 @@ test('DEV retired jobs snapshot fails closed without a GCS request', async () =>
       error=>error.status===404 && /Nile-backed jobs API/.test(error.message));
   } finally {globalThis.fetch=old;}
 });
+
+test('Nile operational status uses exact owned run and maps internal running state', async () => {
+  const {readNileRunPayload}=await import('../src/runtime-gcp.js');
+  const id='run-00000000-0000-4000-8000-000000000001';
+  let called=0;
+  const db={query:async(sql,params)=>{
+    called++;
+    assert.match(sql,/WHERE run_id=\$1/);
+    assert.deepEqual(params,[id]);
+    return {rows:[{payload:{run_id:id,status:'running',records_inspected:13}}]};
+  }};
+  const result=await readNileRunPayload(gcp,id,db);
+  assert.equal(result.payload.status,'in_progress');
+  assert.equal(result.payload.records_inspected,13);
+  assert.equal(await readNileRunPayload(gcp,'wrong',db),null);
+  assert.equal(called,1);
+  assert.equal(await readNileRunPayload(gcp,id,{query:async()=>({rows:[{payload:{run_id:'other'}}]})}),null);
+});
