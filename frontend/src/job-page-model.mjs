@@ -1,4 +1,6 @@
 export const JOBS_PAGE_SIZE = 20;
+export const JOBS_PAGE_SIZES = Object.freeze([20,30,40]);
+export const jobPageSize = value => JOBS_PAGE_SIZES.includes(Number(value)) ? Number(value) : JOBS_PAGE_SIZE;
 
 const MODE_CODE = Object.freeze({ Remote:'remote', Hybrid:'hybrid', Onsite:'onsite' });
 
@@ -12,10 +14,10 @@ export function isSearchProfileConfigured(criteria = {}) {
   return role && geography && workMode && contract;
 }
 
-export function buildJobsPath({ filters = {}, cursor = null, limit = JOBS_PAGE_SIZE, prefetch = JOBS_PAGE_SIZE } = {}) {
+export function buildJobsPath({ filters = {}, cursor = null, limit = jobPageSize(filters.pageSize), prefetch = jobPageSize(filters.pageSize) } = {}) {
   const params = new URLSearchParams();
-  const boundedLimit = Math.min(JOBS_PAGE_SIZE, Math.max(1, Number.isFinite(Number(limit)) ? Math.trunc(Number(limit)) : JOBS_PAGE_SIZE));
-  const boundedPrefetch = Math.min(JOBS_PAGE_SIZE, Math.max(0, Number.isFinite(Number(prefetch)) ? Math.trunc(Number(prefetch)) : JOBS_PAGE_SIZE));
+  const boundedLimit = Math.min(40, Math.max(1, Number.isFinite(Number(limit)) ? Math.trunc(Number(limit)) : JOBS_PAGE_SIZE));
+  const boundedPrefetch = Math.min(40, Math.max(0, Number.isFinite(Number(prefetch)) ? Math.trunc(Number(prefetch)) : JOBS_PAGE_SIZE));
   params.set('limit', String(boundedLimit));
   params.set('prefetch', String(boundedPrefetch));
   const q = String(filters.search || '').trim();
