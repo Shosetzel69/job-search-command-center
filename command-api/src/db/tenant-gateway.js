@@ -1,4 +1,5 @@
 import { getPool, withTransaction } from './pool.js';
+import { devPurgeActive } from '../runtime-gcp.js';
 
 export const PERSONAL_TABLES = Object.freeze([
   'candidate_profile',
@@ -200,6 +201,20 @@ export async function resolveAccountDeletionTarget(
 }
 
 
+// Same existing active Search Profile row lock as preference updates.
+// In DEV, a writer admitted before maintenance must drain before tenant purge;
+// writers admitted afterwards fail closed while the generation lock exists.
+async function lockActiveProfileRows(tx, tenantId) {
+  return tx.query(`SELECT search_profile_id FROM search_profile
+    WHERE tenant_id=$1 AND status='ACTIVE' ORDER BY created_at, search_profile_id FOR UPDATE`,[tenantId]);
+}
+export async function guardDevProjectionWrite(tx, env) {
+  if (env.APP_ENV!=='dev' || env.GCP_PROJECT_ID!=='jscc-dev' || env.JSCC_RUNTIME_BACKEND!=='gcp') return;
+  const locked=await lockActiveProfileRows(tx,tx.tenantId);
+  if (locked.rows?.length!==1) throw httpError('Exactly one active Search Profile required',503);
+  if (await devPurgeActive(env)) throw httpError('DEV DB Purge in progress',409);
+}
+
 // Owner-authorized, DEV-only corpus maintenance. No caller-supplied tenant,
 // table or SQL; only job-derived projections are reset, never personal content.
 export async function purgeDevJobProjections(authContext, env = process.env, { db, assertHeld } = {}) {
@@ -222,6 +237,8 @@ export async function purgeDevJobProjections(authContext, env = process.env, { d
     const tenantId = requireUuid(row.id, 'maintenance tenant');
     const removed = await withTransaction(async tx => {
       await establishTenantContext(tx, tenantId);
+      await lockActiveProfileRows(tx,tenantId);
+      await assertHeld();
       return {
         profile_job_evaluation:(await tx.query('DELETE FROM profile_job_evaluation WHERE tenant_id=$1',[tenantId])).rowCount,
         profile_job_state:(await tx.query('DELETE FROM profile_job_state WHERE tenant_id=$1',[tenantId])).rowCount,
