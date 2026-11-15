@@ -49,6 +49,7 @@ export function captureJobGeometry(doc) {
     rows: rowNodes.map((row, i) => {
       const role = row.querySelector('[data-testid="job-role"]');
       const published = row.querySelector('[data-testid="job-published"]');
+      const retrieved = row.querySelector('[data-testid="job-retrieved"]');
       const desktop = row.querySelector('[data-testid="job-actions"]');
       const cards = row.querySelector('[data-testid="job-card-actions"]');
       const actions = visible(desktop, win) ? desktop : cards;
@@ -65,6 +66,8 @@ export function captureJobGeometry(doc) {
         roleRect: role && visible(role, win) ? rect(role.getBoundingClientRect()) : null,
         publishedRect: published && visible(published, win)
           ? rect(published.getBoundingClientRect()) : null,
+        retrievedRect: retrieved && visible(retrieved, win)
+          ? rect(retrieved.getBoundingClientRect()) : null,
         actionsRect: actions && visible(actions, win)
           ? rect(actions.getBoundingClientRect()) : null,
         controls,
@@ -85,7 +88,7 @@ export function evaluateJobGeometry(snapshot, {minRows = 25} = {}) {
   }
   for (const row of rows) {
     const p = `row ${row.id}:`;
-    const {rowRect, roleRect, publishedRect, actionsRect, controls} = row;
+    const {rowRect, roleRect, publishedRect, retrievedRect, actionsRect, controls} = row;
     if (!rowRect || !roleRect || roleRect.width < 96) {
       failures.push(`${p} ROL not readable / zero-width role column`);
     }
@@ -96,6 +99,8 @@ export function evaluateJobGeometry(snapshot, {minRows = 25} = {}) {
     if (publishedRect && overlap(publishedRect, actionsRect)) {
       failures.push(`${p} PUBLICAT overlaps action group`);
     }
+    if (retrievedRect && overlap(retrievedRect, actionsRect)) failures.push(`${p} RETRIEVE overlaps action group`);
+    if (publishedRect && retrievedRect && overlap(publishedRect, retrievedRect)) failures.push(`${p} PUBLICAT overlaps RETRIEVE`);
     for (const [index, control] of controls.entries()) {
       if (!control.label?.trim() || !control.title?.trim()) {
         failures.push(`${p} action ${index + 1} missing accessible name/title`);
