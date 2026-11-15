@@ -236,14 +236,23 @@ def append_run_history() -> None:
 
 def persist_terminal_evidence():
     """Persist the terminal Run, then mirror its authoritative Coverage snapshot."""
-    append_run_history()
+    nile_only = orchestration.nile_only_dev_retrieve()
+    if not nile_only:
+        append_run_history()
     status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+    if nile_only:
+        status["trigger"] = os.environ.get("RUN_TRIGGER") or os.environ.get("GITHUB_EVENT_NAME") or "unknown"
+        source_sha = (os.environ.get("SOURCE_SHA") or "").strip().lower()
+        if source_sha:
+            status["source_sha"] = source_sha
     evidence = shared_corpus.persist_operational_run(status)
     if isinstance(evidence, dict) and "coverage_after" in evidence:
         for key in ("coverage_before", "coverage_after"):
             status[key] = evidence.get(key)
+    if nile_only or (isinstance(evidence, dict) and "coverage_after" in evidence):
         engine.STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        append_run_history()
+        if not nile_only:
+            append_run_history()
 
 
 def stamp_jobs_provenance() -> bool:
@@ -276,6 +285,12 @@ def stamp_jobs_provenance() -> bool:
 
 
 def validate_history() -> None:
+    if orchestration.nile_only_dev_retrieve():
+        snapshot = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+        canonical = shared_corpus.read_operational_run(snapshot["run_id"])
+        for field in ("run_id", "status", "records_inspected", "jobs_published", "excluded"):
+            assert canonical.get(field) == snapshot.get(field), "Nile operational evidence mismatch: " + field
+        return
     payload = json.loads(HISTORY_PATH.read_text(encoding="utf-8"))
     assert payload.get("schema_version") == engine.SCHEMA_VERSION
     assert isinstance(payload.get("runs"), list)
