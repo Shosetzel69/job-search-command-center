@@ -423,6 +423,39 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(row["source_url_kind"],"careers_board_fallback")
         self.assertEqual(item["quality_counts"],{"VALID":0,"INCOMPLETE":1,"INVALID":1})
 
+
+    def test_explicit_remote_description_cross_adapter(self):
+        import shared_corpus_repository as corpus
+        base = {"id":"remote-42","job_title":"Project Manager","company":"Example",
+                "source_url":"https://example.com/jobs/42",
+                "description":"Job Description This is a remote position.",
+                "location":None,"countries":[],
+                "_jscc_field_provenance":{"title":"ATS_FIELD","description":"ATS_FIELD"}}
+        item = {"source":"Example","source_id":"src-example"}
+        row = dict(base)
+        results = [engine.CollectionResult("example","q",True,[row],1)]
+        orchestration.tag_collection_records(item,results)
+        self.assertEqual(row["location"],"Remote")
+        self.assertTrue(row["remote"])
+        self.assertEqual(row["work_arrangement"],"remote")
+        self.assertEqual(row["countries"],[])
+        posting = corpus.prepare_posting(row)
+        self.assertEqual(posting.work_mode,"remote")
+        self.assertEqual(posting.remote_scope,"unknown")
+        for changes in (
+            {"description":"This is not a remote position."},
+            {"description":"Experience managing remote teams."},
+            {"work_arrangement":"hybrid"},
+            {"_jscc_field_provenance":{"description":"LISTING_CARD"}},
+        ):
+            other = dict(base,**changes)
+            corpus.apply_explicit_remote(other)
+            self.assertIsNone(other["location"])
+        geo = dict(base,location="Bucharest")
+        corpus.apply_explicit_remote(geo)
+        self.assertEqual(geo["location"],"Bucharest")
+        self.assertTrue(geo["remote"])
+
     def test_quality_mixed_batch_rejects_invalid_and_keeps_partial(self):
         valid = record("Jobicy", "valid")
         valid["_jscc_field_provenance"] = {
