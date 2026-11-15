@@ -492,6 +492,17 @@ def tag_collection_records(item, results, run_id=None):
             record.setdefault("_jscc_source_name", item.get("source"))
             if run_id:
                 record["_jscc_run_id"] = run_id
+            # Missing individual links may use the configured public source only
+            # with independent posting identity. Never replace an unsafe supplied URL.
+            if not any(record.get(key) for key in ("final_url", "source_url", "url")) and shared_corpus._external_job_id(record):
+                try:
+                    fallback = web.public_url(item.get("url") or "")
+                    if isinstance(fallback, str) and urlsplit(fallback).scheme == "https":
+                        record["source_url"] = fallback
+                        record["source_url_kind"] = "careers_board_fallback"
+                        record["source_url_label"] = "Source page (not a direct job link)"
+                except (web.FetchError, ValueError, TypeError):
+                    pass
             quality = shared_corpus.assess_record_quality(
                 record, source_hint=item.get("source"), run_id=run_id,
             )
