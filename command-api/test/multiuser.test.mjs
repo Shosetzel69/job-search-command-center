@@ -515,8 +515,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(incompatibleRemote.eligible, false);
   assert.equal(incompatibleRemote.exclusionReason, 'remote eligibility geography incompatible');
-  assert.equal(EVALUATION_VERSION, 'fit-v1-scope-2');
-  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1-scope-2');
+  assert.equal(EVALUATION_VERSION, 'fit-v1-scope-3');
+  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v1-scope-3');
 });
 
 test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {
@@ -792,4 +792,20 @@ test('visible result and count predicates match; unclassified never scores as a 
   assert.equal(matchesResultView({...job,fit:null},unresolved,{result_view:'unclassified'},80),true);
   assert.equal(matchesResultView(job,unresolved,{result_view:'jobs'},80),false);
   assert.throws(()=>normalizeJobSearchQuery({count_only:'true'}),/Result view required/);
+});
+
+test('#520: uncorroborated persisted role cannot receive a High FIT score',()=>{
+ const preferences={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],fit_threshold:68};
+ const row={job_id:'00000000-0000-0000-0000-000000000001',company:'Example Bank',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:['project_management'],payload:{description:'Bank governance B2B project'}};
+ for(const title of ['IAM Support Engineer','IT System Engineer','2028 Bernstein Summer Research Associate','Director of Engineering','Data Engineer','Senior Developer Fullstack']){
+  const input={...row,title};
+  const evaluation=evaluateSharedJob(input,preferences,nomenclatures);
+  assert.equal(evaluation.score,null,title);
+  assert.equal(evaluation.eligibilityState,'UNKNOWN',title);
+  assert.equal(evaluation.eligibilityReasonCode,'ROLE_TITLE_UNCONFIRMED',title);
+  assert.deepEqual(materializeCachedJob(input,evaluation,preferences),evaluation.job);
+  assert.equal(matchesResultView(evaluation.job,evaluation,{result_view:'jobs',quick:'high'},68),false);
+ }
+ const good=evaluateSharedJob({...row,title:'Technical Project Manager'},preferences,nomenclatures);
+ assert.ok(good.score>=68);
 });
