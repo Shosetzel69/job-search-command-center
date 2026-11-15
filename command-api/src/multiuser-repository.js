@@ -22,6 +22,7 @@ const PERSONAL_CONFIG_KEYS = Object.freeze([
   'contract_types',
   'freshness_hours',
   'fit_threshold',
+  'fit_config',
   'keep_reposts',
   'rate_min_eur_day',
   'rate_max_eur_day',
