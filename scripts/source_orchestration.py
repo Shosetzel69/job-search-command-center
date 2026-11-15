@@ -926,6 +926,14 @@ def collect_api_sources(config, state, now, plan, run_id=None, progress_callback
     return collection, metadata, mode
 
 
+def nile_only_dev_retrieve(env=None):
+    """The admitted DEV Cloud Run worker must not read or publish job snapshots."""
+    env = os.environ if env is None else env
+    return (env.get("APP_ENV") == "dev"
+            and env.get("CLOUD_RUN_JOB") == "jscc-search-dev"
+            and env.get("GCP_RUNTIME_BUCKET") == "jscc-dev-runtime-828902654738")
+
+
 def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
     state = optimized.load_state(now)
     run_id = run_id or ("github-" + now.strftime("%Y%m%dT%H%M%SZ"))
@@ -987,9 +995,9 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
     successful = any(result.ok for result in collection)
     shared_corpus_result = None
     output = None
+    nile_only = nile_only_dev_retrieve()
     if successful:
-        # Shared persistence must succeed before the transitional user-facing JSON
-        # snapshot is updated, preventing a split-authority publication.
+        # Persist the shared corpus before any legacy publication.
         shared_corpus_result = shared_corpus.persist_collection(
             collection,
             plan,
@@ -997,14 +1005,24 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
             now=now,
             advance_lifecycle=not bool(retrieve_scope),
         )
-        output = engine.process_records(config, collection, now)
-        output = optimized.merge_with_existing(output, state, config, now)
-        output["incremental_sync"] = mode == "direct"
-        engine.JOBS_PATH.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        published, excluded = output["results"], output["excluded_count"]
-    else:
+        if nile_only:
+            if (shared_corpus_result.get("status") != "persisted"
+                    or not isinstance(shared_corpus_result.get("canonical_publication_by_preferred_source"), dict)):
+                raise RuntimeError("DEV Nile publication evidence unavailable")
+        else:
+            output = engine.process_records(config, collection, now)
+            output = optimized.merge_with_existing(output, state, config, now)
+            output["incremental_sync"] = mode == "direct"
+            engine.JOBS_PATH.write_text(json.dumps(output, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+            published, excluded = output["results"], output["excluded_count"]
+    elif not nile_only:
         current = json.loads(engine.JOBS_PATH.read_text()) if engine.JOBS_PATH.exists() else {}
         published, excluded = len(current.get("jobs") or []), 0
+    if nile_only:
+        raw = aggregate_source_results(plan)["source_record_totals"]["records_collected_raw"]
+        projected = int((shared_corpus_result or {}).get("records_projected", 0))
+        published = sum((shared_corpus_result or {}).get("canonical_publication_by_preferred_source", {}).values())
+        excluded = max(0, raw - projected)
     engine.write_status(now, collection, published, excluded)
     if mode == "apify" and any(item["connector"] == "jobspipe" and item["status"] in {"completed", "failed"} for item in plan):
         apify.update_status([r for r in collection if r.connector.startswith("jobspipe")],
@@ -1014,6 +1032,10 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
     status["started_at"] = now.isoformat()
     status["request_signature"] = request_signature
     status["retrieve_scope"] = retrieve_scope
+    if nile_only:
+        status["records_inspected"] = raw
+        status["publication_basis"] = "distinct_active_shared_jobs_by_api_preferred_source"
+        status["excluded_basis"] = "raw_records_minus_projected_postings"
     if output is not None:
         status["excluded_by_reason"] = output.get("excluded_by_reason") or {}
         status["excluded_by_category"] = output.get("excluded_by_category") or {}
@@ -1038,6 +1060,8 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
     )
     per_source = (shared_corpus_result or {}).get("per_source_postings", {})
     publication = (shared_corpus_result or {}).get("canonical_publication_by_preferred_source")
+    if nile_only and not successful:
+        publication = {}
     publication_known = isinstance(publication, dict)
     planned_ids = {item["source_id"] for item in plan}
     for item in plan:

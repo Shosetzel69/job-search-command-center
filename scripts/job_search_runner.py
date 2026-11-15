@@ -77,6 +77,8 @@ def quota_exhausted_this_month(state: dict, now: datetime) -> bool:
 
 
 def current_job_count() -> int:
+    if orchestration.nile_only_dev_retrieve():
+        return 0
     try:
         current = json.loads(engine.JOBS_PATH.read_text(encoding="utf-8"))
         return len(current.get("jobs") or [])
@@ -196,6 +198,8 @@ def append_run_history() -> None:
         "failed_sources": status.get("failed_sources") or [],
         "records_inspected": int(status.get("records_inspected") or 0),
         "jobs_published": int(status.get("jobs_published") or 0),
+        "publication_basis": status.get("publication_basis"),
+        "excluded_basis": status.get("excluded_basis"),
         "excluded": int(status.get("excluded") or 0),
         "excluded_by_reason": status.get("excluded_by_reason") or {},
         "excluded_by_category": status.get("excluded_by_category") or {},
@@ -248,6 +252,8 @@ def stamp_jobs_provenance() -> bool:
     Existing/stale jobs are intentionally left byte-for-byte unchanged when a run
     does not produce a new jobs snapshot.
     """
+    if orchestration.nile_only_dev_retrieve():
+        return False
     try:
         status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
         jobs = json.loads(engine.JOBS_PATH.read_text(encoding="utf-8"))
@@ -280,6 +286,8 @@ def validate_history() -> None:
         assert payload["runs"], "terminal run must have a corresponding history entry"
         assert payload["runs"][0].get("run_id") == status.get("run_id"), "latest history run must match terminal run-status"
 
+    if orchestration.nile_only_dev_retrieve():
+        return
     try:
         jobs = json.loads(engine.JOBS_PATH.read_text(encoding="utf-8"))
     except Exception:
@@ -291,9 +299,36 @@ def validate_history() -> None:
             assert jobs.get("source_sha") == status.get("source_sha")
 
 
+def validate_dev_output():
+    """Validate the operational contract without a legacy jobs file."""
+    config = json.loads(engine.CONFIG_PATH.read_text(encoding="utf-8"))
+    status = json.loads(engine.STATUS_PATH.read_text(encoding="utf-8"))
+    assert config.get("schema_version") == engine.SCHEMA_VERSION
+    engine.validate_geography_config(config)
+    assert not (engine.configured_contract_types(config) - engine.ACTIVE_CONTRACT_TYPES)
+    assert status.get("schema_version") == engine.SCHEMA_VERSION
+    assert status.get("status") in {"completed", "completed_with_errors"}
+    assert status.get("publication_basis") == "distinct_active_shared_jobs_by_api_preferred_source"
+    publication = status["canonical_publication"]
+    assert publication["measured"] is True
+    assert status["jobs_published"] == publication["canonical_jobs_published_this_run"]
+    assert status["jobs_published"] == (
+        publication["attributed_to_planned_sources"] + publication["attributed_to_other_sources"])
+    assert status["excluded"] == max(0, status["records_inspected"]
+        - int(status["shared_corpus"].get("records_projected", 0)))
+    assert not engine.JOBS_PATH.exists(), "DEV must not publish a legacy jobs snapshot"
+
+
+def validate_result():
+    if orchestration.nile_only_dev_retrieve():
+        validate_dev_output()
+    else:
+        engine.validate_output()
+
+
 def main() -> int:
     if "--validate-only" in sys.argv:
-        engine.validate_output()
+        validate_result()
         optimized.validate_state()
         validate_history()
         print("Configuration, JSON contracts, history and state valid")
@@ -339,7 +374,7 @@ def main() -> int:
     persist_terminal_evidence()
     stamp_jobs_provenance()
     if code == 0:
-        engine.validate_output()
+        validate_result()
     optimized.validate_state()
     validate_history()
     return code

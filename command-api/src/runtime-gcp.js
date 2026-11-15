@@ -190,9 +190,11 @@ async function activeRunId(env) {
 async function runtimeObjectForRead(env, path) {
   const name = path.split('/').pop();
   if (name === 'search-config.json' || name === 'applications.json' || name === 'promotion-status.json') return `seed/${name}`;
-  if (name === 'run-status.json') {
-    const runId = await activeRunId(env);
-    if (runId) return `runs/${runId}/${name}`;
+  if (name === 'run-status.json' || (name === 'run-history.json' && devSourcesEnabled(env))) {
+    if (name === 'run-status.json') {
+      const runId = await activeRunId(env);
+      if (runId) return `runs/${runId}/${name}`;
+    }
     // Completed attempts are visible independently of corpus publication.
     const marker = await objectMetadata(env, 'latest-run.json');
     if (marker) {
@@ -203,6 +205,7 @@ async function runtimeObjectForRead(env, path) {
       }
     }
   }
+  if (devSourcesEnabled(env)) return `seed/${name}`;
   const pointer = await objectMetadata(env, 'current.json');
   if (pointer) {
     const current = await readObjectJson(env, 'current.json');
@@ -225,6 +228,9 @@ function devSourcesEnabled(env) {
 
 export async function readRuntimeJson(env, runtime, path) {
   const name = path.split('/').pop();
+  if (name === 'jobs.json' && devSourcesEnabled(env)) {
+    throw runtimeError('Legacy jobs snapshot retired in DEV; use the Nile-backed jobs API', 404);
+  }
   if (name === 'sources.json' && devSourcesEnabled(env)) {
     try {
       return await readSourceObjectVersioned(env);
@@ -327,7 +333,7 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
     throw error;
   }
 
-  const current = await objectMetadata(env, 'current.json');
+  const current = dev ? null : await objectMetadata(env, 'current.json');
   const currentGeneration = String(current?.generation || '0');
   const name = `projects/${project(env)}/locations/${region(env)}/jobs/${job(env)}`;
   const response = await authorizedFetch(`${RUN_API}/${name}:run`, {
@@ -341,7 +347,7 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
             { name:'RUN_TRIGGER', value:runTrigger },
             { name:'SOURCE_SHA', value:runtime.sourceSha },
             { name:'GCP_RUNTIME_BUCKET', value:bucket(env) },
-            { name:'GCP_CURRENT_GENERATION', value:currentGeneration },
+            ...(!dev ? [{ name:'GCP_CURRENT_GENERATION', value:currentGeneration }] : []),
             { name:'JSCC_RUN_ID', value:runId },
             { name:'JSCC_REQUEST_SIGNATURE', value:requestSignature },
             { name:'JSCC_RETRIEVE_SCOPE_JSON', value:JSON.stringify(retrieveScope || {}) },

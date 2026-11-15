@@ -223,3 +223,14 @@ test('DEV active status ignores stale or missing status object',async()=>{
   assert.equal((await readRuntimeJson(gcp,{sourceSha:SHA},'data/run-status.json')).payload.progress.percent,12);
  }finally{globalThis.fetch=old;}
 });
+
+
+test('DEV retired jobs snapshot fails closed without a GCS request', async () => {
+  const {readRuntimeJson}=await import('../src/runtime-gcp.js');
+  const old=globalThis.fetch;
+  try {
+    globalThis.fetch=()=>{throw Error('Unexpected network access');};
+    await assert.rejects(readRuntimeJson(gcp,{sourceSha:SHA},'data/jobs.json'),
+      error=>error.status===404 && /Nile-backed jobs API/.test(error.message));
+  } finally {globalThis.fetch=old;}
+});

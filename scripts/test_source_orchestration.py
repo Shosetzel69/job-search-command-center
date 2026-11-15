@@ -194,6 +194,37 @@ class OrchestrationTests(unittest.TestCase):
         runner.validate_history()
         engine.validate_output()
 
+    def test_dev_nile_only_never_generates_or_reads_jobs_snapshot(self):
+        evidence = {"status": "persisted", "records_projected": 2, "records_skipped": 0,
+                    "postings_created": 1, "postings_updated": 1,
+                    "canonical_publication_by_preferred_source": {"jobicy": 1},
+                    "lifecycle_advanced": 0}
+        runtime = {"APP_ENV": "dev", "CLOUD_RUN_JOB": "jscc-search-dev",
+                   "GCP_RUNTIME_BUCKET": "jscc-dev-runtime-828902654738"}
+        with patch.dict(os.environ, runtime), patch.object(
+                orchestration.shared_corpus, "persist_collection", return_value=evidence), patch.object(
+                engine, "process_records", side_effect=AssertionError("legacy processing")), patch.object(
+                optimized, "merge_with_existing", side_effect=AssertionError("legacy merge")):
+            code, status = self.run_search()
+            self.assertEqual(code, 0)
+            self.assertFalse(engine.JOBS_PATH.exists())
+            self.assertEqual(status["jobs_published"], 1)
+            self.assertEqual(status["records_inspected"], 2)
+            self.assertEqual(status["excluded"], 0)
+            self.assertEqual(status["canonical_publication"]["canonical_jobs_published_this_run"], 1)
+            runner.validate_history()
+            runner.validate_dev_output()
+            self.assertFalse(runner.stamp_jobs_provenance())
+
+    def test_dev_nile_only_rejects_unmeasured_publication(self):
+        runtime = {"APP_ENV": "dev", "CLOUD_RUN_JOB": "jscc-search-dev",
+                   "GCP_RUNTIME_BUCKET": "jscc-dev-runtime-828902654738"}
+        with patch.dict(os.environ, runtime), patch.object(
+                orchestration.shared_corpus, "persist_collection", return_value={"status": "local_not_configured"}):
+            with self.assertRaisesRegex(RuntimeError, "publication evidence unavailable"):
+                orchestration.run(CONFIG, NOW)
+            self.assertFalse(engine.JOBS_PATH.exists())
+
     def test_shared_corpus_receives_tagged_records_and_status(self):
         evidence = {
             "status": "persisted",
