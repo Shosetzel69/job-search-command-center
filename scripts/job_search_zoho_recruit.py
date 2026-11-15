@@ -321,35 +321,12 @@ def collect(board_url, company_name, opener=None, role_family=None, diagnostics=
             raise ValueError("unrecognized Zoho public board; empty state not established")
         modern = embedded_jobs(modern_html)
         modern = prefilter_public_metadata(modern, role_family=role_family)
-        if modern and not all(row["description_available"] for row in modern):
-            raise ValueError("modern Zoho list lacks descriptions; detail fetch required")
-        records = []
-        for row in modern:
-            text_parser = _PlainText()
-            text_parser.feed(row["description"] or "")
-            plain = " ".join("".join(text_parser.parts).split())
-            if not plain:
-                raise ValueError("empty modern Zoho job description")
-            reject_access_gateway_text(plain)
-            place = ", ".join(x for x in (row.get("city"), row.get("state"), row.get("country")) if x)
-            records.append({
-                "id": f"zoho_recruit:{tenant}:{row['jobid']}",
-                "job_title": row["job_title"], "company": company_name.strip(),
-                "description": plain,
-                "description_completeness": "partial",
-                "description_provenance": "public_modern_jobs_json",
-                "location": place or None,
-                "countries": [row["country"]] if row.get("country") else [],
-                "remote": None, "work_arrangement": None,
-                "employment_statuses": [row["employment_type"]] if row.get("employment_type") else [],
-                "date_posted": normalize_date(row.get("date_opened")), "source_url": board,
-                "_jscc_field_provenance": {
-                    "title": "ATS_FIELD", "description": "LISTING_CARD",
-                    **({"location": "ATS_FIELD"} if place else {}),
-                    **({"date_posted": "ATS_FIELD"} if normalize_date(row.get("date_opened")) else {}),
-                },
-                "sources": [{"provider": "Zoho Recruit", "tenant": tenant}],
-            })
+        # Public listing rows remain useful with missing/partial descriptions.
+        # _metadata_record preserves only published description and location fields,
+        # rejects access-gateway text and marks provenance/completeness explicitly.
+        records = [_metadata_record(row, tenant, company_name, board) for row in modern]
+        if diagnostics is not None:
+            diagnostics["missing_detail_count"] = len(records)
         return mark_careers_board_fallback(records, board)
     if len(summaries) + 2 + paging_requests > MAX_REQUESTS_PER_SOURCE:
         raise ValueError('Zoho request budget exceeded')
