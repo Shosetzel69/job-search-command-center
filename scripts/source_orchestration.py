@@ -254,6 +254,7 @@ def failure_result(connector, query, exc):
         http_status=http_status,
         provider_request_attempts=getattr(exc, "provider_request_attempts", None),
         provider_request_measurement=getattr(exc, "provider_request_measurement", None),
+        provider_scope_details=getattr(exc, "provider_scope_details", None),
     )
 
 
@@ -321,6 +322,8 @@ def emit_source_final(run_id, item):
         records_collected_raw=item.get("records_collected_raw", 0),
         records_scope_excluded=item.get("records_scope_excluded", 0),
         records_role_matched=item.get("records_role_matched",0),
+        provider_scope_verification=item.get("provider_scope_verification"),
+        provider_scope_applied_dimensions=item.get("provider_scope_applied_dimensions"),
         records_role_unresolved=item.get("records_role_unresolved",0),
         records_scope_matched=item.get("records_scope_matched",0),
         records_scope_unresolved=item.get("records_scope_unresolved",0),
@@ -421,6 +424,8 @@ def provider_scope_dimensions(item):
         return {"role":"q","geography":"country_job_location","work_mode":"locationType","contract":None}
     if connector=="public_board" and item.get("source")=="Himalayas":
         return {"role":"q","geography":"country_remote_eligibility","work_mode":None,"contract":None}
+    if connector=="jobspipe":
+        return {"role":"job_title_or","geography":"job_country_code_or","work_mode":"remote","contract":None}
     if connector=="workday":
         return {"role":"searchText","geography":None,"work_mode":None,"contract":None}
     if connector=="eightfold_public":
