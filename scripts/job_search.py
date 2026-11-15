@@ -74,6 +74,49 @@ class CollectionResult:
     provider_request_measurement: str | None = None
 
 
+def measure_provider_opener(collector):
+    """Count attempted opener calls per invocation, including failed requests.
+
+    The injected opener is local to this collection and thread-safe even when
+    a provider uses parallel detail workers. Other transports remain explicit.
+    """
+    import functools
+    import inspect
+    import threading
+    signature = inspect.signature(collector)
+
+    @functools.wraps(collector)
+    def measured(*args, **kwargs):
+        bound = signature.bind(*args, **kwargs)
+        bound.apply_defaults()
+        original = bound.arguments["opener"]
+        if original is None:
+            from urllib.request import urlopen
+            original = urlopen
+        lock = threading.Lock()
+        attempts = 0
+
+        def opener(*a, **kw):
+            nonlocal attempts
+            with lock:
+                attempts += 1
+            return original(*a, **kw)
+
+        bound.arguments["opener"] = opener
+        try:
+            results = collector(*bound.args, **bound.kwargs)
+        except Exception as exc:
+            exc.provider_request_attempts = attempts
+            exc.provider_request_measurement = "adapter_opener_calls"
+            raise
+        if isinstance(results, list) and results and isinstance(results[0], CollectionResult):
+            results[0].provider_request_attempts = attempts
+            results[0].provider_request_measurement = "adapter_opener_calls"
+        return results
+
+    return measured
+
+
 class JobsPipeConnector:
     """Direct JobsPipe client retained for the direct/fallback transport."""
 
