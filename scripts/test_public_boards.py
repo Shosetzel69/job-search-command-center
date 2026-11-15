@@ -1692,3 +1692,31 @@ class RetrievePublicDetailTests(unittest.TestCase):
         self.assertEqual(row["location"],"Bucharest, Romania")
         self.assertEqual(row["_jscc_field_provenance"]["description"],"JOB_DETAIL_JSONLD")
         self.assertIsNone(orange._orange_offer_identity("https://evil.example/Offer.aspx?oid=42"))
+
+
+class ConsolidatedDetailRecoveryTests(unittest.TestCase):
+    def test_nato_verified_detail_recovery(self):
+        import json
+        listing = boards.PUBLIC_BOARD_SOURCES["NATO Careers"]["url"]
+        link = "https://nato.taleo.net/careersection/2/jobdetail.ftl?job=123&lang=en"
+        raw = {"id":"nato:123","job_title":"Project Manager","source_url":link,
+               "description":"Project Manager","_jscc_field_provenance":{"description":"LISTING_CARD"}}
+        html = '<script type="application/ld+json">' + json.dumps({
+            "@type":"JobPosting","title":"Project Manager","description":"Manage delivery and project risks.",
+            "jobLocation":{"address":{"addressLocality":"Brussels","addressCountry":"BE"}},
+            "datePosted":"2026-11-01"}) + '</script>'
+        with patch.object(boards.PublicClient,"get",return_value=(link,html)):
+            rows, unresolved = boards.protect_context_records([raw],"NATO Careers","nato_taleo",listing)
+        self.assertEqual(unresolved,0)
+        self.assertEqual(rows[0]["_jscc_field_provenance"]["description"],"JOB_DETAIL_JSONLD")
+        self.assertEqual(rows[0]["id"],"nato:123")
+
+    def test_unscoped_sgi_is_not_allowed_to_publish_context(self):
+        spec = boards.PUBLIC_BOARD_SOURCES["Source Group International"]
+        row = {"id":"sgi:1","job_title":"Project Manager","description":"Salary EUR 100000",
+               "location":"Salary EUR 100000","source_url":spec["url"]}
+        with patch.object(boards,"_linked_job_board",return_value=[row]):
+            results = boards.collect({"name":"Source Group International"})
+        self.assertEqual(len(results),2)
+        self.assertEqual(results[0].records[0]["description"],"")
+        self.assertEqual(results[0].records[0]["location"],"")
