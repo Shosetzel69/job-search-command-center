@@ -18,9 +18,13 @@ function fakeDb({rows=prior,objects=absent,database='jobsearch_dev',failDDL=fals
    queries.push({sql,params});
    if(sql.includes('current_database()'))return {rows:[{database_name:database}]};
    if(sql.startsWith('SELECT version'))return {rows:[...ledger]};
-   if(sql.includes("to_regclass('public.profile_job_count_snapshots')"))return {rows:[{table_present:historicalReady,column_count:historicalReady?7:0,index_present:historicalReady}]};
+   if(sql.includes('FROM pg_catalog.pg_index') && sql.includes('profile_job_count_snapshots'))return {rows:historicalReady?[{indexname:'profile_job_count_snapshots_version_idx',indexdef:'CREATE INDEX profile_job_count_snapshots_version_idx ON public.profile_job_count_snapshots USING btree (tenant_id, search_profile_id, profile_version)'}]:[]};
    if(sql.includes('FROM pg_catalog.pg_index'))return {rows:catalogIndex?[catalogIndex]:[]};
-   if(sql.includes("to_regclass('public.refresh_requests')"))return {rows:[{...schema}]};
+   if(sql.includes('information_schema.columns') && sql.includes('profile_job_count_snapshots'))return {rows:[{column_count:historicalReady?7:0}]};
+   if(sql.includes('information_schema.columns') && sql.includes('refresh_requests'))return {rows:[{column_count:schema.tenant_id_ready?1:0}]};
+   if(sql.includes("to_regclass('public.profile_job_count_snapshots')"))return {rows:[{table_present:historicalReady}]};
+   if(sql.includes("to_regclass('public.refresh_requests_profile_idx')"))return {rows:[{index_present:schema.index_present}]};
+   if(sql.includes("to_regclass('public.refresh_requests')"))return {rows:[{table_present:schema.table_present}]};
    if(sql===files.at(-1).sql){if(failDDL)throw Error('DDL failed');schema={...present};}
    if(sql.startsWith('INSERT INTO schema_migrations'))ledger.push({version:params[0],name:params[1],checksum:params[2]});
    return {rows:[]};
@@ -102,4 +106,20 @@ test('rejects the former colliding Retrieve 011 and historical schema drift',asy
  const bad=fakeDb({historicalReady:false});
  await assert.rejects(prepareOrApplyRetrieve012({env,buildIdentity:identity,db:bad.db,migrations:files}),/HISTORICAL_011_SCHEMA_DRIFT/);
  assert.ok(!bad.queries.some(q=>q.sql===files.at(-1).sql||q.sql.startsWith('INSERT')));
+});
+
+// Regression: no mixed information_schema/catalog statement; keep exact table-scoped valid index evidence.
+test('managed Nile 57014 mitigation preserves each separate historical assertion',async()=>{
+ const {db,queries}=fakeDb();
+ const c=await db.connect();const original=c.query.bind(c);
+ c.query=async(sql,params)=>{
+   if(sql.includes('information_schema.columns') && (sql.includes('to_regclass')||sql.includes('pg_catalog.pg_index')))throw Object.assign(Error('mixed catalog'),{code:'57014'});
+   return original(sql,params);
+ };
+ const r=await prepareOrApplyRetrieve012({env:{...env,RETRIEVE012_MODE:'inspect',RETRIEVE012_OWNER_GATE:''},buildIdentity:identity,db,migrations:files});
+ assert.equal(r.before,'PENDING_012');
+ const h=queries.filter(q=>q.sql.includes('profile_job_count_snapshots'));
+ assert.equal(h.length,3);
+ assert.match(h[2].sql,/i\.indisvalid AND i\.indisready/);
+ assert.ok(!queries.some(q=>q.sql===files.at(-1).sql||q.sql.startsWith('INSERT')));
 });
