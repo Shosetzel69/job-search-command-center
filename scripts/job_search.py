@@ -72,6 +72,7 @@ class CollectionResult:
     http_status: int | None = None
     provider_request_attempts: int | None = None
     provider_request_measurement: str | None = None
+    provider_scope_details: dict[str, Any] | None = None
 
 
 def measure_provider_opener(collector):
