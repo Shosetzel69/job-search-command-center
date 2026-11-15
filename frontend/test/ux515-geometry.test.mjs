@@ -34,7 +34,8 @@ function fixture(viewportWidth) {
     return {
       id: i + 1, rowRect, roleRect, actionsRect, controls,
       publication: 'data publicării necunoscută',
-      publishedRect: wide ? box(actionsLeft - 125, y + 20, 112, 20) : null,
+      publishedRect: wide ? box(actionsLeft - 249, y + 20, 112, 20) : null,
+      retrievedRect: wide ? box(actionsLeft - 125, y + 20, 112, 20) : null,
     };
   });
   return {viewportWidth, tableRect: box(left, 90, width, 25 * 74 + 40), rows};
@@ -59,6 +60,14 @@ test('detects the original #515 PUBLICAT/action overlap in actual rectangle coor
   assert.match(result.failures.join('\n'), /row 5: PUBLICAT overlaps action group/);
 });
 
+test('detects retrieve-date collision with publication and actions', () => {
+  const snapshot = fixture(1536);
+  snapshot.rows[0].retrievedRect = snapshot.rows[0].publishedRect;
+  snapshot.rows[1].retrievedRect = snapshot.rows[1].actionsRect;
+  assert.match(evaluateJobGeometry(snapshot).failures.join('\n'), /row 1: PUBLICAT overlaps RETRIEVE/);
+  assert.match(evaluateJobGeometry(snapshot).failures.join('\n'), /row 2: RETRIEVE overlaps action group/);
+});
+
 test('detects zero-width ROL at tablet widths and clipped actions', () => {
   const snapshot = fixture(768);
   snapshot.rows[0].roleRect = box(280, 128, 0, 46);
@@ -81,11 +90,12 @@ test('detects missing icon-only aria-label/title and absent real job data', () =
 
 test('source geometry aligns with tested xl/2xl breakpoints and real DOM markers', () => {
   const table = main.slice(main.indexOf('function JobTable('), main.indexOf('function ErrorPanel('));
-  assert.match(table, /xl:grid-cols-\[minmax\(12rem,1fr\)_110px_64px_90px_105px_200px\]/);
-  assert.match(table, /2xl:grid-cols-\[minmax\(12rem,1fr\)_120px_72px_100px_125px_400px\]/);
+  assert.match(table, /xl:grid-cols-\[minmax\(10rem,1fr\)_90px_55px_75px_112px_112px_180px\]/);
+  assert.match(table, /2xl:grid-cols-\[minmax\(10rem,1fr\)_90px_56px_80px_112px_112px_400px\]/);
   assert.match(table, /data-testid="job-row"/);
   assert.match(table, /data-testid="job-role"/);
   assert.match(table, /data-testid="job-published"/);
+  assert.match(table, /data-testid="job-retrieved"/);
   assert.match(table, /data-testid="job-actions"/);
   assert.match(table, /data-testid="job-card-actions"/);
   assert.match(table, /xl:hidden/); // under 1280 -> card, not zero-width desktop grid
