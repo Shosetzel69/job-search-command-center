@@ -28,7 +28,8 @@ test('page-local filters never hide next/previous pagination on empty matches', 
   assert.match(main, /Filtrele rapide, indicatoarele si sortarea FIT se aplica doar joburilor din pagina curenta/);
   assert.match(main, /Nicio potrivire pe aceasta pagina/);
   assert.match(main, /navigate?aza|navigheaza/);
-  assert.match(main, /paginate&&<nav aria-label="Navigare pagini joburi"/);
+  assert.ok(main.includes('paginate&&controls("sus")'));
+  assert.ok(main.includes("paginate&&controls('jos')"));
   assert.doesNotMatch(main, /Incarca mai multe/);
 });
 
@@ -36,7 +37,8 @@ test('N2/N4: stale cursor is announced once and page has one live region', () =>
   const table=main.slice(main.indexOf('function JobTable('),main.indexOf('function ErrorPanel('));
   assert.ok(table.length>0);
   assert.equal((table.match(/aria-live="polite"/g)||[]).length,1);
-  assert.match(table, /<span>Pagina \{page\}<\/span>/);
+  assert.ok(table.includes("{page}/{totalPages??'?'}"));
+  assert.ok(table.includes('value={pageSize}'));
   assert.equal((main.match(/notify\('Cursorul a expirat; lista a fost reluata de la pagina 1\.'\,'info'\)/g)||[]).length,2);
   assert.equal((main.match(/const transition=await navigateJobPage\(/g)||[]).length,2);
 });
