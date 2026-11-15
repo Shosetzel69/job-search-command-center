@@ -31,8 +31,14 @@ try {
   const inspected=await prepareOrApplyRetrieve012({env:releaseEnv,buildIdentity,db});
   if(inspected.before!=='PENDING_012'||inspected.applied)throw new Error('W025_M01 012 precheck mismatch');
   const applyEnv={...releaseEnv,RETRIEVE012_MODE:'apply',RETRIEVE012_OWNER_GATE:'APPROVE_RETRIEVE_DEV_NILE_012_'+source};
-  const applied=await prepareOrApplyRetrieve012({env:applyEnv,buildIdentity,db});
-  if(!applied.applied||applied.before!=='PENDING_012'||applied.after!=='ALREADY_APPLIED')throw new Error('W025_M01 012 apply mismatch');
+  // Two independent clients must serialize before the ledger/schema read.
+  // Exactly one writes; the other sees the committed ledger and is idempotent.
+  const attempts=await Promise.all([0,1].map(()=>prepareOrApplyRetrieve012({env:applyEnv,buildIdentity,db})));
+  const applied=attempts.filter(x=>x.applied), skipped=attempts.filter(x=>!x.applied);
+  if(applied.length!==1||applied[0].before!=='PENDING_012'||applied[0].after!=='ALREADY_APPLIED'||
+     skipped.length!==1||skipped[0].before!=='ALREADY_APPLIED'||skipped[0].after!=='ALREADY_APPLIED')
+    throw new Error('W025_M01 012 concurrent apply mismatch');
+  console.log('RETRIEVE012_NATIVE_CONCURRENT_ROW_LOCK=PASS');
   const retry=await prepareOrApplyRetrieve012({env:applyEnv,buildIdentity,db});
   if(retry.applied||retry.after!=='ALREADY_APPLIED')throw new Error('W025_M02 012 retry mismatch');
   console.log('RETRIEVE012_NATIVE_PREFIX_APPLY_RETRY=PASS');

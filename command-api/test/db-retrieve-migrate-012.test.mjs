@@ -12,11 +12,12 @@ const files=await loadMigrations();
 const prior=files.slice(0,11).map(({version,name,checksum})=>({version,name,checksum}));
 const absent={table_present:false,index_present:false,tenant_id_ready:false};
 const present={table_present:true,index_present:true,tenant_id_ready:true};
-function fakeDb({rows=prior,objects=absent,database='jobsearch_dev',failDDL=false,catalogIndex=null,historicalReady=true}={}) {
+function fakeDb({rows=prior,objects=absent,database='jobsearch_dev',failDDL=false,catalogIndex=null,historicalReady=true,lockRows=[{version:'011'}],lockError=null}={}) {
  const queries=[];let ledger=[...rows],schema={...objects};
  const client={async query(sql,params){
    queries.push({sql,params});
    if(sql.includes('current_database()'))return {rows:[{database_name:database}]};
+   if(sql.includes('FOR UPDATE')){if(lockError)throw lockError;return {rows:lockRows};}
    if(sql.startsWith('SELECT version'))return {rows:[...ledger]};
    if(sql.includes('FROM pg_catalog.pg_index') && sql.includes('profile_job_count_snapshots'))return {rows:historicalReady?[{indexname:'profile_job_count_snapshots_version_idx',indexdef:'CREATE INDEX profile_job_count_snapshots_version_idx ON public.profile_job_count_snapshots USING btree (tenant_id, search_profile_id, profile_version)'}]:[]};
    if(sql.includes('FROM pg_catalog.pg_index'))return {rows:catalogIndex?[catalogIndex]:[]};
@@ -63,7 +64,9 @@ test('apply executes only immutable 012 and records the exact checksum in one tr
  assert.equal(result.after,'ALREADY_APPLIED');assert.equal(result.applied,true);
  assert.equal(queries.filter(q=>q.sql===files.at(-1).sql).length,1);
  assert.deepEqual(queries.find(q=>q.sql.startsWith('INSERT INTO schema_migrations')).params,['012',files.at(-1).name,files.at(-1).checksum]);
- assert.ok(queries.some(q=>q.sql.includes('pg_advisory_xact_lock')));
+ const lock=queries.findIndex(q=>q.sql==="SELECT version FROM schema_migrations WHERE version='011' FOR UPDATE");
+ assert.ok(lock>0 && lock<queries.findIndex(q=>q.sql.startsWith('SELECT version, name, checksum')));
+ assert.ok(!queries.some(q=>q.sql.includes('pg_advisory_xact_lock')||q.sql.includes('LOCK TABLE')));
  const commit=queries.findIndex(q=>q.sql==='COMMIT');
  assert.ok(commit>queries.findIndex(q=>q.sql.startsWith('INSERT INTO schema_migrations')));
  assert.ok(commit<queries.findLastIndex(q=>q.sql.startsWith('SELECT version')));
@@ -122,4 +125,14 @@ test('managed Nile 57014 mitigation preserves each separate historical assertion
  assert.equal(h.length,3);
  assert.match(h[2].sql,/i\.indisvalid AND i\.indisready/);
  assert.ok(!queries.some(q=>q.sql===files.at(-1).sql||q.sql.startsWith('INSERT')));
+});
+
+// Lock admission must fail closed before DDL or ledger writes.
+test('row lock missing, ambiguous or unsupported rejects apply before mutation',async()=>{
+ for(const opts of [{lockRows:[]},{lockRows:[{version:'010'}]},{lockRows:[{version:'011'},{version:'011'}]},{lockError:Object.assign(Error('feature not supported'),{code:'0A000'})}]){
+  const {db,queries}=fakeDb(opts);
+  await assert.rejects(prepareOrApplyRetrieve012({env,buildIdentity:identity,db,migrations:files}));
+  assert.ok(!queries.some(q=>q.sql===files.at(-1).sql||q.sql.startsWith('INSERT')));
+  assert.equal(queries.at(-2).sql,'ROLLBACK');
+ }
 });
