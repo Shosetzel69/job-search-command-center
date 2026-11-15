@@ -137,6 +137,19 @@ class SourceValidationTests(unittest.TestCase):
         self.assertEqual(evidence["sources_failed"], 1)
         self.assertTrue(all(x["publication"] == "none" for x in evidence["source_results"]))
 
+    def test_quality_evidence_contains_counts_not_job_content(self):
+        item = {"source_id": "x", "source": "Example", "records": 2,
+                "quality_counts": {"INCOMPLETE": 2}, "quality_issues": {"DESCRIPTION_EMPTY": 2},
+                "records_collected_raw": 3, "records_quality_excluded": 1,
+                "quality_disposition": "NO_VALID_FIELDS",
+                "rejected_quality_evidence": [{"raw": "DO_NOT_LOG"}]}
+        row = validation._source_evidence(item, 1)
+        self.assertEqual(row["quality_counts"], {"INCOMPLETE": 2})
+        self.assertEqual(row["records_collected_raw"], 3)
+        self.assertEqual(row["records_quality_excluded"], 1)
+        self.assertNotIn("DO_NOT_LOG", json.dumps(row))
+        self.assertEqual(row["publication"], "none")
+
     def test_validation_never_calls_processing_or_publication_pipeline(self):
         payload = catalog(source("one"))
 
