@@ -401,3 +401,51 @@ export async function dispatchWorkflow(env, runtime, runTrigger = 'manual-ui', c
   const operation = await response.json();
   return { ...operation, run_id:runId, request_signature:requestSignature || null };
 }
+
+
+// DEV-only maintenance shares the exact Retrieve generation lock. The caller
+// cannot supply a bucket, object name, generation or operation purpose.
+const PURGE_LOCK='locks/heavy-search.lock';
+function requireDevPurgeRuntime(env) {
+  if (!devSourcesEnabled(env) || bucket(env)!=='jscc-dev-runtime-828902654738' || job(env)!=='jscc-search-dev' || region(env)!=='europe-west1')
+    throw runtimeError('DB Purge is DEV only',403);
+}
+export async function devPurgeActive(env) {
+  if (!devSourcesEnabled(env)) return false;
+  const current=await readVersionedRunObject(env,PURGE_LOCK);
+  return current?.payload?.purpose==='DEV_DB_PURGE';
+}
+export async function acquireDevPurgeLock(env) {
+  requireDevPurgeRuntime(env);
+  const id=randomUUID();
+  await createLock(env,{purpose:'DEV_DB_PURGE',operation_id:id,started_at:new Date().toISOString()});
+  const current=await readVersionedRunObject(env,PURGE_LOCK);
+  if (current?.payload?.operation_id!==id) throw runtimeError('Maintenance lock ownership unverified',503);
+  const generation=current.sha;
+  const assertHeld=async()=>{
+    const held=await readVersionedRunObject(env,PURGE_LOCK);
+    if (held?.sha!==generation || held?.payload?.operation_id!==id)
+      throw runtimeError('Maintenance lock ownership lost',503);
+  };
+  return Object.freeze({
+    assertHeld,
+    async assertIdle(){
+      await assertHeld();
+      if (await objectMetadata(env,'active.json')) throw runtimeError('Retrieve active or unresolved',409);
+    },
+    async clearLatest(){
+      await assertHeld();
+      const latest=await objectMetadata(env,'latest-run.json');
+      if (!latest) return;
+      const expected=String(latest.generation||'');
+      if (!/^[1-9][0-9]*$/.test(expected)) throw runtimeError('Latest run generation invalid',503);
+      const r=await authorizedFetch(objectMetadataUrl(env,'latest-run.json')+'?ifGenerationMatch='+encodeURIComponent(expected),{method:'DELETE'});
+      if (![200,204].includes(r.status)) throw runtimeError('Latest run pointer cleanup unverified',503);
+    },
+    async release(){
+      await assertHeld();
+      const r=await authorizedFetch(objectMetadataUrl(env,PURGE_LOCK)+'?ifGenerationMatch='+encodeURIComponent(generation),{method:'DELETE'});
+      if (![200,204].includes(r.status)) throw runtimeError('Maintenance lock release unverified',503);
+    },
+  });
+}
