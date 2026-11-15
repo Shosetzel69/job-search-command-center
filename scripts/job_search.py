@@ -75,6 +75,40 @@ class CollectionResult:
     provider_scope_details: dict[str, Any] | None = None
 
 
+def _observed_scope_request(request):
+    """Allowlisted request parameters only; never log URLs, headers or arbitrary bodies."""
+    from urllib.parse import urlsplit,parse_qs
+    from retrieve_provider_queries import SCOPE_TERMS
+    terms={t for values in SCOPE_TERMS.values() for t in values}
+    parts=urlsplit(getattr(request,"full_url",""))
+    path=parts.path
+    values={}
+    allowed={}
+    if path.startswith("/wday/cxs/") and path.endswith("/jobs"):
+        try:payload=json.loads(request.data or b"{}")
+        except (ValueError,TypeError):return None
+        if not isinstance(payload,dict):return None
+        values=payload
+        allowed={"searchText":terms,"limit":None,"offset":None}
+    elif path.endswith("/api/pcsx/search"):
+        values={k:v[0] for k,v in parse_qs(parts.query).items() if len(v)==1}
+        allowed={"query":terms,"num":None,"start":None}
+    elif parts.hostname=="api.smartrecruiters.com" and path.endswith("/postings"):
+        values={k:v[0] for k,v in parse_qs(parts.query).items() if len(v)==1}
+        allowed={"q":terms,"country":set(COUNTRY_NAMES),"locationType":{"REMOTE","HYBRID","ONSITE"},"limit":None,"offset":None}
+    else:
+        return None
+    result={}
+    for k,permit in allowed.items():
+        value=values.get(k)
+        if permit is None:
+            if re.fullmatch(r"[0-9]{1,6}",str(value)):
+                result[k]=int(value)
+        elif isinstance(value,str) and value in permit:
+            result[k]=value
+    return result or None
+
+
 def measure_provider_opener(collector):
     """Count attempted opener calls per invocation, including failed requests.
 
@@ -96,11 +130,18 @@ def measure_provider_opener(collector):
             original = urlopen
         lock = threading.Lock()
         attempts = 0
+        observed=[]
+
+        def scope_details():
+            return {'requests':list(observed),'applied_dimensions':sorted({k for v in observed for k in v if k in {'q','query','searchText','country','locationType'}})}
 
         def opener(*a, **kw):
             nonlocal attempts
             with lock:
                 attempts += 1
+                if a and len(observed)<100:
+                    params=_observed_scope_request(a[0])
+                    if params:observed.append(params)
             return original(*a, **kw)
 
         bound.arguments["opener"] = opener
@@ -111,10 +152,12 @@ def measure_provider_opener(collector):
         except Exception as exc:
             exc.provider_request_attempts = attempts + (public[0] if "public" in locals() else 0)
             exc.provider_request_measurement = "adapter_opener_and_public_client_attempts"
+            if observed:exc.provider_scope_details=scope_details()
             raise
         if isinstance(results, list) and results and isinstance(results[0], CollectionResult):
             results[0].provider_request_attempts = attempts + public[0]
             results[0].provider_request_measurement = "adapter_opener_and_public_client_attempts"
+            if observed:results[0].provider_scope_details={**(results[0].provider_scope_details or {}),**scope_details()}
         return results
 
     return measured
