@@ -445,6 +445,12 @@ jobs:
           writeFileSync('/tmp/w025-nile-process-evidence.json',JSON.stringify(evidence,null,2));
           if(!good)process.exitCode=1;
           NODE
+      - name: Verify pinned Python worker driver on ephemeral Nile
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check "$(grep '^psycopg\[binary\]==' requirements-search.txt)"
+          python3 -X faulthandler scripts/gcp_nile_protocol_probe.py --ci-native-write
       - name: Nile container diagnostic and confirmed cleanup
         if: always()
         shell: bash

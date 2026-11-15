@@ -196,3 +196,30 @@ test('SA-B02: registry read checks media generation rather than accepting a newe
     globalThis.fetch=originalFetch;
   }
 });
+
+test('DEV queued status belongs only to current run and starts with no previous counters',async()=>{
+ const {queuedRunStatus}=await import('../src/runtime-gcp.js');
+ const s=queuedRunStatus({run_id:'run-a',started_at:'2026-11-15T01:00:00Z',progress:{percent:100},jobs_published:110});
+ assert.equal(s.run_id,'run-a');assert.equal(s.status,'queued');assert.equal(s.jobs_published,0);assert.equal(s.progress.percent,0);
+});
+
+test('DEV active status ignores stale or missing status object',async()=>{
+ const {readRuntimeJson}=await import('../src/runtime-gcp.js');
+ const old=globalThis.fetch;
+ const id='run-00000000-0000-4000-8000-000000000001';
+ let payload={run_id:'old',status:'completed',jobs_published:110};
+ try{
+  globalThis.fetch=async input=>{
+   const u=new URL(String(input));
+   if(u.hostname==='metadata.google.internal')return Response.json({access_token:'inert'});
+   const name=decodeURIComponent(u.pathname.split('/o/').at(-1));
+   if(name==='locks/heavy-search.lock')return Response.json(u.search?{run_id:id,started_at:'2026-11-15T01:00:00Z'}:{generation:'11'});
+   assert.equal(name,'runs/'+id+'/run-status.json');
+   if(payload===null)return new Response('',{status:404});
+   return Response.json(u.search?payload:{generation:'12'});
+  };
+  for(const p of [payload,null]){payload=p;const s=await readRuntimeJson(gcp,{sourceSha:SHA},'data/run-status.json');assert.equal(s.payload.run_id,id);assert.equal(s.payload.status,'queued');assert.equal(s.payload.jobs_published,0);}
+  payload={run_id:id,status:'in_progress',progress:{percent:12}};
+  assert.equal((await readRuntimeJson(gcp,{sourceSha:SHA},'data/run-status.json')).payload.progress.percent,12);
+ }finally{globalThis.fetch=old;}
+});

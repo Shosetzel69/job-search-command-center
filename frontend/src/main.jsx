@@ -8,7 +8,7 @@ import ActionDialog from './action-dialog.jsx';
 import { PromotionStatusPanel } from './promotion-status.jsx';
 import { CONTRACT_TYPE_OPTIONS, COUNTRY_NAMES, COUNTRY_OPTIONS, REGION_COUNTRIES, REGION_OPTIONS, WORK_MODE_OPTIONS, normalizedCountryNames } from './nomenclature-runtime.mjs';
 import './index.css';
-import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline } from './run-polling.mjs';
+import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline, statusForTrackedRun, initialTrackedRun } from './run-polling.mjs';
 import { runProgressModel } from './run-progress.mjs';
 import { JOBS_PAGE_SIZE, buildJobsPath, ignorePageResponse, isSearchProfileConfigured, navigateJobPage, needsPageReload, pageRequestKey, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
 import { readUiState, writeUiState } from './ui-state.mjs';
@@ -230,7 +230,7 @@ function RunProgressPanel({status}) {
   const title=progress.active?'Actualizare joburi in curs':status?.status==='completed'?'Ultima actualizare finalizata':status?.status==='completed_with_errors'?'Ultima actualizare cu erori':'Ultima actualizare esuata';
   return <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm" aria-label="Progres actualizare surse">
     <div className="flex flex-wrap items-start justify-between gap-3">
-      <div><div className="text-sm font-semibold text-slate-900">{title}</div><div className="mt-1 text-xs text-slate-500">{progress.processed} din {progress.total} surse planificate procesate</div></div>
+      <div><div className="text-sm font-semibold text-slate-900">{title}</div><div className="mt-1 text-xs text-slate-500">{progress.active&&progress.total===0?'Se pregateste rularea...':<>{progress.processed} din {progress.total} surse planificate procesate</>}</div></div>
       <div className="text-2xl font-bold tabular-nums text-slate-950">{progress.percent}%</div>
     </div>
     <div className="mt-3 h-2 overflow-hidden rounded-full bg-slate-100"><div className="h-full rounded-full bg-blue-600 transition-[width] duration-500" style={{width:`${progress.percent}%`}}/></div>
@@ -552,8 +552,8 @@ function App(){
   const reviewJob=useCallback(async job=>{setDetailJob(job);try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({seen:true})});}catch(error){notify('Starea Review nu a putut fi salvata: '+error.message,'error');}},[auth.token,notify]);
   const applyJob=useCallback(job=>{writeUiState({view,filters,selectedJobId:job?.id||null,scrollY:window.scrollY});},[view,filters]);
 
-  const pollRun=useCallback(async(previousRunId,previousCompletedAt)=>{const generation=++pollGenerationRef.current;const baseline={runId:previousRunId??null,completedAt:previousCompletedAt??null};for(let attempt=0;generation===pollGenerationRef.current;attempt+=1){await new Promise(resolve=>setTimeout(resolve,pollingDelayMs(attempt)));if(generation!==pollGenerationRef.current)return null;try{const status=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);setRunStatus(status);if(!terminalForBaseline(status,baseline))continue;await loadData(auth.token,auth.role);const notice=completionNotice(status);notify(notice.message,notice.type);return status;}catch(error){if(error?.status===401||error?.status===403){notify('Urmarirea rularii s-a oprit deoarece sesiunea nu mai este autorizata.','error');return null;}}}return null;},[auth.token,auth.role,loadData,notify]);
-  useEffect(()=>{if(auth.status!=='authenticated'||auth.role!=='ADMIN'||!auth.token||dataState.status!=='ready'||running||!isActiveRunStatus(runStatus?.status))return undefined;setRunning(true);pollRun(runStatus?.run_id??null,runStatus?.completed_at??null).finally(()=>setRunning(false));return undefined;},[auth.status,auth.role,auth.token,dataState.status,runStatus?.status,runStatus?.run_id,runStatus?.completed_at,running,pollRun]);
+  const pollRun=useCallback(async(previousRunId,previousCompletedAt,targetRunId=null)=>{const generation=++pollGenerationRef.current;const baseline={runId:previousRunId??null,completedAt:previousCompletedAt??null};const deadline=Date.now()+60*60*1000;for(let attempt=0;generation===pollGenerationRef.current&&Date.now()<deadline;attempt+=1){await new Promise(resolve=>setTimeout(resolve,pollingDelayMs(attempt)));if(generation!==pollGenerationRef.current)return null;try{const status=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);if(generation!==pollGenerationRef.current)return null;if(targetRunId&&!statusForTrackedRun(status,targetRunId))continue;setRunStatus(status);if(!terminalForBaseline(status,baseline))continue;await loadData(auth.token,auth.role);const notice=completionNotice(status);notify(notice.message,notice.type);return status;}catch(error){if(error?.status===401||error?.status===403){notify('Urmarirea rularii s-a oprit deoarece sesiunea nu mai este autorizata.','error');return null;}}}if(generation===pollGenerationRef.current)notify('Starea finala a rularii nu a putut fi confirmata.','error');return null;},[auth.token,auth.role,loadData,notify]);
+  useEffect(()=>{if(auth.status!=='authenticated'||auth.role!=='ADMIN'||!auth.token||dataState.status!=='ready'||running||!isActiveRunStatus(runStatus?.status))return undefined;setRunning(true);pollRun(runStatus?.run_id??null,runStatus?.completed_at??null,runStatus?.run_id??null).finally(()=>setRunning(false));return undefined;},[auth.status,auth.role,auth.token,dataState.status,runStatus?.status,runStatus?.run_id,runStatus?.completed_at,running,pollRun]);
 
   const pollOwnRefresh=useCallback(async(id)=>{
     const generation=++pollGenerationRef.current;
@@ -587,8 +587,10 @@ function App(){
       const notice=refreshOutcomeNotice(result);notify(notice.message,notice.type);
       if(result.outcome==='REUSED_CORPUS'){await loadJobsPage(auth.token,savedCriteria,filtersRef.current);}
       else if(auth.role==='ADMIN'&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome)){
-        try{const currentStatus=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);setRunStatus(currentStatus);}catch(statusError){notify('Actualizarea a fost acceptata; astept statusul live al executiei.','info');}
-        await pollRun(previousRunId,previousCompletedAt);
+        const target=result.run_id;
+        if(target)setRunStatus(initialTrackedRun(target));
+        try{const currentStatus=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);if(target?statusForTrackedRun(currentStatus,target):isActiveRunStatus(currentStatus?.status))setRunStatus(currentStatus);}catch(statusError){notify('Actualizarea a fost acceptata; astept statusul live al executiei.','info');}
+        await pollRun(previousRunId,previousCompletedAt,target||null);
       }else if(auth.role==='USER'&&result.request_id&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome)){
         await pollOwnRefresh(result.request_id);
       }

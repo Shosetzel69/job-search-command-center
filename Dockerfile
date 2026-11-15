@@ -31,6 +31,7 @@ RUN python3 -m py_compile \
     scripts/shared_corpus_import.py \
     scripts/source_orchestration.py \
     scripts/gcp_source_snapshot.py \
+    scripts/gcp_dev_run_supervisor.py \
     scripts/job_search_public_boards.py \
     scripts/job_search_web.py \
     scripts/web_browser.py \

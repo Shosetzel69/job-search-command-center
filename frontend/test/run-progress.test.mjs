@@ -72,3 +72,8 @@ test('F520-06 distinguishes no-extractable from success and handles empty progre
   assert.equal(empty.preflightSkipped,0);
   assert.equal(empty.noExtractable,0);
 });
+
+test('a failed partial or startup run does not fabricate 100 percent',()=>{
+ assert.equal(runProgressModel({status:'failed',progress:{sources_total:10,sources_processed:2}}).percent,20);
+ assert.equal(runProgressModel({status:'failed',progress:{sources_total:0,sources_processed:0}}).percent,0);
+});

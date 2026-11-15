@@ -41,3 +41,13 @@ export function completionNotice(status) {
   }
   return { type: 'success', message: `Verificare finalizata: ${published} joburi publicate din ${sources} surse.` };
 }
+
+// Correlate every accepted refresh with its exact backend run identity.
+export function statusForTrackedRun(status,runId) {
+  if(!runId || status?.run_id!==runId) return null;
+  return status;
+}
+export function initialTrackedRun(runId) {
+  if(!runId) return null;
+  return {run_id:runId,status:'queued',completed_at:null,progress:{sources_total:0,sources_processed:0,percent:0}};
+}

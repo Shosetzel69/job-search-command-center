@@ -16,6 +16,9 @@ test('ADMIN refresh polls even before the active run pointer becomes visible', (
   const start = main.indexOf("else if(auth.role==='ADMIN'&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome))");
   const end = main.indexOf("    }catch(error)", start);
   const block = main.slice(start, end);
-  assert.match(block, /await pollRun\(previousRunId,previousCompletedAt\)/);
+  assert.match(block, /const target=result\.run_id/);
+  assert.match(block, /setRunStatus\(initialTrackedRun\(target\)\)/);
+  assert.match(block, /statusForTrackedRun\(currentStatus,target\)/);
+  assert.match(block, /await pollRun\(previousRunId,previousCompletedAt,target\|\|null\)/);
   assert.doesNotMatch(block, /if\(isActiveRunStatus\(currentStatus\?\.status\)\)await pollRun/);
 });

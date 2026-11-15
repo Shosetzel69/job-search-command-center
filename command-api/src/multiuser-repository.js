@@ -12,6 +12,7 @@ import {
 import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
 import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from './profile-evaluation.js';
 import { userRefreshScopes } from './retrieve-scope.js';
+import { readFailedRunCompletion } from './runtime-gcp.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
   'target_role_families',
@@ -891,11 +892,16 @@ export async function refreshRequestStatus(authContext, requestId, env = process
   )).rows?.[0] : null;
   const expired = now.getTime()-new Date(row.created_at).getTime()>60*60*1000;
   const accepted = ['STARTED_RUN','JOINED_EXISTING_RUN'].includes(row.outcome);
-  const status = run ? String(run.status) : accepted || row.outcome==='PENDING'
+  // A native worker crash can occur before the PostgreSQL run row is written.
+  // Only the terminal failure marker for THIS tenant-authorized request may
+  // supplement a missing/nonterminal row. Never infer success from GCS.
+  const failure = accepted && row.run_id && !['completed','completed_with_errors','failed','cancelled'].includes(run?.status)
+    ? await readFailedRunCompletion(env,row.run_id).catch(()=>null) : null;
+  const status = failure ? 'failed' : run ? String(run.status) : accepted || row.outcome==='PENDING'
     ? (expired ? 'unknown' : 'queued') : row.outcome==='DISPATCH_UNKNOWN' ? 'unknown' : 'completed';
   return {request_id:id,run_id:row.run_id || null,outcome:row.outcome,reason:row.reason || null,
     status,terminal:['completed','completed_with_errors','failed','cancelled','unknown'].includes(status),
-    created_at:row.created_at,started_at:run?.started_at || null,completed_at:run?.completed_at || null};
+    created_at:row.created_at,started_at:run?.started_at || null,completed_at:failure?.completed_at || run?.completed_at || null};
 }
 
 export async function sharedCorpusRefreshState(

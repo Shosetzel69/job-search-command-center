@@ -7,6 +7,8 @@ import {
   isTerminalRunStatus,
   pollingDelayMs,
   terminalForBaseline,
+  statusForTrackedRun,
+  initialTrackedRun,
 } from '../src/run-polling.mjs';
 
 test('recognizes active and terminal run states', () => {
@@ -55,4 +57,12 @@ test('genuine 409 tracks only a confirmed active run', () => {
   assert.deepEqual(duplicateRunResolution({ status:'completed' }), { trackExistingRun:false, state:'idle' });
   assert.deepEqual(duplicateRunResolution({ status:'completed_with_errors' }), { trackExistingRun:false, state:'idle' });
   assert.deepEqual(duplicateRunResolution(null), { trackExistingRun:false, state:'idle' });
+});
+
+test('accepted run never displays or completes from unrelated terminal status',()=>{
+ const old={run_id:'old',status:'completed',progress:{percent:100}};
+ assert.equal(statusForTrackedRun(old,'new'),null);
+ assert.equal(initialTrackedRun('new').progress.percent,0);
+ const failed={run_id:'new',status:'failed'};
+ assert.equal(statusForTrackedRun(failed,'new'),failed);
 });
