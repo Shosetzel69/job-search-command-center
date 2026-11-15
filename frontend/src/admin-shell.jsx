@@ -111,7 +111,29 @@ function Overview({ sources, runStatus, onNavigate }) {
   </div>;
 }
 
-function UpdateData({ runStatus, running, onRun }) {
+function DevPurgePanel({token,running,notify,onPurged}) {
+  const [open,setOpen]=useState(false),[confirmation,setConfirmation]=useState(''),[busy,setBusy]=useState(false);
+  const guard=useRef(null);
+  if(!guard.current)guard.current=createSingleFireGuard();
+  async function purge(){
+    if(running||confirmation!=='PURGE DEV'||!guard.current.tryStart())return;
+    setBusy(true);
+    try{
+      const result=await api('/admin/db-purge',token,{method:'POST',body:JSON.stringify({confirmation})});
+      if(result?.status!=='completed'||result.lock_released!==true)throw new Error('Resetarea nu a fost confirmata.');
+      setOpen(false);setConfirmation('');
+      notify('DB Purge DEV finalizat.','success');
+      await onPurged?.();
+    }catch(e){notify(e.message,'error');}
+    finally{guard.current.finish();setBusy(false);}
+  }
+  return <Panel title="DB Purge — DEV" note="Sterge corpusul, evaluarile, starile joburilor, Coverage si istoricul Retrieve pentru toti utilizatorii DEV. Pastreaza conturile, profilurile, aplicatiile, notitele si configuratia.">
+    <button type="button" disabled={running||busy} onClick={()=>{setConfirmation('');setOpen(true);}} className="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white disabled:opacity-50">DB Purge</button>
+    {open&&<ActionDialog title="Golire baza de date DEV" description="Operatiune ireversibila asupra datelor de colectare pentru toti utilizatorii DEV. Nu porneste Retrieve automat." fields={[{name:'confirmation',label:'Scrie PURGE DEV pentru confirmare',autoFocus:true}]} values={{confirmation}} onChange={(_,value)=>setConfirmation(value)} confirmLabel="DB Purge" danger busy={busy} confirmDisabled={confirmation!=='PURGE DEV'||running} onCancel={()=>setOpen(false)} onConfirm={purge}/>}
+  </Panel>;
+}
+
+function UpdateData({ runStatus, running, onRun, environment, token, notify, onPurged }) {
   return <div className="grid gap-5 lg:grid-cols-2">
     <Panel title="Rulare manuala" note="Comanda explicita este singura actiune din aceasta pagina care porneste full search.">
       <div className="space-y-3 text-sm text-slate-600">
@@ -128,6 +150,7 @@ function UpdateData({ runStatus, running, onRun }) {
       </div>
       <p className="mt-3 text-xs text-slate-500">Modificarile administrative nu pornesc full search.</p>
     </Panel>
+    {String(environment||'').toLowerCase()==='dev'&&<DevPurgePanel token={token} running={running} notify={notify} onPurged={onPurged}/>}
   </div>;
 }
 
@@ -604,6 +627,8 @@ export default function AdminShell({
   onRun,
   notify,
   token,
+  environment,
+  onPurged,
 }) {
   const [section,setSection] = useState('overview');
   const governedSources = useMemo(() => sources.map(normalizeSource), [sources]);
@@ -611,7 +636,7 @@ export default function AdminShell({
   return <div className="space-y-5">
     <Tabs value={section} onChange={setSection} items={ADMIN_SECTIONS.map(key => [key, ({overview:'Overview',update:'Actualizare date',sources:'Surse',nomenclatures:'Nomenclatoare',coverage:'Coverage',users:'Utilizatori',logs:'Loguri'})[key]])}/>
     {section === 'overview' && <Overview sources={governedSources} runStatus={runStatus} onNavigate={setSection}/>} 
-    {section === 'update' && <UpdateData runStatus={runStatus} running={running} onRun={onRun}/>} 
+    {section === 'update' && <UpdateData runStatus={runStatus} running={running} onRun={onRun} environment={environment} token={token} notify={notify} onPurged={onPurged}/>} 
     {section === 'sources' && <SourcesAdmin {...props}/>} 
     {section === 'nomenclatures' && <NomenclaturesAdmin token={token} notify={notify}/>} 
     {section === 'coverage' && <CoverageAdmin token={token} notify={notify}/>} 
