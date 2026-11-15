@@ -163,3 +163,13 @@ test("validation payload fails closed outside exact DEV cohort contract", () => 
     /Invalid source IDs/,
   );
 });
+
+
+test("Zoho named IDs are permitted without weakening exact DEV cohort gates", () => {
+  const ids = ["src-zoho-osf-digital","src-zoho-hr-plus","src-zoho-madiffpl","src-zoho-matritel","src-zoho-myemployment"];
+  const context = { actor:OWNER_LOGIN, issueNumber:520, commentId:30001 };
+  assert.equal(dispatchEnvelope(`/jscc-validate dev ${SHA} ${ids.join(",")}`, context).payload.inputs.source_ids, ids.join(","));
+  for (const bad of ["src-zoho--osf","src-zoho-osf-","src-zoho/other"]) {
+    assert.throws(() => parseValidationCommand(`/jscc-validate dev ${SHA} ${bad}`, context), /Invalid validation command/);
+  }
+});

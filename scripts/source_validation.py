@@ -23,6 +23,18 @@ import source_orchestration as orchestration
 
 MAX_COHORT = 20
 ALLOWED_VALIDATION_DISABLED_REASON = "live_api_route_not_validated"
+# Owner-requested exact read-only validation cohort; never runtime activation.
+ZOHO_VALIDATION_BOARDS = {
+    "src-zoho-osf-digital": ("OSF Digital", "https://osf-global.zohorecruit.com/careers"),
+    "src-zoho-hr-plus": ("HR Plus", "https://hr-plus.zohorecruit.com/careers"),
+    "src-zoho-madiffpl": ("MADIFF", "https://madiffpl.zohorecruit.com/careers"),
+    "src-zoho-matritel": ("Matritel", "https://matritel.zohorecruit.com/careers"),
+    "src-zoho-myemployment": ("MyEmployment", "https://myemployment.zohorecruit.com/careers"),
+}
+ZOHO_VALIDATION_REASONS = {
+    "OSF-only DEV pilot approved; separate merge and deploy approval pending",
+    "Outside owner-approved Option A pilot; activation not authorized",
+}
 PROHIBITED_CONNECTORS = {"jobspipe"}
 RESTRICTED_SOURCE_STATUSES = {"blocked_credentials", "excluded_policy", "deferred", "unsupported"}
 
@@ -141,6 +153,18 @@ def prepare_validation_items(catalog: dict, source_ids: list[str]) -> list[dict]
             raise ValidationError(f"{source_id} has no safe collection route")
 
         if route.get("enabled") is False:
+            expected = ZOHO_VALIDATION_BOARDS.get(source_id)
+            zoho_validation = (
+                expected is not None
+                and (original.get("name"), original.get("url")) == expected
+                and connector == "zoho_recruit"
+                and route.get("career_url") == expected[1]
+                and disabled_reason in ZOHO_VALIDATION_REASONS
+            )
+            if zoho_validation:
+                _reset_for_validation(item, "zoho_read_only_cohort")
+                prepared.append(item)
+                continue
             if disabled_reason != ALLOWED_VALIDATION_DISABLED_REASON:
                 raise ValidationError(
                     f"{source_id} has disabled route not eligible for validation override: "
