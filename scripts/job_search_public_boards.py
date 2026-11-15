@@ -230,87 +230,32 @@ def _heading_list_board(url, provider, *, default_remote=False, default_country=
     return list(records.values())
 
 
-class _HipoListJobs(HTMLParser):
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.jobs = []
-        self.current = None
-        self.in_heading = False
-        self.title_parts = []
-
-    def _flush(self):
-        if self.current:
-            title = " ".join(self.current.get("title_parts") or []).strip()
-            parts = [p for p in self.current.get("parts") or [] if p]
-            if title and parts:
-                self.jobs.append({"title": title, "parts": parts})
-        self.current = None
-        self.in_heading = False
-        self.title_parts = []
-
-    def handle_starttag(self, tag, attrs):
-        if tag in {"h2","h3","h4"}:
-            self._flush()
-            self.current = {"title_parts": [], "parts": []}
-            self.in_heading = True
-
-    def handle_data(self, data):
-        text = " ".join(str(data or "").split())
-        if not text or not self.current:
-            return
-        if self.in_heading:
-            self.current["title_parts"].append(text)
-        else:
-            self.current["parts"].append(text)
-
-    def handle_endtag(self, tag):
-        if tag in {"h2","h3","h4"} and self.in_heading:
-            self.in_heading = False
-
-    def close(self):
-        super().close()
-        self._flush()
-
-
 def _hipo(url):
     status, _kind, body = _fetch(url, "text/html,application/xhtml+xml")
     if status != 200:
         raise RuntimeError(f"Hipo jobs page HTTP {status}")
-    parser = _HipoListJobs()
+    # Hipo individual posting URLs have a numeric requisition ID; headings
+    # and arbitrary surrounding card text do not establish a vacancy.
+    parser = _RenderedCareerJobs(r"/locuri-de-munca/locuri_de_munca/\d+/[^?#]+")
     parser.feed(body.decode("utf-8", errors="replace"))
     parser.close()
     records = {}
-    for item in parser.jobs:
+    for href, item in parser.jobs.items():
         title = plain_text(item.get("title") or "")
-        if not title or re.match(r"^(?:\d[\d., ]*\s+)?(?:locuri de munc[aă]|joburi)\b", title, re.I):
+        link = urljoin(url, href)
+        parts = urlsplit(link)
+        match = re.fullmatch(r"/locuri-de-munca/locuri_de_munca/(\d+)/[^?#]+", parts.path, re.I)
+        if (not match or parts.scheme != "https" or parts.netloc != urlsplit(url).netloc
+                or not title or re.match(r"^(?:\d[\d., ]*\s+)?(?:locuri de munc[aă]|joburi)\b", title, re.I)
+                or title.casefold() in {"aplica", "aplică", "vezi detalii", "aplica fara cv"}):
             continue
-        parts = [plain_text(x) for x in item.get("parts") or [] if plain_text(x)]
-        if not parts:
-            continue
-        company = parts[0] if parts else "Hipo"
-        context = " ".join(parts[:12])
-        date_match = re.search(r"\b(\d{2})-(\d{2})-(\d{4})\b", context)
-        date_posted = None
-        if date_match:
-            try:
-                date_posted = datetime(
-                    int(date_match.group(3)), int(date_match.group(2)), int(date_match.group(1)),
-                    tzinfo=timezone.utc,
-                ).isoformat()
-            except ValueError:
-                date_posted = None
-        identity_basis = "|".join([title.casefold(), company.casefold(), context.casefold()])
-        identity = hashlib.sha1(identity_basis.encode("utf-8")).hexdigest()[:20]
-        remote = bool(re.search(r"\b(remote|hybrid|hibrid)\b", context, re.I))
-        records[identity] = _record(
-            "Hipo", identity, title, company, context or title, url,
-            date_posted=date_posted,
-            location=context,
-            countries=["Romania"],
-            remote=remote,
-        )
+        identity = match.group(1)
+        record = _record("Hipo", identity, title, "Nespecificata", "", link)
+        record.update(description="", company_provenance="UNKNOWN",
+                      _jscc_field_provenance={"title": "LISTING_CARD"})
+        records[identity] = record
     if not records:
-        raise ValueError("Hipo project-manager search contained no extractable jobs")
+        raise ValueError("Hipo project-manager search contained no extractable individual job links")
     return list(records.values())
 
 
