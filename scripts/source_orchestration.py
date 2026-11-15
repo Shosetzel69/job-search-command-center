@@ -322,6 +322,8 @@ def emit_source_final(run_id, item):
         records_scope_excluded=item.get("records_scope_excluded", 0),
         records_role_matched=item.get("records_role_matched",0),
         records_role_unresolved=item.get("records_role_unresolved",0),
+        records_scope_matched=item.get("records_scope_matched",0),
+        records_scope_unresolved=item.get("records_scope_unresolved",0),
         provider_scope_details=item.get("provider_scope_details"),
         records_quality_excluded=item.get("records_quality_excluded", 0),
         records_malformed=item.get("records_malformed", 0),
@@ -342,7 +344,7 @@ def emit_source_final(run_id, item):
 
 def aggregate_source_results(plan):
     outcome_counts = {}
-    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope", "records_role_matched", "records_role_unresolved")}
+    record_totals = {key: 0 for key in ("records_collected_raw", "records_malformed", "records_quality_excluded", "records_scope_excluded", "records_after_scope", "records_role_matched", "records_role_unresolved", "records_scope_matched", "records_scope_unresolved")}
     error_code_counts = {}
     failure_stage_counts = {}
     for item in plan:
@@ -534,64 +536,61 @@ def tag_collection_records(item, results, run_id=None):
     item["_jscc_quality_accepted"] = quality_counts["VALID"] + quality_counts["INCOMPLETE"]
 
 
-def _posting_matches_scope(posting, scope):
-    # A conflicted/undetermined family can carry nonempty member codes from
-    # multiple families. Keep UNKNOWN for canonical persistence and later
-    # tri-state eligibility; reject explicit mismatches for known families.
-    unknown_family = posting.role_family == "UNKNOWN"
-    if not unknown_family and posting.role_family != str(scope.get("role_family") or "").strip().upper():
-        return False
+def _posting_scope_decision(posting, scope):
+    """Per-tuple three-way scope membership; do not combine different tuples."""
+    unknown = posting.role_family == "UNKNOWN"
+    if not unknown and posting.role_family != str(scope.get("role_family") or "").strip().upper():
+        return "EXCLUDED"
+    members=set(posting.role_subfamily or [])
+    wanted=set(scope.get("role_subfamilies") or [])
+    if not unknown and wanted:
+        if members and not members.intersection(wanted):
+            return "EXCLUDED"
+        if not members:
+            unknown=True
+    for key,actual in (("work_modes",posting.work_mode),("contract_types",posting.contract_type)):
+        allowed=set(scope.get(key) or [])
+        if allowed:
+            if actual=="unknown":
+                unknown=True
+            elif actual not in allowed:
+                return "EXCLUDED"
 
-    role_subfamilies = {
-        str(value).strip()
-        for value in (scope.get("role_subfamilies") or [])
-        if str(value).strip()
-    }
-    if not unknown_family and role_subfamilies and not (set(posting.role_subfamily or []) & role_subfamilies):
-        return False
-
-    work_modes = {str(value).strip().casefold() for value in (scope.get("work_modes") or []) if str(value).strip()}
-    if work_modes and posting.work_mode != "unknown" and posting.work_mode not in work_modes:
-        return False
-
-    contract_types = {str(value).strip().casefold() for value in (scope.get("contract_types") or []) if str(value).strip()}
-    if contract_types and posting.contract_type != "unknown" and posting.contract_type not in contract_types:
-        return False
-
-    allowed_countries = {
-        str(value).strip().upper()
-        for value in (scope.get("target_country_codes") or [])
-        if str(value).strip()
-    }
-    for region in scope.get("target_regions") or []:
-        allowed_countries.update(engine.REGION_COUNTRIES.get(str(region).strip().upper(), set()))
-
-    countries = set(posting.country_codes or [])
-    remote = posting.work_mode == "remote"
-    remote_scope = str(posting.remote_scope or "").casefold()
-    authorized = {str(code).strip().upper() for code in scope.get("remote_eligible_country_codes") or []}
-    # Explicit regional scope is not a blanket geographic bypass.
-    if remote and remote_scope == "worldwide":
-        return True
-    if remote and remote_scope in {"eu", "emea"}:
-        region = remote_scope.upper()
-        members = set(engine.REGION_COUNTRIES.get(region, set()))
-        if region == "EMEA":
-            members |= set(engine.REGION_COUNTRIES.get("EU", set()))
-        target_regions = {str(r).upper() for r in scope.get("target_regions") or []}
-        if region == "EU":
-            if allowed_countries and not (allowed_countries & members) and "EU" not in target_regions:
-                return False
-            if authorized and not (authorized & members):
-                return False
-        # Incomplete EMEA knowledge is unresolved, not a proven mismatch.
-        return True
-    if countries:
+    allowed_countries=set(scope.get("target_country_codes") or [])
+    target_regions=set(scope.get("target_regions") or [])
+    for region in target_regions:
+        allowed_countries.update(engine.REGION_COUNTRIES.get(region,set()))
+    countries=set(posting.country_codes or [])
+    remote=posting.work_mode=="remote"
+    remote_scope=str(posting.remote_scope or "").casefold()
+    authorized=set(scope.get("remote_eligible_country_codes") or [])
+    if remote and remote_scope=="worldwide":
+        pass
+    elif remote and remote_scope in {"eu","emea"}:
+        region=remote_scope.upper()
+        members=set(engine.REGION_COUNTRIES.get(region,set()))
+        if region=="EMEA":
+            members.update(engine.REGION_COUNTRIES.get("EU",set()))
+        if allowed_countries and not (allowed_countries & members) and region not in target_regions:
+            if region=="EU":
+                return "EXCLUDED"
+            unknown=True
+        if authorized and not (authorized & members):
+            if region=="EU":
+                return "EXCLUDED"
+            unknown=True
+    elif countries:
         if allowed_countries and not (countries & allowed_countries):
-            return False
+            return "EXCLUDED"
         if remote and authorized and not (countries & authorized):
-            return False
-    return True
+            return "EXCLUDED"
+    elif allowed_countries or target_regions or (remote and authorized):
+        unknown=True
+    return "UNRESOLVED" if unknown else "MATCHED"
+
+
+def _posting_matches_scope(posting, scope):
+    return _posting_scope_decision(posting,scope)!="EXCLUDED"
 
 
 def apply_retrieve_scope(item, results, config):
@@ -604,6 +603,8 @@ def apply_retrieve_scope(item, results, config):
     excluded = 0
     unresolved_roles = 0
     matched_roles = 0
+    matched_scope = 0
+    unresolved_scope = 0
     for result in results:
         if not result.ok:
             scoped_results.append(result)
@@ -613,7 +614,12 @@ def apply_retrieve_scope(item, results, config):
             if not isinstance(record, dict):
                 continue
             posting = shared_corpus.prepare_posting(record, source_hint=item.get("source"))
-            if posting and any(_posting_matches_scope(posting, scope) for scope in scopes if isinstance(scope, dict)):
+            decisions = {_posting_scope_decision(posting, scope) for scope in scopes if isinstance(scope, dict)} if posting else set()
+            if decisions.intersection({'MATCHED','UNRESOLVED'}):
+                if 'MATCHED' in decisions:
+                    matched_scope += 1
+                else:
+                    unresolved_scope += 1
                 if posting.role_family == "UNKNOWN":
                     unresolved_roles += 1
                 else:
@@ -638,6 +644,8 @@ def apply_retrieve_scope(item, results, config):
     item["records_scope_excluded"] = excluded
     item["records_role_unresolved"] = unresolved_roles
     item["records_role_matched"] = matched_roles
+    item["records_scope_matched"] = matched_scope
+    item["records_scope_unresolved"] = unresolved_scope
     return scoped_results
 
 
