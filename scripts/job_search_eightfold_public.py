@@ -232,6 +232,7 @@ def _detail_outcome(results, records, base_url, domain, budget):
             error_code="SCHEMA_ERROR", failure_stage="parse"))
     return results
 
+@engine.measure_provider_opener
 def collect(base_url, domain, company_name, max_pages=MAX_PAGES, opener=urlopen, search_terms=(), enrich_details=False):
     parsed = urlsplit(str(base_url or "").strip())
     if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
