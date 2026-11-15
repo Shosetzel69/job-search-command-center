@@ -108,11 +108,11 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    assert.equal(selected.length,1);
    assert.equal(unknown.length,2);
    for(const job of selected)assert.ok(returned.has(job.id),'selected project job filtered out: '+job.title);
-   for(const job of unknown)assert.ok(returned.has(job.id),'UNKNOWN silently filtered: '+job.title);
+   for(const job of unknown)assert.ok(!returned.has(job.id),'UNKNOWN must not be a recommendation: '+job.title);
    for(const job of rejected)assert.ok(!returned.has(job.id),'explicit role mismatch leaked: '+job.title);
-   assert.deepEqual([...returned].sort(),[...selected,...unknown].map(j=>j.id).sort());
+   assert.deepEqual([...returned].sort(),selected.map(j=>j.id).sort());
    const persisted=await db.query(
-     'SELECT job_id,eligibility_state,eligibility_reason_code,profile_version FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])',
+     'SELECT job_id,eligibility_state,eligibility_reason_code,profile_version,eligible,score FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])',
      [ctx.profile_id,foundation.search_profile_id,[...selected,...unknown].map(j=>j.id)]);
    assert.equal(persisted.rows.length,selected.length+unknown.length);
    for(const job of selected){
@@ -122,7 +122,7 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    for(const job of unknown){
     const row=persisted.rows.find(r=>r.job_id===job.id);
     assert.ok(row);assert.equal(row.eligibility_state,'UNKNOWN');
-    assert.equal(row.eligibility_reason_code,'ROLE_FAMILY_UNKNOWN');
+    assert.equal(row.eligibility_reason_code,'ROLE_FAMILY_UNKNOWN');assert.equal(row.eligible,false);assert.equal(row.score,null);
    }
    const direct=await db.query('SELECT job_id,role_family,role_subfamily FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
      [seeded.map(j=>j.id)]);
@@ -144,8 +144,8 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    const restrictedIds=new Set(restrictedPage.jobs.map(j=>j.id));
    assert.ok(!restrictedIds.has(selected[0].id),
      'known family with explicitly mismatched subfamily must stay excluded');
-   assert.deepEqual([...restrictedIds].sort(),unknown.map(j=>j.id).sort(),
-     'UNKNOWN conflict jobs must survive subfamily filter despite nonempty member codes');
+   assert.deepEqual([...restrictedIds].sort(),[],
+     'UNKNOWN conflict jobs must remain in corpus but not confirmed recommendations');
   });
   await t.test('W025-R04 two or more pages, exact expected set/order and no canonical mutation',async()=>{
    const prefs={...await repository.effectiveConfig(ctx,env,{db}),
@@ -154,8 +154,8 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    await repository.savePreferences(ctx,prefs,env,{db});
    const stored=await repository.effectiveConfig(ctx,env,{db});
    assert.deepEqual(stored.target_role_families,prefs.target_role_families);
-   const expectedRows=seeded.filter(j=>stored.target_role_families.includes(j.expected)||j.expected==='UNKNOWN');
-   assert.ok(expectedRows.length>=4,'fixture must exercise multiple pages');
+   const expectedRows=seeded.filter(j=>stored.target_role_families.includes(j.expected));
+   assert.ok(expectedRows.length>=2,'fixture must exercise multiple pages');
    const expectedIDs=new Set(expectedRows.map(j=>j.id));
    const before=(await db.query('SELECT job_id,role_family,role_subfamily,job_version FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',
      [seeded.map(j=>j.id)])).rows;
@@ -163,9 +163,9 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    let cursor=null,pages=0,exhausted=false;
    for(let i=0;i<12;i++){
     const page=await repository.listProfileJobs(ctx,stored,nomenclatures,
-      {limit:2,prefetch:0,q:'W025',...(cursor?{cursor}:{})},env,{db});
-    assert.equal(page.bounded,true);assert.equal(page.limit,2);
-    assert.ok(page.jobs.length<=2,'page overflow');
+      {limit:1,prefetch:0,q:'W025',...(cursor?{cursor}:{})},env,{db});
+    assert.equal(page.bounded,true);assert.equal(page.limit,1);
+    assert.ok(page.jobs.length<=1,'page overflow');
     if(!page.jobs.length && page.next_cursor)assert.fail('empty page with continuation');
     seen.push(...page.jobs.map(j=>j.id));
     pages++;
