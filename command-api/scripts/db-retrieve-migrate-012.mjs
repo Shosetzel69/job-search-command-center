@@ -47,13 +47,17 @@ async function getState(client, migrations) {
   const rows=(await client.query('SELECT version, name, checksum FROM schema_migrations ORDER BY version')).rows;
   // Native Nile catalog visibility for tenant DDL is reliable in a fresh
   // transaction after commit; use information_schema for the table's shape.
-  const objects=(await client.query(`
-    SELECT to_regclass('public.refresh_requests') IS NOT NULL AS table_present,
-           to_regclass('public.refresh_requests_profile_idx') IS NOT NULL AS index_present,
-           EXISTS(SELECT 1 FROM information_schema.columns
-                   WHERE table_schema='public' AND table_name='refresh_requests'
-                     AND column_name='tenant_id' AND data_type='uuid' AND is_nullable='NO') AS tenant_id_ready
-  `)).rows[0];
+  // Managed Nile cancels mixed logical-catalog subqueries (SQLSTATE 57014).
+  // Keep each check separate; never infer an affirmative result from a timeout.
+  const objects={
+    table_present:(await client.query("SELECT to_regclass('public.refresh_requests') IS NOT NULL AS table_present")).rows[0]?.table_present===true,
+    index_present:(await client.query("SELECT to_regclass('public.refresh_requests_profile_idx') IS NOT NULL AS index_present")).rows[0]?.index_present===true,
+    tenant_id_ready:(await client.query(`
+      SELECT count(*)::int AS column_count FROM information_schema.columns
+       WHERE table_schema='public' AND table_name='refresh_requests'
+         AND column_name='tenant_id' AND data_type='uuid' AND is_nullable='NO'
+    `)).rows[0]?.column_count===1,
+  };
   // Nile's tenant-aware index may not resolve through to_regclass in the
   // logical catalog. Require affirmative evidence from the table-scoped
   // PostgreSQL index view instead; an empty result is not a PASS.
@@ -75,19 +79,25 @@ async function getState(client, migrations) {
     )===true;
   }
   const state=assertRetrieve012Ledger(migrations,rows,objects);
-  const historical=(await client.query(`
-    SELECT to_regclass('public.profile_job_count_snapshots') IS NOT NULL AS table_present,
-           (SELECT count(*)::int FROM information_schema.columns
-             WHERE table_schema='public' AND table_name='profile_job_count_snapshots'
-              AND column_name IN ('tenant_id','search_profile_id','scope_key','profile_version','fit_algorithm_version','totals','evaluated_at')) AS column_count,
-           EXISTS(SELECT 1 FROM pg_catalog.pg_index i
-             JOIN pg_catalog.pg_class idx ON idx.oid=i.indexrelid
-             WHERE i.indrelid=to_regclass('public.profile_job_count_snapshots')
-               AND idx.relname='profile_job_count_snapshots_version_idx'
-               AND i.indisvalid AND i.indisready
-               AND pg_get_indexdef(i.indexrelid) ~* '\\(tenant_id, search_profile_id, profile_version\\)') AS index_present
-  `)).rows[0];
-  if (!historical?.table_present || Number(historical.column_count)!==7 || !historical.index_present)
+  const historicalTable=(await client.query("SELECT to_regclass('public.profile_job_count_snapshots') IS NOT NULL AS table_present")).rows[0]?.table_present===true;
+  const historicalColumns=Number((await client.query(`
+    SELECT count(*)::int AS column_count FROM information_schema.columns
+     WHERE table_schema='public' AND table_name='profile_job_count_snapshots'
+       AND column_name IN ('tenant_id','search_profile_id','scope_key','profile_version','fit_algorithm_version','totals','evaluated_at')
+  `)).rows[0]?.column_count);
+  const historicalIndexes=await client.query(`
+    SELECT idx.relname AS indexname, pg_get_indexdef(i.indexrelid) AS indexdef
+      FROM pg_catalog.pg_index i
+      JOIN pg_catalog.pg_class idx ON idx.oid=i.indexrelid
+     WHERE i.indrelid=to_regclass('public.profile_job_count_snapshots')
+       AND idx.relname='profile_job_count_snapshots_version_idx'
+       AND i.indisvalid AND i.indisready
+  `);
+  const historicalIndex=historicalIndexes.rows?.some(row =>
+    row.indexname==='profile_job_count_snapshots_version_idx' &&
+    /\(\s*tenant_id\s*,\s*search_profile_id\s*,\s*profile_version\s*\)/i.test(String(row.indexdef||''))
+  )===true;
+  if (!historicalTable || historicalColumns!==7 || !historicalIndex)
     fail('RETRIEVE012_HISTORICAL_011_SCHEMA_DRIFT');
   return state;
 }
@@ -137,7 +147,7 @@ if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
     process.stdout.write(JSON.stringify(result)+'\n');
   } catch(error) {
     // Never print raw SQL, database URL, credentials, or provider exception text.
-    const code=typeof error?.code==='string' && /^RETRIEVE012_[A-Z_0-9]+$/.test(error.code) ? error.code : 'RETRIEVE012_EXECUTION_FAILED';
+    const code=typeof error?.code==='string' && /^RETRIEVE012_[A-Z_0-9]+$/.test(error.code) ? error.code : typeof error?.code==='string' && /^[0-9A-Z]{5}$/.test(error.code) ? 'RETRIEVE012_SQLSTATE_'+error.code : 'RETRIEVE012_EXECUTION_FAILED';
     process.stderr.write(code+'\n');
     process.exitCode=86;
   } finally { await closeMigrationPool(); }
