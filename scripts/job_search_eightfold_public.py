@@ -101,8 +101,15 @@ def normalize(item, base_url, domain, company_name):
         item.get("workLocationOption") or item.get("work_location_option")
         or item.get("locationFlexibility") or item.get("location_flexibility")
     ).lower()
-    remote = "remote" in workplace
-    arrangement = "hybrid" if "hybrid" in workplace else ("remote" if remote else "onsite")
+    if "hybrid" in workplace:
+        arrangement = "hybrid"
+    elif any(value in workplace for value in ("onsite", "on-site", "on site", "in-office", "not remote")):
+        arrangement = "onsite"
+    elif "remote" in workplace:
+        arrangement = "remote"
+    else:
+        arrangement = "unknown"
+    remote = arrangement == "remote"
     employment = item.get("employmentType") or item.get("employment_type") or []
     if not isinstance(employment, list):
         employment = [employment]
@@ -118,8 +125,7 @@ def normalize(item, base_url, domain, company_name):
         "work_arrangement": arrangement,
         "employment_statuses": [str(value) for value in employment if str(value).strip()],
         "date_posted": _epoch_or_iso(
-            item.get("postedTs") or item.get("posted_ts") or item.get("creationTs")
-            or item.get("t_create") or item.get("t_update")
+            item.get("postedTs") or item.get("posted_ts")
         ),
         "source_url": source_url,
         "sources": [{"provider": "Eightfold PCSX", "domain": domain}],

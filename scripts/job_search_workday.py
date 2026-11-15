@@ -10,10 +10,11 @@ from concurrent.futures import ThreadPoolExecutor
 import re
 from html.parser import HTMLParser
 from urllib.parse import quote, urlsplit
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
 import job_search as engine
+import diagnostics
 
 PAGE_SIZE = 20
 MAX_POSTINGS = 500
@@ -193,7 +194,17 @@ def normalize(detail, summary, board, company_name):
         elif extra_country not in countries:
             countries.append(extra_country)
     remote_text = " ".join(str(info.get(key) or "") for key in ("remoteType", "workplaceType"))
-    remote = bool(re.search(r"\bremote\b", remote_text, re.I) or re.search(r"\bremote\b", location, re.I))
+    # Missing remote data is not proof of an on-site role.
+    mode_evidence = remote_text.strip().casefold()
+    if re.search(r"\bhybrid\b", mode_evidence):
+        arrangement = "hybrid"
+    elif re.search(r"\b(?:on[ -]?site|in[ -]?office|not remote)\b", mode_evidence):
+        arrangement = "onsite"
+    elif re.search(r"\bremote\b", mode_evidence):
+        arrangement = "remote"
+    else:
+        arrangement = "unknown"
+    remote = arrangement == "remote"
     employment = info.get("timeType") or info.get("employmentType")
     source_url = board["public_base"] + str(external_path)
 
@@ -206,15 +217,15 @@ def normalize(detail, summary, board, company_name):
         "countries": countries,
         "_jscc_country_scope_complete": bool(country and additional_verified),
         "remote": remote,
-        "work_arrangement": "remote" if remote else "onsite",
+        "work_arrangement": arrangement,
         "employment_statuses": engine.list_values(employment),
         "date_posted": info.get("startDate"),
         "source_url": source_url,
         "sources": [{"provider": "Workday", "tenant": board["tenant"], "site": board["site"]}],
         "_jscc_field_provenance": {
-            **({"title": "ATS_FIELD"} if title else {}),
+            **({"title": "ATS_FIELD" if info.get("title") else "LISTING_CARD"} if title else {}),
             **({"description": "ATS_FIELD"} if info.get("jobDescription") else {}),
-            **({"location": "ATS_FIELD"} if location else {}),
+            **({"location": "ATS_FIELD" if info.get("location") else "LISTING_CARD"} if location else {}),
             **({"date_posted": "ATS_FIELD"} if info.get("startDate") else {}),
         },
     }
@@ -311,14 +322,48 @@ def collect(career_url, company_name, max_postings=MAX_POSTINGS, opener=urlopen,
         detail = _get_detail(board, summary.get("externalPath"), opener=opener)
         return normalize(detail, summary, board, company_name)
 
-    if detail_workers == 1 or len(valid) < 2:
-        records = [load_record(summary) for summary in valid]
-    else:
-        with ThreadPoolExecutor(max_workers=detail_workers) as pool:
-            records = list(pool.map(load_record, valid))
+    # Collect detail failures independently. Do not enqueue an entire board
+    # after a provider has exhausted the existing retry allowance.
+    def load_checked(summary):
+        try:
+            return load_record(summary), None
+        except (HTTPError, URLError, OSError, ValueError) as exc:
+            return None, exc
+
+    records, detail_errors = [], []
+    deferred_details = 0
+    with ThreadPoolExecutor(max_workers=detail_workers) as pool:
+        for offset in range(0, len(valid), detail_workers):
+            batch = valid[offset:offset + detail_workers]
+            outcomes = list(pool.map(load_checked, batch))
+            records.extend(record for record, _ in outcomes if record is not None)
+            detail_errors.extend(error for _, error in outcomes if error is not None)
+            if any(isinstance(error, HTTPError) and error.code in {401, 403, 429}
+                   for _, error in outcomes):
+                deferred_details = len(valid) - offset - len(batch)
+                break
 
     connector = f"workday:{board['tenant']}:{board['site']}"
-    result = [engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
+    # No usable detail after failures must remain a real failure, not empty success.
+    result = ([engine.CollectionResult(connector, "public_cxs", True, records, len(records))]
+              if records or not detail_errors else [])
+    if detail_errors:
+        def failure_kind(error):
+            if isinstance(error, HTTPError):
+                code = {401: "AUTH_REQUIRED", 403: "ACCESS_DENIED", 429: "RATE_LIMITED"}.get(
+                    error.code, "HTTP_SERVER_ERROR" if error.code >= 500 else "HTTP_CLIENT_ERROR")
+                return code, "authentication" if error.code in {401, 403} else "fetch", error.code
+            if isinstance(error, ValueError):
+                return "SCHEMA_ERROR", "parse", None
+            return "NETWORK_ERROR", "fetch", None
+        groups = {}
+        for error in detail_errors:
+            kind = failure_kind(error)
+            groups[kind] = groups.get(kind, 0) + 1
+        for (code, stage, http), count in groups.items():
+            result.append(engine.CollectionResult(connector, "detail_partial", False, [], 0,
+                diagnostics.sanitize_text(f"{count} Workday detail(s) failed: {code}; {deferred_details} not requested after access/rate limit"),
+                error_code=code, failure_stage=stage, http_status=http))
     if scoped_partial:
         result.append(engine.CollectionResult(connector, "bounded_search_partial", False, [], 0,
             "Workday scoped search incomplete within existing request cap or malformed rows",

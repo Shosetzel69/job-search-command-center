@@ -59,6 +59,18 @@ class EightfoldPublicTests(unittest.TestCase):
         self.assertTrue(last["remote"])
         self.assertIn("/careers/job/200-delivery-manager",last["source_url"])
 
+    def test_no_false_posted_date_or_onsite_default(self):
+        row = eightfold.normalize({"id":"1","name":"Delivery Manager","t_update":1790800000000,
+                                   "creationTs":1790800000000},
+                                  "https://jobs.vodafone.com","vodafone.com","Vodafone")
+        self.assertIsNone(row["date_posted"])
+        self.assertEqual(row["work_arrangement"],"unknown")
+        self.assertFalse(row["remote"])
+        row = eightfold.normalize({"id":"2","name":"Delivery Manager","workLocationOption":"Hybrid Remote"},
+                                  "https://jobs.vodafone.com","vodafone.com","Vodafone")
+        self.assertEqual(row["work_arrangement"],"hybrid")
+        self.assertFalse(row["remote"])
+
     def test_missing_positions_fails_closed(self):
         opener=lambda *_args,**_kwargs: FakeResponse(b'{"data":{"count":5}}')
         with self.assertRaises(ValueError):

@@ -305,6 +305,13 @@ def emit_source_final(run_id, item):
         outcome=outcome,
         legacy_status=item.get("status"),
         records=item.get("records", 0),
+        records_collected_raw=item.get("records_collected_raw", 0),
+        records_scope_excluded=item.get("records_scope_excluded", 0),
+        records_quality_excluded=item.get("records_quality_excluded", 0),
+        records_malformed=item.get("records_malformed", 0),
+        provider_scope_mode=item.get("provider_scope_mode"),
+        provider_scope_evidence=item.get("provider_scope_evidence"),
+        quality_disposition=item.get("quality_disposition"),
         quality_counts=item.get("quality_counts"),
         quality_issues=item.get("quality_issues"),
         error_code=item.get("error_code"),
@@ -771,6 +778,23 @@ def record_results(item, results):
                 f"rejected {rejected} of {accepted + rejected} collected job(s) for field quality",
             )))
 
+    counts = item.get("quality_counts") or {}
+    incomplete = int(counts.get("INCOMPLETE", 0))
+    valid = int(counts.get("VALID", 0))
+    invalid = int(counts.get("INVALID", 0))
+    item["quality_disposition"] = (
+        "NO_VALID_FIELDS" if (incomplete or invalid) and not valid else
+        "MIXED" if incomplete or invalid else "VALID" if valid else "NOT_MEASURED"
+    )
+    # Qualify DEV collection with no fully validated rows and actual missing
+    # essential fields. Do not mistake provenance-only uncertainty or a
+    # successful out-of-scope response for transport failure.
+    essential = {"TITLE_LISTING_ONLY", "DESCRIPTION_EMPTY", "LOCATION_EMPTY"}
+    if (nile_only_dev_retrieve() and item.get("outcome") == "success"
+            and item["records"] and incomplete and not valid
+            and essential.intersection(item.get("quality_issues") or {})):
+        item["outcome"] = "partial"
+        item["error"] = f"{incomplete} collected job(s) incomplete; essential fields missing or provisional"
     if item.get("error") and not item.get("failure_reason"):
         item["failure_reason"] = item["error"]
 
@@ -1070,6 +1094,8 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         item["postings_updated"] = int(counts.get("postings_updated", 0))
         item["canonical_jobs_published_this_run"] = int(publication.get(item["source_id"], 0)) if publication_known else None
     status.update(aggregate_source_results(plan))
+    status["source_quality_inventory"] = dict(sorted(Counter(
+        item.get("quality_disposition", "NOT_MEASURED") for item in plan).items()))
     for item in plan:
         if item.get("status") in {"skipped", "inactive", "unsupported"}:
             item["provider_scope_mode"] = "NOT_EXECUTED"
@@ -1127,5 +1153,20 @@ def run(config, now, run_id=None, retrieve_scope=None, request_signature=None):
         excluded=status.get("excluded", 0),
         **{field: status[field] for field in COUNTERS},
     )
+    # A compact audit survives tail-limited log access without job content.
+    diagnostics.emit_event("search.run.audit", run_level, run_id=run_id,
+        record_totals=status["source_record_totals"],
+        provider_scope_inventory=status["provider_scope_inventory"],
+        quality_inventory=status["source_quality_inventory"],
+        publication=status["canonical_publication"],
+        projected_postings=int((shared_corpus_result or {}).get("records_projected", 0)),
+        failure_codes=status["source_failure_codes"])
+    failed = [item for item in plan if item.get("outcome") == "failed"]
+    for offset in range(0, len(failed), 15):
+        diagnostics.emit_event("search.run.failed_sources", "WARN", run_id=run_id,
+            offset=offset, total=len(failed), sources=[
+                {"source_id": item.get("source_id"), "source": item.get("source"),
+                 "code": item.get("error_code"), "stage": item.get("failure_stage")}
+                for item in failed[offset:offset+15]])
     print(json.dumps({field: status[field] for field in COUNTERS}))
     return 2 if status["status"] == "failed" else 0

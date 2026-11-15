@@ -245,6 +245,52 @@ class WorkdayConnectorTests(unittest.TestCase):
                 self.assertFalse(workday._valid_external_path(path))
         self.assertTrue(workday._valid_external_path("/job/Bucharest/Role_R-2"))
 
+    def test_detail_error_retains_valid_jobs_and_marks_partial(self):
+        from urllib.error import HTTPError
+        opener = Mock(side_effect=[
+            FakeResponse({"total": 2, "jobPostings": [
+                {"title": "A", "externalPath": "/job/A"},
+                {"title": "B", "externalPath": "/job/B"},
+            ]}),
+            HTTPError("https://example.wd3.myworkdayjobs.com/job/A", 404, "Gone", {}, None),
+            FakeResponse({"jobPostingInfo": {"jobReqId": "B", "title": "B",
+                "location": "Bucharest", "jobDescription": "<p>Delivery</p>"}}),
+        ])
+        results = workday.collect("https://example.wd3.myworkdayjobs.com/External",
+                                  "Example", opener=opener)
+        self.assertEqual(len(results), 2)
+        self.assertTrue(results[0].ok)
+        self.assertEqual(len(results[0].records), 1)
+        self.assertEqual(results[1].http_status, 404)
+        self.assertFalse(results[1].ok)
+
+    def test_detail_rate_limit_stops_future_requests_and_never_returns_empty_success(self):
+        from urllib.error import HTTPError
+        opener = Mock(side_effect=[
+            FakeResponse({"total": 2, "jobPostings": [
+                {"title": "A", "externalPath": "/job/A"},
+                {"title": "B", "externalPath": "/job/B"},
+            ]}),
+            HTTPError("https://example.wd3.myworkdayjobs.com/job/A", 429, "Limit",
+                      {"Retry-After": "120"}, None),
+        ])
+        results = workday.collect("https://example.wd3.myworkdayjobs.com/External",
+                                  "Example", opener=opener)
+        self.assertEqual(opener.call_count, 2)
+        self.assertFalse(any(result.ok for result in results))
+        self.assertEqual(results[0].error_code, "RATE_LIMITED")
+
+    def test_workday_missing_work_mode_is_unknown_and_listing_fields_are_provisional(self):
+        board = workday.parse_career_url("https://example.wd3.myworkdayjobs.com/External")
+        summary = {"title": "Role", "externalPath": "/job/A", "locationsText": "Bucharest"}
+        row = workday.normalize({"jobPostingInfo": {"jobReqId": "A"}}, summary, board, "Example")
+        self.assertEqual(row["work_arrangement"], "unknown")
+        self.assertEqual(row["_jscc_field_provenance"]["title"], "LISTING_CARD")
+        self.assertEqual(row["_jscc_field_provenance"]["location"], "LISTING_CARD")
+        row = workday.normalize({"jobPostingInfo": {"jobReqId": "A", "remoteType": "Hybrid"}}, summary, board, "Example")
+        self.assertEqual(row["work_arrangement"], "hybrid")
+        self.assertFalse(row["remote"])
+
     def test_workday_429_respects_retry_after(self):
         from urllib.error import HTTPError
         error = HTTPError("https://example.com", 429, "Too Many Requests",
