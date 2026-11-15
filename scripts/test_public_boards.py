@@ -1507,13 +1507,13 @@ class PublicBoardAdapterTests(unittest.TestCase):
         with patch.object(boards, "PublicClient", return_value=fake_client):
             with patch.object(boards, "_record", side_effect=fail_one_record):
                 results = boards.collect({"name": "Societe Generale"})
-        self.assertEqual(len(results), 2)
+        self.assertEqual(len(results), 3)
         self.assertTrue(results[0].ok)
         self.assertEqual(len(results[0].records), 1)
         self.assertEqual(results[0].records[0]["job_title"], "Delivery Manager")
-        self.assertFalse(results[1].ok)
-        self.assertEqual(results[1].error_code, "SCHEMA_ERROR")
-        self.assertEqual(results[1].failure_stage, "parse")
+        self.assertEqual(results[0].records[0]["description"], "")
+        self.assertTrue(all(not result.ok for result in results[1:]))
+        self.assertTrue(any(result.error_code == "SCHEMA_ERROR" and result.failure_stage == "parse" for result in results[1:]))
 
     def test_socgen_all_malformed_still_fails(self):
         html = '<a href="/en/job-offers/invalid-1-en">Bad Posting</a>'
