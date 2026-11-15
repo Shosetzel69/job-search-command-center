@@ -63,6 +63,25 @@ class TestZoho(unittest.TestCase):
 
 
 class ModernZohoTests(unittest.TestCase):
+    def test_direct_detail_requires_exact_route_and_structured_identity(self):
+        import json
+        import time
+        row = {"jobid":"866885000000930001","job_title":"IT Project Manager"}
+        tenant = "alpha.zohorecruit.com"
+        payload = {"jobId":row["jobid"],"jobTitle":row["job_title"],
+                   "jobDescriptionDetails":[{"richText":{"fieldLabel":"Job Description","value":"Plan delivery."}}]}
+        def html(value):
+            return ('<h1>IT Project Manager</h1><script>data = '+json.dumps(value)+';</script>').encode()
+        accepted = zoho._modern_detail_link(row,tenant,
+            lambda req,timeout:Resp(html(payload),req.full_url),time.monotonic()+10)
+        self.assertIn(row["jobid"],accepted)
+        for bad in (
+            lambda req,timeout:Resp(html({**payload,"jobId":"999999999999999999"})+row["jobid"].encode(),req.full_url),
+            lambda req,timeout:Resp(html(payload),"https://"+tenant+"/careers"),
+            lambda req,timeout:Resp(html({**payload,"jobTitle":"Other role"}),req.full_url),
+        ):
+            self.assertIsNone(zoho._modern_detail_link(row,tenant,bad,time.monotonic()+10))
+
     def test_modern_public_jobs_with_description(self):
         import json
         from html import escape
