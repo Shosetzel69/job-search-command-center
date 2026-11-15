@@ -2,6 +2,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getPool, withTransaction } from './db/pool.js';
 import {
   deleteTenantDomain,
+  guardDevProjectionWrite,
   ensureTenant,
   resolveAccountDeletionTarget,
   requireUuid,
@@ -12,7 +13,7 @@ import {
 import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
 import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from './profile-evaluation.js';
 import { userRefreshScopes } from './retrieve-scope.js';
-import { readFailedRunCompletion } from './runtime-gcp.js';
+import { devPurgeActive, readFailedRunCompletion } from './runtime-gcp.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
   'target_role_families',
@@ -836,6 +837,7 @@ export async function beginRefreshRequest(authContext, intent, env = process.env
   }
   const requestId = randomUUID();
   return withTenantTransaction(authContext, async tx => {
+    await guardDevProjectionWrite(tx,env);
     const profile = authContext.role === 'USER' ? await resolveActiveSearchProfileTx(tx) : null;
     await tx.query(
       `INSERT INTO refresh_requests
@@ -858,6 +860,7 @@ export async function finishRefreshRequest(authContext, requestId, result, env =
   const safeOutcome = runId !== null && !correlated ? 'DISPATCH_UNKNOWN' : outcome;
   const reason = /^[A-Z0-9_]{1,80}$/.test(String(result?.reason || '')) ? result.reason : null;
   return withTenantTransaction(authContext, async tx => {
+    await guardDevProjectionWrite(tx,env);
     const updated = await tx.query(
       `UPDATE refresh_requests
           SET outcome=$3, run_id=$4, reason=$5, updated_at=now()
@@ -1100,6 +1103,7 @@ export async function listProfileJobs(
   if (!Number.isFinite(anchor.getTime())) throw httpError('STALE_CURSOR', 400);
 
   return withTenantTransaction(authContext, async tx => {
+    await guardDevProjectionWrite(tx,env);
     const foundation = await resolveActiveSearchProfileTx(tx);
     const params = [tx.tenantId, anchor, foundation.search_profile_id];
     const where = [
@@ -1380,6 +1384,7 @@ export async function setJobState(authContext, jobId, patch, env = process.env, 
   if (seen != null && typeof seen !== 'boolean') throw httpError('seen must be boolean', 400);
 
   return withTenantTransaction(authContext, async tx => {
+    await guardDevProjectionWrite(tx,env);
     const exists = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id = $1', [jobId]);
     if (!exists.rows?.length) throw httpError('Job not found', 404);
     const result = await tx.query(
@@ -1732,7 +1737,10 @@ export async function saveSchedulerConfig(authContext, input, env = process.env,
     schedule_expression:Object.hasOwn(source, 'schedule_expression') ? (expression || null) : current.schedule_expression,
     timezone:timezone == null ? (current.timezone || 'Europe/Bucharest') : timezone,
   };
-  await db.query(
+  await withTransaction(async tx => {
+    await tx.query('SELECT singleton FROM scheduler_config WHERE singleton=true FOR UPDATE');
+    if (await devPurgeActive(env)) throw httpError('DEV DB Purge in progress',409);
+    await tx.query(
     `INSERT INTO scheduler_config(singleton, enabled, schedule_expression, timezone, updated_at)
      VALUES (true, $1, $2, $3, now())
      ON CONFLICT(singleton)
@@ -1741,7 +1749,8 @@ export async function saveSchedulerConfig(authContext, input, env = process.env,
                    timezone=EXCLUDED.timezone,
                    updated_at=now()`,
     [next.enabled, next.schedule_expression, next.timezone],
-  );
+    );
+  }, {env,db});
   return next;
 }
 
