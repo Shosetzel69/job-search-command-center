@@ -13,9 +13,7 @@ export function normalizeFitConfig(input){
   total+=c.weight;
   if(!c.weight){out[key]={weight:0};continue;}
   if(key==='compensation'){
-   if(!Number.isFinite(c.minimum)||!Number.isFinite(c.target)||c.minimum<0||c.target<=c.minimum||
-      !/^[A-Z]{3}$/.test(c.currency||'')||!['hour','day','month','year'].includes(c.period)||!['gross','net'].includes(c.basis))fail();
-   out[key]={weight:c.weight,minimum:c.minimum,target:c.target,currency:c.currency,period:c.period,basis:c.basis};
+   out[key]={weight:c.weight};
   }else{
    if(!obj(c.ratings)||!Object.keys(c.ratings).length||Object.keys(c.ratings).length>50)fail();
    const entries=Object.entries(c.ratings).map(([label,value])=>[norm(label),value]);
@@ -33,12 +31,10 @@ export function evaluateFitV2(input,evidence={}){
   const c=config[key],raw=evidence[key];let grade=0,reason='MISSING_DATA',observed=null;
   if(!c.weight)reason='DISABLED';
   else if(key==='compensation'){
-   // Compare only the same declared currency, period and gross/net basis.
-   if(obj(raw)&&Number.isFinite(raw.minimum)&&raw.minimum>=0&&raw.currency===c.currency&&raw.period===c.period&&raw.basis===c.basis){
-    observed=raw.minimum;
-    grade=observed<c.minimum?0:observed>=c.target?5:1+Math.floor(4*(observed-c.minimum)/(c.target-c.minimum));
-    reason=grade?'MATCH':'NO_MATCH';
-   }
+   // Presence of a confirmed numerical compensation, regardless of currency or period.
+   const amounts=typeof raw==='number'?[raw]:obj(raw)?[raw.amount,raw.minimum,raw.maximum]:[];
+   const amount=amounts.find(v=>typeof v==='number'&&Number.isFinite(v)&&v>=0);
+   if(amount!==undefined){observed=raw;grade=5;reason='MATCH';}
   }else{
    const vals=[...new Set((Array.isArray(raw)?raw:[raw]).map(norm).filter(v=>v&&!['unknown','n/a','unspecified','nespecificat'].includes(v)))];
    if(vals.length){observed=vals;grade=Math.max(0,...vals.map(v=>own(c.ratings,v)?c.ratings[v]:0));reason=grade?'MATCH':'NO_MATCH';}
