@@ -1464,13 +1464,19 @@ class PublicBoardAdapterTests(unittest.TestCase):
             "https://app.torre.ai/search-job?query=project%20manager",
             html,
             {"browser_status":"rendered"},
-        )):
-            result=boards.collect({"name":"Torre","url":"https://torre.ai/"})[0]
+        )), patch.object(boards.PublicClient,"get",side_effect=ValueError("detail unavailable")):
+            results=boards.collect({"name":"Torre","url":"https://torre.ai/"})
+        result=results[0]
         self.assertTrue(result.ok)
         self.assertEqual(len(result.records),1)
         self.assertEqual(result.records[0]["job_title"],"Project Manager")
         self.assertEqual(result.records[0]["source_url"],"https://torre.ai/post/kWR9gZ0r-gotofrcom-project-manager")
-        self.assertTrue(result.records[0]["remote"])
+        self.assertFalse(result.records[0]["remote"])
+        self.assertEqual(result.records[0]["work_arrangement"],"")
+        self.assertEqual(result.records[0]["location"],"")
+        self.assertEqual(result.records[0]["employment_statuses"],[])
+        self.assertIsNone(result.records[0]["date_posted"])
+        self.assertFalse(results[1].ok)
         self.assertTrue(boards.browser_required("Torre"))
 
     def test_eu_careers_route_uses_current_selection_portal(self):
