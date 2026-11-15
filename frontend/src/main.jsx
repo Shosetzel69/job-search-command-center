@@ -58,9 +58,9 @@ function validateContract(payload,name) {
   if (payload?.schema_version !== DATA_SCHEMA) throw new Error(`${name}: versiune contract ${payload?.schema_version || 'lipsa'}; asteptat ${DATA_SCHEMA}`);
 }
 
-async function fetchJson(path,token) {
+async function fetchJson(path,token,signal) {
   const bearer = token && token !== COOKIE_SESSION_BEARER ? { Authorization:`Bearer ${token}` } : {};
-  const response = await fetch(path,{ headers:bearer, cache:'no-store', credentials:'same-origin' });
+  const response = await fetch(path,{ headers:bearer, cache:'no-store', credentials:'same-origin', signal });
   let payload=null; try { payload=await response.json(); } catch { payload=null; }
   if (!response.ok) { const error=new Error(payload?.error || `${path}: HTTP ${response.status}`); error.status=response.status; throw error; }
   return payload;
@@ -480,7 +480,7 @@ function App(){
   const[deleteAccountOpen,setDeleteAccountOpen]=useState(false),[deleteAccountConfirmation,setDeleteAccountConfirmation]=useState(''),[deletingAccount,setDeletingAccount]=useState(false);
   const[jobPage,setJobPage]=useState({nextCursor:null,loading:false,loadingMore:false,results:0});
   const[pageNumber,setPageNumber]=useState(1),[resultTotal,setResultTotal]=useState(null);
-  const pageCursorHistory=useRef([null]),pageRequestSerialRef=useRef(0),pageNavigationPendingRef=useRef(false);
+  const pageCursorHistory=useRef([null]),pageRequestSerialRef=useRef(0),pageNavigationPendingRef=useRef(false),countAbortRef=useRef(null);
   const activeViewRef=useRef(view),activeKpiRef=useRef(kpiFilter);
   const[archivedKeys,setArchivedKeys]=useState([]);
   const pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),serverQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
@@ -513,13 +513,14 @@ function App(){
       setJobs([]);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';return null;
     }
     const requestSerial=++pageRequestSerialRef.current;
+    if(!append){countAbortRef.current?.abort();setResultTotal(null);}
     const size=jobPageSize(filterState.pageSize);
     const viewScope=activeViewRef.current,kpiScope=activeKpiRef.current;
     const pathFor=(nextCursor,limit,prefetch)=>buildJobsPath({filters:filterState,cursor:nextCursor,limit,prefetch,view:viewScope,kpiFilter:kpiScope});
     const navigationContext=append?pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current}):null;
     setJobPage(current=>({...current,loading:!append,loadingMore:append}));
     try{
-      const payload=validateJobsPage(await fetchJson(pathFor(cursor,size,size),token));
+      const payload=validateJobsPage(await fetchJson(pathFor(cursor,size,0),token));
       let batch=payload,next=payload.next_cursor;const collected=[...payload.jobs];
       for(let i=1;collected.length<size&&next&&i<32;i++){
         if(requestSerial!==pageRequestSerialRef.current)return {ignored:true};
@@ -592,10 +593,12 @@ function App(){
     const scope=pageRequestKey({filters,view,kpiFilter});
     if(scope!==jobPage.scope)return;
     let current=true;
+    const controller=new AbortController();countAbortRef.current=controller;
     const basis=jobPage.countBasis,anchor=jobPage.generatedAt;
-    scanResultCount({basis,anchor,isCurrent:()=>current,load:cursor=>fetchJson(buildJobsPath({filters,view,kpiFilter,cursor,countOnly:true,asOf:anchor,countBasis:basis,prefetch:0}),auth.token)})
-      .then(total=>{if(current&&total!==null)setResultTotal({scope,basis,anchor,total});}).catch(()=>{});
-    return()=>{current=false;};
+    // Keep the first render off the count-scan critical path; cancel stale scans immediately.
+    const timer=setTimeout(()=>scanResultCount({basis,anchor,isCurrent:()=>current&&!controller.signal.aborted,load:cursor=>fetchJson(buildJobsPath({filters,view,kpiFilter,cursor,countOnly:true,asOf:anchor,countBasis:basis,prefetch:0}),auth.token,controller.signal)})
+      .then(total=>{if(current&&!controller.signal.aborted&&total!==null)setResultTotal({scope,basis,anchor,total});}).catch(()=>{}),300);
+    return()=>{current=false;clearTimeout(timer);controller.abort();if(countAbortRef.current===controller)countAbortRef.current=null;};
   },[dataState.status,view,auth.token,jobPage.countBasis,jobPage.generatedAt,jobPage.scope,filters.search,filters.freshness,filters.workModes.join('|'),filters.pageSize,filters.quick,filters.sort,kpiFilter]);
 
   useEffect(()=>{if(dataState.status!=='ready'||restoredScrollRef.current)return;restoredScrollRef.current=true;requestAnimationFrame(()=>window.scrollTo({top:initialUi.scrollY||0,behavior:'auto'}));},[dataState.status,initialUi.scrollY]);
