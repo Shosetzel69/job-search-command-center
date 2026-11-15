@@ -432,6 +432,19 @@ export async function acquireDevPurgeLock(env) {
     async assertIdle(){
       await assertHeld();
       if (await objectMetadata(env,'active.json')) throw runtimeError('Retrieve active or unresolved',409);
+      // Refuse out-of-band or unresolved executions too; no permission escalation.
+      const base=`${RUN_API}/projects/${project(env)}/locations/${region(env)}/jobs/${job(env)}/executions`;
+      let pageToken=null;
+      do {
+        const params=new URLSearchParams({pageSize:'100'});
+        if(pageToken)params.set('pageToken',pageToken);
+        const response=await authorizedFetch(base+'?'+params);
+        if(!response.ok)throw runtimeError('Search execution inventory unavailable',503);
+        const data=await response.json();
+        if((data.executions||[]).some(execution=>!execution.completionTime))throw runtimeError('Search execution still active',409);
+        pageToken=data.nextPageToken||null;
+      }while(pageToken);
+      await assertHeld();
     },
     async clearLatest(){
       await assertHeld();
