@@ -164,6 +164,12 @@ def _source_evidence(item: dict, duration_ms: int) -> dict:
         "connector": item.get("connector"),
         "outcome": item.get("outcome"),
         "records": int(item.get("records") or 0),
+        "records_collected_raw": int(item.get("records_collected_raw") or 0),
+        "records_malformed": int(item.get("records_malformed") or 0),
+        "records_quality_excluded": int(item.get("records_quality_excluded") or 0),
+        "quality_counts": item.get("quality_counts") or {},
+        "quality_issues": item.get("quality_issues") or {},
+        "quality_disposition": item.get("quality_disposition") or "NOT_MEASURED",
         "error": diagnostics.sanitize_text(item.get("error")) if item.get("error") else None,
         "error_code": item.get("error_code"),
         "failure_stage": item.get("failure_stage"),
@@ -207,7 +213,9 @@ def execute_validation(
             ) from exc
         duration_ms = int((time.monotonic() - started) * 1000)
         orchestration.finalize_source_outcomes([item], run_id)
-        evidence["source_results"].append(_source_evidence(item, duration_ms))
+        row = _source_evidence(item, duration_ms)
+        evidence["source_results"].append(row)
+        diagnostics.emit_event("source.validation.result", "WARN" if row["outcome"] in {"failed", "partial"} else "INFO", **row)
 
     failures = [item for item in evidence["source_results"] if item["outcome"] == "failed"]
     evidence["status"] = "completed_with_source_failures" if failures else "completed"
