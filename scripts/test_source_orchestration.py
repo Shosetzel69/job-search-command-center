@@ -456,6 +456,17 @@ class OrchestrationTests(unittest.TestCase):
         self.assertEqual(geo["location"],"Bucharest")
         self.assertTrue(geo["remote"])
 
+    def test_provider_request_measurement_is_not_record_count(self):
+        item = {"source":"Example","source_id":"src-example"}
+        result = engine.CollectionResult("example","q",True,[],100,
+            provider_request_attempts=3, provider_request_measurement="zoho_opener_calls")
+        orchestration.record_results(item,[result])
+        self.assertEqual(item["provider_request_attempts"],3)
+        self.assertEqual(item["provider_reported_total"],100)
+        unknown = {"source":"Other","source_id":"src-other"}
+        orchestration.record_results(unknown,[engine.CollectionResult("other","q",True,[],0)])
+        self.assertIsNone(unknown["provider_request_attempts"])
+
     def test_quality_mixed_batch_rejects_invalid_and_keeps_partial(self):
         valid = record("Jobicy", "valid")
         valid["_jscc_field_provenance"] = {
