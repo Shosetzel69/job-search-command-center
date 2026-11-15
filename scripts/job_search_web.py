@@ -379,6 +379,8 @@ def collect(source, config, now=None, client=None):
         "failure_reason": failure_reason,
         "block_reason": block_reason,
         "block_reasons": block_reasons,
+        "provider_request_attempts": getattr(client, "request_attempts", None),
+        "provider_request_measurement": "public_client_http_attempts_browser_excluded" if browser_attempted else "public_client_http_attempts",
         "pages_attempted": pages,
         "pages_fetched": sum(item["status"] == "fetched" for item in diagnostics),
         "jobs_detected": detected,
