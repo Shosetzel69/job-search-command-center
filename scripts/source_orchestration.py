@@ -389,7 +389,7 @@ def provider_scope_capability(item, config):
         return "QUERY_BOUNDED", "SMARTRECRUITERS_PUBLIC_Q_ROLE_TERMS"
     if connector == "public_board" and public_boards.scoped_public_query(item.get("source"), config):
         return "QUERY_BOUNDED", "PUBLIC_KEYWORD_SINGLE_COMMON_ROLE_TERM"
-    if connector == "public_board" and item.get("source") == "Freelancer.com":
+    if connector == "public_board" and item.get("source") == "Freelancer.com" and engine.configured_titles(config):
         return "QUERY_BOUNDED", "FREELANCER_OR_SEARCH_QUERY_ROLE_TERMS"
     if connector == "public_board":
         spec = public_boards.PUBLIC_BOARD_SOURCES.get(item.get("source"), {})
@@ -563,13 +563,31 @@ def _posting_matches_scope(posting, scope):
     for region in scope.get("target_regions") or []:
         allowed_countries.update(engine.REGION_COUNTRIES.get(str(region).strip().upper(), set()))
 
-    if allowed_countries and posting.country_codes:
-        if set(posting.country_codes) & allowed_countries:
-            return True
-        if posting.work_mode == "remote" and posting.remote_scope in {"Worldwide", "EMEA", "EU"}:
-            return True
-        return False
-
+    countries = set(posting.country_codes or [])
+    remote = posting.work_mode == "remote"
+    remote_scope = str(posting.remote_scope or "").casefold()
+    authorized = {str(code).strip().upper() for code in scope.get("remote_eligible_country_codes") or []}
+    # Explicit regional scope is not a blanket geographic bypass.
+    if remote and remote_scope == "worldwide":
+        return True
+    if remote and remote_scope in {"eu", "emea"}:
+        region = remote_scope.upper()
+        members = set(engine.REGION_COUNTRIES.get(region, set()))
+        if region == "EMEA":
+            members |= set(engine.REGION_COUNTRIES.get("EU", set()))
+        target_regions = {str(r).upper() for r in scope.get("target_regions") or []}
+        if region == "EU":
+            if allowed_countries and not (allowed_countries & members) and "EU" not in target_regions:
+                return False
+            if authorized and not (authorized & members):
+                return False
+        # Incomplete EMEA knowledge is unresolved, not a proven mismatch.
+        return True
+    if countries:
+        if allowed_countries and not (countries & allowed_countries):
+            return False
+        if remote and authorized and not (countries & authorized):
+            return False
     return True
 
 
@@ -581,6 +599,8 @@ def apply_retrieve_scope(item, results, config):
 
     scoped_results = []
     excluded = 0
+    unresolved_roles = 0
+    matched_roles = 0
     for result in results:
         if not result.ok:
             scoped_results.append(result)
@@ -591,6 +611,10 @@ def apply_retrieve_scope(item, results, config):
                 continue
             posting = shared_corpus.prepare_posting(record, source_hint=item.get("source"))
             if posting and any(_posting_matches_scope(posting, scope) for scope in scopes if isinstance(scope, dict)):
+                if posting.role_family == "UNKNOWN":
+                    unresolved_roles += 1
+                else:
+                    matched_roles += 1
                 records.append(record)
             else:
                 excluded += 1
@@ -608,6 +632,8 @@ def apply_retrieve_scope(item, results, config):
             result.provider_request_measurement,
         ))
     item["records_scope_excluded"] = excluded
+    item["records_role_unresolved"] = unresolved_roles
+    item["records_role_matched"] = matched_roles
     return scoped_results
 
 
