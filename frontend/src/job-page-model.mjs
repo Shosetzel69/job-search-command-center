@@ -9,9 +9,7 @@ export function isSearchProfileConfigured(criteria = {}) {
   const subfamilies = Array.isArray(criteria.roleSubfamilies) ? criteria.roleSubfamilies : [];
   const role = families.length > 0 && subfamilies.length > 0;
   const geography = Boolean(criteria.targetRegions?.length || criteria.targetCountries?.length);
-  const workMode = Boolean(criteria.workRemote || criteria.workHybrid || criteria.workOnsite);
-  const contract = Array.isArray(criteria.contractTypes) && criteria.contractTypes.length > 0;
-  return role && geography && workMode && contract;
+  return role && geography;
 }
 
 export function buildJobsPath({ filters = {}, cursor = null, limit = jobPageSize(filters.pageSize), prefetch = jobPageSize(filters.pageSize), view = null, kpiFilter = 'all', countOnly = false, asOf = null, countBasis = null } = {}) {
