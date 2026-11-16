@@ -57,13 +57,14 @@ function excludedCountryCodes(preferences, nomenclatures) {
 }
 
 function contractType(payload, row = {}) {
-  const explicit = String(row.contract_type && row.contract_type !== 'unknown' ? row.contract_type : payload.contract_type || '').trim().toLowerCase();
+  const explicit = String(row.contract_type ?? payload.contract_type ?? '').trim().toLowerCase();
+  if (row.contract_type != null && explicit === 'unknown') return 'unknown';
   if (['permanent','temporary','contract','freelance'].includes(explicit)) return explicit;
   const raw = values(payload.employment_statuses || payload.employment_type || payload.employment_status || payload.job_type)
     .join(' ').toLowerCase();
   if (/freelance/.test(raw)) return 'freelance';
-  if (/contract|contractor|b2b/.test(raw)) return 'contract';
   if (/temporary|fixed[- ]term/.test(raw)) return 'temporary';
+  if (/\b(?:contract|contractor|b2b)\b/.test(raw)) return 'contract';
   if (/permanent/.test(raw)) return 'permanent';
   return 'unknown';
 }
