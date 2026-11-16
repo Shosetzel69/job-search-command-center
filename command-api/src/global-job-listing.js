@@ -147,6 +147,8 @@ export async function listGlobalProfileJobs(authContext,nomenclatures,query,env=
   if(anchor>new Date(now))throw stale();
   return withTenantTransaction(authContext,async tx=>{
     const basis=await readEvaluationBasisTx(tx,nomenclatures);
+    // Bind continuation to tenant, active profile, effective policy and threshold.
+    spec.filter_hash=hash([spec.filter_hash,tx.tenantId,basis.search_profile_id,basis.profile_version,basis.preferences.fit_threshold??80,basis.policy]);
     if(spec.cursor&&(spec.cursor.sort!==spec.sort||spec.cursor.dir!==spec.dir||
       spec.cursor.filter_hash!==spec.filter_hash||spec.cursor.profile_eval_digest!==basis.preference_digest))throw stale();
     const q=buildGlobalListingQuery(tx.tenantId,basis,spec,anchor);
