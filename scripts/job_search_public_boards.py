@@ -3541,6 +3541,161 @@ def _single_detail_jobposting(html, expected_title):
             result["salary"] = numeric
     return result
 
+class _DetailBlocks(HTMLParser):
+    """Read bounded visible blocks, without scripts, controls or page navigation."""
+    BLOCKS = {"h1", "h2", "h3", "h4", "p", "div", "section", "li", "td", "th", "dt", "dd", "br", "tr"}
+    SKIP = {"script", "style", "noscript", "nav", "footer", "button", "svg"}
+    def __init__(self, html):
+        super().__init__(convert_charrefs=True)
+        self.blocks, self.parts, self.hidden = [], [], []
+        self.heading = None
+        self.feed(html)
+        self.close()
+        self.flush()
+    def flush(self):
+        text = " ".join(" ".join(self.parts).split())
+        if text:
+            self.blocks.append((self.heading or "", text))
+        self.parts = []
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP:
+            self.flush()
+            self.hidden.append(tag)
+            return
+        if self.hidden:
+            return
+        if tag in self.BLOCKS:
+            self.flush()
+        if tag in {"h1","h2","h3","h4"}:
+            self.heading = tag
+    def handle_endtag(self, tag):
+        if self.hidden:
+            if self.hidden[-1] == tag:
+                self.hidden.pop()
+            return
+        if tag in self.BLOCKS:
+            self.flush()
+        if tag == self.heading:
+            self.heading = None
+    def handle_data(self, data):
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def _labelled_detail(html, expected_title, name):
+    """Source-specific fallback for explicit labelled fields on an exact posting.
+    Do not treat a listing page or arbitrary surrounding prose as a job record."""
+    if name not in {"Hipo", "Societe Generale"}:
+        return None
+    import unicodedata
+    def clean(text):
+        return " ".join("".join(c for c in text if unicodedata.category(c) != "Cf"
+                                and not 0xFE00 <= ord(c) <= 0xFE0F).split())
+    def fold(text):
+        return "".join(c for c in unicodedata.normalize("NFKD", clean(text).casefold())
+                       if not unicodedata.combining(c))
+    blocks = [(tag, clean(text)) for tag, text in _DetailBlocks(html).blocks]
+    headings = [i for i,(tag,text) in enumerate(blocks) if tag == "h1"]
+    if len(headings) != 1 or fold(blocks[headings[0]][1]) != fold(plain_text(expected_title)):
+        return None
+    index = headings[0]
+    labels = {"angajator", "domeniu", "tip job", "nivel job", "orase", "actualizat la",
+              "remote work", "reference", "start date", "publication date"}
+    sections = {"cerinte", "responsabilitati", "alte informatii", "beneficii"} if name == "Hipo" else {
+        "responsibilities", "profile required", "why join us", "business insight"}
+    groups, values = [], {}
+    current = None
+    for tag,text in blocks[index+1:]:
+        key = fold(text).rstrip(":")
+        if tag in {"h1","h2","h3","h4"}:
+            current = key if key in sections else None
+            if current:
+                groups.append([text, []])
+            continue
+        if current:
+            # Description comes only from explicitly headed job sections.
+            groups[-1][1].append(text)
+            continue
+        if groups:
+            continue
+        for label in labels:
+            match = re.match(r"^" + re.escape(label) + r"\s*:\s*(.*)$", key)
+            if match:
+                values[label] = text.split(":", 1)[1].strip() if ":" in text else ""
+                break
+        else:
+            if key in labels:
+                values[key] = ""
+            elif values and not values[next(reversed(values))]:
+                values[next(reversed(values))] = text
+    description = "\n\n".join(title + "\n" + "\n".join(parts) for title,parts in groups if parts)
+    if not description:
+        return None
+    provenance = {"title":"JOB_DETAIL_HTML", "description":"JOB_DETAIL_HTML"}
+    result = {"job_title":clean(expected_title), "description":description[:100000],
+              "description_completeness":"full", "_jscc_field_provenance":provenance}
+    header = "\n".join(text for _,text in blocks[index+1:next((i for i in range(index+1,len(blocks))
+                           if fold(blocks[i][1]) in sections),len(blocks))])
+    if name == "Hipo":
+        company = values.get("angajator")
+        location = values.get("orase")
+        raw_mode = fold(values.get("remote work") or "")
+        employment = values.get("tip job")
+        updated = values.get("actualizat la") or ""
+        match = re.fullmatch(r"(\d{2})-(\d{2})-(\d{4})", updated)
+        if match:
+            try:
+                result["date_updated"] = datetime(int(match[3]),int(match[2]),int(match[1])).date().isoformat()
+            except ValueError:
+                pass
+        # Hipo explicitly labels the date as an update, never publication.
+        result["date_posted"] = None
+        countries = ["Romania"] if location and fold(location) in {"bucuresti","bucharest"} else []
+    else:
+        company = "Societe Generale"
+        location = None
+        raw_mode = ""
+        employment = None
+        countries = []
+        # Only exact header fields, never description text.
+        for line in header.splitlines():
+            match = re.fullmatch(r"\s*([^,\n]+),\s*([^,\n]+?)\s+(Hybrid|Remote|On-site|Onsite)\s*",line,re.I)
+            if match:
+                location = match[1] + ", " + match[2]
+                raw_mode = fold(match[3])
+                countries = [match[2]] if match[2].casefold() in engine.COUNTRY_NAME_TO_CODE else []
+        mode_lines = [fold(x) for x in header.splitlines() if fold(x) in {"hybrid","remote","on-site","onsite"}]
+        if not raw_mode and len(set(mode_lines)) == 1:
+            raw_mode = mode_lines[0]
+        if not location:
+            for line in header.splitlines():
+                match = re.fullmatch(r"([^,\n]+),\s*([^,\n]+)",line)
+                if match and match[2].strip().casefold() in engine.COUNTRY_NAME_TO_CODE:
+                    location, countries = line, [match[2].strip()]
+                    break
+        match = re.search(r"\bPublication date\s*:?\s*(\d{4})[/-](\d{2})[/-](\d{2})\b",header,re.I)
+        if match:
+            try:
+                result["date_posted"] = datetime(int(match[1]),int(match[2]),int(match[3])).date().isoformat()
+                provenance["date_posted"] = "JOB_DETAIL_HTML"
+            except ValueError:
+                pass
+        if re.search(r"(?im)^Internship(?:\s|$)",header):
+            employment = "Internship"
+    if company:
+        result["company"] = company
+        provenance["company"] = "JOB_DETAIL_HTML"
+    if location:
+        result.update(location=location,countries=countries,country_codes=[])
+        provenance["location"] = "JOB_DETAIL_HTML"
+    mode = {"remote":"remote","hybrid":"hybrid","on-site":"onsite","onsite":"onsite"}.get(raw_mode)
+    if mode:
+        result.update(work_arrangement=mode,work_mode=mode,remote=mode=="remote",hybrid=mode=="hybrid")
+    if employment:
+        result["employment_statuses"] = [employment]
+    return result
+
+
 def protect_context_records(records, name, kind, listing_url, *, max_details=4, max_seconds=10, config=None):
     """Try only bounded same-origin individual detail URLs; otherwise keep
     the title/identity and make unverified fields unknown, never reuse card prose.
@@ -3585,12 +3740,14 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
                 target = urlsplit(final)
                 if (target.scheme, target.netloc, target.path, target.query) == (parts.scheme, parts.netloc, parts.path, parts.query):
                     detail = _single_detail_jobposting(html, record.get("job_title"))
+                    if not detail:
+                        detail = _labelled_detail(html, record.get("job_title"), name)
             except (FetchError, OSError, ValueError, TypeError):
                 pass
         if detail:
             record.update(detail)
             if detail.get("company"):
-                record["company_provenance"] = "JOB_DETAIL_JSONLD"
+                record["company_provenance"] = detail["_jscc_field_provenance"].get("company", "UNKNOWN")
             elif name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo", "No Fluff Jobs"}:
                 record["company"] = "Nespecificata"
                 record["company_provenance"] = "UNKNOWN"
