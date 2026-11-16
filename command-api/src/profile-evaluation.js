@@ -237,6 +237,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     eligibilityState,
     eligibilityReasonCode,
     score,
+    fitMatrix:fit.matrix,
     pros:pros.slice(0, 2),
     risks:risks.slice(0, 2),
     exclusionReason:eligibility.state==='INELIGIBLE' ? compatibilityReasons[eligibility.reason_code] || eligibility.reason_code : null,
