@@ -3572,7 +3572,9 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
                 pass
         if detail:
             record.update(detail)
-            if name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo"} and not detail.get("company"):
+            if detail.get("company"):
+                record["company_provenance"] = "JOB_DETAIL_JSONLD"
+            elif name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo", "No Fluff Jobs"}:
                 record["company"] = "Nespecificata"
                 record["company_provenance"] = "UNKNOWN"
         else:
@@ -3595,7 +3597,7 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
                 provenance["location"] = "LISTING_CARD"
             elif location:
                 provenance["location"] = "LISTING_CARD"
-            if name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo"} or (kind in {"linked_jobs", "rendered_links"} and str(record.get("company") or "").casefold() == name.casefold()):
+            if name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo", "No Fluff Jobs"} or (kind in {"linked_jobs", "rendered_links"} and str(record.get("company") or "").casefold() == name.casefold()):
                 record["company"] = "Nespecificata"
                 record["company_provenance"] = "UNKNOWN"
             if name == "Crossover":
@@ -3789,8 +3791,11 @@ def collect(source, config=None):
                 scope_evidence["listing_valid"]=len(records)
     unresolved = 0
     if name in CONTEXT_RISK_SOURCES:
-        # Every collection mode uses the same bounded provenance gate.
-        records, unresolved = protect_context_records(records, name, kind, url, config=config)
+        # Preserve same-origin and time limits; expand detail budget only for confirmed defect sources.
+        if name in {"Hipo", "Just Join IT", "SkipTheDrive", "Wellfound", "No Fluff Jobs", "Societe Generale"}:
+            records, unresolved = protect_context_records(records, name, kind, url, max_details=30, max_seconds=25, config=config)
+        else:
+            records, unresolved = protect_context_records(records, name, kind, url, config=config)
     result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
     if scope_evidence is not None:
         result[0].provider_scope_details=scope_evidence
