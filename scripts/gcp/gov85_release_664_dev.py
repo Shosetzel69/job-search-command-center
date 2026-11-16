@@ -2,7 +2,7 @@
 """GOV85 #664: coordinated DEV release, including additive migration 013.
 Preparation template: binding to a merged exact-CI application SHA is mandatory.
 """
-import copy, json, re, subprocess, tempfile, time, urllib.request, urllib.error, urllib.parse
+import argparse, copy, json, re, subprocess, tempfile, time, urllib.request, urllib.error, urllib.parse
 from pathlib import Path
 APP="163aae97159a5c71235d414e5cda8b901bbf8ebe"
 CTRL="9257b18cf441ccafec85622055de33a44dd5b416"
@@ -141,7 +141,10 @@ def patch_template(expected,template):
     current=get("jobs",M)
     need(current.get("template")==expected and current.get("etag"),"MIGRATION_TEMPLATE_DRIFT")
     body={"name":current["name"],"etag":current["etag"],"template":template}
-    result=api(f"{ROOT}/jobs/{M}?updateMask=template","PATCH",json.dumps(body).encode())
+    # Cloud Run v2 Jobs PATCH rejects updateMask (confirmed validateOnly HTTP 400).
+    # Validate exactly the request before applying; keep optimistic etag and readback.
+    api(f"{ROOT}/jobs/{M}?validateOnly=true","PATCH",json.dumps(body).encode())
+    result=api(f"{ROOT}/jobs/{M}","PATCH",json.dumps(body).encode())
     wait_op(result)
     need(get("jobs",M).get("template")==template,"MIGRATION_TEMPLATE_READBACK_MISMATCH")
 def execution_logs(execution,marker):
@@ -212,7 +215,7 @@ def attest_migration(result,checksum,mode):
         and result.get("before") in ("PENDING_013","ALREADY_APPLIED"),"MIGRATION_EVIDENCE_MISMATCH")
     if mode=="apply":need(result.get("after")=="ALREADY_APPLIED","MIGRATION_APPLY_UNVERIFIED")
     else:need(result.get("applied") is False and result.get("before")==result.get("after"),"MIGRATION_INSPECT_NOT_READONLY")
-def managed_migration(img,checksum,gen):
+def managed_migration(img,checksum,gen,preflight_only=False):
     owned(gen);quiet()
     original=get("jobs",M)["template"]
     c=container(original["template"])
@@ -228,10 +231,13 @@ def managed_migration(img,checksum,gen):
     try:
         patch_template(original,staged)
         owned(gen);quiet()
-        need(run_migration(["--input-type=module","-e",PROBE],{"DB_POOL_MAX":"2"},"PROBE") is True,"MANAGED_LOCK_PROBE_DENIED")
-        owned(gen);quiet()
         before=run_migration([MIG_SCRIPT],{"EVALUATION013_MODE":"inspect"},"INSPECT")
         attest_migration(before,checksum,"inspect")
+        print("MANAGED_NILE_013_INSPECT=PASS state="+before["before"]+" checksum="+checksum,flush=True)
+        owned(gen);quiet()
+        need(run_migration(["--input-type=module","-e",PROBE],{"DB_POOL_MAX":"2"},"PROBE") is True,"MANAGED_LOCK_PROBE_DENIED")
+        print("MANAGED_NILE_013_LOCK_PROBE=PASS",flush=True)
+        if preflight_only:return
         if before.get("before")=="PENDING_013":
             owned(gen);quiet()
             applied=run_migration([MIG_SCRIPT],{"EVALUATION013_MODE":"apply","EVALUATION013_OWNER_GATE":"APPROVE_EVALUATION_DEV_NILE_013_"+APP},"APPLY")
@@ -252,6 +258,14 @@ def managed_migration(img,checksum,gen):
         print("MIGRATION_TEMPLATE_RESTORED=PASS",flush=True)
 
 def main():
+    parser=argparse.ArgumentParser()
+    parser.add_argument("--resume-generation")
+    parser.add_argument("--preflight-only",action="store_true")
+    opts=parser.parse_args()
+    # The failed release's sentinel is retained. No lock deletion/reacquisition.
+    need(opts.preflight_only,"EXACT_SQL_REVIEW_AND_MANAGED_PROBE_REQUIRED_BEFORE_APPLY")
+    if opts.resume_generation:
+        need(re.fullmatch(r"[0-9]+",opts.resume_generation),"RESUME_GENERATION_INVALID")
     need(SHA.fullmatch(APP) and SHA.fullmatch(CTRL),"UNBOUND_RELEASE_TEMPLATE")
     need(gc("artifacts","repositories","describe","jscc","--project=jscc-shared","--location="+R,"--format=value(dockerConfig.immutableTags)").lower()=="true","REGISTRY_NOT_IMMUTABLE")
     builds=json.loads(gc("builds","list","--project=jscc-shared","--region="+R,"--filter=substitutions._GIT_SHA="+APP,"--format=json"))
@@ -287,13 +301,19 @@ def main():
         import hashlib
         raw=subprocess.run(["git","-C",repo,"show",APP+":command-api/migrations/013_profile_job_evaluation_listing.sql"],capture_output=True,check=True,timeout=30).stdout
         checksum=hashlib.sha256(raw).hexdigest()
-    need(meta(LOCK) is None,"EXISTING_LOCK")
+    if opts.resume_generation:
+        owned(opts.resume_generation)
+        marker=api(STORAGE+urllib.parse.quote(LOCK,safe="")+"?alt=media&generation="+opts.resume_generation)
+        need(marker=={"purpose":"GOV85_RELEASE_664","source_sha":APP},"RESUME_SENTINEL_CONTENT_MISMATCH")
+        owned(opts.resume_generation)
+    else:
+        need(meta(LOCK) is None,"EXISTING_LOCK")
     quiet()
     catalog=str((meta("seed/sources.json") or {}).get("generation",""))
     need(catalog.isdigit(),"CATALOG_GENERATION_UNVERIFIED")
     print("BASELINE=PASS old_sha="+oldsha+" revision="+oldrev+" old_job="+oldjob+" old_service="+oldservice,flush=True)
-    gen=lock()
-    print("LOCK_ACQUIRED generation="+gen,flush=True)
+    gen=opts.resume_generation or lock()
+    print(("LOCK_RESUMED" if opts.resume_generation else "LOCK_ACQUIRED")+" generation="+gen,flush=True)
     touched=False
     migration_complete=False
     migration_started=False
@@ -304,7 +324,12 @@ def main():
         verify_job(oldjob,oldsha,override)
         need(str((meta("seed/sources.json") or {}).get("generation"))==catalog,"CATALOG_DRIFT")
         migration_started=True
-        managed_migration(imgs["jscc-service"],checksum,gen)
+        managed_migration(imgs["jscc-service"],checksum,gen,preflight_only=opts.preflight_only)
+        if opts.preflight_only:
+            owned(gen);quiet()
+            health(fresh["uri"],oldsha)
+            print("MANAGED_PREFLIGHT=PASS LOCK_RETAINED generation="+gen,flush=True)
+            return
         migration_complete=True
         health(fresh["uri"],oldsha)
         touched=True
