@@ -500,6 +500,29 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(warmOwner.totals.all,65);
     assert.equal(warmOwner.search_profile_id,ownerFoundationA.search_profile_id);
     assert.notEqual(warmOwner.search_profile_id,restoredFoundation.search_profile_id);
+    // T-ADV: two independent connections respecting the same tenant-local lock.
+    let unblock,locked;
+    const releasePause=new Promise(resolve=>{unblock=resolve;});
+    const lockReached=new Promise(resolve=>{locked=resolve;});
+    const pausedDb={connect:async()=>{
+      const client=await runtimeDb.connect();
+      return {release:()=>client.release(),query:async(sql,params)=>{
+        const result=await client.query(sql,params);
+        if(sql.includes('pg_try_advisory_xact_lock')){
+          locked(result.rows?.[0]?.acquired);
+          await releasePause;
+        }
+        return result;
+      }};
+    }};
+    const holding=advanceProfileEvaluation(user,jobNomenclatures,env,{db:pausedDb,now:matrixNow});
+    try{
+      assert.equal(await Promise.race([lockReached,holding.then(()=>false)]),true);
+      const contended=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+      assert.equal(contended.status,'BUSY');
+      assert.equal(contended.evaluated,0);
+    }finally{unblock();await holding;}
+    console.log('R6_NATIVE_TWO_TAB_LOCK=PASS');
     const cursorPage=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
     assert.ok(cursorPage.next_cursor);
     await adminDb.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"changed\"'::jsonb) WHERE job_id=$1",[matrixIds.at(-1)]);
