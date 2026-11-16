@@ -201,6 +201,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     };
 
   const roleCorroborated=titleRoleEvidence(title,row,preferences);
+  const eligibilityState=eligibility.state==='INELIGIBLE'||roleCorroborated||eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN')?eligibility.state:'UNKNOWN';
+  const eligibilityReasonCode=eligibility.state==='INELIGIBLE'||roleCorroborated||eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN')?eligibility.reason_code:'ROLE_TITLE_UNCONFIRMED';
   const fit=evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type));
   const score=fit.score;
   const pros=fit.matrix.filter(v=>v.weight&&v.grade===5).map(v=>v.criterion+': preferinta confirmata');
@@ -216,8 +218,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
 
   return {
     eligible:eligibility.state!=='INELIGIBLE'&&!eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN'),
-    eligibilityState:eligibility.state==='INELIGIBLE'||roleCorroborated?eligibility.state:'UNKNOWN',
-    eligibilityReasonCode:eligibility.state==='INELIGIBLE'||roleCorroborated?eligibility.reason_code:'ROLE_TITLE_UNCONFIRMED',
+    eligibilityState,
+    eligibilityReasonCode,
     score,
     pros:pros.slice(0, 2),
     risks:risks.slice(0, 2),
@@ -227,8 +229,8 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       title,
       company,
       initial:company.split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase() || '?',
-      eligibility_state:eligibility.state,
-      eligibility_reason:eligibility.reason_code,
+      eligibility_state:eligibilityState,
+      eligibility_reason:eligibilityReasonCode,
       fit:score,
       fit_matrix:fit.matrix,
       location:row.location || payload.location || payload.short_location || 'Nespecificat',
