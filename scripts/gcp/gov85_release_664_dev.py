@@ -167,7 +167,7 @@ def execution_logs(execution,marker):
         for e in entries:
             structured=e.get("jsonPayload")
             if marker=="LOCK_DIAGNOSTIC" and isinstance(structured,dict) and structured.get("diagnostic")=="EVALUATION013_LOCK_CAPABILITIES":
-                found.append({k:structured.get(k) for k in ("diagnostic","privilege","hashtext","advisory","row_nowait")})
+                found.append({k:structured.get(k) for k in ("diagnostic","privilege","hashtext","advisory","row_nowait","statement_timeout","row_plain","row_contention","row_reacquire","contention_ms")})
                 continue
             if isinstance(structured,dict) and marker!="PROBE" and structured.get("migration")=="013_profile_job_evaluation_listing.sql":
                 found.append({k:structured.get(k) for k in ("status","environment","mode","source_sha","before","after","applied","migration","checksum")})
@@ -182,7 +182,7 @@ def execution_logs(execution,marker):
                     try:x=json.loads(line)
                     except ValueError:continue
                     if isinstance(x,dict) and x.get("diagnostic")=="EVALUATION013_LOCK_CAPABILITIES":
-                        found.append({k:x.get(k) for k in ("diagnostic","privilege","hashtext","advisory","row_nowait")})
+                        found.append({k:x.get(k) for k in ("diagnostic","privilege","hashtext","advisory","row_nowait","statement_timeout","row_plain","row_contention","row_reacquire","contention_ms")})
                 else:
                     try:x=json.loads(line)
                     except ValueError:continue
@@ -248,6 +248,9 @@ try{
  await check('privilege',async()=> (await runtimePrivilegeReadiness()).status==='ok'?'PASS':'DENIED');
  await check('hashtext',async()=> {await db.query("SELECT hashtext('r6-lock-diagnostic')");return 'PASS';});
  a=await db.connect();b=await db.connect();
+ await check('statement_timeout',async()=>{
+   try{await begin(a);return 'PASS';}finally{await rollback(a);}
+ });
  await check('advisory',async()=>{
    const q='SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',p=[5910401,randomUUID()];
    try{
@@ -270,6 +273,36 @@ try{
      if(!excluded)return 'EXCLUSION_DENIED';
      await begin(b);await establishTenantContext(b,tenant);
      return (await b.query(q,[tenant])).rows.length===1?'PASS':'REACQUIRE_DENIED';
+   }finally{await rollback(a);await rollback(b);}
+ });
+ await check('row_plain',async()=>{
+   const owner=(await a.query("SELECT p.profile_id FROM profile p JOIN app_user u ON u.user_id=p.user_id WHERE u.role='ADMIN' AND u.status='ACTIVE' AND p.provisioned_at IS NOT NULL ORDER BY p.profile_id LIMIT 1")).rows[0];
+   if(!owner?.profile_id)return 'NO_ACTIVE_ADMIN';
+   const tenant=String(owner.profile_id);
+   const q="SELECT search_profile_id FROM search_profile WHERE tenant_id=$1 AND status='ACTIVE' FOR UPDATE";
+   const start=async c=>{await c.query('BEGIN');await establishTenantContext(c,tenant);};
+   try{
+     await start(a);
+     if((await a.query(q,[tenant])).rows.length!==1)return 'NO_UNIQUE_ACTIVE_PROFILE';
+     // Ensure timeout configuration is independently supported and bounds the waiter.
+     await start(b);
+     try{await b.query("SET LOCAL statement_timeout = '1500ms'");}
+     catch(e){result.row_contention='TIMEOUT_CONFIG_'+code(e);return 'PASS';}
+     const t=Date.now();
+     // Independent watchdog releases holder even if the server ignores statement timeout.
+     // In that case the waiter succeeds and the diagnostic explicitly fails.
+     let watchdog;
+     const pending=b.query(q,[tenant]).then(()=> 'EXCLUSION_TIMEOUT_DENIED',e=>code(e));
+     const expiry=new Promise(resolve=>{watchdog=setTimeout(()=>resolve('WATCHDOG'),4000);});
+     let outcome=await Promise.race([pending,expiry]);
+     clearTimeout(watchdog);
+     result.contention_ms=Date.now()-t;
+     if(outcome==='WATCHDOG'){await rollback(a);await pending;result.row_contention='TIMEOUT_UNBOUNDED';await rollback(b);return 'PASS';}
+     result.row_contention=(['55P03','57014'].includes(outcome)&&result.contention_ms<3500)?'PASS':outcome;
+     await rollback(b);await rollback(a);
+     await start(b);
+     result.row_reacquire=(await b.query(q,[tenant])).rows.length===1?'PASS':'REACQUIRE_DENIED';
+     return 'PASS';
    }finally{await rollback(a);await rollback(b);}
  });
  console.log(JSON.stringify(result));
