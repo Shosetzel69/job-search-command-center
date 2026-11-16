@@ -56,12 +56,16 @@ async function state(client,files){
  const columns=(await client.query(`SELECT column_name,data_type,is_nullable FROM information_schema.columns
   WHERE table_schema='public' AND table_name='profile_job_evaluation' AND column_name=ANY($1::text[])`,
   [Object.keys(COLUMNS)])).rows;
- const indexes=(await client.query("SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='profile_job_evaluation' AND indexname=ANY($1::text[])",[Object.keys(INDEXES)])).rows;
+ // Nile's pg_indexes can expose physical UUID_public schema names even
+ // when information_schema.columns exposes logical public. Filter by exact
+ // table/name first and validate namespace and definitions separately.
+ const indexes=(await client.query("SELECT schemaname,indexname,indexdef FROM pg_indexes WHERE tablename='profile_job_evaluation' AND indexname=ANY($1::text[])",[Object.keys(INDEXES)])).rows;
+ if(indexes.some(i=>!/^public$|^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_public$/i.test(String(i.schemaname))))fail('EVALUATION013_INDEX_NAMESPACE_DENIED');
  try{return assertEvaluation013Ledger(files,rows,columns,indexes);}
  catch(error){
    // Only native disposable CI receives catalog diagnostics: no runtime data.
    if(error?.code==='EVALUATION013_INDEX_DRIFT'&&process.env.CI==='true'&&process.env.GITHUB_ACTIONS==='true')
-     console.error('EVALUATION013_NATIVE_INDEX_EVIDENCE='+JSON.stringify(indexes.map(i=>({indexname:i.indexname,indexdef:i.indexdef}))));
+     console.error('EVALUATION013_NATIVE_INDEX_EVIDENCE='+JSON.stringify(indexes.map(i=>({schemaname:i.schemaname,indexname:i.indexname,indexdef:i.indexdef}))));
    throw error;
  }
 }
