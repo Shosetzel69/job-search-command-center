@@ -676,3 +676,12 @@ class ContractEvidenceRegressionTests(unittest.TestCase):
                 self.assertEqual(repository._contract_type({"employment_statuses":[raw],"contract_type":"permanent"}),"unknown")
         self.assertEqual(repository._contract_type({"employment_statuses":["FULL_TIME","Permanent"]}),"permanent")
         self.assertEqual(repository._contract_type({"employment_statuses":["FULL_TIME","B2B"]}),"contract")
+
+    def test_remote_ok_mixed_tags_do_not_prove_permanent(self):
+        raw = {"id":"remote-ok:42", "employment_statuses":["project management","full time","agile"], "contract_type":"permanent"}
+        self.assertTrue(repository._workload_only(raw))
+        self.assertEqual(repository._contract_type(raw),"unknown")
+        for tag, expected in [("permanent","permanent"),("B2B","contract"),("freelance","freelance")]:
+            evidence = {**raw, "contract_type":"unknown", "employment_statuses":[*raw["employment_statuses"],tag]}
+            self.assertFalse(repository._workload_only(evidence))
+            self.assertEqual(repository._contract_type(evidence),expected)
