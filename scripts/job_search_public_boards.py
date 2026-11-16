@@ -3459,70 +3459,87 @@ CONTEXT_LOCATION_KINDS = frozenset((
 
 
 def _single_detail_jobposting(html, expected_title):
-    parser = _LuxoftJobPosting()
-    parser.feed(html)
-    jobs = []
-    for script in parser.scripts:
-        try:
-            data = json.loads(script)
-        except (ValueError, TypeError):
-            continue
-        candidates = data if isinstance(data, list) else [data]
-        for item in candidates:
-            if isinstance(item, dict):
-                graph = item.get("@graph")
-                for node in ([item] + (graph if isinstance(graph, list) else [])):
-                    if isinstance(node, dict) and node.get("@type") == "JobPosting":
-                        jobs.append(node)
+    # Only one individually fetched posting may supply fields. Nested schema.org
+    # variants are allowed, but multiple JobPosting nodes remain ambiguous.
+    from job_search_web import Page, objects, is_type, as_list
+    page = Page(html)
+    jobs = [node for document in page.documents for node in objects(document)
+            if is_type(node, "JobPosting")]
     if len(jobs) != 1:
         return None
     job = jobs[0]
     title = plain_text(job.get("title"))
     description = plain_text(job.get("description"))
-    # Same-title corroboration prevents a redirected or adjacent vacancy
-    # from being attached to the stable listing identity.
     if not title or title.casefold() != plain_text(expected_title).casefold() or not description:
         return None
-    organization = job.get("hiringOrganization")
-    company = plain_text(organization.get("name")) if isinstance(organization, dict) else ""
-    locations = job.get("jobLocation")
-    locations = locations if isinstance(locations, list) else [locations]
-    labels, countries = [], []
-    for location in locations:
-        address = location.get("address") if isinstance(location, dict) else None
-        if not isinstance(address, dict):
+    organizations = [plain_text(x.get("name")) for x in as_list(job.get("hiringOrganization"))
+                     if isinstance(x, dict) and x.get("name")]
+    organizations = list(dict.fromkeys(x for x in organizations if x))
+    company = organizations[0] if len(organizations) == 1 else ""
+    def area(value):
+        if isinstance(value, dict):
+            value = value.get("name") or value.get("identifier")
+        text = plain_text(value)
+        return engine.COUNTRY_NAMES.get(text.upper(), text) if len(text) == 2 else text
+    labels, office_countries = [], []
+    for location in as_list(job.get("jobLocation")):
+        if not isinstance(location, dict):
             continue
-        country = address.get("addressCountry")
-        if isinstance(country, dict):
-            country = country.get("name") or country.get("identifier")
-        country = plain_text(country)
-        if len(country) == 2:
-            country = engine.COUNTRY_NAMES.get(country.upper(), country.upper())
-        label = ", ".join(x for x in (plain_text(address.get("addressLocality")),
-                                      plain_text(address.get("addressRegion")), country) if x)
-        if label and label not in labels:
-            labels.append(label)
-        if country and country not in countries:
-            countries.append(country)
-    remote = str(job.get("jobLocationType") or "").upper() == "TELECOMMUTE"
+        for address in as_list(location.get("address")):
+            if not isinstance(address, dict):
+                continue
+            country = area(address.get("addressCountry"))
+            label = ", ".join(x for x in (plain_text(address.get("addressLocality")),
+                                          plain_text(address.get("addressRegion")), country) if x)
+            if label and label not in labels:
+                labels.append(label)
+            if country and country not in office_countries:
+                office_countries.append(country)
+    modes = {str(x).strip().casefold().replace("_", "-") for x in as_list(job.get("jobLocationType"))}
+    if modes & {"hybrid"}:
+        mode = "hybrid"
+    elif modes & {"telecommute", "remote"}:
+        mode = "remote"
+    elif modes & {"onsite", "on-site", "on site", "office"}:
+        mode = "onsite"
+    else:
+        mode = ""
+    restrictions = list(dict.fromkeys(area(x) for x in as_list(job.get("applicantLocationRequirements")) if area(x)))
+    # Office addresses are not evidence of where a remote applicant may work.
+    countries = restrictions if mode == "remote" else office_countries
+    provenance = {"title": "JOB_DETAIL_JSONLD", "description": "JOB_DETAIL_JSONLD"}
+    location = "; ".join(labels) or ("Remote" if mode == "remote" else "")
+    if location:
+        provenance["location"] = "JOB_DETAIL_JSONLD"
+    if job.get("datePosted"):
+        provenance["date_posted"] = "JOB_DETAIL_JSONLD"
     result = {"job_title": title, "description": description[:100000],
-              "location": "; ".join(labels) or ("Remote" if remote else ""),
-              "countries": countries, "remote": remote,
-              "work_arrangement": "remote" if remote else "",
+              "description_completeness": "full", "location": location,
+              "countries": countries, "country_codes": [],
+              "remote": mode == "remote", "hybrid": mode == "hybrid",
+              "work_arrangement": mode, "work_mode": mode,
               "employment_statuses": engine.list_values(job.get("employmentType")),
               "date_posted": job.get("datePosted"),
-              "_jscc_field_provenance": {
-                  "title": "JOB_DETAIL_JSONLD", "description": "JOB_DETAIL_JSONLD",
-                  **({"location": "JOB_DETAIL_JSONLD"} if labels or remote else {}),
-                  **({"date_posted": "JOB_DETAIL_JSONLD"} if job.get("datePosted") else {}),
-              }}
+              "date_updated": job.get("dateModified"),
+              "_jscc_field_provenance": provenance}
+    if restrictions and mode == "remote":
+        result["remote_locations"] = restrictions
     if company:
         result["company"] = company
-        result["_jscc_field_provenance"]["company"] = "JOB_DETAIL_JSONLD"
-    if isinstance(job.get("baseSalary"), dict):
-        result["salary"] = job["baseSalary"]
+        provenance["company"] = "JOB_DETAIL_JSONLD"
+    salary = job.get("baseSalary")
+    if isinstance(salary, dict):
+        amount = salary.get("value")
+        if isinstance(amount, dict):
+            numeric = {"minimum": amount.get("minValue"), "maximum": amount.get("maxValue"),
+                       "amount": amount.get("value"), "currency": salary.get("currency"),
+                       "period": amount.get("unitText")}
+        else:
+            numeric = {"amount": amount, "currency": salary.get("currency")}
+        if any(isinstance(numeric.get(key), (int, float)) and not isinstance(numeric.get(key), bool)
+               for key in ("amount", "minimum", "maximum")):
+            result["salary"] = numeric
     return result
-
 
 def protect_context_records(records, name, kind, listing_url, *, max_details=4, max_seconds=10, config=None):
     """Try only bounded same-origin individual detail URLs; otherwise keep
