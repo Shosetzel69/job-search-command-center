@@ -410,6 +410,61 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(pending.count_status,'INCOMPLETE');assert.equal(pending.totals,null);
     const reevaluated=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:new Date('2026-10-05T12:05:00Z')});
     assert.equal(reevaluated.status,'COMPLETE');
+    // Native keyset order across four pages, including ties and NULLs.
+    const matrixIds=[];
+    for(let i=0;i<65;i++){
+      const suffix=String(i+1).padStart(12,'0'),jobId='aaaaaaaa-1111-4111-8111-'+suffix,postingId='bbbbbbbb-1111-4111-8111-'+suffix;
+      matrixIds.push(jobId);
+      const title='R6SORT Technical Project Manager '+String(i%7);
+      const mode=['remote','hybrid','onsite','unknown'][i%4],contract=['contract','freelance','permanent','unknown'][i%4],country=['RO','BE','DE'][i%3];
+      const published=i%5===0?null:new Date(Date.UTC(2026,9,1+i%4)),seen=new Date(Date.UTC(2026,9,5,8+i%3));
+      await adminDb.query(`INSERT INTO canonical_jobs(job_id,title,company,location,country_codes,work_mode,role_family,
+        lifecycle_status,first_seen_at,last_seen_at,payload,job_version,role_subfamily,seniority,contract_type,remote_scope,
+        classification_status,classification_confidence,classification_version,evaluation_basis_hash)
+        VALUES($1,$2,'R6 Fixture','City',ARRAY[$3]::text[],$4,'PROJECT_DELIVERY_MANAGEMENT','ACTIVE',$5,$5,
+        '{}'::jsonb,1,ARRAY['project_management']::text[],'mid',$6,'Country','matched',1,'2026.10.08-1',repeat('c',64))`,
+        [jobId,title,country,mode,seen,contract]);
+      await adminDb.query(`INSERT INTO source_postings(posting_id,job_id,source_id,source_name,external_job_id,
+        canonical_url,identity_kind,identity_value,posted_at,lifecycle_status,first_seen_at,last_seen_at,seen_run_id,payload)
+        VALUES($1,$2,'r6-sort','Integration',$2::text,'https://example.test/r6','EXTERNAL_ID',$2::text,$3,
+        'ACTIVE',$4,$4,'r6-sort','{}'::jsonb)`,[postingId,jobId,published,seen]);
+    }
+    const matrixNow=new Date('2026-10-05T12:06:00Z');
+    let full;
+    for(let attempts=0;attempts<15;attempts++){
+      full=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+      if(full.status==='COMPLETE')break;
+    }
+    assert.equal(full?.status,'COMPLETE',JSON.stringify(full));
+    const oracle=await adminDb.query(`SELECT job_id,score,sort_title,display_country,display_work_mode,publication_at,retrieve_at
+      FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])`,
+      [user.profile_id,restoredFoundation.search_profile_id,matrixIds]);
+    assert.equal(oracle.rows.length,65);
+    for(const [sort,col] of Object.entries({fit:'score',title:'sort_title',country:'display_country',work_mode:'display_work_mode',publication:'publication_at',retrieve:'retrieve_at'})){
+      for(const dir of ['asc','desc']){
+        const expected=[...oracle.rows].sort((a,b)=>{
+          const av=a[col],bv=b[col];
+          if(av==null||bv==null){if(av==null&&bv!=null)return 1;if(av!=null&&bv==null)return -1;}
+          else{const x=col==='score'?Number(av):av,y=col==='score'?Number(bv):bv;
+            if(x<y)return dir==='asc'?-1:1;if(x>y)return dir==='asc'?1:-1;}
+          return a.job_id.localeCompare(b.job_id);
+        }).map(row=>row.job_id);
+        const actual=[];let cursor=null;
+        for(let page=0;page<4;page++){
+          const result=await listGlobalProfileJobs(user,jobNomenclatures,{sort,dir,limit:20,q:'R6SORT',cursor},env,{db:runtimeDb,now:matrixNow});
+          assert.equal(result.count_status,'EXACT');assert.equal(result.totals.all,65);
+          actual.push(...result.jobs.map(j=>j.id));cursor=result.next_cursor;
+        }
+        assert.equal(cursor,null);assert.deepEqual(actual,expected,sort+' '+dir);
+      }
+    }
+    const cursorPage=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.ok(cursorPage.next_cursor);
+    await adminDb.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"changed\"'::jsonb) WHERE job_id=$1",[matrixIds.at(-1)]);
+    await assert.rejects(listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT',cursor:cursorPage.next_cursor},env,{db:runtimeDb,now:matrixNow}),/STALE_CURSOR/);
+    await adminDb.query('DELETE FROM source_postings WHERE job_id=ANY($1::uuid[])',[matrixIds]);
+    await adminDb.query('DELETE FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',[matrixIds]);
+
 
     });
     await t.test('W025-F01 native preserved assertions',async()=>{
