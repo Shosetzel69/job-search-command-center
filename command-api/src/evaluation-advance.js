@@ -25,6 +25,7 @@ export async function readEvaluationBasisTx(tx,nomenclatures) {
   const preferences=mergeEffectiveConfig(row.preferences,row.policy);
   return Object.freeze({search_profile_id:String(row.search_profile_id),
     profile_version:Number(row.profile_version),preferences,
+    personal:row.preferences??{},policy:row.policy??{},
     preference_digest:evaluationPreferenceDigest(preferences,nomenclatures)});
 }
 
