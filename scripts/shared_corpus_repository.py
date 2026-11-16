@@ -1447,6 +1447,17 @@ def _coverage_scope_metrics(cursor: Any, scope: Mapping[str, Any]) -> tuple[int,
         if _text(value)
     })
     allowed_countries = _coverage_allowed_countries(scope)
+    excluded_regions = sorted({_text(v).upper() for v in scope.get("excluded_regions") or [] if _text(v)})
+    excluded_countries = _coverage_allowed_countries({
+        "target_regions": excluded_regions,
+        "target_country_codes": scope.get("excluded_country_codes") or [],
+    })
+    # PostgreSQL word-boundary patterns are built only from escaped literal terms.
+    def literal_pattern(key):
+        terms = [re.escape(str(v)) for v in scope.get(key) or [] if _text(v)]
+        return r"\y(?:" + "|".join(terms) + r")\y" if terms else None
+    role_pattern = literal_pattern("excluded_role_keywords")
+    erp_pattern = literal_pattern("deep_erp_terms")
 
     cursor.execute(
         """
@@ -1477,6 +1488,13 @@ def _coverage_scope_metrics(cursor: Any, scope: Mapping[str, Any]) -> tuple[int,
             OR j.contract_type = 'unknown'
             OR j.contract_type = ANY(%s::text[])
           )
+          AND NOT (j.country_codes && %s::text[])
+          AND NOT (j.work_mode = 'remote' AND upper(j.remote_scope) = ANY(%s::text[]))
+          AND (%s::text IS NULL OR NOT (j.title ~* %s::text))
+          AND (%s::text IS NULL OR NOT (
+            (j.title || ' ' || COALESCE(j.payload->>'description', '')) ~* %s::text
+            AND (j.title || ' ' || COALESCE(j.payload->>'description', '')) ~* 'implement|consultant|specialist|functional'
+          ))
           AND (
             cardinality(%s::text[]) = 0
             OR cardinality(j.country_codes) = 0
@@ -1495,6 +1513,12 @@ def _coverage_scope_metrics(cursor: Any, scope: Mapping[str, Any]) -> tuple[int,
             work_modes,
             contract_types,
             contract_types,
+            excluded_countries,
+            excluded_regions,
+            role_pattern,
+            role_pattern,
+            erp_pattern,
+            erp_pattern,
             allowed_countries,
             allowed_countries,
         ),
@@ -1533,6 +1557,10 @@ def _persist_coverage_observations(cursor: Any, status: Mapping[str, Any]) -> in
             "target_regions": sorted({_text(value).upper() for value in (raw_scope.get("target_regions") or []) if _text(value)}),
             "target_country_codes": sorted({_text(value).upper() for value in (raw_scope.get("target_country_codes") or []) if _text(value)}),
             "remote_eligible_country_codes": sorted({_text(value).upper() for value in (raw_scope.get("remote_eligible_country_codes") or []) if _text(value)}),
+            "excluded_regions": sorted({_text(value).upper() for value in (raw_scope.get("excluded_regions") or []) if _text(value)}),
+            "excluded_country_codes": sorted({_text(value).upper() for value in (raw_scope.get("excluded_country_codes") or []) if _text(value)}),
+            "excluded_role_keywords": sorted({str(value).strip() for value in (raw_scope.get("excluded_role_keywords") or []) if _text(value)}),
+            "deep_erp_terms": sorted({str(value).strip() for value in (raw_scope.get("deep_erp_terms") or []) if _text(value)}),
             "work_modes": sorted({_text(value).casefold() for value in (raw_scope.get("work_modes") or []) if _text(value)}),
             "contract_types": sorted({_text(value).casefold() for value in (raw_scope.get("contract_types") or []) if _text(value)}),
         }
