@@ -1,3 +1,4 @@
+import { assertFitWeightStepForSave } from '../../shared/fit-v2.mjs';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import {
   applyUserConfigPatch,
@@ -307,6 +308,7 @@ export async function handleAuthenticatedRoute(request, env, context) {
       applyUserConfigPatch(structuredClone(current), patch),
       nomenclatures,
     );
+    assertFitWeightStepForSave(current.fit_config,next.fit_config);
     const changed = personalPreferencesChanged(current, next);
     if (changed) await savePreferences(context, next, env);
     return json({ status:'saved', changed, preferences:next });
