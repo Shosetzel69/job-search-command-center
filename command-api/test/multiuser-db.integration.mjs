@@ -551,8 +551,12 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(mixedRecovered.status,'COMPLETE',JSON.stringify(mixedRecovered));
     console.log('R6_NATIVE_MIXED_VALUES_GUARD=PASS');
 
-    // T-B01-c: a second real connection publishes N+1 between profile read and
-    // the single-statement listing snapshot. Never attest the old complete set.
+    // T-B01-c: the in-flight reader may observe the complete N snapshot or
+    // the incomplete N+1 snapshot, never mixed page/count generations.
+    // An independent subsequent request MUST observe N+1 and reject N's cursor.
+    const beforeRetrieve=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(beforeRetrieve.count_status,'EXACT');assert.equal(beforeRetrieve.totals.all,65);
+    assert.ok(beforeRetrieve.next_cursor);
     let writerCommitted=false;
     const retrieveRaceDb={connect:async()=>{
       const client=await runtimeDb.connect();
@@ -571,8 +575,19 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
       }};
     }};
     const duringRetrieve=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:retrieveRaceDb,now:matrixNow});
-    assert.ok(writerCommitted,'native N+1 writer must commit before page snapshot');
-    assert.equal(duringRetrieve.count_status,'INCOMPLETE');assert.equal(duringRetrieve.totals,null);
+    assert.ok(writerCommitted,'native N+1 writer must commit before page statement');
+    if(duringRetrieve.count_status==='EXACT'){
+      assert.deepEqual(duringRetrieve,beforeRetrieve,'snapshot N must be wholly identical, including page, totals and cursor');
+    }else{
+      assert.equal(duringRetrieve.count_status,'INCOMPLETE');
+      assert.equal(duringRetrieve.pending,1);assert.equal(duringRetrieve.totals,null);
+      assert.equal(duringRetrieve.order_status,'PROVISIONAL');
+      assert.ok(!duringRetrieve.jobs.some(job=>job.id===matrixIds[0]));
+    }
+    const freshN1=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(freshN1.count_status,'INCOMPLETE');assert.equal(freshN1.pending,1);
+    assert.equal(freshN1.totals,null);assert.ok(!freshN1.jobs.some(job=>job.id===matrixIds[0]));
+    await assert.rejects(listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT',cursor:beforeRetrieve.next_cursor},env,{db:runtimeDb,now:matrixNow}),/STALE_CURSOR/);
     const afterRetrieve=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
     assert.equal(afterRetrieve.status,'COMPLETE',JSON.stringify(afterRetrieve));
     console.log('R6_NATIVE_RETRIEVE_LIST_INTERLEAVE=PASS');
