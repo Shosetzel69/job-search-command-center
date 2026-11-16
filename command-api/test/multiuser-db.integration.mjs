@@ -430,6 +430,27 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
         'ACTIVE',$4,$4,'r6-sort','{}'::jsonb)`,[postingId,jobId,published,seen]);
     }
     const matrixNow=new Date('2026-10-05T12:06:00Z');
+    // Force a preference commit on a second connection after the evaluator
+    // read and before the first provisional write. Do not use a mock database.
+    const beforeRace=await effectiveConfig(user,env,{db:runtimeDb});
+    let interleaved=false;
+    const raceDb={connect:async()=>{
+      const client=await runtimeDb.connect();
+      return {release:()=>client.release(),query:async(sql,params)=>{
+        if(!interleaved&&sql.startsWith('INSERT INTO profile_job_evaluation AS cur')){
+          interleaved=true;
+          await savePreferences(user,{...beforeRace,keep_reposts:beforeRace.keep_reposts===false},env,{db:runtimeDb});
+        }
+        return client.query(sql,params);
+      }};
+    }};
+    const raced=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:raceDb,now:matrixNow});
+    assert.ok(interleaved,'T-B01-a must force the actual write interleaving');
+    assert.notEqual(raced.status,'COMPLETE','old input cannot attest current completeness');
+    const postRace=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(postRace.count_status,'INCOMPLETE');assert.equal(postRace.totals,null);
+    cacheConfigB=await effectiveConfig(user,env,{db:runtimeDb});
+
     let full;
     for(let attempts=0;attempts<15;attempts++){
       full=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
@@ -458,6 +479,27 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
         assert.equal(cursor,null);assert.deepEqual(actual,expected,sort+' '+dir);
       }
     }
+
+    // T-FILTER: independently compute matches using the persisted projection.
+    const projected=await adminDb.query(`SELECT job_id,display_work_mode,display_contract_type,publication_at,score
+      FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])`,
+      [user.profile_id,restoredFoundation.search_profile_id,matrixIds]);
+    const expectedFiltered=projected.rows.filter(x=>['remote','hybrid'].includes(x.display_work_mode)&&
+      ['contract','freelance'].includes(x.display_contract_type)).map(x=>x.job_id).sort();
+    const filtered=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'title',dir:'asc',limit:40,q:'R6SORT',
+      work_mode:['remote','hybrid'],contract_type:['contract','freelance'],role_subfamily:['project_management']},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(filtered.count_status,'EXACT');assert.equal(filtered.totals.all,expectedFiltered.length);
+    assert.deepEqual(filtered.jobs.map(j=>j.id).sort(),expectedFiltered);
+    assert.equal(filtered.next_cursor,null);
+    // T-ISO: a warm tenant cannot make another tenant's cold cache COMPLETE.
+    const coldOwner=await listGlobalProfileJobs(ownerA,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(coldOwner.count_status,'INCOMPLETE');assert.equal(coldOwner.totals,null);
+    const ownerAdvance=await advanceProfileEvaluation(ownerA,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+    assert.equal(ownerAdvance.status,'COMPLETE',JSON.stringify(ownerAdvance));
+    const warmOwner=await listGlobalProfileJobs(ownerA,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(warmOwner.totals.all,65);
+    assert.equal(warmOwner.search_profile_id,ownerFoundationA.search_profile_id);
+    assert.notEqual(warmOwner.search_profile_id,restoredFoundation.search_profile_id);
     const cursorPage=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
     assert.ok(cursorPage.next_cursor);
     await adminDb.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"changed\"'::jsonb) WHERE job_id=$1",[matrixIds.at(-1)]);
