@@ -2,7 +2,7 @@ export const UI_STATE_KEY = 'jscc-ui-state-v1';
 
 const VIEWS = new Set(['jobs','review','unclassified','applications','criteria','admin']);
 const QUICK = new Set(['all','high','b2b']);
-const SORTS = new Set(['fit-desc','fit-asc']);
+const SORTS = new Set(['fit','title','country','work_mode','publication','retrieve'].flatMap(key=>['asc','desc'].map(dir=>key+'-'+dir)));
 const MODES = new Set(['Remote','Hybrid','Onsite']);
 
 function finiteNumber(value, fallback = null) {

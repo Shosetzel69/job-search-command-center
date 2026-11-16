@@ -4,6 +4,21 @@ import { evaluateEligibility } from './eligibility.js';
 import { ROLE_TAXONOMY, normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
 import { canonicalPostedDate, postedAgeHours, parsePostedDate } from './posted-date.mjs';
 
+function publicQuality(payload) {
+  const quality = payload.job_quality;
+  if (!quality || !['VALID','INCOMPLETE','INVALID'].includes(quality.verdict)) return null;
+  return { verdict:quality.verdict, issues:Array.isArray(quality.issues)
+    ? [...new Set(quality.issues.filter(issue => typeof issue === 'string' && /^[A-Z_]{1,80}$/.test(issue)))] : [] };
+}
+
+function applicationUrl(row,payload) {
+  for (const candidate of [payload.apply_url,payload.application_url,row.canonical_url,payload.final_url,payload.source_url,payload.url]) {
+    if(typeof candidate!=='string') continue;
+    try { const url=new URL(candidate); if(['https:','http:'].includes(url.protocol)&&url.hostname&&!url.username&&!url.password) return url.href; } catch {}
+  }
+  return null;
+}
+
 export const FIT_ALGORITHM_VERSION = 'fit-v2-independent-2';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
@@ -214,7 +229,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   const posted = canonicalPostedDate(row, now);
   const age = postedAgeHours(posted, now);
   const threshold = Number(preferences.fit_threshold ?? 80);
-  const url = row.canonical_url || payload.final_url || payload.source_url || payload.url || null;
+  const url = applicationUrl(row,payload);
   const modeLabel = workMode === 'remote' ? 'Remote' : workMode === 'hybrid' ? 'Hybrid' : workMode === 'onsite' ? 'Onsite' : 'N/A';
 
   return {
@@ -222,6 +237,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     eligibilityState,
     eligibilityReasonCode,
     score,
+    fitMatrix:fit.matrix,
     pros:pros.slice(0, 2),
     risks:risks.slice(0, 2),
     exclusionReason:eligibility.state==='INELIGIBLE' ? compatibilityReasons[eligibility.reason_code] || eligibility.reason_code : null,
@@ -234,6 +250,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       eligibility_reason:eligibilityReasonCode,
       fit:score,
       fit_matrix:fit.matrix,
+      job_quality:publicQuality(payload),
       location:row.location || payload.location || payload.short_location || 'Nespecificat',
       countries,
       country_codes:countryCodes,
@@ -280,7 +297,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
   const age = postedAgeHours(posted, now);
   const score = cached.score != null ? Number(cached.score) : null;
   const threshold = Number(preferences.fit_threshold ?? 80);
-  const url = row.canonical_url || payload.final_url || payload.source_url || payload.url || null;
+  const url = applicationUrl(row,payload);
   const modeLabel = workMode === 'remote' ? 'Remote' : workMode === 'hybrid' ? 'Hybrid' : workMode === 'onsite' ? 'Onsite' : 'N/A';
   const pros = Array.isArray(cached.pros) ? cached.pros : [];
   const risks = Array.isArray(cached.risks) ? cached.risks : [];
@@ -293,7 +310,8 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     eligibility_state:cached.eligibilityState,
     eligibility_reason:cached.eligibilityReasonCode,
     fit:score,
-    fit_matrix:score===null?[]:evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type)).matrix,
+    fit_matrix:score===null?[]:(Array.isArray(cached.fitMatrix)?cached.fitMatrix:[]),
+    job_quality:publicQuality(payload),
     location:row.location || payload.location || payload.short_location || 'Nespecificat',
     countries,
     country_codes:countryCodes,

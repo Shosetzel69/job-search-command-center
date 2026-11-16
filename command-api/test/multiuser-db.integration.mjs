@@ -19,6 +19,8 @@ const {
   listAccounts,
   listApplications,
   listProfileJobs,
+  listGlobalProfileJobs,
+  advanceProfileEvaluation,
   nomenclatureReferenceCount,
   resolveActiveSearchProfile,
   resolveOrProvisionGoogleIdentity,
@@ -353,6 +355,9 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(firstLazy.cache_hits, 0);
     assert.equal(firstLazy.bounded, true);
 
+    const advance=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:new Date('2026-10-05T12:00:00Z')});
+    assert.equal(advance.status,'COMPLETE',JSON.stringify(advance));
+    assert.ok(advance.evaluated>=1);
     const secondLazy = await listProfileJobs(
       user, cacheConfigA, jobNomenclatures, cacheQuery, env,
       { db:runtimeDb, now:new Date('2026-10-05T12:01:00Z') },
@@ -371,7 +376,15 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
       { db:runtimeDb, now:new Date('2026-10-05T12:02:00Z') },
     );
     assert.equal(thirdLazy.results, 1);
-    assert.equal(thirdLazy.evaluations_computed, 1, 'profile_version change invalidates only the bounded cache row');
+    assert.equal(thirdLazy.evaluations_computed, 0, 'threshold-only change must reuse FIT');
+    assert.equal(thirdLazy.cache_hits,1);
+    // Evaluation-relevant preference change must invalidate the digest.
+    await savePreferences(user,{...cacheConfigB,keep_reposts:cacheConfigB.keep_reposts===false},env,{db:runtimeDb});
+    cacheConfigB=await effectiveConfig(user,env,{db:runtimeDb});
+    const invalidated=await listProfileJobs(user,cacheConfigB,jobNomenclatures,cacheQuery,env,{db:runtimeDb,now:new Date('2026-10-05T12:03:00Z')});
+    assert.equal(invalidated.evaluations_computed,1);
+    const renewed=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:new Date('2026-10-05T12:03:00Z')});
+    assert.equal(renewed.status,'COMPLETE',JSON.stringify(renewed));
 
     const cacheRow = await adminDb.query(
       `SELECT search_profile_id, profile_version, job_version, fit_algorithm_version, eligibility_state
@@ -386,6 +399,263 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(Number(cacheRow.rows[0].job_version), 1);
     assert.equal(cacheRow.rows[0].fit_algorithm_version, 'fit-v2-independent-2');
     assert.equal(cacheRow.rows[0].eligibility_state, 'ELIGIBLE');
+    const global=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'ATC48903CACHE'},env,{db:runtimeDb,now:new Date('2026-10-05T12:04:00Z')});
+    assert.equal(global.order_status,'GLOBAL');
+    assert.equal(global.count_status,'EXACT');
+    assert.equal(global.totals.all,1);
+    assert.equal(global.jobs[0].id,lazyJobId);
+    // Posting change without a canonical version bump cannot reuse the previous projection.
+    await adminDb.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"technology\"'::jsonb) WHERE posting_id=$1",[lazyPostingId]);
+    const pending=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'ATC48903CACHE'},env,{db:runtimeDb,now:new Date('2026-10-05T12:05:00Z')});
+    assert.equal(pending.count_status,'INCOMPLETE');assert.equal(pending.totals,null);
+    const reevaluated=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:new Date('2026-10-05T12:05:00Z')});
+    assert.equal(reevaluated.status,'COMPLETE');
+    // Native keyset order across four pages, including ties and NULLs.
+    const matrixIds=[];
+    for(let i=0;i<65;i++){
+      const suffix=String(i+1).padStart(12,'0'),jobId='aaaaaaaa-1111-4111-8111-'+suffix,postingId='bbbbbbbb-1111-4111-8111-'+suffix;
+      matrixIds.push(jobId);
+      const title='R6SORT Technical Project Manager '+String(i%7);
+      const mode=['remote','hybrid','onsite','unknown'][i%4],contract=['contract','freelance','permanent','unknown'][i%4],country=['RO','BE','DE'][i%3];
+      const published=i%5===0?null:new Date(Date.UTC(2026,9,1+i%4)),seen=new Date(Date.UTC(2026,9,5,8+i%3));
+      await adminDb.query(`INSERT INTO canonical_jobs(job_id,title,company,location,country_codes,work_mode,role_family,
+        lifecycle_status,first_seen_at,last_seen_at,payload,job_version,role_subfamily,seniority,contract_type,remote_scope,
+        classification_status,classification_confidence,classification_version,evaluation_basis_hash)
+        VALUES($1,$2,'R6 Fixture','City',ARRAY[$3]::text[],$4,'PROJECT_DELIVERY_MANAGEMENT','ACTIVE',$5,$5,
+        '{}'::jsonb,1,ARRAY['project_management']::text[],'mid',$6,'Country','matched',1,'2026.10.08-1',repeat('c',64))`,
+        [jobId,title,country,mode,seen,contract]);
+      await adminDb.query(`INSERT INTO source_postings(posting_id,job_id,source_id,source_name,external_job_id,
+        canonical_url,identity_kind,identity_value,posted_at,lifecycle_status,first_seen_at,last_seen_at,seen_run_id,payload)
+        VALUES($1,$2::uuid,'r6-sort','Integration',($2::uuid)::text,'https://example.test/r6','EXTERNAL_ID',($2::uuid)::text,$3,
+        'ACTIVE',$4,$4,'r6-sort','{}'::jsonb)`,[postingId,jobId,published,seen]);
+    }
+    const matrixNow=new Date('2026-10-05T12:06:00Z');
+    // Force a preference commit on a second connection after the evaluator
+    // read and before the first provisional write. Do not use a mock database.
+    const beforeRace=await effectiveConfig(user,env,{db:runtimeDb});
+    let interleaved=false;
+    const raceDb={connect:async()=>{
+      const client=await runtimeDb.connect();
+      return {release:()=>client.release(),query:async(sql,params)=>{
+        if(!interleaved&&sql.startsWith('INSERT INTO profile_job_evaluation AS cur')){
+          interleaved=true;
+          await savePreferences(user,{...beforeRace,keep_reposts:beforeRace.keep_reposts===false},env,{db:runtimeDb});
+        }
+        return client.query(sql,params);
+      }};
+    }};
+    const raced=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:raceDb,now:matrixNow});
+    assert.ok(interleaved,'T-B01-a must force the actual write interleaving');
+    assert.notEqual(raced.status,'COMPLETE','old input cannot attest current completeness');
+    const postRace=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(postRace.count_status,'INCOMPLETE');assert.equal(postRace.totals,null);
+    cacheConfigB=await effectiveConfig(user,env,{db:runtimeDb});
+
+    let full;
+    for(let attempts=0;attempts<15;attempts++){
+      full=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+      if(full.status==='COMPLETE')break;
+    }
+    assert.equal(full?.status,'COMPLETE',JSON.stringify(full));
+    const oracle=await adminDb.query(`SELECT job_id,score,sort_title,display_country,display_work_mode,publication_at,retrieve_at
+      FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])`,
+      [user.profile_id,restoredFoundation.search_profile_id,matrixIds]);
+    assert.equal(oracle.rows.length,65);
+    for(const [sort,col] of Object.entries({fit:'score',title:'sort_title',country:'display_country',work_mode:'display_work_mode',publication:'publication_at',retrieve:'retrieve_at'})){
+      for(const dir of ['asc','desc']){
+        const expected=[...oracle.rows].sort((a,b)=>{
+          const av=a[col],bv=b[col];
+          if(av==null||bv==null){if(av==null&&bv!=null)return 1;if(av!=null&&bv==null)return -1;}
+          else{const x=col==='score'?Number(av):av,y=col==='score'?Number(bv):bv;
+            if(x<y)return dir==='asc'?-1:1;if(x>y)return dir==='asc'?1:-1;}
+          return a.job_id.localeCompare(b.job_id);
+        }).map(row=>row.job_id);
+        const actual=[];let cursor=null;
+        for(let page=0;page<4;page++){
+          const result=await listGlobalProfileJobs(user,jobNomenclatures,{sort,dir,limit:20,q:'R6SORT',cursor},env,{db:runtimeDb,now:matrixNow});
+          assert.equal(result.count_status,'EXACT');assert.equal(result.totals.all,65);
+          actual.push(...result.jobs.map(j=>j.id));cursor=result.next_cursor;
+        }
+        assert.equal(cursor,null);assert.deepEqual(actual,expected,sort+' '+dir);
+      }
+    }
+
+    // T-FILTER: independently compute matches using the persisted projection.
+    const projected=await adminDb.query(`SELECT job_id,display_work_mode,display_contract_type,publication_at,score
+      FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])`,
+      [user.profile_id,restoredFoundation.search_profile_id,matrixIds]);
+    const expectedFiltered=projected.rows.filter(x=>['remote','hybrid'].includes(x.display_work_mode)&&
+      ['contract','freelance'].includes(x.display_contract_type)).map(x=>x.job_id).sort();
+    const filtered=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'title',dir:'asc',limit:40,q:'R6SORT',
+      work_mode:['remote','hybrid'],contract_type:['contract','freelance'],role_subfamily:['project_management']},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(filtered.count_status,'EXACT');assert.equal(filtered.totals.all,expectedFiltered.length);
+    assert.deepEqual(filtered.jobs.map(j=>j.id).sort(),expectedFiltered);
+    assert.equal(filtered.next_cursor,null);
+    // T-ISO: a warm tenant cannot make another tenant's cold cache COMPLETE.
+    const coldOwner=await listGlobalProfileJobs(ownerA,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(coldOwner.count_status,'INCOMPLETE');assert.equal(coldOwner.totals,null);
+    const ownerAdvance=await advanceProfileEvaluation(ownerA,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+    assert.equal(ownerAdvance.status,'COMPLETE',JSON.stringify(ownerAdvance));
+    const warmOwner=await listGlobalProfileJobs(ownerA,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(warmOwner.totals.all,65);
+    assert.equal(warmOwner.search_profile_id,ownerFoundationA.search_profile_id);
+    assert.notEqual(warmOwner.search_profile_id,restoredFoundation.search_profile_id);
+    // T-ADV: two independent connections respecting the same tenant-local lock.
+    let unblock,locked;
+    const releasePause=new Promise(resolve=>{unblock=resolve;});
+    const lockReached=new Promise(resolve=>{locked=resolve;});
+    const pausedDb={connect:async()=>{
+      const client=await runtimeDb.connect();
+      return {release:()=>client.release(),query:async(sql,params)=>{
+        const result=await client.query(sql,params);
+        if(sql.includes('pg_try_advisory_xact_lock')){
+          locked(result.rows?.[0]?.acquired);
+          await releasePause;
+        }
+        return result;
+      }};
+    }};
+    const holding=advanceProfileEvaluation(user,jobNomenclatures,env,{db:pausedDb,now:matrixNow});
+    try{
+      assert.equal(await Promise.race([lockReached,holding.then(()=>false)]),true);
+      const contended=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+      assert.equal(contended.status,'BUSY');
+      assert.equal(contended.evaluated,0);
+    }finally{unblock();await holding;}
+    console.log('R6_NATIVE_TWO_TAB_LOCK=PASS');
+    // T-B02: both an unknown algorithm and a provisional newer version in
+    // one actual VALUES batch. Unknown algorithm must be replaced, but newer
+    // profile_version must reject the write without breaking read-side authority.
+    const mixedIds=matrixIds.slice(0,2);
+    const mixedVersion=(await resolveActiveSearchProfile(user,env,{db:runtimeDb})).profile_version;
+    await adminDb.query(`UPDATE profile_job_evaluation SET fit_algorithm_version='r6-unknown-fixture',
+      input_digest=NULL,profile_version=CASE WHEN job_id=$3 THEN $4::integer+1 ELSE $4::integer END
+      WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($5::uuid[])`,
+      [user.profile_id,restoredFoundation.search_profile_id,mixedIds[1],mixedVersion,mixedIds]);
+    try{
+      const mixed=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+      assert.equal(mixed.evaluated,1,JSON.stringify(mixed));
+      assert.equal(mixed.pending,1);assert.equal(mixed.status,'INCOMPLETE');
+      const persisted=await adminDb.query(`SELECT job_id,fit_algorithm_version,profile_version
+        FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])`,
+        [user.profile_id,restoredFoundation.search_profile_id,mixedIds]);
+      assert.equal(persisted.rows.find(row=>row.job_id===mixedIds[0]).fit_algorithm_version,'fit-v2-independent-2');
+      assert.equal(persisted.rows.find(row=>row.job_id===mixedIds[1]).fit_algorithm_version,'r6-unknown-fixture');
+      const safeList=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+      assert.equal(safeList.count_status,'INCOMPLETE');assert.equal(safeList.totals,null);
+    }finally{
+      await adminDb.query('UPDATE profile_job_evaluation SET profile_version=$4 WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=$3',
+        [user.profile_id,restoredFoundation.search_profile_id,mixedIds[1],mixedVersion]);
+    }
+    const mixedRecovered=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+    assert.equal(mixedRecovered.status,'COMPLETE',JSON.stringify(mixedRecovered));
+    console.log('R6_NATIVE_MIXED_VALUES_GUARD=PASS');
+
+    // T-B01-c: the in-flight reader may observe the complete N snapshot or
+    // the incomplete N+1 snapshot, never mixed page/count generations.
+    // An independent subsequent request MUST observe N+1 and reject N's cursor.
+    const beforeRetrieve=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(beforeRetrieve.count_status,'EXACT');assert.equal(beforeRetrieve.totals.all,65);
+    assert.ok(beforeRetrieve.next_cursor);
+    let writerCommitted=false;
+    const retrieveRaceDb={connect:async()=>{
+      const client=await runtimeDb.connect();
+      return {release:()=>client.release(),query:async(sql,params)=>{
+        if(!writerCommitted&&sql.startsWith('WITH basis_guard AS')){
+          const writer=await adminDb.connect();
+          try{
+            await writer.query('BEGIN');
+            await writer.query('UPDATE canonical_jobs SET job_version=job_version+1 WHERE job_id=$1',[matrixIds[0]]);
+            await writer.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"new-retrieve\"'::jsonb) WHERE job_id=$1",[matrixIds[0]]);
+            await writer.query('COMMIT');writerCommitted=true;
+          }catch(error){await writer.query('ROLLBACK');throw error;}
+          finally{writer.release();}
+        }
+        return client.query(sql,params);
+      }};
+    }};
+    const duringRetrieve=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:retrieveRaceDb,now:matrixNow});
+    assert.ok(writerCommitted,'native N+1 writer must commit before page statement');
+    if(duringRetrieve.count_status==='EXACT'){
+      assert.deepEqual(duringRetrieve,beforeRetrieve,'snapshot N must be wholly identical, including page, totals and cursor');
+    }else{
+      assert.equal(duringRetrieve.count_status,'INCOMPLETE');
+      assert.equal(duringRetrieve.pending,1);assert.equal(duringRetrieve.totals,null);
+      assert.equal(duringRetrieve.order_status,'PROVISIONAL');
+      assert.ok(!duringRetrieve.jobs.some(job=>job.id===matrixIds[0]));
+    }
+    const freshN1=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(freshN1.count_status,'INCOMPLETE');assert.equal(freshN1.pending,1);
+    assert.equal(freshN1.totals,null);assert.ok(!freshN1.jobs.some(job=>job.id===matrixIds[0]));
+    await assert.rejects(listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT',cursor:beforeRetrieve.next_cursor},env,{db:runtimeDb,now:matrixNow}),/STALE_CURSOR/);
+    const afterRetrieve=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+    assert.equal(afterRetrieve.status,'COMPLETE',JSON.stringify(afterRetrieve));
+    console.log('R6_NATIVE_RETRIEVE_LIST_INTERLEAVE=PASS');
+    const cursorPage=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+    assert.ok(cursorPage.next_cursor);
+    await adminDb.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"changed\"'::jsonb) WHERE job_id=$1",[matrixIds.at(-1)]);
+    await assert.rejects(listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT',cursor:cursorPage.next_cursor},env,{db:runtimeDb,now:matrixNow}),/STALE_CURSOR/);
+    await adminDb.query('DELETE FROM source_postings WHERE job_id=ANY($1::uuid[])',[matrixIds]);
+    await adminDb.query('DELETE FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',[matrixIds]);
+    // T-COUNT/T-ADV: a native shared fixture above the former 400-row window.
+    // Use fixed synthetic records on the attested disposable Nile instance.
+    const volume=405;
+    async function seedVolume(from,to){
+    await adminDb.query(`INSERT INTO canonical_jobs(job_id,title,company,location,country_codes,work_mode,role_family,
+      lifecycle_status,first_seen_at,last_seen_at,payload,job_version,role_subfamily,seniority,contract_type,remote_scope,
+      classification_status,classification_confidence,classification_version,evaluation_basis_hash)
+      SELECT ('cccccccc-1111-4111-8111-'||lpad(i::text,12,'0'))::uuid,'R6VOLUME Technical Project Manager','Volume Fixture','City',
+      ARRAY['RO']::text[],'remote','PROJECT_DELIVERY_MANAGEMENT','ACTIVE',$1::timestamptz,$1::timestamptz,
+      '{}'::jsonb,1,ARRAY['project_management']::text[],'mid','contract','Country','matched',1,'2026.10.08-1',repeat('d',64)
+      FROM generate_series($2::integer,$3::integer) i`,[matrixNow,from,to]);
+    await adminDb.query(`INSERT INTO source_postings(posting_id,job_id,source_id,source_name,external_job_id,
+      canonical_url,identity_kind,identity_value,posted_at,lifecycle_status,first_seen_at,last_seen_at,seen_run_id,payload)
+      SELECT ('dddddddd-1111-4111-8111-'||lpad(i::text,12,'0'))::uuid,
+      ('cccccccc-1111-4111-8111-'||lpad(i::text,12,'0'))::uuid,'r6-volume','Integration',i::text,
+      'https://example.test/r6-volume','EXTERNAL_ID',i::text,$1::timestamptz,'ACTIVE',$1::timestamptz,$1::timestamptz,'r6-volume','{}'::jsonb
+      FROM generate_series($2::integer,$3::integer) i`,[matrixNow,from,to]);
+    }
+    await seedVolume(1,volume);
+    async function finishVolume(ctx,expected=volume,maxCalls=20){
+      const start=performance.now();let maxAdvanceMs=0,state=null,attempts=0;
+      // Intentional interruption: an individual POST commits a bounded batch.
+      // A later POST must resume without losing the preceding writes.
+      for(;attempts<maxCalls;attempts++){
+        const started=performance.now();
+        state=await advanceProfileEvaluation(ctx,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+        const elapsed=performance.now()-started;
+        maxAdvanceMs=Math.max(maxAdvanceMs,elapsed);
+        assert.ok(elapsed<=8000,'advance exceeded 8s: '+elapsed);
+        assert.ok(state.evaluated<=100,'advance batch exceeded 100');
+        if(state.status==='COMPLETE')break;
+      }
+      assert.equal(state?.status,'COMPLETE',JSON.stringify(state));
+      const pageStart=performance.now();
+      const page=await listGlobalProfileJobs(ctx,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6VOLUME'},env,{db:runtimeDb,now:matrixNow});
+      assert.equal(page.count_status,'EXACT');assert.equal(page.totals.all,expected);
+      return {advance_total_ms:Math.round(performance.now()-start),max_advance_ms:Math.round(maxAdvanceMs),page_ms:Math.round(performance.now()-pageStart),calls:attempts+1};
+    }
+    const beforeVolume=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6VOLUME'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(beforeVolume.count_status,'INCOMPLETE');assert.equal(beforeVolume.totals,null);
+    const syntheticUsers=[];
+    try{
+      for(let i=0;i<3;i++)syntheticUsers.push(await resolveOrProvisionGoogleIdentity(
+        {sub:'r6-volume-'+i,email:'r6-volume-'+i+'@example.test',email_verified:true},env,{db:runtimeDb}));
+      const measurements=[];
+      for(const ctx of [user,ownerA,...syntheticUsers])measurements.push(await finishVolume(ctx));
+      console.log('R6_NATIVE_405_FIVE_TENANT='+JSON.stringify(measurements));
+      await seedVolume(volume+1,12801);
+      const incomplete=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6VOLUME'},env,{db:runtimeDb,now:matrixNow});
+      assert.equal(incomplete.count_status,'INCOMPLETE');assert.equal(incomplete.totals,null);
+      const large=await finishVolume(user,12801,200);
+      console.log('R6_NATIVE_12801_EXACT='+JSON.stringify(large));
+    }finally{
+      for(const ctx of syntheticUsers)await deleteAccount(ownerA,ctx.user_id,env,{db:runtimeDb});
+      await adminDb.query("DELETE FROM source_postings WHERE source_id='r6-volume'");
+      await adminDb.query("DELETE FROM canonical_jobs WHERE title='R6VOLUME Technical Project Manager'");
+    }
+
+
 
     });
     await t.test('W025-F01 native preserved assertions',async()=>{

@@ -13,6 +13,8 @@ import {
 import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
 import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from './profile-evaluation.js';
 import { userRefreshScopes } from './retrieve-scope.js';
+import { performance } from 'node:perf_hooks';
+import { INPUT_DIGEST_SQL,evaluationPreferenceDigest,EVALUATION_SOURCE_SQL,EVALUATION_FIELDS_SQL,EVALUATION_VISIBLE_SQL,EVALUATION_PENDING_SQL } from './evaluation-basis.js';
 import { devPurgeActive, readFailedRunCompletion } from './runtime-gcp.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
@@ -1040,54 +1042,10 @@ export function normalizeJobSearchQuery(input = {}) {
 }
 
 function evaluationCacheValid(row, foundation) {
-  return row.cached_profile_version != null
-    && Number(row.cached_profile_version) === Number(foundation.profile_version)
-    && Number(row.cached_job_version) === Number(row.job_version)
-    && String(row.cached_fit_algorithm_version || '') === FIT_ALGORITHM_VERSION;
-}
-
-async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
-  await tx.query(
-    `INSERT INTO profile_job_evaluation(
-        tenant_id, search_profile_id, job_id,
-        eligibility_state, eligibility_reason_code, eligible,
-        score, pros, risks, exclusion_reason,
-        profile_version, job_version, fit_algorithm_version,
-        evaluation_version, evaluated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15)
-      ON CONFLICT(tenant_id, search_profile_id, job_id)
-      DO UPDATE SET
-        eligibility_state=EXCLUDED.eligibility_state,
-        eligibility_reason_code=EXCLUDED.eligibility_reason_code,
-        eligible=EXCLUDED.eligible,
-        score=EXCLUDED.score,
-        pros=EXCLUDED.pros,
-        risks=EXCLUDED.risks,
-        exclusion_reason=EXCLUDED.exclusion_reason,
-        profile_version=EXCLUDED.profile_version,
-        job_version=EXCLUDED.job_version,
-        fit_algorithm_version=EXCLUDED.fit_algorithm_version,
-        evaluation_version=EXCLUDED.evaluation_version,
-        evaluated_at=EXCLUDED.evaluated_at`,
-    [
-      tx.tenantId,
-      foundation.search_profile_id,
-      String(row.job_id),
-      evaluation.eligibilityState,
-      evaluation.eligibilityReasonCode || null,
-      evaluation.eligible,
-      evaluation.score,
-      JSON.stringify(evaluation.pros || []),
-      JSON.stringify(evaluation.risks || []),
-      evaluation.exclusionReason || null,
-      foundation.profile_version,
-      Number(row.job_version),
-      FIT_ALGORITHM_VERSION,
-      FIT_ALGORITHM_VERSION,
-      now,
-    ],
-  );
+  return typeof row.input_digest==='string' && row.input_digest===row.cached_input_digest
+    && Array.isArray(row.cached_fit_matrix)
+    && Number(row.cached_job_version)===Number(row.job_version)
+    && String(row.cached_fit_algorithm_version||'')===FIT_ALGORITHM_VERSION;
 }
 
 function cachedEvaluation(row) {
@@ -1096,6 +1054,7 @@ function cachedEvaluation(row) {
     eligibilityState:String(row.cached_eligibility_state),
     eligibilityReasonCode:row.cached_eligibility_reason_code || null,
     score:row.cached_score == null ? null : Number(row.cached_score),
+    fitMatrix:row.cached_fit_matrix,
     pros:Array.isArray(row.cached_pros) ? row.cached_pros : [],
     risks:Array.isArray(row.cached_risks) ? row.cached_risks : [],
     exclusionReason:row.cached_exclusion_reason || null,
@@ -1142,10 +1101,12 @@ export async function listProfileJobs(
 
   return withTenantTransaction(authContext, async tx => {
     await guardDevProjectionWrite(tx,env);
-    const foundation = await resolveActiveSearchProfileTx(tx);
+    const foundation = await readEvaluationBasisTx(tx,nomenclatures);
+    // Use the preferences captured with their version, not the caller's earlier read.
+    preferences=foundation.preferences;
     const basis=spec.result_view?await resultCountBasis(tx,foundation):null;
     if(spec.count_only&&(!basis||basis.active||basis.key!==spec.count_basis))throw httpError('Count basis changed or Retrieve active',409);
-    const params = [tx.tenantId, anchor, foundation.search_profile_id];
+    const params = [tx.tenantId, anchor, foundation.search_profile_id,foundation.preference_digest];
     const where = [
       `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`,
     ];
@@ -1222,10 +1183,13 @@ export async function listProfileJobs(
               eval.exclusion_reason AS cached_exclusion_reason,
               eval.profile_version AS cached_profile_version,
               eval.job_version AS cached_job_version,
-              eval.fit_algorithm_version AS cached_fit_algorithm_version
+              eval.fit_algorithm_version AS cached_fit_algorithm_version,
+              eval.input_digest AS cached_input_digest,
+              eval.fit_matrix AS cached_fit_matrix,
+              ${INPUT_DIGEST_SQL} AS input_digest
          FROM canonical_jobs j
          JOIN LATERAL (
-           SELECT source_name, canonical_url, posted_at, last_seen_at, repost_of_posting_id, payload
+           SELECT posting_id, source_name, canonical_url, posted_at, last_seen_at, repost_of_posting_id, payload
              FROM source_postings
             WHERE job_id = j.job_id
             ORDER BY CASE lifecycle_status WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
@@ -1318,7 +1282,8 @@ export async function listProfileJobs(
       }
       evaluationsComputed += 1;
       const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
-      if(!spec.count_only)await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
+      // Transitional listing computes visible candidates but does not write cache.
+      // Complete evaluation is driven exclusively by the advance endpoint.
       return { evaluation, job:evaluation.job };
     };
 
@@ -1796,4 +1761,326 @@ export async function capacityStatus(authContext, env = process.env, { db = getP
     warning:limit ? count / limit >= warningPercent / 100 : null,
     prod_guard_configured:String(env.APP_ENV || '').toLowerCase() !== 'prod' || Boolean(limit),
   };
+}
+// ATC-535-FP02-R6: tenant-scoped evaluation and listing SQL stays inside ADR-008 repository.
+export const EVALUATION_JOIN_SQL = `LEFT JOIN profile_job_evaluation eval
+ ON eval.tenant_id=$1 AND eval.search_profile_id=$3 AND eval.job_id=j.job_id`;
+
+export const ADVANCE_BATCH_MAX=100;
+export const ADVANCE_BUDGET_MS=8000;
+const LOCK_NAMESPACE=5910401;
+const knownAlgorithmRank=(alias)=>`CASE ${alias}.fit_algorithm_version WHEN 'fit-v2-independent-2' THEN 2 WHEN 'fit-v1' THEN 1 ELSE 0 END`;
+
+export async function readEvaluationBasisTx(tx,nomenclatures) {
+  const result=await tx.query(`SELECT p.search_profile_id,p.profile_version,
+    pref.preferences,policy.policy
+    FROM search_profile p
+    LEFT JOIN search_profile_preferences pref ON pref.tenant_id=p.tenant_id AND pref.search_profile_id=p.search_profile_id
+    LEFT JOIN collection_policy policy ON policy.singleton=true
+    WHERE p.tenant_id=$1 AND p.status='ACTIVE'`,[tx.tenantId]);
+  if(result.rows?.length!==1)throw httpError('Exactly one active Search Profile is required',503);
+  const row=result.rows[0];
+  const preferences=mergeEffectiveConfig(row.preferences,row.policy);
+  return Object.freeze({search_profile_id:String(row.search_profile_id),
+    profile_version:Number(row.profile_version),preferences,
+    personal:row.preferences??{},policy:row.policy??{},
+    preference_digest:evaluationPreferenceDigest(preferences,nomenclatures)});
+}
+
+export function evaluationProjection(row,evaluation) {
+  const job=evaluation.job;
+  const first=(job.country_codes||[])[0];
+  return {
+    input_digest:row.input_digest,fit_matrix:job.fit_matrix,
+    sort_title:job.title?job.title.normalize('NFKC').toLowerCase():null,
+    display_country:first|| (job.remote_scope==='Worldwide'?'WORLDWIDE':null),
+    display_work_mode:job.mode==='N/A'?null:job.mode.toLowerCase(),
+    display_contract_type:job.contract_type==='unknown'?null:job.contract_type,
+    b2b:Boolean(job.b2b),publication_at:job.publication_date||null,
+    publication_precision:job.publication_precision||null,retrieve_at:job.retrieve_date||null,
+    is_repost:Boolean(job.repost),is_remote:Boolean(job.remote),
+  };
+}
+
+// Writes are provisional. A conflicting newer record is not an error, and
+// all consumers must validate the full input digest against authoritative input.
+export const ADVANCE_WRITE_BATCH_MAX=30;
+// 26 bind parameters per row: at most 780 per write, beneath the R6 cap of 905.
+// Only VALUES, no INSERT SELECT/UNNEST. Every accepted row remains provisional.
+export async function persistIncrementalBatchTx(tx,basis,entries,now) {
+  if(!entries.length)return 0;
+  if(entries.length>ADVANCE_WRITE_BATCH_MAX)throw new RangeError('Evaluation write batch too large');
+  const args=[];
+  const tuples=entries.map(({row,evaluation})=>{
+    const p=evaluationProjection(row,evaluation);
+    const base=args.length;
+    const b=n=>'$'+(base+n);
+    args.push(tx.tenantId,basis.search_profile_id,String(row.job_id),
+      evaluation.eligibilityState,evaluation.eligibilityReasonCode||null,evaluation.eligible,
+      evaluation.score,JSON.stringify(evaluation.pros||[]),JSON.stringify(evaluation.risks||[]),
+      evaluation.exclusionReason||null,basis.profile_version,Number(row.job_version),
+      FIT_ALGORITHM_VERSION,now,p.input_digest,JSON.stringify(p.fit_matrix),p.sort_title,
+      p.display_country,p.display_work_mode,p.display_contract_type,p.b2b,p.publication_at,
+      p.publication_precision,p.retrieve_at,p.is_repost,p.is_remote);
+    return '('+Array.from({length:27},(_,i)=>{
+      const n=i<13?i+1:i===13?13:i;
+      return b(n)+([8,9,16].includes(n)?'::jsonb':'');
+    }).join(',')+')';
+  });
+  const result=await tx.query(`INSERT INTO profile_job_evaluation AS cur(
+    tenant_id,search_profile_id,job_id,eligibility_state,eligibility_reason_code,eligible,
+    score,pros,risks,exclusion_reason,profile_version,job_version,fit_algorithm_version,
+    evaluation_version,evaluated_at,input_digest,fit_matrix,sort_title,display_country,
+    display_work_mode,display_contract_type,b2b,publication_at,publication_precision,
+    retrieve_at,is_repost,is_remote)
+    VALUES ${tuples.join(',')}
+    ON CONFLICT(tenant_id,search_profile_id,job_id) DO UPDATE SET
+      eligibility_state=EXCLUDED.eligibility_state,eligibility_reason_code=EXCLUDED.eligibility_reason_code,
+      eligible=EXCLUDED.eligible,score=EXCLUDED.score,pros=EXCLUDED.pros,risks=EXCLUDED.risks,
+      exclusion_reason=EXCLUDED.exclusion_reason,profile_version=EXCLUDED.profile_version,
+      job_version=EXCLUDED.job_version,fit_algorithm_version=EXCLUDED.fit_algorithm_version,
+      evaluation_version=EXCLUDED.evaluation_version,evaluated_at=EXCLUDED.evaluated_at,
+      input_digest=EXCLUDED.input_digest,fit_matrix=EXCLUDED.fit_matrix,sort_title=EXCLUDED.sort_title,
+      display_country=EXCLUDED.display_country,display_work_mode=EXCLUDED.display_work_mode,
+      display_contract_type=EXCLUDED.display_contract_type,b2b=EXCLUDED.b2b,
+      publication_at=EXCLUDED.publication_at,publication_precision=EXCLUDED.publication_precision,
+      retrieve_at=EXCLUDED.retrieve_at,is_repost=EXCLUDED.is_repost,is_remote=EXCLUDED.is_remote
+    WHERE EXCLUDED.profile_version>=cur.profile_version AND EXCLUDED.job_version>=cur.job_version
+      AND (${knownAlgorithmRank('EXCLUDED')})>=(${knownAlgorithmRank('cur')})
+    RETURNING job_id`,args);
+  return result.rows?.length||0;
+}
+export async function persistIncrementalEvaluationTx(tx,basis,row,evaluation,now) {
+  return (await persistIncrementalBatchTx(tx,basis,[{row,evaluation}],now))===1;
+}
+
+export async function advanceProfileEvaluation(authContext,nomenclatures,env=process.env,
+ {db=getPool(env),clock=()=>performance.now(),now=new Date()}={}) {
+  const deadline=clock()+ADVANCE_BUDGET_MS;
+  const remaining=()=>Math.floor(deadline-clock());
+  try {
+    return await withTenantTransaction(authContext,async tx=>{
+      // PostgreSQL timeout bounds each SQL statement by the remaining budget.
+      // Reserve time for response and transaction completion. Native Nile proof required.
+      const budget=async()=>{
+        const ms=remaining()-250;
+        if(ms<=0)throw httpError('EVALUATION_ADVANCE_DEADLINE',503);
+        await tx.query("SELECT set_config('statement_timeout',$1,true)",[String(ms)]);
+      };
+      await budget();
+      await guardDevProjectionWrite(tx,env);
+      await budget();
+      const basis=await readEvaluationBasisTx(tx,nomenclatures);
+      await budget();
+      const lock=await tx.query('SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',
+        [LOCK_NAMESPACE,tx.tenantId+':'+basis.search_profile_id]);
+      if(lock.rows?.[0]?.acquired!==true)return {status:'BUSY',pending:null,evaluated:0};
+      const args=[tx.tenantId,now,basis.search_profile_id,basis.preference_digest,FIT_ALGORITHM_VERSION];
+      const from=`${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
+        WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`;
+      await budget();
+      const batch=await tx.query(`SELECT ${EVALUATION_FIELDS_SQL}
+        ${from} ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX}`,args);
+      let evaluated=0,defaultEntries=[];
+      const flush=async()=>{
+        if(!defaultEntries.length)return;
+        await budget();
+        evaluated+=await persistIncrementalBatchTx(tx,basis,defaultEntries,now);
+        defaultEntries=[];
+      };
+      for(const row of batch.rows||[]){
+        if(remaining()<1400)break;
+        defaultEntries.push({row,evaluation:evaluateSharedJob(row,basis.preferences,nomenclatures,now)});
+        if(defaultEntries.length===ADVANCE_WRITE_BATCH_MAX)await flush();
+      }
+      if(remaining()>=1100)await flush();
+      await budget();
+      const current=await readEvaluationBasisTx(tx,nomenclatures);
+      if(current.search_profile_id!==basis.search_profile_id ||
+        current.preference_digest!==basis.preference_digest)
+        return {status:'INVALIDATED',pending:null,evaluated};
+      await budget();
+      const result=await tx.query(`SELECT COUNT(*)::integer AS pending ${from}`,args);
+      const pending=Number(result.rows?.[0]?.pending);
+      if(!Number.isSafeInteger(pending)||pending<0)throw httpError('EVALUATION_PENDING_UNAVAILABLE',503);
+      return {status:pending===0?'COMPLETE':'INCOMPLETE',pending,evaluated,
+        basis:{profile_version:basis.profile_version,preference_digest:basis.preference_digest,
+          fit_algorithm_version:FIT_ALGORITHM_VERSION}};
+    },{env,db});
+  }catch(error){
+    if(error?.code==='57014'||error?.message==='EVALUATION_ADVANCE_DEADLINE')
+      return {status:'RETRY',pending:null,evaluated:0};
+    throw error;
+  }
+}
+
+const SORTS=Object.freeze({fit:['score','numeric'],title:['sort_title','text'],
+ country:['display_country','text'],work_mode:['display_work_mode','text'],
+ publication:['publication_at','timestamptz'],retrieve:['retrieve_at','timestamptz']});
+const hash=value=>createHash('sha256').update(JSON.stringify(value)).digest('hex');
+const error=(message,status=400)=>Object.assign(new Error(message),{status});
+const HEX=/^[0-9a-f]{64}$/;
+const UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+const stale=()=>error('STALE_CURSOR: restart pagination');
+
+export function normalizeGlobalQuery(input={}) {
+  const spec=normalizeJobSearchQuery({...input,cursor:null,count_only:false});
+  const sort=String(input.sort||'publication'),dir=String(input.dir||'desc');
+  if(!Object.hasOwn(SORTS,sort)||!['asc','desc'].includes(dir))throw error('Invalid global sort');
+  if(![20,30,40].includes(spec.limit))throw error('Invalid page size');
+  const scope={...spec};delete scope.cursor;delete scope.limit;delete scope.prefetch;delete scope.as_of;
+  for(const k of ['role_family','role_subfamily','work_mode','contract_type'])scope[k]=[...new Set(scope[k])].sort();
+  return {...spec,sort,dir,filter_hash:hash(scope),cursor:decodeGlobalCursor(input.cursor)};
+}
+export function decodeGlobalCursor(raw) {
+  if(!raw)return null;
+  try{
+    if(String(raw).length>4096)throw stale();
+    const c=JSON.parse(Buffer.from(String(raw),'base64url').toString('utf8'));
+    if(c.v!==3||!Object.hasOwn(SORTS,c.sort)||!['asc','desc'].includes(c.dir)||
+      !UUID.test(c.job_id)||!HEX.test(c.filter_hash)||!HEX.test(c.profile_eval_digest)||
+      !HEX.test(c.watermark)||!['GLOBAL','PROVISIONAL'].includes(c.order_status)||
+      !Number.isFinite(Date.parse(c.as_of))||typeof c.null_flag!=='boolean'||
+      (c.null_flag?c.value!==null:typeof c.value!=='string'||c.value.length>1024))throw stale();
+    const type=c.order_status==='PROVISIONAL'?'timestamptz':SORTS[c.sort][1];
+    if(!c.null_flag&&type==='numeric'&&(!/^[0-9]+(?:\.[0-9]+)?$/.test(c.value)||Number(c.value)>100))throw stale();
+    if(!c.null_flag&&type==='timestamptz'&&!Number.isFinite(Date.parse(c.value)))throw stale();
+    return c;
+  }catch{throw stale();}
+}
+export function encodeGlobalCursor(c){return Buffer.from(JSON.stringify({v:3,...c})).toString('base64url');}
+
+export function buildGlobalListingQuery(tenant,basis,spec,anchor){
+  const p=[tenant,anchor,basis.search_profile_id,basis.preference_digest,FIT_ALGORITHM_VERSION,
+    basis.profile_version,JSON.stringify(basis.personal),JSON.stringify(basis.policy)];
+  const add=v=>{p.push(v);return '$'+p.length;};
+  const threshold=add(Number(basis.preferences.fit_threshold??80));
+  const structural=[];
+  if(!spec.include_archived)structural.push('archived_at IS NULL');
+  if(spec.empty_modes)structural.push('false');
+  if(spec.role_family.length)structural.push('role_family=ANY('+add(spec.role_family)+'::text[])');
+  if(spec.role_subfamily.length)structural.push('role_subfamily && '+add(spec.role_subfamily)+'::text[]');
+  if(spec.work_mode.length)structural.push("COALESCE(display_work_mode,'unknown')=ANY("+add(spec.work_mode)+"::text[])");
+  if(spec.contract_type.length)structural.push("COALESCE(display_contract_type,'unknown')=ANY("+add(spec.contract_type)+"::text[])");
+  if(spec.q)structural.push("concat_ws(' ',title,company,location) ILIKE "+add('%'+spec.q+'%'));
+  if(spec.freshness_hours!=null)structural.push('publication_at >= $2 - ('+add(spec.freshness_hours)+"::integer * interval '1 hour')");
+  if(spec.min_fit!=null)structural.push('score >= '+add(spec.min_fit)+'::numeric');
+  if(spec.result_view==='unclassified')structural.push("eligibility_state='UNKNOWN' AND eligibility_reason_code='ROLE_FAMILY_UNKNOWN'");
+  if(spec.result_view==='review')structural.push('(score IS NULL OR score < '+threshold+'::numeric)');
+  const matches=[...structural];
+  if(spec.quick==='high'||spec.kpi==='high')matches.push('score >= '+threshold+'::numeric');
+  if(spec.quick==='b2b')matches.push('b2b IS TRUE');
+  if(spec.kpi==='remote')matches.push('is_remote IS TRUE');
+  if(spec.kpi==='repost')matches.push('is_repost IS TRUE');
+  const new24="publication_at > $2 - interval '25 hours' AND publication_at <= $2";
+  if(spec.kpi==='new')matches.push(new24);
+  const [column,type]=SORTS[spec.sort];
+  // Text wire format avoids lossy JSON numeric conversions and gives one
+  // deterministic value to the cursor; comparisons cast to the allowed type.
+  const orderValue=spec.sort==='publication'?'publication_at':column;
+  const direction=spec.dir.toUpperCase();
+  const sortExpr=spec.sort==='publication'?'publication_at':orderValue;
+  const typedValue=add(spec.cursor?.order_status==='GLOBAL'?spec.cursor.value:null);
+  const provisionalValue=add(spec.cursor?.order_status==='PROVISIONAL'?spec.cursor.value:null);
+  const cursorId=add(spec.cursor?.job_id??null);
+  const cursorNull=add(spec.cursor?.null_flag??false);
+  const cursorStatus=add(spec.cursor?.order_status??null);
+  const cursorWatermark=add(spec.cursor?.watermark??null);
+  const limit=add(spec.limit+1);
+  const op=spec.dir==='asc'?'>':'<';
+  const keyset=(expression,cast,compare,value=typedValue)=>`(${cursorId}::uuid IS NULL OR
+   (NOT ${cursorNull}::boolean AND (${expression} IS NULL OR ${expression} ${compare} ${value}::${cast}
+    OR (${expression}=${value}::${cast} AND job_id>${cursorId}::uuid)))
+   OR (${cursorNull}::boolean AND ${expression} IS NULL AND job_id>${cursorId}::uuid))`;
+  return {params:p,sql:`WITH basis_guard AS (
+   SELECT p.search_profile_id FROM search_profile p
+    LEFT JOIN search_profile_preferences pref ON pref.tenant_id=p.tenant_id AND pref.search_profile_id=p.search_profile_id
+    LEFT JOIN collection_policy policy ON policy.singleton=true
+   WHERE p.tenant_id=$1 AND p.search_profile_id=$3 AND p.status='ACTIVE'
+    AND p.profile_version=$6 AND COALESCE(pref.preferences,'{}'::jsonb)=$7::jsonb
+    AND COALESCE(policy.policy,'{}'::jsonb)=$8::jsonb
+  ), population AS (
+   SELECT ${EVALUATION_FIELDS_SQL}, state.archived_at,
+    eval.score,eval.eligibility_state,eval.eligibility_reason_code,eval.eligible,
+    eval.pros,eval.risks,eval.exclusion_reason,eval.fit_matrix,eval.sort_title,
+    eval.display_country,eval.display_work_mode,eval.display_contract_type,
+    eval.b2b,eval.publication_at,eval.publication_precision,eval.retrieve_at,
+    eval.is_repost,eval.is_remote,eval.evaluated_at,
+    NOT ${EVALUATION_PENDING_SQL} AND eval.fit_matrix IS NOT NULL AS current_evaluation
+   ${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
+   LEFT JOIN profile_job_state state ON state.tenant_id=$1 AND state.job_id=j.job_id
+   WHERE ${EVALUATION_VISIBLE_SQL} AND EXISTS(SELECT 1 FROM basis_guard)
+  ), summary AS (
+   SELECT COUNT(*) FILTER(WHERE NOT current_evaluation)::integer AS pending,
+    encode(sha256(convert_to(COALESCE(string_agg(
+      jsonb_build_array(job_id,input_digest,current_evaluation,archived_at,score,
+        sort_title,display_country,display_work_mode,display_contract_type,
+        publication_at,retrieve_at,eligibility_state,eligibility_reason_code,b2b,is_remote,is_repost)::text,
+      E'\\n' ORDER BY job_id),''),'UTF8')),'hex') AS watermark
+   FROM population
+  ), matched AS (
+   SELECT * FROM population WHERE current_evaluation AND ${matches.length?matches.join(' AND '):'true'}
+  ), totals AS (
+   SELECT count(*)::integer AS all_count,
+    count(*) FILTER(WHERE score>=${threshold}::numeric)::integer AS high,
+    count(*) FILTER(WHERE b2b)::integer AS b2b,
+    count(*) FILTER(WHERE is_remote)::integer AS remote,
+    count(*) FILTER(WHERE is_repost)::integer AS repost,
+    count(*) FILTER(WHERE ${new24})::integer AS new24h FROM matched
+  ), page AS (
+   SELECT matched.*,CASE WHEN summary.pending=0 THEN ${sortExpr}::text ELSE publication_at::text END AS cursor_value
+   FROM matched CROSS JOIN summary
+   WHERE (${cursorWatermark}::text IS NULL OR summary.watermark=${cursorWatermark}::text)
+    AND ((summary.pending=0 AND (${cursorStatus}::text IS NULL OR ${cursorStatus}::text='GLOBAL')
+      AND ${keyset(sortExpr,type,op)})
+     OR (summary.pending>0 AND (${cursorStatus}::text IS NULL OR ${cursorStatus}::text='PROVISIONAL')
+      AND ${keyset('publication_at','timestamptz','<',provisionalValue)}))
+   ORDER BY CASE WHEN summary.pending=0 THEN ${sortExpr} END ${direction} NULLS LAST,
+    CASE WHEN summary.pending>0 THEN publication_at END DESC NULLS LAST,job_id ASC
+   LIMIT ${limit}::integer
+  )
+  SELECT EXISTS(SELECT 1 FROM basis_guard) AS basis_ok,summary.pending,summary.watermark,
+   to_jsonb(totals) AS totals,COALESCE((SELECT jsonb_agg(to_jsonb(page) ORDER BY
+    CASE WHEN summary.pending=0 THEN page.${sortExpr} END ${direction} NULLS LAST,
+    CASE WHEN summary.pending>0 THEN page.publication_at END DESC NULLS LAST,page.job_id ASC) FROM page),'[]'::jsonb) AS page
+  FROM summary CROSS JOIN totals`};
+}
+
+export async function listGlobalProfileJobs(authContext,nomenclatures,query,env=process.env,
+ {db=getPool(env),now=new Date()}={}){
+  const spec=normalizeGlobalQuery(query);
+  const anchor=spec.cursor?new Date(spec.cursor.as_of):new Date(now);
+  if(anchor>new Date(now))throw stale();
+  return withTenantTransaction(authContext,async tx=>{
+    const basis=await readEvaluationBasisTx(tx,nomenclatures);
+    // Bind continuation to tenant, active profile, effective policy and threshold.
+    spec.filter_hash=hash([spec.filter_hash,tx.tenantId,basis.search_profile_id,basis.profile_version,basis.preferences.fit_threshold??80,basis.policy]);
+    if(spec.cursor&&(spec.cursor.sort!==spec.sort||spec.cursor.dir!==spec.dir||
+      spec.cursor.filter_hash!==spec.filter_hash||spec.cursor.profile_eval_digest!==basis.preference_digest))throw stale();
+    const q=buildGlobalListingQuery(tx.tenantId,basis,spec,anchor);
+    const snapshot=(await tx.query(q.sql,q.params)).rows?.[0];
+    if(!snapshot?.basis_ok)throw stale();
+    const pending=Number(snapshot.pending);
+    if(!Number.isSafeInteger(pending)||pending<0||!HEX.test(snapshot.watermark)||!Array.isArray(snapshot.page))throw error('Global listing unavailable',503);
+    const status=pending===0?'GLOBAL':'PROVISIONAL';
+    if(spec.cursor&&(spec.cursor.watermark!==snapshot.watermark||spec.cursor.order_status!==status))throw stale();
+    const rows=snapshot.page.slice(0,spec.limit);
+    const jobs=rows.map(row=>materializeCachedJob(row,{
+      eligible:row.eligible,eligibilityState:row.eligibility_state,eligibilityReasonCode:row.eligibility_reason_code,
+      score:row.score,fitMatrix:row.fit_matrix,pros:row.pros,risks:row.risks,exclusionReason:row.exclusion_reason,
+    },basis.preferences,anchor));
+    const last=rows.at(-1);
+    const next_cursor=snapshot.page.length>spec.limit&&last?encodeGlobalCursor({
+      sort:spec.sort,dir:spec.dir,value:last.cursor_value??null,null_flag:last.cursor_value==null,
+      job_id:String(last.job_id),filter_hash:spec.filter_hash,profile_eval_digest:basis.preference_digest,
+      watermark:snapshot.watermark,order_status:status,as_of:anchor.toISOString(),
+    }):null;
+    const t=snapshot.totals||{};
+    return {schema_version:'3.0',bounded:true,generated_at:anchor.toISOString(),search_profile_id:basis.search_profile_id,
+      profile_version:basis.profile_version,fit_algorithm_version:FIT_ALGORITHM_VERSION,limit:spec.limit,
+      order_status:status,count_status:pending===0?'EXACT':'INCOMPLETE',pending,next_cursor,
+      totals:pending===0?{all:Number(t.all_count),high:Number(t.high),b2b:Number(t.b2b),
+        remote:Number(t.remote),repost:Number(t.repost),new24h:Number(t.new24h)}:null,
+      results:jobs.length,jobs};
+  },{env,db});
 }

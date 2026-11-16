@@ -1,3 +1,4 @@
+import { assertFitWeightStepForSave } from '../../shared/fit-v2.mjs';
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import {
   applyUserConfigPatch,
@@ -42,6 +43,8 @@ import { adminCoverageSnapshot } from './coverage.js';
 import { adminRefresh } from './admin-refresh.js';
 import { adminDbPurge } from './admin-db-purge.js';
 import { devPurgeActive } from './runtime-gcp.js';
+import { advanceProfileEvaluation } from './evaluation-advance.js';
+import { listGlobalProfileJobs } from './global-job-listing.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const COOKIE_SENTINEL = '__JSCC_COOKIE_SESSION__';
@@ -235,6 +238,8 @@ function jobStateMatch(url) {
 
 function jobSearchQuery(url) {
   return {
+    sort:url.searchParams.get('sort'),
+    dir:url.searchParams.get('dir'),
     limit:url.searchParams.get('limit'),
     cursor:url.searchParams.get('cursor'),
     q:url.searchParams.get('q'),
@@ -303,6 +308,7 @@ export async function handleAuthenticatedRoute(request, env, context) {
       applyUserConfigPatch(structuredClone(current), patch),
       nomenclatures,
     );
+    assertFitWeightStepForSave(current.fit_config,next.fit_config);
     const changed = personalPreferencesChanged(current, next);
     if (changed) await savePreferences(context, next, env);
     return json({ status:'saved', changed, preferences:next });
@@ -324,12 +330,19 @@ export async function handleAuthenticatedRoute(request, env, context) {
     return json(await refreshRequestStatus(context,url.pathname.split('/').at(-1),env));
   }
 
-  if (request.method === 'GET' && url.pathname === '/me/jobs') {
-    const preferences = await currentPreferences(context, env);
+  if (request.method === 'POST' && url.pathname === '/me/evaluation/advance') {
+    requireSameOrigin(request, env);
     const nomenclatures = (await readNomenclatures(env)).payload;
+    return json(await advanceProfileEvaluation(context,nomenclatures,env));
+  }
+
+  if (request.method === 'GET' && url.pathname === '/me/jobs') {
+    const nomenclatures = (await readNomenclatures(env)).payload;
+    const query=jobSearchQuery(url);
+    if(query.sort)return json(await listGlobalProfileJobs(context,nomenclatures,query,env));
     return json(await listProfileJobs(
       context,
-      preferences,
+      null,
       nomenclatures,
       jobSearchQuery(url),
       env,

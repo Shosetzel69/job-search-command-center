@@ -8,7 +8,8 @@ const identity={sourceSha:source,runtimeDataSha:source};
 const env={APP_ENV:'dev',CLOUD_RUN_JOB:'jscc-db-migrate-dev',SOURCE_SHA:source,
  RETRIEVE012_MODE:'apply',RETRIEVE012_OWNER_GATE:'APPROVE_RETRIEVE_DEV_NILE_012_'+source,
  NILE_MIGRATION_DATABASE_URL:'postgresql://migration:dummy@localhost/jobsearch_dev'};
-const files=await loadMigrations();
+// Fixed 012 candidate fixture; the runtime admission still rejects later migrations.
+const files=(await loadMigrations()).filter(m=>Number(m.version)<=12);
 const prior=files.slice(0,11).map(({version,name,checksum})=>({version,name,checksum}));
 const absent={table_present:false,index_present:false,tenant_id_ready:false};
 const present={table_present:true,index_present:true,tenant_id_ready:true};
