@@ -103,8 +103,7 @@ def _role_family(title: str) -> tuple[str, str]:
     return classification["role_family"], classification["classification_status"]
 
 
-def _contract_type(record: Mapping[str, Any]) -> str:
-    explicit = _text(record.get("contract_type")).casefold()
+def _employment_values(record: Mapping[str, Any]) -> list[str]:
     raw_value = (
         record.get("employment_statuses")
         or record.get("employment_type")
@@ -113,15 +112,20 @@ def _contract_type(record: Mapping[str, Any]) -> str:
         or ""
     )
     values = raw_value if isinstance(raw_value, list) else [raw_value]
-    raw = " ".join(_text(value) for value in values).casefold()
+    return [_text(value).casefold() for value in values if _text(value)]
+
+
+def _workload_only(record: Mapping[str, Any]) -> bool:
+    values = _employment_values(record)
+    return bool(values) and all(re.fullmatch(r"(?:full|part)[ _-]?time", value) for value in values)
+
+
+def _contract_type(record: Mapping[str, Any]) -> str:
+    explicit = _text(record.get("contract_type")).casefold()
+    raw = " ".join(_employment_values(record))
     # An upstream inferred permanent value must not override workload-only evidence.
-    # Preserve genuine explicit contract types when no contradictory raw evidence exists.
-    workload_only = bool(raw) and all(
-        re.fullmatch(r"(?:full|part)[ _-]?time", _text(value).casefold())
-        for value in values if _text(value)
-    )
     if explicit in {"permanent", "temporary", "contract", "freelance"}:
-        if explicit == "permanent" and workload_only:
+        if explicit == "permanent" and _workload_only(record):
             return "unknown"
         return explicit
     if "freelance" in raw:
@@ -696,6 +700,46 @@ def _resolve_repost(cursor: Any, posting: SharedPosting) -> str | None:
     return str(row[0]) if row else None
 
 
+def _correct_reobserved_workload_contract(cursor: Any, posting: SharedPosting, posting_id: str, job_id: str) -> None:
+    """Remove an unsupported permanent classification only on same-source re-observation.
+    Incomplete evidence may not overwrite title, description, geography, or a verified contract.
+    """
+    if posting.contract_type != "unknown" or not _workload_only(posting.payload):
+        return
+    cursor.execute(
+        """SELECT j.title,j.company,j.location,j.country_codes,j.work_mode,j.role_family,
+                  j.role_subfamily,j.seniority,j.remote_scope,j.payload,sp.payload
+             FROM canonical_jobs j JOIN source_postings sp ON sp.job_id=j.job_id
+            WHERE j.job_id=%s AND sp.posting_id=%s AND j.contract_type='permanent'
+            FOR UPDATE OF j,sp""",
+        (job_id, posting_id),
+    )
+    row = cursor.fetchone()
+    if not row:
+        return
+    title,company,location,countries,mode,family,members,seniority,remote_scope,payload,source_payload = row
+    if not isinstance(payload, Mapping) or not isinstance(source_payload, Mapping):
+        return
+    if not (_workload_only(payload) and _workload_only(source_payload)):
+        return
+    # Canonical payload must originate from the same individual posting.
+    if (_posting_url(payload) != posting.canonical_url or _posting_url(source_payload) != posting.canonical_url
+            or not posting.canonical_url or _external_job_id(payload) != posting.external_job_id
+            or not posting.external_job_id):
+        return
+    basis = _evaluation_basis_hash(title=title, company=company, location=location,
+        country_codes=tuple(countries or []), work_mode=mode, role_family=family,
+        role_subfamily=tuple(members or []), seniority=seniority, contract_type="unknown",
+        remote_scope=remote_scope, description=payload.get("description"))
+    cursor.execute(
+        """UPDATE canonical_jobs SET contract_type='unknown', job_version=job_version+1,
+                  evaluation_basis_hash=%s, payload=jsonb_set(payload,'{contract_type}','"unknown"'::jsonb)
+            WHERE job_id=%s AND contract_type='permanent'""", (basis, job_id))
+    cursor.execute(
+        """UPDATE source_postings SET payload=jsonb_set(payload,'{contract_type}','"unknown"'::jsonb)
+            WHERE posting_id=%s""", (posting_id,))
+
+
 def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datetime) -> tuple[str, bool]:
     cursor.execute(
         """
@@ -765,6 +809,7 @@ def _upsert_posting(cursor: Any, posting: SharedPosting, run_id: str, now: datet
 
     if existing and not verified:
         posting_id, job_id = str(existing[0]), str(existing[1])
+        _correct_reobserved_workload_contract(cursor, posting, posting_id, job_id)
         cursor.execute(
             """
             UPDATE source_postings
