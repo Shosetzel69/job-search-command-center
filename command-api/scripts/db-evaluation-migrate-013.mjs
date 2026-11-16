@@ -33,7 +33,7 @@ export function assertEvaluation013Ledger(files,rows,columns,indexes){
  if(rows.length===12&&(columns.length!==0||indexes.length!==0))fail('EVALUATION013_UNTRACKED_OBJECTS');
  if(rows.length===13&&(indexes.length!==Object.keys(INDEXES).length||
    indexes.some(i=>!Object.hasOwn(INDEXES,i.indexname)||
-     !new RegExp('^CREATE INDEX '+i.indexname+' ON (?:public\\\\.)?profile_job_evaluation USING btree \\\\(tenant_id, search_profile_id, '+INDEXES[i.indexname]+', job_id\\\\)
+     String(i.indexdef).replace(/^CREATE INDEX /i,'CREATE INDEX ').replace(/ ON public\./i,' ON ')!==`CREATE INDEX ${i.indexname} ON profile_job_evaluation USING btree (tenant_id, search_profile_id, ${INDEXES[i.indexname]}, job_id)`)))
  if(rows.length===13&&(columns.length!==Object.keys(COLUMNS).length||
    columns.some(c=>COLUMNS[c.column_name]!==c.data_type||c.is_nullable!=='YES')))
    fail('EVALUATION013_SCHEMA_DRIFT');
