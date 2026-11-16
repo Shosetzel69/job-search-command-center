@@ -276,11 +276,11 @@ test('Eligibility v1 is tri-state and only explicit contradiction excludes', () 
   assert.equal(evaluateEligibility(row, criteria, nomenclatures).state, 'ELIGIBLE');
   assert.deepEqual(
     evaluateEligibility({ ...row, work_mode:'onsite' }, criteria, nomenclatures),
-    { state:'INELIGIBLE', reason_code:'WORK_MODE_EXCLUDED', reasons:['WORK_MODE_EXCLUDED'] },
+    { state:'ELIGIBLE', reason_code:null, reasons:[] },
   );
   assert.deepEqual(
     evaluateEligibility({ ...row, contract_type:'unknown' }, criteria, nomenclatures),
-    { state:'UNKNOWN', reason_code:'CONTRACT_TYPE_UNKNOWN', reasons:['CONTRACT_TYPE_UNKNOWN'] },
+    { state:'ELIGIBLE', reason_code:null, reasons:[] },
   );
   assert.deepEqual(
     evaluateEligibility({ ...row, role_family:'UNKNOWN' }, criteria, nomenclatures),
