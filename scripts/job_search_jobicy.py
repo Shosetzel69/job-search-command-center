@@ -50,6 +50,13 @@ def normalize(item):
         "date_posted": item.get("pubDate"),
         "source_url": item["url"],
         "sources": [{"provider": "Jobicy"}],
+        "description_completeness": "full" if item.get("jobDescription") else "summary",
+        "_jscc_field_provenance": {
+            "title": "PUBLIC_API_FIELD",
+            **({"description": "PUBLIC_API_FIELD"} if item.get("jobDescription") else {}),
+            **({"location": "PUBLIC_API_FIELD"} if geo else {}),
+            **({"date_posted": "PUBLIC_API_FIELD"} if item.get("pubDate") else {}),
+        },
     }
 
 

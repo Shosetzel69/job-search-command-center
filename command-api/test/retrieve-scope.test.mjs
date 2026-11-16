@@ -198,3 +198,16 @@ test('signed source generation changes signature even when active IDs do not cha
   assert.equal(a.retrieve_scope.freshness.posting_max_age_hours,12);
   assert.notEqual(a.request_signature,b.request_signature);
 });
+
+test('exclusions are canonical, signed and distinguish coverage and coalescing', () => {
+  const prefs={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],
+    excluded_regions:['asia','US'],excluded_country_codes:['us'],excluded_role_keywords:['Sales'],deep_erp_terms:['SAP']};
+  const scopes=userRefreshScopes(prefs);
+  assert.deepEqual(scopes[0].excluded_regions,['ASIA','US']);
+  assert.deepEqual(scopes[0].excluded_country_codes,['US']);
+  assert.deepEqual(scopes[0].excluded_role_keywords,['Sales']);
+  const excluded=buildRetrieveRequest({scopes});
+  const unexcluded=buildRetrieveRequest({scopes:userRefreshScopes({...prefs,excluded_regions:[],excluded_country_codes:[],excluded_role_keywords:[],deep_erp_terms:[]})});
+  assert.notEqual(excluded.request_signature,unexcluded.request_signature);
+  assert.notEqual(excluded.retrieve_scope.scopes[0].scope_key,unexcluded.retrieve_scope.scopes[0].scope_key);
+});

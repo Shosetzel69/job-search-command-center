@@ -667,3 +667,12 @@ class CanonicalPublicationCountTests(unittest.TestCase):
         self.assertIn("seen_run_id=%s",sql)
         self.assertIn("last_seen_at DESC, posting_id ASC",sql)
         self.assertIn("j.lifecycle_status='ACTIVE'",sql)
+
+
+class ContractEvidenceRegressionTests(unittest.TestCase):
+    def test_workload_only_does_not_prove_permanent_contract(self):
+        for raw in ["full-time", "FULL_TIME", "Full Time", "part-time"]:
+            with self.subTest(raw=raw):
+                self.assertEqual(repository._contract_type({"employment_statuses":[raw],"contract_type":"permanent"}),"unknown")
+        self.assertEqual(repository._contract_type({"employment_statuses":["FULL_TIME","Permanent"]}),"permanent")
+        self.assertEqual(repository._contract_type({"employment_statuses":["FULL_TIME","B2B"]}),"contract")

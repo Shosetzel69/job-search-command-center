@@ -35,6 +35,10 @@ function scopeKey(scope) {
     scope.target_regions,
     scope.target_country_codes,
     scope.remote_eligible_country_codes,
+    scope.excluded_regions,
+    scope.excluded_country_codes,
+    scope.excluded_role_keywords,
+    scope.deep_erp_terms,
     scope.work_modes,
     scope.contract_types,
   ]);
@@ -58,8 +62,10 @@ export async function aggregateAdminRefreshScopes(
         COALESCE(pref.preferences->'target_regions', '[]'::jsonb) AS target_regions,
         COALESCE(pref.preferences->'target_country_codes', '[]'::jsonb) AS target_country_codes,
         COALESCE(pref.preferences->'remote_eligible_country_codes', '[]'::jsonb) AS remote_eligible_country_codes,
-        COALESCE(pref.preferences->'work_modes', '{}'::jsonb) AS work_modes,
-        COALESCE(pref.preferences->'contract_types', '[]'::jsonb) AS contract_types
+        COALESCE(pref.preferences->'excluded_regions', '[]'::jsonb) AS excluded_regions,
+        COALESCE(pref.preferences->'excluded_country_codes', '[]'::jsonb) AS excluded_country_codes,
+        COALESCE(pref.preferences->'excluded_role_keywords', '[]'::jsonb) AS excluded_role_keywords,
+        COALESCE(pref.preferences->'deep_erp_terms', '[]'::jsonb) AS deep_erp_terms
        FROM search_profile sp
        JOIN profile workspace
          ON workspace.profile_id = sp.tenant_id
@@ -80,8 +86,12 @@ export async function aggregateAdminRefreshScopes(
       target_regions:list(row.target_regions, { upper:true }),
       target_country_codes:list(row.target_country_codes, { upper:true }),
       remote_eligible_country_codes:list(row.remote_eligible_country_codes, { upper:true }),
-      work_modes:workModes(row.work_modes),
-      contract_types:list(row.contract_types, { lower:true }),
+      excluded_regions:list(row.excluded_regions, { upper:true }),
+      excluded_country_codes:list(row.excluded_country_codes, { upper:true }),
+      excluded_role_keywords:list(row.excluded_role_keywords),
+      deep_erp_terms:list(row.deep_erp_terms),
+      work_modes:['remote','hybrid','onsite'],
+      contract_types:[],
     };
     for (const roleFamily of roleFamilies(row)) {
       const scope = {

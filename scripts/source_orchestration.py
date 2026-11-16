@@ -572,6 +572,17 @@ def _posting_scope_decision(posting, scope):
     unknown = posting.role_family == "UNKNOWN"
     if not unknown and posting.role_family != str(scope.get("role_family") or "").strip().upper():
         return "EXCLUDED"
+    # Exclusions are evaluated per signed tuple, not as a global ADMIN union.
+    import re
+    title = str(getattr(posting, "title", "") or "")
+    description = str((getattr(posting, "payload", {}) or {}).get("description") or "")
+    for key, evidence in (("excluded_role_keywords", title), ("deep_erp_terms", title + " " + description)):
+        terms = [re.escape(str(value)) for value in scope.get(key) or [] if str(value).strip()]
+        matched = terms and re.search(r"\b(?:" + "|".join(terms) + r")\b", evidence, re.I)
+        if matched and (key == "excluded_role_keywords" or re.search(r"implement|consultant|specialist|functional", evidence, re.I)):
+            return "EXCLUDED"
+        if key == "deep_erp_terms" and terms and not description:
+            unknown = True
     members=set(posting.role_subfamily or [])
     wanted=set(scope.get("role_subfamilies") or [])
     if not unknown and wanted:
@@ -591,7 +602,13 @@ def _posting_scope_decision(posting, scope):
     target_regions=set(scope.get("target_regions") or [])
     for region in target_regions:
         allowed_countries.update(engine.REGION_COUNTRIES.get(region,set()))
+    excluded=set(scope.get("excluded_country_codes") or [])
+    excluded_regions=set(scope.get("excluded_regions") or [])
+    for region in excluded_regions:
+        excluded.update(engine.REGION_COUNTRIES.get(region,set()))
     countries=set(posting.country_codes or [])
+    if countries & excluded:
+        return "EXCLUDED"
     remote=posting.work_mode=="remote"
     remote_scope=str(posting.remote_scope or "").casefold()
     authorized=set(scope.get("remote_eligible_country_codes") or [])
@@ -599,6 +616,8 @@ def _posting_scope_decision(posting, scope):
         pass
     elif remote and remote_scope in {"eu","emea"}:
         region=remote_scope.upper()
+        if region in excluded_regions:
+            return "EXCLUDED"
         members=set(engine.REGION_COUNTRIES.get(region,set()))
         if region=="EMEA":
             members.update(engine.REGION_COUNTRIES.get("EU",set()))
@@ -615,7 +634,7 @@ def _posting_scope_decision(posting, scope):
             return "EXCLUDED"
         if remote and authorized and not (countries & authorized):
             return "EXCLUDED"
-    elif allowed_countries or target_regions or (remote and authorized):
+    elif allowed_countries or target_regions or excluded or excluded_regions or (remote and authorized):
         unknown=True
     return "UNRESOLVED" if unknown else "MATCHED"
 

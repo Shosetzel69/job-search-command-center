@@ -43,6 +43,10 @@ function canonicalScope(scope) {
     target_regions:list(scope?.target_regions, { upper:true }).sort(),
     target_country_codes:list(scope?.target_country_codes, { upper:true }).sort(),
     remote_eligible_country_codes:list(scope?.remote_eligible_country_codes, { upper:true }).sort(),
+    excluded_regions:list(scope?.excluded_regions, { upper:true }).sort(),
+    excluded_country_codes:list(scope?.excluded_country_codes, { upper:true }).sort(),
+    excluded_role_keywords:list(scope?.excluded_role_keywords).sort(),
+    deep_erp_terms:list(scope?.deep_erp_terms).sort(),
     work_modes:list(scope?.work_modes, { lower:true }).sort(),
     contract_types:list(scope?.contract_types, { lower:true }).sort(),
   });
@@ -54,6 +58,10 @@ export function userRefreshScopes(preferences) {
     target_regions:list(p.target_regions, { upper:true }),
     target_country_codes:list(p.target_country_codes, { upper:true }),
     remote_eligible_country_codes:list(p.remote_eligible_country_codes, { upper:true }),
+    excluded_regions:list(p.excluded_regions, { upper:true }),
+    excluded_country_codes:list(p.excluded_country_codes, { upper:true }),
+    excluded_role_keywords:list(p.excluded_role_keywords),
+    deep_erp_terms:list(p.deep_erp_terms),
     work_modes:['remote','hybrid','onsite'],
     contract_types:[],
   };

@@ -1269,6 +1269,29 @@ class PublicBoardAdapterTests(unittest.TestCase):
         self.assertNotIn("Do not include",detail["description"])
         self.assertIsNone(boards._labelled_detail(html,"Wrong title","Hipo"))
 
+    def test_hipo_structured_summary_is_enriched_with_exact_detail_fields(self):
+        import json
+        job = {"@type":"JobPosting","title":"Project Manager","description":"Brief summary",
+               "educationRequirements":"<p>Lead delivery across teams. Own risks and dependencies.</p>",
+               "hiringOrganization":{"name":"Siemens Energy"},
+               "jobLocation":{"address":{"addressLocality":"BUCURESTI ,","addressRegion":"RO"}},
+               "employmentType":"FULL_TIME","datePosted":"2026-11-16"}
+        html = '<script type="application/ld+json">' + json.dumps(job) + '</script>'
+        html += '<h1>Project Manager</h1><p>Remote work: On-site</p><p>Actualizat la: 16-11-2026</p>'
+        listing="https://www.hipo.ro/locuri-de-munca/cautajob/project-manager"
+        url="https://www.hipo.ro/locuri-de-munca/locuri_de_munca/268902/project-manager"
+        row=boards._record("Hipo","268902","Project Manager","Nespecificata","",url)
+        with patch.object(boards.PublicClient,"get",return_value=(url,html)):
+            rows,unresolved=boards.protect_context_records([row],"Hipo","hipo",listing)
+        self.assertEqual(unresolved,0)
+        detail=rows[0]
+        self.assertEqual(detail["work_mode"],"onsite")
+        self.assertEqual(detail["countries"],[boards.engine.COUNTRY_NAMES["RO"]])
+        self.assertIn("Own risks and dependencies",detail["description"])
+        self.assertIsNone(detail["date_posted"])
+        self.assertEqual(detail["date_updated"],"2026-11-16")
+        self.assertEqual(detail["_jscc_field_provenance"]["work_mode"],"JOB_DETAIL_HTML")
+
     def test_socgen_labelled_detail_distinguishes_publication_and_start(self):
         html='''<h1>Junior Project Manager</h1><p>Internship</p>
         <p>Luxembourg, Luxembourg Hybrid</p><p>Reference 26000M0G</p>

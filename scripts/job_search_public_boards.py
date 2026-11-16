@@ -1981,13 +1981,20 @@ def _remoteok(payload):
         if not isinstance(item, dict) or not item.get("id") or not item.get("position") or not item.get("url"):
             continue
         location = item.get("location") or "Worldwide"
-        records.append(_record(
+        record = _record(
             "Remote OK", item["id"], item["position"], item.get("company"),
             item.get("description"), item.get("url") or item.get("apply_url"),
             date_posted=item.get("date"), location=location,
             countries=_country_names_from_text(location), remote=True,
             employment_statuses=item.get("tags") or [],
-        ))
+        )
+        record["_jscc_field_provenance"] = {
+            "title": "PUBLIC_API_FIELD",
+            **({"description": "PUBLIC_API_FIELD"} if item.get("description") else {}),
+            **({"location": "PUBLIC_API_FIELD"} if item.get("location") else {}),
+            **({"date_posted": "PUBLIC_API_FIELD"} if item.get("date") else {}),
+        }
+        records.append(record)
     return records
 
 
@@ -3458,7 +3465,7 @@ CONTEXT_LOCATION_KINDS = frozenset((
 ))
 
 
-def _single_detail_jobposting(html, expected_title):
+def _single_detail_jobposting(html, expected_title, source=None):
     # Only one individually fetched posting may supply fields. Nested schema.org
     # variants are allowed, but multiple JobPosting nodes remain ambiguous.
     from job_search_web import Page, objects, is_type, as_list
@@ -3470,6 +3477,12 @@ def _single_detail_jobposting(html, expected_title):
     job = jobs[0]
     title = plain_text(job.get("title"))
     description = plain_text(job.get("description"))
+    if source == "Hipo":
+        # Hipo places the long posting text in educationRequirements.
+        # Retain the summary and the explicit requirements, not surrounding page text.
+        requirements = plain_text(job.get("educationRequirements"))
+        if requirements and requirements not in description:
+            description = requirements if description in requirements else "\n\n".join(filter(None, (description, requirements)))
     if not title or title.casefold() != plain_text(expected_title).casefold() or not description:
         return None
     organizations = [plain_text(x.get("name")) for x in as_list(job.get("hiringOrganization"))
@@ -3489,8 +3502,11 @@ def _single_detail_jobposting(html, expected_title):
             if not isinstance(address, dict):
                 continue
             country = area(address.get("addressCountry"))
-            label = ", ".join(x for x in (plain_text(address.get("addressLocality")),
-                                          plain_text(address.get("addressRegion")), country) if x)
+            region = plain_text(address.get("addressRegion")).strip(" ,")
+            if source == "Hipo" and not country and region.upper() in engine.COUNTRY_NAMES and len(region) == 2:
+                country, region = area(region), ""
+            label = ", ".join(x for x in (plain_text(address.get("addressLocality")).strip(" ,"),
+                                          region, country) if x)
             if label and label not in labels:
                 labels.append(label)
             if country and country not in office_countries:
@@ -3629,17 +3645,22 @@ def _labelled_detail(html, expected_title, name):
             elif values and not values[next(reversed(values))]:
                 values[next(reversed(values))] = text
     description = "\n\n".join(title + "\n" + "\n".join(parts) for title,parts in groups if parts)
-    if not description:
+    if not description and name != "Hipo":
         return None
-    provenance = {"title":"JOB_DETAIL_HTML", "description":"JOB_DETAIL_HTML"}
-    result = {"job_title":clean(expected_title), "description":description[:100000],
-              "description_completeness":"full", "_jscc_field_provenance":provenance}
+    provenance = {"title":"JOB_DETAIL_HTML"}
+    result = {"job_title":clean(expected_title), "_jscc_field_provenance":provenance}
+    if description:
+        result.update(description=description[:100000], description_completeness="full")
+        provenance["description"] = "JOB_DETAIL_HTML"
     header = "\n".join(text for _,text in blocks[index+1:next((i for i in range(index+1,len(blocks))
                            if fold(blocks[i][1]) in sections),len(blocks))])
     if name == "Hipo":
         company = values.get("angajator")
         location = values.get("orase")
         raw_mode = fold(values.get("remote work") or "")
+        if raw_mode not in {"remote", "hybrid", "on-site", "onsite", "on site"}:
+            match_mode = re.search(r"(?im)^\s*Remote work\s*:?\s*(On-site|On site|Onsite|Hybrid|Remote)\s*$", header)
+            raw_mode = fold(match_mode[1]) if match_mode else ""
         employment = values.get("tip job")
         updated = values.get("actualizat la") or ""
         match = re.fullmatch(r"(\d{2})-(\d{2})-(\d{4})", updated)
@@ -3688,9 +3709,10 @@ def _labelled_detail(html, expected_title, name):
     if location:
         result.update(location=location,countries=countries,country_codes=[])
         provenance["location"] = "JOB_DETAIL_HTML"
-    mode = {"remote":"remote","hybrid":"hybrid","on-site":"onsite","onsite":"onsite"}.get(raw_mode)
+    mode = {"remote":"remote","hybrid":"hybrid","on-site":"onsite","on site":"onsite","onsite":"onsite"}.get(raw_mode)
     if mode:
         result.update(work_arrangement=mode,work_mode=mode,remote=mode=="remote",hybrid=mode=="hybrid")
+        provenance["work_mode"] = "JOB_DETAIL_HTML"
     if employment:
         result["employment_statuses"] = [employment]
     return result
@@ -3739,9 +3761,28 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
                 final, html = PublicClient(deadline).get(link)
                 target = urlsplit(final)
                 if (target.scheme, target.netloc, target.path, target.query) == (parts.scheme, parts.netloc, parts.path, parts.query):
-                    detail = _single_detail_jobposting(html, record.get("job_title"))
-                    if not detail:
-                        detail = _labelled_detail(html, record.get("job_title"), name)
+                    detail = _single_detail_jobposting(html, record.get("job_title"), name)
+                    labelled = _labelled_detail(html, record.get("job_title"), name) if name == "Hipo" or not detail else None
+                    if detail and labelled and name == "Hipo":
+                        # Exact-title source HTML complements incomplete structured fields.
+                        provenance = detail["_jscc_field_provenance"]
+                        if labelled.get("work_mode") and not detail.get("work_mode"):
+                            for key in ("work_arrangement", "work_mode", "remote", "hybrid"):
+                                detail[key] = labelled[key]
+                            provenance["work_mode"] = "JOB_DETAIL_HTML"
+                        if labelled.get("countries") and not detail.get("countries"):
+                            detail.update(location=labelled["location"], countries=labelled["countries"], country_codes=[])
+                            provenance["location"] = "JOB_DETAIL_HTML"
+                        if len(labelled.get("description", "")) > len(detail.get("description", "")):
+                            detail["description"] = labelled["description"]
+                            provenance["description"] = "JOB_DETAIL_HTML"
+                        if labelled.get("date_updated"):
+                            detail["date_updated"] = labelled["date_updated"]
+                            if detail.get("date_posted") == labelled["date_updated"]:
+                                detail["date_posted"] = None
+                                provenance.pop("date_posted", None)
+                    elif not detail:
+                        detail = labelled if labelled and labelled.get("description") else None
             except (FetchError, OSError, ValueError, TypeError):
                 pass
         if detail:
