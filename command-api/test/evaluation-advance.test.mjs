@@ -58,3 +58,15 @@ test('rejected UPSERT is not an HTTP error; digest and matrix are part of one gu
   assert.equal(calls[0].args[14],'digest');
   assert.equal(calls[0].args[15],JSON.stringify([{points:25}]));
 });
+
+import { COLUMNS, INDEXES, assertEvaluation013Ledger } from '../scripts/db-evaluation-migrate-013.mjs';
+test('013 exact ledger rejects missing or incorrect indexes and untracked objects',()=>{
+  const files=Array.from({length:13},(_,i)=>({version:String(i+1).padStart(3,'0'),name:i===12?'013_profile_job_evaluation_listing.sql':String(i+1),checksum:i===10?'c6cb6ac52c9a717a5dc452b38fb0874be51896190dc24beab01babfafe623f0e':'x'}));
+  const cols=Object.entries(COLUMNS).map(([column_name,data_type])=>({column_name,data_type,is_nullable:'YES'}));
+  const indexes=Object.entries(INDEXES).map(([indexname,col])=>({indexname,indexdef:`CREATE INDEX ${indexname} ON public.profile_job_evaluation USING btree (tenant_id, search_profile_id, ${col}, job_id)`}));
+  assert.equal(assertEvaluation013Ledger(files,files.slice(0,12),[],[]),'PENDING_013');
+  assert.equal(assertEvaluation013Ledger(files,files,cols,indexes),'ALREADY_APPLIED');
+  assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.slice(0,-1)),/EVALUATION013_INDEX_DRIFT/);
+  assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((x,i)=>i?x:{...x,indexdef:x.indexdef.replace('score','b2b')})),/EVALUATION013_INDEX_DRIFT/);
+  assert.throws(()=>assertEvaluation013Ledger(files,files.slice(0,12),[],indexes),/EVALUATION013_UNTRACKED_OBJECTS/);
+});
