@@ -581,7 +581,7 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     const retrieveRaceDb={connect:async()=>{
       const client=await runtimeDb.connect();
       return {release:()=>client.release(),query:async(sql,params)=>{
-        if(!writerCommitted&&sql.startsWith('WITH basis_guard AS')){
+        if(!writerCommitted&&sql.includes('basis_guard AS (')&&sql.includes('population AS (')&&sql.includes('summary AS (')){
           const writer=await adminDb.connect();
           try{
             await writer.query('BEGIN');
