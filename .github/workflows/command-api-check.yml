@@ -365,7 +365,8 @@ jobs:
               ...(needsTap?{NODE_OPTIONS:[process.env.NODE_OPTIONS,'--test-reporter=tap'].filter(Boolean).join(' ')}:{}),
               ...(mode==='NATIVE'?{W025_NATIVE_RUN_ID:runId,W025_NATIVE_CHALLENGE:challenge}:{})
             };
-            const child=spawnSync(command,args,{encoding:'utf8',env:childEnv,timeout:180000});
+            // R6 exercises 12,801 native rows; accommodate CI runner variability without changing the evaluator's 8s deadline or any required oracle.
+            const child=spawnSync(command,args,{encoding:'utf8',env:childEnv,timeout:runId==='multiuser'?600000:180000});
             const output=(child.stdout||'')+'\n'+(child.stderr||'');
             process.stdout.write(output);
             let sqlReadback=null;
