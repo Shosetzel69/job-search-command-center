@@ -551,6 +551,31 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(mixedRecovered.status,'COMPLETE',JSON.stringify(mixedRecovered));
     console.log('R6_NATIVE_MIXED_VALUES_GUARD=PASS');
 
+    // T-B01-c: a second real connection publishes N+1 between profile read and
+    // the single-statement listing snapshot. Never attest the old complete set.
+    let writerCommitted=false;
+    const retrieveRaceDb={connect:async()=>{
+      const client=await runtimeDb.connect();
+      return {release:()=>client.release(),query:async(sql,params)=>{
+        if(!writerCommitted&&sql.startsWith('WITH basis_guard AS')){
+          const writer=await adminDb.connect();
+          try{
+            await writer.query('BEGIN');
+            await writer.query('UPDATE canonical_jobs SET job_version=job_version+1 WHERE job_id=$1',[matrixIds[0]]);
+            await writer.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"new-retrieve\"'::jsonb) WHERE job_id=$1",[matrixIds[0]]);
+            await writer.query('COMMIT');writerCommitted=true;
+          }catch(error){await writer.query('ROLLBACK');throw error;}
+          finally{writer.release();}
+        }
+        return client.query(sql,params);
+      }};
+    }};
+    const duringRetrieve=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:retrieveRaceDb,now:matrixNow});
+    assert.ok(writerCommitted,'native N+1 writer must commit before page snapshot');
+    assert.equal(duringRetrieve.count_status,'INCOMPLETE');assert.equal(duringRetrieve.totals,null);
+    const afterRetrieve=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+    assert.equal(afterRetrieve.status,'COMPLETE',JSON.stringify(afterRetrieve));
+    console.log('R6_NATIVE_RETRIEVE_LIST_INTERLEAVE=PASS');
     const cursorPage=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
     assert.ok(cursorPage.next_cursor);
     await adminDb.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"changed\"'::jsonb) WHERE job_id=$1",[matrixIds.at(-1)]);
