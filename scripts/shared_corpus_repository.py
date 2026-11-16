@@ -122,7 +122,7 @@ def _contract_type(record: Mapping[str, Any]) -> str:
         return "contract"
     if re.search(r"temporary|fixed[- ]term", raw):
         return "temporary"
-    if re.search(r"permanent|full[- ]time", raw):
+    if re.search(r"\bpermanent\b", raw):
         return "permanent"
     return "unknown"
 
