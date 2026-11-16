@@ -43,6 +43,7 @@ import { adminRefresh } from './admin-refresh.js';
 import { adminDbPurge } from './admin-db-purge.js';
 import { devPurgeActive } from './runtime-gcp.js';
 import { advanceProfileEvaluation } from './evaluation-advance.js';
+import { listGlobalProfileJobs } from './global-job-listing.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const COOKIE_SENTINEL = '__JSCC_COOKIE_SESSION__';
@@ -236,6 +237,8 @@ function jobStateMatch(url) {
 
 function jobSearchQuery(url) {
   return {
+    sort:url.searchParams.get('sort'),
+    dir:url.searchParams.get('dir'),
     limit:url.searchParams.get('limit'),
     cursor:url.searchParams.get('cursor'),
     q:url.searchParams.get('q'),
@@ -333,6 +336,8 @@ export async function handleAuthenticatedRoute(request, env, context) {
 
   if (request.method === 'GET' && url.pathname === '/me/jobs') {
     const nomenclatures = (await readNomenclatures(env)).payload;
+    const query=jobSearchQuery(url);
+    if(query.sort)return json(await listGlobalProfileJobs(context,nomenclatures,query,env));
     return json(await listProfileJobs(
       context,
       null,
