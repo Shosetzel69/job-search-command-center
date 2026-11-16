@@ -23,8 +23,6 @@ test('empty onboarding profile does not qualify for job retrieval', () => {
     roleFamilies:['PROJECT_DELIVERY_MANAGEMENT'],
     roleSubfamilies:['project_management'],
     targetRegions:['EU'],
-    workRemote:true,
-    contractTypes:['contract'],
   }), true);
 });
 
