@@ -10,3 +10,15 @@ test('exact explicit preference ratings and no match',()=>{const r=evaluateFitV2
 test('invalid total, grade and duplicate normalized label rejected',()=>{for(const c of [{...example(),compensation:{weight:21}},{...example(),work_mode:{weight:50,ratings:{remote:6}}},{...example(),work_mode:{weight:50,ratings:{remote:5,REMOTE:4}}}])assert.throws(()=>normalizeFitConfig(c),{status:400});});
 test('zero weights have no effect and no implicit preferences',()=>{const c={...config(),compensation:{weight:100}};assert.equal(evaluateFitV2(c,{work_mode:'remote'}).score,0);assert.equal(evaluateFitV2(c,{compensation:100}).score,100);});
 test('profiles independently evaluate same evidence without mutation',()=>{const a=example(),b={...a,work_mode:{weight:50,ratings:{remote:1}}},e=Object.freeze({work_mode:'remote'});assert.equal(evaluateFitV2(a,e).score,50);assert.equal(evaluateFitV2(b,e).score,10);assert.equal(a.work_mode.ratings.remote,5);});
+
+import { normalizedContractType, classifyCanonicalJob } from '../../shared/job-classification.mjs';
+test('D-660-02 workload tags do not turn unknown into permanent',()=>{
+  for(const tag of ['full time','full-time','FULL_TIME','part time']) {
+    const payload={employment_statuses:['project management',tag,'agile'],contract_type:'unknown'};
+    assert.equal(normalizedContractType(payload),'unknown');
+    assert.equal(normalizedContractType({employment_statuses:payload.employment_statuses}),'unknown');
+    assert.equal(classifyCanonicalJob({title:'Project Manager',payload}).contract_type,'unknown');
+  }
+  assert.equal(normalizedContractType({employment_statuses:['full time','permanent']}),'permanent');
+  assert.equal(normalizedContractType({employment_statuses:['full time','B2B']}),'contract');
+});

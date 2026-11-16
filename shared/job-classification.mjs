@@ -72,14 +72,14 @@ export function classifyRoleTitle(title, taxonomy = loadRoleTaxonomy()) {
 
 export function normalizedContractType(payload = {}) {
   const explicit = String(payload.contract_type ?? '').trim().toLowerCase();
-  if (['permanent','temporary','contract','freelance'].includes(explicit)) return explicit;
+  if (['unknown','permanent','temporary','contract','freelance'].includes(explicit)) return explicit;
   const raw = values(payload.employment_statuses ?? payload.employment_type ?? payload.employment_status ?? payload.job_type)
     .join(' ')
     .toLowerCase();
   if (/freelance/.test(raw)) return 'freelance';
   if (/contract|contractor|b2b/.test(raw)) return 'contract';
   if (/temporary|fixed[- ]term/.test(raw)) return 'temporary';
-  if (/permanent|full[- ]time/.test(raw)) return 'permanent';
+  if (/\bpermanent\b/.test(raw)) return 'permanent';
   return 'unknown';
 }
 

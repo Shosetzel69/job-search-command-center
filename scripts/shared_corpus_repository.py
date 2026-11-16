@@ -117,7 +117,20 @@ def _employment_values(record: Mapping[str, Any]) -> list[str]:
 
 def _workload_only(record: Mapping[str, Any]) -> bool:
     values = _employment_values(record)
-    return bool(values) and all(re.fullmatch(r"(?:full|part)[ _-]?time", value) for value in values)
+    workload = lambda value: bool(re.fullmatch(r"(?:full|part)[ _-]?time", value))
+    # Remote OK mixes workload with role/technology tags. Ignore unrelated tags,
+    # but retain any explicit contract evidence; other providers remain unchanged.
+    sources = record.get("sources") or []
+    remoteok = _text(record.get("id")).casefold().startswith("remote-ok:") or any(
+        isinstance(source, Mapping) and _text(source.get("provider")).casefold() == "remote ok"
+        for source in sources
+    )
+    if remoteok:
+        return any(workload(value) for value in values) and not any(
+            re.search(r"\b(?:permanent|temporary|contract|contractor|b2b|freelance)\b|fixed[- ]term", value)
+            for value in values
+        )
+    return bool(values) and all(workload(value) for value in values)
 
 
 def _contract_type(record: Mapping[str, Any]) -> str:
