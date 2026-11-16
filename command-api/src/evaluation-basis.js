@@ -109,6 +109,6 @@ export const EVALUATION_FIELDS_SQL = `j.job_id,j.title,j.company,j.location,j.co
  ${INPUT_DIGEST_SQL} AS input_digest`;
 
 export const EVALUATION_VISIBLE_SQL = `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`;
-export const EVALUATION_PENDING_SQL = `(eval.input_digest IS DISTINCT FROM (${INPUT_DIGEST_SQL})
+export const EVALUATION_PENDING_SQL = `(eval.fit_matrix IS NULL OR eval.input_digest IS DISTINCT FROM (${INPUT_DIGEST_SQL})
  OR eval.fit_algorithm_version IS DISTINCT FROM $5::text
  OR eval.job_version IS DISTINCT FROM j.job_version)`;
