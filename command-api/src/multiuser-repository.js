@@ -1764,8 +1764,14 @@ export async function capacityStatus(authContext, env = process.env, { db = getP
   };
 }
 // ATC-535-FP02-R6: tenant-scoped evaluation and listing SQL stays inside ADR-008 repository.
-export const EVALUATION_JOIN_SQL = `LEFT JOIN profile_job_evaluation eval
- ON eval.tenant_id=$1 AND eval.search_profile_id=$3 AND eval.job_id=j.job_id`;
+// Materialize the selected tenant/profile cache once per statement. The six
+// sort indexes otherwise give the planner alternative repeated per-job probes
+// through the tenant/profile prefixes during a full-corpus pending count.
+// No cross-tenant input, persisted count, or altered current-input predicate.
+const TENANT_EVALUATION_CTE = `tenant_evaluation AS MATERIALIZED (
+ SELECT * FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$3
+)`;
+export const EVALUATION_JOIN_SQL = `LEFT JOIN tenant_evaluation eval ON eval.job_id=j.job_id`;
 
 export const ADVANCE_BATCH_MAX=100;
 export const ADVANCE_BUDGET_MS=8000;
@@ -1887,7 +1893,7 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       const from=`${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
         WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`;
       await budget();
-      const batch=await tx.query(`SELECT ${EVALUATION_FIELDS_SQL}
+      const batch=await tx.query(`WITH ${TENANT_EVALUATION_CTE} SELECT ${EVALUATION_FIELDS_SQL}
         ${from} ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX}`,args);
       let evaluated=0,defaultEntries=[];
       const flush=async()=>{
@@ -1908,7 +1914,7 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
         current.preference_digest!==basis.preference_digest)
         return {status:'INVALIDATED',pending:null,evaluated};
       await budget();
-      const result=await tx.query(`SELECT COUNT(*)::integer AS pending ${from}`,args);
+      const result=await tx.query(`WITH ${TENANT_EVALUATION_CTE} SELECT COUNT(*)::integer AS pending ${from}`,args);
       const pending=Number(result.rows?.[0]?.pending);
       if(!Number.isSafeInteger(pending)||pending<0)throw httpError('EVALUATION_PENDING_UNAVAILABLE',503);
       return {status:pending===0?'COMPLETE':'INCOMPLETE',pending,evaluated,
@@ -2001,7 +2007,7 @@ export function buildGlobalListingQuery(tenant,basis,spec,anchor){
    (NOT ${cursorNull}::boolean AND (${expression} IS NULL OR ${expression} ${compare} ${value}::${cast}
     OR (${expression}=${value}::${cast} AND job_id>${cursorId}::uuid)))
    OR (${cursorNull}::boolean AND ${expression} IS NULL AND job_id>${cursorId}::uuid))`;
-  return {params:p,sql:`WITH basis_guard AS (
+  return {params:p,sql:`WITH ${TENANT_EVALUATION_CTE}, basis_guard AS (
    SELECT p.search_profile_id FROM search_profile p
     LEFT JOIN search_profile_preferences pref ON pref.tenant_id=p.tenant_id AND pref.search_profile_id=p.search_profile_id
     LEFT JOIN collection_policy policy ON policy.singleton=true
