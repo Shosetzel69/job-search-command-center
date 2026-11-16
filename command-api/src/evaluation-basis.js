@@ -108,8 +108,6 @@ export const EVALUATION_FIELDS_SQL = `j.job_id,j.title,j.company,j.location,j.co
  sp.payload AS posting_payload,publication.effective_posted_at,
  ${INPUT_DIGEST_SQL} AS input_digest`;
 
-export const EVALUATION_JOIN_SQL = `LEFT JOIN profile_job_evaluation eval
- ON eval.tenant_id=$1 AND eval.search_profile_id=$3 AND eval.job_id=j.job_id`;
 export const EVALUATION_VISIBLE_SQL = `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`;
 export const EVALUATION_PENDING_SQL = `(eval.input_digest IS DISTINCT FROM (${INPUT_DIGEST_SQL})
  OR eval.fit_algorithm_version IS DISTINCT FROM $5::text
