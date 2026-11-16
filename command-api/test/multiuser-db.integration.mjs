@@ -426,7 +426,7 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
         [jobId,title,country,mode,seen,contract]);
       await adminDb.query(`INSERT INTO source_postings(posting_id,job_id,source_id,source_name,external_job_id,
         canonical_url,identity_kind,identity_value,posted_at,lifecycle_status,first_seen_at,last_seen_at,seen_run_id,payload)
-        VALUES($1,$2,'r6-sort','Integration',$2::text,'https://example.test/r6','EXTERNAL_ID',$2::text,$3,
+        VALUES($1,$2::uuid,'r6-sort','Integration',($2::uuid)::text,'https://example.test/r6','EXTERNAL_ID',($2::uuid)::text,$3,
         'ACTIVE',$4,$4,'r6-sort','{}'::jsonb)`,[postingId,jobId,published,seen]);
     }
     const matrixNow=new Date('2026-10-05T12:06:00Z');
