@@ -523,6 +523,34 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
       assert.equal(contended.evaluated,0);
     }finally{unblock();await holding;}
     console.log('R6_NATIVE_TWO_TAB_LOCK=PASS');
+    // T-B02: both an unknown algorithm and a provisional newer version in
+    // one actual VALUES batch. Unknown algorithm must be replaced, but newer
+    // profile_version must reject the write without breaking read-side authority.
+    const mixedIds=matrixIds.slice(0,2);
+    const mixedVersion=(await resolveActiveSearchProfile(user,env,{db:runtimeDb})).profile_version;
+    await adminDb.query(`UPDATE profile_job_evaluation SET fit_algorithm_version='r6-unknown-fixture',
+      input_digest=NULL,profile_version=CASE WHEN job_id=$3 THEN $4::integer+1 ELSE $4::integer END
+      WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($5::uuid[])`,
+      [user.profile_id,restoredFoundation.search_profile_id,mixedIds[1],mixedVersion,mixedIds]);
+    try{
+      const mixed=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+      assert.equal(mixed.evaluated,1,JSON.stringify(mixed));
+      assert.equal(mixed.pending,1);assert.equal(mixed.status,'INCOMPLETE');
+      const persisted=await adminDb.query(`SELECT job_id,fit_algorithm_version,profile_version
+        FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])`,
+        [user.profile_id,restoredFoundation.search_profile_id,mixedIds]);
+      assert.equal(persisted.rows.find(row=>row.job_id===mixedIds[0]).fit_algorithm_version,'fit-v2-independent-2');
+      assert.equal(persisted.rows.find(row=>row.job_id===mixedIds[1]).fit_algorithm_version,'r6-unknown-fixture');
+      const safeList=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
+      assert.equal(safeList.count_status,'INCOMPLETE');assert.equal(safeList.totals,null);
+    }finally{
+      await adminDb.query('UPDATE profile_job_evaluation SET profile_version=$4 WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=$3',
+        [user.profile_id,restoredFoundation.search_profile_id,mixedIds[1],mixedVersion]);
+    }
+    const mixedRecovered=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+    assert.equal(mixedRecovered.status,'COMPLETE',JSON.stringify(mixedRecovered));
+    console.log('R6_NATIVE_MIXED_VALUES_GUARD=PASS');
+
     const cursorPage=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
     assert.ok(cursorPage.next_cursor);
     await adminDb.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"changed\"'::jsonb) WHERE job_id=$1",[matrixIds.at(-1)]);
