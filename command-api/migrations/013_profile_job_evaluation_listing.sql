@@ -16,3 +16,11 @@ ALTER TABLE profile_job_evaluation
   ADD COLUMN is_remote boolean;
 
 -- Age/new24h are evaluated at the fixed listing anchor, never persisted.
+
+-- Tenant-local global listing orderings (R6 section 3.3).
+CREATE INDEX pje_listing_score_idx ON profile_job_evaluation (tenant_id, search_profile_id, score, job_id);
+CREATE INDEX pje_listing_publication_idx ON profile_job_evaluation (tenant_id, search_profile_id, publication_at, job_id);
+CREATE INDEX pje_listing_retrieve_idx ON profile_job_evaluation (tenant_id, search_profile_id, retrieve_at, job_id);
+CREATE INDEX pje_listing_title_idx ON profile_job_evaluation (tenant_id, search_profile_id, sort_title, job_id);
+CREATE INDEX pje_listing_country_idx ON profile_job_evaluation (tenant_id, search_profile_id, display_country, job_id);
+CREATE INDEX pje_listing_mode_idx ON profile_job_evaluation (tenant_id, search_profile_id, display_work_mode, job_id);
