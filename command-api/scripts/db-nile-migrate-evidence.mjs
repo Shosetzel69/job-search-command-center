@@ -55,17 +55,18 @@ try {
   console.log('EVALUATION013_NATIVE_PREFIX_APPLY_RETRY=PASS');
   // Destructive schema rollback is exercised only on this admitted ephemeral
   // native CI database, before any product fixture or application data exists.
+  // CI is exclusive and admitted as disposable, with no application clients yet.
+  // Release the distributed ACCESS SHARE lock from COUNT before distributed DDL:
+  // coordinator logs on both previous attempts identify remote SQLSTATE 55P03.
+  const count=await db.query('SELECT count(*)::integer AS count FROM profile_job_evaluation');
+  if(Number(count.rows[0]?.count)!==0)throw Error('EVALUATION013_ROLLBACK_NONEMPTY_DENIED');
   const rollbackClient=await db.connect();
   try{
     await rollbackClient.query('BEGIN');
     const lock=await rollbackClient.query("SELECT version FROM schema_migrations WHERE version='012' FOR UPDATE");
     if(lock.rows.length!==1)throw Error('EVALUATION013_ROLLBACK_LOCK_DENIED');
-    const count=await rollbackClient.query('SELECT count(*)::integer AS count FROM profile_job_evaluation');
-    if(Number(count.rows[0]?.count)!==0)throw Error('EVALUATION013_ROLLBACK_NONEMPTY_DENIED');
     const {COLUMNS}=await import('./db-evaluation-migrate-013.mjs');
-    // Nile rejected multi-action DROP (XX000). Keep every DDL operation and
-    // the ledger delete in the same transaction; verify the complete rollback.
-    for(const column of Object.keys(COLUMNS).reverse())await rollbackClient.query('ALTER TABLE profile_job_evaluation DROP COLUMN '+column);
+    await rollbackClient.query('ALTER TABLE profile_job_evaluation '+Object.keys(COLUMNS).map(c=>'DROP COLUMN '+c).join(', '));
     const removed=await rollbackClient.query("DELETE FROM schema_migrations WHERE version='013' AND checksum=$1 RETURNING version",[items.at(-1).checksum]);
     if(removed.rows.length!==1)throw Error('EVALUATION013_ROLLBACK_LEDGER_DENIED');
     await rollbackClient.query('COMMIT');
