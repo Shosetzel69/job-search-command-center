@@ -105,8 +105,6 @@ def _role_family(title: str) -> tuple[str, str]:
 
 def _contract_type(record: Mapping[str, Any]) -> str:
     explicit = _text(record.get("contract_type")).casefold()
-    if explicit in {"permanent", "temporary", "contract", "freelance"}:
-        return explicit
     raw_value = (
         record.get("employment_statuses")
         or record.get("employment_type")
@@ -116,6 +114,16 @@ def _contract_type(record: Mapping[str, Any]) -> str:
     )
     values = raw_value if isinstance(raw_value, list) else [raw_value]
     raw = " ".join(_text(value) for value in values).casefold()
+    # An upstream inferred permanent value must not override workload-only evidence.
+    # Preserve genuine explicit contract types when no contradictory raw evidence exists.
+    workload_only = bool(raw) and all(
+        re.fullmatch(r"(?:full|part)[ _-]?time", _text(value).casefold())
+        for value in values if _text(value)
+    )
+    if explicit in {"permanent", "temporary", "contract", "freelance"}:
+        if explicit == "permanent" and workload_only:
+            return "unknown"
+        return explicit
     if "freelance" in raw:
         return "freelance"
     if re.search(r"contract|contractor|b2b", raw):
@@ -542,6 +550,8 @@ def prepare_posting(record: Mapping[str, Any], source_hint: str | None = None) -
             if not country_codes and geo_scope == "Country":
                 country_codes = geo_codes
     contract_type = _contract_type(record)
+    # Canonical and retained posting payload must agree after normalization.
+    record["contract_type"] = contract_type
     remote_scope = _remote_scope(record, work_mode, country_codes)
     seniority = _seniority(record)
     role_subfamily = tuple(role_details["role_subfamily"])
