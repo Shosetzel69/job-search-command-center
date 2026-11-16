@@ -506,6 +506,56 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     await assert.rejects(listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT',cursor:cursorPage.next_cursor},env,{db:runtimeDb,now:matrixNow}),/STALE_CURSOR/);
     await adminDb.query('DELETE FROM source_postings WHERE job_id=ANY($1::uuid[])',[matrixIds]);
     await adminDb.query('DELETE FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',[matrixIds]);
+    // T-COUNT/T-ADV: a native shared fixture above the former 400-row window.
+    // Use fixed synthetic records on the attested disposable Nile instance.
+    const volume=405;
+    await adminDb.query(`INSERT INTO canonical_jobs(job_id,title,company,location,country_codes,work_mode,role_family,
+      lifecycle_status,first_seen_at,last_seen_at,payload,job_version,role_subfamily,seniority,contract_type,remote_scope,
+      classification_status,classification_confidence,classification_version,evaluation_basis_hash)
+      SELECT ('cccccccc-1111-4111-8111-'||lpad(i::text,12,'0'))::uuid,'R6VOLUME Technical Project Manager','Volume Fixture','City',
+      ARRAY['RO']::text[],'remote','PROJECT_DELIVERY_MANAGEMENT','ACTIVE',$1::timestamptz,$1::timestamptz,
+      '{}'::jsonb,1,ARRAY['project_management']::text[],'mid','contract','Country','matched',1,'2026.10.08-1',repeat('d',64)
+      FROM generate_series(1,$2::integer) i`,[matrixNow,volume]);
+    await adminDb.query(`INSERT INTO source_postings(posting_id,job_id,source_id,source_name,external_job_id,
+      canonical_url,identity_kind,identity_value,posted_at,lifecycle_status,first_seen_at,last_seen_at,seen_run_id,payload)
+      SELECT ('dddddddd-1111-4111-8111-'||lpad(i::text,12,'0'))::uuid,
+      ('cccccccc-1111-4111-8111-'||lpad(i::text,12,'0'))::uuid,'r6-volume','Integration',i::text,
+      'https://example.test/r6-volume','EXTERNAL_ID',i::text,$1::timestamptz,'ACTIVE',$1::timestamptz,$1::timestamptz,'r6-volume','{}'::jsonb
+      FROM generate_series(1,$2::integer) i`,[matrixNow,volume]);
+    async function finishVolume(ctx){
+      const start=performance.now();let maxAdvanceMs=0,state=null,attempts=0;
+      // Intentional interruption: an individual POST commits a bounded batch.
+      // A later POST must resume without losing the preceding writes.
+      for(;attempts<20;attempts++){
+        const started=performance.now();
+        state=await advanceProfileEvaluation(ctx,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+        const elapsed=performance.now()-started;
+        maxAdvanceMs=Math.max(maxAdvanceMs,elapsed);
+        assert.ok(elapsed<=8000,'advance exceeded 8s: '+elapsed);
+        assert.ok(state.evaluated<=100,'advance batch exceeded 100');
+        if(state.status==='COMPLETE')break;
+      }
+      assert.equal(state?.status,'COMPLETE',JSON.stringify(state));
+      const pageStart=performance.now();
+      const page=await listGlobalProfileJobs(ctx,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6VOLUME'},env,{db:runtimeDb,now:matrixNow});
+      assert.equal(page.count_status,'EXACT');assert.equal(page.totals.all,volume);
+      return {advance_total_ms:Math.round(performance.now()-start),max_advance_ms:Math.round(maxAdvanceMs),page_ms:Math.round(performance.now()-pageStart),calls:attempts+1};
+    }
+    const beforeVolume=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6VOLUME'},env,{db:runtimeDb,now:matrixNow});
+    assert.equal(beforeVolume.count_status,'INCOMPLETE');assert.equal(beforeVolume.totals,null);
+    const syntheticUsers=[];
+    try{
+      for(let i=0;i<3;i++)syntheticUsers.push(await resolveOrProvisionGoogleIdentity(
+        {sub:'r6-volume-'+i,email:'r6-volume-'+i+'@example.test',email_verified:true},env,{db:runtimeDb}));
+      const measurements=[];
+      for(const ctx of [user,ownerA,...syntheticUsers])measurements.push(await finishVolume(ctx));
+      console.log('R6_NATIVE_405_FIVE_TENANT='+JSON.stringify(measurements));
+    }finally{
+      for(const ctx of syntheticUsers)await deleteAccount(ownerA,ctx.user_id,env,{db:runtimeDb});
+      await adminDb.query("DELETE FROM source_postings WHERE source_id='r6-volume'");
+      await adminDb.query("DELETE FROM canonical_jobs WHERE title='R6VOLUME Technical Project Manager'");
+    }
+
 
 
     });
