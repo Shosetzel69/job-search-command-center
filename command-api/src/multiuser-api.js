@@ -332,11 +332,10 @@ export async function handleAuthenticatedRoute(request, env, context) {
   }
 
   if (request.method === 'GET' && url.pathname === '/me/jobs') {
-    const preferences = await currentPreferences(context, env);
     const nomenclatures = (await readNomenclatures(env)).payload;
     return json(await listProfileJobs(
       context,
-      preferences,
+      null,
       nomenclatures,
       jobSearchQuery(url),
       env,
