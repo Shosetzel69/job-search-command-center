@@ -13,6 +13,8 @@ import {
 import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
 import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from './profile-evaluation.js';
 import { userRefreshScopes } from './retrieve-scope.js';
+import { INPUT_DIGEST_SQL } from './evaluation-basis.js';
+import { readEvaluationBasisTx } from './evaluation-advance.js';
 import { devPurgeActive, readFailedRunCompletion } from './runtime-gcp.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
@@ -1040,54 +1042,10 @@ export function normalizeJobSearchQuery(input = {}) {
 }
 
 function evaluationCacheValid(row, foundation) {
-  return row.cached_profile_version != null
-    && Number(row.cached_profile_version) === Number(foundation.profile_version)
-    && Number(row.cached_job_version) === Number(row.job_version)
-    && String(row.cached_fit_algorithm_version || '') === FIT_ALGORITHM_VERSION;
-}
-
-async function persistEvaluationTx(tx, foundation, row, evaluation, now) {
-  await tx.query(
-    `INSERT INTO profile_job_evaluation(
-        tenant_id, search_profile_id, job_id,
-        eligibility_state, eligibility_reason_code, eligible,
-        score, pros, risks, exclusion_reason,
-        profile_version, job_version, fit_algorithm_version,
-        evaluation_version, evaluated_at
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb, $10, $11, $12, $13, $14, $15)
-      ON CONFLICT(tenant_id, search_profile_id, job_id)
-      DO UPDATE SET
-        eligibility_state=EXCLUDED.eligibility_state,
-        eligibility_reason_code=EXCLUDED.eligibility_reason_code,
-        eligible=EXCLUDED.eligible,
-        score=EXCLUDED.score,
-        pros=EXCLUDED.pros,
-        risks=EXCLUDED.risks,
-        exclusion_reason=EXCLUDED.exclusion_reason,
-        profile_version=EXCLUDED.profile_version,
-        job_version=EXCLUDED.job_version,
-        fit_algorithm_version=EXCLUDED.fit_algorithm_version,
-        evaluation_version=EXCLUDED.evaluation_version,
-        evaluated_at=EXCLUDED.evaluated_at`,
-    [
-      tx.tenantId,
-      foundation.search_profile_id,
-      String(row.job_id),
-      evaluation.eligibilityState,
-      evaluation.eligibilityReasonCode || null,
-      evaluation.eligible,
-      evaluation.score,
-      JSON.stringify(evaluation.pros || []),
-      JSON.stringify(evaluation.risks || []),
-      evaluation.exclusionReason || null,
-      foundation.profile_version,
-      Number(row.job_version),
-      FIT_ALGORITHM_VERSION,
-      FIT_ALGORITHM_VERSION,
-      now,
-    ],
-  );
+  return typeof row.input_digest==='string' && row.input_digest===row.cached_input_digest
+    && Array.isArray(row.cached_fit_matrix)
+    && Number(row.cached_job_version)===Number(row.job_version)
+    && String(row.cached_fit_algorithm_version||'')===FIT_ALGORITHM_VERSION;
 }
 
 function cachedEvaluation(row) {
@@ -1096,6 +1054,7 @@ function cachedEvaluation(row) {
     eligibilityState:String(row.cached_eligibility_state),
     eligibilityReasonCode:row.cached_eligibility_reason_code || null,
     score:row.cached_score == null ? null : Number(row.cached_score),
+    fitMatrix:row.cached_fit_matrix,
     pros:Array.isArray(row.cached_pros) ? row.cached_pros : [],
     risks:Array.isArray(row.cached_risks) ? row.cached_risks : [],
     exclusionReason:row.cached_exclusion_reason || null,
@@ -1142,10 +1101,12 @@ export async function listProfileJobs(
 
   return withTenantTransaction(authContext, async tx => {
     await guardDevProjectionWrite(tx,env);
-    const foundation = await resolveActiveSearchProfileTx(tx);
+    const foundation = await readEvaluationBasisTx(tx,nomenclatures);
+    // Use the preferences captured with their version, not the caller's earlier read.
+    preferences=foundation.preferences;
     const basis=spec.result_view?await resultCountBasis(tx,foundation):null;
     if(spec.count_only&&(!basis||basis.active||basis.key!==spec.count_basis))throw httpError('Count basis changed or Retrieve active',409);
-    const params = [tx.tenantId, anchor, foundation.search_profile_id];
+    const params = [tx.tenantId, anchor, foundation.search_profile_id,foundation.preference_digest];
     const where = [
       `(j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $2)`,
     ];
@@ -1222,10 +1183,13 @@ export async function listProfileJobs(
               eval.exclusion_reason AS cached_exclusion_reason,
               eval.profile_version AS cached_profile_version,
               eval.job_version AS cached_job_version,
-              eval.fit_algorithm_version AS cached_fit_algorithm_version
+              eval.fit_algorithm_version AS cached_fit_algorithm_version,
+              eval.input_digest AS cached_input_digest,
+              eval.fit_matrix AS cached_fit_matrix,
+              ${INPUT_DIGEST_SQL} AS input_digest
          FROM canonical_jobs j
          JOIN LATERAL (
-           SELECT source_name, canonical_url, posted_at, last_seen_at, repost_of_posting_id, payload
+           SELECT posting_id, source_name, canonical_url, posted_at, last_seen_at, repost_of_posting_id, payload
              FROM source_postings
             WHERE job_id = j.job_id
             ORDER BY CASE lifecycle_status WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
@@ -1318,7 +1282,8 @@ export async function listProfileJobs(
       }
       evaluationsComputed += 1;
       const evaluation = evaluateSharedJob(row, preferences, nomenclatures, anchor);
-      if(!spec.count_only)await persistEvaluationTx(tx, foundation, row, evaluation, anchor);
+      // Transitional listing computes visible candidates but does not write cache.
+      // Complete evaluation is driven exclusively by the advance endpoint.
       return { evaluation, job:evaluation.job };
     };
 
