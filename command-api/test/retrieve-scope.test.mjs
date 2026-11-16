@@ -32,7 +32,8 @@ test('USER scope is bounded to at most two major families and carries selected s
   assert.deepEqual(scopes[1].role_subfamilies, ['product_owner']);
   assert.deepEqual(scopes[0].target_regions, ['EU']);
   assert.deepEqual(scopes[0].target_country_codes, ['RO']);
-  assert.deepEqual(scopes[0].work_modes, ['hybrid','remote']);
+  assert.deepEqual(scopes[0].work_modes, ['hybrid','onsite','remote']);
+  assert.deepEqual(scopes[0].contract_types, []);
   const serialized = JSON.stringify(scopes);
   assert.equal(/tenant_id|user_id|profile_id|search_profile_id/i.test(serialized), false);
 });
