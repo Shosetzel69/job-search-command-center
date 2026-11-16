@@ -30,13 +30,22 @@ def api(url,method="GET",data=None,missing=False):
     headers={"Authorization":"Bearer "+token,"Accept":"application/json"}
     if data is not None: headers["Content-Type"]="application/json"
     req=urllib.request.Request(url,data=data,method=method,headers=headers)
-    try:
-        with urllib.request.urlopen(req,timeout=45) as resp:
-            body=resp.read()
-            return json.loads(body) if body else {}
-    except urllib.error.HTTPError as e:
-        if missing and e.code==404:return None
-        raise RuntimeError("PROVIDER_HTTP_"+str(e.code)) from None
+    # Retry only GETs: a transient 503 during verification must not mask
+    # known evidence. Do not automatically repeat any provider mutation.
+    for attempt in range(5 if method=="GET" else 1):
+        try:
+            with urllib.request.urlopen(req,timeout=45) as resp:
+                body=resp.read()
+                return json.loads(body) if body else {}
+        except urllib.error.HTTPError as e:
+            if missing and e.code==404:return None
+            if method=="GET" and e.code in (429,500,502,503,504) and attempt<4:
+                time.sleep(2**attempt);continue
+            raise RuntimeError("PROVIDER_HTTP_"+str(e.code)+" method="+method) from None
+        except (urllib.error.URLError,TimeoutError):
+            if method=="GET" and attempt<4:
+                time.sleep(2**attempt);continue
+            raise RuntimeError("PROVIDER_TRANSPORT_UNCERTAIN method="+method) from None
 def get(kind,name): return api(f"{ROOT}/{kind}/{name}")
 def meta(name): return api(STORAGE+urllib.parse.quote(name,safe=""),missing=True)
 def env(c,name):
@@ -227,7 +236,7 @@ def managed_migration(img,checksum,gen,preflight_only=False):
     c=container(original["template"])
     need(env(c,"APP_ENV")=="dev" and env(c,"DB_MIGRATION_MODE")=="refuse","MIGRATION_BASELINE_DENIED")
     pinned(c,"NILE_DATABASE_URL");pinned(c,"NILE_MIGRATION_DATABASE_URL")
-    image(c,"jscc-service")
+    need(image(c,"jscc-service")==REG+"jscc-service@sha256:e00a6d7e7145640830262b4cc3983c00ac67e502aaf1d6c719e85f127a5beea3" and env(c,"SOURCE_SHA")=="25a046fffdeccc8c5f877a8c8cac01110f3c7324","MIGRATION_BASELINE_IDENTITY_DRIFT")
     staged=copy.deepcopy(original)
     new=container(staged["template"])
     new["image"]=img
