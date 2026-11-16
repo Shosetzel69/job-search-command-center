@@ -498,11 +498,12 @@ test('same shared job can produce different per-profile eligibility without prov
   const blocked = evaluateSharedJob(row, { ...base, work_modes:{ ...base.work_modes, remote:false } }, nomenclatures, new Date('2026-10-01T12:00:00Z'));
   assert.equal(allowed.eligible, true);
   assert.equal(allowed.eligibilityState, 'ELIGIBLE');
-  assert.equal(evaluateSharedJob({...row,role_subfamily:[]},base,nomenclatures).score,null);
+  assert.equal(evaluateSharedJob({...row,role_subfamily:[]},base,nomenclatures).score,100);
   assert.equal(allowed.score,100);
   assert.equal(evaluateSharedJob(row,{...base,fit_config:null},nomenclatures).score,null);
-  assert.equal(blocked.eligible, false);
-  assert.equal(blocked.exclusionReason, 'remote disabled');
+  assert.equal(blocked.eligible, true);
+  assert.equal(blocked.exclusionReason, null);
+  assert.equal(blocked.score,100);
   const unknownRole = evaluateSharedJob(
     { ...row, role_family:'UNKNOWN' },
     base,
@@ -511,7 +512,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(unknownRole.eligible, false, 'unresolved role is not a confirmed recommendation');
   assert.equal(unknownRole.eligibilityState, 'UNKNOWN');
-  assert.equal(unknownRole.score, null);
+  assert.equal(unknownRole.score, 100);
+  assert.ok(unknownRole.job);
   const incompatibleRemote = evaluateSharedJob(
     { ...row, country_codes:['US'], payload:{ ...row.payload, remote_scope:'Country' } },
     { ...base, target_country_codes:['US'], remote_eligible_country_codes:['RO'] },
@@ -520,8 +522,8 @@ test('same shared job can produce different per-profile eligibility without prov
   );
   assert.equal(incompatibleRemote.eligible, false);
   assert.equal(incompatibleRemote.exclusionReason, 'remote eligibility geography incompatible');
-  assert.equal(EVALUATION_VERSION, 'fit-v2-eligibility-1');
-  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v2-eligibility-1');
+  assert.equal(EVALUATION_VERSION, 'fit-v2-independent-2');
+  assert.equal(FIT_ALGORITHM_VERSION, 'fit-v2-independent-2');
 });
 
 test('migration credential remains fail-closed except for explicit DEV/TEST shared-role migration work', () => {
@@ -787,7 +789,7 @@ test('preferred source dates preserve day-only precision and never substitute a 
   assert.deepEqual(sourcePostingDates(row,now),{retrieve_date:'2026-11-15T13:00:00.000Z',publication_date:'2026-11-13',publication_precision:'date'});
   assert.deepEqual(sourcePostingDates({payload:{date_posted:'2026-11-13'},posting_last_seen_at:row.posting_last_seen_at},now),{retrieve_date:'2026-11-15T13:00:00.000Z',publication_date:null,publication_precision:null});
 });
-test('visible result and count predicates match; unclassified never scores as a recommendation',()=>{
+test('visible result and count predicates match; eligibility does not exclude jobs',()=>{
   const job={fit:82,b2b:true,remote:true,repost:false,age:5};
   const eligible={eligible:true,eligibilityState:'ELIGIBLE'};
   assert.equal(matchesResultView(job,eligible,{result_view:'jobs',quick:'high',kpi:'remote'},80),true);
@@ -795,38 +797,49 @@ test('visible result and count predicates match; unclassified never scores as a 
   assert.equal(matchesResultView(job,eligible,{result_view:'jobs',quick:'all',kpi:'repost'},80),false);
   const unresolved={eligible:false,eligibilityState:'UNKNOWN',eligibilityReasonCode:'ROLE_FAMILY_UNKNOWN'};
   assert.equal(matchesResultView({...job,fit:null},unresolved,{result_view:'unclassified'},80),true);
-  assert.equal(matchesResultView(job,unresolved,{result_view:'jobs'},80),false);
+  assert.equal(matchesResultView(job,unresolved,{result_view:'jobs'},80),true);
   assert.throws(()=>normalizeJobSearchQuery({count_only:'true'}),/Result view required/);
 });
 
-test('#520: uncorroborated persisted role cannot receive a High FIT score',()=>{
+test('#88: FIT independent of uncorroborated role; annotation retained',()=>{
  const preferences={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],fit_threshold:68,fit_config:{compensation:{weight:0},work_mode:{weight:0},contract_type:{weight:0},industry:{weight:0},career:{weight:0},company:{weight:100,ratings:{example:5,'example bank':5}}},};
  const row={job_id:'00000000-0000-0000-0000-000000000001',company:'Example Bank',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:['project_management'],payload:{description:'Bank governance B2B project'}};
  for(const title of ['IAM Support Engineer','IT System Engineer','2028 Bernstein Summer Research Associate','Director of Engineering','Data Engineer','Senior Developer Fullstack']){
   const input={...row,title};
   const evaluation=evaluateSharedJob(input,preferences,nomenclatures);
-  assert.equal(evaluation.score,null,title);
+  assert.equal(evaluation.score,100,title);
   assert.equal(evaluation.eligibilityState,'UNKNOWN',title);
   assert.equal(evaluation.eligibilityReasonCode,'ROLE_TITLE_UNCONFIRMED',title);
   assert.deepEqual(materializeCachedJob(input,evaluation,preferences),evaluation.job);
-  assert.equal(matchesResultView(evaluation.job,evaluation,{result_view:'jobs',quick:'high'},68),false);
+  assert.equal(matchesResultView(evaluation.job,evaluation,{result_view:'jobs',quick:'high'},68),true);
  }
  const good=evaluateSharedJob({...row,title:'Technical Project Manager'},preferences,nomenclatures);
  assert.equal(good.score,100);
 });
 
-test('#520 unknown geography or contract cannot receive FIT, including cached reads',()=>{
+test('#88 unknown geography, contract and mode do not block FIT; cached reads agree',()=>{
  const preferences={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],target_country_codes:['RO'],contract_types:['contract'],work_modes:{remote:true,hybrid:false,onsite:false},fit_threshold:60,fit_config:{compensation:{weight:0},work_mode:{weight:0},contract_type:{weight:0},industry:{weight:0},career:{weight:0},company:{weight:100,ratings:{example:5}}}};
  const base={job_id:'00000000-0000-0000-0000-000000000001',title:'Technical Project Manager',company:'Example',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:['project_management'],work_mode:'remote',remote_scope:'Country',contract_type:'contract',country_codes:['RO'],payload:{description:'Project delivery',contract_type:'contract'}};
  const now=new Date('2026-11-15T12:00:00Z');
  assert.equal(evaluateSharedJob(base,preferences,nomenclatures,now).score,100);
  for(const row of [{...base,country_codes:[]},{...base,contract_type:'unknown',payload:{description:'Project delivery'}},{...base,work_mode:'unknown'}]){
   const e=evaluateSharedJob(row,preferences,nomenclatures,now);
-  assert.equal(e.eligibilityState,'UNKNOWN');
-  assert.equal(e.score,null);
-  assert.deepEqual(e.job.fit_matrix,[]);
-  assert.equal(matchesResultView(e.job,e,{result_view:'jobs',quick:'high'},60),false);
+  assert.equal(e.score,100);
+  assert.equal(e.job.fit_matrix.length,6);
+  assert.equal(matchesResultView(e.job,e,{result_view:'jobs',quick:'high'},60),true);
   assert.deepEqual(materializeCachedJob(row,e,preferences,now),e.job);
-  assert.equal(materializeCachedJob(row,{...e,score:100},preferences,now).fit,null);
  }
+});
+
+
+test('B2B filter uses structured contract evidence, not description keywords',()=>{
+ const row={job_id:'test',title:'Project Manager',company:'Example',role_family:'UNKNOWN',payload:{description:'Manage supplier contracts',employment_type:'full-time'}};
+ const now=new Date('2026-11-15T12:00:00Z');
+ const plain=evaluateSharedJob(row,{},nomenclatures,now);
+ assert.equal(plain.job.b2b,false);
+ assert.equal(plain.job.contract_type,'unknown');
+ assert.equal(matchesResultView(plain.job,plain,{result_view:'jobs',quick:'b2b'},80),false);
+ const contract=evaluateSharedJob({...row,contract_type:'freelance'}, {},nomenclatures,now);
+ assert.equal(contract.job.b2b,true);
+ assert.equal(matchesResultView(contract.job,contract,{result_view:'jobs',quick:'b2b'},80),true);
 });
