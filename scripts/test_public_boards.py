@@ -1226,8 +1226,31 @@ class PublicBoardAdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"individual job links"):
                 boards._hipo("https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager")
 
+    def test_detail_jobposting_preserves_structured_geo_mode_contract_dates_and_salary(self):
+        import json
+        job = {"@type": ["Thing", "https://schema.org/JobPosting"], "title": "Project Manager",
+               "description": "<p>Coordinate delivery.</p>", "hiringOrganization": {"name": "Example Employer"},
+               "jobLocation": {"address": {"addressLocality": "Warsaw", "addressCountry": "PL"}},
+               "applicantLocationRequirements": [{"@type": "Country", "name": "Romania"}],
+               "jobLocationType": "TELECOMMUTE", "employmentType": ["B2B", "FULL_TIME"],
+               "datePosted": "2026-11-09", "dateModified": "2026-11-15",
+               "baseSalary": {"currency": "PLN", "value": {"minValue": 8500, "maxValue": 10500, "unitText": "MONTH"}}}
+        html = '<script type="application/ld+json">' + json.dumps({"@graph": [{"@type":"ItemList", "itemListElement":[job]}]}) + '</script>'
+        record = boards._single_detail_jobposting(html, "Project Manager")
+        self.assertEqual(record["company"], "Example Employer")
+        self.assertEqual(record["countries"], ["Romania"])
+        self.assertIn("Warsaw", record["location"])
+        self.assertEqual(record["work_arrangement"], "remote")
+        self.assertIn("B2B", record["employment_statuses"])
+        self.assertEqual(record["date_posted"], "2026-11-09")
+        self.assertEqual(record["date_updated"], "2026-11-15")
+        self.assertEqual(record["salary"]["minimum"], 8500)
+        self.assertIsNone(boards._single_detail_jobposting(html, "Different role"))
+        duplicate = html + html
+        self.assertIsNone(boards._single_detail_jobposting(duplicate, "Project Manager"))
+
     def test_unverified_board_employer_does_not_become_company(self):
-        for name in ("Just Join IT","SkipTheDrive","Wellfound","Hipo"):
+        for name in ("Just Join IT","SkipTheDrive","Wellfound","Hipo","No Fluff Jobs"):
             raw={"id":"1","job_title":"Project Manager","company":name,
                  "source_url":"https://example.com/jobs/1","description":"Card context"}
             with patch.object(boards.PublicClient,"get",side_effect=ValueError("unavailable")):
