@@ -113,6 +113,8 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    assert.deepEqual([...returned].sort(),seeded.map(j=>j.id).sort());
    const explicit=await repository.listProfileJobs(ctx,stored,nomenclatures,{limit:50,prefetch:0,q:'W025',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:'project_management'},env,{db});
    assert.deepEqual(explicit.jobs.map(j=>j.id).sort(),selected.map(j=>j.id).sort());
+   const advance=await repository.advanceProfileEvaluation(ctx,nomenclatures,env,{db});
+   assert.equal(advance.status,'COMPLETE',JSON.stringify(advance));
    const persisted=await db.query(
      'SELECT job_id,eligibility_state,eligibility_reason_code,profile_version,eligible,score FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])',
      [ctx.profile_id,foundation.search_profile_id,[...selected,...unknown].map(j=>j.id)]);
