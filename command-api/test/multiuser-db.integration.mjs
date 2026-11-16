@@ -19,6 +19,8 @@ const {
   listAccounts,
   listApplications,
   listProfileJobs,
+  listGlobalProfileJobs,
+  advanceProfileEvaluation,
   nomenclatureReferenceCount,
   resolveActiveSearchProfile,
   resolveOrProvisionGoogleIdentity,
@@ -353,6 +355,9 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(firstLazy.cache_hits, 0);
     assert.equal(firstLazy.bounded, true);
 
+    const advance=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:new Date('2026-10-05T12:00:00Z')});
+    assert.equal(advance.status,'COMPLETE',JSON.stringify(advance));
+    assert.ok(advance.evaluated>=1);
     const secondLazy = await listProfileJobs(
       user, cacheConfigA, jobNomenclatures, cacheQuery, env,
       { db:runtimeDb, now:new Date('2026-10-05T12:01:00Z') },
@@ -371,7 +376,15 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
       { db:runtimeDb, now:new Date('2026-10-05T12:02:00Z') },
     );
     assert.equal(thirdLazy.results, 1);
-    assert.equal(thirdLazy.evaluations_computed, 1, 'profile_version change invalidates only the bounded cache row');
+    assert.equal(thirdLazy.evaluations_computed, 0, 'threshold-only change must reuse FIT');
+    assert.equal(thirdLazy.cache_hits,1);
+    // Evaluation-relevant preference change must invalidate the digest.
+    await savePreferences(user,{...cacheConfigB,keep_reposts:cacheConfigB.keep_reposts===false},env,{db:runtimeDb});
+    cacheConfigB=await effectiveConfig(user,env,{db:runtimeDb});
+    const invalidated=await listProfileJobs(user,cacheConfigB,jobNomenclatures,cacheQuery,env,{db:runtimeDb,now:new Date('2026-10-05T12:03:00Z')});
+    assert.equal(invalidated.evaluations_computed,1);
+    const renewed=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:new Date('2026-10-05T12:03:00Z')});
+    assert.equal(renewed.status,'COMPLETE',JSON.stringify(renewed));
 
     const cacheRow = await adminDb.query(
       `SELECT search_profile_id, profile_version, job_version, fit_algorithm_version, eligibility_state
@@ -386,6 +399,17 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     assert.equal(Number(cacheRow.rows[0].job_version), 1);
     assert.equal(cacheRow.rows[0].fit_algorithm_version, 'fit-v2-independent-2');
     assert.equal(cacheRow.rows[0].eligibility_state, 'ELIGIBLE');
+    const global=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'ATC48903CACHE'},env,{db:runtimeDb,now:new Date('2026-10-05T12:04:00Z')});
+    assert.equal(global.order_status,'GLOBAL');
+    assert.equal(global.count_status,'EXACT');
+    assert.equal(global.totals.all,1);
+    assert.equal(global.jobs[0].id,lazyJobId);
+    // Posting change without a canonical version bump cannot reuse the previous projection.
+    await adminDb.query("UPDATE source_postings SET payload=jsonb_set(payload,'{industry}','\"technology\"'::jsonb) WHERE posting_id=$1",[lazyPostingId]);
+    const pending=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'ATC48903CACHE'},env,{db:runtimeDb,now:new Date('2026-10-05T12:05:00Z')});
+    assert.equal(pending.count_status,'INCOMPLETE');assert.equal(pending.totals,null);
+    const reevaluated=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:new Date('2026-10-05T12:05:00Z')});
+    assert.equal(reevaluated.status,'COMPLETE');
 
     });
     await t.test('W025-F01 native preserved assertions',async()=>{
