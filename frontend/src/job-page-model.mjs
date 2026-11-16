@@ -30,6 +30,11 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = jobPageSize
     for (const code of new Set(filters.roleSubfamilies || [])) params.append('role_subfamily', String(code));
     for (const code of new Set(filters.contractTypes || [])) params.append('contract_type', String(code));
     if (filters.minFit != null && filters.minFit !== '') params.set('min_fit', String(filters.minFit));
+    if(!countOnly){
+      const [key,dir]=String(filters.sort||'fit-desc').split('-');
+      params.set('sort',['fit','title','country','work_mode','publication','retrieve'].includes(key)?key:'publication');
+      params.set('dir',dir==='asc'?'asc':'desc');
+    }
     params.set('result_view',['jobs','review','unclassified'].includes(view)?view:'jobs');
     params.set('quick',view==='unclassified'?'all':filters.quick||'all');
     params.set('kpi',view==='jobs'?kpiFilter:'all');
@@ -81,7 +86,7 @@ export async function navigateJobPage({direction, page, history, nextCursor, loa
 }
 
 export function validateJobsPage(payload) {
-  if (payload?.schema_version !== '2.0' || payload?.bounded !== true || !Array.isArray(payload?.jobs)) {
+  if (!['2.0','3.0'].includes(payload?.schema_version) || payload?.bounded !== true || !Array.isArray(payload?.jobs)) {
     throw new Error('me/jobs: invalid bounded profile-job contract');
   }
   return payload;
