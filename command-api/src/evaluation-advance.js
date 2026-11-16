@@ -103,7 +103,7 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       const from=`${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
         WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`;
       await budget();
-      const batch=await tx.query(`SELECT ${EVALUATION_FIELDS_SQL},COUNT(*) OVER()::integer AS pending
+      const batch=await tx.query(`SELECT ${EVALUATION_FIELDS_SQL}
         ${from} ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX}`,args);
       let evaluated=0;
       for(const row of batch.rows||[]){
