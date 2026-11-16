@@ -53,6 +53,28 @@ try {
   const retry013=await prepareOrApplyEvaluation013({env:apply013,buildIdentity,db,migrations:items});
   if(retry013.applied||retry013.after!=='ALREADY_APPLIED')throw new Error('W025_M02 013 retry mismatch');
   console.log('EVALUATION013_NATIVE_PREFIX_APPLY_RETRY=PASS');
+  // Destructive schema rollback is exercised only on this admitted ephemeral
+  // native CI database, before any product fixture or application data exists.
+  const rollbackClient=await db.connect();
+  try{
+    await rollbackClient.query('BEGIN');
+    const lock=await rollbackClient.query("SELECT version FROM schema_migrations WHERE version='012' FOR UPDATE");
+    if(lock.rows.length!==1)throw Error('EVALUATION013_ROLLBACK_LOCK_DENIED');
+    const count=await rollbackClient.query('SELECT count(*)::integer AS count FROM profile_job_evaluation');
+    if(Number(count.rows[0]?.count)!==0)throw Error('EVALUATION013_ROLLBACK_NONEMPTY_DENIED');
+    const {COLUMNS}=await import('./db-evaluation-migrate-013.mjs');
+    await rollbackClient.query('ALTER TABLE profile_job_evaluation '+Object.keys(COLUMNS).map(c=>'DROP COLUMN '+c).join(', '));
+    const removed=await rollbackClient.query("DELETE FROM schema_migrations WHERE version='013' AND checksum=$1 RETURNING version",[items.at(-1).checksum]);
+    if(removed.rows.length!==1)throw Error('EVALUATION013_ROLLBACK_LEDGER_DENIED');
+    await rollbackClient.query('COMMIT');
+  }catch(e){await rollbackClient.query('ROLLBACK').catch(()=>{});throw e;}
+  finally{rollbackClient.release();}
+  const rolledBack=await prepareOrApplyEvaluation013({env:evaluationEnv,buildIdentity,db,migrations:items});
+  if(rolledBack.before!=='PENDING_013')throw Error('EVALUATION013_ROLLBACK_POSTCHECK_FAILED');
+  const restored013=await prepareOrApplyEvaluation013({env:apply013,buildIdentity,db,migrations:items});
+  if(!restored013.applied||restored013.after!=='ALREADY_APPLIED')throw Error('EVALUATION013_ROLLBACK_REAPPLY_FAILED');
+  console.log('EVALUATION013_NATIVE_EMPTY_ROLLBACK_REAPPLY=PASS');
+
   const stored=await db.query('SELECT version,checksum FROM schema_migrations ORDER BY version');
   if(stored.rows.length!==13||stored.rows.some((r,i)=>r.version!==items[i].version||r.checksum!==items[i].checksum))
     throw new Error('W025_M01 checksum mismatch');
