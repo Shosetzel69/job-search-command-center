@@ -356,7 +356,7 @@ def _payload(record: Mapping[str, Any], classification_status: str) -> dict[str,
 
 
 QUALITY_PROVENANCE = frozenset({
-    "ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML", "LISTING_CARD", "EXPLICIT_DESCRIPTION",
+    "ATS_FIELD", "JOB_DETAIL_JSONLD", "JOB_DETAIL_HTML", "LISTING_CARD", "EXPLICIT_DESCRIPTION", "PUBLIC_API_FIELD",
 })
 QUALITY_FIELDS = ("title", "description", "location", "date_posted")
 SHARE_MARKUP = re.compile(
