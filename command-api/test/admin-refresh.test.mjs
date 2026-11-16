@@ -381,3 +381,19 @@ test('manual Retrieve still coalesces equivalent active work and blocks empty so
   const blocked=await adminRefresh(admin,baseEnv,deps({intent:'manual',readCatalog:async()=>({catalog:{schema_version:'1.0',sources:[]},generation:'7'}),dispatch:async()=>{throw Error('must not dispatch empty source set');}}));
   assert.equal(blocked.reason,'NO_ACTIVE_SOURCES');
 });
+
+test('ADMIN retains distinct per-profile exclusions and ignores FIT-only preferences',async()=>{
+  const common={target_role_families:['PROJECT_DELIVERY_MANAGEMENT'],target_role_subfamilies:['project_management'],target_country_codes:['RO']};
+  const db={query:async()=>({rows:[
+    {...common,excluded_country_codes:['US'],excluded_role_keywords:['Sales'],work_modes:{remote:true},contract_types:['contract']},
+    {...common,excluded_country_codes:['US'],excluded_role_keywords:['Sales'],work_modes:{onsite:true},contract_types:['permanent']},
+    {...common,excluded_country_codes:['DE'],excluded_role_keywords:[]},
+  ]})};
+  const result=await aggregateAdminRefreshScopes({}, {db});
+  assert.equal(result.scope_count,2);
+  const us=result.scopes.find(s=>s.excluded_country_codes.includes('US'));
+  assert.equal(us.active_profile_count,2);
+  assert.deepEqual(us.excluded_role_keywords,['Sales']);
+  assert.deepEqual(us.work_modes,['remote','hybrid','onsite']);
+  assert.deepEqual(us.contract_types,[]);
+});
