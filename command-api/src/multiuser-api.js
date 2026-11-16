@@ -42,6 +42,7 @@ import { adminCoverageSnapshot } from './coverage.js';
 import { adminRefresh } from './admin-refresh.js';
 import { adminDbPurge } from './admin-db-purge.js';
 import { devPurgeActive } from './runtime-gcp.js';
+import { advanceProfileEvaluation } from './evaluation-advance.js';
 
 const GOOGLE_JWKS = createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 const COOKIE_SENTINEL = '__JSCC_COOKIE_SESSION__';
@@ -322,6 +323,12 @@ export async function handleAuthenticatedRoute(request, env, context) {
   if (request.method === 'GET' && /^\/me\/refresh\/[^/]+$/.test(url.pathname)
       && String(env.APP_ENV || '').toLowerCase()==='dev') {
     return json(await refreshRequestStatus(context,url.pathname.split('/').at(-1),env));
+  }
+
+  if (request.method === 'POST' && url.pathname === '/me/evaluation/advance') {
+    requireSameOrigin(request, env);
+    const nomenclatures = (await readNomenclatures(env)).payload;
+    return json(await advanceProfileEvaluation(context,nomenclatures,env));
   }
 
   if (request.method === 'GET' && url.pathname === '/me/jobs') {
