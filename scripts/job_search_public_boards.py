@@ -1981,13 +1981,20 @@ def _remoteok(payload):
         if not isinstance(item, dict) or not item.get("id") or not item.get("position") or not item.get("url"):
             continue
         location = item.get("location") or "Worldwide"
-        records.append(_record(
+        record = _record(
             "Remote OK", item["id"], item["position"], item.get("company"),
             item.get("description"), item.get("url") or item.get("apply_url"),
             date_posted=item.get("date"), location=location,
             countries=_country_names_from_text(location), remote=True,
             employment_statuses=item.get("tags") or [],
-        ))
+        )
+        record["_jscc_field_provenance"] = {
+            "title": "PUBLIC_API_FIELD",
+            **({"description": "PUBLIC_API_FIELD"} if item.get("description") else {}),
+            **({"location": "PUBLIC_API_FIELD"} if item.get("location") else {}),
+            **({"date_posted": "PUBLIC_API_FIELD"} if item.get("date") else {}),
+        }
+        records.append(record)
     return records
 
 
