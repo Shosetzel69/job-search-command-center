@@ -166,6 +166,9 @@ def execution_logs(execution,marker):
         found=[]
         for e in entries:
             structured=e.get("jsonPayload")
+            if marker=="LOCK_DIAGNOSTIC" and isinstance(structured,dict) and structured.get("diagnostic")=="EVALUATION013_LOCK_CAPABILITIES":
+                found.append({k:structured.get(k) for k in ("diagnostic","privilege","hashtext","advisory","row_nowait")})
+                continue
             if isinstance(structured,dict) and marker!="PROBE" and structured.get("migration")=="013_profile_job_evaluation_listing.sql":
                 found.append({k:structured.get(k) for k in ("status","environment","mode","source_sha","before","after","applied","migration","checksum")})
                 continue
@@ -175,6 +178,11 @@ def execution_logs(execution,marker):
             for line in raw.splitlines():
                 if marker=="PROBE":
                     if line=="EVALUATION013_MANAGED_PROBE=PASS":found.append(True)
+                elif marker=="LOCK_DIAGNOSTIC":
+                    try:x=json.loads(line)
+                    except ValueError:continue
+                    if isinstance(x,dict) and x.get("diagnostic")=="EVALUATION013_LOCK_CAPABILITIES":
+                        found.append({k:x.get(k) for k in ("diagnostic","privilege","hashtext","advisory","row_nowait")})
                 else:
                     try:x=json.loads(line)
                     except ValueError:continue
@@ -223,6 +231,50 @@ try{
   await closePool();
 }
 """
+LOCK_DIAGNOSTIC=r"""
+import {getPool,closePool} from './command-api/src/db/pool.js';
+import {runtimePrivilegeReadiness} from './command-api/src/db/privilege-readiness.js';
+import {establishTenantContext} from './command-api/src/db/tenant-gateway.js';
+import {randomUUID} from 'node:crypto';
+const db=getPool();
+const result={diagnostic:'EVALUATION013_LOCK_CAPABILITIES'};
+const code=e=>/^[0-9A-Z]{5}$/.test(e?.code||'')?e.code:'UNVERIFIED';
+const check=async (name,fn)=>{try{result[name]=await fn();}catch(e){result[name]=code(e);}};
+let a,b;
+const begin=async c=>{await c.query('BEGIN');await c.query("SELECT set_config('statement_timeout','3500',true)");};
+const rollback=async c=>{await c.query('ROLLBACK');};
+try{
+ if(process.env.APP_ENV!=='dev'||process.env.CLOUD_RUN_JOB!=='jscc-db-migrate-dev'||(await db.query('SELECT current_database() AS db')).rows[0]?.db!=='jobsearch_dev')throw Error('SCOPE_DENIED');
+ await check('privilege',async()=> (await runtimePrivilegeReadiness()).status==='ok'?'PASS':'DENIED');
+ await check('hashtext',async()=> {await db.query("SELECT hashtext('r6-lock-diagnostic')");return 'PASS';});
+ a=await db.connect();b=await db.connect();
+ await check('advisory',async()=>{
+   const q='SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',p=[5910401,randomUUID()];
+   try{
+     await begin(a);await begin(b);
+     return (await a.query(q,p)).rows[0]?.acquired===true&&(await b.query(q,p)).rows[0]?.acquired===false?'PASS':'EXCLUSION_DENIED';
+   }finally{await rollback(a);await rollback(b);}
+ });
+ await check('row_nowait',async()=>{
+   const owner=(await a.query("SELECT p.profile_id FROM profile p JOIN app_user u ON u.user_id=p.user_id WHERE u.role='ADMIN' AND u.status='ACTIVE' AND p.provisioned_at IS NOT NULL ORDER BY p.profile_id LIMIT 1")).rows[0];
+   if(!owner?.profile_id)return 'NO_ACTIVE_ADMIN';
+   const tenant=String(owner.profile_id);
+   const q="SELECT search_profile_id FROM search_profile WHERE tenant_id=$1 AND status='ACTIVE' FOR UPDATE NOWAIT";
+   try{
+     await begin(a);await establishTenantContext(a,tenant);
+     if((await a.query(q,[tenant])).rows.length!==1)return 'NO_UNIQUE_ACTIVE_PROFILE';
+     let excluded=false;
+     await begin(b);await establishTenantContext(b,tenant);
+     try{await b.query(q,[tenant]);}catch(e){if(e.code!=='55P03')throw e;excluded=true;}
+     await rollback(b);await rollback(a);
+     if(!excluded)return 'EXCLUSION_DENIED';
+     await begin(b);await establishTenantContext(b,tenant);
+     return (await b.query(q,[tenant])).rows.length===1?'PASS':'REACQUIRE_DENIED';
+   }finally{await rollback(a);await rollback(b);}
+ });
+ console.log(JSON.stringify(result));
+}finally{for(const c of [a,b])if(c){await c.query('ROLLBACK').catch(()=>{});c.release();}await closePool();}
+"""
 def attest_migration(result,checksum,mode):
     need(isinstance(result,dict) and result.get("status")=="ok" and result.get("environment")=="dev"
         and result.get("mode")==mode and result.get("source_sha")==APP and result.get("checksum")==checksum
@@ -230,7 +282,7 @@ def attest_migration(result,checksum,mode):
         and result.get("before") in ("PENDING_013","ALREADY_APPLIED"),"MIGRATION_EVIDENCE_MISMATCH")
     if mode=="apply":need(result.get("after")=="ALREADY_APPLIED","MIGRATION_APPLY_UNVERIFIED")
     else:need(result.get("applied") is False and result.get("before")==result.get("after"),"MIGRATION_INSPECT_NOT_READONLY")
-def managed_migration(img,checksum,gen,preflight_only=False):
+def managed_migration(img,checksum,gen,preflight_only=False,diagnostic_locks=False):
     owned(gen);quiet()
     original=get("jobs",M)["template"]
     c=container(original["template"])
@@ -250,6 +302,10 @@ def managed_migration(img,checksum,gen,preflight_only=False):
         attest_migration(before,checksum,"inspect")
         print("MANAGED_NILE_013_INSPECT=PASS state="+before["before"]+" checksum="+checksum,flush=True)
         owned(gen);quiet()
+        if diagnostic_locks:
+            evidence=run_migration(["--input-type=module","-e",LOCK_DIAGNOSTIC],{"DB_POOL_MAX":"2"},"LOCK_DIAGNOSTIC")
+            print("LOCK_DIAGNOSTIC="+json.dumps(evidence,sort_keys=True),flush=True)
+            return
         need(run_migration(["--input-type=module","-e",PROBE],{"DB_POOL_MAX":"2"},"PROBE") is True,"MANAGED_LOCK_PROBE_DENIED")
         print("MANAGED_NILE_013_LOCK_PROBE=PASS",flush=True)
         if preflight_only:return
@@ -276,6 +332,7 @@ def main():
     parser=argparse.ArgumentParser()
     parser.add_argument("--resume-generation")
     parser.add_argument("--preflight-only",action="store_true")
+    parser.add_argument("--diagnostic-locks",action="store_true")
     opts=parser.parse_args()
     # The failed release's sentinel is retained. No lock deletion/reacquisition.
     need(opts.preflight_only,"EXACT_SQL_REVIEW_AND_MANAGED_PROBE_REQUIRED_BEFORE_APPLY")
@@ -339,11 +396,11 @@ def main():
         verify_job(oldjob,oldsha,override)
         need(str((meta("seed/sources.json") or {}).get("generation"))==catalog,"CATALOG_DRIFT")
         migration_started=True
-        managed_migration(imgs["jscc-service"],checksum,gen,preflight_only=opts.preflight_only)
+        managed_migration(imgs["jscc-service"],checksum,gen,preflight_only=opts.preflight_only,diagnostic_locks=opts.diagnostic_locks)
         if opts.preflight_only:
             owned(gen);quiet()
             health(fresh["uri"],oldsha)
-            print("MANAGED_PREFLIGHT=PASS LOCK_RETAINED generation="+gen,flush=True)
+            print(("LOCK_DIAGNOSTIC_COMPLETE" if opts.diagnostic_locks else "MANAGED_PREFLIGHT=PASS")+" LOCK_RETAINED generation="+gen,flush=True)
             return
         migration_complete=True
         health(fresh["uri"],oldsha)
