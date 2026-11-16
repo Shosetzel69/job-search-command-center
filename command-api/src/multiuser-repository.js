@@ -1804,16 +1804,36 @@ export function evaluationProjection(row,evaluation) {
 
 // Writes are provisional. A conflicting newer record is not an error, and
 // all consumers must validate the full input digest against authoritative input.
-export async function persistIncrementalEvaluationTx(tx,basis,row,evaluation,now) {
-  const p=evaluationProjection(row,evaluation);
+export const ADVANCE_WRITE_BATCH_MAX=30;
+// 26 bind parameters per row: at most 780 per write, beneath the R6 cap of 905.
+// Only VALUES, no INSERT SELECT/UNNEST. Every accepted row remains provisional.
+export async function persistIncrementalBatchTx(tx,basis,entries,now) {
+  if(!entries.length)return 0;
+  if(entries.length>ADVANCE_WRITE_BATCH_MAX)throw new RangeError('Evaluation write batch too large');
+  const args=[];
+  const tuples=entries.map(({row,evaluation})=>{
+    const p=evaluationProjection(row,evaluation);
+    const base=args.length;
+    const b=n=>'$'+(base+n);
+    args.push(tx.tenantId,basis.search_profile_id,String(row.job_id),
+      evaluation.eligibilityState,evaluation.eligibilityReasonCode||null,evaluation.eligible,
+      evaluation.score,JSON.stringify(evaluation.pros||[]),JSON.stringify(evaluation.risks||[]),
+      evaluation.exclusionReason||null,basis.profile_version,Number(row.job_version),
+      FIT_ALGORITHM_VERSION,now,p.input_digest,JSON.stringify(p.fit_matrix),p.sort_title,
+      p.display_country,p.display_work_mode,p.display_contract_type,p.b2b,p.publication_at,
+      p.publication_precision,p.retrieve_at,p.is_repost,p.is_remote);
+    return '('+Array.from({length:27},(_,i)=>{
+      const n=i<13?i+1:i===13?13:i;
+      return b(n)+([8,9,16].includes(n)?'::jsonb':'');
+    }).join(',')+')';
+  });
   const result=await tx.query(`INSERT INTO profile_job_evaluation AS cur(
     tenant_id,search_profile_id,job_id,eligibility_state,eligibility_reason_code,eligible,
     score,pros,risks,exclusion_reason,profile_version,job_version,fit_algorithm_version,
     evaluation_version,evaluated_at,input_digest,fit_matrix,sort_title,display_country,
     display_work_mode,display_contract_type,b2b,publication_at,publication_precision,
     retrieve_at,is_repost,is_remote)
-    VALUES($1,$2,$3,$4,$5,$6,$7,$8::jsonb,$9::jsonb,$10,$11,$12,$13,$13,$14,
-      $15,$16::jsonb,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26)
+    VALUES ${tuples.join(',')}
     ON CONFLICT(tenant_id,search_profile_id,job_id) DO UPDATE SET
       eligibility_state=EXCLUDED.eligibility_state,eligibility_reason_code=EXCLUDED.eligibility_reason_code,
       eligible=EXCLUDED.eligible,score=EXCLUDED.score,pros=EXCLUDED.pros,risks=EXCLUDED.risks,
@@ -1827,14 +1847,11 @@ export async function persistIncrementalEvaluationTx(tx,basis,row,evaluation,now
       retrieve_at=EXCLUDED.retrieve_at,is_repost=EXCLUDED.is_repost,is_remote=EXCLUDED.is_remote
     WHERE EXCLUDED.profile_version>=cur.profile_version AND EXCLUDED.job_version>=cur.job_version
       AND (${knownAlgorithmRank('EXCLUDED')})>=(${knownAlgorithmRank('cur')})
-    RETURNING job_id`,[tx.tenantId,basis.search_profile_id,String(row.job_id),
-      evaluation.eligibilityState,evaluation.eligibilityReasonCode||null,evaluation.eligible,
-      evaluation.score,JSON.stringify(evaluation.pros||[]),JSON.stringify(evaluation.risks||[]),
-      evaluation.exclusionReason||null,basis.profile_version,Number(row.job_version),
-      FIT_ALGORITHM_VERSION,now,p.input_digest,JSON.stringify(p.fit_matrix),p.sort_title,
-      p.display_country,p.display_work_mode,p.display_contract_type,p.b2b,p.publication_at,
-      p.publication_precision,p.retrieve_at,p.is_repost,p.is_remote]);
-  return Boolean(result.rows?.length);
+    RETURNING job_id`,args);
+  return result.rows?.length||0;
+}
+export async function persistIncrementalEvaluationTx(tx,basis,row,evaluation,now) {
+  return (await persistIncrementalBatchTx(tx,basis,[{row,evaluation}],now))===1;
 }
 
 export async function advanceProfileEvaluation(authContext,nomenclatures,env=process.env,
@@ -1864,14 +1881,19 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       await budget();
       const batch=await tx.query(`SELECT ${EVALUATION_FIELDS_SQL}
         ${from} ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX}`,args);
-      let evaluated=0;
-      for(const row of batch.rows||[]){
-        // Keep the unprocessed tail resumable; do not emit a score on evaluator failure.
-        if(remaining()<1100)break;
-        const evaluation=evaluateSharedJob(row,basis.preferences,nomenclatures,now);
+      let evaluated=0,defaultEntries=[];
+      const flush=async()=>{
+        if(!defaultEntries.length)return;
         await budget();
-        if(await persistIncrementalEvaluationTx(tx,basis,row,evaluation,now))evaluated++;
+        evaluated+=await persistIncrementalBatchTx(tx,basis,defaultEntries,now);
+        defaultEntries=[];
+      };
+      for(const row of batch.rows||[]){
+        if(remaining()<1400)break;
+        defaultEntries.push({row,evaluation:evaluateSharedJob(row,basis.preferences,nomenclatures,now)});
+        if(defaultEntries.length===ADVANCE_WRITE_BATCH_MAX)await flush();
       }
+      if(remaining()>=1100)await flush();
       await budget();
       const current=await readEvaluationBasisTx(tx,nomenclatures);
       if(current.search_profile_id!==basis.search_profile_id ||
