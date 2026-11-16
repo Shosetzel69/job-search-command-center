@@ -63,7 +63,9 @@ try {
     const count=await rollbackClient.query('SELECT count(*)::integer AS count FROM profile_job_evaluation');
     if(Number(count.rows[0]?.count)!==0)throw Error('EVALUATION013_ROLLBACK_NONEMPTY_DENIED');
     const {COLUMNS}=await import('./db-evaluation-migrate-013.mjs');
-    await rollbackClient.query('ALTER TABLE profile_job_evaluation '+Object.keys(COLUMNS).map(c=>'DROP COLUMN '+c).join(', '));
+    // Nile rejected multi-action DROP (XX000). Keep every DDL operation and
+    // the ledger delete in the same transaction; verify the complete rollback.
+    for(const column of Object.keys(COLUMNS).reverse())await rollbackClient.query('ALTER TABLE profile_job_evaluation DROP COLUMN '+column);
     const removed=await rollbackClient.query("DELETE FROM schema_migrations WHERE version='013' AND checksum=$1 RETURNING version",[items.at(-1).checksum]);
     if(removed.rows.length!==1)throw Error('EVALUATION013_ROLLBACK_LEDGER_DENIED');
     await rollbackClient.query('COMMIT');
