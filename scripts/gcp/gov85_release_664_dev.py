@@ -153,10 +153,15 @@ def execution_logs(execution,marker):
     need(re.fullmatch(r"jscc-db-migrate-dev-[a-z0-9-]+",short),"MIGRATION_EXECUTION_SCOPE")
     filter_text='resource.type="cloud_run_job" AND resource.labels.job_name="'+M+'" AND labels."run.googleapis.com/execution_name"="'+short+'"'
     for _ in range(15):
-        entries=json.loads(gc("logging","read",filter_text,"--project="+P,"--freshness=30m","--limit=100","--format=json"))
+        entries=json.loads(gc("logging","read",filter_text,"--project="+P,"--freshness=24h","--limit=100","--format=json"))
         found=[]
         for e in entries:
+            structured=e.get("jsonPayload")
+            if isinstance(structured,dict) and marker!="PROBE" and structured.get("migration")=="013_profile_job_evaluation_listing.sql":
+                found.append({k:structured.get(k) for k in ("status","environment","mode","source_sha","before","after","applied","migration","checksum")})
+                continue
             raw=e.get("textPayload")
+            if not isinstance(raw,str) and isinstance(structured,dict):raw=structured.get("message")
             if not isinstance(raw,str):continue
             for line in raw.splitlines():
                 if marker=="PROBE":
@@ -164,7 +169,8 @@ def execution_logs(execution,marker):
                 else:
                     try:x=json.loads(line)
                     except ValueError:continue
-                    if isinstance(x,dict) and x.get("migration")=="013_profile_job_evaluation_listing.sql":found.append(x)
+                    if isinstance(x,dict) and x.get("migration")=="013_profile_job_evaluation_listing.sql":
+                        found.append({k:x.get(k) for k in ("status","environment","mode","source_sha","before","after","applied","migration","checksum")})
         if len(found)==1:return found[0]
         need(not found,"DUPLICATE_MIGRATION_EVIDENCE")
         time.sleep(4)
