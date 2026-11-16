@@ -74,16 +74,17 @@ export function buildGlobalListingQuery(tenant,basis,spec,anchor){
   const orderValue=spec.sort==='publication'?'publication_at':column;
   const direction=spec.dir.toUpperCase();
   const sortExpr=spec.sort==='publication'?'publication_at':orderValue;
-  const typedValue=add(spec.cursor?.value??null);
+  const typedValue=add(spec.cursor?.order_status==='GLOBAL'?spec.cursor.value:null);
+  const provisionalValue=add(spec.cursor?.order_status==='PROVISIONAL'?spec.cursor.value:null);
   const cursorId=add(spec.cursor?.job_id??null);
   const cursorNull=add(spec.cursor?.null_flag??false);
   const cursorStatus=add(spec.cursor?.order_status??null);
   const cursorWatermark=add(spec.cursor?.watermark??null);
   const limit=add(spec.limit+1);
   const op=spec.dir==='asc'?'>':'<';
-  const keyset=(expression,cast,compare)=>`(${cursorId}::uuid IS NULL OR
-   (NOT ${cursorNull}::boolean AND (${expression} IS NULL OR ${expression} ${compare} ${typedValue}::${cast}
-    OR (${expression}=${typedValue}::${cast} AND job_id>${cursorId}::uuid)))
+  const keyset=(expression,cast,compare,value=typedValue)=>`(${cursorId}::uuid IS NULL OR
+   (NOT ${cursorNull}::boolean AND (${expression} IS NULL OR ${expression} ${compare} ${value}::${cast}
+    OR (${expression}=${value}::${cast} AND job_id>${cursorId}::uuid)))
    OR (${cursorNull}::boolean AND ${expression} IS NULL AND job_id>${cursorId}::uuid))`;
   return {params:p,sql:`WITH basis_guard AS (
    SELECT p.search_profile_id FROM search_profile p
@@ -127,7 +128,7 @@ export function buildGlobalListingQuery(tenant,basis,spec,anchor){
     AND ((summary.pending=0 AND (${cursorStatus}::text IS NULL OR ${cursorStatus}::text='GLOBAL')
       AND ${keyset(sortExpr,type,op)})
      OR (summary.pending>0 AND (${cursorStatus}::text IS NULL OR ${cursorStatus}::text='PROVISIONAL')
-      AND ${keyset('publication_at','timestamptz','<')}))
+      AND ${keyset('publication_at','timestamptz','<',provisionalValue)}))
    ORDER BY CASE WHEN summary.pending=0 THEN ${sortExpr} END ${direction} NULLS LAST,
     CASE WHEN summary.pending>0 THEN publication_at END DESC NULLS LAST,job_id ASC
    LIMIT ${limit}::integer
