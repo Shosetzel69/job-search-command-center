@@ -3,6 +3,7 @@ import { getPool, withTransaction } from './db/pool.js';
 import {
   deleteTenantDomain,
   guardDevProjectionWrite,
+  lockActiveEvaluationProfile,
   ensureTenant,
   resolveAccountDeletionTarget,
   requireUuid,
@@ -1768,7 +1769,7 @@ export const EVALUATION_JOIN_SQL = `LEFT JOIN profile_job_evaluation eval
 
 export const ADVANCE_BATCH_MAX=100;
 export const ADVANCE_BUDGET_MS=8000;
-const LOCK_NAMESPACE=5910401;
+export const ADVANCE_LOCK_BUDGET_MS=1500;
 const knownAlgorithmRank=(alias)=>`CASE ${alias}.fit_algorithm_version WHEN 'fit-v2-independent-2' THEN 2 WHEN 'fit-v1' THEN 1 ELSE 0 END`;
 
 export async function readEvaluationBasisTx(tx,nomenclatures) {
@@ -1862,19 +1863,26 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
     return await withTenantTransaction(authContext,async tx=>{
       // PostgreSQL timeout bounds each SQL statement by the remaining budget.
       // Reserve time for response and transaction completion. Native Nile proof required.
-      const budget=async()=>{
-        const ms=remaining()-250;
+      const budget=async(cap=ADVANCE_BUDGET_MS)=>{
+        const ms=Math.min(cap,remaining()-250);
         if(ms<=0)throw httpError('EVALUATION_ADVANCE_DEADLINE',503);
         await tx.query("SELECT set_config('statement_timeout',$1,true)",[String(ms)]);
       };
-      await budget();
-      await guardDevProjectionWrite(tx,env);
+      // Acquire the existing active tenant profile row before reading inputs.
+      // Managed Nile supports plain FOR UPDATE, not advisory locks or NOWAIT.
+      // The DEV guard already acquires this same row; reuse its returned identity.
+      await budget(ADVANCE_LOCK_BUDGET_MS);
+      let lockedProfile;
+      try{
+        lockedProfile=await guardDevProjectionWrite(tx,env);
+        if(!lockedProfile)lockedProfile=await lockActiveEvaluationProfile(tx);
+      }catch(error){
+        if(['55P03','57014'].includes(error?.code))throw httpError('EVALUATION_LOCK_BUSY',503);
+        throw error;
+      }
       await budget();
       const basis=await readEvaluationBasisTx(tx,nomenclatures);
-      await budget();
-      const lock=await tx.query('SELECT pg_try_advisory_xact_lock($1::integer,hashtext($2::text)) AS acquired',
-        [LOCK_NAMESPACE,tx.tenantId+':'+basis.search_profile_id]);
-      if(lock.rows?.[0]?.acquired!==true)return {status:'BUSY',pending:null,evaluated:0};
+      if(basis.search_profile_id!==lockedProfile)return {status:'INVALIDATED',pending:null,evaluated:0};
       const args=[tx.tenantId,now,basis.search_profile_id,basis.preference_digest,FIT_ALGORITHM_VERSION];
       const from=`${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
         WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`;
@@ -1908,6 +1916,7 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
           fit_algorithm_version:FIT_ALGORITHM_VERSION}};
     },{env,db});
   }catch(error){
+    if(error?.message==='EVALUATION_LOCK_BUSY')return {status:'BUSY',pending:null,evaluated:0};
     if(error?.code==='57014'||error?.message==='EVALUATION_ADVANCE_DEADLINE')
       return {status:'RETRY',pending:null,evaluated:0};
     throw error;
