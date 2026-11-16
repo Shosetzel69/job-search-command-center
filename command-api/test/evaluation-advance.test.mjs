@@ -66,6 +66,10 @@ test('013 exact ledger rejects missing or incorrect indexes and untracked object
   const indexes=Object.entries(INDEXES).map(([indexname,col])=>({indexname,indexdef:`CREATE INDEX ${indexname} ON public.profile_job_evaluation USING btree (tenant_id, search_profile_id, ${col}, job_id)`}));
   assert.equal(assertEvaluation013Ledger(files,files.slice(0,12),[],[]),'PENDING_013');
   assert.equal(assertEvaluation013Ledger(files,files,cols,indexes),'ALREADY_APPLIED');
+  // Nile catalogs can expose the physical database-qualified public schema.
+  const physical=indexes.map(i=>({...i,indexdef:i.indexdef.replace('public.','"01000000-0000-7000-8000-000000000000_public".')}));
+  assert.equal(assertEvaluation013Ledger(files,files,cols,physical),'ALREADY_APPLIED');
+  assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((v,i)=>i?v:{...v,indexdef:v.indexdef.replace('public.','other_schema.')})),/EVALUATION013_INDEX_DRIFT/);
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.slice(0,-1)),/EVALUATION013_INDEX_DRIFT/);
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((x,i)=>i?x:{...x,indexdef:x.indexdef.replace('score','b2b')})),/EVALUATION013_INDEX_DRIFT/);
   assert.throws(()=>assertEvaluation013Ledger(files,files.slice(0,12),[],indexes),/EVALUATION013_UNTRACKED_OBJECTS/);
