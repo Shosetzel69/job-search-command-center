@@ -63,7 +63,7 @@ import { COLUMNS, INDEXES, assertEvaluation013Ledger } from '../scripts/db-evalu
 test('013 exact ledger rejects missing or incorrect indexes and untracked objects',()=>{
   const files=Array.from({length:13},(_,i)=>({version:String(i+1).padStart(3,'0'),name:i===12?'013_profile_job_evaluation_listing.sql':String(i+1),checksum:i===10?'c6cb6ac52c9a717a5dc452b38fb0874be51896190dc24beab01babfafe623f0e':'x'}));
   const cols=Object.entries(COLUMNS).map(([column_name,data_type])=>({column_name,data_type,is_nullable:'YES'}));
-  const indexes=Object.entries(INDEXES).map(([indexname,col])=>({indexname,indexdef:`CREATE INDEX ${indexname} ON public.profile_job_evaluation USING btree (tenant_id, search_profile_id, ${col}, job_id)`}));
+  const indexes=Object.entries(INDEXES).map(([indexname,col])=>({indexname,indisvalid:true,indisready:true,indexdef:`CREATE INDEX ${indexname} ON public.profile_job_evaluation USING btree (tenant_id, search_profile_id, ${col}, job_id)`}));
   assert.equal(assertEvaluation013Ledger(files,files.slice(0,12),[],[]),'PENDING_013');
   assert.equal(assertEvaluation013Ledger(files,files,cols,indexes),'ALREADY_APPLIED');
   // Nile catalogs can expose the physical database-qualified public schema.
@@ -71,6 +71,11 @@ test('013 exact ledger rejects missing or incorrect indexes and untracked object
   assert.equal(assertEvaluation013Ledger(files,files,cols,physical),'ALREADY_APPLIED');
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((v,i)=>i?v:{...v,indexdef:v.indexdef.replace('public.','other_schema.')})),/EVALUATION013_INDEX_DRIFT/);
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.slice(0,-1)),/EVALUATION013_INDEX_DRIFT/);
+  assert.throws(()=>assertEvaluation013Ledger(files,files,cols,[...indexes.slice(0,-1),indexes[0]]),/EVALUATION013_INDEX_DRIFT/);
+  for(const flag of ['indisvalid','indisready']) {
+    assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((x,i)=>i?x:{...x,[flag]:false})),/EVALUATION013_INDEX_DRIFT/);
+    assert.throws(()=>assertEvaluation013Ledger(files,files.slice(0,12),[],[{...indexes[0],[flag]:false}]),/EVALUATION013_UNTRACKED_OBJECTS/);
+  }
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((x,i)=>i?x:{...x,indexdef:x.indexdef.replace('score','b2b')})),/EVALUATION013_INDEX_DRIFT/);
   assert.throws(()=>assertEvaluation013Ledger(files,files.slice(0,12),[],indexes),/EVALUATION013_UNTRACKED_OBJECTS/);
 });
