@@ -309,7 +309,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     eligibility_state:cached.eligibilityState,
     eligibility_reason:cached.eligibilityReasonCode,
     fit:score,
-    fit_matrix:score===null?[]:evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type)).matrix,
+    fit_matrix:score===null?[]:(Array.isArray(cached.fitMatrix)?cached.fitMatrix:[]),
     job_quality:publicQuality(payload),
     location:row.location || payload.location || payload.short_location || 'Nespecificat',
     countries,
