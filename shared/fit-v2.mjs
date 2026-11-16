@@ -24,6 +24,19 @@ export function normalizeFitConfig(input){
  if(total!==100)fail();
  return out;
 }
+// Historical configurations remain readable; only a newly changed configuration is constrained.
+export function assertFitWeightStepForSave(previous,next){
+  if(next==null)return;
+  const before=previous==null?null:normalizeFitConfig(previous);
+  const after=normalizeFitConfig(next);
+  const canonical=v=>JSON.stringify(v,Object.keys(v||{}).sort());
+  const unchanged=before&&FIT_CRITERIA.every(key=>{
+    const a=before[key],b=after[key];
+    return a.weight===b.weight&&canonical(a.ratings||{})===canonical(b.ratings||{});
+  });
+  if(!unchanged&&FIT_CRITERIA.some(key=>after[key].weight%5!==0))
+    throw Object.assign(new Error('FIT weights must be multiples of 5'),{status:400});
+}
 export function evaluateFitV2(input,evidence={}){
  let config;try{config=normalizeFitConfig(input??null);}catch{return {score:null,matrix:[],state:'UNCONFIGURED'};}
  if(!config)return {score:null,matrix:[],state:'UNCONFIGURED'};
