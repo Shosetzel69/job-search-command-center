@@ -1332,6 +1332,20 @@ class D2ScopeTriageTests(unittest.TestCase):
         other={**scope,"role_family":"PRODUCT_AGILE","role_subfamilies":["product_owner"],"target_country_codes":["CA"],"remote_eligible_country_codes":["CA"]}
         self.assertFalse(any(orchestration._posting_matches_scope(SimpleNamespace(**base),s) for s in [scope,other]))
 
+    def test_signed_exclusions_apply_per_tuple_without_cross_profile_contamination(self):
+        from types import SimpleNamespace
+        base = dict(title="Senior Sales Project Manager", payload={"description":"Lead delivery."},
+                    role_family="PROJECT_DELIVERY_MANAGEMENT", role_subfamily=["project_management"],
+                    work_mode="onsite", contract_type="unknown", country_codes=["RO"], remote_scope="Country")
+        scope = {"role_family":"PROJECT_DELIVERY_MANAGEMENT","role_subfamilies":["project_management"],
+                 "target_country_codes":["RO"],"excluded_role_keywords":["Sales"]}
+        posting = SimpleNamespace(**base)
+        self.assertEqual(orchestration._posting_scope_decision(posting, scope),"EXCLUDED")
+        self.assertEqual(orchestration._posting_scope_decision(posting,{**scope,"excluded_role_keywords":[]}),"MATCHED")
+        self.assertEqual(orchestration._posting_scope_decision(posting,{**scope,"excluded_role_keywords":[],"excluded_country_codes":["RO"]}),"EXCLUDED")
+        unknown=SimpleNamespace(**{**base,"title":"Project Manager","country_codes":[]})
+        self.assertEqual(orchestration._posting_scope_decision(unknown,{**scope,"excluded_country_codes":["RO"]}),"UNRESOLVED")
+
     def test_conservative_listing_detail_admission(self):
         from retrieve_provider_queries import listing_role_excluded
         scopes=[{"role_family":"PROJECT_DELIVERY_MANAGEMENT","role_subfamilies":["project_management"]}]
