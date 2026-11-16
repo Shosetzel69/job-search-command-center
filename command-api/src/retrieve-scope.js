@@ -54,8 +54,8 @@ export function userRefreshScopes(preferences) {
     target_regions:list(p.target_regions, { upper:true }),
     target_country_codes:list(p.target_country_codes, { upper:true }),
     remote_eligible_country_codes:list(p.remote_eligible_country_codes, { upper:true }),
-    work_modes:workModes(p.work_modes),
-    contract_types:list(p.contract_types, { lower:true }),
+    work_modes:['remote','hybrid','onsite'],
+    contract_types:[],
   };
   const families = orderedFamilies(p);
   if (families.length > 2) {

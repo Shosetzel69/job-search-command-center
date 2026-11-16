@@ -3459,68 +3459,240 @@ CONTEXT_LOCATION_KINDS = frozenset((
 
 
 def _single_detail_jobposting(html, expected_title):
-    parser = _LuxoftJobPosting()
-    parser.feed(html)
-    jobs = []
-    for script in parser.scripts:
-        try:
-            data = json.loads(script)
-        except (ValueError, TypeError):
-            continue
-        candidates = data if isinstance(data, list) else [data]
-        for item in candidates:
-            if isinstance(item, dict):
-                graph = item.get("@graph")
-                for node in ([item] + (graph if isinstance(graph, list) else [])):
-                    if isinstance(node, dict) and node.get("@type") == "JobPosting":
-                        jobs.append(node)
+    # Only one individually fetched posting may supply fields. Nested schema.org
+    # variants are allowed, but multiple JobPosting nodes remain ambiguous.
+    from job_search_web import Page, objects, is_type, as_list
+    page = Page(html)
+    jobs = [node for document in page.documents for node in objects(document)
+            if is_type(node, "JobPosting")]
     if len(jobs) != 1:
         return None
     job = jobs[0]
     title = plain_text(job.get("title"))
     description = plain_text(job.get("description"))
-    # Same-title corroboration prevents a redirected or adjacent vacancy
-    # from being attached to the stable listing identity.
     if not title or title.casefold() != plain_text(expected_title).casefold() or not description:
         return None
-    organization = job.get("hiringOrganization")
-    company = plain_text(organization.get("name")) if isinstance(organization, dict) else ""
-    locations = job.get("jobLocation")
-    locations = locations if isinstance(locations, list) else [locations]
-    labels, countries = [], []
-    for location in locations:
-        address = location.get("address") if isinstance(location, dict) else None
-        if not isinstance(address, dict):
+    organizations = [plain_text(x.get("name")) for x in as_list(job.get("hiringOrganization"))
+                     if isinstance(x, dict) and x.get("name")]
+    organizations = list(dict.fromkeys(x for x in organizations if x))
+    company = organizations[0] if len(organizations) == 1 else ""
+    def area(value):
+        if isinstance(value, dict):
+            value = value.get("name") or value.get("identifier")
+        text = plain_text(value)
+        return engine.COUNTRY_NAMES.get(text.upper(), text) if len(text) == 2 else text
+    labels, office_countries = [], []
+    for location in as_list(job.get("jobLocation")):
+        if not isinstance(location, dict):
             continue
-        country = address.get("addressCountry")
-        if isinstance(country, dict):
-            country = country.get("name") or country.get("identifier")
-        country = plain_text(country)
-        if len(country) == 2:
-            country = engine.COUNTRY_NAMES.get(country.upper(), country.upper())
-        label = ", ".join(x for x in (plain_text(address.get("addressLocality")),
-                                      plain_text(address.get("addressRegion")), country) if x)
-        if label and label not in labels:
-            labels.append(label)
-        if country and country not in countries:
-            countries.append(country)
-    remote = str(job.get("jobLocationType") or "").upper() == "TELECOMMUTE"
+        for address in as_list(location.get("address")):
+            if not isinstance(address, dict):
+                continue
+            country = area(address.get("addressCountry"))
+            label = ", ".join(x for x in (plain_text(address.get("addressLocality")),
+                                          plain_text(address.get("addressRegion")), country) if x)
+            if label and label not in labels:
+                labels.append(label)
+            if country and country not in office_countries:
+                office_countries.append(country)
+    modes = {str(x).strip().casefold().replace("_", "-") for x in as_list(job.get("jobLocationType"))}
+    if modes & {"hybrid"}:
+        mode = "hybrid"
+    elif modes & {"telecommute", "remote"}:
+        mode = "remote"
+    elif modes & {"onsite", "on-site", "on site", "office"}:
+        mode = "onsite"
+    else:
+        mode = ""
+    restrictions = list(dict.fromkeys(area(x) for x in as_list(job.get("applicantLocationRequirements")) if area(x)))
+    # Office addresses are not evidence of where a remote applicant may work.
+    countries = restrictions if mode == "remote" else office_countries
+    provenance = {"title": "JOB_DETAIL_JSONLD", "description": "JOB_DETAIL_JSONLD"}
+    location = "; ".join(labels) or ("Remote" if mode == "remote" else "")
+    if location:
+        provenance["location"] = "JOB_DETAIL_JSONLD"
+    if job.get("datePosted"):
+        provenance["date_posted"] = "JOB_DETAIL_JSONLD"
     result = {"job_title": title, "description": description[:100000],
-              "location": "; ".join(labels) or ("Remote" if remote else ""),
-              "countries": countries, "remote": remote,
-              "work_arrangement": "remote" if remote else "",
+              "description_completeness": "full", "location": location,
+              "countries": countries, "country_codes": [],
+              "remote": mode == "remote", "hybrid": mode == "hybrid",
+              "work_arrangement": mode, "work_mode": mode,
               "employment_statuses": engine.list_values(job.get("employmentType")),
               "date_posted": job.get("datePosted"),
-              "_jscc_field_provenance": {
-                  "title": "JOB_DETAIL_JSONLD", "description": "JOB_DETAIL_JSONLD",
-                  **({"location": "JOB_DETAIL_JSONLD"} if labels or remote else {}),
-                  **({"date_posted": "JOB_DETAIL_JSONLD"} if job.get("datePosted") else {}),
-              }}
+              "date_updated": job.get("dateModified"),
+              "_jscc_field_provenance": provenance}
+    if restrictions and mode == "remote":
+        result["remote_locations"] = restrictions
     if company:
         result["company"] = company
-        result["_jscc_field_provenance"]["company"] = "JOB_DETAIL_JSONLD"
-    if isinstance(job.get("baseSalary"), dict):
-        result["salary"] = job["baseSalary"]
+        provenance["company"] = "JOB_DETAIL_JSONLD"
+    salary = job.get("baseSalary")
+    if isinstance(salary, dict):
+        amount = salary.get("value")
+        if isinstance(amount, dict):
+            numeric = {"minimum": amount.get("minValue"), "maximum": amount.get("maxValue"),
+                       "amount": amount.get("value"), "currency": salary.get("currency"),
+                       "period": amount.get("unitText")}
+        else:
+            numeric = {"amount": amount, "currency": salary.get("currency")}
+        if any(isinstance(numeric.get(key), (int, float)) and not isinstance(numeric.get(key), bool)
+               for key in ("amount", "minimum", "maximum")):
+            result["salary"] = numeric
+    return result
+
+class _DetailBlocks(HTMLParser):
+    """Read bounded visible blocks, without scripts, controls or page navigation."""
+    BLOCKS = {"h1", "h2", "h3", "h4", "p", "div", "section", "li", "td", "th", "dt", "dd", "br", "tr"}
+    SKIP = {"script", "style", "noscript", "nav", "footer", "button", "svg"}
+    def __init__(self, html):
+        super().__init__(convert_charrefs=True)
+        self.blocks, self.parts, self.hidden = [], [], []
+        self.heading = None
+        self.feed(html)
+        self.close()
+        self.flush()
+    def flush(self):
+        text = " ".join(" ".join(self.parts).split())
+        if text:
+            self.blocks.append((self.heading or "", text))
+        self.parts = []
+    def handle_starttag(self, tag, attrs):
+        if tag in self.SKIP:
+            self.flush()
+            self.hidden.append(tag)
+            return
+        if self.hidden:
+            return
+        if tag in self.BLOCKS:
+            self.flush()
+        if tag in {"h1","h2","h3","h4"}:
+            self.heading = tag
+    def handle_endtag(self, tag):
+        if self.hidden:
+            if self.hidden[-1] == tag:
+                self.hidden.pop()
+            return
+        if tag in self.BLOCKS:
+            self.flush()
+        if tag == self.heading:
+            self.heading = None
+    def handle_data(self, data):
+        if not self.hidden:
+            self.parts.append(data)
+
+
+def _labelled_detail(html, expected_title, name):
+    """Source-specific fallback for explicit labelled fields on an exact posting.
+    Do not treat a listing page or arbitrary surrounding prose as a job record."""
+    if name not in {"Hipo", "Societe Generale"}:
+        return None
+    import unicodedata
+    def clean(text):
+        return " ".join("".join(c for c in text if unicodedata.category(c) != "Cf"
+                                and not 0xFE00 <= ord(c) <= 0xFE0F).split())
+    def fold(text):
+        return "".join(c for c in unicodedata.normalize("NFKD", clean(text).casefold())
+                       if not unicodedata.combining(c))
+    blocks = [(tag, clean(text)) for tag, text in _DetailBlocks(html).blocks]
+    headings = [i for i,(tag,text) in enumerate(blocks) if tag == "h1"]
+    if len(headings) != 1 or fold(blocks[headings[0]][1]) != fold(plain_text(expected_title)):
+        return None
+    index = headings[0]
+    labels = {"angajator", "domeniu", "tip job", "nivel job", "orase", "actualizat la",
+              "remote work", "reference", "start date", "publication date"}
+    sections = {"cerinte", "responsabilitati", "alte informatii", "beneficii"} if name == "Hipo" else {
+        "responsibilities", "profile required", "why join us", "business insight"}
+    groups, values = [], {}
+    current = None
+    for tag,text in blocks[index+1:]:
+        key = fold(text).rstrip(":")
+        if tag in {"h1","h2","h3","h4"}:
+            current = key if key in sections else None
+            if current:
+                groups.append([text, []])
+            continue
+        if current:
+            # Description comes only from explicitly headed job sections.
+            groups[-1][1].append(text)
+            continue
+        if groups:
+            continue
+        for label in labels:
+            match = re.match(r"^" + re.escape(label) + r"\s*:\s*(.*)$", key)
+            if match:
+                values[label] = text.split(":", 1)[1].strip() if ":" in text else ""
+                break
+        else:
+            if key in labels:
+                values[key] = ""
+            elif values and not values[next(reversed(values))]:
+                values[next(reversed(values))] = text
+    description = "\n\n".join(title + "\n" + "\n".join(parts) for title,parts in groups if parts)
+    if not description:
+        return None
+    provenance = {"title":"JOB_DETAIL_HTML", "description":"JOB_DETAIL_HTML"}
+    result = {"job_title":clean(expected_title), "description":description[:100000],
+              "description_completeness":"full", "_jscc_field_provenance":provenance}
+    header = "\n".join(text for _,text in blocks[index+1:next((i for i in range(index+1,len(blocks))
+                           if fold(blocks[i][1]) in sections),len(blocks))])
+    if name == "Hipo":
+        company = values.get("angajator")
+        location = values.get("orase")
+        raw_mode = fold(values.get("remote work") or "")
+        employment = values.get("tip job")
+        updated = values.get("actualizat la") or ""
+        match = re.fullmatch(r"(\d{2})-(\d{2})-(\d{4})", updated)
+        if match:
+            try:
+                result["date_updated"] = datetime(int(match[3]),int(match[2]),int(match[1])).date().isoformat()
+            except ValueError:
+                pass
+        # Hipo explicitly labels the date as an update, never publication.
+        result["date_posted"] = None
+        countries = ["Romania"] if location and fold(location) in {"bucuresti","bucharest"} else []
+    else:
+        company = "Societe Generale"
+        location = None
+        raw_mode = ""
+        employment = None
+        countries = []
+        # Only exact header fields, never description text.
+        for line in header.splitlines():
+            match = re.fullmatch(r"\s*([^,\n]+),\s*([^,\n]+?)\s+(Hybrid|Remote|On-site|Onsite)\s*",line,re.I)
+            if match:
+                location = match[1] + ", " + match[2]
+                raw_mode = fold(match[3])
+                countries = [match[2]] if match[2].casefold() in engine.COUNTRY_NAME_TO_CODE else []
+        mode_lines = [fold(x) for x in header.splitlines() if fold(x) in {"hybrid","remote","on-site","onsite"}]
+        if not raw_mode and len(set(mode_lines)) == 1:
+            raw_mode = mode_lines[0]
+        if not location:
+            for line in header.splitlines():
+                match = re.fullmatch(r"([^,\n]+),\s*([^,\n]+)",line)
+                if match and match[2].strip().casefold() in engine.COUNTRY_NAME_TO_CODE:
+                    location, countries = line, [match[2].strip()]
+                    break
+        match = re.search(r"\bPublication date\s*:?\s*(\d{4})[/-](\d{2})[/-](\d{2})\b",header,re.I)
+        if match:
+            try:
+                result["date_posted"] = datetime(int(match[1]),int(match[2]),int(match[3])).date().isoformat()
+                provenance["date_posted"] = "JOB_DETAIL_HTML"
+            except ValueError:
+                pass
+        if re.search(r"(?im)^Internship(?:\s|$)",header):
+            employment = "Internship"
+    if company:
+        result["company"] = company
+        provenance["company"] = "JOB_DETAIL_HTML"
+    if location:
+        result.update(location=location,countries=countries,country_codes=[])
+        provenance["location"] = "JOB_DETAIL_HTML"
+    mode = {"remote":"remote","hybrid":"hybrid","on-site":"onsite","onsite":"onsite"}.get(raw_mode)
+    if mode:
+        result.update(work_arrangement=mode,work_mode=mode,remote=mode=="remote",hybrid=mode=="hybrid")
+    if employment:
+        result["employment_statuses"] = [employment]
     return result
 
 
@@ -3568,11 +3740,15 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
                 target = urlsplit(final)
                 if (target.scheme, target.netloc, target.path, target.query) == (parts.scheme, parts.netloc, parts.path, parts.query):
                     detail = _single_detail_jobposting(html, record.get("job_title"))
+                    if not detail:
+                        detail = _labelled_detail(html, record.get("job_title"), name)
             except (FetchError, OSError, ValueError, TypeError):
                 pass
         if detail:
             record.update(detail)
-            if name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo"} and not detail.get("company"):
+            if detail.get("company"):
+                record["company_provenance"] = detail["_jscc_field_provenance"].get("company", "UNKNOWN")
+            elif name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo", "No Fluff Jobs"}:
                 record["company"] = "Nespecificata"
                 record["company_provenance"] = "UNKNOWN"
         else:
@@ -3595,7 +3771,7 @@ def protect_context_records(records, name, kind, listing_url, *, max_details=4, 
                 provenance["location"] = "LISTING_CARD"
             elif location:
                 provenance["location"] = "LISTING_CARD"
-            if name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo"} or (kind in {"linked_jobs", "rendered_links"} and str(record.get("company") or "").casefold() == name.casefold()):
+            if name in {"Just Join IT", "SkipTheDrive", "Wellfound", "Hipo", "No Fluff Jobs"} or (kind in {"linked_jobs", "rendered_links"} and str(record.get("company") or "").casefold() == name.casefold()):
                 record["company"] = "Nespecificata"
                 record["company_provenance"] = "UNKNOWN"
             if name == "Crossover":
@@ -3789,8 +3965,11 @@ def collect(source, config=None):
                 scope_evidence["listing_valid"]=len(records)
     unresolved = 0
     if name in CONTEXT_RISK_SOURCES:
-        # Every collection mode uses the same bounded provenance gate.
-        records, unresolved = protect_context_records(records, name, kind, url, config=config)
+        # Preserve same-origin and time limits; expand detail budget only for confirmed defect sources.
+        if name in {"Hipo", "Just Join IT", "SkipTheDrive", "Wellfound", "No Fluff Jobs", "Societe Generale"}:
+            records, unresolved = protect_context_records(records, name, kind, url, max_details=30, max_seconds=25, config=config)
+        else:
+            records, unresolved = protect_context_records(records, name, kind, url, config=config)
     result = [engine.CollectionResult("public_board", kind, True, records, len(records))]
     if scope_evidence is not None:
         result[0].provider_scope_details=scope_evidence

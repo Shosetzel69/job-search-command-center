@@ -1226,8 +1226,65 @@ class PublicBoardAdapterTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,"individual job links"):
                 boards._hipo("https://www.hipo.ro/locuri-de-munca/cautajob/Toate-Domeniile/Toate-Orasele/project-manager")
 
+    def test_detail_jobposting_preserves_structured_geo_mode_contract_dates_and_salary(self):
+        import json
+        job = {"@type": ["Thing", "https://schema.org/JobPosting"], "title": "Project Manager",
+               "description": "<p>Coordinate delivery.</p>", "hiringOrganization": {"name": "Example Employer"},
+               "jobLocation": {"address": {"addressLocality": "Warsaw", "addressCountry": "PL"}},
+               "applicantLocationRequirements": [{"@type": "Country", "name": "Romania"}],
+               "jobLocationType": "TELECOMMUTE", "employmentType": ["B2B", "FULL_TIME"],
+               "datePosted": "2026-11-09", "dateModified": "2026-11-15",
+               "baseSalary": {"currency": "PLN", "value": {"minValue": 8500, "maxValue": 10500, "unitText": "MONTH"}}}
+        html = '<script type="application/ld+json">' + json.dumps({"@graph": [{"@type":"ItemList", "itemListElement":[job]}]}) + '</script>'
+        record = boards._single_detail_jobposting(html, "Project Manager")
+        self.assertEqual(record["company"], "Example Employer")
+        self.assertEqual(record["countries"], ["Romania"])
+        self.assertIn("Warsaw", record["location"])
+        self.assertEqual(record["work_arrangement"], "remote")
+        self.assertIn("B2B", record["employment_statuses"])
+        self.assertEqual(record["date_posted"], "2026-11-09")
+        self.assertEqual(record["date_updated"], "2026-11-15")
+        self.assertEqual(record["salary"]["minimum"], 8500)
+        self.assertIsNone(boards._single_detail_jobposting(html, "Different role"))
+        duplicate = html + html
+        self.assertIsNone(boards._single_detail_jobposting(duplicate, "Project Manager"))
+
+    def test_hipo_labelled_detail_never_calls_update_publication(self):
+        html = '''<h1>Strategic ERP Project Manager</h1><table>
+          <tr><td>Angajator:</td><td>Working4U</td></tr>
+          <tr><td>Tip job:</td><td>full-time</td></tr>
+          <tr><td>Orase:</td><td>BUCURESTI</td></tr>
+          <tr><td>Actualizat la:</td><td>16-11-2026</td></tr>
+          <tr><td>Remote work:</td><td>On-site</td></tr></table>
+          <h2>Cerinte</h2><p>Experience in delivery.</p>
+          <h2>Responsabilitati</h2><p>Coordinate teams.</p>
+          <h2>Other jobs</h2><p>Do not include.</p>'''
+        detail = boards._labelled_detail(html,"Strategic ERP Project Manager","Hipo")
+        self.assertEqual(detail["company"],"Working4U")
+        self.assertEqual(detail["countries"],["Romania"])
+        self.assertEqual(detail["work_arrangement"],"onsite")
+        self.assertEqual(detail["employment_statuses"],["full-time"])
+        self.assertIsNone(detail["date_posted"])
+        self.assertEqual(detail["date_updated"],"2026-11-16")
+        self.assertNotIn("Do not include",detail["description"])
+        self.assertIsNone(boards._labelled_detail(html,"Wrong title","Hipo"))
+
+    def test_socgen_labelled_detail_distinguishes_publication_and_start(self):
+        html='''<h1>Junior Project Manager</h1><p>Internship</p>
+        <p>Luxembourg, Luxembourg Hybrid</p><p>Reference 26000M0G</p>
+        <p>Start date 2026/12/01</p><p>Publication date 2026/10/15</p>
+        <h2>Responsibilities</h2><p>Assist delivery.</p>
+        <h2>Why join us</h2><p>Career training.</p>
+        <h2>Related jobs</h2><p>Other employer.</p>'''
+        detail=boards._labelled_detail(html,"Junior Project Manager","Societe Generale")
+        self.assertEqual(detail["date_posted"],"2026-10-15")
+        self.assertEqual(detail["work_arrangement"],"hybrid")
+        self.assertEqual(detail["countries"],["Luxembourg"])
+        self.assertEqual(detail["employment_statuses"],["Internship"])
+        self.assertNotIn("Other employer",detail["description"])
+
     def test_unverified_board_employer_does_not_become_company(self):
-        for name in ("Just Join IT","SkipTheDrive","Wellfound","Hipo"):
+        for name in ("Just Join IT","SkipTheDrive","Wellfound","Hipo","No Fluff Jobs"):
             raw={"id":"1","job_title":"Project Manager","company":name,
                  "source_url":"https://example.com/jobs/1","description":"Card context"}
             with patch.object(boards.PublicClient,"get",side_effect=ValueError("unavailable")):

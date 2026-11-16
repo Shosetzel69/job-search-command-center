@@ -108,9 +108,11 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    assert.equal(selected.length,1);
    assert.equal(unknown.length,2);
    for(const job of selected)assert.ok(returned.has(job.id),'selected project job filtered out: '+job.title);
-   for(const job of unknown)assert.ok(!returned.has(job.id),'UNKNOWN must not be a recommendation: '+job.title);
-   for(const job of rejected)assert.ok(!returned.has(job.id),'explicit role mismatch leaked: '+job.title);
-   assert.deepEqual([...returned].sort(),selected.map(j=>j.id).sort());
+   for(const job of unknown)assert.ok(returned.has(job.id),'UNKNOWN must remain visible: '+job.title);
+   for(const job of rejected)assert.ok(returned.has(job.id),'Eligibility must not hide a collected job: '+job.title);
+   assert.deepEqual([...returned].sort(),seeded.map(j=>j.id).sort());
+   const explicit=await repository.listProfileJobs(ctx,stored,nomenclatures,{limit:50,prefetch:0,q:'W025',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:'project_management'},env,{db});
+   assert.deepEqual(explicit.jobs.map(j=>j.id).sort(),selected.map(j=>j.id).sort());
    const persisted=await db.query(
      'SELECT job_id,eligibility_state,eligibility_reason_code,profile_version,eligible,score FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])',
      [ctx.profile_id,foundation.search_profile_id,[...selected,...unknown].map(j=>j.id)]);
@@ -150,12 +152,12 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    await repository.savePreferences(ctx,restricted,env,{db});
    const restrictedConfig=await repository.effectiveConfig(ctx,env,{db});
    const restrictedPage=await repository.listProfileJobs(ctx,restrictedConfig,nomenclatures,
-     {limit:50,prefetch:0,q:'W025'},env,{db});
+     {limit:50,prefetch:0,q:'W025',role_family:'PROJECT_DELIVERY_MANAGEMENT',role_subfamily:'delivery_management'},env,{db});
    const restrictedIds=new Set(restrictedPage.jobs.map(j=>j.id));
    assert.ok(!restrictedIds.has(selected[0].id),
-     'known family with explicitly mismatched subfamily must stay excluded');
+     'explicit UI subfamily filter must exclude a mismatched row');
    assert.deepEqual([...restrictedIds].sort(),[],
-     'UNKNOWN conflict jobs must remain in corpus but not confirmed recommendations');
+     'explicit UI family/subfamily filter must have no results');
   });
   await t.test('W025-R04 two or more pages, exact expected set/order and no canonical mutation',async()=>{
    const prefs={...await repository.effectiveConfig(ctx,env,{db}),
@@ -164,7 +166,7 @@ test('W025 Nile 010 role families native functional contract',async t=>{
    await repository.savePreferences(ctx,prefs,env,{db});
    const stored=await repository.effectiveConfig(ctx,env,{db});
    assert.deepEqual(stored.target_role_families,prefs.target_role_families);
-   const expectedRows=seeded.filter(j=>stored.target_role_families.includes(j.expected));
+   const expectedRows=seeded; // Main view includes collected jobs regardless of eligibility.
    assert.ok(expectedRows.length>=2,'fixture must exercise multiple pages');
    const expectedIDs=new Set(expectedRows.map(j=>j.id));
    const before=(await db.query('SELECT job_id,role_family,role_subfamily,job_version FROM canonical_jobs WHERE job_id=ANY($1::uuid[])',

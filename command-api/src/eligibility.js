@@ -149,7 +149,6 @@ function remoteAuthorizationDecision(row, preferences, nomenclatures) {
 export function evaluateEligibility(row, preferences = {}, nomenclatures) {
   const payload = { ...(row.payload || {}), ...(row.posting_payload || {}) };
   const title = String(row.title || payload.job_title || payload.title || '').trim();
-  const company = String(row.company || payload.company || payload.company_name || '').trim();
   const description = String(payload.description || '');
   const unknown = [];
 
@@ -171,13 +170,9 @@ export function evaluateEligibility(row, preferences = {}, nomenclatures) {
     }
   }
 
-  const companyRule = compileRegex(preferences.excluded_company_patterns);
   const roleRule = compileRegex(preferences.excluded_role_keywords);
   const erpRule = compileRegex(preferences.deep_erp_terms);
-  if (companyRule.invalid || roleRule.invalid || erpRule.invalid) unknown.push('HARD_EXCLUSION_RULE_INVALID');
-  if (companyRule.regex?.test(company)) {
-    return Object.freeze({ state:'INELIGIBLE', reason_code:'COMPANY_EXCLUDED', reasons:['COMPANY_EXCLUDED'] });
-  }
+  if (roleRule.invalid || erpRule.invalid) unknown.push('HARD_EXCLUSION_RULE_INVALID');
   if (roleRule.regex?.test(title)) {
     return Object.freeze({ state:'INELIGIBLE', reason_code:'ROLE_EXCLUDED', reasons:['ROLE_EXCLUDED'] });
   }
@@ -187,23 +182,6 @@ export function evaluateEligibility(row, preferences = {}, nomenclatures) {
       return Object.freeze({ state:'INELIGIBLE', reason_code:'HARD_EXCLUSION_MATCH', reasons:['HARD_EXCLUSION_MATCH'] });
     }
     if (!description) unknown.push('HARD_EXCLUSION_EVIDENCE_UNKNOWN');
-  }
-
-  const workMode = String(row.work_mode || 'unknown').toLowerCase();
-  const workModes = preferences.work_modes || {};
-  if (workMode === 'unknown') {
-    if (['remote','hybrid','onsite'].some(mode => workModes?.[mode] === false)) unknown.push('WORK_MODE_UNKNOWN');
-  } else if (workModes?.[workMode] === false) {
-    return Object.freeze({ state:'INELIGIBLE', reason_code:'WORK_MODE_EXCLUDED', reasons:['WORK_MODE_EXCLUDED'] });
-  }
-
-  const contractTypes = new Set(values(preferences.contract_types).map(x => x.toLowerCase()));
-  const contractType = String(row.contract_type || payload.contract_type || 'unknown').toLowerCase();
-  if (contractTypes.size) {
-    if (contractType === 'unknown') unknown.push('CONTRACT_TYPE_UNKNOWN');
-    else if (!contractTypes.has(contractType)) {
-      return Object.freeze({ state:'INELIGIBLE', reason_code:'CONTRACT_TYPE_EXCLUDED', reasons:['CONTRACT_TYPE_EXCLUDED'] });
-    }
   }
 
   const geography = geographicDecision(row, preferences, nomenclatures);

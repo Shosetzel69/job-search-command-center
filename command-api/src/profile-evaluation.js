@@ -4,7 +4,7 @@ import { evaluateEligibility } from './eligibility.js';
 import { ROLE_TAXONOMY, normalizeRoleFamilies, normalizeRoleSubfamilies } from '../../shared/role-taxonomy-runtime.mjs';
 import { canonicalPostedDate, postedAgeHours, parsePostedDate } from './posted-date.mjs';
 
-export const FIT_ALGORITHM_VERSION = 'fit-v2-eligibility-1';
+export const FIT_ALGORITHM_VERSION = 'fit-v2-independent-2';
 export const EVALUATION_VERSION = FIT_ALGORITHM_VERSION;
 
 
@@ -56,15 +56,16 @@ function excludedCountryCodes(preferences, nomenclatures) {
   return result;
 }
 
-function contractType(payload) {
-  const explicit = String(payload.contract_type || '').trim().toLowerCase();
+function contractType(payload, row = {}) {
+  const explicit = String(row.contract_type ?? payload.contract_type ?? '').trim().toLowerCase();
+  if (row.contract_type != null && explicit === 'unknown') return 'unknown';
   if (['permanent','temporary','contract','freelance'].includes(explicit)) return explicit;
   const raw = values(payload.employment_statuses || payload.employment_type || payload.employment_status || payload.job_type)
     .join(' ').toLowerCase();
   if (/freelance/.test(raw)) return 'freelance';
-  if (/contract|contractor|b2b/.test(raw)) return 'contract';
   if (/temporary|fixed[- ]term/.test(raw)) return 'temporary';
-  if (/permanent|full[- ]time/.test(raw)) return 'permanent';
+  if (/\b(?:contract|contractor|b2b)\b/.test(raw)) return 'contract';
+  if (/permanent/.test(raw)) return 'permanent';
   return 'unknown';
 }
 
@@ -172,7 +173,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   const countryCodes = [...new Set([...(row.country_codes || []), ...values(payload.country_codes), payload.country_code, payload.job_country_code]
     .map(x => String(x || '').trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x)))];
   const remoteScope = countryScope(payload, countryCodes, remote);
-  const type = contractType(payload);
+  const type = contractType(payload, row);
   const repost = Boolean(row.repost_of_posting_id || payload.reposted || payload.repost);
 
   const eligibility = evaluateEligibility({
@@ -185,8 +186,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
     payload,
   }, preferences, nomenclatures);
 
-  if (eligibility.state === 'INELIGIBLE' || eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN')) {
-    const compatibilityReasons = {
+  const compatibilityReasons = {
       ROLE_FAMILY_EXCLUDED:'jobs family disabled',
       ROLE_FAMILY_UNKNOWN:'role family unresolved',
       COMPANY_EXCLUDED:'excluded company',
@@ -200,25 +200,16 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       REMOTE_AUTHORIZATION_INCOMPATIBLE:'remote eligibility geography incompatible',
       REPOST_EXCLUDED:'repost disabled',
     };
-    return {
-      eligible:false,
-      eligibilityState:eligibility.state,
-      eligibilityReasonCode:eligibility.reason_code,
-      score:null,
-      pros:[],
-      risks:[],
-      exclusionReason:compatibilityReasons[eligibility.reason_code] || eligibility.reason_code,
-      job:null,
-    };
-  }
 
   const roleCorroborated=titleRoleEvidence(title,row,preferences);
-  const fit=roleCorroborated&&eligibility.state==='ELIGIBLE'?evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type)):{score:null,matrix:[]};
+  const eligibilityState=eligibility.state==='INELIGIBLE'||roleCorroborated||eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN')?eligibility.state:'UNKNOWN';
+  const eligibilityReasonCode=eligibility.state==='INELIGIBLE'||roleCorroborated||eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN')?eligibility.reason_code:'ROLE_TITLE_UNCONFIRMED';
+  const fit=evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type));
   const score=fit.score;
   const pros=fit.matrix.filter(v=>v.weight&&v.grade===5).map(v=>v.criterion+': preferinta confirmata');
   const risks=fit.matrix.filter(v=>v.weight&&v.reason==='MISSING_DATA').map(v=>v.criterion+': date lipsa');
   if(!roleCorroborated)risks.unshift('Clasificarea rolului nu este confirmata de titlu');
-  if(eligibility.state==='UNKNOWN')risks.unshift('Eligibilitate neconfirmata: '+eligibility.reason_code);
+  if(eligibility.state!=='ELIGIBLE')risks.unshift('Eligibilitate neconfirmata: '+eligibility.reason_code);
 
   const posted = canonicalPostedDate(row, now);
   const age = postedAgeHours(posted, now);
@@ -227,18 +218,20 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
   const modeLabel = workMode === 'remote' ? 'Remote' : workMode === 'hybrid' ? 'Hybrid' : workMode === 'onsite' ? 'Onsite' : 'N/A';
 
   return {
-    eligible:true,
-    eligibilityState:roleCorroborated?eligibility.state:'UNKNOWN',
-    eligibilityReasonCode:roleCorroborated?eligibility.reason_code:'ROLE_TITLE_UNCONFIRMED',
+    eligible:eligibility.state!=='INELIGIBLE'&&!eligibility.reasons.includes('ROLE_FAMILY_UNKNOWN'),
+    eligibilityState,
+    eligibilityReasonCode,
     score,
     pros:pros.slice(0, 2),
     risks:risks.slice(0, 2),
-    exclusionReason:null,
+    exclusionReason:eligibility.state==='INELIGIBLE' ? compatibilityReasons[eligibility.reason_code] || eligibility.reason_code : null,
     job:{
       id:String(row.job_id),
       title,
       company,
       initial:company.split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase() || '?',
+      eligibility_state:eligibilityState,
+      eligibility_reason:eligibilityReasonCode,
       fit:score,
       fit_matrix:fit.matrix,
       location:row.location || payload.location || payload.short_location || 'Nespecificat',
@@ -251,7 +244,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       employment_type_raw:values(payload.employment_statuses || payload.employment_type).join(', ') || null,
       age,
       remote,
-      b2b:['contract','freelance'].includes(type) || /contract|freelance|b2b/i.test(text),
+      b2b:['contract','freelance'].includes(type),
       repost,
       status:score != null && score >= threshold ? 'new' : 'review',
       pros:pros.slice(0,2),
@@ -279,13 +272,13 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
   const countryCodes = [...new Set([...(row.country_codes || []), ...values(payload.country_codes), payload.country_code, payload.job_country_code]
     .map(x => String(x || '').trim().toUpperCase()).filter(x => /^[A-Z]{2}$/.test(x)))];
   const remoteScope = countryScope(payload, countryCodes, remote);
-  const type = contractType(payload);
+  const type = contractType(payload, row);
   const description = String(payload.description || '');
   const text = title + ' ' + description;
   const repost = Boolean(row.repost_of_posting_id || payload.reposted || payload.repost);
   const posted = canonicalPostedDate(row, now);
   const age = postedAgeHours(posted, now);
-  const score = cached.eligibilityState === 'ELIGIBLE' && cached.score != null ? Number(cached.score) : null;
+  const score = cached.score != null ? Number(cached.score) : null;
   const threshold = Number(preferences.fit_threshold ?? 80);
   const url = row.canonical_url || payload.final_url || payload.source_url || payload.url || null;
   const modeLabel = workMode === 'remote' ? 'Remote' : workMode === 'hybrid' ? 'Hybrid' : workMode === 'onsite' ? 'Onsite' : 'N/A';
@@ -297,6 +290,8 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     title,
     company,
     initial:company.split(/\s+/).slice(0,2).map(x => x[0]).join('').toUpperCase() || '?',
+    eligibility_state:cached.eligibilityState,
+    eligibility_reason:cached.eligibilityReasonCode,
     fit:score,
     fit_matrix:score===null?[]:evaluateFitV2(preferences.fit_config,fitEvidence(row,payload,company,workMode,type)).matrix,
     location:row.location || payload.location || payload.short_location || 'Nespecificat',
@@ -309,7 +304,7 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     employment_type_raw:values(payload.employment_statuses || payload.employment_type).join(', ') || null,
     age,
     remote,
-    b2b:['contract','freelance'].includes(type) || /contract|freelance|b2b/i.test(text),
+    b2b:['contract','freelance'].includes(type),
     repost,
     status:score != null && score >= threshold ? 'new' : 'review',
     pros:pros.slice(0,2),
