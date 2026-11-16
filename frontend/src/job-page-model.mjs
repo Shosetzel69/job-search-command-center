@@ -27,6 +27,9 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = jobPageSize
     for (const mode of modes) if (MODE_CODE[mode]) params.append('work_mode', MODE_CODE[mode]);
   }
   if (view) {
+    for (const code of new Set(filters.roleSubfamilies || [])) params.append('role_subfamily', String(code));
+    for (const code of new Set(filters.contractTypes || [])) params.append('contract_type', String(code));
+    if (filters.minFit != null && filters.minFit !== '') params.set('min_fit', String(filters.minFit));
     params.set('result_view',['jobs','review','unclassified'].includes(view)?view:'jobs');
     params.set('quick',view==='unclassified'?'all':filters.quick||'all');
     params.set('kpi',view==='jobs'?kpiFilter:'all');
