@@ -1106,7 +1106,6 @@ function cachedEvaluation(row) {
 export function matchesResultView(job,evaluation,spec,threshold) {
   if(!job)return false;
   if(spec.result_view==='unclassified')return evaluation.eligibilityState==='UNKNOWN'&&evaluation.eligibilityReasonCode==='ROLE_FAMILY_UNKNOWN';
-  if(!evaluation.eligible)return false;
   if(spec.result_view==='review'&&job.fit!=null&&job.fit>=threshold)return false;
   if(spec.quick==='high'&&!(job.fit!=null&&job.fit>=threshold))return false;
   if(spec.quick==='b2b'&&!job.b2b)return false;
@@ -1155,36 +1154,6 @@ export async function listProfileJobs(
       return '$' + params.length;
     };
 
-    // Cheap hard-prefilter: remove only normalized explicit contradictions.
-    const targetFamilies = listValues(preferences.target_role_families).map(x => x.toUpperCase());
-    if (targetFamilies.length) {
-      const p = add(targetFamilies);
-      where.push(`(j.role_family = ANY(${p}::text[]) OR j.role_family = 'UNKNOWN')`);
-    }
-
-    const targetSubfamilies = listValues(preferences.target_role_subfamilies);
-    if (targetSubfamilies.length) {
-      const p = add(targetSubfamilies);
-      // Conflicted canonical classifications can be UNKNOWN with nonempty member codes.
-      // A subfamily mismatch is explicit only for a known role family.
-      where.push(`(j.role_family = 'UNKNOWN' OR cardinality(j.role_subfamily) = 0 OR j.role_subfamily && ${p}::text[])`);
-    }
-
-    const disabledModes = Object.entries(jsonObject(preferences.work_modes))
-      .filter(([, enabled]) => enabled === false)
-      .map(([mode]) => String(mode).toLowerCase());
-    if (disabledModes.length) {
-      const p = add(disabledModes);
-      where.push(`lower(COALESCE(j.work_mode, 'unknown')) <> ALL(${p}::text[])`);
-    }
-
-    const allowedContracts = listValues(preferences.contract_types).map(x => x.toLowerCase());
-    if (allowedContracts.length) {
-      const p = add(allowedContracts);
-      where.push(`(lower(COALESCE(j.contract_type, 'unknown')) = ANY(${p}::text[])
-        OR lower(COALESCE(j.contract_type, 'unknown')) = 'unknown')`);
-    }
-
     // Temporary view filters. These do not mutate Selection Criteria or evaluation versions.
     if(spec.empty_modes)where.push('false');
     if(spec.result_view==='unclassified')where.push("j.role_family='UNKNOWN'");
@@ -1211,7 +1180,7 @@ export async function listProfileJobs(
     }
     if (spec.freshness_hours != null) {
       const p = add(spec.freshness_hours);
-      where.push(`COALESCE(publication.effective_posted_at, date_trunc('milliseconds', j.last_seen_at)) >= $2 - (${p}::integer * interval '1 hour')`);
+      where.push(`publication.effective_posted_at >= $2 - (${p}::integer * interval '1 hour')`);
     }
     if (spec.cursor) {
       const at = add(spec.cursor.sort_at);
@@ -1342,7 +1311,7 @@ export async function listProfileJobs(
         const evaluation = cachedEvaluation(row);
         return {
           evaluation,
-          job:evaluation.eligible ? materializeCachedJob(row, evaluation, preferences, anchor) : null,
+          job:materializeCachedJob(row, evaluation, preferences, anchor),
         };
       }
       evaluationsComputed += 1;
@@ -1356,9 +1325,8 @@ export async function listProfileJobs(
       const resolved = await resolveRow(rows[index]);
       inspected += 1;
       pageEndIndex = index;
-      const viewJob=spec.result_view==='unclassified'&&resolved.evaluation.eligibilityReasonCode==='ROLE_FAMILY_UNKNOWN'
-        ? {...materializeCachedJob(rows[index],resolved.evaluation,preferences,anchor),fit:null,eligibility_reason:'ROLE_FAMILY_UNKNOWN'} : resolved.job;
-      if (spec.result_view? !matchesResultView(viewJob,resolved.evaluation,spec,Number(preferences.fit_threshold??80)):!resolved.evaluation.eligible) {
+      const viewJob=resolved.job;
+      if (!viewJob || (spec.result_view && !matchesResultView(viewJob,resolved.evaluation,spec,Number(preferences.fit_threshold??80)))) {
         excluded += 1;
         continue;
       }
