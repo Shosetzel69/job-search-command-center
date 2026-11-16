@@ -23,6 +23,17 @@ export function admitEvaluation013(env,identity){
  else fail('EVALUATION013_MODE_DENIED');
  return {mode,source};
 }
+// Nile may deparse logical public tables using the underlying database UUID
+// schema. Accept only an exact public schema alias, no extra clauses or keys.
+// pg_indexes is independently restricted to the logical public table and the
+// allowlisted names; this does not relax index count/order/type/definition.
+function normalizeIndexDefinition(definition){
+ return String(definition).trim().replace(/\s+/g,' ')
+  .replace(/^CREATE INDEX /i,'CREATE INDEX ')
+  .replace(/ ON (?:"public"|public|"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_public")\./i,' ON ')
+  .replace(/ USING BTREE /i,' USING btree ')
+  .replace(/,\s*/g,', ');
+}
 export function assertEvaluation013Ledger(files,rows,columns,indexes){
  if(files.length!==13||files.some((m,i)=>m.version!==String(i+1).padStart(3,'0'))||
    files.at(-1).name!==TARGET||files[10].checksum!=='c6cb6ac52c9a717a5dc452b38fb0874be51896190dc24beab01babfafe623f0e')
@@ -33,7 +44,7 @@ export function assertEvaluation013Ledger(files,rows,columns,indexes){
  if(rows.length===12&&(columns.length!==0||indexes.length!==0))fail('EVALUATION013_UNTRACKED_OBJECTS');
  if(rows.length===13&&(indexes.length!==Object.keys(INDEXES).length||
    indexes.some(i=>!Object.hasOwn(INDEXES,i.indexname)||
-     String(i.indexdef).replace(/^CREATE INDEX /i,'CREATE INDEX ').replace(/ ON public\./i,' ON ')!==`CREATE INDEX ${i.indexname} ON profile_job_evaluation USING btree (tenant_id, search_profile_id, ${INDEXES[i.indexname]}, job_id)`)))
+     normalizeIndexDefinition(i.indexdef)!==`CREATE INDEX ${i.indexname} ON profile_job_evaluation USING btree (tenant_id, search_profile_id, ${INDEXES[i.indexname]}, job_id)`)))
    fail('EVALUATION013_INDEX_DRIFT');
  if(rows.length===13&&(columns.length!==Object.keys(COLUMNS).length||
    columns.some(c=>COLUMNS[c.column_name]!==c.data_type||c.is_nullable!=='YES')))
@@ -46,7 +57,13 @@ async function state(client,files){
   WHERE table_schema='public' AND table_name='profile_job_evaluation' AND column_name=ANY($1::text[])`,
   [Object.keys(COLUMNS)])).rows;
  const indexes=(await client.query("SELECT indexname,indexdef FROM pg_indexes WHERE schemaname='public' AND tablename='profile_job_evaluation' AND indexname=ANY($1::text[])",[Object.keys(INDEXES)])).rows;
- return assertEvaluation013Ledger(files,rows,columns,indexes);
+ try{return assertEvaluation013Ledger(files,rows,columns,indexes);}
+ catch(error){
+   // Only native disposable CI receives catalog diagnostics: no runtime data.
+   if(error?.code==='EVALUATION013_INDEX_DRIFT'&&process.env.CI==='true'&&process.env.GITHUB_ACTIONS==='true')
+     console.error('EVALUATION013_NATIVE_INDEX_EVIDENCE='+JSON.stringify(indexes.map(i=>({indexname:i.indexname,indexdef:i.indexdef}))));
+   throw error;
+ }
 }
 export async function prepareOrApplyEvaluation013({env=process.env,buildIdentity,db,migrations}={}){
  const admitted=admitEvaluation013(env,buildIdentity);
