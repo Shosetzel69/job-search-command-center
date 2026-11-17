@@ -637,17 +637,20 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     }
     await seedVolume(1,volume);
     async function finishVolume(ctx,expected=volume,maxCalls=20){
-      const start=performance.now();let maxAdvanceMs=0,state=null,attempts=0;
-      // Intentional interruption: an individual POST commits a bounded batch.
-      // A later POST must resume without losing the preceding writes.
+      const start=performance.now();let maxAdvanceMs=0,state=null,attempts=0,scanCursor=null;
+      // Each transaction advances a tenant-bound scan; no old job prefix is
+      // reprocessed merely because earlier cached evaluations are current.
       for(;attempts<maxCalls;attempts++){
         const started=performance.now();
-        state=await advanceProfileEvaluation(ctx,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+        state=await advanceProfileEvaluation(ctx,jobNomenclatures,env,
+          {db:runtimeDb,now:matrixNow,scanCursor});
         const elapsed=performance.now()-started;
         maxAdvanceMs=Math.max(maxAdvanceMs,elapsed);
         assert.ok(elapsed<=8000,'advance exceeded 8s: '+elapsed);
         assert.ok(state.evaluated<=100,'advance batch exceeded 100');
         if(state.status==='COMPLETE')break;
+        if(state.status==='INCOMPLETE')scanCursor=state.scan_cursor??null;
+        if(state.status==='INVALIDATED')scanCursor=null;
       }
       assert.equal(state?.status,'COMPLETE',JSON.stringify(state));
       const pageStart=performance.now();
