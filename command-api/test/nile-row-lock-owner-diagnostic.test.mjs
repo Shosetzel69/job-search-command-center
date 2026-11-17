@@ -8,7 +8,7 @@ admitNileCi();
 const {resolveOrProvisionGoogleIdentity,resolveActiveSearchProfile}=await import('../src/multiuser-repository.js');
 const url=process.env.NILE_TEST_DATABASE_URL;
 const env={...process.env,APP_ENV:'dev'};
-test('Nile active search profile row-lock owner trace', {timeout:30000},async()=>{
+test('W025-L03 Nile active search profile row-lock owner trace', {timeout:30000},async()=>{
  const db=new pg.Pool({connectionString:url,max:2});
  const a=new pg.Client({connectionString:url,connectionTimeoutMillis:10000});
  const b=new pg.Client({connectionString:url,connectionTimeoutMillis:10000});
