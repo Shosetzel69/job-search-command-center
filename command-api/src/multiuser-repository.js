@@ -1985,10 +1985,9 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       if(current.search_profile_id!==basis.search_profile_id ||
         current.preference_digest!==basis.preference_digest)
         return {status:'INVALIDATED',pending:null,evaluated};
-      // Do not run a whole-corpus COUNT after writes: if that statement times
-      // out, Nile aborts this transaction and loses the entire bounded batch.
-      // Return progress from the LIMIT 101 snapshot; GET /me/jobs remains the
-      // authoritative, exact pending/count/sort verifier after COMMIT.
+      // Do not count the whole corpus after each write: a separate verify
+      // request performs the exact pending check after the last scan window.
+      // GET /me/jobs remains authoritative for global sort and totals.
       const basisProof={profile_version:basis.profile_version,preference_digest:basis.preference_digest,
         fit_algorithm_version:FIT_ALGORITHM_VERSION};
       // Never skip a scan window if a deadline stopped evaluation or a newer
