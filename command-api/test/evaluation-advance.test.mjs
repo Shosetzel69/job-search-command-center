@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluationPreferenceDigest, INPUT_DIGEST_SQL, EVALUATION_SOURCE_SQL } from '../src/evaluation-basis.js';
-import { ADVANCE_BATCH_MAX, ADVANCE_BUDGET_MS, readEvaluationBasisTx, evaluationProjection, persistIncrementalEvaluationTx } from '../src/evaluation-advance.js';
+import { ADVANCE_BATCH_MAX, ADVANCE_BUDGET_MS, evaluationAdvanceProgress, readEvaluationBasisTx, evaluationProjection, persistIncrementalEvaluationTx } from '../src/evaluation-advance.js';
 
 test('only evaluation-relevant preferences and nomenclature affect the digest',()=>{
   const p={fit_config:{work_mode:{weight:50}},target_regions:['EU'],fit_threshold:80,freshness_hours:24};
@@ -94,4 +94,17 @@ test('013 exact ledger rejects missing or incorrect indexes and untracked object
   }
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((x,i)=>i?x:{...x,indexdef:x.indexdef.replace('score','b2b')})),/EVALUATION013_INDEX_DRIFT/);
   assert.throws(()=>assertEvaluation013Ledger(files,files.slice(0,12),[],indexes),/EVALUATION013_UNTRACKED_OBJECTS/);
+});
+
+test('P0 bounded lookahead commits progress without a post-write full-corpus count',()=>{
+  assert.deepEqual(evaluationAdvanceProgress(0,0),{status:'COMPLETE',pending:0});
+  assert.deepEqual(evaluationAdvanceProgress(1,1),{status:'COMPLETE',pending:0});
+  assert.deepEqual(evaluationAdvanceProgress(99,99),{status:'COMPLETE',pending:0});
+  assert.deepEqual(evaluationAdvanceProgress(100,100),{status:'COMPLETE',pending:0});
+  assert.deepEqual(evaluationAdvanceProgress(101,100),{status:'INCOMPLETE',pending:null});
+  assert.deepEqual(evaluationAdvanceProgress(101,70),{status:'INCOMPLETE',pending:null});
+  assert.deepEqual(evaluationAdvanceProgress(2,1),{status:'INCOMPLETE',pending:1});
+  assert.deepEqual(evaluationAdvanceProgress(100,99),{status:'INCOMPLETE',pending:1});
+  for(const input of [[102,100],[1,2],[100,-1],[-1,0],[1.5,1]])
+    assert.throws(()=>evaluationAdvanceProgress(...input),/Invalid evaluation advance progress/);
 });
