@@ -333,7 +333,8 @@ export async function handleAuthenticatedRoute(request, env, context) {
   if (request.method === 'POST' && url.pathname === '/me/evaluation/advance') {
     requireSameOrigin(request, env);
     const nomenclatures = (await readNomenclatures(env)).payload;
-    return json(await advanceProfileEvaluation(context,nomenclatures,env));
+    return json(await advanceProfileEvaluation(context,nomenclatures,env,
+      {scanCursor:url.searchParams.get('scan_cursor')}));
   }
 
   if (request.method === 'GET' && url.pathname === '/me/jobs') {

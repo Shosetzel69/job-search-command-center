@@ -607,8 +607,16 @@ function App(){
 
   useEffect(()=>{
     if(auth.status!=='authenticated'||!auth.token||dataState.status!=='ready'||jobPage.orderStatus!=='PROVISIONAL'||!['jobs','review','unclassified'].includes(view))return;
-    let active=true;let timer=null;const controller=new AbortController();
-    const step=async()=>{try{const result=await commandApi('/me/evaluation/advance',auth.token,{method:'POST',signal:controller.signal});if(!active)return;if(result.status==='COMPLETE'){await loadJobsPage(auth.token,savedCriteria,filtersRef.current);return;}if(result.status==='INCOMPLETE')setJobPage(current=>({...current,pending:result.pending}));timer=setTimeout(step,result.status==='INCOMPLETE'?150:1200);}catch(error){if(active)notify('Evaluarea FIT a fost intrerupta: '+error.message,'error');}};
+    let active=true;let timer=null,scanCursor=null;const controller=new AbortController();
+    const step=async()=>{try{
+      const path='/me/evaluation/advance'+(scanCursor?'?scan_cursor='+encodeURIComponent(scanCursor):'');
+      const result=await commandApi(path,auth.token,{method:'POST',signal:controller.signal});
+      if(!active)return;
+      if(result.status==='COMPLETE'){await loadJobsPage(auth.token,savedCriteria,filtersRef.current);return;}
+      if(result.status==='INCOMPLETE'){scanCursor=result.scan_cursor??null;setJobPage(current=>({...current,pending:result.pending}));}
+      if(result.status==='INVALIDATED')scanCursor=null;
+      timer=setTimeout(step,result.status==='INCOMPLETE'?150:1200);
+    }catch(error){if(active)notify('Evaluarea FIT a fost intrerupta: '+error.message,'error');}};
     timer=setTimeout(step,150);return()=>{active=false;clearTimeout(timer);controller.abort();};
   },[auth.status,auth.token,dataState.status,jobPage.orderStatus,view,savedCriteria,loadJobsPage,notify]);
   useEffect(()=>{if(dataState.status!=='ready'||restoredScrollRef.current)return;restoredScrollRef.current=true;requestAnimationFrame(()=>window.scrollTo({top:initialUi.scrollY||0,behavior:'auto'}));},[dataState.status,initialUi.scrollY]);
