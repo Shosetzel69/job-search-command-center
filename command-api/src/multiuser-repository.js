@@ -1775,6 +1775,33 @@ export const EVALUATION_JOIN_SQL = `LEFT JOIN tenant_evaluation eval ON eval.job
 
 export const ADVANCE_BATCH_MAX=100;
 export const ADVANCE_BUDGET_MS=8000;
+// Resume a bounded canonical-ID scan without storing per-tenant cursor state.
+// A cursor is a hint, never authority: a full pending check gates COMPLETE.
+const ADVANCE_CURSOR_UUID=/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+const ADVANCE_CURSOR_DIGEST=/^[0-9a-f]{64}$/;
+export function encodeEvaluationScanCursor(tenantId,basis,position,phase='scan') {
+  if(!['scan','verify'].includes(phase)||(phase==='scan'&&!ADVANCE_CURSOR_UUID.test(position))||
+    (phase==='verify'&&position!==null))throw new RangeError('Invalid evaluation scan cursor');
+  return Buffer.from(JSON.stringify({v:1,tenant:tenantId,profile:basis.search_profile_id,
+    version:basis.profile_version,digest:basis.preference_digest,phase,position}),'utf8').toString('base64url');
+}
+export function decodeEvaluationScanCursor(raw,tenantId,basis) {
+  if(raw==null||raw==='')return {phase:'scan',position:null};
+  if(typeof raw!=='string'||raw.length>1024||!/^[A-Za-z0-9_-]+$/.test(raw))throw httpError('Invalid evaluation scan cursor',400);
+  let c;
+  try {c=JSON.parse(Buffer.from(raw,'base64url').toString('utf8'));}
+  catch {throw httpError('Invalid evaluation scan cursor',400);}
+  if(c?.v!==1||!['scan','verify'].includes(c.phase)||
+    (c.phase==='scan'&&!ADVANCE_CURSOR_UUID.test(c.position))||
+    (c.phase==='verify'&&c.position!==null)||
+    !ADVANCE_CURSOR_UUID.test(c.tenant)||!ADVANCE_CURSOR_UUID.test(c.profile)||
+    !Number.isSafeInteger(c.version)||!ADVANCE_CURSOR_DIGEST.test(c.digest))
+    throw httpError('Invalid evaluation scan cursor',400);
+  if(c.tenant!==tenantId||c.profile!==basis.search_profile_id||
+    c.version!==basis.profile_version||c.digest!==basis.preference_digest)
+    return {phase:'invalidated',position:null};
+  return {phase:c.phase,position:c.position};
+}
 // One lookahead candidate proves whether the bounded batch covers all currently
 // pending inputs.  A positive unknown remainder is never represented as zero.
 export function evaluationAdvanceProgress(candidateCount,acceptedCount) {
@@ -1873,7 +1900,7 @@ export async function persistIncrementalEvaluationTx(tx,basis,row,evaluation,now
 }
 
 export async function advanceProfileEvaluation(authContext,nomenclatures,env=process.env,
- {db=getPool(env),clock=()=>performance.now(),now=new Date()}={}) {
+ {db=getPool(env),clock=()=>performance.now(),now=new Date(),scanCursor=null}={}) {
   const deadline=clock()+ADVANCE_BUDGET_MS;
   const remaining=()=>Math.floor(deadline-clock());
   try {
@@ -1900,15 +1927,46 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       await budget();
       const basis=await readEvaluationBasisTx(tx,nomenclatures);
       if(basis.search_profile_id!==lockedProfile)return {status:'INVALIDATED',pending:null,evaluated:0};
+      const cursor=decodeEvaluationScanCursor(scanCursor,tx.tenantId,basis);
+      if(cursor.phase==='invalidated')return {status:'INVALIDATED',pending:null,evaluated:0,scan_cursor:null};
       const args=[tx.tenantId,now,basis.search_profile_id,basis.preference_digest,FIT_ALGORITHM_VERSION];
-      const from=`${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
-        WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`;
+      if(cursor.phase==='verify'){
+        // Once per completed scan, an exact tenant-scoped check prevents false COMPLETE
+        // after concurrent source edits or an untrusted/forged scan cursor.
+        await budget();
+        const verification=await tx.query(`WITH ${TENANT_EVALUATION_CTE}
+          SELECT COUNT(*)::integer AS pending
+          ${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
+          WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`,args);
+        const pending=Number(verification.rows?.[0]?.pending);
+        if(!Number.isSafeInteger(pending)||pending<0)throw httpError('Evaluation verification unavailable',503);
+        return {status:pending===0?'COMPLETE':'INCOMPLETE',pending,evaluated:0,scan_cursor:null,
+          basis:{profile_version:basis.profile_version,preference_digest:basis.preference_digest,
+            fit_algorithm_version:FIT_ALGORITHM_VERSION}};
+      }
+      // Limit the expensive posting/date/digest work to at most 100 canonical IDs.
+      // Scanning all pending rows from job_id=0 on every call starves after cache
+      // fills: a single LATERAL/digest pass consumed ~6.8s in DEV (#535/#659).
       await budget();
-      const batch=await tx.query(`WITH ${TENANT_EVALUATION_CTE} SELECT ${EVALUATION_FIELDS_SQL}
-        ${from} ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX+1}`,args);
-      // The extra row is a read-only lookahead; never evaluate or persist it.
-      const candidates=batch.rows||[];
-      const workRows=candidates.slice(0,ADVANCE_BATCH_MAX);
+      const scan=await tx.query(`SELECT j.job_id FROM canonical_jobs j
+        WHERE (j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $1)
+          AND ($2::uuid IS NULL OR j.job_id>$2::uuid)
+        ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX+1}`,[now,cursor.position]);
+      const scanRows=scan.rows||[];
+      const ids=scanRows.slice(0,ADVANCE_BATCH_MAX).map(r=>String(r.job_id));
+      const hasMore=scanRows.length>ADVANCE_BATCH_MAX;
+      const lastId=ids.at(-1)||cursor.position;
+      let candidates=[];
+      if(ids.length){
+        await budget();
+        const batch=await tx.query(`WITH ${TENANT_EVALUATION_CTE} SELECT ${EVALUATION_FIELDS_SQL}
+          ${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
+          WHERE ${EVALUATION_VISIBLE_SQL} AND j.job_id=ANY($6::uuid[])
+            AND ${EVALUATION_PENDING_SQL}
+          ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX}`,[...args,ids]);
+        candidates=batch.rows||[];
+      }
+      const workRows=candidates;
       let evaluated=0,defaultEntries=[];
       const flush=async()=>{
         if(!defaultEntries.length)return;
@@ -1931,10 +1989,18 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       // out, Nile aborts this transaction and loses the entire bounded batch.
       // Return progress from the LIMIT 101 snapshot; GET /me/jobs remains the
       // authoritative, exact pending/count/sort verifier after COMMIT.
-      const progress=evaluationAdvanceProgress(candidates.length,evaluated);
-      return {...progress,evaluated,
-        basis:{profile_version:basis.profile_version,preference_digest:basis.preference_digest,
-          fit_algorithm_version:FIT_ALGORITHM_VERSION}};
+      const basisProof={profile_version:basis.profile_version,preference_digest:basis.preference_digest,
+        fit_algorithm_version:FIT_ALGORITHM_VERSION};
+      // Never skip a scan window if a deadline stopped evaluation or a newer
+      // conflicting DB row rejected a provisional write.
+      if(evaluated!==workRows.length)return {status:'RETRY',pending:null,evaluated,
+        scan_cursor:scanCursor||null,basis:basisProof};
+      if(hasMore)return {status:'INCOMPLETE',pending:null,evaluated,
+        scan_cursor:encodeEvaluationScanCursor(tx.tenantId,basis,lastId),basis:basisProof};
+      if(cursor.position!==null)return {status:'INCOMPLETE',pending:null,evaluated,
+        scan_cursor:encodeEvaluationScanCursor(tx.tenantId,basis,null,'verify'),basis:basisProof};
+      // Small corpora complete in one call with the existing response contract.
+      return {status:'COMPLETE',pending:0,evaluated,scan_cursor:null,basis:basisProof};
     },{env,db});
   }catch(error){
     if(error?.message==='EVALUATION_LOCK_BUSY')return {status:'BUSY',pending:null,evaluated:0};
