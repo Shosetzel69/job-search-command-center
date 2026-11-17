@@ -1775,6 +1775,17 @@ export const EVALUATION_JOIN_SQL = `LEFT JOIN tenant_evaluation eval ON eval.job
 
 export const ADVANCE_BATCH_MAX=100;
 export const ADVANCE_BUDGET_MS=8000;
+// One lookahead candidate proves whether the bounded batch covers all currently
+// pending inputs.  A positive unknown remainder is never represented as zero.
+export function evaluationAdvanceProgress(candidateCount,acceptedCount) {
+  if(!Number.isSafeInteger(candidateCount)||candidateCount<0||candidateCount>ADVANCE_BATCH_MAX+1||
+     !Number.isSafeInteger(acceptedCount)||acceptedCount<0||
+     acceptedCount>Math.min(candidateCount,ADVANCE_BATCH_MAX))throw new RangeError('Invalid evaluation advance progress');
+  const hasMore=candidateCount>ADVANCE_BATCH_MAX;
+  const knownRemaining=Math.min(candidateCount,ADVANCE_BATCH_MAX)-acceptedCount;
+  return {status:hasMore||knownRemaining>0?'INCOMPLETE':'COMPLETE',
+    pending:hasMore?null:knownRemaining};
+}
 export const ADVANCE_LOCK_BUDGET_MS=1500;
 const knownAlgorithmRank=(alias)=>`CASE ${alias}.fit_algorithm_version WHEN 'fit-v2-independent-2' THEN 2 WHEN 'fit-v1' THEN 1 ELSE 0 END`;
 
@@ -1894,7 +1905,10 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
         WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`;
       await budget();
       const batch=await tx.query(`WITH ${TENANT_EVALUATION_CTE} SELECT ${EVALUATION_FIELDS_SQL}
-        ${from} ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX}`,args);
+        ${from} ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX+1}`,args);
+      // The extra row is a read-only lookahead; never evaluate or persist it.
+      const candidates=batch.rows||[];
+      const workRows=candidates.slice(0,ADVANCE_BATCH_MAX);
       let evaluated=0,defaultEntries=[];
       const flush=async()=>{
         if(!defaultEntries.length)return;
@@ -1902,7 +1916,7 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
         evaluated+=await persistIncrementalBatchTx(tx,basis,defaultEntries,now);
         defaultEntries=[];
       };
-      for(const row of batch.rows||[]){
+      for(const row of workRows){
         if(remaining()<1400)break;
         defaultEntries.push({row,evaluation:evaluateSharedJob(row,basis.preferences,nomenclatures,now)});
         if(defaultEntries.length===ADVANCE_WRITE_BATCH_MAX)await flush();
@@ -1913,11 +1927,12 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       if(current.search_profile_id!==basis.search_profile_id ||
         current.preference_digest!==basis.preference_digest)
         return {status:'INVALIDATED',pending:null,evaluated};
-      await budget();
-      const result=await tx.query(`WITH ${TENANT_EVALUATION_CTE} SELECT COUNT(*)::integer AS pending ${from}`,args);
-      const pending=Number(result.rows?.[0]?.pending);
-      if(!Number.isSafeInteger(pending)||pending<0)throw httpError('EVALUATION_PENDING_UNAVAILABLE',503);
-      return {status:pending===0?'COMPLETE':'INCOMPLETE',pending,evaluated,
+      // Do not run a whole-corpus COUNT after writes: if that statement times
+      // out, Nile aborts this transaction and loses the entire bounded batch.
+      // Return progress from the LIMIT 101 snapshot; GET /me/jobs remains the
+      // authoritative, exact pending/count/sort verifier after COMMIT.
+      const progress=evaluationAdvanceProgress(candidates.length,evaluated);
+      return {...progress,evaluated,
         basis:{profile_version:basis.profile_version,preference_digest:basis.preference_digest,
           fit_algorithm_version:FIT_ALGORITHM_VERSION}};
     },{env,db});
