@@ -69,3 +69,10 @@ test('static frontend leaves canonical multiuser endpoints to Command API', () =
   assert.match(staticFrontend, /'\/admin\/'/);
   assert.match(staticFrontend, /'\/applications\/'/);
 });
+
+test('R6 evaluation requests carry the bounded scan cursor without altering profile or search',()=>{
+  assert.match(main,/scanCursor=result\.scan_cursor\?\?null/);
+  assert.match(main,/scan_cursor='\+encodeURIComponent\(scanCursor\)/);
+  assert.match(main,/if\(result\.status==='INVALIDATED'\)scanCursor=null/);
+  assert.match(main,/await loadJobsPage\(auth\.token,savedCriteria,filtersRef\.current\)/);
+});
