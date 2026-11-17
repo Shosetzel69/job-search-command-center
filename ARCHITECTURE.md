@@ -26,6 +26,19 @@ Documente complementare:
 - `docs/analysis/2026-09-09-ai-github-bridge.md` — analiza si statusul bridge-ului AI GitHub;
 - `docs/analysis/2026-09-10-remote-mcp-claude.md` — implementarea si validarea Remote MCP Claude.
 
+
+## Nile persistence-first — mandatory development guardrail (2026-11-17)
+
+**Decision:** Nile is the transactional persistence and tenant-isolation boundary, not the default engine for expensive business computation. This rule applies to all **new or materially changed** Nile integrations (API, FIT, Search, Retrieve, workers, migrations and CI). Existing code is not subject to a blanket rewrite; remediate blocking defects first and prioritize broader optimization separately.
+
+- **Keep in Nile:** durable records, relational joins and selective filters, indexed lookups, necessary transactional integrity, tenant isolation, and simple aggregations when justified by measured cost.
+- **Prefer Node.js/Python:** FIT/scoring, JSON parsing and normalization, repeated hashing/digests, complex business rules, and bounded batch processing. Normalize external payloads before persistence where feasible. Do not transfer entire tables to application memory as a shortcut.
+- **Nile compatibility is not generic PostgreSQL compatibility.** Before introducing locks, transaction controls, extensions, SQL functions, DDL, or index features, consult Nile's current documentation and prove the exact construct in native Nile CI. In particular, do not assume PostgreSQL advisory locks, `FOR UPDATE NOWAIT`, or generic migration locking are available. Preserve `SET LOCAL nile.tenant_id` and fail-closed tenant boundaries.
+- **Performance gate:** for new queries expected to scan or transform substantial data, document the query shape, selectivity, indexes, batch limits, timeout budget and expected cardinality. Benchmark on representative Nile data when performance-sensitive; record latency (including p95), query count, bytes transferred, worker CPU/memory, and timeout rate. Never claim an improvement without measurements.
+- **Correctness gate:** preserve source-payload change detection even when a version field is unchanged; verify FIT parity, tenant isolation, idempotency, concurrency and rollback behavior with regression tests.
+- **PR acceptance:** each Nile-touching PR must state (1) why SQL is needed rather than application processing, (2) Nile-specific compatibility evidence, (3) query/performance risk and mitigation, and (4) exact-SHA native Nile CI result. If evidence is missing, do not merge. No automatic schema migration, production deployment, or infrastructure expansion is authorized by this policy.
+- **Deferred audit backlog:** FIT evaluation/listing digest and full-population watermark costs; JSON date parsing in SQL; repeated pending counts; advisory-lock usage in FIT and migrations; Retrieve/Search query paths. These are findings to investigate, **not** authorization for a broad refactor.
+
 ## 2. Principii
 
 Arhitectura MVP este:
