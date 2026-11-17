@@ -555,7 +555,8 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     try{
       const mixed=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
       assert.equal(mixed.evaluated,1,JSON.stringify(mixed));
-      assert.equal(mixed.pending,1);assert.equal(mixed.status,'INCOMPLETE');
+      assert.equal(mixed.pending,null);assert.equal(mixed.status,'RETRY');
+      assert.equal(mixed.scan_cursor,null,'a rejected guarded UPSERT must replay the same window');
       const persisted=await adminDb.query(`SELECT job_id,fit_algorithm_version,profile_version
         FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$2 AND job_id=ANY($3::uuid[])`,
         [user.profile_id,restoredFoundation.search_profile_id,mixedIds]);
