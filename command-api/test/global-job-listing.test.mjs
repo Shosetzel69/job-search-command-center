@@ -18,7 +18,8 @@ test('all twelve orders use one statement with stable null-last ordering and exa
   for(const dir of ['asc','desc']){
    const spec=normalizeGlobalQuery({sort,dir,limit:20,result_view:'jobs'});
    const {sql,params}=buildGlobalListingQuery(id,basis,spec,anchor);
-   assert.match(sql,/WITH basis_guard AS/);
+   assert.match(sql,/WITH tenant_evaluation AS MATERIALIZED \(\s*SELECT \* FROM profile_job_evaluation WHERE tenant_id=\$1 AND search_profile_id=\$3\s*\), basis_guard AS/);
+   assert.match(sql,/LEFT JOIN tenant_evaluation eval ON eval\.job_id=j\.job_id/);
    assert.match(sql,/population AS/);
    assert.match(sql,/matched AS/);
    assert.match(sql,/totals AS/);

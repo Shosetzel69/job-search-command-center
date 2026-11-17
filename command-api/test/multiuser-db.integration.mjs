@@ -430,23 +430,39 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
         'ACTIVE',$4,$4,'r6-sort','{}'::jsonb)`,[postingId,jobId,published,seen]);
     }
     const matrixNow=new Date('2026-10-05T12:06:00Z');
-    // Force a preference commit on a second connection after the evaluator
-    // read and before the first provisional write. Do not use a mock database.
+    // D1 amendment: preference writes share the active profile row lock.
+    // Force the writer to attempt its real lock during evaluation and prove
+    // it cannot commit until the evaluator commits. Fresh reads must invalidate N.
     const beforeRace=await effectiveConfig(user,env,{db:runtimeDb});
-    let interleaved=false;
+    let interleaved=false,writerSettled=false,writer,writerReached;
+    const started=new Promise(resolve=>{writerReached=resolve;});
+    const writerDb={connect:async()=>{
+      const client=await runtimeDb.connect();
+      return {release:()=>client.release(),query:(sql,params)=>{
+        const pending=client.query(sql,params);
+        if(sql.includes('FROM search_profile')&&sql.includes('FOR UPDATE'))writerReached();
+        return pending;
+      }};
+    }};
     const raceDb={connect:async()=>{
       const client=await runtimeDb.connect();
       return {release:()=>client.release(),query:async(sql,params)=>{
         if(!interleaved&&sql.startsWith('INSERT INTO profile_job_evaluation AS cur')){
           interleaved=true;
-          await savePreferences(user,{...beforeRace,keep_reposts:beforeRace.keep_reposts===false},env,{db:runtimeDb});
+          writer=savePreferences(user,{...beforeRace,keep_reposts:beforeRace.keep_reposts===false},env,{db:writerDb})
+            .then(value=>({value}),error=>({error})).finally(()=>{writerSettled=true;});
+          await Promise.race([started,writer]);
+          await new Promise(resolve=>setTimeout(resolve,100));
+          assert.equal(writerSettled,false,'preference writer must wait for evaluator row lock');
         }
         return client.query(sql,params);
       }};
     }};
-    const raced=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:raceDb,now:matrixNow});
-    assert.ok(interleaved,'T-B01-a must force the actual write interleaving');
-    assert.notEqual(raced.status,'COMPLETE','old input cannot attest current completeness');
+    let raced;
+    try{raced=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:raceDb,now:matrixNow});}
+    finally{if(writer){const result=await writer;if(result.error)throw result.error;}}
+    assert.ok(interleaved&&writerSettled,'T-B01-a must force a real blocked preference write and commit afterward');
+    assert.ok(['COMPLETE','INCOMPLETE'].includes(raced.status),JSON.stringify(raced));
     const postRace=await listGlobalProfileJobs(user,jobNomenclatures,{sort:'fit',dir:'desc',limit:20,q:'R6SORT'},env,{db:runtimeDb,now:matrixNow});
     assert.equal(postRace.count_status,'INCOMPLETE');assert.equal(postRace.totals,null);
     cacheConfigB=await effectiveConfig(user,env,{db:runtimeDb});
@@ -508,8 +524,8 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
       const client=await runtimeDb.connect();
       return {release:()=>client.release(),query:async(sql,params)=>{
         const result=await client.query(sql,params);
-        if(sql.includes('pg_try_advisory_xact_lock')){
-          locked(result.rows?.[0]?.acquired);
+        if(sql.includes('FROM search_profile')&&sql.includes('FOR UPDATE')){
+          locked(result.rows?.length===1);
           await releasePause;
         }
         return result;
@@ -521,7 +537,11 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
       const contended=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
       assert.equal(contended.status,'BUSY');
       assert.equal(contended.evaluated,0);
+      const other=await advanceProfileEvaluation(ownerA,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+      assert.equal(other.status,'COMPLETE','distinct tenant lock must not be blocked');
     }finally{unblock();await holding;}
+    const reacquired=await advanceProfileEvaluation(user,jobNomenclatures,env,{db:runtimeDb,now:matrixNow});
+    assert.equal(reacquired.status,'COMPLETE');
     console.log('R6_NATIVE_TWO_TAB_LOCK=PASS');
     // T-B02: both an unknown algorithm and a provisional newer version in
     // one actual VALUES batch. Unknown algorithm must be replaced, but newer
@@ -561,7 +581,7 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
     const retrieveRaceDb={connect:async()=>{
       const client=await runtimeDb.connect();
       return {release:()=>client.release(),query:async(sql,params)=>{
-        if(!writerCommitted&&sql.startsWith('WITH basis_guard AS')){
+        if(!writerCommitted&&sql.includes('basis_guard AS (')&&sql.includes('population AS (')&&sql.includes('summary AS (')){
           const writer=await adminDb.connect();
           try{
             await writer.query('BEGIN');

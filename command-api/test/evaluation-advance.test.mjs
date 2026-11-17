@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluationPreferenceDigest, INPUT_DIGEST_SQL, EVALUATION_SOURCE_SQL } from '../src/evaluation-basis.js';
-import { ADVANCE_BATCH_MAX, ADVANCE_BUDGET_MS, readEvaluationBasisTx, evaluationProjection, persistIncrementalEvaluationTx } from '../src/evaluation-advance.js';
+import { ADVANCE_BATCH_MAX, ADVANCE_BUDGET_MS, evaluationAdvanceProgress, readEvaluationBasisTx, evaluationProjection, persistIncrementalEvaluationTx } from '../src/evaluation-advance.js';
 
 test('only evaluation-relevant preferences and nomenclature affect the digest',()=>{
   const p={fit_config:{work_mode:{weight:50}},target_regions:['EU'],fit_threshold:80,freshness_hours:24};
@@ -57,4 +57,54 @@ test('rejected UPSERT is not an HTTP error; digest and matrix are part of one gu
   assert.match(calls[0].sql,/ELSE 0 END/);
   assert.equal(calls[0].args[14],'digest');
   assert.equal(calls[0].args[15],JSON.stringify([{points:25}]));
+});
+
+import { COLUMNS, INDEXES, assertEvaluation013Ledger } from '../scripts/db-evaluation-migrate-013.mjs';
+test('013 exact ledger rejects missing or incorrect indexes and untracked objects',()=>{
+  const files=Array.from({length:13},(_,i)=>({version:String(i+1).padStart(3,'0'),name:i===12?'013_profile_job_evaluation_listing.sql':String(i+1),checksum:i===10?'c6cb6ac52c9a717a5dc452b38fb0874be51896190dc24beab01babfafe623f0e':'x'}));
+  const cols=Object.entries(COLUMNS).map(([column_name,data_type])=>({column_name,data_type,is_nullable:'YES'}));
+  const indexes=Object.entries(INDEXES).map(([indexname,col])=>({indexname,indisvalid:true,indisready:true,indexdef:`CREATE INDEX ${indexname} ON public.profile_job_evaluation USING btree (tenant_id, search_profile_id, ${col}, job_id)`}));
+  assert.equal(assertEvaluation013Ledger(files,files.slice(0,12),[],[]),'PENDING_013');
+  assert.equal(assertEvaluation013Ledger(files,files,cols,indexes),'ALREADY_APPLIED');
+  // Nile catalogs can expose the physical database-qualified public schema.
+  const physical=indexes.map(i=>({...i,indexdef:i.indexdef.replace('public.','"01000000-0000-7000-8000-000000000000_public".')}));
+  assert.equal(assertEvaluation013Ledger(files,files,cols,physical),'ALREADY_APPLIED');
+  // Official native Nile image: exact physical deparser, from job 133681429203.
+  const internal=indexes.map(i=>({...i,indexdef:i.indexdef.replace(
+    'ON public.profile_job_evaluation',
+    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_1'
+  )}));
+  assert.equal(assertEvaluation013Ledger(files,files,cols,internal),'ALREADY_APPLIED');
+  for(const incorrect of [
+    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".wrong_table_pdb_1',
+    'ON ONLY "01000000-0000-7000-8000-000000000000_other_nile_internal".profile_job_evaluation_pdb_1',
+    'ON ONLY public.profile_job_evaluation',
+    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_0',
+  ]) {
+    const bad=internal.map((i,n)=>n?i:{...i,indexdef:i.indexdef.replace(
+      'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_1',incorrect)});
+    assert.throws(()=>assertEvaluation013Ledger(files,files,cols,bad),/EVALUATION013_INDEX_DRIFT/);
+  }
+  assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((v,i)=>i?v:{...v,indexdef:v.indexdef.replace('public.','other_schema.')})),/EVALUATION013_INDEX_DRIFT/);
+  assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.slice(0,-1)),/EVALUATION013_INDEX_DRIFT/);
+  assert.throws(()=>assertEvaluation013Ledger(files,files,cols,[...indexes.slice(0,-1),indexes[0]]),/EVALUATION013_INDEX_DRIFT/);
+  for(const flag of ['indisvalid','indisready']) {
+    assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((x,i)=>i?x:{...x,[flag]:false})),/EVALUATION013_INDEX_DRIFT/);
+    assert.throws(()=>assertEvaluation013Ledger(files,files.slice(0,12),[],[{...indexes[0],[flag]:false}]),/EVALUATION013_UNTRACKED_OBJECTS/);
+  }
+  assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((x,i)=>i?x:{...x,indexdef:x.indexdef.replace('score','b2b')})),/EVALUATION013_INDEX_DRIFT/);
+  assert.throws(()=>assertEvaluation013Ledger(files,files.slice(0,12),[],indexes),/EVALUATION013_UNTRACKED_OBJECTS/);
+});
+
+test('P0 bounded lookahead commits progress without a post-write full-corpus count',()=>{
+  assert.deepEqual(evaluationAdvanceProgress(0,0),{status:'COMPLETE',pending:0});
+  assert.deepEqual(evaluationAdvanceProgress(1,1),{status:'COMPLETE',pending:0});
+  assert.deepEqual(evaluationAdvanceProgress(99,99),{status:'COMPLETE',pending:0});
+  assert.deepEqual(evaluationAdvanceProgress(100,100),{status:'COMPLETE',pending:0});
+  assert.deepEqual(evaluationAdvanceProgress(101,100),{status:'INCOMPLETE',pending:null});
+  assert.deepEqual(evaluationAdvanceProgress(101,70),{status:'INCOMPLETE',pending:null});
+  assert.deepEqual(evaluationAdvanceProgress(2,1),{status:'INCOMPLETE',pending:1});
+  assert.deepEqual(evaluationAdvanceProgress(100,99),{status:'INCOMPLETE',pending:1});
+  for(const input of [[102,100],[1,2],[100,-1],[-1,0],[1.5,1]])
+    assert.throws(()=>evaluationAdvanceProgress(...input),/Invalid evaluation advance progress/);
 });

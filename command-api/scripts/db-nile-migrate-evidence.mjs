@@ -65,7 +65,8 @@ try {
     await rollbackClient.query('BEGIN');
     const lock=await rollbackClient.query("SELECT version FROM schema_migrations WHERE version='012' FOR UPDATE");
     if(lock.rows.length!==1)throw Error('EVALUATION013_ROLLBACK_LOCK_DENIED');
-    const {COLUMNS}=await import('./db-evaluation-migrate-013.mjs');
+    const {COLUMNS,INDEXES}=await import('./db-evaluation-migrate-013.mjs');
+    for(const index of Object.keys(INDEXES))await rollbackClient.query('DROP INDEX '+index);
     await rollbackClient.query('ALTER TABLE profile_job_evaluation '+Object.keys(COLUMNS).map(c=>'DROP COLUMN '+c).join(', '));
     const removed=await rollbackClient.query("DELETE FROM schema_migrations WHERE version='013' AND checksum=$1 RETURNING version",[items.at(-1).checksum]);
     if(removed.rows.length!==1)throw Error('EVALUATION013_ROLLBACK_LEDGER_DENIED');
