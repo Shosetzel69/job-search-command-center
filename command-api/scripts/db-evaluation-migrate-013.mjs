@@ -23,14 +23,17 @@ export function admitEvaluation013(env,identity){
  else fail('EVALUATION013_MODE_DENIED');
  return {mode,source};
 }
-// Nile may deparse logical public tables using the underlying database UUID
-// schema. Accept only an exact public schema alias, no extra clauses or keys.
+// Nile may deparse the logical table via its UUID_public_nile_internal
+// physical relation (ON ONLY ..._pdb_N). Accept that exact known spelling
+// only because the catalog query is bound to the logical table OID.
+// No arbitrary schemas, tables, index names, columns or extra clauses.
 // Catalog evidence is scoped by the resolved logical table OID and exact names;
 // index readiness, validity, count, uniqueness and definition are mandatory.
 function normalizeIndexDefinition(definition){
  return String(definition).trim().replace(/\s+/g,' ')
   .replace(/^CREATE INDEX /i,'CREATE INDEX ')
   .replace(/ ON (?:"public"|public|"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_public")\./i,' ON ')
+  .replace(/ ON ONLY "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}_public_nile_internal"\.profile_job_evaluation_pdb_[1-9]\d* USING /i,' ON profile_job_evaluation USING ')
   .replace(/ USING BTREE /i,' USING btree ')
   .replace(/,\s*/g,', ');
 }
