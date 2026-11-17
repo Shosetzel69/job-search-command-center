@@ -428,7 +428,7 @@ jobs:
           run('admission_unit','HARNESS','node',['--test','test/nile-ci-local-admission.test.mjs'],['H02'],'unit_admission');
           run('tenant','NATIVE','node',['--test','test/nile-native-isolation.integration.mjs'],['T01','T02','T03','T04','T05']);
           run('multiuser','NATIVE','node',['--test','test/multiuser-db.integration.mjs'],['U01','U02','U03','U04','U05','F01','F02','U06','L01','L02']);
-          run('lock_trace','NATIVE','node',['--test','test/nile-row-lock-owner-diagnostic.test.mjs'],['L03']);
+          run('lock_trace','NATIVE','node',['--test','scripts/nile-row-lock-owner-diagnostic.mjs'],['L03']);
           run('role_family','NATIVE','node',['--test','test/nile-role-family.integration.mjs'],['R01','R02','R03','R04','R05']);
           run('role_review','MOCK','node',['--test','test/role-family-review.test.mjs'],['D1','G1']);
           run('unit_all','MOCK','npm',['test'],['M04'],'mock_composite');
