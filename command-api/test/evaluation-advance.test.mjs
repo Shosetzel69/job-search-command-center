@@ -69,6 +69,22 @@ test('013 exact ledger rejects missing or incorrect indexes and untracked object
   // Nile catalogs can expose the physical database-qualified public schema.
   const physical=indexes.map(i=>({...i,indexdef:i.indexdef.replace('public.','"01000000-0000-7000-8000-000000000000_public".')}));
   assert.equal(assertEvaluation013Ledger(files,files,cols,physical),'ALREADY_APPLIED');
+  // Official native Nile image: exact physical deparser, from job 133681429203.
+  const internal=indexes.map(i=>({...i,indexdef:i.indexdef.replace(
+    'ON public.profile_job_evaluation',
+    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_1'
+  )}));
+  assert.equal(assertEvaluation013Ledger(files,files,cols,internal),'ALREADY_APPLIED');
+  for(const incorrect of [
+    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".wrong_table_pdb_1',
+    'ON ONLY "01000000-0000-7000-8000-000000000000_other_nile_internal".profile_job_evaluation_pdb_1',
+    'ON ONLY public.profile_job_evaluation',
+    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_0',
+  ]) {
+    const bad=internal.map((i,n)=>n?i:{...i,indexdef:i.indexdef.replace(
+      'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_1',incorrect)});
+    assert.throws(()=>assertEvaluation013Ledger(files,files,cols,bad),/EVALUATION013_INDEX_DRIFT/);
+  }
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.map((v,i)=>i?v:{...v,indexdef:v.indexdef.replace('public.','other_schema.')})),/EVALUATION013_INDEX_DRIFT/);
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,indexes.slice(0,-1)),/EVALUATION013_INDEX_DRIFT/);
   assert.throws(()=>assertEvaluation013Ledger(files,files,cols,[...indexes.slice(0,-1),indexes[0]]),/EVALUATION013_INDEX_DRIFT/);
