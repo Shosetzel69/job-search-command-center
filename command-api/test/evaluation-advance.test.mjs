@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { evaluationPreferenceDigest, INPUT_DIGEST_SQL, EVALUATION_SOURCE_SQL } from '../src/evaluation-basis.js';
-import { ADVANCE_BATCH_MAX, ADVANCE_BUDGET_MS, evaluationAdvanceProgress, readEvaluationBasisTx, evaluationProjection, persistIncrementalEvaluationTx } from '../src/evaluation-advance.js';
+import { ADVANCE_BATCH_MAX, ADVANCE_BUDGET_MS, evaluationAdvanceProgress, encodeEvaluationScanCursor, decodeEvaluationScanCursor, readEvaluationBasisTx, evaluationProjection, persistIncrementalEvaluationTx } from '../src/evaluation-advance.js';
 
 test('only evaluation-relevant preferences and nomenclature affect the digest',()=>{
   const p={fit_config:{work_mode:{weight:50}},target_regions:['EU'],fit_threshold:80,freshness_hours:24};
@@ -107,4 +107,21 @@ test('P0 bounded lookahead commits progress without a post-write full-corpus cou
   assert.deepEqual(evaluationAdvanceProgress(100,99),{status:'INCOMPLETE',pending:1});
   for(const input of [[102,100],[1,2],[100,-1],[-1,0],[1.5,1]])
     assert.throws(()=>evaluationAdvanceProgress(...input),/Invalid evaluation advance progress/);
+});
+
+test('bounded corpus cursor is tenant/profile/version/digest bound and tamper-safe',()=>{
+  const tenant='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const other='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const position='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+  const basis={search_profile_id:other,profile_version:21,preference_digest:'d'.repeat(64)};
+  const raw=encodeEvaluationScanCursor(tenant,basis,position);
+  assert.deepEqual(decodeEvaluationScanCursor(null,tenant,basis),{phase:'scan',position:null});
+  assert.deepEqual(decodeEvaluationScanCursor(raw,tenant,basis),{phase:'scan',position});
+  assert.deepEqual(decodeEvaluationScanCursor(raw,other,basis),{phase:'invalidated',position:null});
+  assert.deepEqual(decodeEvaluationScanCursor(raw,tenant,{...basis,profile_version:22}),{phase:'invalidated',position:null});
+  assert.deepEqual(decodeEvaluationScanCursor(raw,tenant,{...basis,preference_digest:'e'.repeat(64)}),{phase:'invalidated',position:null});
+  const verify=encodeEvaluationScanCursor(tenant,basis,null,'verify');
+  assert.deepEqual(decodeEvaluationScanCursor(verify,tenant,basis),{phase:'verify',position:null});
+  assert.throws(()=>decodeEvaluationScanCursor('INVALID!',tenant,basis),/Invalid evaluation scan cursor/);
+  assert.throws(()=>encodeEvaluationScanCursor(tenant,basis,null),/Invalid evaluation scan cursor/);
 });
