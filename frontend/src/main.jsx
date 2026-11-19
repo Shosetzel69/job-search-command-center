@@ -491,7 +491,7 @@ function App(){
   const notify=useCallback((message,type='info')=>{const id=Date.now();setToast({id,message,type});window.setTimeout(()=>setToast(current=>current?.id===id?null:current),3500);},[]);
 
   useEffect(()=>{filtersRef.current=filters;activeViewRef.current=view;activeKpiRef.current=kpiFilter;},[filters,view,kpiFilter]);
-  useEffect(()=>{registerPwa().catch(()=>{});},[]);
+  useEffect(()=>{registerPwa().catch(error=>{console.warn('[JSCC PWA] Service Worker registration failed:', error);});},[]);
   useEffect(()=>{Promise.all([commandApi('/auth/config',null),commandApi('/health',null)]).then(([config,health])=>{if(!config?.configured||!config?.client_id)throw new Error('Autentificarea Google nu este configurata complet.');setClientId(config.client_id);setEnvironment(health?.environment||null);}).catch(error=>setAuth(current=>({...current,error:error.message})));},[]);
   useEffect(()=>()=>{pollGenerationRef.current+=1;},[]);
 
