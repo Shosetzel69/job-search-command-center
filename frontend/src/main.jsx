@@ -795,35 +795,39 @@ function App(){
 
   const loadMoreJobs=useCallback(async()=>{
     if(!auth.token||!jobPage.nextCursor||jobPage.loading||jobPage.loadingMore||pageNavigationPendingRef.current)return;
+    const generation=sessionGenerationRef.current;
     pageNavigationPendingRef.current=true;
     try{
       const transition=await navigateJobPage({
         direction:'next',page:pageNumber,history:pageCursorHistory.current,nextCursor:jobPage.nextCursor,
-        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true}),
+        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true,generation}),
       });
+      if(generation!==sessionGenerationRef.current)return;
       if(transition.outcome==='restarted'){notify('Cursorul a expirat; lista a fost reluata de la pagina 1.','info');return;}
       if(transition.outcome!=='loaded')return;
       pageCursorHistory.current=transition.history;
       setPageNumber(transition.page);
       document.querySelector('[data-testid="job-table"]')?.scrollIntoView({block:'start',behavior:'auto'});
-    }catch(error){notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error');}
-    finally{pageNavigationPendingRef.current=false;}
+    }catch(error){if(generation===sessionGenerationRef.current)notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error');}
+    finally{if(generation===sessionGenerationRef.current)pageNavigationPendingRef.current=false;}
   },[auth.token,jobPage.nextCursor,jobPage.loading,jobPage.loadingMore,pageNumber,savedCriteria,loadJobsPage,notify]);
   const previousJobsPage=useCallback(async()=>{
     if(!auth.token||pageNumber<=1||jobPage.loading||jobPage.loadingMore||pageNavigationPendingRef.current)return;
+    const generation=sessionGenerationRef.current;
     pageNavigationPendingRef.current=true;
     try{
       const transition=await navigateJobPage({
         direction:'previous',page:pageNumber,history:pageCursorHistory.current,
-        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true}),
+        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true,generation}),
       });
+      if(generation!==sessionGenerationRef.current)return;
       if(transition.outcome==='restarted'){notify('Cursorul a expirat; lista a fost reluata de la pagina 1.','info');return;}
       if(transition.outcome!=='loaded')return;
       pageCursorHistory.current=transition.history;
       setPageNumber(transition.page);
       document.querySelector('[data-testid="job-table"]')?.scrollIntoView({block:'start',behavior:'auto'});
-    }catch(error){notify('Pagina anterioara nu a putut fi incarcata: '+error.message,'error');}
-    finally{pageNavigationPendingRef.current=false;}
+    }catch(error){if(generation===sessionGenerationRef.current)notify('Pagina anterioara nu a putut fi incarcata: '+error.message,'error');}
+    finally{if(generation===sessionGenerationRef.current)pageNavigationPendingRef.current=false;}
   },[auth.token,jobPage.loading,jobPage.loadingMore,pageNumber,savedCriteria,loadJobsPage,notify]);
   const changeView=useCallback(next=>{setView(next);if(next!=='jobs')setKpiFilter('all');},[]);
   const openDetails=useCallback(job=>{detailScrollRef.current=window.scrollY;setDetailJob(job);},[]);
