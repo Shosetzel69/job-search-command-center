@@ -71,3 +71,16 @@ test('P4 clearUiState gracefully handles denied or missing session storage',()=>
  assert.equal(clearUiState(null),false);
  assert.equal(clearUiState({removeItem(){throw Error('denied');}}),false);
 });
+
+test('P4 M2: browser sessionStorage getter throws, mount/read/write/logout fail closed',()=>{
+ const original=Object.getOwnPropertyDescriptor(globalThis,'sessionStorage');
+ try {
+   Object.defineProperty(globalThis,'sessionStorage',{configurable:true,get(){throw Object.assign(Error('denied'),{name:'SecurityError'});}});
+   assert.equal(readUiState().view,'jobs');
+   assert.equal(writeUiState({view:'review'}),false);
+   assert.equal(clearUiState(),false);
+ } finally {
+   if(original)Object.defineProperty(globalThis,'sessionStorage',original);
+   else delete globalThis.sessionStorage;
+ }
+});
