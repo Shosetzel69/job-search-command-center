@@ -39,7 +39,7 @@ test('mobile job cards are alternating scan-first cards with overflow actions', 
   const start = main.indexOf('function MobileOverflow(');
   const end = main.indexOf('function ErrorPanel', start);
   const block = main.slice(start, end);
-  assert.match(block, /index%2===0\?'bg-white':'bg-slate-50\/70'/);
+  assert.match(block, /index%2===0\?'bg-white':'bg-slate-100'/);
   assert.match(block, /md:hidden/);
   assert.match(block, /Mai multe actiuni/);
   assert.match(block, /knownCompact\(job\.mode\)/);
@@ -64,4 +64,25 @@ test('PASS promotion state is compact while non-PASS states retain checklist', (
   assert.match(promotion, /status\.status === 'PASS'/);
   assert.match(promotion, /Promotion PASS/);
   assert.match(promotion, /Checklist promovare/);
+});
+
+test('P4 FIT details render as a compact grid with one six-criterion matrix',()=>{
+  const start=main.indexOf('function FitMatrix(');
+  const block=main.slice(start,main.indexOf('function CriteriaPage(',start));
+  assert.match(block,/lg:grid-cols-3/);
+  assert.match(block,/FIT_CRITERIA\.map/);
+  assert.match(block,/FIT total/);
+  assert.match(block,/Total ponderi/);
+  assert.match(block,/Stare evaluare/);
+  assert.doesNotMatch(main,/aria-label="Rezumat FIT"/);
+});
+
+test('P4 removes duplicate Review action but keeps Details and responsive filters',()=>{
+  const block=main.slice(main.indexOf('function JobTable('),main.indexOf('function ErrorPanel('));
+  assert.doesNotMatch(block,/title="Review job"/);
+  assert.match(block,/title="Detalii job"/);
+  const filters=main.slice(main.indexOf('function Filters('),main.indexOf('function FitBadge('));
+  assert.doesNotMatch(filters,/<FilterButton active=/);
+  assert.match(main,/Selecteaza toate/);
+  assert.match(main,/Deselecteaza toate/);
 });
