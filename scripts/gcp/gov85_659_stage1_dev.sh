@@ -31,13 +31,13 @@ echo "JSCC659_ROLLBACK_DIGEST=$observed"
 # Verify private Cloud Run invocation BEFORE building an image. For traffic
 # tags the token audience remains the canonical service URL.
 service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
-[[ "$service_url" =~ ^https://[a-z0-9-]+(\\.a)?\\.run\\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
+[[ "$service_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
 [[ -n "${GCP_WIF_SA:-}" ]] || { echo JSCC659_WIF_SA_MISSING; exit 86; }
 preflight_token="$(gcloud auth print-identity-token \
   --impersonate-service-account="$GCP_WIF_SA" --audiences="$service_url" 2>/tmp/jscc659-token-preflight-error)" || {
   echo JSCC659_IDENTITY_PREFLIGHT_DENIED; exit 86;
 }
-[[ "$preflight_token" =~ ^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$ ]] || {
+[[ "$preflight_token" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]] || {
   echo JSCC659_IDENTITY_PREFLIGHT_INVALID; exit 86;
 }
 curl -fsS -H "Authorization: Bearer $preflight_token" "$service_url/health" >/tmp/jscc659-preflight-health.json || {
