@@ -537,6 +537,7 @@ function App(){
     restoredJobRef.current=true;
     detailScrollRef.current=0;
     setResultTotal(null);
+    setSaving(false);
     setSavedCriteria(criteriaFromConfig({}));
     setDraftCriteria(criteriaFromConfig({}));
     pageRequestSerialRef.current++;pageCursorHistory.current=[null];pageNavigationPendingRef.current=false;setPageNumber(1);setJobs([]);setArchivedKeys([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';serverQueryRef.current='';
@@ -683,7 +684,7 @@ function App(){
     }
   },[auth.token,deletingAccount,deleteAccountConfirmation,clearData,notify]);
 
-  const retryData=useCallback(()=>{if(auth.token)loadData(auth.token,auth.role).then(()=>notify('Datele au fost reincarcate.','success')).catch(error=>notify('Incarcarea a esuat: '+error.message,'error'));},[auth.token,auth.role,loadData,notify]);
+  const retryData=useCallback(()=>{if(!auth.token)return;const generation=sessionGenerationRef.current;loadData(auth.token,auth.role,generation).then(()=>{if(generation===sessionGenerationRef.current)notify('Datele au fost reincarcate.','success');}).catch(error=>{if(generation===sessionGenerationRef.current)notify('Incarcarea a esuat: '+error.message,'error');});},[auth.token,auth.role,loadData,notify]);
 
   const profileConfigured=isSearchProfileConfigured(savedCriteria);
   useEffect(()=>{
@@ -740,7 +741,7 @@ function App(){
   const metrics=useMemo(()=>({jobs:canonicalCounts.new24h,high:canonicalCounts.high,reposts:canonicalCounts.reposts,remote:canonicalCounts.remote,threshold,scope:jobCountScopeLabel(filters.freshness)}),[canonicalCounts,threshold,filters.freshness]);
   const counts=useMemo(()=>({jobs:canonicalCounts.all,review:reviewRows.length,applications:applications.length}),[canonicalCounts,reviewRows,applications]);
 
-  const archiveJob=useCallback(async job=>{try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({archived:true})});setArchivedKeys(current=>[...new Set([...current,jobKey(job)])]);if(detailJob?.id===job.id)setDetailJob(null);setResultTotal(null);await loadJobsPage(auth.token,savedCriteria,filtersRef.current);notify('Job arhivat pentru profilul curent.','success');}catch(error){notify('Arhivarea a esuat: '+error.message,'error');}},[auth.token,detailJob,notify,loadJobsPage,savedCriteria]);
+  const archiveJob=useCallback(async job=>{const generation=sessionGenerationRef.current;try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({archived:true})});if(generation!==sessionGenerationRef.current)return;setArchivedKeys(current=>[...new Set([...current,jobKey(job)])]);if(detailJob?.id===job.id)setDetailJob(null);setResultTotal(null);await loadJobsPage(auth.token,savedCriteria,filtersRef.current,{generation});if(generation===sessionGenerationRef.current)notify('Job arhivat pentru profilul curent.','success');}catch(error){if(generation===sessionGenerationRef.current)notify('Arhivarea a esuat: '+error.message,'error');}},[auth.token,detailJob,notify,loadJobsPage,savedCriteria]);
 
   const applyJob=useCallback(job=>{writeUiState({view,filters,selectedJobId:job?.id||null,scrollY:window.scrollY});},[view,filters]);
 
