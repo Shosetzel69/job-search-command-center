@@ -17,6 +17,10 @@ test('SQL basis covers the chosen posting, both payloads, classification and pre
   for(const field of ['sp.posting_id','j.payload','sp.payload','j.job_version','j.role_subfamily','$4::text','publication.effective_posted_at'])
     assert.ok(INPUT_DIGEST_SQL.includes(field),field);
   assert.match(EVALUATION_SOURCE_SQL,/posting_id ASC/);
+  assert.match(EVALUATION_SOURCE_SQL,/SELECT DISTINCT ON \(job_id\)/);
+  assert.match(EVALUATION_SOURCE_SQL,/sp\.job_id = j\.job_id/);
+  assert.match(EVALUATION_SOURCE_SQL,/ORDER BY job_id,[\s\S]*last_seen_at DESC, posting_id ASC/);
+  assert.doesNotMatch(EVALUATION_SOURCE_SQL,/JOIN LATERAL \(\s*SELECT posting_id/);
   assert.equal(ADVANCE_BATCH_MAX,100);
   assert.equal(ADVANCE_BUDGET_MS,8000);
 });
