@@ -88,7 +88,7 @@ actual_digest="$(gcloud run revisions describe "$revision" --project="$project" 
 # traffic. WIF must impersonate a permitted caller; never silently fall back
 # to an unauthenticated smoke if token minting is denied.
 service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
-[[ "$service_url" =~ ^https://[a-z0-9-]+\.run\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
+[[ "$service_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
 [[ -n "${GCP_WIF_SA:-}" ]] || { echo JSCC659_WIF_SA_MISSING; exit 86; }
 token="$(gcloud auth print-identity-token \
   --impersonate-service-account="$GCP_WIF_SA" --audiences="$service_url" 2>/tmp/jscc659-token-error)" || {
