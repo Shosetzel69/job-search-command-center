@@ -2,6 +2,7 @@ import http from 'node:http';
 import commandApi from './secure-entry.js';
 import { databaseReadiness } from './db/readiness.js';
 import { staticFrontendResponse } from './static-frontend.js';
+import { measureNileHttpRequest } from './performance-telemetry.js';
 
 function envObject() { return { ...process.env }; }
 
@@ -28,6 +29,7 @@ async function writeResponse(res, response) {
 
 const port = Number(process.env.PORT || 8080);
 const server = http.createServer(async (req, res) => {
+  await measureNileHttpRequest(req, res, async () => {
   try {
     if (req.method === 'GET' && req.url === '/health/db') {
       const result = await databaseReadiness(envObject());
@@ -51,6 +53,7 @@ const server = http.createServer(async (req, res) => {
     res.setHeader('content-type','application/json; charset=utf-8');
     res.end(JSON.stringify({ error:'Command API error' }));
   }
+  }, process.env);
 });
 
 server.listen(port, '0.0.0.0', () => console.log(`JSCC Command API listening on ${port}`));
