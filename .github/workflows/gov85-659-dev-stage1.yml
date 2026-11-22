@@ -79,7 +79,11 @@ jobs:
         run: |
           set -euo pipefail
           bash -n control/scripts/gcp/gov85_659_stage1_dev.sh
-          python3 -m py_compile control/scripts/gcp/gov85_659_stage1_guard.py
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          ast.parse(Path('control/scripts/gcp/gov85_659_stage1_guard.py').read_text())
+          PY
           test -z "$(git -C control status --porcelain)"
           test -z "$(git -C candidate status --porcelain)"
           test "$(git -C candidate rev-parse HEAD)" = "${{ steps.scope.outputs.source_sha }}"
