@@ -86,3 +86,19 @@ test('P4 removes duplicate Review action but keeps Details and responsive filter
   assert.match(main,/Selecteaza toate/);
   assert.match(main,/Deselecteaza toate/);
 });
+
+test('P4 M1 reset runs for both logout and permanent account deletion',()=>{
+ const reset=main.slice(main.indexOf('const clearData=useCallback('),main.indexOf('const loadJobsPage=useCallback('));
+ assert.match(reset,/clearUiState\(\)/);
+ assert.match(reset,/setFilters\(defaultUi\.filters\)/);
+ assert.match(reset,/filtersRef\.current=defaultUi\.filters/);
+ assert.match(reset,/initialUiRef\.current=defaultUi/);
+ assert.match(reset,/setView\(defaultUi\.view\)/);
+ assert.match(reset,/setResultTotal\(null\)/);
+ const logout=main.slice(main.indexOf('const logout=useCallback('),main.indexOf('const deleteCurrentAccount=useCallback('));
+ const deletion=main.slice(main.indexOf('const deleteCurrentAccount=useCallback('),main.indexOf('const retryData=useCallback('));
+ assert.match(logout,/clearData\(\)/);
+ assert.match(deletion,/clearData\(\)/);
+ const persist=main.slice(main.indexOf('const rememberUi=useCallback('),main.indexOf('const clearData=useCallback('));
+ assert.match(persist,/if\(auth\.status==='authenticated'\)rememberUi\(\)/);
+});
