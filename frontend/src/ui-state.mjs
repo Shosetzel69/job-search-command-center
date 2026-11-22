@@ -59,3 +59,14 @@ export function writeUiState(input, storage = globalThis?.sessionStorage) {
     return false;
   }
 }
+
+// UI return context is tab-local but not user-scoped. Remove it on every sign-out.
+export function clearUiState(storage = globalThis?.sessionStorage) {
+  if (!storage?.removeItem) return false;
+  try {
+    storage.removeItem(UI_STATE_KEY);
+    return true;
+  } catch {
+    return false;
+  }
+}
