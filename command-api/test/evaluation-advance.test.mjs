@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluationPreferenceDigest, INPUT_DIGEST_SQL, EVALUATION_SOURCE_SQL } from '../src/evaluation-basis.js';
+import { evaluationPreferenceDigest, INPUT_DIGEST_SQL, EVALUATION_SOURCE_SQL, EVALUATION_BATCH_SOURCE_SQL, PREFERRED_POSTING_ORDER_SQL, PREFERRED_POSTING_FULL_JOIN_SQL, PREFERRED_POSTING_BATCH_JOIN_SQL } from '../src/evaluation-basis.js';
 import { ADVANCE_BATCH_MAX, ADVANCE_BUDGET_MS, evaluationAdvanceProgress, encodeEvaluationScanCursor, decodeEvaluationScanCursor, readEvaluationBasisTx, evaluationProjection, persistIncrementalEvaluationTx } from '../src/evaluation-advance.js';
 
 test('only evaluation-relevant preferences and nomenclature affect the digest',()=>{
@@ -21,6 +21,17 @@ test('SQL basis covers the chosen posting, both payloads, classification and pre
   assert.match(EVALUATION_SOURCE_SQL,/sp\.job_id = j\.job_id/);
   assert.match(EVALUATION_SOURCE_SQL,/ORDER BY job_id,[\s\S]*last_seen_at DESC, posting_id ASC/);
   assert.doesNotMatch(EVALUATION_SOURCE_SQL,/JOIN LATERAL \(\s*SELECT posting_id/);
+  assert.match(EVALUATION_BATCH_SOURCE_SQL,/JOIN LATERAL \\(\\s*SELECT posting_id/);
+  assert.match(EVALUATION_BATCH_SOURCE_SQL,/WHERE job_id = j\\.job_id/);
+  assert.match(EVALUATION_BATCH_SOURCE_SQL,/LIMIT 1/);
+  assert.doesNotMatch(EVALUATION_BATCH_SOURCE_SQL,/SELECT DISTINCT ON/);
+  assert.ok(EVALUATION_SOURCE_SQL.includes(PREFERRED_POSTING_FULL_JOIN_SQL));
+  assert.ok(EVALUATION_BATCH_SOURCE_SQL.includes(PREFERRED_POSTING_BATCH_JOIN_SQL));
+  assert.ok(PREFERRED_POSTING_FULL_JOIN_SQL.includes(PREFERRED_POSTING_ORDER_SQL));
+  assert.ok(PREFERRED_POSTING_BATCH_JOIN_SQL.includes(PREFERRED_POSTING_ORDER_SQL));
+  // Replacing only the access path must preserve date parsing and input-digest semantics.
+  assert.equal(EVALUATION_SOURCE_SQL.replace(PREFERRED_POSTING_FULL_JOIN_SQL,'__PREFERRED__'),
+    EVALUATION_BATCH_SOURCE_SQL.replace(PREFERRED_POSTING_BATCH_JOIN_SQL,'__PREFERRED__'));
   assert.equal(ADVANCE_BATCH_MAX,100);
   assert.equal(ADVANCE_BUDGET_MS,8000);
 });
