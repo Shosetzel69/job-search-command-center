@@ -1,12 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readUiState, sanitizeUiState, UI_STATE_KEY, writeUiState } from '../src/ui-state.mjs';
+import { clearUiState, readUiState, sanitizeUiState, UI_STATE_KEY, writeUiState } from '../src/ui-state.mjs';
 
 function memoryStorage() {
   const values = new Map();
   return {
     getItem:key => values.get(key) ?? null,
     setItem:(key,value) => values.set(key,value),
+    removeItem:key => values.delete(key),
     value:key => values.get(key),
   };
 }
@@ -47,4 +48,26 @@ test('P4 all/none selection survives navigation and hidden quick chip is reset',
  assert.equal(clean.filters.roleSubfamiliesNone,true);
  assert.equal(clean.filters.contractTypesNone,true);
  assert.deepEqual(clean.filters.roleSubfamilies,[]);
+});
+
+test('P4 logout clears only per-tab personal UI context before a different account signs in',()=>{
+ const store=memoryStorage();
+ store.setItem('unrelated-setting','safe');
+ writeUiState({view:'review',filters:{roleSubfamilies:['project_management'],contractTypesNone:true,minFit:'65'},selectedJobId:'job-account-a',scrollY:100},store);
+ assert.equal(readUiState(store).filters.contractTypesNone,true);
+ assert.equal(clearUiState(store),true);
+ assert.equal(store.value(UI_STATE_KEY),undefined);
+ assert.equal(store.value('unrelated-setting'),'safe');
+ const next=readUiState(store);
+ assert.equal(next.view,'jobs');
+ assert.equal(next.filters.contractTypesNone,false);
+ assert.deepEqual(next.filters.roleSubfamilies,[]);
+ assert.equal(next.filters.minFit,'');
+ assert.equal(next.selectedJobId,null);
+ assert.equal(next.scrollY,0);
+});
+
+test('P4 clearUiState gracefully handles denied or missing session storage',()=>{
+ assert.equal(clearUiState(null),false);
+ assert.equal(clearUiState({removeItem(){throw Error('denied');}}),false);
 });
