@@ -39,7 +39,11 @@ export function sanitizeUiState(input = {}) {
   };
 }
 
-export function readUiState(storage = globalThis?.sessionStorage) {
+function browserSessionStorage() {
+  try { return globalThis.sessionStorage; } catch { return null; }
+}
+
+export function readUiState(storage = browserSessionStorage()) {
   if (!storage?.getItem) return sanitizeUiState();
   try {
     const parsed = JSON.parse(storage.getItem(UI_STATE_KEY) || '{}');
@@ -50,7 +54,7 @@ export function readUiState(storage = globalThis?.sessionStorage) {
   }
 }
 
-export function writeUiState(input, storage = globalThis?.sessionStorage) {
+export function writeUiState(input, storage = browserSessionStorage()) {
   if (!storage?.setItem) return false;
   try {
     storage.setItem(UI_STATE_KEY, JSON.stringify(sanitizeUiState(input)));
@@ -61,7 +65,7 @@ export function writeUiState(input, storage = globalThis?.sessionStorage) {
 }
 
 // UI return context is tab-local but not user-scoped. Remove it on every sign-out.
-export function clearUiState(storage = globalThis?.sessionStorage) {
+export function clearUiState(storage = browserSessionStorage()) {
   if (!storage?.removeItem) return false;
   try {
     storage.removeItem(UI_STATE_KEY);
