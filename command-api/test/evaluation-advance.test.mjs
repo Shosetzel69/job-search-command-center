@@ -90,11 +90,15 @@ test('013 exact ledger rejects missing or incorrect indexes and untracked object
     'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_1'
   )}));
   assert.equal(assertEvaluation013Ledger(files,files,cols,internal),'ALREADY_APPLIED');
+  // Real official Nile native image (2026-11-22) deparsed six indexes as _pdb_0.
+  const internalPdb0=internal.map(i=>({...i,indexdef:i.indexdef.replace(
+    'profile_job_evaluation_pdb_1','profile_job_evaluation_pdb_0')}));
+  assert.equal(assertEvaluation013Ledger(files,files,cols,internalPdb0),'ALREADY_APPLIED');
   for(const incorrect of [
     'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".wrong_table_pdb_1',
     'ON ONLY "01000000-0000-7000-8000-000000000000_other_nile_internal".profile_job_evaluation_pdb_1',
     'ON ONLY public.profile_job_evaluation',
-    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_0',
+    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_01',
   ]) {
     const bad=internal.map((i,n)=>n?i:{...i,indexdef:i.indexdef.replace(
       'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_1',incorrect)});
