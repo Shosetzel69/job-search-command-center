@@ -59,6 +59,32 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
 
   try {
   await attestNativeDatabase(runtimeDb);
+  await t.test('P659 native Nile SQL telemetry preserves query and sanitizes events',async()=>{
+    // Native Nile provider admission occurred before this suite; not local PG.
+    const {measureNileSql}=await import('../src/performance-telemetry.js');
+    const events=[],info=console.info;
+    const envTelemetry={APP_ENV:'dev',JSCC_PERF_TELEMETRY:'1'};
+    console.info=(entry,...other)=>{
+      if(typeof entry==='string' && entry.includes('JSCC_PERF_SQL_V1'))events.push(JSON.parse(entry));
+      else info(entry,...other);
+    };
+    try{
+      const result=await measureNileSql('global_listing_sql',runtimeDb,
+        'SELECT $1::integer AS probe',[659],envTelemetry);
+      assert.equal(Number(result.rows[0].probe),659);
+      assert.equal(events.length,1);
+      assert.equal(events[0].operation,'global_listing_sql');
+      assert.equal(events[0].outcome,'PASS');
+      assert.ok(events[0].duration_ms>=0);
+      assert.equal(JSON.stringify(events[0]).includes('SELECT'),false);
+      const disabled=await measureNileSql('global_listing_sql',runtimeDb,
+        'SELECT $1::integer AS probe',[659],{APP_ENV:'dev'});
+      assert.equal(Number(disabled.rows[0].probe),659);
+      assert.equal(events.length,1);
+      console.log('P659_NILE_TELEMETRY_NATIVE=PASS');
+    }finally{ console.info=info; }
+  });
+
   let ownerPayload, ownerA, ownerB, ownerFoundationA, user, userFoundation, restoredFoundation, lazyPostingId, lazyJobId, jobNomenclatures, cacheQuery, cacheConfigB, f1aAnchor, originalOwnerUserId, originalOwnerProfileId;
     await t.test('W025-U01 native preserved assertions',async()=>{
     const ownerSeed = {
