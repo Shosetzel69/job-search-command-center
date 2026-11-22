@@ -84,3 +84,19 @@ test('P4 M2: browser sessionStorage getter throws, mount/read/write/logout fail 
    else delete globalThis.sessionStorage;
  }
 });
+
+test('P4 L1: obsolete option codes are never restored as hidden API filters',()=>{
+ const onlyUnknown=sanitizeUiState({filters:{roleSubfamilies:['obsolete_code'],contractTypes:['obsolete_contract']}});
+ assert.deepEqual(onlyUnknown.filters.roleSubfamilies,[]);
+ assert.deepEqual(onlyUnknown.filters.contractTypes,[]);
+ assert.equal(onlyUnknown.filters.roleSubfamiliesNone,true);
+ assert.equal(onlyUnknown.filters.contractTypesNone,true);
+ const mixed=sanitizeUiState({filters:{roleSubfamilies:['obsolete_code','project_management'],contractTypes:['obsolete_contract','contract']}});
+ assert.deepEqual(mixed.filters.roleSubfamilies,['project_management']);
+ assert.deepEqual(mixed.filters.contractTypes,['contract']);
+ assert.equal(mixed.filters.roleSubfamiliesNone,false);
+ assert.equal(mixed.filters.contractTypesNone,false);
+ const all=sanitizeUiState({filters:{roleSubfamilies:[],contractTypes:[]}});
+ assert.equal(all.filters.roleSubfamiliesNone,false);
+ assert.equal(all.filters.contractTypesNone,false);
+});
