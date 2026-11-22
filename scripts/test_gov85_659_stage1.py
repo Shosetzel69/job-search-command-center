@@ -121,6 +121,11 @@ class Stage1GuardTest(unittest.TestCase):
         self.assertIn("JSCC659_CANONICAL_POST_CUTOVER_HEALTH=PASS",script)
         self.assertIn("/tmp/jscc659-before-cutover.json",script)
         self.assertIn("image-provenance",script)
+        self.assertIn("JSCC659_AUTHENTICATED_DEV_PREFLIGHT=PASS",script)
+        self.assertLess(script.index("JSCC659_AUTHENTICATED_DEV_PREFLIGHT=PASS"),
+                        script.index("gcloud builds submit candidate"))
+        self.assertIn("JSCC659_INVOKER_PREFLIGHT_DENIED",script)
+
 
     def test_exact_stage_retains_secret_binding_and_old_traffic(self):
         sha="b"*40
