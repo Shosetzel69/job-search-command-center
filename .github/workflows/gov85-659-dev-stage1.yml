@@ -103,6 +103,31 @@ jobs:
           ref: ${{ steps.scope.outputs.source_sha }}
           path: candidate
           persist-credentials: false
+      - name: Checkout the independently reviewed PR #673 source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: dbebc032710020d25e9060ba8bdc225ca3c8b446
+          path: reviewed
+          persist-credentials: false
+      - name: Verify merged-main exact application files match reviewed #673
+        if: ${{ steps.scope.outputs.mode == 'release' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in \
+            command-api/scripts/db-evaluation-migrate-013.mjs \
+            command-api/src/multiuser-repository.js \
+            command-api/src/performance-telemetry.js \
+            command-api/src/server.js \
+            command-api/test/evaluation-advance.test.mjs \
+            command-api/test/multiuser-db.integration.mjs \
+            command-api/test/performance-telemetry.test.mjs; do
+            cmp -s "reviewed/$file" "candidate/$file" || {
+              echo "JSCC659_REVIEWED_SOURCE_DRIFT: $file" >&2
+              exit 86
+            }
+          done
+          echo 'JSCC659_REVIEWED_CODE_PARITY=PASS' >> "$GITHUB_STEP_SUMMARY"
       - name: Validate pinned DEV control scripts without cloud writes
         shell: bash
         run: |
