@@ -77,6 +77,51 @@ class Stage1GuardTest(unittest.TestCase):
           {"name":"UNAPPROVED","value":"true"})
         self.denied(lambda:guard.assert_no_intervening_dev_change(old,changed))
 
+    def test_immutable_build_reuse_requires_successful_exact_provenance(self):
+        sha="b"*40
+        digest="sha256:"+"c"*64
+        tag=guard.IMAGE_REPO+":"+sha
+        evidence={
+            "status":"SUCCESS", "serviceAccount":guard.BUILD_SA,
+            "substitutions":{"_GIT_SHA":sha}, "images":[tag],
+            "results":{"images":[{"name":tag,"digest":digest}]},
+        }
+        self.assertTrue(guard.attest_service_image_build([evidence],sha,digest))
+        for change in [
+            {"status":"FAILURE"},
+            {"serviceAccount":"projects/jscc-shared/serviceAccounts/wrong@example.test"},
+            {"substitutions":{"_GIT_SHA":"a"*40}},
+            {"images":["wrong"]},
+            {"results":{"images":[{"name":tag,"digest":"sha256:"+"d"*64}]}},
+        ]:
+            bad={**evidence,**change}
+            self.denied(lambda: guard.attest_service_image_build([bad],sha,digest))
+        self.denied(lambda: guard.attest_service_image_build([],sha,digest))
+
+    def test_full_template_guard_rejects_non_env_runtime_mutation(self):
+        before=baseline()
+        for field, value in [
+            ("vpcAccess",{"connector":"unexpected"}),
+            ("maxScale",7),
+            ("volumes",[{"name":"changed"}]),
+            ("containerConcurrency",9),
+        ]:
+            new=staged()
+            new["spec"]["template"]["spec"][field]=value
+            self.denied(lambda:guard.check_stage(before,new,"b"*40))
+        preserved=staged()
+        self.assertTrue(guard.immutable_template_equal(before,preserved))
+
+    def test_script_uses_canonical_url_and_strict_impersonation(self):
+        script=(ROOT/"scripts/gcp/gov85_659_stage1_dev.sh").read_text()
+        self.assertIn('service_url="$(gcloud run services describe',script)
+        self.assertIn('--audiences="$service_url"',script)
+        self.assertIn('--impersonate-service-account="$GCP_WIF_SA"',script)
+        self.assertNotIn('|| true',script)
+        self.assertIn("JSCC659_CANONICAL_POST_CUTOVER_HEALTH=PASS",script)
+        self.assertIn("/tmp/jscc659-before-cutover.json",script)
+        self.assertIn("image-provenance",script)
+
     def test_exact_stage_retains_secret_binding_and_old_traffic(self):
         sha="b"*40
         self.assertIsNone(guard.check_stage(baseline(),staged(sha),sha))
