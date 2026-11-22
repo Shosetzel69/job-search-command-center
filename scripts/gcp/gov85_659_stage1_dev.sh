@@ -38,8 +38,8 @@ fi
 # Existing authorized build SA, no Search Job or database image change.
 image_tag="$repo:$candidate"
 if gcloud artifacts docker images describe "$image_tag" --project="$shared" --format='value(image_summary.digest)' >/tmp/jscc659-existing 2>/tmp/jscc659-image-error; then
-  echo JSCC659_EXISTING_IMAGE_REQUIRES_INDEPENDENT_PROVENANCE_ATTESTATION
-  exit 86
+  digest="$(cat /tmp/jscc659-existing)"
+  echo JSCC659_EXISTING_IMMUTABLE_IMAGE_FOUND
 else
   if ! grep -Eiq '(not found|NOT_FOUND|404)' /tmp/jscc659-image-error; then
     echo JSCC659_ARTIFACT_REGISTRY_STATE_UNVERIFIED
@@ -52,6 +52,13 @@ else
   digest="$(gcloud artifacts docker images describe "$image_tag" --project="$shared" --format='value(image_summary.digest)')"
 fi
 [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo JSCC659_SERVICE_IMAGE_DIGEST_UNVERIFIED; exit 86; }
+# Reuse a pushed image only if a successful Cloud Build under the intended
+# build service account attests the same exact _GIT_SHA + image tag + digest.
+# Do not read raw build JSON back to GitHub artifacts or logs.
+gcloud builds list --project="$shared" --region="$region" \
+  --filter="status=SUCCESS" --limit=200 --format=json > /tmp/jscc659-builds.json
+python3 control/scripts/gcp/gov85_659_stage1_guard.py image-provenance \
+  /tmp/jscc659-builds.json "$candidate" "$digest"
 image="$repo@$digest"
 echo "JSCC659_SERVICE_IMAGE_DIGEST=$digest"
 
@@ -77,15 +84,21 @@ tag_uri="$(printf '%s\n' "$proof" | sed -n 's/^JSCC659_STAGE1_TAGGED_URL=//p')"
 actual_digest="$(gcloud run revisions describe "$revision" --project="$project" --region="$region" --format='value(status.imageDigest)')"
 [[ "$actual_digest" == "$digest" ]] || { echo JSCC659_STAGED_DIGEST_MISMATCH; exit 86; }
 
-# Authenticated tagged, zero-traffic smoke; no write / Retrieve / test data.
-token="$(gcloud auth print-identity-token --audiences="$tag_uri" 2>/dev/null || true)"
-if [[ -n "$token" ]]; then
-  curl -fsS -H "Authorization: Bearer $token" "$tag_uri/health" >/tmp/jscc659-health.json || { echo JSCC659_TAGGED_HEALTH_DENIED; exit 86; }
-  curl -fsS -H "Authorization: Bearer $token" "$tag_uri/health/db" >/tmp/jscc659-db.json || { echo JSCC659_TAGGED_NILE_READINESS_DENIED; exit 86; }
-else
-  curl -fsS "$tag_uri/health" >/tmp/jscc659-health.json || { echo JSCC659_TAGGED_HEALTH_DENIED; exit 86; }
-  curl -fsS "$tag_uri/health/db" >/tmp/jscc659-db.json || { echo JSCC659_TAGGED_NILE_READINESS_DENIED; exit 86; }
-fi
+# Cloud Run's OIDC audience is the CANONICAL service URL even for tagged
+# traffic. WIF must impersonate a permitted caller; never silently fall back
+# to an unauthenticated smoke if token minting is denied.
+service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
+[[ "$service_url" =~ ^https://[a-z0-9-]+\\.run\\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
+[[ -n "${GCP_WIF_SA:-}" ]] || { echo JSCC659_WIF_SA_MISSING; exit 86; }
+token="$(gcloud auth print-identity-token \
+  --impersonate-service-account="$GCP_WIF_SA" --audiences="$service_url" 2>/tmp/jscc659-token-error)" || {
+  echo JSCC659_IDENTITY_TOKEN_DENIED; exit 86;
+}
+[[ "$token" =~ ^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$ ]] || {
+  echo JSCC659_IDENTITY_TOKEN_INVALID; exit 86;
+}
+curl -fsS -H "Authorization: Bearer $token" "$tag_uri/health" >/tmp/jscc659-health.json || { echo JSCC659_TAGGED_HEALTH_DENIED; exit 86; }
+curl -fsS -H "Authorization: Bearer $token" "$tag_uri/health/db" >/tmp/jscc659-db.json || { echo JSCC659_TAGGED_NILE_READINESS_DENIED; exit 86; }
 python3 - "$candidate" <<'PY'
 import json,sys
 a=json.load(open('/tmp/jscc659-health.json',encoding='utf8'))
@@ -106,6 +119,12 @@ rollback(){
     echo JSCC659_ROLLBACK_COMMAND=FAIL_MANUAL_RECOVERY_REQUIRED
   fi
 }
+# Reverify the exact staged revision, 0% traffic, config and unchanged
+# serving revision immediately before cutover (concurrent deploy guard).
+gcloud run services describe "$service" --project="$project" --region="$region" --format=json > /tmp/jscc659-before-cutover.json
+python3 control/scripts/gcp/gov85_659_stage1_guard.py stage \
+  /tmp/jscc659-before.json /tmp/jscc659-before-cutover.json "$candidate" >/tmp/jscc659-last-stage-check
+grep -Fqx 'JSCC659_STAGE1_CONFIG_PARITY=PASS' /tmp/jscc659-last-stage-check || exit 86
 trap 'rollback' ERR
 gcloud run services update-traffic "$service" --project="$project" --region="$region" \
   --to-revisions="$revision=100" --quiet >/tmp/jscc659-cutover 2>&1
@@ -118,6 +137,17 @@ active=[t for t in traffic if int(t.get('percent',0))>0]
 assert len(active)==1 and int(active[0].get('percent',0))==100
 assert (active[0].get('revisionName') or active[0].get('revision'))==sys.argv[1]
 print('JSCC659_TRAFFIC_TO_TELEMETRY_REVISION=PASS')
+PY
+# The serving (untagged) endpoint must remain healthy after traffic switch.
+curl -fsS -H "Authorization: Bearer $token" "$service_url/health" >/tmp/jscc659-post-health.json
+curl -fsS -H "Authorization: Bearer $token" "$service_url/health/db" >/tmp/jscc659-post-db.json
+python3 - "$candidate" <<'PY'
+import json,sys
+a=json.load(open('/tmp/jscc659-post-health.json',encoding='utf8'))
+b=json.load(open('/tmp/jscc659-post-db.json',encoding='utf8'))
+assert a.get('status')=='ok' and a.get('environment')=='dev' and a.get('source_sha')==sys.argv[1]
+assert b.get('status')=='ok' and b.get('database')=='jobsearch_dev'
+print('JSCC659_CANONICAL_POST_CUTOVER_HEALTH=PASS')
 PY
 trap - ERR
 echo "JSCC659_STAGE1_DEV_DEPLOY_PASS source=$candidate revision=$revision digest=$digest"
