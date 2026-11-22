@@ -88,6 +88,17 @@ def assert_old(original):
     print("JSCC659_STAGE1_CONFIG_PREFLIGHT=PASS")
 
 
+def assert_no_intervening_dev_change(old, current):
+    assert_old(current)
+    if env_dict(old) != env_dict(current):
+        fail("CONFIG_CHANGED_AFTER_BASELINE")
+    if template(old).get("serviceAccountName") != template(current).get("serviceAccountName"):
+        fail("IDENTITY_CHANGED_AFTER_BASELINE")
+    if serving(old) != serving(current):
+        fail("TRAFFIC_CHANGED_AFTER_BASELINE")
+    print("JSCC659_STAGE1_CAS_PREFLIGHT=PASS")
+
+
 def check_stage(old, new, sha):
     if not re.fullmatch(r"[0-9a-f]{40}", sha):
         fail("INVALID_SOURCE_SHA")
@@ -126,6 +137,8 @@ if __name__ == "__main__":
     try:
         if sys.argv[1] == "preflight" and len(sys.argv) == 3:
             assert_old(load(sys.argv[2]))
+        elif sys.argv[1] == "unchanged" and len(sys.argv) == 4:
+            assert_no_intervening_dev_change(load(sys.argv[2]), load(sys.argv[3]))
         elif sys.argv[1] == "stage" and len(sys.argv) == 5:
             check_stage(load(sys.argv[2]), load(sys.argv[3]), sys.argv[4])
         else:
