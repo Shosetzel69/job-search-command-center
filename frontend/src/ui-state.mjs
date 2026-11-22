@@ -1,5 +1,5 @@
 import { ROLE_FAMILIES } from '../../shared/role-taxonomy-runtime.mjs';
-import { CONTRACT_TYPE_OPTIONS } from './nomenclature-runtime.mjs';
+import nomenclatures from '../../data/nomenclatures.json' with { type:'json' };
 
 export const UI_STATE_KEY = 'jscc-ui-state-v1';
 
@@ -7,7 +7,7 @@ const VIEWS = new Set(['jobs','review','unclassified','applications','criteria',
 const SORTS = new Set(['fit','title','country','work_mode','publication','retrieve'].flatMap(key=>['asc','desc'].map(dir=>key+'-'+dir)));
 const MODES = new Set(['Remote','Hybrid','Onsite']);
 const ROLE_CODES=new Set(ROLE_FAMILIES.flatMap(family=>family.subfamilies.map(role=>role.code)));
-const CONTRACT_CODES=new Set(CONTRACT_TYPE_OPTIONS.map(([code])=>code));
+const CONTRACT_CODES=new Set((nomenclatures.domains?.contract_types?.values||[]).filter(value=>value.active).map(value=>value.code));
 
 function cleanSelection(value, allowed) {
   const raw=Array.isArray(value)?value:[];
