@@ -15,7 +15,7 @@ test('transient UI state stores only the allowlisted return context', () => {
   const store = memoryStorage();
   writeUiState({
     view:'review',
-    filters:{search:'project',quick:'high',freshness:48,workModes:['Remote'],sort:'fit-asc'},
+    filters:{search:'project',quick:'high',freshness:48,workModes:['Remote'],roleSubfamilies:['project_management'],contractTypes:['contract'],roleSubfamiliesNone:false,contractTypesNone:true,minFit:'65',sort:'fit-asc'},
     selectedJobId:'job-1',
     scrollY:321,
     credential:'not-persisted',
@@ -27,7 +27,7 @@ test('transient UI state stores only the allowlisted return context', () => {
   assert.deepEqual(readUiState(store), {
     schema_version:1,
     view:'review',
-    filters:{search:'project',quick:'high',freshness:48,workModes:['Remote'],sort:'fit-asc'},
+    filters:{search:'project',quick:'all',freshness:48,workModes:['Remote'],roleSubfamilies:['project_management'],contractTypes:['contract'],roleSubfamiliesNone:false,contractTypesNone:true,minFit:'65',sort:'fit-asc'},
     selectedJobId:'job-1',
     scrollY:321,
   });
@@ -39,4 +39,12 @@ test('invalid transient state fails closed to safe defaults', () => {
   assert.equal(clean.filters.quick,'all');
   assert.deepEqual(clean.filters.workModes,['Remote']);
   assert.equal(clean.scrollY,0);
+});
+
+test('P4 all/none selection survives navigation and hidden quick chip is reset',()=>{
+ const clean=sanitizeUiState({filters:{quick:'b2b',roleSubfamiliesNone:true,contractTypesNone:true}});
+ assert.equal(clean.filters.quick,'all');
+ assert.equal(clean.filters.roleSubfamiliesNone,true);
+ assert.equal(clean.filters.contractTypesNone,true);
+ assert.deepEqual(clean.filters.roleSubfamilies,[]);
 });
