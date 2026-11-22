@@ -1,0 +1,103 @@
+# GOV85 / #659 only. Does not change legacy exit-86 promotion.
+# Activated solely by an exact owner-authored comment on existing issue #659.
+name: GOV85 659 Stage-1 Nile DEV telemetry
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+  id-token: write
+
+concurrency:
+  group: gov85-659-dev-telemetry-stage1
+  cancel-in-progress: false
+
+jobs:
+  stage1:
+    if: ${{ github.actor == 'Shosetzel69' && github.event.issue.number == 659 && startsWith(github.event.comment.body, '/jscc-659-stage1 ') }}
+    runs-on: ubuntu-latest
+    environment: dev
+    timeout-minutes: 60
+    env:
+      GCP_WIF_PROVIDER: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }}
+      GCP_WIF_SA: ${{ vars.JSCC_DEV_GCP_WIF_SERVICE_ACCOUNT }}
+    steps:
+      - name: Checkout trusted control-plane from current main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - name: Admit owner, exact PR SHA, CI, independent review, and release sequence
+        id: scope
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ github.event.comment.body }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = Shosetzel69/job-search-command-center || exit 86
+          test "$ACTOR" = Shosetzel69 || exit 86
+          test "$(git -C control rev-parse HEAD)" = "$GITHUB_SHA" || exit 86
+          case "$BODY" in
+            '/jscc-659-stage1 preflight') mode=preflight ;;
+            '/jscc-659-stage1 release APPROVE_659_STAGE1_673_DEV_RELEASE_WITH_TELEMETRY') mode=release ;;
+            *) echo JSCC659_UNAPPROVED_COMMAND >&2; exit 86 ;;
+          esac
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/673")"
+          head="$(jq -r '.head.sha' <<< "$pr")"
+          test "$head" = dbebc032710020d25e9060ba8bdc225ca3c8b446 || exit 86
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/45049683937" --jq '.conclusion')" = success || exit 86
+          review="$(gh api "repos/$GITHUB_REPOSITORY/issues/comments/7082990034" --jq '.body')"
+          grep -Fq 'PR_673_REVIEW_PASS' <<< "$review" || exit 86
+          grep -Fq "$head" <<< "$review" || exit 86
+          if [[ "$mode" == release ]]; then
+            test "$(jq -r '.merged' <<< "$pr")" = true || { echo JSCC659_PR673_NOT_MERGED; exit 86; }
+            sha="$(jq -r '.merge_commit_sha' <<< "$pr")"
+            test "$sha" = "$GITHUB_SHA" || { echo JSCC659_MAIN_MOVED_AFTER_SQUASH; exit 86; }
+          else
+            sha="$head"
+          fi
+          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || exit 86
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "JSCC659_MODE=$mode" >> "$GITHUB_STEP_SUMMARY"
+          echo "JSCC659_SOURCE_SHA=$sha" >> "$GITHUB_STEP_SUMMARY"
+      - name: Checkout exact application candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.scope.outputs.source_sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Validate pinned DEV control scripts without cloud writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash -n control/scripts/gcp/gov85_659_stage1_dev.sh
+          python3 -m py_compile control/scripts/gcp/gov85_659_stage1_guard.py
+          test -z "$(git -C control status --porcelain)"
+          test -z "$(git -C candidate status --porcelain)"
+          test "$(git -C candidate rev-parse HEAD)" = "${{ steps.scope.outputs.source_sha }}"
+          test -n "$GCP_WIF_PROVIDER" && test -n "$GCP_WIF_SA" || { echo JSCC659_WIF_UNCONFIGURED; exit 86; }
+      - name: Authenticate to GCP with existing DEV WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: jscc-shared
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_WIF_SA }}
+      - name: Install pinned gcloud SDK action
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Strict DEV preflight or authorized stage, smoke and cutover
+        env:
+          JSCC659_OWNER_GATE: ${{ steps.scope.outputs.mode == 'release' && 'APPROVE_659_STAGE1_673_DEV_RELEASE_WITH_TELEMETRY' || '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash control/scripts/gcp/gov85_659_stage1_dev.sh \
+            "${{ steps.scope.outputs.mode }}" "${{ steps.scope.outputs.source_sha }}"
+          echo 'JSCC659_NO_NILE_DDL_NO_IAM_NO_TEST_PROD' >> "$GITHUB_STEP_SUMMARY"
