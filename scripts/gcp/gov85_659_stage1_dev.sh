@@ -38,8 +38,8 @@ fi
 # Existing authorized build SA, no Search Job or database image change.
 image_tag="$repo:$candidate"
 if gcloud artifacts docker images describe "$image_tag" --project="$shared" --format='value(image_summary.digest)' >/tmp/jscc659-existing 2>/tmp/jscc659-image-error; then
-  digest="$(cat /tmp/jscc659-existing)"
-  echo JSCC659_EXISTING_IMMUTABLE_SERVICE_IMAGE
+  echo JSCC659_EXISTING_IMAGE_REQUIRES_INDEPENDENT_PROVENANCE_ATTESTATION
+  exit 86
 else
   if ! grep -Eiq '(not found|NOT_FOUND|404)' /tmp/jscc659-image-error; then
     echo JSCC659_ARTIFACT_REGISTRY_STATE_UNVERIFIED
