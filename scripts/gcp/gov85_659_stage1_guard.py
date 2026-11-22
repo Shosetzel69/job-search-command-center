@@ -7,6 +7,7 @@ No standalone PostgreSQL and no database mutation.
 import json
 import re
 import sys
+from copy import deepcopy
 
 OLD_REV = "jscc-command-api-dev-00098-cem"
 OLD_DIGEST = "sha256:8b9229a096a2ef723c89efed4d25111e589de1152419dd1765df703375d82d93"
@@ -54,6 +55,52 @@ def env_dict(service):
     return result
 
 
+def immutable_template_equal(old, new):
+    """Compare all Cloud Run template configuration except reviewed image/3 flags."""
+    def sanitized(service):
+        t = deepcopy(template(service))
+        if len(t["containers"]) != 1:
+            fail("CONTAINERS_UNKNOWN")
+        t["containers"][0].pop("image", None)
+        t["containers"][0]["env"] = sorted(
+            (e for e in t["containers"][0].get("env", [])
+             if e.get("name") not in {"SOURCE_SHA", "RUNTIME_DATA_SHA", "JSCC_PERF_TELEMETRY"}),
+            key=lambda e: e["name"],
+        )
+        return t
+    if sanitized(old) != sanitized(new):
+        fail("TEMPLATE_CONFIG_CHANGED")
+    return True
+
+
+BUILD_SA = "projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com"
+IMAGE_REPO = "europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service"
+
+
+def attest_service_image_build(builds, sha, digest):
+    """Allow reuse only with matching successful immutable Cloud Build evidence."""
+    if not re.fullmatch(r"[0-9a-f]{40}", sha) or not DIGEST.fullmatch(digest):
+        fail("BUILD_INPUT_INVALID")
+    if not isinstance(builds, list):
+        fail("BUILDS_INVALID")
+    tag = IMAGE_REPO + ":" + sha
+    for build in builds:
+        if not isinstance(build, dict) or build.get("status") != "SUCCESS":
+            continue
+        if build.get("serviceAccount") != BUILD_SA:
+            continue
+        if build.get("substitutions", {}).get("_GIT_SHA") != sha:
+            continue
+        if tag not in build.get("images", []):
+            continue
+        results = build.get("results", {}).get("images", [])
+        if any(isinstance(img, dict) and img.get("name") == tag
+               and img.get("digest") == digest for img in results):
+            print("JSCC659_SERVICE_IMAGE_PROVENANCE=PASS")
+            return True
+    fail("IMAGE_BUILD_PROVENANCE_UNVERIFIED")
+
+
 def service_account(service):
     t = template(service)
     return t.get("serviceAccountName") or t.get("serviceAccount")
@@ -92,8 +139,7 @@ def assert_no_intervening_dev_change(old, current):
     assert_old(current)
     if env_dict(old) != env_dict(current):
         fail("CONFIG_CHANGED_AFTER_BASELINE")
-    if template(old).get("serviceAccountName") != template(current).get("serviceAccountName"):
-        fail("IDENTITY_CHANGED_AFTER_BASELINE")
+    immutable_template_equal(old, current)
     if serving(old) != serving(current):
         fail("TRAFFIC_CHANGED_AFTER_BASELINE")
     print("JSCC659_STAGE1_CAS_PREFLIGHT=PASS")
@@ -102,6 +148,7 @@ def assert_no_intervening_dev_change(old, current):
 def check_stage(old, new, sha):
     if not re.fullmatch(r"[0-9a-f]{40}", sha):
         fail("INVALID_SOURCE_SHA")
+    immutable_template_equal(old, new)
     if service_account(old) != service_account(new):
         fail("SERVICE_ACCOUNT_CHANGED")
     before, after = env_dict(old), env_dict(new)
@@ -137,6 +184,8 @@ if __name__ == "__main__":
     try:
         if sys.argv[1] == "preflight" and len(sys.argv) == 3:
             assert_old(load(sys.argv[2]))
+        elif sys.argv[1] == "image-provenance" and len(sys.argv) == 5:
+            attest_service_image_build(load(sys.argv[2]), sys.argv[3], sys.argv[4])
         elif sys.argv[1] == "unchanged" and len(sys.argv) == 4:
             assert_no_intervening_dev_change(load(sys.argv[2]), load(sys.argv[3]))
         elif sys.argv[1] == "stage" and len(sys.argv) == 5:
