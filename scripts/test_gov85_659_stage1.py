@@ -69,6 +69,14 @@ class Stage1GuardTest(unittest.TestCase):
         s["spec"]["template"]["spec"]["serviceAccountName"]="wrong@example.test"
         self.denied(lambda: guard.assert_old(s))
 
+    def test_preflight_detects_concurrent_dev_config_changes(self):
+        old=baseline()
+        self.assertIsNone(guard.assert_no_intervening_dev_change(old,deepcopy(old)))
+        changed=deepcopy(old)
+        changed["spec"]["template"]["spec"]["containers"][0]["env"].append(
+          {"name":"UNAPPROVED","value":"true"})
+        self.denied(lambda:guard.assert_no_intervening_dev_change(old,changed))
+
     def test_exact_stage_retains_secret_binding_and_old_traffic(self):
         sha="b"*40
         self.assertIsNone(guard.check_stage(baseline(),staged(sha),sha))
