@@ -1029,6 +1029,8 @@ export function normalizeJobSearchQuery(input = {}) {
     result_view:resultView,quick,kpi,count_only:countOnly,count_basis:countBasis,
     as_of:countOnly&&source.as_of?String(source.as_of):null,
     empty_modes:String(source.empty_modes||'')==='true',
+    empty_role_subfamilies:String(source.empty_role_subfamilies||'')==='true',
+    empty_contract_types:String(source.empty_contract_types||'')==='true',
     limit,
     cursor:decodeJobCursor(source.cursor),
     q:String(source.q || '').trim().slice(0, 200),
@@ -1120,7 +1122,7 @@ export async function listProfileJobs(
     // Temporary view filters. These do not mutate Selection Criteria or evaluation versions.
     // B2B is an explicit structured contract filter, applied before the bounded page window.
     if(spec.quick==='b2b')where.push("lower(COALESCE(j.contract_type,'unknown')) IN ('contract','freelance')");
-    if(spec.empty_modes)where.push('false');
+    if(spec.empty_modes||spec.empty_role_subfamilies||spec.empty_contract_types)where.push('false');
     if(spec.result_view==='unclassified')where.push("j.role_family='UNKNOWN'");
     if (!spec.include_archived) where.push('state.archived_at IS NULL');
     if (spec.role_family.length) {
@@ -2053,7 +2055,7 @@ export function buildGlobalListingQuery(tenant,basis,spec,anchor){
   const threshold=add(Number(basis.preferences.fit_threshold??80));
   const structural=[];
   if(!spec.include_archived)structural.push('archived_at IS NULL');
-  if(spec.empty_modes)structural.push('false');
+  if(spec.empty_modes||spec.empty_role_subfamilies||spec.empty_contract_types)structural.push('false');
   if(spec.role_family.length)structural.push('role_family=ANY('+add(spec.role_family)+'::text[])');
   if(spec.role_subfamily.length)structural.push('role_subfamily && '+add(spec.role_subfamily)+'::text[]');
   if(spec.work_mode.length)structural.push("COALESCE(display_work_mode,'unknown')=ANY("+add(spec.work_mode)+"::text[])");

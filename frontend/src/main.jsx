@@ -12,7 +12,7 @@ import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline, statusForTrackedRun, initialTrackedRun } from './run-polling.mjs';
 import { runProgressModel } from './run-progress.mjs';
 import { JOBS_PAGE_SIZE, JOBS_PAGE_SIZES, jobPageSize, buildJobsPath, ignorePageResponse, isSearchProfileConfigured, navigateJobPage, needsPageReload, pageRequestKey, scanResultCount, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
-import { readUiState, writeUiState } from './ui-state.mjs';
+import { clearUiState, readUiState, sanitizeUiState, writeUiState } from './ui-state.mjs';
 import { registerPwa } from './pwa.mjs';
 import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
 import { environmentBadge, releaseVersionLabel } from './environment-marker.mjs';
@@ -265,38 +265,37 @@ function KPIGrid({metrics,selected,onSelect}){const toggle=key=>onSelect(selecte
   </section>
   <section className="hidden gap-3 sm:grid-cols-2 md:grid xl:grid-cols-4"><MetricCard value={metrics.jobs} label="roluri noi" note="ultimele 24h din filtrul curent" icon="jobs" active={selected==='new'} onClick={()=>toggle('new')}/><MetricCard value={metrics.high} label="fit ridicat" note={`>= ${metrics.threshold}% · ${metrics.scope}`} icon="review" tone="slate" active={selected==='high'} onClick={()=>toggle('high')}/><MetricCard value={metrics.reposts} label="repostari" note={metrics.scope} icon="refresh" tone="amber" active={selected==='repost'} onClick={()=>toggle('repost')}/><MetricCard value={metrics.remote} label="remote" note={metrics.scope} icon="globe" tone="violet" active={selected==='remote'} onClick={()=>toggle('remote')}/></section>
 </>;}
-function FilterButton({active,onClick,children,count}){return<button onClick={onClick} className={cx('inline-flex h-9 items-center gap-2 rounded-full border px-3 text-sm font-medium transition',active?'border-blue-200 bg-blue-50 text-blue-700':'border-slate-200 bg-white text-slate-600 hover:bg-slate-50')}>{children}{count!==undefined&&<span className={cx('rounded-full px-1.5 py-0.5 text-[11px] font-semibold',active?'bg-blue-100 text-blue-700':'bg-slate-100 text-slate-500')}>{count}</span>}</button>;}
-function WorkModeDropdown({selected,onChange}){const[open,setOpen]=useState(false),ref=useRef(null);useEffect(()=>{const h=e=>{if(ref.current&&!ref.current.contains(e.target))setOpen(false)};document.addEventListener('mousedown',h);return()=>document.removeEventListener('mousedown',h)},[]);const label=selected.length===ALL_WORK_MODES.length?'Toate':selected.length===0?'Niciunul':selected.map(mode=>mode==='Hybrid'?'Hibrid':mode).join(', ');const toggle=mode=>onChange(selected.includes(mode)?selected.filter(x=>x!==mode):[...selected,mode]);return<div className="relative" ref={ref}><button onClick={()=>setOpen(v=>!v)} className="inline-flex h-9 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-medium text-slate-600">Mod lucru: <span className="max-w-36 truncate text-slate-800">{label}</span><Icon name="chevronDown" className="h-4 w-4 text-slate-400"/></button>{open&&<div className="absolute left-0 z-40 mt-2 w-48 rounded-xl border border-slate-200 bg-white p-2 shadow-lg">{ALL_WORK_MODES.map(mode=><label key={mode} className="flex cursor-pointer items-center gap-2 rounded-lg px-2.5 py-2 text-sm text-slate-700 hover:bg-slate-50"><input type="checkbox" checked={selected.includes(mode)} onChange={()=>toggle(mode)} className="h-4 w-4 rounded border-slate-300"/>{mode==='Hybrid'?'Hibrid':mode}</label>)}</div>}</div>;}
 function ListingFilters({filters,setFilters,defaultFreshness}) {
   const roles=ROLE_FAMILIES.flatMap(f=>f.subfamilies.map(s=>[s.code,s.label]));
   const update=(key,value)=>setFilters(v=>({...v,[key]:value}));
-  const multi=(label,key,options)=>{
-    const selected=filters[key]||[];
-    return <fieldset className="min-w-0"><legend className="text-xs font-semibold">{label}</legend><details className="mt-1 rounded border border-slate-400/40 p-2 text-xs"><summary className="cursor-pointer">{selected.length?selected.length+' selectate':'Toate'}</summary><div className="mt-2 max-h-40 overflow-y-auto space-y-1">{options.map(([code,name])=><label key={code} className="flex items-start gap-2"><input type="checkbox" checked={selected.includes(code)} onChange={e=>update(key,e.target.checked?[...selected,code]:selected.filter(v=>v!==code))}/>{name}</label>)}</div><button type="button" className="mt-2 underline" onClick={()=>update(key,[])}>Toate</button></details></fieldset>;
+  const multi=(label,key,options,noneFlag)=>{
+    const stored=filters[key]||[];
+    const all=options.map(([code])=>code);
+    const selected=filters[noneFlag]?[]:stored.length===0?all:stored;
+    const allSelected=selected.length===all.length&&all.every(code=>selected.includes(code));
+    const choose=next=>{const full=next.length===all.length&&all.every(code=>next.includes(code));setFilters(current=>({...current,[key]:full?[]:next,[noneFlag]:next.length===0}));};
+    return <fieldset className="min-w-0"><legend className="text-xs font-semibold">{label}</legend><details className="mt-1 rounded border border-slate-400/40 p-2 text-xs"><summary className="cursor-pointer">{allSelected?'Toate':selected.length?selected.length+' selectate':'Niciuna'}</summary><div className="mt-2 max-h-40 space-y-1 overflow-y-auto">{options.map(([code,name])=><label key={code} className="flex items-start gap-2"><input type="checkbox" checked={selected.includes(code)} onChange={e=>choose(e.target.checked?[...selected,code]:selected.filter(v=>v!==code))}/>{name}</label>)}</div><button type="button" className="mt-2 underline" onClick={()=>choose(allSelected?[]:all)}>{allSelected?'Deselecteaza toate':'Selecteaza toate'}</button></details></fieldset>;
   };
   return <div className="space-y-3 text-sm">
-    {multi('Roluri individuale','roleSubfamilies',roles)}
-    <fieldset><legend className="text-xs font-semibold">Mod de lucru</legend>{ALL_WORK_MODES.map(mode=><label key={mode} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={filters.workModes.includes(mode)} onChange={e=>update('workModes',e.target.checked?[...filters.workModes,mode]:filters.workModes.filter(v=>v!==mode))}/>{mode}</label>)}</fieldset>
-    {multi('Tip contract','contractTypes',CONTRACT_TYPE_OPTIONS)}
+    {multi('Roluri individuale','roleSubfamilies',roles,'roleSubfamiliesNone')}
+    <fieldset><legend className="text-xs font-semibold">Mod de lucru</legend><button type="button" className="mb-2 block text-xs underline" onClick={()=>update('workModes',filters.workModes.length===ALL_WORK_MODES.length?[]:[...ALL_WORK_MODES])}>{filters.workModes.length===ALL_WORK_MODES.length?'Deselecteaza toate':'Selecteaza toate'}</button>{ALL_WORK_MODES.map(mode=><label key={mode} className="flex items-center gap-2 text-xs"><input type="checkbox" checked={filters.workModes.includes(mode)} onChange={e=>update('workModes',e.target.checked?[...filters.workModes,mode]:filters.workModes.filter(v=>v!==mode))}/>{mode}</label>)}</fieldset>
+    {multi('Tip contract','contractTypes',CONTRACT_TYPE_OPTIONS,'contractTypesNone')}
     <label className="block text-xs font-semibold">FIT minim<select aria-label="FIT minim" value={filters.minFit??''} onChange={e=>update('minFit',e.target.value)} className="mt-1 w-full rounded border border-slate-400/40 bg-white p-2 text-slate-800"><option value="">Toate</option>{Array.from({length:21},(_,i)=>i*5).map(n=><option key={n} value={n}>{n}%</option>)}</select></label>
     <label className="block text-xs font-semibold">Vechime job<select value={filters.freshness} onChange={e=>update('freshness',Number(e.target.value))} className="mt-1 w-full rounded border border-slate-400/40 bg-white p-2 text-slate-800">{[[24,'24h'],[36,'36h'],[48,'48h'],[120,'5 zile'],[720,'30 zile']].map(([n,label])=><option key={n} value={n}>{label}</option>)}</select></label>
-    <button type="button" onClick={()=>setFilters(v=>({...v,roleSubfamilies:[],contractTypes:[],minFit:'',workModes:[...ALL_WORK_MODES],freshness:defaultFreshness||24,search:'',quick:'all'}))} className="text-xs underline">Reseteaza filtrele</button>
+    <button type="button" onClick={()=>setFilters(v=>({...v,roleSubfamilies:[],roleSubfamiliesNone:false,contractTypes:[],contractTypesNone:false,minFit:'',workModes:[...ALL_WORK_MODES],freshness:defaultFreshness||24,search:'',quick:'all'}))} className="text-xs underline">Reseteaza filtrele</button>
   </div>;
 }
-function Filters({filters,setFilters,counts,defaultFreshness,onResetKpi}) {
+function Filters({filters,setFilters,defaultFreshness,onResetKpi}) {
   const[mobileOpen,setMobileOpen]=useState(false);
-  const reset=()=>{setFilters({search:'',quick:'all',freshness:defaultFreshness||24,workModes:[...ALL_WORK_MODES],roleSubfamilies:[],contractTypes:[],minFit:'',sort:'fit-desc',pageSize:jobPageSize(filters.pageSize)});onResetKpi?.();};
-  const secondaryCount=(filters.freshness!==(defaultFreshness||24)?1:0)+(filters.workModes.length!==ALL_WORK_MODES.length?1:0)+(filters.sort!=='fit-desc'?1:0)+(filters.roleSubfamilies?.length?1:0)+(filters.contractTypes?.length?1:0)+(filters.minFit!==''&&filters.minFit!=null?1:0);
+  const reset=()=>{setFilters({search:'',quick:'all',freshness:defaultFreshness||24,workModes:[...ALL_WORK_MODES],roleSubfamilies:[],roleSubfamiliesNone:false,contractTypes:[],contractTypesNone:false,minFit:'',sort:'fit-desc',pageSize:jobPageSize(filters.pageSize)});onResetKpi?.();};
+  const secondaryCount=(filters.freshness!==(defaultFreshness||24)?1:0)+(filters.workModes.length!==ALL_WORK_MODES.length?1:0)+(filters.sort!=='fit-desc'?1:0)+(filters.roleSubfamilies?.length||filters.roleSubfamiliesNone?1:0)+(filters.contractTypes?.length||filters.contractTypesNone?1:0)+(filters.minFit!==''&&filters.minFit!=null?1:0);
   return <>
     <div className="sticky top-14 z-30 -mx-3 border-y border-slate-200 bg-slate-50/95 px-3 py-2 backdrop-blur md:static md:mx-0 md:rounded-2xl md:border md:bg-white md:p-0 md:shadow-sm">
       <div className="flex gap-2 md:border-b md:border-slate-100 md:p-4">
         <label className="relative min-w-0 flex-1"><Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={filters.search} onChange={e=>setFilters(v=>({...v,search:e.target.value}))} type="search" placeholder="Cauta joburi..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-800 outline-none md:h-11 md:bg-slate-50"/></label>
         <button type="button" aria-haspopup="dialog" aria-expanded={mobileOpen} aria-controls="jscc-mobile-filters" onClick={()=>setMobileOpen(true)} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 md:hidden">Filtre{secondaryCount>0&&<span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">{secondaryCount}</span>}</button>
       </div>
-      <div className="mt-2 flex gap-2 overflow-x-auto pb-0.5 md:mt-0 md:flex-wrap md:items-center md:p-4">
-        <FilterButton active={filters.quick==='all'} onClick={()=>setFilters(v=>({...v,quick:'all'}))} count={counts.all}>Toate</FilterButton><FilterButton active={filters.quick==='high'} onClick={()=>setFilters(v=>({...v,quick:'high'}))} count={counts.high}>High FIT</FilterButton><FilterButton active={filters.quick==='b2b'} onClick={()=>setFilters(v=>({...v,quick:'b2b'}))} count={counts.b2b}>B2B</FilterButton>
-        
-      </div>
+      
     </div>
     {mobileOpen&&<><button type="button" aria-label="Inchide filtrele" className="fixed inset-0 z-[70] bg-slate-950/30 md:hidden" onClick={()=>setMobileOpen(false)}/><section id="jscc-mobile-filters" role="dialog" aria-modal="true" aria-label="Filtre afisare" className="safe-bottom fixed inset-x-0 bottom-0 z-[80] rounded-t-3xl bg-white p-4 shadow-2xl md:hidden">
       <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200"/>
@@ -316,7 +315,7 @@ function displayJobDate(value){
   const date=new Date(value);
   return Number.isFinite(date.getTime())?date.toLocaleString('ro-RO',{dateStyle:'short',timeStyle:'short'}):'—';
 }
-function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=false,loadingMore=false,loading=false,paginate=false,page=1,onPrevious=null,onNext=null,pageSize=20,onPageSize=null,totalPages=null,sort='fit-desc',onSort=null,orderStatus=null,pending=null}) {
+function JobTable({rows,threshold,onDetails,onArchive,onApply,hasMore=false,loadingMore=false,loading=false,paginate=false,page=1,onPrevious=null,onNext=null,pageSize=20,onPageSize=null,totalPages=null,sort='fit-desc',onSort=null,orderStatus=null,pending=null}) {
   if(!rows.length&&!loading&&!paginate)return<div className="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500 shadow-sm">Niciun rezultat.</div>;
   const controls=(position)=><nav aria-label={'Navigare pagini joburi '+position} className="flex flex-wrap items-center justify-between gap-2 border-y border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-600">
     <label>Inregistrari/pagina <select aria-label={'Inregistrari pe pagina '+position} value={pageSize} disabled={loading||loadingMore} onChange={e=>onPageSize?.(Number(e.target.value))} className="ml-1 rounded-md border border-slate-200 bg-white p-2">{JOBS_PAGE_SIZES.map(n=><option key={n} value={n}>{n}</option>)}</select></label>
@@ -329,23 +328,23 @@ function JobTable({rows,threshold,onDetails,onReview,onArchive,onApply,hasMore=f
     <div className="hidden xl:grid-cols-[minmax(10rem,1fr)_90px_55px_75px_112px_112px_180px] 2xl:grid-cols-[minmax(10rem,1fr)_90px_56px_80px_112px_112px_400px] gap-3 border-b border-slate-100 bg-slate-50 px-5 py-2 text-[11px] font-semibold uppercase tracking-wide text-slate-400 xl:grid">{[['title','Rol'],['country','Tara'],['fit','Fit'],['work_mode','Mod lucru'],['publication','Publication Date'],['retrieve','Retrieve Date']].map(([key,label])=><div key={key} role="columnheader" aria-sort={sort===key+'-asc'?'ascending':sort===key+'-desc'?'descending':'none'}><button type="button" disabled={!paginate} onClick={()=>onSort?.(key+(sort===key+'-asc'?'-desc':'-asc'))} className="text-left">{label}{sort===key+'-asc'?' ↑':sort===key+'-desc'?' ↓':''}</button></div>)}<span className="text-right">Actiuni</span></div>
     {paginate&&<div className="border-b border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-600"><label className="xl:hidden block">Sortare globala <select value={sort} onChange={e=>onSort?.(e.target.value)}>{[['title','Rol'],['country','Tara'],['fit','FIT'],['work_mode','Mod lucru'],['publication','Publicare'],['retrieve','Retrieve']].flatMap(([key,label])=>['asc','desc'].map(dir=><option key={key+'-'+dir} value={key+'-'+dir}>{label} {dir==='asc'?'↑':'↓'}</option>))}</select></label><p>Filtrele se aplica tuturor rezultatelor.</p>{orderStatus==='PROVISIONAL'&&<p role="status">Se actualizeaza ordonarea. {pending??'—'} evaluari in asteptare; totalul nu este inca disponibil.</p>}</div>}
     {!rows.length&&!loading&&<div role="status" className="px-4 py-10 text-center text-sm text-slate-600">Nicio potrivire pe aceasta pagina. Verifica filtrele sau navigheaza la alta pagina.</div>}
-    <div>{rows.map((job,index)=><article data-testid="job-row" key={jobKey(job)} className={cx('border-b border-slate-100 px-3 py-3 transition last:border-b-0 xl:grid xl:grid-cols-[minmax(10rem,1fr)_90px_55px_75px_112px_112px_180px] 2xl:grid-cols-[minmax(10rem,1fr)_90px_56px_80px_112px_112px_400px] xl:items-center xl:gap-3 xl:px-5 xl:py-3',index%2===0?'bg-white':'bg-slate-50/70','hover:bg-blue-50/40')}>
+    <div>{rows.map((job,index)=><article data-testid="job-row" key={jobKey(job)} className={cx('border-b border-slate-100 px-3 py-3 transition last:border-b-0 xl:grid xl:grid-cols-[minmax(10rem,1fr)_90px_55px_75px_112px_112px_180px] 2xl:grid-cols-[minmax(10rem,1fr)_90px_56px_80px_112px_112px_400px] xl:items-center xl:gap-3 xl:px-5 xl:py-3',index%2===0?'bg-white':'bg-slate-100','hover:bg-blue-50')}>
       <button data-testid="job-role" type="button" onClick={()=>onDetails(job)} className="block w-full min-w-0 overflow-hidden text-left xl:flex xl:items-start xl:gap-3">
         <span className="hidden h-10 w-10 shrink-0 place-items-center rounded-xl bg-slate-100 text-xs font-bold text-slate-600 xl:grid">{job.initial}</span>
         <span className="block min-w-0">
           <span className="flex items-start justify-between gap-3"><span className="line-clamp-2 text-[15px] font-semibold leading-5 text-slate-950 xl:block xl:truncate xl:text-sm">{job.title}{job.quality&&job.quality.verdict!=='VALID'&&job.quality.issues?.length>0&&<span className="ml-1 text-amber-700" title={job.quality.issues.join(", ")} aria-label={"Atentie: "+job.quality.issues.join(", ")}> ⚠</span>}</span><span className="shrink-0 xl:hidden"> <FitBadge fit={job.fit} threshold={threshold}/></span></span>
-          <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-xs text-slate-500"><span className="truncate">{knownCompact(job.company)||'Companie'}</span>{knownCompact(job.location)&&<><span>·</span><span className="truncate">{job.location}</span></>}{knownCompact(job.mode)&&<><span>·</span><span>{job.mode==='Hybrid'?'Hibrid':job.mode}</span></>}<span>·</span><span>{job.isApplication?publishedLabel(job):"Publicat: "+displayJobDate(job.publicationDate)}</span>{!job.isApplication&&<span>Retrieve: {displayJobDate(job.retrieveDate)}</span>}{job.repost&&<span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">Repost</span>}</span>
+          <span className="mt-1 flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 overflow-hidden text-xs text-slate-600"><span className="truncate">{knownCompact(job.company)||'Companie'}</span>{knownCompact(job.location)&&<><span>·</span><span className="truncate">{job.location}</span></>}{knownCompact(job.mode)&&<><span>·</span><span>{job.mode==='Hybrid'?'Hibrid':job.mode}</span></>}<span>·</span><span>{job.isApplication?publishedLabel(job):"Publicat: "+displayJobDate(job.publicationDate)}</span>{!job.isApplication&&<span>Retrieve: {displayJobDate(job.retrieveDate)}</span>}{job.repost&&<span className="rounded-full bg-amber-50 px-1.5 py-0.5 text-amber-700">Repost</span>}</span>
         </span>
       </button>
-      <div className="hidden min-w-0 text-xs xl:contents"><div className="min-w-0 truncate font-medium text-slate-600" title={countryCompact(job)}>{countryCompact(job)}</div><div><FitBadge fit={job.fit} threshold={threshold}/></div><div>{knownCompact(job.mode)?<ModeBadge mode={job.mode}/>:<span className="text-slate-300">—</span>}</div><div data-testid="job-published" className="min-w-0 truncate font-medium text-slate-500" title={publishedLabel(job)}>{job.isApplication?publishedLabel(job):displayJobDate(job.publicationDate)}</div><div data-testid="job-retrieved" className="min-w-0 truncate text-slate-500" title={displayJobDate(job.retrieveDate)}>{displayJobDate(job.retrieveDate)}</div></div>
+      <div className="hidden min-w-0 text-xs xl:contents"><div className="min-w-0 truncate font-medium text-slate-600" title={countryCompact(job)}>{countryCompact(job)}</div><div><FitBadge fit={job.fit} threshold={threshold}/></div><div>{knownCompact(job.mode)?<ModeBadge mode={job.mode}/>:<span className="text-slate-300">—</span>}</div><div data-testid="job-published" className="min-w-0 truncate font-medium text-slate-600" title={publishedLabel(job)}>{job.isApplication?publishedLabel(job):displayJobDate(job.publicationDate)}</div><div data-testid="job-retrieved" className="min-w-0 truncate text-slate-600" title={displayJobDate(job.retrieveDate)}>{displayJobDate(job.retrieveDate)}</div></div>
       <div data-testid="job-card-actions" className="mt-3 flex min-w-0 items-center gap-2 xl:hidden" onClick={event=>event.stopPropagation()}>
-        {!job.isApplication&&<button type="button" title="Review job" aria-label="Review job" onClick={()=>onReview(job)} className="inline-flex min-h-11 min-w-11 flex-1 items-center justify-center gap-1.5 rounded-xl border border-blue-200 bg-white px-3 text-xs font-semibold text-blue-700 md:flex-none md:px-2"><Icon name="review"/><span className="md:hidden">Review</span></button>}
+        
         {job.url&&<a role="button" title="Aplica la job" aria-label="Aplica la job" href={job.url} target="_blank" rel="noopener noreferrer" onClick={()=>onApply(job)} className="inline-flex min-h-11 min-w-11 flex-1 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-3 text-xs font-semibold text-white md:flex-none md:px-2"><Icon name="external"/><span className="md:hidden">Aplica</span></a>}
         {!job.isApplication&&<MobileOverflow job={job} onArchive={onArchive}/>}
       </div>
       <div data-testid="job-actions" className="hidden min-w-0 items-center justify-end gap-1 xl:flex 2xl:gap-2" onClick={event=>event.stopPropagation()}>
         <button type="button" title="Detalii job" aria-label="Detalii job" onClick={()=>onDetails(job)} className="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-2 text-xs font-semibold text-slate-600 2xl:px-3"><Icon name="eye"/><span className="hidden 2xl:inline">Detalii</span></button>
-        {!job.isApplication&&<button type="button" title="Review job" aria-label="Review job" onClick={()=>onReview(job)} className="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-blue-200 px-2 text-xs font-semibold text-blue-700 2xl:px-3"><Icon name="review"/><span className="hidden 2xl:inline">Review</span></button>}
+        
         {job.url&&<a role="button" title="Aplica la job" aria-label="Aplica la job" href={job.url} target="_blank" rel="noopener noreferrer" onClick={()=>onApply(job)} className="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl bg-blue-600 px-2 text-xs font-semibold text-white 2xl:px-3"><Icon name="external"/><span className="hidden 2xl:inline">Aplica</span></a>}
         {!job.isApplication&&<button type="button" title="Arhiveaza job" aria-label="Arhiveaza job" onClick={()=>onArchive(job)} className="inline-flex min-h-10 min-w-10 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-slate-200 px-2 text-xs font-semibold text-slate-600 2xl:px-3"><Icon name="archive"/><span className="hidden 2xl:inline">Arhiveaza</span></button>}
       </div>
@@ -363,7 +362,7 @@ function DetailDrawer({job,threshold,onClose,onApply}) {
   if(!job)return null;
   return <><button className="fixed inset-0 z-50 bg-slate-950/25" onClick={onClose} aria-label="Inchide detaliile"/><aside className="fixed inset-0 z-[60] overflow-y-auto bg-white shadow-2xl md:inset-y-0 md:left-auto md:right-0 md:w-full md:max-w-xl md:border-l md:border-slate-200">
     <div className="safe-top sticky top-0 flex items-center justify-between border-b border-slate-100 bg-white px-3 py-2 sm:px-6 sm:py-3"><button type="button" onClick={onClose} className="inline-flex min-h-11 items-center gap-2 rounded-lg px-2 text-sm font-semibold text-slate-700 hover:bg-slate-100"><span aria-hidden="true">←</span><span className="md:hidden">Inapoi</span><span className="hidden text-xs uppercase tracking-wide text-slate-400 md:inline">Detalii job</span></button><button onClick={onClose} aria-label="Inchide detaliile" className="hidden min-h-11 min-w-11 place-items-center rounded-lg hover:bg-slate-100 md:grid"><Icon name="close"/></button></div>
-    <div className="space-y-6 p-4 pb-24 sm:p-6"><div><h2 className="font-display text-2xl font-bold text-slate-950">{job.url?<a href={job.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">{job.title} ↗</a>:job.title}</h2>{!job.isApplication&&<div className="mt-1 overflow-x-auto whitespace-nowrap text-xs text-slate-600" tabIndex={0} aria-label="Rezumat FIT"><strong>FIT {job.fit==null?'—':job.fit+'%'}</strong>{job.fitMatrix.map(v=><span key={v.criterion} title={FIT_LABELS[v.criterion]+': '+v.weight+'%; '+v.reason}> · {({work_mode:'Mod',contract_type:'Contract',compensation:'Compensatie',industry:'Industrie',career:'Cariera',company:'Companie'})[v.criterion]||v.criterion} {v.grade}/5</span>)}</div>}{!job.isApplication&&<FitMatrix matrix={job.fitMatrix}/>}<p className="mt-1 text-sm text-slate-500">{job.company}</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Mod lucru</div><div className="mt-1"><ModeBadge mode={job.mode}/></div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Locatie</div><div className="mt-1 text-sm font-medium text-slate-700">{job.location}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Tara / tari</div><div className="mt-1 text-sm font-medium text-slate-700">{job.countries?.length?job.countries.join(', '):'Nespecificat'}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Tip contract</div><div className="mt-1 text-sm font-medium text-slate-700">{job.type||'Nespecificat'}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Sursa</div><div className="mt-1 text-sm font-medium text-slate-700">{job.source}</div></div>{!job.isApplication&&<><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Publication Date</div><div>{displayJobDate(job.publicationDate)}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Retrieve Date</div><div>{displayJobDate(job.retrieveDate)}</div></div></>}{job.remote&&<div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Scope Remote</div><div className="mt-1 text-sm font-medium text-slate-700">{job.remoteScope}</div></div>}</div>{!job.isApplication&&job.eligibilityState&&<p className="rounded border p-3 text-sm text-slate-600">Eligibilitate: {job.eligibilityState}{job.eligibilityReason?' · '+job.eligibilityReason:''} (informativ)</p>} {job.pros?.length>0&&<div><h3 className="text-sm font-semibold text-slate-900">Puncte forte</h3><ul className="mt-2 space-y-2 text-sm text-slate-600">{job.pros.map((x,i)=><li key={i}>• {x}</li>)}</ul></div>}{job.risks?.length>0&&<div><h3 className="text-sm font-semibold text-slate-900">Riscuri</h3><ul className="mt-2 space-y-2 text-sm text-slate-600">{job.risks.map((x,i)=><li key={i}>• {x}</li>)}</ul></div>}<div><h3 className="text-sm font-semibold text-slate-900">Descriere</h3><div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{job.description||'Descriere indisponibila.'}</div></div>{job.url&&<a role="button" href={job.url} target="_blank" rel="noopener noreferrer" onClick={()=>onApply?.(job)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">Deschide jobul <Icon name="external"/></a>}</div>
+    <div className="space-y-6 p-4 pb-24 sm:p-6"><div><h2 className="font-display text-2xl font-bold text-slate-950">{job.url?<a href={job.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 underline">{job.title} ↗</a>:job.title}</h2>{!job.isApplication&&<FitMatrix matrix={job.fitMatrix} fit={job.fit}/>}<p className="mt-1 text-sm text-slate-500">{job.company}</p></div><div className="grid grid-cols-1 gap-3 sm:grid-cols-2"><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Mod lucru</div><div className="mt-1"><ModeBadge mode={job.mode}/></div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Locatie</div><div className="mt-1 text-sm font-medium text-slate-700">{job.location}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Tara / tari</div><div className="mt-1 text-sm font-medium text-slate-700">{job.countries?.length?job.countries.join(', '):'Nespecificat'}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Tip contract</div><div className="mt-1 text-sm font-medium text-slate-700">{job.type||'Nespecificat'}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Sursa</div><div className="mt-1 text-sm font-medium text-slate-700">{job.source}</div></div>{!job.isApplication&&<><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Publication Date</div><div>{displayJobDate(job.publicationDate)}</div></div><div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Retrieve Date</div><div>{displayJobDate(job.retrieveDate)}</div></div></>}{job.remote&&<div className="rounded-xl bg-slate-50 p-3"><div className="text-xs text-slate-400">Scope Remote</div><div className="mt-1 text-sm font-medium text-slate-700">{job.remoteScope}</div></div>}</div>{!job.isApplication&&job.eligibilityState&&<p className="rounded border p-3 text-sm text-slate-600">Eligibilitate: {job.eligibilityState}{job.eligibilityReason?' · '+job.eligibilityReason:''} (informativ)</p>} {job.pros?.length>0&&<div><h3 className="text-sm font-semibold text-slate-900">Puncte forte</h3><ul className="mt-2 space-y-2 text-sm text-slate-600">{job.pros.map((x,i)=><li key={i}>• {x}</li>)}</ul></div>}{job.risks?.length>0&&<div><h3 className="text-sm font-semibold text-slate-900">Riscuri</h3><ul className="mt-2 space-y-2 text-sm text-slate-600">{job.risks.map((x,i)=><li key={i}>• {x}</li>)}</ul></div>}<div><h3 className="text-sm font-semibold text-slate-900">Descriere</h3><div className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{job.description||'Descriere indisponibila.'}</div></div>{job.url&&<a role="button" href={job.url} target="_blank" rel="noopener noreferrer" onClick={()=>onApply?.(job)} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-blue-600 px-4 text-sm font-semibold text-white">Deschide jobul <Icon name="external"/></a>}</div>
   </aside></>;
 }
 
@@ -398,9 +397,22 @@ function FitRatingsEditor({ratings,onChange,criterion}){
   return <div className="space-y-2">{Object.entries(ratings).map(([key,score])=><div key={key} className="flex items-center gap-2"><span className="flex-1 break-all">{key}</span><input type="range" min="0" max="5" step="1" aria-label={'Nota '+key} value={score} onChange={e=>onChange({...ratings,[key]:Number(e.target.value)})}/><output>{score}/5</output><button type="button" aria-label={'Elimina '+key} onClick={()=>onChange(Object.fromEntries(Object.entries(ratings).filter(([k])=>k!==key)))}>×</button></div>)}
   <div className="flex flex-wrap gap-2">{choices?<select aria-label="Preferinta" value={label} onChange={e=>setLabel(e.target.value)}><option value="">Selecteaza</option>{choices.map(x=><option key={x}>{x}</option>)}</select>:<input aria-label="Preferinta" value={label} maxLength={160} placeholder="Valoare exacta din anunt" onChange={e=>setLabel(e.target.value)} className="min-w-0 flex-1 rounded border p-2"/>}<select aria-label="Nota preferintei" value={grade} onChange={e=>setGrade(Number(e.target.value))}>{[0,1,2,3,4,5].map(n=><option key={n}>{n}</option>)}</select><button type="button" disabled={!label.trim()} onClick={()=>{onChange({...ratings,[label.normalize('NFKC').trim().toLowerCase()]:grade});setLabel('');}} className="rounded border px-2">Adauga</button></div></div>;
 }
-function FitMatrix({matrix}){
- return <details className="rounded-xl border p-3"><summary className="cursor-pointer font-semibold">Matrice FIT</summary>{!matrix?.length?<p className="mt-2 text-sm">FIT necalculat: profil neconfigurat.</p>:<div className="mt-2 space-y-2">{matrix.map(row=><div key={row.criterion} className="rounded border p-2 text-sm"><strong>{FIT_LABELS[row.criterion]||row.criterion}</strong><div>Pondere {row.weight}% · Nota {row.grade}/5 · {row.points} puncte</div><meter className="w-full" min={0} max={5} value={row.grade} aria-label={FIT_LABELS[row.criterion]||row.criterion}/><div>{({MISSING_DATA:'Date lipsa',NO_MATCH:'Nu corespunde',MATCH:'Preferinta confirmata',DISABLED:'Criteriu dezactivat'})[row.reason]||row.reason}</div></div>)}</div>}</details>;
+function FitMatrix({matrix,fit}){
+  if(!Array.isArray(matrix)||matrix.length===0)return <section className="rounded-xl border p-3" aria-label="Matrice FIT"><h3 className="font-semibold">Matrice FIT</h3><p className="mt-2 text-sm">FIT necalculat.</p></section>;
+  const rows=FIT_CRITERIA.map(key=>matrix.find(row=>row.criterion===key)).filter(Boolean);
+  const totalWeight=rows.reduce((sum,row)=>sum+(Number(row.weight)||0),0);
+  const reasonLabel={MISSING_DATA:'Date lipsa',NO_MATCH:'Nu corespunde',MATCH:'Preferinta confirmata',DISABLED:'Criteriu dezactivat'};
+  return <section className="rounded-xl border p-3" aria-label="Matrice FIT">
+    <h3 className="font-semibold">Matrice FIT</h3>
+    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      {rows.map(row=><div key={row.criterion} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"><strong className="block text-slate-800">{FIT_LABELS[row.criterion]||row.criterion}</strong><p className="mt-1">Pondere {row.weight}% · Nota {row.grade}/5 · {row.points} puncte</p><meter className="mt-2 w-full" min={0} max={5} value={row.grade} aria-label={FIT_LABELS[row.criterion]||row.criterion}/><p className="mt-1 text-xs text-slate-600">{reasonLabel[row.reason]||row.reason}</p></div>)}
+      <div className="rounded-lg border border-slate-200 p-3 text-sm"><strong>FIT total</strong><p>{fit==null?'—':fit+'%'}</p></div>
+      <div className="rounded-lg border border-slate-200 p-3 text-sm"><strong>Total ponderi</strong><p>{totalWeight}%</p></div>
+      <div className="rounded-lg border border-slate-200 p-3 text-sm"><strong>Stare evaluare</strong><p>{fit==null?'Necalculat':'Calculat'}</p></div>
+    </div>
+  </section>;
 }
+
 function CriteriaPage({draft,setDraft,saved,onSave,onReset,saving}){
   const dirty=JSON.stringify(draft)!==JSON.stringify(saved);
   const update=(key,value)=>setDraft(v=>({...v,[key]:value}));
@@ -480,14 +492,14 @@ function App(){
   const[loginHint,setLoginHint]=useState(()=>readGoogleLoginHint()),[allowAutoRestore,setAllowAutoRestore]=useState(true);
   const[jobs,setJobs]=useState([]),[applications,setApplications]=useState([]),[sources,setSources]=useState([]),[sourceCategories,setSourceCategories]=useState([]),[runStatus,setRunStatus]=useState(null),[runHistory,setRunHistory]=useState([]),[promotionStatus,setPromotionStatus]=useState(null),[canonicalConfig,setCanonicalConfig]=useState(null);
   const[savedCriteria,setSavedCriteria]=useState(criteriaFromConfig({})),[draftCriteria,setDraftCriteria]=useState(criteriaFromConfig({})),[view,setView]=useState(initialUi.view||'jobs');
-  const[filters,setFilters]=useState(()=>({...initialUi.filters,workModes:[...(initialUi.filters?.workModes||ALL_WORK_MODES)]})),[kpiFilter,setKpiFilter]=useState('all'),[detailJob,setDetailJob]=useState(null),[running,setRunning]=useState(false),[saving,setSaving]=useState(false),[toast,setToast]=useState(null);
+  const[filters,setFilters]=useState(()=>({...initialUi.filters,quick:'all',workModes:[...(initialUi.filters?.workModes||ALL_WORK_MODES)]})),[kpiFilter,setKpiFilter]=useState('all'),[detailJob,setDetailJob]=useState(null),[running,setRunning]=useState(false),[saving,setSaving]=useState(false),[toast,setToast]=useState(null);
   const[deleteAccountOpen,setDeleteAccountOpen]=useState(false),[deleteAccountConfirmation,setDeleteAccountConfirmation]=useState(''),[deletingAccount,setDeletingAccount]=useState(false);
   const[jobPage,setJobPage]=useState({nextCursor:null,loading:false,loadingMore:false,results:0});
   const[pageNumber,setPageNumber]=useState(1),[resultTotal,setResultTotal]=useState(null);
   const pageCursorHistory=useRef([null]),pageRequestSerialRef=useRef(0),pageNavigationPendingRef=useRef(false),countAbortRef=useRef(null);
   const activeViewRef=useRef(view),activeKpiRef=useRef(kpiFilter);
   const[archivedKeys,setArchivedKeys]=useState([]);
-  const pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),serverQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
+  const sessionGenerationRef=useRef(0),pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),serverQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
   const notify=useCallback((message,type='info')=>{const id=Date.now();setToast({id,message,type});window.setTimeout(()=>setToast(current=>current?.id===id?null:current),3500);},[]);
 
   useEffect(()=>{filtersRef.current=filters;activeViewRef.current=view;activeKpiRef.current=kpiFilter;},[filters,view,kpiFilter]);
@@ -509,9 +521,30 @@ function App(){
   useEffect(()=>{if(auth.status==='authenticated')rememberUi();},[auth.status,rememberUi]);
   useEffect(()=>{if(auth.status!=='authenticated')return undefined;const save=()=>rememberUi();window.addEventListener('pagehide',save);return()=>window.removeEventListener('pagehide',save);},[auth.status,rememberUi]);
 
-  const clearData=useCallback(()=>{pageRequestSerialRef.current++;pageCursorHistory.current=[null];pageNavigationPendingRef.current=false;setPageNumber(1);setJobs([]);setArchivedKeys([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';serverQueryRef.current='';},[]);
+  const clearData=useCallback(()=>{
+    sessionGenerationRef.current+=1; // invalidate every older account's async work immediately
+    countAbortRef.current?.abort();
+    // Also used by account deletion: do not leak this tab's GUI context to another login.
+    clearUiState();
+    const defaultUi=sanitizeUiState();
+    initialUiRef.current=defaultUi;
+    filtersRef.current=defaultUi.filters;
+    setView(defaultUi.view);
+    setFilters(defaultUi.filters);
+    setKpiFilter('all');
+    setDetailJob(null);
+    restoredScrollRef.current=true;
+    restoredJobRef.current=true;
+    detailScrollRef.current=0;
+    setResultTotal(null);
+    setSaving(false);
+    setSavedCriteria(criteriaFromConfig({}));
+    setDraftCriteria(criteriaFromConfig({}));
+    pageRequestSerialRef.current++;pageCursorHistory.current=[null];pageNavigationPendingRef.current=false;setPageNumber(1);setJobs([]);setArchivedKeys([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';serverQueryRef.current='';
+  },[]);
 
-  const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false}={})=>{
+  const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false,generation=sessionGenerationRef.current}={})=>{
+    if(generation!==sessionGenerationRef.current)return {ignored:true};
     if(!isSearchProfileConfigured(criteria)){
       pageRequestSerialRef.current++;pageCursorHistory.current=[null];setPageNumber(1);
       setJobs([]);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';return null;
@@ -525,16 +558,19 @@ function App(){
     setJobPage(current=>({...current,loading:!append,loadingMore:append}));
     try{
       const payload=validateJobsPage(await fetchJson(pathFor(cursor,size,0),token));
+      if(generation!==sessionGenerationRef.current)return {ignored:true};
       let batch=payload,next=payload.next_cursor;const collected=[...payload.jobs];
       for(let i=1;payload.schema_version==='2.0'&&collected.length<size&&next&&i<32;i++){
         if(requestSerial!==pageRequestSerialRef.current)return {ignored:true};
         const previous=next;
         batch=validateJobsPage(await fetchJson(pathFor(next,size-collected.length,0),token));
+        if(generation!==sessionGenerationRef.current)return {ignored:true};
         if(batch.generated_at!==payload.generated_at||batch.profile_version!==payload.profile_version||batch.count_basis!==payload.count_basis||batch.next_cursor===previous)throw Object.assign(new Error('STALE_CURSOR: result scope changed'),{status:400});
         collected.push(...batch.jobs);next=batch.next_cursor;
       }
       if(payload.schema_version==='2.0'&&collected.length<size&&next)throw new Error('Limita de scanare a paginii a fost atinsa. Restrange filtrele.');
       payload.jobs=collected;payload.next_cursor=next;payload.results=collected.length;
+      if(generation!==sessionGenerationRef.current)return {ignored:true};
       if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
       const normalized=(payload.jobs||[]).map(normalizeJob);
       if(!append){pageCursorHistory.current=[null];setPageNumber(1);}
@@ -545,6 +581,7 @@ function App(){
       if(!append){jobQueryRef.current=pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current});serverQueryRef.current=buildJobsPath({filters:filterState,view:viewScope,kpiFilter:kpiScope});}
       return payload;
     }catch(error){
+      if(generation!==sessionGenerationRef.current)return {ignored:true};
       if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
       if(append && error.status===400 && /^STALE_CURSOR/.test(error.message||'')){
         // One restart on stale cursor; never attempt another continuation with that cursor.
@@ -556,26 +593,98 @@ function App(){
     }
   },[]);
 
-  const loadData=useCallback(async(token,role)=>{setDataState({status:'loading',error:null});try{
-    const[applicationPayload,configPayload]=await Promise.all([fetchJson('/applications',token),fetchJson('/me/preferences',token)]);
-    for(const [payload,name] of [[applicationPayload,'applications'],[configPayload,'me/preferences']])validateContract(payload,name);
-    const criteria=criteriaFromConfig(configPayload);
-    const currentFilters=filtersRef.current;
-    const nextFilters={...currentFilters,freshness:currentFilters.freshness??criteria.freshness??24,workModes:Array.isArray(currentFilters.workModes)&&currentFilters.workModes.length?currentFilters.workModes:[...ALL_WORK_MODES]};
-    let statusPayload=null,historyPayload={runs:[]},sourcePayload={sources:[]},categoryPayload={categories:[]};
-    if(role==='ADMIN'){
-      [statusPayload,historyPayload,sourcePayload,categoryPayload]=await Promise.all([fetchJson('/data/run-status.json',token),fetchJson('/data/run-history.json',token),fetchJson('/data/sources.json',token),fetchJson('/data/source-categories.json',token)]);
-      for(const [payload,name] of [[statusPayload,'run-status.json'],[historyPayload,'run-history.json'],[sourcePayload,'sources.json'],[categoryPayload,'source-categories.json']])validateContract(payload,name);
+  // Epoch is client-session identity; the cookie bearer is intentionally the same for all accounts.
+  const loadData=useCallback(async(token,role,generation=sessionGenerationRef.current)=>{
+    if(generation!==sessionGenerationRef.current)return null;
+    setDataState({status:'loading',error:null});
+    try{
+      const[applicationPayload,configPayload]=await Promise.all([fetchJson('/applications',token),fetchJson('/me/preferences',token)]);
+      if(generation!==sessionGenerationRef.current)return null;
+      for(const [payload,name] of [[applicationPayload,'applications'],[configPayload,'me/preferences']])validateContract(payload,name);
+      const criteria=criteriaFromConfig(configPayload);
+      const currentFilters=filtersRef.current;
+      const nextFilters={...currentFilters,freshness:currentFilters.freshness??criteria.freshness??24,workModes:Array.isArray(currentFilters.workModes)?currentFilters.workModes:[...ALL_WORK_MODES]};
+      let statusPayload=null,historyPayload={runs:[]},sourcePayload={sources:[]},categoryPayload={categories:[]};
+      if(role==='ADMIN'){
+        [statusPayload,historyPayload,sourcePayload,categoryPayload]=await Promise.all([fetchJson('/data/run-status.json',token),fetchJson('/data/run-history.json',token),fetchJson('/data/sources.json',token),fetchJson('/data/source-categories.json',token)]);
+        if(generation!==sessionGenerationRef.current)return null;
+        for(const [payload,name] of [[statusPayload,'run-status.json'],[historyPayload,'run-history.json'],[sourcePayload,'sources.json'],[categoryPayload,'source-categories.json']])validateContract(payload,name);
+      }
+      if(generation!==sessionGenerationRef.current)return null;
+      setApplications((applicationPayload.applications||[]).map(normalizeApplication));
+      setSources((sourcePayload.sources||[]).map(normalizeSource));setSourceCategories(categoryPayload.categories||[]);
+      setRunStatus(statusPayload);setRunHistory(historyPayload.runs||[]);
+      setCanonicalConfig(configPayload);setSavedCriteria(criteria);setDraftCriteria(criteria);setFilters(nextFilters);
+      await loadJobsPage(token,criteria,nextFilters,{generation});
+      if(generation!==sessionGenerationRef.current)return null;
+      setDataState({status:'ready',error:null});return statusPayload;
+    }catch(error){
+      if(generation!==sessionGenerationRef.current)return null;
+      setDataState({status:'error',error});throw error;
     }
-    setApplications((applicationPayload.applications||[]).map(normalizeApplication));setSources((sourcePayload.sources||[]).map(normalizeSource));setSourceCategories(categoryPayload.categories||[]);setRunStatus(statusPayload);setRunHistory(historyPayload.runs||[]);setCanonicalConfig(configPayload);setSavedCriteria(criteria);setDraftCriteria(criteria);setFilters(nextFilters);
-    await loadJobsPage(token,criteria,nextFilters);
-    setDataState({status:'ready',error:null});return statusPayload;
-  }catch(error){setDataState({status:'error',error});throw error;}},[loadJobsPage]);
+  },[loadJobsPage]);
 
-  const handleCredential=useCallback(async credential=>{setAuth({status:'authenticating',token:null,email:null,role:null,error:null});try{const session=await commandApi('/auth/session',credential,{method:'POST'});const email=session?.email||null,role=session?.role||'USER';if(email){const remembered=rememberGoogleLoginHint(email);if(remembered)setLoginHint(remembered);}setAllowAutoRestore(true);setAuth({status:'authenticated',token:COOKIE_SESSION_BEARER,email,role,error:null});try{await loadData(COOKIE_SESSION_BEARER,role);notify('Autentificare Google reusita.','success');}catch(error){notify('Autentificarea a reusit, dar datele nu s-au incarcat: '+error.message,'error');}}catch(error){const message=error.status===403?'Contul este dezactivat sau nu are acces.':'Autentificare esuata: '+error.message;setAuth({status:'signed-out',token:null,email:null,role:null,error:message});}},[loadData,notify]);
-  const logout=useCallback(async()=>{pollGenerationRef.current+=1;setAllowAutoRestore(false);try{await commandApi('/auth/logout',COOKIE_SESSION_BEARER,{method:'POST'});}catch{}try{window.google?.accounts?.id?.disableAutoSelect();}catch{}setAuth({status:'signed-out',token:null,email:null,role:null,error:null});setDataState({status:'idle',error:null});clearData();setDetailJob(null);setRunning(false);notify('Contul Google a fost deconectat.','info');},[clearData,notify]);
-  const deleteCurrentAccount=useCallback(async()=>{if(deletingAccount||deleteAccountConfirmation!=='STERGE')return;setDeletingAccount(true);try{await commandApi('/me/account',auth.token,{method:'DELETE'});pollGenerationRef.current+=1;setAllowAutoRestore(false);try{window.google?.accounts?.id?.disableAutoSelect();}catch{}setAuth({status:'signed-out',token:null,email:null,role:null,error:null});setDataState({status:'idle',error:null});clearData();setDetailJob(null);setRunning(false);setDeleteAccountOpen(false);setDeleteAccountConfirmation('');notify('Contul si datele personale au fost sterse definitiv.','success');}catch(error){notify('Contul nu a putut fi sters: '+error.message,'error');}finally{setDeletingAccount(false);}},[auth.token,deletingAccount,deleteAccountConfirmation,clearData,notify]);
-  const retryData=useCallback(()=>{if(auth.token)loadData(auth.token,auth.role).then(()=>notify('Datele au fost reincarcate.','success')).catch(error=>notify('Incarcarea a esuat: '+error.message,'error'));},[auth.token,auth.role,loadData,notify]);
+  const handleCredential=useCallback(async credential=>{
+    const generation=++sessionGenerationRef.current;
+    pollGenerationRef.current+=1;
+    setAuth({status:'authenticating',token:null,email:null,role:null,error:null});
+    try{
+      const session=await commandApi('/auth/session',credential,{method:'POST'});
+      if(generation!==sessionGenerationRef.current)return;
+      const email=session?.email||null,role=session?.role||'USER';
+      if(email){const remembered=rememberGoogleLoginHint(email);if(remembered)setLoginHint(remembered);}
+      setAllowAutoRestore(true);
+      setAuth({status:'authenticated',token:COOKIE_SESSION_BEARER,email,role,error:null});
+      try{
+        await loadData(COOKIE_SESSION_BEARER,role,generation);
+        if(generation===sessionGenerationRef.current)notify('Autentificare Google reusita.','success');
+      }catch(error){
+        if(generation===sessionGenerationRef.current)notify('Autentificarea a reusit, dar datele nu s-au incarcat: '+error.message,'error');
+      }
+    }catch(error){
+      if(generation!==sessionGenerationRef.current)return;
+      const message=error.status===403?'Contul este dezactivat sau nu are acces.':'Autentificare esuata: '+error.message;
+      setAuth({status:'signed-out',token:null,email:null,role:null,error:message});
+    }
+  },[loadData,notify]);
+
+  const logout=useCallback(async()=>{
+    pollGenerationRef.current+=1;
+    setAllowAutoRestore(false);
+    clearData(); // synchronous invalidation; never wait for network logout
+    const generation=sessionGenerationRef.current;
+    setAuth({status:'authenticating',token:null,email:null,role:null,error:null});
+    setDataState({status:'idle',error:null});
+    try{await commandApi('/auth/logout',COOKIE_SESSION_BEARER,{method:'POST'});}catch{}
+    if(generation!==sessionGenerationRef.current)return;
+    try{window.google?.accounts?.id?.disableAutoSelect();}catch{}
+    setAuth({status:'signed-out',token:null,email:null,role:null,error:null});
+    setRunning(false);
+    notify('Contul Google a fost deconectat.','info');
+  },[clearData,notify]);
+
+  const deleteCurrentAccount=useCallback(async()=>{
+    if(deletingAccount||deleteAccountConfirmation!=='STERGE')return;
+    const generation=++sessionGenerationRef.current;
+    setDeletingAccount(true);
+    try{
+      await commandApi('/me/account',auth.token,{method:'DELETE'});
+      if(generation!==sessionGenerationRef.current)return;
+      pollGenerationRef.current+=1;setAllowAutoRestore(false);
+      try{window.google?.accounts?.id?.disableAutoSelect();}catch{}
+      clearData();
+      setAuth({status:'signed-out',token:null,email:null,role:null,error:null});
+      setDataState({status:'idle',error:null});setRunning(false);
+      setDeleteAccountOpen(false);setDeleteAccountConfirmation('');
+      notify('Contul si datele personale au fost sterse definitiv.','success');
+    }catch(error){
+      if(generation===sessionGenerationRef.current)notify('Contul nu a putut fi sters: '+error.message,'error');
+    }finally{
+      setDeletingAccount(false);
+    }
+  },[auth.token,deletingAccount,deleteAccountConfirmation,clearData,notify]);
+
+  const retryData=useCallback(()=>{if(!auth.token)return;const generation=sessionGenerationRef.current;loadData(auth.token,auth.role,generation).then(()=>{if(generation===sessionGenerationRef.current)notify('Datele au fost reincarcate.','success');}).catch(error=>{if(generation===sessionGenerationRef.current)notify('Incarcarea a esuat: '+error.message,'error');});},[auth.token,auth.role,loadData,notify]);
 
   const profileConfigured=isSearchProfileConfigured(savedCriteria);
   useEffect(()=>{
@@ -589,7 +698,7 @@ function App(){
     }
     const timer=setTimeout(()=>loadJobsPage(auth.token,savedCriteria,filters).catch(error=>notify('Lista de joburi nu a putut fi actualizata: '+error.message,'error')),250);
     return()=>clearTimeout(timer);
-  },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),(filters.roleSubfamilies||[]).join('|'),(filters.contractTypes||[]).join('|'),filters.minFit,filters.pageSize,filters.quick,filters.sort,kpiFilter,pageNumber,savedCriteria,loadJobsPage,notify]);
+  },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),(filters.roleSubfamilies||[]).join('|'),(filters.contractTypes||[]).join('|'),filters.roleSubfamiliesNone,filters.contractTypesNone,filters.minFit,filters.pageSize,filters.quick,filters.sort,kpiFilter,pageNumber,savedCriteria,loadJobsPage,notify]);
 
   useEffect(()=>{
     setResultTotal(null);
@@ -603,7 +712,7 @@ function App(){
     const timer=setTimeout(()=>scanResultCount({basis,anchor,isCurrent:()=>current&&!controller.signal.aborted,load:cursor=>fetchJson(buildJobsPath({filters,view,kpiFilter,cursor,countOnly:true,asOf:anchor,countBasis:basis,prefetch:0}),auth.token,controller.signal)})
       .then(total=>{if(current&&!controller.signal.aborted&&total!==null)setResultTotal({scope,basis,anchor,total});}).catch(()=>{}),300);
     return()=>{current=false;clearTimeout(timer);controller.abort();if(countAbortRef.current===controller)countAbortRef.current=null;};
-  },[dataState.status,view,auth.token,jobPage.countBasis,jobPage.generatedAt,jobPage.scope,filters.search,filters.freshness,filters.workModes.join('|'),(filters.roleSubfamilies||[]).join('|'),(filters.contractTypes||[]).join('|'),filters.minFit,filters.pageSize,filters.quick,filters.sort,kpiFilter]);
+  },[dataState.status,view,auth.token,jobPage.countBasis,jobPage.generatedAt,jobPage.scope,filters.search,filters.freshness,filters.workModes.join('|'),(filters.roleSubfamilies||[]).join('|'),(filters.contractTypes||[]).join('|'),filters.roleSubfamiliesNone,filters.contractTypesNone,filters.minFit,filters.pageSize,filters.quick,filters.sort,kpiFilter]);
 
   useEffect(()=>{
     if(auth.status!=='authenticated'||!auth.token||dataState.status!=='ready'||jobPage.orderStatus!=='PROVISIONAL'||!['jobs','review','unclassified'].includes(view))return;
@@ -629,19 +738,18 @@ function App(){
   const baseRows=useMemo(()=>view==='applications'?applications:activeJobs,[view,applications,activeJobs]);
   const filteredRows=useMemo(()=>view==='applications'?filterAndSortJobRows(baseRows,{view,filters:{...filters,quick:'all',search:''},threshold,kpiFilter:'all',ageHours}):baseRows,[view,baseRows,filters.quick,filters.search,filters.sort,threshold,kpiFilter]);
   const canonicalCounts=useMemo(()=>jobPage.orderStatus?{all:jobPage.totals?.all??null,high:jobPage.totals?.high??null,b2b:jobPage.totals?.b2b??null,new24h:jobPage.totals?.new24h??null,reposts:jobPage.totals?.repost??null,remote:jobPage.totals?.remote??null}:jobViewCounts(jobPopulation,threshold,ageHours),[jobPage.orderStatus,jobPage.totals,jobPopulation,threshold]);
-  const quickCounts=useMemo(()=>({all:canonicalCounts.all,high:canonicalCounts.high,b2b:canonicalCounts.b2b}),[canonicalCounts]);
   const metrics=useMemo(()=>({jobs:canonicalCounts.new24h,high:canonicalCounts.high,reposts:canonicalCounts.reposts,remote:canonicalCounts.remote,threshold,scope:jobCountScopeLabel(filters.freshness)}),[canonicalCounts,threshold,filters.freshness]);
   const counts=useMemo(()=>({jobs:canonicalCounts.all,review:reviewRows.length,applications:applications.length}),[canonicalCounts,reviewRows,applications]);
 
-  const archiveJob=useCallback(async job=>{try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({archived:true})});setArchivedKeys(current=>[...new Set([...current,jobKey(job)])]);if(detailJob?.id===job.id)setDetailJob(null);setResultTotal(null);await loadJobsPage(auth.token,savedCriteria,filtersRef.current);notify('Job arhivat pentru profilul curent.','success');}catch(error){notify('Arhivarea a esuat: '+error.message,'error');}},[auth.token,detailJob,notify,loadJobsPage,savedCriteria]);
-  const reviewJob=useCallback(async job=>{setDetailJob(job);try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({seen:true})});}catch(error){notify('Starea Review nu a putut fi salvata: '+error.message,'error');}},[auth.token,notify]);
+  const archiveJob=useCallback(async job=>{const generation=sessionGenerationRef.current;try{await commandApi('/me/jobs/'+job.id+'/state',auth.token,{method:'PUT',body:JSON.stringify({archived:true})});if(generation!==sessionGenerationRef.current)return;setArchivedKeys(current=>[...new Set([...current,jobKey(job)])]);if(detailJob?.id===job.id)setDetailJob(null);setResultTotal(null);await loadJobsPage(auth.token,savedCriteria,filtersRef.current,{generation});if(generation===sessionGenerationRef.current)notify('Job arhivat pentru profilul curent.','success');}catch(error){if(generation===sessionGenerationRef.current)notify('Arhivarea a esuat: '+error.message,'error');}},[auth.token,detailJob,notify,loadJobsPage,savedCriteria]);
+
   const applyJob=useCallback(job=>{writeUiState({view,filters,selectedJobId:job?.id||null,scrollY:window.scrollY});},[view,filters]);
 
-  const pollRun=useCallback(async(previousRunId,previousCompletedAt,targetRunId=null)=>{const generation=++pollGenerationRef.current;const baseline={runId:previousRunId??null,completedAt:previousCompletedAt??null};const deadline=Date.now()+60*60*1000;for(let attempt=0;generation===pollGenerationRef.current&&Date.now()<deadline;attempt+=1){await new Promise(resolve=>setTimeout(resolve,pollingDelayMs(attempt)));if(generation!==pollGenerationRef.current)return null;try{const status=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);if(generation!==pollGenerationRef.current)return null;if(['idle','unavailable'].includes(status?.status)){setRunStatus(status);notify('Starea finala a rularii nu a putut fi confirmata.','info');return null;}if(targetRunId&&!statusForTrackedRun(status,targetRunId))continue;setRunStatus(status);if(!terminalForBaseline(status,baseline))continue;await loadData(auth.token,auth.role);const notice=completionNotice(status);notify(notice.message,notice.type);return status;}catch(error){if(error?.status===401||error?.status===403){if(generation===pollGenerationRef.current)setRunStatus({status:'unavailable'});notify('Urmarirea rularii s-a oprit deoarece sesiunea nu mai este autorizata.','error');return null;}}}if(generation===pollGenerationRef.current){setRunStatus({status:'unavailable'});notify('Starea finala a rularii nu a putut fi confirmata.','error');}return null;},[auth.token,auth.role,loadData,notify]);
-  useEffect(()=>{if(auth.status!=='authenticated'||auth.role!=='ADMIN'||!auth.token||dataState.status!=='ready'||running||!isActiveRunStatus(runStatus?.status))return undefined;setRunning(true);pollRun(runStatus?.run_id??null,runStatus?.completed_at??null,runStatus?.run_id??null).finally(()=>setRunning(false));return undefined;},[auth.status,auth.role,auth.token,dataState.status,runStatus?.status,runStatus?.run_id,runStatus?.completed_at,running,pollRun]);
+  const pollRun=useCallback(async(previousRunId,previousCompletedAt,targetRunId=null)=>{const generation=++pollGenerationRef.current,sessionEpoch=sessionGenerationRef.current;const baseline={runId:previousRunId??null,completedAt:previousCompletedAt??null};const deadline=Date.now()+60*60*1000;for(let attempt=0;generation===pollGenerationRef.current&&Date.now()<deadline;attempt+=1){await new Promise(resolve=>setTimeout(resolve,pollingDelayMs(attempt)));if(generation!==pollGenerationRef.current)return null;try{const status=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);if(generation!==pollGenerationRef.current)return null;if(['idle','unavailable'].includes(status?.status)){setRunStatus(status);notify('Starea finala a rularii nu a putut fi confirmata.','info');return null;}if(targetRunId&&!statusForTrackedRun(status,targetRunId))continue;setRunStatus(status);if(!terminalForBaseline(status,baseline))continue;await loadData(auth.token,auth.role,sessionEpoch);if(generation!==pollGenerationRef.current||sessionEpoch!==sessionGenerationRef.current)return null;const notice=completionNotice(status);notify(notice.message,notice.type);return status;}catch(error){if(error?.status===401||error?.status===403){if(generation===pollGenerationRef.current)setRunStatus({status:'unavailable'});notify('Urmarirea rularii s-a oprit deoarece sesiunea nu mai este autorizata.','error');return null;}}}if(generation===pollGenerationRef.current){setRunStatus({status:'unavailable'});notify('Starea finala a rularii nu a putut fi confirmata.','error');}return null;},[auth.token,auth.role,loadData,notify]);
+  useEffect(()=>{if(auth.status!=='authenticated'||auth.role!=='ADMIN'||!auth.token||dataState.status!=='ready'||running||!isActiveRunStatus(runStatus?.status))return undefined;const sessionEpoch=sessionGenerationRef.current;setRunning(true);pollRun(runStatus?.run_id??null,runStatus?.completed_at??null,runStatus?.run_id??null).finally(()=>{if(sessionEpoch===sessionGenerationRef.current)setRunning(false);});return undefined;},[auth.status,auth.role,auth.token,dataState.status,runStatus?.status,runStatus?.run_id,runStatus?.completed_at,running,pollRun]);
 
   const pollOwnRefresh=useCallback(async(id)=>{
-    const generation=++pollGenerationRef.current;
+    const generation=++pollGenerationRef.current,sessionEpoch=sessionGenerationRef.current;
     const deadline=Date.now()+60*60*1000;
     for(let attempt=0;generation===pollGenerationRef.current&&Date.now()<deadline;attempt+=1){
       await new Promise(resolve=>setTimeout(resolve,pollingDelayMs(attempt)));
@@ -651,7 +759,8 @@ function App(){
         if(generation!==pollGenerationRef.current)return;
         if(!status.terminal)continue;
         if(status.status==='completed'||status.status==='completed_with_errors'){
-          await loadJobsPage(auth.token,savedCriteria,filtersRef.current);
+          await loadJobsPage(auth.token,savedCriteria,filtersRef.current,{generation:sessionEpoch});
+          if(generation!==pollGenerationRef.current||sessionEpoch!==sessionGenerationRef.current)return;
           notify(status.status==='completed'?'Actualizare finalizata.':'Actualizare finalizata cu erori partiale.',status.status==='completed'?'success':'info');
         }else notify('Actualizarea nu a putut fi confirmata ca finalizata.','error');
         return;
@@ -664,58 +773,64 @@ function App(){
 
   const runSearch=useCallback(async()=>{
     if(!auth.token||running)return;
+    const sessionEpoch=sessionGenerationRef.current;
     if(!isSearchProfileConfigured(savedCriteria)){setView('criteria');notify('Configureaza familia, subfamilia si restul Search Profile-ului inainte de actualizare.','error');return;}
     setRunning(true);
     const previousRunId=runStatus?.run_id||null,previousCompletedAt=runStatus?.completed_at||null;
     try{
       const result=await commandApi(auth.role==='ADMIN'?'/admin/refresh?intent=manual':'/me/refresh?intent=manual',auth.token,{method:'POST'});
+      if(sessionEpoch!==sessionGenerationRef.current)return;
       const notice=refreshOutcomeNotice(result);notify(notice.message,notice.type);
-      if(result.outcome==='REUSED_CORPUS'){await loadJobsPage(auth.token,savedCriteria,filtersRef.current);}
+      if(result.outcome==='REUSED_CORPUS'){await loadJobsPage(auth.token,savedCriteria,filtersRef.current,{generation:sessionEpoch});}
       else if(auth.role==='ADMIN'&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome)){
         const target=result.run_id;
         if(target)setRunStatus(initialTrackedRun(target));
-        try{const currentStatus=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);if(target?statusForTrackedRun(currentStatus,target):isActiveRunStatus(currentStatus?.status))setRunStatus(currentStatus);}catch(statusError){notify('Actualizarea a fost acceptata; astept statusul live al executiei.','info');}
+        try{const currentStatus=await fetchJson('/data/run-status.json?t='+Date.now(),auth.token);if(sessionEpoch!==sessionGenerationRef.current)return;if(target?statusForTrackedRun(currentStatus,target):isActiveRunStatus(currentStatus?.status))setRunStatus(currentStatus);}catch(statusError){notify('Actualizarea a fost acceptata; astept statusul live al executiei.','info');}
         await pollRun(previousRunId,previousCompletedAt,target||null);
       }else if(auth.role==='USER'&&result.request_id&&['STARTED_RUN','JOINED_EXISTING_RUN'].includes(result.outcome)){
         await pollOwnRefresh(result.request_id);
       }
-    }catch(error){notify('Nu am putut actualiza joburile: '+error.message,'error');}
-    finally{setRunning(false);}
+    }catch(error){if(sessionEpoch===sessionGenerationRef.current)notify('Nu am putut actualiza joburile: '+error.message,'error');}
+    finally{if(sessionEpoch===sessionGenerationRef.current)setRunning(false);}
   },[auth.token,auth.role,running,savedCriteria,runStatus,notify,loadJobsPage,pollRun,pollOwnRefresh]);
 
-  const saveCriteria=useCallback(async()=>{if(!auth.token||saving)return;if(geographyConflicts(draftCriteria)){notify('Rezolva conflictul dintre includerile si excluderile teritoriale.','error');return;}if(!hasTargetGeography(draftCriteria)){notify('Selecteaza cel putin o tara sau regiune tinta.','error');return;}if(!hasSelectedRole(draftCriteria)){notify('Selecteaza cel putin o familie si o subfamilie pentru Retrieve.','error');return;}if(!hasSelectedWorkMode(draftCriteria)){notify('Selecteaza cel putin un mod de lucru pentru Retrieve.','error');return;}if(!hasSelectedContractType(draftCriteria)){notify('Selecteaza cel putin un tip de contract pentru Retrieve.','error');return;}setSaving(true);try{const result=await commandApi('/me/preferences',auth.token,{method:'PUT',body:JSON.stringify(preferencePatchFromCriteria(draftCriteria))});setSavedCriteria(draftCriteria);setCanonicalConfig(result?.preferences||canonicalConfig);const nextFilters={...filtersRef.current,freshness:filtersRef.current.freshness??draftCriteria.freshness};setFilters(nextFilters);await loadJobsPage(auth.token,draftCriteria,nextFilters);notify('Preferintele au fost salvate. Nu a fost pornit niciun Retrieve.','success');}catch(error){notify('Preferintele nu au putut fi salvate: '+error.message,'error');}finally{setSaving(false);}},[auth.token,saving,draftCriteria,notify,loadJobsPage,canonicalConfig]);
+  const saveCriteria=useCallback(async()=>{if(!auth.token||saving)return;if(geographyConflicts(draftCriteria)){notify('Rezolva conflictul dintre includerile si excluderile teritoriale.','error');return;}if(!hasTargetGeography(draftCriteria)){notify('Selecteaza cel putin o tara sau regiune tinta.','error');return;}if(!hasSelectedRole(draftCriteria)){notify('Selecteaza cel putin o familie si o subfamilie pentru Retrieve.','error');return;}if(!hasSelectedWorkMode(draftCriteria)){notify('Selecteaza cel putin un mod de lucru pentru Retrieve.','error');return;}if(!hasSelectedContractType(draftCriteria)){notify('Selecteaza cel putin un tip de contract pentru Retrieve.','error');return;}const generation=sessionGenerationRef.current;setSaving(true);try{const result=await commandApi('/me/preferences',auth.token,{method:'PUT',body:JSON.stringify(preferencePatchFromCriteria(draftCriteria))});if(generation!==sessionGenerationRef.current)return;setSavedCriteria(draftCriteria);setCanonicalConfig(result?.preferences||canonicalConfig);const nextFilters={...filtersRef.current,freshness:filtersRef.current.freshness??draftCriteria.freshness};setFilters(nextFilters);await loadJobsPage(auth.token,draftCriteria,nextFilters,{generation});if(generation!==sessionGenerationRef.current)return;notify('Preferintele au fost salvate. Nu a fost pornit niciun Retrieve.','success');}catch(error){if(generation===sessionGenerationRef.current)notify('Preferintele nu au putut fi salvate: '+error.message,'error');}finally{if(generation===sessionGenerationRef.current)setSaving(false);}},[auth.token,saving,draftCriteria,notify,loadJobsPage,canonicalConfig]);
 
   const loadMoreJobs=useCallback(async()=>{
     if(!auth.token||!jobPage.nextCursor||jobPage.loading||jobPage.loadingMore||pageNavigationPendingRef.current)return;
+    const generation=sessionGenerationRef.current;
     pageNavigationPendingRef.current=true;
     try{
       const transition=await navigateJobPage({
         direction:'next',page:pageNumber,history:pageCursorHistory.current,nextCursor:jobPage.nextCursor,
-        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true}),
+        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true,generation}),
       });
+      if(generation!==sessionGenerationRef.current)return;
       if(transition.outcome==='restarted'){notify('Cursorul a expirat; lista a fost reluata de la pagina 1.','info');return;}
       if(transition.outcome!=='loaded')return;
       pageCursorHistory.current=transition.history;
       setPageNumber(transition.page);
       document.querySelector('[data-testid="job-table"]')?.scrollIntoView({block:'start',behavior:'auto'});
-    }catch(error){notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error');}
-    finally{pageNavigationPendingRef.current=false;}
+    }catch(error){if(generation===sessionGenerationRef.current)notify('Pagina urmatoare nu a putut fi incarcata: '+error.message,'error');}
+    finally{if(generation===sessionGenerationRef.current)pageNavigationPendingRef.current=false;}
   },[auth.token,jobPage.nextCursor,jobPage.loading,jobPage.loadingMore,pageNumber,savedCriteria,loadJobsPage,notify]);
   const previousJobsPage=useCallback(async()=>{
     if(!auth.token||pageNumber<=1||jobPage.loading||jobPage.loadingMore||pageNavigationPendingRef.current)return;
+    const generation=sessionGenerationRef.current;
     pageNavigationPendingRef.current=true;
     try{
       const transition=await navigateJobPage({
         direction:'previous',page:pageNumber,history:pageCursorHistory.current,
-        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true}),
+        load:cursor=>loadJobsPage(auth.token,savedCriteria,filtersRef.current,{cursor,append:true,generation}),
       });
+      if(generation!==sessionGenerationRef.current)return;
       if(transition.outcome==='restarted'){notify('Cursorul a expirat; lista a fost reluata de la pagina 1.','info');return;}
       if(transition.outcome!=='loaded')return;
       pageCursorHistory.current=transition.history;
       setPageNumber(transition.page);
       document.querySelector('[data-testid="job-table"]')?.scrollIntoView({block:'start',behavior:'auto'});
-    }catch(error){notify('Pagina anterioara nu a putut fi incarcata: '+error.message,'error');}
-    finally{pageNavigationPendingRef.current=false;}
+    }catch(error){if(generation===sessionGenerationRef.current)notify('Pagina anterioara nu a putut fi incarcata: '+error.message,'error');}
+    finally{if(generation===sessionGenerationRef.current)pageNavigationPendingRef.current=false;}
   },[auth.token,jobPage.loading,jobPage.loadingMore,pageNumber,savedCriteria,loadJobsPage,notify]);
   const changeView=useCallback(next=>{setView(next);if(next!=='jobs')setKpiFilter('all');},[]);
   const openDetails=useCallback(job=>{detailScrollRef.current=window.scrollY;setDetailJob(job);},[]);
@@ -726,7 +841,7 @@ function App(){
   const countMatches=resultTotal?.scope===pageRequestKey({filters,view,kpiFilter})&&resultTotal?.basis===jobPage.countBasis&&resultTotal?.anchor===jobPage.generatedAt;
   const exactTotal=jobPage.scope===pageRequestKey({filters,view,kpiFilter})?jobPage.totals?.all:null;
   const totalPages=Number.isSafeInteger(exactTotal)?Math.max(1,Math.ceil(exactTotal/jobPageSize(filters.pageSize))):countMatches?Math.max(1,Math.ceil(resultTotal.total/jobPageSize(filters.pageSize))):null;
-  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role} filters={filters} setFilters={setFilters} defaultFreshness={savedCriteria.freshness}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&['jobs','review','unclassified'].includes(view)&&<Filters filters={filters} setFilters={setFilters} counts={quickCounts} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&['jobs','review','unclassified'].includes(view)||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onReview={reviewJob} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)&&(totalPages==null||pageNumber<totalPages)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} paginate={view!=='applications'} page={pageNumber} onNext={loadMoreJobs} onPrevious={previousJobsPage} pageSize={jobPageSize(filters.pageSize)} onPageSize={value=>{pageRequestSerialRef.current++;pageCursorHistory.current=[null];setPageNumber(1);setResultTotal(null);setJobPage(current=>({...current,nextCursor:null,loading:true}));setFilters(current=>({...current,pageSize:jobPageSize(value)}));}} totalPages={totalPages} sort={filters.sort} orderStatus={jobPage.orderStatus} pending={jobPage.pending} onSort={sort=>{pageRequestSerialRef.current++;setFilters(current=>({...current,sort}));}}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token} environment={environment} onPurged={async()=>{setDetailJob(null);setArchivedKeys([]);await loadData(auth.token,auth.role);}}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
+  return<div className="min-h-screen bg-slate-50"><ApplicationHeader email={auth.email} onLogout={logout} onDeleteAccount={()=>{setDeleteAccountConfirmation('');setDeleteAccountOpen(true);}} environment={environment}/><div className="md:flex"><Sidebar view={view} onView={changeView} counts={counts} runStatus={runStatus} role={auth.role} filters={filters} setFilters={setFilters} defaultFreshness={savedCriteria.freshness}/><main className="min-w-0 flex-1 pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0"><div className="mx-auto w-full max-w-[1400px] space-y-3 px-3 py-3 sm:space-y-5 sm:px-6 lg:px-8 lg:py-6"><Header view={view} running={running} onRun={runSearch} refreshDisabled={!profileConfigured} metrics={metrics}/>{auth.role==='ADMIN'&&<PromotionStatusPanel status={promotionStatus}/>} {auth.role==='ADMIN'&&<RunProgressPanel status={runStatus}/>} {dataState.status==='loading'&&<LoadingPanel/>}{dataState.status==='error'&&<ErrorPanel error={dataState.error} onRetry={retryData}/>} {dataState.status==='ready'&&<>{onboarding&&<OnboardingPanel onStart={()=>changeView('criteria')}/>} {!onboarding&&view==='jobs'&&<KPIGrid metrics={metrics} selected={kpiFilter} onSelect={setKpiFilter}/>} {!onboarding&&['jobs','review','unclassified'].includes(view)&&<Filters filters={filters} setFilters={setFilters} defaultFreshness={savedCriteria.freshness} onResetKpi={()=>setKpiFilter('all')}/>} {(!onboarding&&['jobs','review','unclassified'].includes(view)||view==='applications')&&<JobTable rows={filteredRows} threshold={threshold} onDetails={openDetails} onArchive={archiveJob} onApply={applyJob} hasMore={view!=='applications'&&Boolean(jobPage.nextCursor)&&(totalPages==null||pageNumber<totalPages)} loadingMore={jobPage.loadingMore} loading={jobPage.loading} paginate={view!=='applications'} page={pageNumber} onNext={loadMoreJobs} onPrevious={previousJobsPage} pageSize={jobPageSize(filters.pageSize)} onPageSize={value=>{pageRequestSerialRef.current++;pageCursorHistory.current=[null];setPageNumber(1);setResultTotal(null);setJobPage(current=>({...current,nextCursor:null,loading:true}));setFilters(current=>({...current,pageSize:jobPageSize(value)}));}} totalPages={totalPages} sort={filters.sort} orderStatus={jobPage.orderStatus} pending={jobPage.pending} onSort={sort=>{pageRequestSerialRef.current++;setFilters(current=>({...current,sort}));}}/>} {view==='criteria'&&<CriteriaPage draft={draftCriteria} setDraft={setDraftCriteria} saved={savedCriteria} onSave={saveCriteria} onReset={()=>setDraftCriteria(savedCriteria)} saving={saving}/>} {view==='admin'&&auth.role==='ADMIN'&&<AdminShell sources={sources} setSources={setSources} sourceCategories={sourceCategories} setSourceCategories={setSourceCategories} runStatus={runStatus} runHistory={runHistory} running={running} onRun={runSearch} notify={notify} token={auth.token} environment={environment} onPurged={async()=>{setDetailJob(null);setArchivedKeys([]);await loadData(auth.token,auth.role);}}/>}</>}</div></main></div><BottomNav view={view} onView={changeView} counts={counts} role={auth.role} onLogout={logout}/><DetailDrawer job={detailJob} threshold={threshold} onClose={closeDetails} onApply={applyJob}/>{deleteAccountOpen&&<ActionDialog title="Sterge definitiv contul" description="Aceasta actiune este ireversibila. Sesiunile si toate datele personale JSCC vor fi sterse; corpusul partajat de joburi ramane intact." fields={[{name:'confirmation',label:'Scrie STERGE pentru confirmare',autoFocus:true}]} values={{confirmation:deleteAccountConfirmation}} onChange={(name,value)=>{if(name==='confirmation')setDeleteAccountConfirmation(value);}} confirmLabel="Sterge definitiv" danger busy={deletingAccount} confirmDisabled={deleteAccountConfirmation!=='STERGE'} onCancel={()=>{setDeleteAccountOpen(false);setDeleteAccountConfirmation('');}} onConfirm={deleteCurrentAccount}/>}<Toast toast={toast}/></div>;
 }
 
 createRoot(document.getElementById('root')).render(<React.StrictMode><App/></React.StrictMode>);

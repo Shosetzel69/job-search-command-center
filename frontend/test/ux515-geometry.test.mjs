@@ -99,9 +99,10 @@ test('source geometry aligns with tested xl/2xl breakpoints and real DOM markers
   assert.match(table, /data-testid="job-actions"/);
   assert.match(table, /data-testid="job-card-actions"/);
   assert.match(table, /xl:hidden/); // under 1280 -> card, not zero-width desktop grid
-  for (const action of ['Detalii job', 'Review job', 'Aplica la job', 'Arhiveaza job']) {
+  for (const action of ['Detalii job', 'Aplica la job', 'Arhiveaza job']) {
     assert.ok(table.includes(`title="${action}" aria-label="${action}"`));
   }
+  assert.doesNotMatch(table, /title="Review job"/); // P4: one Details action; review must be explicit workflow
   assert.match(table, /hidden 2xl:inline/); // wide text, intermediate icon-only
 });
 

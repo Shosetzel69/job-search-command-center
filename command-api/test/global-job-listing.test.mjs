@@ -49,3 +49,15 @@ test('typed keysets do not cast a FIT score as a provisional timestamp',()=>{
  assert.ok(idx>=0);
  assert.equal(params[idx+1],null);
 });
+
+test('P4 explicit none selection has a distinct cursor scope and short-circuits matches',()=>{
+ const all=normalizeGlobalQuery({sort:'publication',limit:20,result_view:'jobs'});
+ const none=normalizeGlobalQuery({sort:'publication',limit:20,result_view:'jobs',empty_role_subfamilies:'true',empty_contract_types:'true'});
+ assert.notEqual(all.filter_hash,none.filter_hash);
+ assert.equal(none.empty_role_subfamilies,true);
+ assert.equal(none.empty_contract_types,true);
+ const allSql=buildGlobalListingQuery(id,basis,all,anchor).sql;
+ const noneSql=buildGlobalListingQuery(id,basis,none,anchor).sql;
+ assert.doesNotMatch(allSql,/WHERE false AND/);
+ assert.match(noneSql,/AND false/);
+});

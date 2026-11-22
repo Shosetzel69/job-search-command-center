@@ -30,6 +30,8 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = jobPageSize
     for (const code of new Set(filters.roleSubfamilies || [])) params.append('role_subfamily', String(code));
     for (const code of new Set(filters.contractTypes || [])) params.append('contract_type', String(code));
     if (filters.minFit != null && filters.minFit !== '') params.set('min_fit', String(filters.minFit));
+    if (filters.roleSubfamiliesNone === true) params.set('empty_role_subfamilies', 'true');
+    if (filters.contractTypesNone === true) params.set('empty_contract_types', 'true');
     if(!countOnly){
       const [key,dir]=String(filters.sort||'fit-desc').split('-');
       params.set('sort',['fit','title','country','work_mode','publication','retrieve'].includes(key)?key:'publication');
