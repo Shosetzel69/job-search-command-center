@@ -55,6 +55,11 @@ fi
 image="$repo@$digest"
 echo "JSCC659_SERVICE_IMAGE_DIGEST=$digest"
 
+# Reject a concurrent DEV rollout or a configuration/secret change during build.
+gcloud run services describe "$service" --project="$project" --region="$region" --format=json > /tmp/jscc659-before-stage.json
+python3 control/scripts/gcp/gov85_659_stage1_guard.py unchanged \
+  /tmp/jscc659-before.json /tmp/jscc659-before-stage.json
+
 # Revision staged with no traffic; image-only plus the three necessary
 # identity/telemetry variables. Existing SA, secrets and other env unchanged.
 gcloud run services update "$service" --project="$project" --region="$region" \
