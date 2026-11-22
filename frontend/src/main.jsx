@@ -289,7 +289,7 @@ function ListingFilters({filters,setFilters,defaultFreshness}) {
 function Filters({filters,setFilters,defaultFreshness,onResetKpi}) {
   const[mobileOpen,setMobileOpen]=useState(false);
   const reset=()=>{setFilters({search:'',quick:'all',freshness:defaultFreshness||24,workModes:[...ALL_WORK_MODES],roleSubfamilies:[],roleSubfamiliesNone:false,contractTypes:[],contractTypesNone:false,minFit:'',sort:'fit-desc',pageSize:jobPageSize(filters.pageSize)});onResetKpi?.();};
-  const secondaryCount=(filters.freshness!==(defaultFreshness||24)?1:0)+(filters.workModes.length!==ALL_WORK_MODES.length?1:0)+(filters.sort!=='fit-desc'?1:0)+(filters.roleSubfamilies?.length?1:0)+(filters.contractTypes?.length?1:0)+(filters.minFit!==''&&filters.minFit!=null?1:0);
+  const secondaryCount=(filters.freshness!==(defaultFreshness||24)?1:0)+(filters.workModes.length!==ALL_WORK_MODES.length?1:0)+(filters.sort!=='fit-desc'?1:0)+(filters.roleSubfamilies?.length||filters.roleSubfamiliesNone?1:0)+(filters.contractTypes?.length||filters.contractTypesNone?1:0)+(filters.minFit!==''&&filters.minFit!=null?1:0);
   return <>
     <div className="sticky top-14 z-30 -mx-3 border-y border-slate-200 bg-slate-50/95 px-3 py-2 backdrop-blur md:static md:mx-0 md:rounded-2xl md:border md:bg-white md:p-0 md:shadow-sm">
       <div className="flex gap-2 md:border-b md:border-slate-100 md:p-4">
