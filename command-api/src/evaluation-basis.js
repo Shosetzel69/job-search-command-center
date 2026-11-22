@@ -36,15 +36,29 @@ export const INPUT_DIGEST_SQL = `encode(sha256(convert_to(jsonb_build_array(
   publication.effective_posted_at
 )::text,'UTF8')),'hex')`;
 
-export const EVALUATION_SOURCE_SQL = `FROM canonical_jobs j
-         JOIN LATERAL (
-           SELECT posting_id, source_name, canonical_url, posted_at, last_seen_at, repost_of_posting_id, payload
+// #659: shared deterministic preferred-posting order for Nile query paths.
+// FULL uses one set-based source pass; BATCH preserves correlated indexed
+// lookup for the at-most-100 canonical job IDs selected by advance.
+export const PREFERRED_POSTING_ORDER_SQL = `CASE lifecycle_status
+                       WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
+                     last_seen_at DESC, posting_id ASC`;
+const PREFERRED_POSTING_FIELDS_SQL =
+  'posting_id, source_name, canonical_url, posted_at, last_seen_at, repost_of_posting_id, payload';
+export const PREFERRED_POSTING_FULL_JOIN_SQL = `JOIN (
+           SELECT DISTINCT ON (job_id) job_id, ${PREFERRED_POSTING_FIELDS_SQL}
+             FROM source_postings
+            ORDER BY job_id, ${PREFERRED_POSTING_ORDER_SQL}
+         ) sp ON sp.job_id = j.job_id`;
+export const PREFERRED_POSTING_BATCH_JOIN_SQL = `JOIN LATERAL (
+           SELECT ${PREFERRED_POSTING_FIELDS_SQL}
              FROM source_postings
             WHERE job_id = j.job_id
-            ORDER BY CASE lifecycle_status WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
-                     last_seen_at DESC, posting_id ASC
+            ORDER BY ${PREFERRED_POSTING_ORDER_SQL}
             LIMIT 1
-         ) sp ON true
+         ) sp ON true`;
+// A single publication-date/parser fragment is shared by FULL and BATCH.
+const EVALUATION_SOURCE_TEMPLATE_SQL = `FROM canonical_jobs j
+         __PREFERRED_POSTING_JOIN__
          LEFT JOIN LATERAL (
            SELECT COALESCE(
              CASE WHEN date_trunc('milliseconds', sp.posted_at) <= $2
@@ -100,6 +114,10 @@ export const EVALUATION_SOURCE_SQL = `FROM canonical_jobs j
              )
            ) AS effective_posted_at
          ) publication ON true`;
+export const EVALUATION_SOURCE_SQL = EVALUATION_SOURCE_TEMPLATE_SQL.replace(
+  '__PREFERRED_POSTING_JOIN__', PREFERRED_POSTING_FULL_JOIN_SQL);
+export const EVALUATION_BATCH_SOURCE_SQL = EVALUATION_SOURCE_TEMPLATE_SQL.replace(
+  '__PREFERRED_POSTING_JOIN__', PREFERRED_POSTING_BATCH_JOIN_SQL);
 export const EVALUATION_FIELDS_SQL = `j.job_id,j.title,j.company,j.location,j.country_codes,j.work_mode,
  j.role_family,j.role_subfamily,j.seniority,j.contract_type,j.remote_scope,j.job_version,
  j.classification_status,j.classification_confidence,j.classification_version,

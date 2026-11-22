@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { evaluationPreferenceDigest, INPUT_DIGEST_SQL, EVALUATION_SOURCE_SQL } from '../src/evaluation-basis.js';
+import { evaluationPreferenceDigest, INPUT_DIGEST_SQL, EVALUATION_SOURCE_SQL, EVALUATION_BATCH_SOURCE_SQL, PREFERRED_POSTING_ORDER_SQL, PREFERRED_POSTING_FULL_JOIN_SQL, PREFERRED_POSTING_BATCH_JOIN_SQL } from '../src/evaluation-basis.js';
 import { ADVANCE_BATCH_MAX, ADVANCE_BUDGET_MS, evaluationAdvanceProgress, encodeEvaluationScanCursor, decodeEvaluationScanCursor, readEvaluationBasisTx, evaluationProjection, persistIncrementalEvaluationTx } from '../src/evaluation-advance.js';
 
 test('only evaluation-relevant preferences and nomenclature affect the digest',()=>{
@@ -17,6 +17,21 @@ test('SQL basis covers the chosen posting, both payloads, classification and pre
   for(const field of ['sp.posting_id','j.payload','sp.payload','j.job_version','j.role_subfamily','$4::text','publication.effective_posted_at'])
     assert.ok(INPUT_DIGEST_SQL.includes(field),field);
   assert.match(EVALUATION_SOURCE_SQL,/posting_id ASC/);
+  assert.match(EVALUATION_SOURCE_SQL,/SELECT DISTINCT ON \(job_id\)/);
+  assert.match(EVALUATION_SOURCE_SQL,/sp\.job_id = j\.job_id/);
+  assert.match(EVALUATION_SOURCE_SQL,/ORDER BY job_id,[\s\S]*last_seen_at DESC, posting_id ASC/);
+  assert.doesNotMatch(EVALUATION_SOURCE_SQL,/JOIN LATERAL \(\s*SELECT posting_id/);
+  assert.match(EVALUATION_BATCH_SOURCE_SQL,/JOIN LATERAL \(\s*SELECT posting_id/);
+  assert.match(EVALUATION_BATCH_SOURCE_SQL,/WHERE job_id = j\.job_id/);
+  assert.match(EVALUATION_BATCH_SOURCE_SQL,/LIMIT 1/);
+  assert.doesNotMatch(EVALUATION_BATCH_SOURCE_SQL,/SELECT DISTINCT ON/);
+  assert.ok(EVALUATION_SOURCE_SQL.includes(PREFERRED_POSTING_FULL_JOIN_SQL));
+  assert.ok(EVALUATION_BATCH_SOURCE_SQL.includes(PREFERRED_POSTING_BATCH_JOIN_SQL));
+  assert.ok(PREFERRED_POSTING_FULL_JOIN_SQL.includes(PREFERRED_POSTING_ORDER_SQL));
+  assert.ok(PREFERRED_POSTING_BATCH_JOIN_SQL.includes(PREFERRED_POSTING_ORDER_SQL));
+  // Replacing only the access path must preserve date parsing and input-digest semantics.
+  assert.equal(EVALUATION_SOURCE_SQL.replace(PREFERRED_POSTING_FULL_JOIN_SQL,'__PREFERRED__'),
+    EVALUATION_BATCH_SOURCE_SQL.replace(PREFERRED_POSTING_BATCH_JOIN_SQL,'__PREFERRED__'));
   assert.equal(ADVANCE_BATCH_MAX,100);
   assert.equal(ADVANCE_BUDGET_MS,8000);
 });
@@ -75,11 +90,15 @@ test('013 exact ledger rejects missing or incorrect indexes and untracked object
     'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_1'
   )}));
   assert.equal(assertEvaluation013Ledger(files,files,cols,internal),'ALREADY_APPLIED');
+  // Real official Nile native image (2026-11-22) deparsed six indexes as _pdb_0.
+  const internalPdb0=internal.map(i=>({...i,indexdef:i.indexdef.replace(
+    'profile_job_evaluation_pdb_1','profile_job_evaluation_pdb_0')}));
+  assert.equal(assertEvaluation013Ledger(files,files,cols,internalPdb0),'ALREADY_APPLIED');
   for(const incorrect of [
     'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".wrong_table_pdb_1',
     'ON ONLY "01000000-0000-7000-8000-000000000000_other_nile_internal".profile_job_evaluation_pdb_1',
     'ON ONLY public.profile_job_evaluation',
-    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_0',
+    'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_01',
   ]) {
     const bad=internal.map((i,n)=>n?i:{...i,indexdef:i.indexdef.replace(
       'ON ONLY "01000000-0000-7000-8000-000000000000_public_nile_internal".profile_job_evaluation_pdb_1',incorrect)});

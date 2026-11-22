@@ -59,6 +59,32 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
 
   try {
   await attestNativeDatabase(runtimeDb);
+  await t.test('P659 native Nile SQL telemetry preserves query and sanitizes events',async()=>{
+    // Native Nile provider admission occurred before this suite; not local PG.
+    const {measureNileSql}=await import('../src/performance-telemetry.js');
+    const events=[],info=console.info;
+    const envTelemetry={APP_ENV:'dev',JSCC_PERF_TELEMETRY:'1'};
+    console.info=(entry,...other)=>{
+      if(typeof entry==='string' && entry.includes('JSCC_PERF_SQL_V1'))events.push(JSON.parse(entry));
+      else info(entry,...other);
+    };
+    try{
+      const result=await measureNileSql('global_listing_sql',runtimeDb,
+        'SELECT $1::integer AS probe',[659],envTelemetry);
+      assert.equal(Number(result.rows[0].probe),659);
+      assert.equal(events.length,1);
+      assert.equal(events[0].operation,'global_listing_sql');
+      assert.equal(events[0].outcome,'PASS');
+      assert.ok(events[0].duration_ms>=0);
+      assert.equal(JSON.stringify(events[0]).includes('SELECT'),false);
+      const disabled=await measureNileSql('global_listing_sql',runtimeDb,
+        'SELECT $1::integer AS probe',[659],{APP_ENV:'dev'});
+      assert.equal(Number(disabled.rows[0].probe),659);
+      assert.equal(events.length,1);
+      console.log('P659_NILE_TELEMETRY_NATIVE=PASS');
+    }finally{ console.info=info; }
+  });
+
   let ownerPayload, ownerA, ownerB, ownerFoundationA, user, userFoundation, restoredFoundation, lazyPostingId, lazyJobId, jobNomenclatures, cacheQuery, cacheConfigB, f1aAnchor, originalOwnerUserId, originalOwnerProfileId;
     await t.test('W025-U01 native preserved assertions',async()=>{
     const ownerSeed = {
@@ -681,6 +707,50 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
 
 
 
+    });
+    await t.test('P659 Nile-native FULL/BATCH preferred posting equivalence and tie-break',async()=>{
+      // Runs only after admitNileCi() on the disposable Nile testing container.
+      const {EVALUATION_SOURCE_SQL,EVALUATION_BATCH_SOURCE_SQL} =
+        await import('../src/evaluation-basis.js');
+      const extras=[
+        ['22222222-2222-4222-8222-222222222222','p659-active-tie','ACTIVE','2026-10-05T10:00:00Z'],
+        ['11111111-1111-4111-8111-111111111111','p659-unconfirmed','UNCONFIRMED','2026-10-05T11:00:00Z'],
+      ];
+      const ids=extras.map(row=>row[0]);
+      const anchor=new Date('2026-10-05T12:10:00Z');
+      const sql=source=>`SELECT j.job_id,sp.posting_id,sp.source_name,
+          publication.effective_posted_at ${source}
+          WHERE j.job_id = ANY($1::uuid[])`;
+      const read=async()=>Promise.all([
+        adminDb.query(sql(EVALUATION_SOURCE_SQL),[[lazyJobId],anchor]),
+        adminDb.query(sql(EVALUATION_BATCH_SOURCE_SQL),[[lazyJobId],anchor]),
+      ]);
+      try{
+        for(const [postingId,identity,state,seenAt] of extras){
+          await adminDb.query(`INSERT INTO source_postings(
+              posting_id,job_id,source_id,source_name,external_job_id,
+              canonical_url,identity_kind,identity_value,posted_at,
+              lifecycle_status,first_seen_at,last_seen_at,seen_run_id,payload
+            ) VALUES ($1,$2,'p659-native','P659 Native',$3,
+              'https://example.test/p659','EXTERNAL_ID',$3,$4,
+              $5,$4,$4,'p659-native','{}'::jsonb)`,
+            [postingId,lazyJobId,identity,seenAt,state]);
+        }
+        let [full,batch]=await read();
+        assert.equal(full.rows.length,1);
+        assert.deepEqual(batch.rows,full.rows,'FULL and BATCH differ on native Nile');
+        assert.equal(full.rows[0].posting_id,ids[0],
+          'ACTIVE timestamp tie must select smaller posting_id');
+        await adminDb.query("UPDATE source_postings SET lifecycle_status='INACTIVE' WHERE posting_id=$1",[ids[0]]);
+        [full,batch]=await read();
+        assert.equal(full.rows.length,1);
+        assert.deepEqual(batch.rows,full.rows,'lifecycle priority drift on native Nile');
+        assert.equal(full.rows[0].posting_id,lazyPostingId,
+          'original ACTIVE must beat newer UNCONFIRMED posting');
+        console.log('P659_NILE_FULL_BATCH_EQUIVALENCE=PASS');
+      }finally{
+        await adminDb.query('DELETE FROM source_postings WHERE posting_id=ANY($1::uuid[])',[ids]);
+      }
     });
     await t.test('W025-F01 native preserved assertions',async()=>{
     // #535 / F-1a: real PostgreSQL ↔ JavaScript parity on both cached and fresh read paths.
