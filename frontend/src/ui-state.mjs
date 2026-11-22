@@ -1,9 +1,19 @@
+import { ROLE_FAMILIES } from '../../shared/role-taxonomy-runtime.mjs';
+import { CONTRACT_TYPE_OPTIONS } from './nomenclature-runtime.mjs';
+
 export const UI_STATE_KEY = 'jscc-ui-state-v1';
 
 const VIEWS = new Set(['jobs','review','unclassified','applications','criteria','admin']);
-const QUICK = new Set(['all','high','b2b']);
 const SORTS = new Set(['fit','title','country','work_mode','publication','retrieve'].flatMap(key=>['asc','desc'].map(dir=>key+'-'+dir)));
 const MODES = new Set(['Remote','Hybrid','Onsite']);
+const ROLE_CODES=new Set(ROLE_FAMILIES.flatMap(family=>family.subfamilies.map(role=>role.code)));
+const CONTRACT_CODES=new Set(CONTRACT_TYPE_OPTIONS.map(([code])=>code));
+
+function cleanSelection(value, allowed) {
+  const raw=Array.isArray(value)?value:[];
+  const selected=[...new Set(raw.filter(code=>typeof code==='string'&&allowed.has(code)))];
+  return {selected,allInvalid:raw.length>0&&selected.length===0};
+}
 
 function finiteNumber(value, fallback = null) {
   const number = Number(value);
@@ -11,6 +21,8 @@ function finiteNumber(value, fallback = null) {
 }
 
 function cleanFilters(input = {}) {
+  const roles=cleanSelection(input.roleSubfamilies,ROLE_CODES);
+  const contracts=cleanSelection(input.contractTypes,CONTRACT_CODES);
   const modes = Array.isArray(input.workModes)
     ? [...new Set(input.workModes.filter(mode => MODES.has(mode)))]
     : ['Remote','Hybrid','Onsite'];
@@ -19,10 +31,11 @@ function cleanFilters(input = {}) {
     quick:'all',
     freshness:finiteNumber(input.freshness, null),
     workModes:modes,
-    roleSubfamilies:Array.isArray(input.roleSubfamilies)?[...new Set(input.roleSubfamilies.filter(x=>typeof x==='string'&&x.length<100))]:[],
-    contractTypes:Array.isArray(input.contractTypes)?[...new Set(input.contractTypes.filter(x=>typeof x==='string'&&x.length<100))]:[],
-    roleSubfamiliesNone:input.roleSubfamiliesNone===true,
-    contractTypesNone:input.contractTypesNone===true,
+    roleSubfamilies:input.roleSubfamiliesNone===true?[]:roles.selected,
+    contractTypes:input.contractTypesNone===true?[]:contracts.selected,
+    // Obsolete choices fail closed instead of showing ALL while sending a hidden code.
+    roleSubfamiliesNone:input.roleSubfamiliesNone===true||roles.allInvalid,
+    contractTypesNone:input.contractTypesNone===true||contracts.allInvalid,
     minFit:input.minFit===''||input.minFit==null?'':(Number.isInteger(Number(input.minFit))&&Number(input.minFit)>=0&&Number(input.minFit)<=100?String(Number(input.minFit)):'') ,
     sort:SORTS.has(input.sort) ? input.sort : 'fit-desc',
     ...(input.pageSize!=null?{pageSize:[20,30,40].includes(Number(input.pageSize))?Number(input.pageSize):20}:{}),
