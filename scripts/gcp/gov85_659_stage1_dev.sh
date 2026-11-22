@@ -88,13 +88,13 @@ actual_digest="$(gcloud run revisions describe "$revision" --project="$project" 
 # traffic. WIF must impersonate a permitted caller; never silently fall back
 # to an unauthenticated smoke if token minting is denied.
 service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
-[[ "$service_url" =~ ^https://[a-z0-9-]+\\.run\\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
+[[ "$service_url" =~ ^https://[a-z0-9-]+\.run\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
 [[ -n "${GCP_WIF_SA:-}" ]] || { echo JSCC659_WIF_SA_MISSING; exit 86; }
 token="$(gcloud auth print-identity-token \
   --impersonate-service-account="$GCP_WIF_SA" --audiences="$service_url" 2>/tmp/jscc659-token-error)" || {
   echo JSCC659_IDENTITY_TOKEN_DENIED; exit 86;
 }
-[[ "$token" =~ ^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$ ]] || {
+[[ "$token" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]] || {
   echo JSCC659_IDENTITY_TOKEN_INVALID; exit 86;
 }
 curl -fsS -H "Authorization: Bearer $token" "$tag_uri/health" >/tmp/jscc659-health.json || { echo JSCC659_TAGGED_HEALTH_DENIED; exit 86; }
