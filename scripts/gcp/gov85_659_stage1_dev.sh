@@ -28,6 +28,28 @@ observed="$(gcloud run revisions describe "$old_revision" --project="$project" -
 [[ "$observed" == "$old_digest" ]] || { echo JSCC659_OLD_SERVING_DIGEST_DRIFT; exit 86; }
 echo "JSCC659_ROLLBACK_REVISION=$old_revision"
 echo "JSCC659_ROLLBACK_DIGEST=$observed"
+# Verify private Cloud Run invocation BEFORE building an image. For traffic
+# tags the token audience remains the canonical service URL.
+service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
+[[ "$service_url" =~ ^https://[a-z0-9-]+(\\.a)?\\.run\\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
+[[ -n "${GCP_WIF_SA:-}" ]] || { echo JSCC659_WIF_SA_MISSING; exit 86; }
+preflight_token="$(gcloud auth print-identity-token \
+  --impersonate-service-account="$GCP_WIF_SA" --audiences="$service_url" 2>/tmp/jscc659-token-preflight-error)" || {
+  echo JSCC659_IDENTITY_PREFLIGHT_DENIED; exit 86;
+}
+[[ "$preflight_token" =~ ^[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+$ ]] || {
+  echo JSCC659_IDENTITY_PREFLIGHT_INVALID; exit 86;
+}
+curl -fsS -H "Authorization: Bearer $preflight_token" "$service_url/health" >/tmp/jscc659-preflight-health.json || {
+  echo JSCC659_INVOKER_PREFLIGHT_DENIED; exit 86;
+}
+python3 - <<'PY'
+import json
+h=json.load(open('/tmp/jscc659-preflight-health.json',encoding='utf8'))
+assert h.get('status')=='ok' and h.get('environment')=='dev'
+print('JSCC659_AUTHENTICATED_DEV_PREFLIGHT=PASS')
+PY
+unset preflight_token
 echo "JSCC659_WIF_DEV_PREFLIGHT=PASS"
 if [[ "$mode" == preflight ]]; then
   echo JSCC659_PREFLIGHT_ONLY_NO_MUTATION
@@ -87,9 +109,7 @@ actual_digest="$(gcloud run revisions describe "$revision" --project="$project" 
 # Cloud Run's OIDC audience is the CANONICAL service URL even for tagged
 # traffic. WIF must impersonate a permitted caller; never silently fall back
 # to an unauthenticated smoke if token minting is denied.
-service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
-[[ "$service_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || { echo JSCC659_CANONICAL_URL_UNVERIFIED; exit 86; }
-[[ -n "${GCP_WIF_SA:-}" ]] || { echo JSCC659_WIF_SA_MISSING; exit 86; }
+# Refresh the short-lived OIDC token after the image build.
 token="$(gcloud auth print-identity-token \
   --impersonate-service-account="$GCP_WIF_SA" --audiences="$service_url" 2>/tmp/jscc659-token-error)" || {
   echo JSCC659_IDENTITY_TOKEN_DENIED; exit 86;
