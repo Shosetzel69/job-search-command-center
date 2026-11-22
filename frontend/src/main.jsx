@@ -274,7 +274,7 @@ function ListingFilters({filters,setFilters,defaultFreshness}) {
     const all=options.map(([code])=>code);
     const selected=filters[noneFlag]?[]:stored.length===0?all:stored;
     const allSelected=selected.length===all.length&&all.every(code=>selected.includes(code));
-    const choose=next=>setFilters(current=>({...current,[key]:next,[noneFlag]:next.length===0}));
+    const choose=next=>{const full=next.length===all.length&&all.every(code=>next.includes(code));setFilters(current=>({...current,[key]:full?[]:next,[noneFlag]:next.length===0}));};
     return <fieldset className="min-w-0"><legend className="text-xs font-semibold">{label}</legend><details className="mt-1 rounded border border-slate-400/40 p-2 text-xs"><summary className="cursor-pointer">{allSelected?'Toate':selected.length?selected.length+' selectate':'Niciuna'}</summary><div className="mt-2 max-h-40 space-y-1 overflow-y-auto">{options.map(([code,name])=><label key={code} className="flex items-start gap-2"><input type="checkbox" checked={selected.includes(code)} onChange={e=>choose(e.target.checked?[...selected,code]:selected.filter(v=>v!==code))}/>{name}</label>)}</div><button type="button" className="mt-2 underline" onClick={()=>choose(allSelected?[]:all)}>{allSelected?'Deselecteaza toate':'Selecteaza toate'}</button></details></fieldset>;
   };
   return <div className="space-y-3 text-sm">
