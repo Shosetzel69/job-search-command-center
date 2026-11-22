@@ -2,6 +2,12 @@
 # Activated solely by an exact owner-authored comment on existing issue #659.
 name: GOV85 659 Stage-1 Nile DEV telemetry
 on:
+  pull_request:
+    paths:
+      - '.github/workflows/gov85-659-dev-stage1.yml'
+      - 'scripts/gcp/gov85_659_stage1_guard.py'
+      - 'scripts/gcp/gov85_659_stage1_dev.sh'
+      - 'scripts/test_gov85_659_stage1.py'
   issue_comment:
     types: [created]
 
@@ -17,8 +23,31 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  control-contract:
+    if: ${{ github.event_name == 'pull_request' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout exact candidate control-plane SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Syntax and fail-closed GOV85 #659 contract
+        run: |
+          set -euo pipefail
+          bash -n scripts/gcp/gov85_659_stage1_dev.sh
+          python3 - <<'PY'
+          import ast
+          from pathlib import Path
+          ast.parse(Path('scripts/gcp/gov85_659_stage1_guard.py').read_text())
+          PY
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s scripts -p 'test_gov85_659_stage1.py' -v
+
   stage1:
-    if: ${{ github.actor == 'Shosetzel69' && github.event.issue.number == 659 && startsWith(github.event.comment.body, '/jscc-659-stage1 ') }}
+    if: ${{ github.event_name == 'issue_comment' && github.actor == 'Shosetzel69' && github.event.issue.number == 659 && startsWith(github.event.comment.body, '/jscc-659-stage1 ') }}
     runs-on: ubuntu-latest
     environment: dev
     timeout-minutes: 60
