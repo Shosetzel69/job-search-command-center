@@ -593,25 +593,97 @@ function App(){
     }
   },[]);
 
-  const loadData=useCallback(async(token,role)=>{setDataState({status:'loading',error:null});try{
-    const[applicationPayload,configPayload]=await Promise.all([fetchJson('/applications',token),fetchJson('/me/preferences',token)]);
-    for(const [payload,name] of [[applicationPayload,'applications'],[configPayload,'me/preferences']])validateContract(payload,name);
-    const criteria=criteriaFromConfig(configPayload);
-    const currentFilters=filtersRef.current;
-    const nextFilters={...currentFilters,freshness:currentFilters.freshness??criteria.freshness??24,workModes:Array.isArray(currentFilters.workModes)?currentFilters.workModes:[...ALL_WORK_MODES]};
-    let statusPayload=null,historyPayload={runs:[]},sourcePayload={sources:[]},categoryPayload={categories:[]};
-    if(role==='ADMIN'){
-      [statusPayload,historyPayload,sourcePayload,categoryPayload]=await Promise.all([fetchJson('/data/run-status.json',token),fetchJson('/data/run-history.json',token),fetchJson('/data/sources.json',token),fetchJson('/data/source-categories.json',token)]);
-      for(const [payload,name] of [[statusPayload,'run-status.json'],[historyPayload,'run-history.json'],[sourcePayload,'sources.json'],[categoryPayload,'source-categories.json']])validateContract(payload,name);
+  // Epoch is client-session identity; the cookie bearer is intentionally the same for all accounts.
+  const loadData=useCallback(async(token,role,generation=sessionGenerationRef.current)=>{
+    if(generation!==sessionGenerationRef.current)return null;
+    setDataState({status:'loading',error:null});
+    try{
+      const[applicationPayload,configPayload]=await Promise.all([fetchJson('/applications',token),fetchJson('/me/preferences',token)]);
+      if(generation!==sessionGenerationRef.current)return null;
+      for(const [payload,name] of [[applicationPayload,'applications'],[configPayload,'me/preferences']])validateContract(payload,name);
+      const criteria=criteriaFromConfig(configPayload);
+      const currentFilters=filtersRef.current;
+      const nextFilters={...currentFilters,freshness:currentFilters.freshness??criteria.freshness??24,workModes:Array.isArray(currentFilters.workModes)?currentFilters.workModes:[...ALL_WORK_MODES]};
+      let statusPayload=null,historyPayload={runs:[]},sourcePayload={sources:[]},categoryPayload={categories:[]};
+      if(role==='ADMIN'){
+        [statusPayload,historyPayload,sourcePayload,categoryPayload]=await Promise.all([fetchJson('/data/run-status.json',token),fetchJson('/data/run-history.json',token),fetchJson('/data/sources.json',token),fetchJson('/data/source-categories.json',token)]);
+        if(generation!==sessionGenerationRef.current)return null;
+        for(const [payload,name] of [[statusPayload,'run-status.json'],[historyPayload,'run-history.json'],[sourcePayload,'sources.json'],[categoryPayload,'source-categories.json']])validateContract(payload,name);
+      }
+      if(generation!==sessionGenerationRef.current)return null;
+      setApplications((applicationPayload.applications||[]).map(normalizeApplication));
+      setSources((sourcePayload.sources||[]).map(normalizeSource));setSourceCategories(categoryPayload.categories||[]);
+      setRunStatus(statusPayload);setRunHistory(historyPayload.runs||[]);
+      setCanonicalConfig(configPayload);setSavedCriteria(criteria);setDraftCriteria(criteria);setFilters(nextFilters);
+      await loadJobsPage(token,criteria,nextFilters,{generation});
+      if(generation!==sessionGenerationRef.current)return null;
+      setDataState({status:'ready',error:null});return statusPayload;
+    }catch(error){
+      if(generation!==sessionGenerationRef.current)return null;
+      setDataState({status:'error',error});throw error;
     }
-    setApplications((applicationPayload.applications||[]).map(normalizeApplication));setSources((sourcePayload.sources||[]).map(normalizeSource));setSourceCategories(categoryPayload.categories||[]);setRunStatus(statusPayload);setRunHistory(historyPayload.runs||[]);setCanonicalConfig(configPayload);setSavedCriteria(criteria);setDraftCriteria(criteria);setFilters(nextFilters);
-    await loadJobsPage(token,criteria,nextFilters);
-    setDataState({status:'ready',error:null});return statusPayload;
-  }catch(error){setDataState({status:'error',error});throw error;}},[loadJobsPage]);
+  },[loadJobsPage]);
 
-  const handleCredential=useCallback(async credential=>{setAuth({status:'authenticating',token:null,email:null,role:null,error:null});try{const session=await commandApi('/auth/session',credential,{method:'POST'});const email=session?.email||null,role=session?.role||'USER';if(email){const remembered=rememberGoogleLoginHint(email);if(remembered)setLoginHint(remembered);}setAllowAutoRestore(true);setAuth({status:'authenticated',token:COOKIE_SESSION_BEARER,email,role,error:null});try{await loadData(COOKIE_SESSION_BEARER,role);notify('Autentificare Google reusita.','success');}catch(error){notify('Autentificarea a reusit, dar datele nu s-au incarcat: '+error.message,'error');}}catch(error){const message=error.status===403?'Contul este dezactivat sau nu are acces.':'Autentificare esuata: '+error.message;setAuth({status:'signed-out',token:null,email:null,role:null,error:message});}},[loadData,notify]);
-  const logout=useCallback(async()=>{pollGenerationRef.current+=1;setAllowAutoRestore(false);try{await commandApi('/auth/logout',COOKIE_SESSION_BEARER,{method:'POST'});}catch{}try{window.google?.accounts?.id?.disableAutoSelect();}catch{}setAuth({status:'signed-out',token:null,email:null,role:null,error:null});setDataState({status:'idle',error:null});clearData();setDetailJob(null);setRunning(false);notify('Contul Google a fost deconectat.','info');},[clearData,notify]);
-  const deleteCurrentAccount=useCallback(async()=>{if(deletingAccount||deleteAccountConfirmation!=='STERGE')return;setDeletingAccount(true);try{await commandApi('/me/account',auth.token,{method:'DELETE'});pollGenerationRef.current+=1;setAllowAutoRestore(false);try{window.google?.accounts?.id?.disableAutoSelect();}catch{}setAuth({status:'signed-out',token:null,email:null,role:null,error:null});setDataState({status:'idle',error:null});clearData();setDetailJob(null);setRunning(false);setDeleteAccountOpen(false);setDeleteAccountConfirmation('');notify('Contul si datele personale au fost sterse definitiv.','success');}catch(error){notify('Contul nu a putut fi sters: '+error.message,'error');}finally{setDeletingAccount(false);}},[auth.token,deletingAccount,deleteAccountConfirmation,clearData,notify]);
+  const handleCredential=useCallback(async credential=>{
+    const generation=++sessionGenerationRef.current;
+    pollGenerationRef.current+=1;
+    setAuth({status:'authenticating',token:null,email:null,role:null,error:null});
+    try{
+      const session=await commandApi('/auth/session',credential,{method:'POST'});
+      if(generation!==sessionGenerationRef.current)return;
+      const email=session?.email||null,role=session?.role||'USER';
+      if(email){const remembered=rememberGoogleLoginHint(email);if(remembered)setLoginHint(remembered);}
+      setAllowAutoRestore(true);
+      setAuth({status:'authenticated',token:COOKIE_SESSION_BEARER,email,role,error:null});
+      try{
+        await loadData(COOKIE_SESSION_BEARER,role,generation);
+        if(generation===sessionGenerationRef.current)notify('Autentificare Google reusita.','success');
+      }catch(error){
+        if(generation===sessionGenerationRef.current)notify('Autentificarea a reusit, dar datele nu s-au incarcat: '+error.message,'error');
+      }
+    }catch(error){
+      if(generation!==sessionGenerationRef.current)return;
+      const message=error.status===403?'Contul este dezactivat sau nu are acces.':'Autentificare esuata: '+error.message;
+      setAuth({status:'signed-out',token:null,email:null,role:null,error:message});
+    }
+  },[loadData,notify]);
+
+  const logout=useCallback(async()=>{
+    pollGenerationRef.current+=1;
+    setAllowAutoRestore(false);
+    clearData(); // synchronous invalidation; never wait for network logout
+    const generation=sessionGenerationRef.current;
+    setAuth({status:'authenticating',token:null,email:null,role:null,error:null});
+    setDataState({status:'idle',error:null});
+    try{await commandApi('/auth/logout',COOKIE_SESSION_BEARER,{method:'POST'});}catch{}
+    if(generation!==sessionGenerationRef.current)return;
+    try{window.google?.accounts?.id?.disableAutoSelect();}catch{}
+    setAuth({status:'signed-out',token:null,email:null,role:null,error:null});
+    setRunning(false);
+    notify('Contul Google a fost deconectat.','info');
+  },[clearData,notify]);
+
+  const deleteCurrentAccount=useCallback(async()=>{
+    if(deletingAccount||deleteAccountConfirmation!=='STERGE')return;
+    const generation=++sessionGenerationRef.current;
+    setDeletingAccount(true);
+    try{
+      await commandApi('/me/account',auth.token,{method:'DELETE'});
+      if(generation!==sessionGenerationRef.current)return;
+      pollGenerationRef.current+=1;setAllowAutoRestore(false);
+      try{window.google?.accounts?.id?.disableAutoSelect();}catch{}
+      clearData();
+      setAuth({status:'signed-out',token:null,email:null,role:null,error:null});
+      setDataState({status:'idle',error:null});setRunning(false);
+      setDeleteAccountOpen(false);setDeleteAccountConfirmation('');
+      notify('Contul si datele personale au fost sterse definitiv.','success');
+    }catch(error){
+      if(generation===sessionGenerationRef.current)notify('Contul nu a putut fi sters: '+error.message,'error');
+    }finally{
+      setDeletingAccount(false);
+    }
+  },[auth.token,deletingAccount,deleteAccountConfirmation,clearData,notify]);
+
   const retryData=useCallback(()=>{if(auth.token)loadData(auth.token,auth.role).then(()=>notify('Datele au fost reincarcate.','success')).catch(error=>notify('Incarcarea a esuat: '+error.message,'error'));},[auth.token,auth.role,loadData,notify]);
 
   const profileConfigured=isSearchProfileConfigured(savedCriteria);
