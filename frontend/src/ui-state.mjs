@@ -16,9 +16,14 @@ function cleanFilters(input = {}) {
     : ['Remote','Hybrid','Onsite'];
   return {
     search:String(input.search || '').slice(0, 200),
-    quick:QUICK.has(input.quick) ? input.quick : 'all',
+    quick:'all',
     freshness:finiteNumber(input.freshness, null),
     workModes:modes,
+    roleSubfamilies:Array.isArray(input.roleSubfamilies)?[...new Set(input.roleSubfamilies.filter(x=>typeof x==='string'&&x.length<100))]:[],
+    contractTypes:Array.isArray(input.contractTypes)?[...new Set(input.contractTypes.filter(x=>typeof x==='string'&&x.length<100))]:[],
+    roleSubfamiliesNone:input.roleSubfamiliesNone===true,
+    contractTypesNone:input.contractTypesNone===true,
+    minFit:input.minFit===''||input.minFit==null?'':(Number.isInteger(Number(input.minFit))&&Number(input.minFit)>=0&&Number(input.minFit)<=100?String(Number(input.minFit)):'') ,
     sort:SORTS.has(input.sort) ? input.sort : 'fit-desc',
     ...(input.pageSize!=null?{pageSize:[20,30,40].includes(Number(input.pageSize))?Number(input.pageSize):20}:{}),
   };
