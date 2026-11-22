@@ -21,8 +21,8 @@ test('SQL basis covers the chosen posting, both payloads, classification and pre
   assert.match(EVALUATION_SOURCE_SQL,/sp\.job_id = j\.job_id/);
   assert.match(EVALUATION_SOURCE_SQL,/ORDER BY job_id,[\s\S]*last_seen_at DESC, posting_id ASC/);
   assert.doesNotMatch(EVALUATION_SOURCE_SQL,/JOIN LATERAL \(\s*SELECT posting_id/);
-  assert.match(EVALUATION_BATCH_SOURCE_SQL,/JOIN LATERAL \\(\\s*SELECT posting_id/);
-  assert.match(EVALUATION_BATCH_SOURCE_SQL,/WHERE job_id = j\\.job_id/);
+  assert.match(EVALUATION_BATCH_SOURCE_SQL,/JOIN LATERAL \(\s*SELECT posting_id/);
+  assert.match(EVALUATION_BATCH_SOURCE_SQL,/WHERE job_id = j\.job_id/);
   assert.match(EVALUATION_BATCH_SOURCE_SQL,/LIMIT 1/);
   assert.doesNotMatch(EVALUATION_BATCH_SOURCE_SQL,/SELECT DISTINCT ON/);
   assert.ok(EVALUATION_SOURCE_SQL.includes(PREFERRED_POSTING_FULL_JOIN_SQL));
