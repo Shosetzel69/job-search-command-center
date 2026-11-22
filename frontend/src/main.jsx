@@ -12,7 +12,7 @@ import './index.css';
 import { completionNotice, isActiveRunStatus, pollingDelayMs, terminalForBaseline, statusForTrackedRun, initialTrackedRun } from './run-polling.mjs';
 import { runProgressModel } from './run-progress.mjs';
 import { JOBS_PAGE_SIZE, JOBS_PAGE_SIZES, jobPageSize, buildJobsPath, ignorePageResponse, isSearchProfileConfigured, navigateJobPage, needsPageReload, pageRequestKey, scanResultCount, refreshOutcomeNotice, validateJobsPage } from './job-page-model.mjs';
-import { readUiState, writeUiState } from './ui-state.mjs';
+import { clearUiState, readUiState, sanitizeUiState, writeUiState } from './ui-state.mjs';
 import { registerPwa } from './pwa.mjs';
 import { COOKIE_SESSION_BEARER, googleIdentityOptions, readGoogleLoginHint, rememberGoogleLoginHint } from './auth-session.mjs';
 import { environmentBadge, releaseVersionLabel } from './environment-marker.mjs';
@@ -522,7 +522,24 @@ function App(){
   useEffect(()=>{if(auth.status==='authenticated')rememberUi();},[auth.status,rememberUi]);
   useEffect(()=>{if(auth.status!=='authenticated')return undefined;const save=()=>rememberUi();window.addEventListener('pagehide',save);return()=>window.removeEventListener('pagehide',save);},[auth.status,rememberUi]);
 
-  const clearData=useCallback(()=>{pageRequestSerialRef.current++;pageCursorHistory.current=[null];pageNavigationPendingRef.current=false;setPageNumber(1);setJobs([]);setArchivedKeys([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';serverQueryRef.current='';},[]);
+  const clearData=useCallback(()=>{
+    // Also used by account deletion: do not leak this tab's GUI context to another login.
+    clearUiState();
+    const defaultUi=sanitizeUiState();
+    initialUiRef.current=defaultUi;
+    filtersRef.current=defaultUi.filters;
+    setView(defaultUi.view);
+    setFilters(defaultUi.filters);
+    setKpiFilter('all');
+    setDetailJob(null);
+    restoredScrollRef.current=true;
+    restoredJobRef.current=true;
+    detailScrollRef.current=0;
+    setResultTotal(null);
+    setSavedCriteria(criteriaFromConfig({}));
+    setDraftCriteria(criteriaFromConfig({}));
+    pageRequestSerialRef.current++;pageCursorHistory.current=[null];pageNavigationPendingRef.current=false;setPageNumber(1);setJobs([]);setArchivedKeys([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';serverQueryRef.current='';
+  },[]);
 
   const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false}={})=>{
     if(!isSearchProfileConfigured(criteria)){
