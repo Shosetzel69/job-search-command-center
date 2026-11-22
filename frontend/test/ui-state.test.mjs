@@ -28,7 +28,7 @@ test('transient UI state stores only the allowlisted return context', () => {
   assert.deepEqual(readUiState(store), {
     schema_version:1,
     view:'review',
-    filters:{search:'project',quick:'all',freshness:48,workModes:['Remote'],roleSubfamilies:['project_management'],contractTypes:['contract'],roleSubfamiliesNone:false,contractTypesNone:true,minFit:'65',sort:'fit-asc'},
+    filters:{search:'project',quick:'all',freshness:48,workModes:['Remote'],roleSubfamilies:['project_management'],contractTypes:[],roleSubfamiliesNone:false,contractTypesNone:true,minFit:'65',sort:'fit-asc'},
     selectedJobId:'job-1',
     scrollY:321,
   });
