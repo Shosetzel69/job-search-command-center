@@ -215,3 +215,13 @@ test('count scan stops after cancellation while a batch is in flight',async()=>{
   assert.equal(result,null);
   assert.equal(calls,1);
 });
+
+test('P4 explicit all vs none is encoded in the server-bound query',()=>{
+ const all=new URL(buildJobsPath({filters:{workModes:['Remote','Hybrid','Onsite'],roleSubfamilies:[],contractTypes:[]},view:'jobs'}),'https://jscc.test');
+ assert.equal(all.searchParams.has('empty_role_subfamilies'),false);
+ assert.equal(all.searchParams.has('empty_contract_types'),false);
+ const none=new URL(buildJobsPath({filters:{workModes:[],roleSubfamilies:[],contractTypes:[],roleSubfamiliesNone:true,contractTypesNone:true},view:'jobs'}),'https://jscc.test');
+ assert.equal(none.searchParams.get('empty_modes'),'true');
+ assert.equal(none.searchParams.get('empty_role_subfamilies'),'true');
+ assert.equal(none.searchParams.get('empty_contract_types'),'true');
+});
