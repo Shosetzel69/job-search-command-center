@@ -37,14 +37,15 @@ export const INPUT_DIGEST_SQL = `encode(sha256(convert_to(jsonb_build_array(
 )::text,'UTF8')),'hex')`;
 
 export const EVALUATION_SOURCE_SQL = `FROM canonical_jobs j
-         JOIN LATERAL (
-           SELECT posting_id, source_name, canonical_url, posted_at, last_seen_at, repost_of_posting_id, payload
+         JOIN (
+           SELECT DISTINCT ON (job_id)
+                  job_id, posting_id, source_name, canonical_url, posted_at,
+                  last_seen_at, repost_of_posting_id, payload
              FROM source_postings
-            WHERE job_id = j.job_id
-            ORDER BY CASE lifecycle_status WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
+            ORDER BY job_id,
+                     CASE lifecycle_status WHEN 'ACTIVE' THEN 0 WHEN 'UNCONFIRMED' THEN 1 ELSE 2 END,
                      last_seen_at DESC, posting_id ASC
-            LIMIT 1
-         ) sp ON true
+         ) sp ON sp.job_id = j.job_id
          LEFT JOIN LATERAL (
            SELECT COALESCE(
              CASE WHEN date_trunc('milliseconds', sp.posted_at) <= $2
