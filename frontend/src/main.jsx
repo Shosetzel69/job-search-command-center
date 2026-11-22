@@ -500,7 +500,7 @@ function App(){
   const pageCursorHistory=useRef([null]),pageRequestSerialRef=useRef(0),pageNavigationPendingRef=useRef(false),countAbortRef=useRef(null);
   const activeViewRef=useRef(view),activeKpiRef=useRef(kpiFilter);
   const[archivedKeys,setArchivedKeys]=useState([]);
-  const pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),serverQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
+  const sessionGenerationRef=useRef(0),pollGenerationRef=useRef(0),filtersRef=useRef(filters),jobQueryRef=useRef(''),serverQueryRef=useRef(''),restoredScrollRef=useRef(false),restoredJobRef=useRef(false),detailScrollRef=useRef(0);
   const notify=useCallback((message,type='info')=>{const id=Date.now();setToast({id,message,type});window.setTimeout(()=>setToast(current=>current?.id===id?null:current),3500);},[]);
 
   useEffect(()=>{filtersRef.current=filters;activeViewRef.current=view;activeKpiRef.current=kpiFilter;},[filters,view,kpiFilter]);
@@ -523,6 +523,8 @@ function App(){
   useEffect(()=>{if(auth.status!=='authenticated')return undefined;const save=()=>rememberUi();window.addEventListener('pagehide',save);return()=>window.removeEventListener('pagehide',save);},[auth.status,rememberUi]);
 
   const clearData=useCallback(()=>{
+    sessionGenerationRef.current+=1; // invalidate every older account's async work immediately
+    countAbortRef.current?.abort();
     // Also used by account deletion: do not leak this tab's GUI context to another login.
     clearUiState();
     const defaultUi=sanitizeUiState();
@@ -541,7 +543,8 @@ function App(){
     pageRequestSerialRef.current++;pageCursorHistory.current=[null];pageNavigationPendingRef.current=false;setPageNumber(1);setJobs([]);setArchivedKeys([]);setApplications([]);setSources([]);setSourceCategories([]);setRunStatus(null);setRunHistory([]);setPromotionStatus(null);setCanonicalConfig(null);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';serverQueryRef.current='';
   },[]);
 
-  const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false}={})=>{
+  const loadJobsPage=useCallback(async(token,criteria,filterState,{cursor=null,append=false,generation=sessionGenerationRef.current}={})=>{
+    if(generation!==sessionGenerationRef.current)return {ignored:true};
     if(!isSearchProfileConfigured(criteria)){
       pageRequestSerialRef.current++;pageCursorHistory.current=[null];setPageNumber(1);
       setJobs([]);setJobPage({nextCursor:null,loading:false,loadingMore:false,results:0});jobQueryRef.current='';return null;
@@ -555,16 +558,19 @@ function App(){
     setJobPage(current=>({...current,loading:!append,loadingMore:append}));
     try{
       const payload=validateJobsPage(await fetchJson(pathFor(cursor,size,0),token));
+      if(generation!==sessionGenerationRef.current)return {ignored:true};
       let batch=payload,next=payload.next_cursor;const collected=[...payload.jobs];
       for(let i=1;payload.schema_version==='2.0'&&collected.length<size&&next&&i<32;i++){
         if(requestSerial!==pageRequestSerialRef.current)return {ignored:true};
         const previous=next;
         batch=validateJobsPage(await fetchJson(pathFor(next,size-collected.length,0),token));
+        if(generation!==sessionGenerationRef.current)return {ignored:true};
         if(batch.generated_at!==payload.generated_at||batch.profile_version!==payload.profile_version||batch.count_basis!==payload.count_basis||batch.next_cursor===previous)throw Object.assign(new Error('STALE_CURSOR: result scope changed'),{status:400});
         collected.push(...batch.jobs);next=batch.next_cursor;
       }
       if(payload.schema_version==='2.0'&&collected.length<size&&next)throw new Error('Limita de scanare a paginii a fost atinsa. Restrange filtrele.');
       payload.jobs=collected;payload.next_cursor=next;payload.results=collected.length;
+      if(generation!==sessionGenerationRef.current)return {ignored:true};
       if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
       const normalized=(payload.jobs||[]).map(normalizeJob);
       if(!append){pageCursorHistory.current=[null];setPageNumber(1);}
@@ -575,6 +581,7 @@ function App(){
       if(!append){jobQueryRef.current=pageRequestKey({filters:filterState,view:activeViewRef.current,kpiFilter:activeKpiRef.current});serverQueryRef.current=buildJobsPath({filters:filterState,view:viewScope,kpiFilter:kpiScope});}
       return payload;
     }catch(error){
+      if(generation!==sessionGenerationRef.current)return {ignored:true};
       if(ignorePageResponse({requestSerial,currentSerial:pageRequestSerialRef.current,append,navigationContext,currentContext:pageRequestKey({filters:filtersRef.current,view:activeViewRef.current,kpiFilter:activeKpiRef.current})},setJobPage))return {ignored:true};
       if(append && error.status===400 && /^STALE_CURSOR/.test(error.message||'')){
         // One restart on stale cursor; never attempt another continuation with that cursor.
