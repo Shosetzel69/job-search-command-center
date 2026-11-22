@@ -575,7 +575,7 @@ function App(){
     for(const [payload,name] of [[applicationPayload,'applications'],[configPayload,'me/preferences']])validateContract(payload,name);
     const criteria=criteriaFromConfig(configPayload);
     const currentFilters=filtersRef.current;
-    const nextFilters={...currentFilters,freshness:currentFilters.freshness??criteria.freshness??24,workModes:Array.isArray(currentFilters.workModes)&&currentFilters.workModes.length?currentFilters.workModes:[...ALL_WORK_MODES]};
+    const nextFilters={...currentFilters,freshness:currentFilters.freshness??criteria.freshness??24,workModes:Array.isArray(currentFilters.workModes)?currentFilters.workModes:[...ALL_WORK_MODES]};
     let statusPayload=null,historyPayload={runs:[]},sourcePayload={sources:[]},categoryPayload={categories:[]};
     if(role==='ADMIN'){
       [statusPayload,historyPayload,sourcePayload,categoryPayload]=await Promise.all([fetchJson('/data/run-status.json',token),fetchJson('/data/run-history.json',token),fetchJson('/data/sources.json',token),fetchJson('/data/source-categories.json',token)]);
@@ -603,7 +603,7 @@ function App(){
     }
     const timer=setTimeout(()=>loadJobsPage(auth.token,savedCriteria,filters).catch(error=>notify('Lista de joburi nu a putut fi actualizata: '+error.message,'error')),250);
     return()=>clearTimeout(timer);
-  },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),(filters.roleSubfamilies||[]).join('|'),(filters.contractTypes||[]).join('|'),filters.minFit,filters.pageSize,filters.quick,filters.sort,kpiFilter,pageNumber,savedCriteria,loadJobsPage,notify]);
+  },[auth.status,auth.token,dataState.status,profileConfigured,view,filters.search,filters.freshness,filters.workModes.join('|'),(filters.roleSubfamilies||[]).join('|'),(filters.contractTypes||[]).join('|'),filters.roleSubfamiliesNone,filters.contractTypesNone,filters.minFit,filters.pageSize,filters.quick,filters.sort,kpiFilter,pageNumber,savedCriteria,loadJobsPage,notify]);
 
   useEffect(()=>{
     setResultTotal(null);
@@ -617,7 +617,7 @@ function App(){
     const timer=setTimeout(()=>scanResultCount({basis,anchor,isCurrent:()=>current&&!controller.signal.aborted,load:cursor=>fetchJson(buildJobsPath({filters,view,kpiFilter,cursor,countOnly:true,asOf:anchor,countBasis:basis,prefetch:0}),auth.token,controller.signal)})
       .then(total=>{if(current&&!controller.signal.aborted&&total!==null)setResultTotal({scope,basis,anchor,total});}).catch(()=>{}),300);
     return()=>{current=false;clearTimeout(timer);controller.abort();if(countAbortRef.current===controller)countAbortRef.current=null;};
-  },[dataState.status,view,auth.token,jobPage.countBasis,jobPage.generatedAt,jobPage.scope,filters.search,filters.freshness,filters.workModes.join('|'),(filters.roleSubfamilies||[]).join('|'),(filters.contractTypes||[]).join('|'),filters.minFit,filters.pageSize,filters.quick,filters.sort,kpiFilter]);
+  },[dataState.status,view,auth.token,jobPage.countBasis,jobPage.generatedAt,jobPage.scope,filters.search,filters.freshness,filters.workModes.join('|'),(filters.roleSubfamilies||[]).join('|'),(filters.contractTypes||[]).join('|'),filters.roleSubfamiliesNone,filters.contractTypesNone,filters.minFit,filters.pageSize,filters.quick,filters.sort,kpiFilter]);
 
   useEffect(()=>{
     if(auth.status!=='authenticated'||!auth.token||dataState.status!=='ready'||jobPage.orderStatus!=='PROVISIONAL'||!['jobs','review','unclassified'].includes(view))return;
