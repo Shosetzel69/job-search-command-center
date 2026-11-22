@@ -17,6 +17,7 @@ import { userRefreshScopes } from './retrieve-scope.js';
 import { performance } from 'node:perf_hooks';
 import { INPUT_DIGEST_SQL,evaluationPreferenceDigest,EVALUATION_SOURCE_SQL,EVALUATION_FIELDS_SQL,EVALUATION_VISIBLE_SQL,EVALUATION_PENDING_SQL } from './evaluation-basis.js';
 import { devPurgeActive, readFailedRunCompletion } from './runtime-gcp.js';
+import { measureNileSql } from './performance-telemetry.js';
 
 const PERSONAL_CONFIG_KEYS = Object.freeze([
   'target_role_families',
@@ -1164,7 +1165,7 @@ export async function listProfileJobs(
     );
     const limitParam = add(candidateLimit);
 
-    const rowsResult = await tx.query(
+    const rowsResult = await measureNileSql('legacy_list_sql', tx,
       `SELECT j.job_id, j.title, j.company, j.location, j.country_codes, j.work_mode,
               j.role_family, j.role_subfamily, j.seniority, j.contract_type,
               j.remote_scope, j.job_version, j.classification_status,
@@ -1261,7 +1262,7 @@ export async function listProfileJobs(
         WHERE ${where.join('\n          AND ')}
         ORDER BY COALESCE(publication.effective_posted_at, '0001-01-01T00:00:00Z'::timestamptz) DESC, j.job_id ASC
         LIMIT ${limitParam}::integer`,
-      params,
+      params, env,
     );
 
     const rows = rowsResult.rows || [];
@@ -1934,10 +1935,10 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
         // Once per completed scan, an exact tenant-scoped check prevents false COMPLETE
         // after concurrent source edits or an untrusted/forged scan cursor.
         await budget();
-        const verification=await tx.query(`WITH ${TENANT_EVALUATION_CTE}
+        const verification=await measureNileSql('advance_verify_sql', tx, `WITH ${TENANT_EVALUATION_CTE}
           SELECT COUNT(*)::integer AS pending
           ${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
-          WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`,args);
+          WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`,args,env);
         const pending=Number(verification.rows?.[0]?.pending);
         if(!Number.isSafeInteger(pending)||pending<0)throw httpError('Evaluation verification unavailable',503);
         return {status:pending===0?'COMPLETE':'INCOMPLETE',pending,evaluated:0,scan_cursor:null,
@@ -1948,10 +1949,10 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       // Scanning all pending rows from job_id=0 on every call starves after cache
       // fills: a single LATERAL/digest pass consumed ~6.8s in DEV (#535/#659).
       await budget();
-      const scan=await tx.query(`SELECT j.job_id FROM canonical_jobs j
+      const scan=await measureNileSql('advance_scan_sql', tx, `SELECT j.job_id FROM canonical_jobs j
         WHERE (j.lifecycle_status <> 'INACTIVE' OR j.retention_until IS NULL OR j.retention_until > $1)
           AND ($2::uuid IS NULL OR j.job_id>$2::uuid)
-        ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX+1}`,[now,cursor.position]);
+        ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX+1}`,[now,cursor.position],env);
       const scanRows=scan.rows||[];
       const ids=scanRows.slice(0,ADVANCE_BATCH_MAX).map(r=>String(r.job_id));
       const hasMore=scanRows.length>ADVANCE_BATCH_MAX;
@@ -1959,11 +1960,11 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
       let candidates=[];
       if(ids.length){
         await budget();
-        const batch=await tx.query(`WITH ${TENANT_EVALUATION_CTE} SELECT ${EVALUATION_FIELDS_SQL}
+        const batch=await measureNileSql('advance_batch_sql', tx, `WITH ${TENANT_EVALUATION_CTE} SELECT ${EVALUATION_FIELDS_SQL}
           ${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
           WHERE ${EVALUATION_VISIBLE_SQL} AND j.job_id=ANY($6::uuid[])
             AND ${EVALUATION_PENDING_SQL}
-          ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX}`,[...args,ids]);
+          ORDER BY j.job_id ASC LIMIT ${ADVANCE_BATCH_MAX}`,[...args,ids],env);
         candidates=batch.rows||[];
       }
       const workRows=candidates;
@@ -2153,7 +2154,7 @@ export async function listGlobalProfileJobs(authContext,nomenclatures,query,env=
     if(spec.cursor&&(spec.cursor.sort!==spec.sort||spec.cursor.dir!==spec.dir||
       spec.cursor.filter_hash!==spec.filter_hash||spec.cursor.profile_eval_digest!==basis.preference_digest))throw stale();
     const q=buildGlobalListingQuery(tx.tenantId,basis,spec,anchor);
-    const snapshot=(await tx.query(q.sql,q.params)).rows?.[0];
+    const snapshot=(await measureNileSql('global_listing_sql',tx,q.sql,q.params,env)).rows?.[0];
     if(!snapshot?.basis_ok)throw stale();
     const pending=Number(snapshot.pending);
     if(!Number.isSafeInteger(pending)||pending<0||!HEX.test(snapshot.watermark)||!Array.isArray(snapshot.page))throw error('Global listing unavailable',503);
