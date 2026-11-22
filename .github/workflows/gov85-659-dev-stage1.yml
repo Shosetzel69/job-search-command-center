@@ -84,6 +84,7 @@ jobs:
           from pathlib import Path
           ast.parse(Path('control/scripts/gcp/gov85_659_stage1_guard.py').read_text())
           PY
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s control/scripts -p 'test_gov85_659_stage1.py' -v
           test -z "$(git -C control status --porcelain)"
           test -z "$(git -C candidate status --porcelain)"
           test "$(git -C candidate rev-parse HEAD)" = "${{ steps.scope.outputs.source_sha }}"
