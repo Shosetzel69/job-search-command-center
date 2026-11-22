@@ -255,6 +255,8 @@ function jobSearchQuery(url) {
     quick:url.searchParams.get('quick'),
     kpi:url.searchParams.get('kpi'),
     empty_modes:url.searchParams.get('empty_modes'),
+    empty_role_subfamilies:url.searchParams.get('empty_role_subfamilies'),
+    empty_contract_types:url.searchParams.get('empty_contract_types'),
     count_only:url.searchParams.get('count_only'),
     as_of:url.searchParams.get('as_of'),
     count_basis:url.searchParams.get('count_basis'),
