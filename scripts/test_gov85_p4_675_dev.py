@@ -244,8 +244,6 @@ class P4ReleaseControls(unittest.TestCase):
         self.assertEqual(shell.count('normalize_revision_digest "$actual_old"'), 1)
         self.assertEqual(shell.count('normalize_revision_digest "$staged_digest"'), 1)
         self.assertEqual(shell.count('normalize_revision_digest "$rev_digest"'), 1)
-        for name in ("actual_old", "staged_digest", "rev_digest"):
-            self.assertNotIn(f'[[ "$\\{name}" ==', shell)
         digest = guard.OLD_DIGEST
         repo = guard.IMAGE_REPO
         candidates = ((digest, 0, digest), (repo + "@" + digest, 0, digest),
@@ -255,7 +253,7 @@ class P4ReleaseControls(unittest.TestCase):
         for actual, expected_code, expected_output in candidates:
             result = subprocess.run(
                 ["bash", "-c", 'image_repo="$1"; ' + function +
-                 '\\nnormalize_revision_digest "$2"', "test", repo, actual],
+                 '\nnormalize_revision_digest "$2"', "test", repo, actual],
                 capture_output=True, text=True, check=False)
             self.assertEqual(result.returncode, expected_code, actual)
             self.assertEqual(result.stdout.strip(), expected_output, actual)
@@ -264,8 +262,8 @@ class P4ReleaseControls(unittest.TestCase):
             ("staged_digest", "digest", "JSCC_P4_TAG_CLEANUP_DIGEST_UNVERIFIED"),
             ("rev_digest", "digest", "JSCC_P4_STAGED_DIGEST_INVALID"),
         ):
-            self.assertIn(f'normalize_revision_digest "$\\{name}"', shell)
-            self.assertIn(f'[[ "$\\{name}" == "$\\{expected}" ]]', shell)
+            self.assertIn(f'normalize_revision_digest "$${name}"', shell)
+            self.assertIn(f'[[ "$${name}" == "$${expected}" ]]', shell)
             self.assertIn(error, shell)
 
     def test_workflow_identity_uses_owner_issue663_and_no_automatic_deploy(self):
