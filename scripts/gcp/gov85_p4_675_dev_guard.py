@@ -143,6 +143,10 @@ def protected_metadata(service):
             "run.googleapis.com/client-name",
             "run.googleapis.com/client-version",
             "run.googleapis.com/operation-id",
+            # Cloud Run overwrites these with the principal executing the stage.
+            # They are audit metadata, not VPC/secret/scaling configuration.
+            "serving.knative.dev/lastModifier",
+            "run.googleapis.com/lastModifier",
         ):
             annotations.pop(key, None)
         result.pop("generation", None)
@@ -213,6 +217,72 @@ def attest(builds, digest):
     deny("IMAGE_BUILD_PROVENANCE_UNVERIFIED")
 
 
+
+# The check-runs endpoint contains JOB names, not workflow names. Anchor
+# success to the exact immutable post-merge SHA and the GitHub Actions app.
+REQUIRED_CI = (
+    "validate",
+    "Nile-only native provider CI",
+    "api-version-policy",
+    "gitleaks",
+    "snapshot",
+)
+
+def postmerge_ci(payload, sha):
+    if sha != TARGET_SHA or not isinstance(payload, dict):
+        deny("CHECK_RUN_SOURCE_INVALID")
+    entries = payload.get("check_runs")
+    if not isinstance(entries, list):
+        deny("CHECK_RUNS_NOT_AVAILABLE")
+    for name in REQUIRED_CI:
+        matching = [
+            row for row in entries if isinstance(row, dict)
+            and row.get("name") == name
+            and row.get("status") == "completed"
+            and row.get("conclusion") == "success"
+            and row.get("head_sha") == TARGET_SHA
+            and isinstance(row.get("app"), dict)
+            and row["app"].get("slug") == "github-actions"
+        ]
+        if not matching:
+            deny("MAIN_CHECK_RUN_MISSING_" + name.replace(" ", "_"))
+    print("JSCC_P4_MAIN_EXACT_SHA_CI=PASS")
+
+
+def environment_protection(payload):
+    """Release is denied unless GitHub's DEV environment has actual reviewers.
+    The job must also be subject to GitHub's *external* environment approval
+    before obtaining WIF credentials; an owner issue comment alone is insufficient.
+    """
+    if not isinstance(payload, dict) or payload.get("name") != "dev":
+        deny("DEV_ENVIRONMENT_UNVERIFIED")
+    rules = payload.get("protection_rules")
+    if not isinstance(rules, list):
+        deny("DEV_ENVIRONMENT_PROTECTION_MISSING")
+    reviewer_rules = [r for r in rules if isinstance(r, dict)
+                      and r.get("type") == "required_reviewers"]
+    if len(reviewer_rules) != 1:
+        deny("DEV_REQUIRED_REVIEWERS_MISSING")
+    rule = reviewer_rules[0]
+    reviewers = rule.get("reviewers")
+    if not isinstance(reviewers, list) or not reviewers:
+        deny("DEV_REQUIRED_REVIEWERS_EMPTY")
+    eligible = [
+        row for row in reviewers if isinstance(row, dict)
+        and row.get("type") == "User"
+        and isinstance(row.get("reviewer"), dict)
+        and isinstance(row["reviewer"].get("login"), str)
+        and row["reviewer"]["login"]
+        and not row["reviewer"]["login"].lower().endswith("[bot]")
+    ]
+    if not eligible:
+        deny("DEV_HUMAN_REVIEWER_NOT_CONFIGURED")
+    if rule.get("prevent_self_review") is True and all(
+        row["reviewer"]["login"].casefold() == "shosetzel69" for row in eligible
+    ):
+        deny("DEV_OWNER_CANNOT_SELF_REVIEW")
+    print("JSCC_P4_DEV_ENV_REQUIRED_REVIEWERS=CONFIGURED")
+
 if __name__ == "__main__":
     try:
         operation = sys.argv[1]
@@ -226,6 +296,10 @@ if __name__ == "__main__":
             final(load(sys.argv[2]), load(sys.argv[3]), sys.argv[4])
         elif operation == "attest" and len(sys.argv) == 4:
             attest(load(sys.argv[2]), sys.argv[3])
+        elif operation == "postmerge-ci" and len(sys.argv) == 4:
+            postmerge_ci(load(sys.argv[2]), sys.argv[3])
+        elif operation == "environment-protection" and len(sys.argv) == 3:
+            environment_protection(load(sys.argv[2]))
         else:
             deny("ARGUMENTS")
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError, IndexError):
