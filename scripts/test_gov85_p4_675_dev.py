@@ -134,6 +134,110 @@ class P4ReleaseControls(unittest.TestCase):
             if changed=="digest": b["results"]["images"][0]["digest"]="sha256:"+"c"*64
             self.assertEqual(rejects(guard.attest,[b],digest),86,changed)
 
+    def test_actual_github_job_names_exact_sha_and_app_identity(self):
+        # Minimal projection of real GET /commits/b8fa506/check-runs evidence.
+        # Workflow titles like "Validate Command API" are intentionally absent.
+        names = ["snapshot", "validate", "gitleaks",
+                 "Nile-only native provider CI", "api-version-policy"]
+        checks = {"total_count": len(names), "check_runs": [
+            {"name": name, "head_sha": guard.TARGET_SHA,
+             "status": "completed", "conclusion": "success",
+             "app": {"slug": "github-actions"}} for name in names
+        ]}
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.postmerge_ci(checks, guard.TARGET_SHA)
+        self.assertEqual(rejects(guard.postmerge_ci, checks, "0"*40), 86)
+        for change in ("missing", "wrong_app", "wrong_sha", "failure", "pending"):
+            stale = copy.deepcopy(checks)
+            if change == "missing":
+                stale["check_runs"].pop()
+            elif change == "wrong_app":
+                stale["check_runs"][0]["app"]["slug"] = "third-party"
+            elif change == "wrong_sha":
+                stale["check_runs"][0]["head_sha"] = "0"*40
+            elif change == "failure":
+                stale["check_runs"][0]["conclusion"] = "failure"
+            elif change == "pending":
+                stale["check_runs"][0]["status"] = "in_progress"
+            self.assertEqual(rejects(guard.postmerge_ci, stale, guard.TARGET_SHA), 86, change)
+
+    def test_release_requires_real_dev_environment_required_reviewers(self):
+        protected = {"name": "dev", "protection_rules": [{
+            "type": "required_reviewers", "prevent_self_review": False,
+            "reviewers": [{"type": "User", "reviewer": {"login": "Shosetzel69"}}],
+        }]}
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.environment_protection(protected)
+        for change in ("missing", "empty", "no_rule", "bot", "self_review",
+                       "wrong_environment"):
+            obj = copy.deepcopy(protected)
+            rule = obj["protection_rules"][0]
+            if change == "missing":
+                obj.pop("protection_rules")
+            elif change == "empty":
+                rule["reviewers"] = []
+            elif change == "no_rule":
+                rule["type"] = "wait_timer"
+            elif change == "bot":
+                rule["reviewers"][0]["reviewer"]["login"] = "any[bot]"
+            elif change == "self_review":
+                rule["prevent_self_review"] = True
+            elif change == "wrong_environment":
+                obj["name"] = "test"
+            self.assertEqual(rejects(guard.environment_protection, obj), 86, change)
+
+    def test_last_modifier_metadata_is_not_sensitive_but_vpc_is(self):
+        original = fixture()
+        original["metadata"]["annotations"]["serving.knative.dev/lastModifier"] = "alice"
+        original["spec"]["template"]["metadata"]["annotations"]["run.googleapis.com/lastModifier"] = "alice"
+        candidate = staged(original)
+        candidate["metadata"]["annotations"]["serving.knative.dev/lastModifier"] = "builder"
+        candidate["spec"]["template"]["metadata"]["annotations"]["run.googleapis.com/lastModifier"] = "builder"
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.stage(original, candidate)
+        candidate["metadata"]["annotations"]["run.googleapis.com/ingress"] = "all"
+        self.assertEqual(rejects(guard.stage, original, candidate), 86)
+
+    def test_safe_cleanup_only_own_staged_tag_after_old_traffic_restored(self):
+        original = fixture()
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.cleanup_tag_revision(original)  # no tag => no action
+        stage = staged(original)
+        with contextlib.redirect_stdout(io.StringIO()) as output:
+            guard.cleanup_tag_revision(stage)
+        self.assertIn("jscc-command-api-dev-00101-p4w", output.getvalue())
+        for violation in ("new_serving", "foreign_source", "live_tag", "duplicate"):
+            bad = copy.deepcopy(stage)
+            if violation == "new_serving":
+                bad["status"]["traffic"][0]["revisionName"] = "jscc-command-api-dev-00102-new"
+            elif violation == "foreign_source":
+                next(x for x in guard.template(bad)["containers"][0]["env"]
+                     if x["name"] == "SOURCE_SHA")["value"] = "wrong"
+            elif violation == "live_tag":
+                bad["status"]["traffic"][1]["percent"] = 5
+            elif violation == "duplicate":
+                bad["status"]["traffic"].append(copy.deepcopy(bad["status"]["traffic"][1]))
+            self.assertEqual(rejects(guard.cleanup_tag_revision, bad), 86, violation)
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.verify_rollback(original)
+        rolled = copy.deepcopy(original)
+        rolled["status"]["traffic"][0]["revisionName"] = "jscc-command-api-dev-00102-new"
+        self.assertEqual(rejects(guard.verify_rollback, rolled), 86)
+
+    def test_workflow_fails_closed_before_gcp_on_missing_environment_rule(self):
+        workflow = WORKFLOW.read_text(encoding="utf8")
+        self.assertIn("environment-protection", workflow)
+        self.assertIn("JSCC_P4_DEV_ENV_PROTECTION_UNVERIFIABLE", workflow)
+        self.assertIn("repos/$GITHUB_REPOSITORY/environments/dev", workflow)
+        self.assertLess(workflow.index("Require verified DEV environment protection"),
+                        workflow.index("Authenticate using existing DEV WIF"))
+        self.assertIn("postmerge-ci", workflow)
+        self.assertNotIn('for name in "Validate Command API"', workflow)
+        self.assertLess(workflow.index("postmerge-ci"),
+                        workflow.index("Authenticate using existing DEV WIF"))
+        self.assertIn("concurrency:", workflow)
+        self.assertNotIn("\nconcurrency:\n", workflow)
+
     def test_shell_has_strict_owner_source_release_gate_and_rollback(self):
         shell=SHELL.read_text(encoding="utf8")
         for required in (guard.TARGET_SHA,guard.OLD_REV,guard.OLD_DIGEST,
@@ -143,7 +247,11 @@ class P4ReleaseControls(unittest.TestCase):
                          "gcloud builds submit candidate",
                          "python3 \"$guard\" unchanged",
                          "python3 \"$guard\" stage",
-                         "--no-traffic", "--to-revisions=", "trap 'rollback' ERR"):
+                         "--no-traffic", "--to-revisions=", "--remove-tags=p4w1",
+                         "trap 'release_exit' EXIT", "trap 'exit 130' INT",
+                         "trap 'exit 143' TERM",
+                         "python3 \"$guard\" verify-rollback",
+                         "python3 \"$guard\" cleanup-tag"):
             self.assertIn(required,shell,required)
         self.assertLess(shell.index("if [[ \"$mode\" == preflight ]]"),shell.index("gcloud builds submit"))
         for prohibited in ("gcloud run jobs deploy", "gcloud run jobs execute",
