@@ -199,7 +199,8 @@ jobs:
           checks = (
               ("build-project", "https://cloudresourcemanager.googleapis.com/v1/projects/jscc-shared:testIamPermissions",
                ["cloudbuild.builds.create", "cloudbuild.builds.get",
-                "cloudbuild.builds.list", "serviceusage.services.use"]),
+                "cloudbuild.builds.list", "serviceusage.services.use",
+                "storage.buckets.list"]),
               ("build-sa", "https://iam.googleapis.com/v1/projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com:testIamPermissions",
                ["iam.serviceAccounts.actAs"]),
               ("deployer-sa", "https://iam.googleapis.com/v1/projects/jscc-dev/serviceAccounts/jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com:testIamPermissions",
@@ -209,7 +210,7 @@ jobs:
               ("registry", "https://artifactregistry.googleapis.com/v1/projects/jscc-shared/locations/europe-west1/repositories/jscc:testIamPermissions",
                ["artifactregistry.repositories.get", "artifactregistry.repositories.downloadArtifacts"]),
               ("service", "https://run.googleapis.com/v2/projects/jscc-dev/locations/europe-west1/services/jscc-command-api-dev:testIamPermissions",
-               ["run.services.get", "run.services.update"]),
+               ["run.services.get", "run.services.update", "run.routes.invoke"]),
           )
           for label, url, required in checks:
               probe(label, url, required)
@@ -217,8 +218,9 @@ jobs:
           bucket = "jscc-shared_cloudbuild"
           url = ("https://storage.googleapis.com/storage/v1/b/" +
                  urllib.parse.quote(bucket, safe="") + "/iam/testPermissions?" +
-                 urllib.parse.urlencode({"permissions": "storage.objects.create"}))
-          probe("build-staging", url, ["storage.objects.create"], method="GET")
+                 urllib.parse.urlencode({"permissions": ["storage.objects.create",
+                                                           "storage.buckets.get"]}, doseq=True))
+          probe("build-staging", url, ["storage.objects.create", "storage.buckets.get"], method="GET")
           PY
           if ! gcloud builds list --project=jscc-shared --region=europe-west1 \
             --limit=1 --format='value(id)' >/dev/null 2>/tmp/jscc-p4-v5-build-list-error; then
