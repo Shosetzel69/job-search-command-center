@@ -239,17 +239,34 @@ class P4ReleaseControls(unittest.TestCase):
     def test_rollback_digest_accepts_only_expected_image_identity(self):
         import subprocess
         shell = SHELL.read_text(encoding="utf8")
-        condition = next(line for line in shell.splitlines()
-                         if "JSCC_P4_ROLLBACK_DIGEST_CHANGED" in line)
+        function = shell[shell.index("normalize_revision_digest(){"):
+                         shell.index("\numask 077", shell.index("normalize_revision_digest(){"))]
+        self.assertEqual(shell.count('normalize_revision_digest "$actual_old"'), 1)
+        self.assertEqual(shell.count('normalize_revision_digest "$staged_digest"'), 1)
+        self.assertEqual(shell.count('normalize_revision_digest "$rev_digest"'), 1)
+        for name in ("actual_old", "staged_digest", "rev_digest"):
+            self.assertNotIn(f'[[ "$\\{name}" ==', shell)
         digest = guard.OLD_DIGEST
         repo = guard.IMAGE_REPO
-        for actual, expected in ((digest, 0), (repo + "@" + digest, 0),
-                                 ("other.example/image@" + digest, 86),
-                                 (repo + "@sha256:" + "0" * 64, 86)):
-            command = 'old_digest="$1"; image_repo="$2"; actual_old="$3"; ' + condition
-            result = subprocess.run(["bash", "-c", command, "test", digest, repo, actual],
-                                    capture_output=True, text=True, check=False)
-            self.assertEqual(result.returncode, expected, actual)
+        candidates = ((digest, 0, digest), (repo + "@" + digest, 0, digest),
+                      ("other.example/image@" + digest, 1, ""),
+                      (repo + "@sha256:" + "0" * 64, 0, "sha256:" + "0" * 64),
+                      (repo + ":latest", 1, ""), ("", 1, ""))
+        for actual, expected_code, expected_output in candidates:
+            result = subprocess.run(
+                ["bash", "-c", 'image_repo="$1"; ' + function +
+                 '\\nnormalize_revision_digest "$2"', "test", repo, actual],
+                capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, expected_code, actual)
+            self.assertEqual(result.stdout.strip(), expected_output, actual)
+        for name, expected, error in (
+            ("actual_old", "old_digest", "JSCC_P4_ROLLBACK_DIGEST_CHANGED"),
+            ("staged_digest", "digest", "JSCC_P4_TAG_CLEANUP_DIGEST_UNVERIFIED"),
+            ("rev_digest", "digest", "JSCC_P4_STAGED_DIGEST_INVALID"),
+        ):
+            self.assertIn(f'normalize_revision_digest "$\\{name}"', shell)
+            self.assertIn(f'[[ "$\\{name}" == "$\\{expected}" ]]', shell)
+            self.assertIn(error, shell)
 
     def test_workflow_identity_uses_owner_issue663_and_no_automatic_deploy(self):
         workflow=WORKFLOW.read_text(encoding="utf8")
