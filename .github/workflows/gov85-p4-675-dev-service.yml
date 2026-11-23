@@ -26,6 +26,8 @@ jobs:
     timeout-minutes: 10
     permissions:
       contents: read
+      actions: read
+      checks: read
     steps:
       - name: Checkout exact source candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -40,6 +42,26 @@ jobs:
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v scripts.test_gov85_p4_675_dev
           grep -Fq 'exit 86' cloudbuild.promotion.yaml
           grep -Fq 'exit 86' scripts/gcp/promote.sh
+
+      - name: Verify LIVE exact post-merge checks and DEV environment reviewer policy
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          target=b8fa506987bd79053f5c3cf86137f32e41a4095b
+          gh api "repos/$GITHUB_REPOSITORY/commits/$target/check-runs?per_page=100" \
+            >/tmp/jscc-p4-main-checks-ci.json
+          python3 scripts/gcp/gov85_p4_675_dev_guard.py postmerge-ci \
+            /tmp/jscc-p4-main-checks-ci.json "$target"
+          # Read-only evidence. Without a real required-reviewer rule, no release.
+          gh api "repos/$GITHUB_REPOSITORY/environments/dev" \
+            >/tmp/jscc-p4-dev-environment-ci.json || {
+              echo JSCC_P4_DEV_ENV_PROTECTION_UNVERIFIABLE
+              exit 86
+            }
+          python3 scripts/gcp/gov85_p4_675_dev_guard.py environment-protection \
+            /tmp/jscc-p4-dev-environment-ci.json
 
   p4-service-release:
     if: github.event_name == 'issue_comment' && github.actor == 'Shosetzel69' && github.event.issue.number == 663 && startsWith(github.event.comment.body, '/jscc-p4-675 ')
