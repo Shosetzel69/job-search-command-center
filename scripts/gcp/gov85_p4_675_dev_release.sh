@@ -22,6 +22,14 @@ guard=control/scripts/gcp/gov85_p4_675_dev_guard.py
 [[ -z "$(git -C candidate status --porcelain)" ]] || exit 86
 [[ -n "${GCP_WIF_SA:-}" ]] || { echo JSCC_P4_WIF_MISSING; exit 86; }
 image_tag="$image_repo:$target"
+normalize_revision_digest(){
+  local value="$1"
+  if [[ "$value" == "$image_repo@"* ]]; then
+    value="${value#"$image_repo@"}"
+  fi
+  [[ "$value" =~ ^sha256:[0-9a-f]{64}$ ]] || return 1
+  printf '%s\n' "$value"
+}
 umask 077
 immutable="$(gcloud artifacts repositories describe jscc --project="$shared" --location="$region" --format='value(dockerConfig.immutableTags)')"
 [[ "$immutable" == True || "$immutable" == true ]] || { echo JSCC_P4_REGISTRY_NOT_IMMUTABLE; exit 86; }
@@ -30,7 +38,8 @@ immutable="$(gcloud artifacts repositories describe jscc --project="$shared" --l
 gcloud run services describe "$service" --project="$project" --region="$region" --format=json > /tmp/jscc-p4-before.json
 python3 "$guard" baseline /tmp/jscc-p4-before.json
 actual_old="$(gcloud run revisions describe "$old_revision" --project="$project" --region="$region" --format='value(status.imageDigest)')"
-[[ "$actual_old" == "$old_digest" || "$actual_old" == "$image_repo@$old_digest" ]] || { echo JSCC_P4_ROLLBACK_DIGEST_CHANGED; exit 86; }
+actual_old="$(normalize_revision_digest "$actual_old")" || { echo JSCC_P4_ROLLBACK_DIGEST_CHANGED; exit 86; }
+[[ "$actual_old" == "$old_digest" ]] || { echo JSCC_P4_ROLLBACK_DIGEST_CHANGED; exit 86; }
 service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
 [[ "$service_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || { echo JSCC_P4_CANONICAL_URL_INVALID; exit 86; }
 id_token="$(gcloud auth print-identity-token --impersonate-service-account="$GCP_WIF_SA" \
@@ -147,6 +156,10 @@ cleanup_stage_tag(){
   [[ "$staged_rev" =~ ^jscc-command-api-dev-[a-z0-9-]+$ ]] || return 1
   staged_digest="$(gcloud run revisions describe "$staged_rev" \
     --project="$project" --region="$region" --format='value(status.imageDigest)')" || return 1
+  staged_digest="$(normalize_revision_digest "$staged_digest")" || {
+    echo JSCC_P4_TAG_CLEANUP_DIGEST_UNVERIFIED
+    return 1
+  }
   [[ "$staged_digest" == "$digest" ]] || {
     echo JSCC_P4_TAG_CLEANUP_DIGEST_UNVERIFIED
     return 1
@@ -197,6 +210,7 @@ tag_url="$(sed -n 's/^JSCC_P4_STAGED_URL=//p' <<<"$proof")"
 [[ "$revision" =~ ^jscc-command-api-dev-[a-z0-9-]+$ ]] || exit 86
 [[ "$tag_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || exit 86
 rev_digest="$(gcloud run revisions describe "$revision" --project="$project" --region="$region" --format='value(status.imageDigest)')"
+rev_digest="$(normalize_revision_digest "$rev_digest")" || { echo JSCC_P4_STAGED_DIGEST_INVALID; exit 86; }
 [[ "$rev_digest" == "$digest" ]] || { echo JSCC_P4_STAGED_DIGEST_INVALID; exit 86; }
 
 id_token="$(gcloud auth print-identity-token --impersonate-service-account="$GCP_WIF_SA" \
