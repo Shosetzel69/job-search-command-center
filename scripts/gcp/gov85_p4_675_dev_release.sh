@@ -43,7 +43,19 @@ actual_old="$(normalize_revision_digest "$actual_old")" || { echo JSCC_P4_ROLLBA
 service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
 [[ "$service_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || { echo JSCC_P4_CANONICAL_URL_INVALID; exit 86; }
 id_token="$(gcloud auth print-identity-token --impersonate-service-account="$GCP_WIF_SA" \
- --audiences="$service_url" 2>/tmp/jscc-p4-auth-error)" || { echo JSCC_P4_INVOCATION_DENIED; exit 86; }
+ --audiences="$service_url" 2>/tmp/jscc-p4-auth-error)" || {
+  if grep -Eiq '(iam.serviceAccounts.getOpenIdToken|iamcredentials.googleapis.com|permission.denied|PERMISSION_DENIED|403)' /tmp/jscc-p4-auth-error; then
+    echo JSCC_P4_INVOCATION_DENIED_CLASS=IAM_PERMISSION
+  elif grep -Eiq '(invalid.*audience|audience.*invalid)' /tmp/jscc-p4-auth-error; then
+    echo JSCC_P4_INVOCATION_DENIED_CLASS=AUDIENCE
+  elif grep -Eiq '(invalid_grant|invalid.*credentials|credentials.*invalid|UNAUTHENTICATED|401)' /tmp/jscc-p4-auth-error; then
+    echo JSCC_P4_INVOCATION_DENIED_CLASS=CREDENTIALS
+  else
+    echo JSCC_P4_INVOCATION_DENIED_CLASS=OTHER_REDACTED
+  fi
+  echo JSCC_P4_INVOCATION_DENIED
+  exit 86
+}
 [[ "$id_token" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]] || exit 86
 curl --fail --silent --show-error --connect-timeout 10 --max-time 30 \
  -H "Authorization: Bearer $id_token" "$service_url/health" >/tmp/jscc-p4-before-health.json

@@ -281,6 +281,57 @@ class P4ReleaseControls(unittest.TestCase):
             self.assertIn(f'[[ "${name}" == "${expected}" ]]', shell)
             self.assertIn(error, shell)
 
+    def test_auth_diagnostic_is_redacted_and_fail_closed(self):
+        shell = SHELL.read_text(encoding="utf8")
+        self.assertIn("JSCC_P4_INVOCATION_DENIED_CLASS=IAM_PERMISSION", shell)
+        self.assertIn("JSCC_P4_INVOCATION_DENIED_CLASS=AUDIENCE", shell)
+        self.assertIn("JSCC_P4_INVOCATION_DENIED_CLASS=CREDENTIALS", shell)
+        self.assertIn("JSCC_P4_INVOCATION_DENIED_CLASS=OTHER_REDACTED", shell)
+        self.assertIn("echo JSCC_P4_INVOCATION_DENIED\n  exit 86", shell)
+        self.assertNotIn("cat /tmp/jscc-p4-auth-error", shell)
+
+    def test_auth_diagnostic_real_branch_redacts_stderr(self):
+        import os
+        import subprocess
+        import tempfile
+
+        shell = SHELL.read_text(encoding="utf8")
+        start = shell.index('id_token="$(gcloud auth print-identity-token --impersonate-service-account="$GCP_WIF_SA"')
+        end = shell.index('\n[[ "$id_token" =~', start)
+        branch = shell[start:end].replace("/tmp/jscc-p4-auth-error", '"$TEST_AUTH_ERROR"')
+        cases = (
+            ("PERMISSION_DENIED iam.serviceAccounts.getOpenIdToken PRIVATE_MARKER", "IAM_PERMISSION"),
+            ("Invalid audience PRIVATE_MARKER", "AUDIENCE"),
+            ("UNAUTHENTICATED invalid credentials PRIVATE_MARKER", "CREDENTIALS"),
+            ("connection reset PRIVATE_MARKER", "OTHER_REDACTED"),
+            ("", "OTHER_REDACTED"),
+        )
+        with tempfile.TemporaryDirectory() as directory:
+            fake_gcloud = Path(directory) / "gcloud"
+            fake_gcloud.write_text(
+                '#!/bin/sh\nprintf "%s\\n" "$STUB_ERROR" >&2\nexit 1\n', encoding="utf8"
+            )
+            fake_gcloud.chmod(0o700)
+            for stderr, category in cases:
+                env = dict(os.environ)
+                env.update(
+                    PATH=directory + os.pathsep + os.environ["PATH"],
+                    STUB_ERROR=stderr,
+                    TEST_AUTH_ERROR=str(Path(directory) / "stderr"),
+                )
+                result = subprocess.run(
+                    ["bash", "-c",
+                     'set -euo pipefail\numask 077\nGCP_WIF_SA=svc@example.invalid\n'
+                     'service_url=https://example.invalid\n' + branch],
+                    env=env, capture_output=True, text=True, check=False
+                )
+                self.assertEqual(result.returncode, 86, category)
+                self.assertEqual(result.stdout.strip().splitlines(), [
+                    "JSCC_P4_INVOCATION_DENIED_CLASS=" + category,
+                    "JSCC_P4_INVOCATION_DENIED",
+                ])
+                self.assertNotIn("PRIVATE_MARKER", result.stdout + result.stderr)
+
     def test_workflow_identity_uses_owner_issue663_and_no_automatic_deploy(self):
         workflow=WORKFLOW.read_text(encoding="utf8")
         for required in ("github.event.issue.number == 663",
