@@ -122,7 +122,7 @@ jobs:
           test -n "$GCP_WIF_PROVIDER" && test -n "$GCP_WIF_SA" || exit 86
           bash -n control/scripts/gcp/gov85_p4_675_dev_release.sh
           python3 -m py_compile control/scripts/gcp/gov85_p4_675_dev_guard.py
-          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s control/scripts -p 'test_gov85_p4_675_dev.py' -v
+          (cd control && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v scripts.test_gov85_p4_675_dev)
       # Explicit owner authorization for this immutable DEV-only P4 release is
       # documented in issue #663. No new required-reviewer environment rule is
       # installed or assumed. Existing GCP WIF, GH actor, SHA and runtime guards
