@@ -29,7 +29,7 @@ def fixture():
                                     {"name": "RUNTIME_DATA_SHA", "value": "old"},
                                     {"name": "NILE_SECRET", "valueFrom": {"secretKeyRef": {"name": "nile"}}}]}],
             "containerConcurrency": 80, "timeoutSeconds": 300,
-        }}}},
+        }}},
         "status": {"traffic": [{"revisionName": guard.OLD_REV, "percent": 100}]},
     }
 
