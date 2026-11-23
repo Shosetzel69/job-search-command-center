@@ -79,6 +79,110 @@ echo "JSCC_P4_SERVICE_DIGEST=$digest"
 # All template/VPC/SA/secrets and old traffic must be unchanged since preflight.
 gcloud run services describe "$service" --project="$project" --region="$region" --format=json >/tmp/jscc-p4-prestage.json
 python3 "$guard" unchanged /tmp/jscc-p4-before.json /tmp/jscc-p4-prestage.json
+# Compensating actions are installed BEFORE the first Cloud Run mutation.
+# A failed stage must not leave a reachable 0%-traffic p4w1 tag that blocks retry.
+stage_attempted=0
+cutover_attempted=0
+
+rollback(){
+  echo JSCC_P4_ROLLBACK_ATTEMPTED
+  if ! gcloud run services update-traffic "$service" --project="$project" --region="$region" \
+    --to-revisions="$old_revision=100" --quiet >/tmp/jscc-p4-rollback-log 2>&1; then
+    echo JSCC_P4_ROLLBACK_COMMAND=FAIL_MANUAL_RECOVERY_REQUIRED
+    return 1
+  fi
+  if ! gcloud run services describe "$service" --project="$project" --region="$region" \
+    --format=json >/tmp/jscc-p4-rollback-state.json; then
+    echo JSCC_P4_ROLLBACK_STATE_UNVERIFIED
+    return 1
+  fi
+  if ! python3 "$guard" verify-rollback /tmp/jscc-p4-rollback-state.json; then
+    echo JSCC_P4_ROLLBACK_TRAFFIC_UNVERIFIED
+    return 1
+  fi
+  # The original revision must also pass authenticated canonical health.
+  local rollback_token
+  rollback_token="$(gcloud auth print-identity-token \
+    --impersonate-service-account="$GCP_WIF_SA" --audiences="$service_url" \
+    2>/tmp/jscc-p4-rollback-token-error)" || {
+    echo JSCC_P4_ROLLBACK_IDENTITY_DENIED
+    return 1
+  }
+  if ! curl -fsS --connect-timeout 10 --max-time 30 \
+    -H "Authorization: Bearer $rollback_token" "$service_url/health" \
+    >/tmp/jscc-p4-rollback-health.json; then
+    echo JSCC_P4_ROLLBACK_HEALTH_DENIED
+    return 1
+  fi
+  if ! python3 - <<'PY'
+import json
+h=json.load(open('/tmp/jscc-p4-rollback-health.json',encoding='utf8'))
+assert h.get('status')=='ok' and h.get('environment')=='dev'
+assert h.get('runtime_backend')=='gcp' and h.get('search_mode')=='disabled'
+PY
+  then
+    echo JSCC_P4_ROLLBACK_HEALTH_UNVERIFIED
+    return 1
+  fi
+  echo JSCC_P4_ROLLBACK_VERIFIED=PASS
+}
+
+cleanup_stage_tag(){
+  # Never remove an unrelated tag or one carrying live traffic.
+  local tag_proof staged_rev staged_digest
+  if ! gcloud run services describe "$service" --project="$project" --region="$region" \
+    --format=json >/tmp/jscc-p4-cleanup-state.json; then
+    echo JSCC_P4_TAG_CLEANUP_STATE_UNAVAILABLE
+    return 1
+  fi
+  tag_proof="$(python3 "$guard" cleanup-tag /tmp/jscc-p4-cleanup-state.json)" || {
+    echo JSCC_P4_TAG_CLEANUP_OWNERSHIP_UNVERIFIED
+    return 1
+  }
+  if grep -Fqx 'JSCC_P4_TAG_CLEANUP=NOT_REQUIRED' <<<"$tag_proof"; then
+    echo JSCC_P4_STAGE_TAG_ABSENT
+    return 0
+  fi
+  staged_rev="$(sed -n 's/^JSCC_P4_TAG_CLEANUP_REVISION=//p' <<<"$tag_proof")"
+  [[ "$staged_rev" =~ ^jscc-command-api-dev-[a-z0-9-]+$ ]] || return 1
+  staged_digest="$(gcloud run revisions describe "$staged_rev" \
+    --project="$project" --region="$region" --format='value(status.imageDigest)')" || return 1
+  [[ "$staged_digest" == "$digest" ]] || {
+    echo JSCC_P4_TAG_CLEANUP_DIGEST_UNVERIFIED
+    return 1
+  }
+  if ! gcloud run services update-traffic "$service" --project="$project" --region="$region" \
+    --remove-tags=p4w1 --quiet >/tmp/jscc-p4-cleanup-log 2>&1; then
+    echo JSCC_P4_TAG_CLEANUP_COMMAND_FAILED_MANUAL_RECOVERY_REQUIRED
+    return 1
+  fi
+  gcloud run services describe "$service" --project="$project" --region="$region" \
+    --format=json >/tmp/jscc-p4-cleanup-verified.json || return 1
+  local postcheck
+  postcheck="$(python3 "$guard" cleanup-tag /tmp/jscc-p4-cleanup-verified.json)" || return 1
+  grep -Fqx 'JSCC_P4_TAG_CLEANUP=NOT_REQUIRED' <<<"$postcheck" || return 1
+  echo JSCC_P4_STAGE_TAG_CLEANUP=PASS
+}
+
+release_exit(){
+  local original_status="$?"
+  trap - EXIT INT TERM
+  if [[ "$original_status" -ne 0 ]]; then
+    echo "JSCC_P4_RELEASE_FAILED_EXIT=$original_status"
+    if [[ "$cutover_attempted" == 1 ]]; then
+      rollback || echo JSCC_P4_ROLLBACK_REQUIRES_MANUAL_RECOVERY
+    fi
+    if [[ "$stage_attempted" == 1 ]]; then
+      cleanup_stage_tag || echo JSCC_P4_TAG_REQUIRES_MANUAL_RECOVERY
+    fi
+  fi
+  exit "$original_status"
+}
+trap 'release_exit' EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+
+stage_attempted=1
 gcloud run services update "$service" --project="$project" --region="$region" \
  --image="$image_repo@$digest" \
  --update-env-vars="SOURCE_SHA=$target,RUNTIME_DATA_SHA=$target" \
@@ -118,16 +222,8 @@ PY
 gcloud run services describe "$service" --project="$project" --region="$region" --format=json >/tmp/jscc-p4-precutover.json
 python3 "$guard" stage /tmp/jscc-p4-before.json /tmp/jscc-p4-precutover.json >/tmp/jscc-p4-precutover-proof
 grep -Fqx 'JSCC_P4_STAGED_CONFIG_PARITY=PASS' /tmp/jscc-p4-precutover-proof || exit 86
-rollback(){
-  echo JSCC_P4_ROLLBACK_ATTEMPTED
-  if gcloud run services update-traffic "$service" --project="$project" --region="$region" \
-    --to-revisions="$old_revision=100" --quiet >/tmp/jscc-p4-rollback-log 2>&1; then
-    echo JSCC_P4_ROLLBACK_COMMAND=PASS
-  else
-    echo JSCC_P4_ROLLBACK_COMMAND=FAIL_MANUAL_RECOVERY_REQUIRED
-  fi
-}
-trap 'rollback' ERR
+# Mark cutover intent before GCP mutation so any partial switch is compensated.
+cutover_attempted=1
 gcloud run services update-traffic "$service" --project="$project" --region="$region" \
  --to-revisions="$revision=100" --quiet >/tmp/jscc-p4-cutover-log 2>&1
 gcloud run services describe "$service" --project="$project" --region="$region" --format=json >/tmp/jscc-p4-final.json
@@ -145,7 +241,9 @@ assert h.get('source_sha')==sys.argv[1] and h.get('runtime_backend')=='gcp'
 assert d.get('status')=='ok' and d.get('database')=='jobsearch_dev'
 print('JSCC_P4_POST_CUTOVER_HEALTH_DB=PASS')
 PY
-trap - ERR
+# Success: retain the verified serving revision. A failed run takes the
+# compensating EXIT path; SIGKILL/runner loss still requires manual inspection.
+trap - EXIT INT TERM
 unset id_token
 echo "JSCC_P4_675_DEV_TECHNICAL_DEPLOY_PASS sha=$target revision=$revision digest=$digest"
 echo JSCC_P4_REAL_USER_FUNCTIONAL_ACCEPTANCE=PENDING
