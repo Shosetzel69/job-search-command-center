@@ -257,6 +257,21 @@ class P4ReleaseControls(unittest.TestCase):
                 capture_output=True, text=True, check=False)
             self.assertEqual(result.returncode, expected_code, actual)
             self.assertEqual(result.stdout.strip(), expected_output, actual)
+        for actual, accepted in (
+            (digest, True), (repo + "@" + digest, True),
+            ("other.example/image@" + digest, False),
+            (repo + "@sha256:" + "0" * 64, False),
+            (repo + ":latest", False), ("", False),
+        ):
+            for field in ("actual_old", "staged_digest", "rev_digest"):
+                command = ('image_repo="$1"; ' + function +
+                           '\\nvalue="$(normalize_revision_digest "$2")" || exit 86; ' +
+                           '[[ "$value" == "$3" ]] || exit 86')
+                result = subprocess.run(
+                    ["bash", "-c", command, field, repo, actual, digest],
+                    capture_output=True, text=True, check=False)
+                self.assertEqual(result.returncode, 0 if accepted else 86,
+                                 (field, actual))
         for name, expected, error in (
             ("actual_old", "old_digest", "JSCC_P4_ROLLBACK_DIGEST_CHANGED"),
             ("staged_digest", "digest", "JSCC_P4_TAG_CLEANUP_DIGEST_UNVERIFIED"),
