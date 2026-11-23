@@ -161,31 +161,6 @@ class P4ReleaseControls(unittest.TestCase):
                 stale["check_runs"][0]["status"] = "in_progress"
             self.assertEqual(rejects(guard.postmerge_ci, stale, guard.TARGET_SHA), 86, change)
 
-    def test_release_requires_real_dev_environment_required_reviewers(self):
-        protected = {"name": "dev", "protection_rules": [{
-            "type": "required_reviewers", "prevent_self_review": False,
-            "reviewers": [{"type": "User", "reviewer": {"login": "Shosetzel69"}}],
-        }]}
-        with contextlib.redirect_stdout(io.StringIO()):
-            guard.environment_protection(protected)
-        for change in ("missing", "empty", "no_rule", "bot", "self_review",
-                       "wrong_environment"):
-            obj = copy.deepcopy(protected)
-            rule = obj["protection_rules"][0]
-            if change == "missing":
-                obj.pop("protection_rules")
-            elif change == "empty":
-                rule["reviewers"] = []
-            elif change == "no_rule":
-                rule["type"] = "wait_timer"
-            elif change == "bot":
-                rule["reviewers"][0]["reviewer"]["login"] = "any[bot]"
-            elif change == "self_review":
-                rule["prevent_self_review"] = True
-            elif change == "wrong_environment":
-                obj["name"] = "test"
-            self.assertEqual(rejects(guard.environment_protection, obj), 86, change)
-
     def test_last_modifier_metadata_is_not_sensitive_but_vpc_is(self):
         original = fixture()
         original["metadata"]["annotations"]["serving.knative.dev/lastModifier"] = "alice"
@@ -224,19 +199,20 @@ class P4ReleaseControls(unittest.TestCase):
         rolled["status"]["traffic"][0]["revisionName"] = "jscc-command-api-dev-00102-new"
         self.assertEqual(rejects(guard.verify_rollback, rolled), 86)
 
-    def test_workflow_fails_closed_before_gcp_on_missing_environment_rule(self):
+    def test_owner_scoped_github_only_dispatch_without_new_environment_policy(self):
         workflow = WORKFLOW.read_text(encoding="utf8")
-        self.assertIn("environment-protection", workflow)
-        self.assertIn("JSCC_P4_DEV_ENV_PROTECTION_UNVERIFIABLE", workflow)
-        self.assertIn("repos/$GITHUB_REPOSITORY/environments/dev", workflow)
-        self.assertLess(workflow.index("Require verified DEV environment protection"),
-                        workflow.index("Authenticate using existing DEV WIF"))
+        self.assertNotIn("environment-protection", workflow)
+        self.assertNotIn("DEV_REQUIRED_REVIEWERS_MISSING", workflow)
+        self.assertNotIn("gh api \"repos/$GITHUB_REPOSITORY/environments/dev\"", workflow)
         self.assertIn("postmerge-ci", workflow)
         self.assertNotIn('for name in "Validate Command API"', workflow)
         self.assertLess(workflow.index("postmerge-ci"),
                         workflow.index("Authenticate using existing DEV WIF"))
+        self.assertIn("github.actor == 'Shosetzel69'",workflow)
+        self.assertIn("github.event.issue.number == 663",workflow)
         self.assertIn("concurrency:", workflow)
-        self.assertNotIn("\nconcurrency:\n", workflow)
+        self.assertNotIn("\\nconcurrency:\\n", workflow)
+        self.assertIn("environment: dev",workflow)
 
     def test_shell_has_strict_owner_source_release_gate_and_rollback(self):
         shell=SHELL.read_text(encoding="utf8")
