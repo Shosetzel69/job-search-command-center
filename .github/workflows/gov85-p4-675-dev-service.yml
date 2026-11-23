@@ -1,0 +1,146 @@
+# P4 #663/#675: DEV Command API Service only. No legacy promotion.
+# Only an owner-authored command on existing issue #663 can run this release.
+name: GOV85 P4 675 DEV Service-only release
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/gov85-p4-675-dev-service.yml'
+      - 'scripts/gcp/gov85_p4_675_dev_release.sh'
+      - 'scripts/gcp/gov85_p4_675_dev_guard.py'
+      - 'scripts/test_gov85_p4_675_dev.py'
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+  actions: read
+  checks: read
+  id-token: write
+
+jobs:
+  source-contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+    steps:
+      - name: Checkout exact source candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - name: Syntax, scope and isolation checks, no cloud mutation
+        run: |
+          set -euo pipefail
+          bash -n scripts/gcp/gov85_p4_675_dev_release.sh
+          python3 -m py_compile scripts/gcp/gov85_p4_675_dev_guard.py
+          PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v scripts.test_gov85_p4_675_dev
+          grep -Fq 'exit 86' cloudbuild.promotion.yaml
+          grep -Fq 'exit 86' scripts/gcp/promote.sh
+
+      - name: Verify LIVE exact post-merge checks on immutable application SHA
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          target=b8fa506987bd79053f5c3cf86137f32e41a4095b
+          gh api "repos/$GITHUB_REPOSITORY/commits/$target/check-runs?per_page=100" \
+            >/tmp/jscc-p4-main-checks-ci.json
+          python3 scripts/gcp/gov85_p4_675_dev_guard.py postmerge-ci \
+            /tmp/jscc-p4-main-checks-ci.json "$target"
+
+  p4-service-release:
+    if: github.event_name == 'issue_comment' && github.actor == 'Shosetzel69' && github.event.issue.number == 663 && startsWith(github.event.comment.body, '/jscc-p4-675 ')
+    concurrency:
+      group: gov85-p4-675-dev-service-only
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    environment: dev
+    timeout-minutes: 65
+    env:
+      GCP_WIF_PROVIDER: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }}
+      GCP_WIF_SA: ${{ vars.JSCC_DEV_GCP_WIF_SERVICE_ACCOUNT }}
+    steps:
+      - name: Checkout trusted main control-plane
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          path: control
+          persist-credentials: false
+      - name: Admit exact owner command, PR675 merge identity and post-merge CI
+        id: scope
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BODY: ${{ github.event.comment.body }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = Shosetzel69/job-search-command-center || exit 86
+          test "$GITHUB_REF" = refs/heads/main || exit 86
+          test "$ACTOR" = Shosetzel69 || exit 86
+          test "$(git -C control rev-parse HEAD)" = "$GITHUB_SHA" || exit 86
+          target=b8fa506987bd79053f5c3cf86137f32e41a4095b
+          case "$BODY" in
+            "/jscc-p4-675 preflight $target") mode=preflight ;;
+            "/jscc-p4-675 release $target") mode=release ;;
+            *) echo JSCC_P4_UNAPPROVED_OWNER_COMMAND; exit 86 ;;
+          esac
+          pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/675")"
+          test "$(jq -r '.merged' <<<"$pr")" = true || exit 86
+          test "$(jq -r '.merge_commit_sha' <<<"$pr")" = "$target" || exit 86
+          test "$(jq -r '.head.sha' <<<"$pr")" = d699b6efb1074c77ac3e5fdd2062ef182b6f2f9a || exit 86
+          # The GitHub check-runs endpoint reports *job* names. Check source
+          # SHA, app identity, completed/success and all five exact job names.
+          gh api "repos/$GITHUB_REPOSITORY/commits/$target/check-runs?per_page=100" \
+            > /tmp/jscc-p4-main-checks.json
+          python3 control/scripts/gcp/gov85_p4_675_dev_guard.py postmerge-ci \
+            /tmp/jscc-p4-main-checks.json "$target"
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$target" >> "$GITHUB_OUTPUT"
+          echo "JSCC_P4_MODE=$mode" >> "$GITHUB_STEP_SUMMARY"
+          echo "JSCC_P4_EXACT_SOURCE=$target" >> "$GITHUB_STEP_SUMMARY"
+      - name: Checkout immutable P4 application SHA
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ steps.scope.outputs.source_sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Verify candidate and DEV-only control scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = b8fa506987bd79053f5c3cf86137f32e41a4095b
+          test -z "$(git -C candidate status --porcelain)"
+          test -z "$(git -C control status --porcelain)"
+          test -n "$GCP_WIF_PROVIDER" && test -n "$GCP_WIF_SA" || exit 86
+          bash -n control/scripts/gcp/gov85_p4_675_dev_release.sh
+          python3 -m py_compile control/scripts/gcp/gov85_p4_675_dev_guard.py
+          (cd control && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v scripts.test_gov85_p4_675_dev)
+      # Explicit owner authorization for this immutable DEV-only P4 release is
+      # documented in issue #663. No new required-reviewer environment rule is
+      # installed or assumed. Existing GCP WIF, GH actor, SHA and runtime guards
+      # remain mandatory. This workflow does not claim independent approval.
+      - name: Authenticate using existing DEV WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: jscc-shared
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_WIF_SA }}
+      - name: Install pinned gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: DEV preflight OR owner-authorized Service stage and cutover
+        shell: bash
+        env:
+          JSCC_P4_RELEASE_GATE: ${{ steps.scope.outputs.mode == 'release' && 'APPROVE_P4_675_B8FA506_DEV_SERVICE_ONLY' || '' }}
+        run: |
+          set -euo pipefail
+          bash control/scripts/gcp/gov85_p4_675_dev_release.sh \
+            "${{ steps.scope.outputs.mode }}" "${{ steps.scope.outputs.source_sha }}"
+          echo JSCC_P4_NO_RETRIEVE_NO_JOB_NO_NILE_DDL_NO_TEST_PROD >> "$GITHUB_STEP_SUMMARY"
