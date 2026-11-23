@@ -109,6 +109,8 @@ def parity(old, new):
         return t
     if cleaned(old) != cleaned(new):
         deny("UNAUTHORIZED_SERVICE_TEMPLATE_CHANGE")
+    if protected_metadata(old) != protected_metadata(new):
+        deny("UNAUTHORIZED_SERVICE_METADATA_CHANGE")
     if service_account(old) != service_account(new):
         deny("SERVICE_IDENTITY_CHANGED")
     before, after = env(old), env(new)
@@ -121,9 +123,39 @@ def parity(old, new):
     return True
 
 
+def protected_metadata(service):
+    """Protect ALL service and revision annotations, excluding only known
+    gcloud-generated client/operation bookkeeping. This includes VPC, ingress,
+    networking, scaling, Cloud SQL, ingress policy and secret bindings.
+    """
+    root = service.get("metadata", {})
+    spec = service.get("spec", {})
+    revision = (spec.get("template", {}) if isinstance(spec, dict) else {}).get("metadata", {})
+    def clean(value):
+        if not isinstance(value, dict):
+            deny("UNVERIFIED_METADATA")
+        result = deepcopy(value)
+        result.pop("name", None)  # generated revision name
+        annotations = result.get("annotations", {})
+        if not isinstance(annotations, dict):
+            deny("INVALID_ANNOTATION_SHAPE")
+        for key in (
+            "run.googleapis.com/client-name",
+            "run.googleapis.com/client-version",
+            "run.googleapis.com/operation-id",
+        ):
+            annotations.pop(key, None)
+        result.pop("generation", None)
+        result.pop("resourceVersion", None)
+        result.pop("uid", None)
+        result.pop("creationTimestamp", None)
+        return result
+    return clean(root), clean(revision)
+
+
 def unchanged(old, current):
     base(current)
-    if template(old) != template(current) or env(old) != env(current):
+    if template(old) != template(current) or env(old) != env(current) or protected_metadata(old) != protected_metadata(current):
         deny("CONCURRENT_CONFIG_CHANGE")
     if traffic(old) != traffic(current):
         deny("CONCURRENT_TRAFFIC_CHANGE")
