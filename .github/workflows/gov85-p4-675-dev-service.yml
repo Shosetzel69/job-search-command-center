@@ -135,7 +135,7 @@ jobs:
           service_account: ${{ env.GCP_WIF_SA }}
       - name: Install pinned gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
-      - name: V5 verify DEV Cloud Build IAM without mutation
+      - name: V5 verify DEV WIF deployment permissions without mutation
         shell: bash
         run: |
           set -euo pipefail
@@ -147,55 +147,97 @@ jobs:
           import json
           import subprocess
           import urllib.error
+          import urllib.parse
           import urllib.request
 
-          token = subprocess.check_output(
-              ["gcloud", "auth", "print-access-token"],
-              text=True, stderr=subprocess.DEVNULL
-          ).strip()
+          try:
+              token = subprocess.check_output(
+                  ["gcloud", "auth", "print-access-token"],
+                  text=True, stderr=subprocess.DEVNULL
+              ).strip()
+          except (subprocess.CalledProcessError, OSError):
+              print("JSCC_P4_V5_ACCESS_TOKEN_DENIED")
+              raise SystemExit(86)
           if not token:
+              print("JSCC_P4_V5_ACCESS_TOKEN_MISSING")
               raise SystemExit(86)
 
-          checks = (
-              (
-                  "project",
-                  "https://cloudresourcemanager.googleapis.com/v1/projects/jscc-shared:testIamPermissions",
-                  ["cloudbuild.builds.create", "cloudbuild.builds.get",
-                   "cloudbuild.builds.list", "serviceusage.services.use"],
-              ),
-              (
-                  "build-sa",
-                  "https://iam.googleapis.com/v1/projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com:testIamPermissions",
-                  ["iam.serviceAccounts.actAs"],
-              ),
-          )
-          for label, url, required in checks:
+          def probe(label, url, required, method="POST"):
+              data = json.dumps({"permissions": required}).encode("utf-8") if method == "POST" else None
               request = urllib.request.Request(
-                  url,
-                  data=json.dumps({"permissions": required}).encode("utf-8"),
-                  headers={"Authorization": "Bearer " + token,
-                           "Content-Type": "application/json"},
-                  method="POST",
+                  url, data=data,
+                  headers={
+                      "Authorization": "Bearer " + token,
+                      "Content-Type": "application/json",
+                  },
+                  method=method,
               )
               try:
                   with urllib.request.urlopen(request, timeout=20) as response:
-                      granted = set(json.load(response).get("permissions", []))
+                      payload = json.load(response)
               except urllib.error.HTTPError as exc:
                   print(f"JSCC_P4_V5_{label}_HTTP_{exc.code}")
                   raise SystemExit(86)
               except (urllib.error.URLError, ValueError, OSError):
                   print(f"JSCC_P4_V5_{label}_REQUEST_FAILED")
                   raise SystemExit(86)
+              if (not isinstance(payload, dict) or
+                  not isinstance(payload.get("permissions", []), list)):
+                  print(f"JSCC_P4_V5_{label}_INVALID_RESPONSE")
+                  raise SystemExit(86)
+              if not all(isinstance(item, str) for item in payload.get("permissions", [])):
+                  print(f"JSCC_P4_V5_{label}_INVALID_RESPONSE")
+                  raise SystemExit(86)
+              granted = set(payload.get("permissions", []))
               missing = set(required) - granted
               if missing:
                   for permission in sorted(missing):
                       print(f"JSCC_P4_V5_MISSING_{label}={permission}")
                   raise SystemExit(86)
               print(f"JSCC_P4_V5_{label}_IAM=PASS")
+
+          checks = (
+              ("build-project", "https://cloudresourcemanager.googleapis.com/v1/projects/jscc-shared:testIamPermissions",
+               ["cloudbuild.builds.create", "cloudbuild.builds.get",
+                "cloudbuild.builds.list", "serviceusage.services.use"]),
+              ("build-sa", "https://iam.googleapis.com/v1/projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com:testIamPermissions",
+               ["iam.serviceAccounts.actAs"]),
+              ("deployer-sa", "https://iam.googleapis.com/v1/projects/jscc-dev/serviceAccounts/jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com:testIamPermissions",
+               ["iam.serviceAccounts.getOpenIdToken"]),
+              ("runtime-sa", "https://iam.googleapis.com/v1/projects/jscc-dev/serviceAccounts/jscc-dev-runtime@jscc-dev.iam.gserviceaccount.com:testIamPermissions",
+               ["iam.serviceAccounts.actAs"]),
+              ("registry", "https://artifactregistry.googleapis.com/v1/projects/jscc-shared/locations/europe-west1/repositories/jscc:testIamPermissions",
+               ["artifactregistry.repositories.get", "artifactregistry.repositories.downloadArtifacts"]),
+              ("service", "https://run.googleapis.com/v2/projects/jscc-dev/locations/europe-west1/services/jscc-command-api-dev:testIamPermissions",
+               ["run.services.get", "run.services.update"]),
+          )
+          for label, url, required in checks:
+              probe(label, url, required)
+
+          bucket = "jscc-shared_cloudbuild"
+          url = ("https://storage.googleapis.com/storage/v1/b/" +
+                 urllib.parse.quote(bucket, safe="") + "/iam/testPermissions?" +
+                 urllib.parse.urlencode({"permissions": "storage.objects.create"}))
+          probe("build-staging", url, ["storage.objects.create"], method="GET")
           PY
           if ! gcloud builds list --project=jscc-shared --region=europe-west1 \
             --limit=1 --format='value(id)' >/dev/null 2>/tmp/jscc-p4-v5-build-list-error; then
             echo JSCC_P4_V5_CLOUD_BUILD_LIST_DENIED
+            exit 86
+          fi
+          if ! gcloud artifacts repositories describe jscc --project=jscc-shared \
+            --location=europe-west1 --format='value(name)' >/dev/null 2>/tmp/jscc-p4-v5-registry-error; then
+            echo JSCC_P4_V5_ARTIFACT_REGISTRY_READ_DENIED
+            exit 86
+          fi
+          if ! gcloud run services describe jscc-command-api-dev --project=jscc-dev \
+            --region=europe-west1 --format='value(metadata.name)' >/dev/null 2>/tmp/jscc-p4-v5-run-error; then
+            echo JSCC_P4_V5_CLOUD_RUN_SERVICE_READ_DENIED
+            exit 86
+          fi
+          if ! gcloud run revisions describe jscc-command-api-dev-00100-mek --project=jscc-dev \
+            --region=europe-west1 --format='value(status.imageDigest)' >/dev/null 2>/tmp/jscc-p4-v5-revision-error; then
+            echo JSCC_P4_V5_CLOUD_RUN_REVISION_READ_DENIED
             exit 86
           fi
           echo JSCC_P4_V5_READONLY_PERMISSION_PROBE=PASS
