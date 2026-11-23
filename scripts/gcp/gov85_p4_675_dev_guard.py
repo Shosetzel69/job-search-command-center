@@ -218,6 +218,38 @@ def attest(builds, digest):
 
 
 
+
+def cleanup_tag_revision(service):
+    """Never remove an unrelated or serving tag after partial staging."""
+    matches = [t for t in traffic(service)
+               if isinstance(t, dict) and t.get("tag") == TAG]
+    if not matches:
+        print("JSCC_P4_TAG_CLEANUP=NOT_REQUIRED")
+        return
+    if len(matches) != 1:
+        deny("TAG_CLEANUP_AMBIGUOUS")
+    row = matches[0]
+    revision = row.get("revisionName") or row.get("revision")
+    if not REV.fullmatch(revision or ""):
+        deny("TAG_CLEANUP_REVISION_INVALID")
+    if int(row.get("percent", -1)) != 0:
+        deny("TAG_CLEANUP_TRAFFIC_NOT_ZERO")
+    if serving(service) != OLD_REV:
+        deny("TAG_CLEANUP_SERVING_REVISION_CHANGED")
+    if env(service).get("SOURCE_SHA", {}).get("value") != TARGET_SHA:
+        deny("TAG_CLEANUP_SOURCE_UNVERIFIED")
+    print("JSCC_P4_TAG_CLEANUP_REVISION=" + revision)
+
+
+def verify_rollback(service):
+    """Live serving revision after a failed release must be restored to old."""
+    if serving(service) != OLD_REV:
+        deny("ROLLBACK_OLD_REVISION_NOT_SERVING")
+    if service_account(service) != SA:
+        deny("ROLLBACK_SERVICE_ACCOUNT_CHANGED")
+    print("JSCC_P4_ROLLBACK_SERVING_100_PERCENT=PASS")
+
+
 # The check-runs endpoint contains JOB names, not workflow names. Anchor
 # success to the exact immutable post-merge SHA and the GitHub Actions app.
 REQUIRED_CI = (
@@ -300,6 +332,10 @@ if __name__ == "__main__":
             postmerge_ci(load(sys.argv[2]), sys.argv[3])
         elif operation == "environment-protection" and len(sys.argv) == 3:
             environment_protection(load(sys.argv[2]))
+        elif operation == "cleanup-tag" and len(sys.argv) == 3:
+            cleanup_tag_revision(load(sys.argv[2]))
+        elif operation == "verify-rollback" and len(sys.argv) == 3:
+            verify_rollback(load(sys.argv[2]))
         else:
             deny("ARGUMENTS")
     except (OSError, ValueError, KeyError, TypeError, json.JSONDecodeError, IndexError):
