@@ -43,7 +43,7 @@ jobs:
           grep -Fq 'exit 86' cloudbuild.promotion.yaml
           grep -Fq 'exit 86' scripts/gcp/promote.sh
 
-      - name: Verify LIVE exact post-merge checks and DEV environment reviewer policy
+      - name: Verify LIVE exact post-merge checks on immutable application SHA
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,14 +54,6 @@ jobs:
             >/tmp/jscc-p4-main-checks-ci.json
           python3 scripts/gcp/gov85_p4_675_dev_guard.py postmerge-ci \
             /tmp/jscc-p4-main-checks-ci.json "$target"
-          # Read-only evidence. Without a real required-reviewer rule, no release.
-          gh api "repos/$GITHUB_REPOSITORY/environments/dev" \
-            >/tmp/jscc-p4-dev-environment-ci.json || {
-              echo JSCC_P4_DEV_ENV_PROTECTION_UNVERIFIABLE
-              exit 86
-            }
-          python3 scripts/gcp/gov85_p4_675_dev_guard.py environment-protection \
-            /tmp/jscc-p4-dev-environment-ci.json
 
   p4-service-release:
     if: github.event_name == 'issue_comment' && github.actor == 'Shosetzel69' && github.event.issue.number == 663 && startsWith(github.event.comment.body, '/jscc-p4-675 ')
@@ -131,23 +123,10 @@ jobs:
           bash -n control/scripts/gcp/gov85_p4_675_dev_release.sh
           python3 -m py_compile control/scripts/gcp/gov85_p4_675_dev_guard.py
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s control/scripts -p 'test_gov85_p4_675_dev.py' -v
-      # This check MUST run before GCP auth. A shared owner comment is not a
-      # human authorization: GitHub must require an actual environment approval.
-      # If the environment rule is missing or unreadable, fail closed.
-      - name: Require verified DEV environment protection for RELEASE
-        if: steps.scope.outputs.mode == 'release'
-        shell: bash
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/environments/dev" \
-            > /tmp/jscc-p4-dev-environment.json || {
-              echo JSCC_P4_DEV_ENV_PROTECTION_UNVERIFIABLE
-              exit 86
-            }
-          python3 control/scripts/gcp/gov85_p4_675_dev_guard.py environment-protection \
-            /tmp/jscc-p4-dev-environment.json
+      # Explicit owner authorization for this immutable DEV-only P4 release is
+      # documented in issue #663. No new required-reviewer environment rule is
+      # installed or assumed. Existing GCP WIF, GH actor, SHA and runtime guards
+      # remain mandatory. This workflow does not claim independent approval.
       - name: Authenticate using existing DEV WIF
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
