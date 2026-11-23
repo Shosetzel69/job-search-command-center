@@ -281,6 +281,15 @@ class P4ReleaseControls(unittest.TestCase):
             self.assertIn(f'[[ "${name}" == "${expected}" ]]', shell)
             self.assertIn(error, shell)
 
+    def test_auth_diagnostic_is_redacted_and_fail_closed(self):
+        shell = SHELL.read_text(encoding="utf8")
+        self.assertIn("JSCC_P4_INVOCATION_DENIED_CLASS=IAM_PERMISSION", shell)
+        self.assertIn("JSCC_P4_INVOCATION_DENIED_CLASS=AUDIENCE", shell)
+        self.assertIn("JSCC_P4_INVOCATION_DENIED_CLASS=CREDENTIALS", shell)
+        self.assertIn("JSCC_P4_INVOCATION_DENIED_CLASS=OTHER_REDACTED", shell)
+        self.assertIn("echo JSCC_P4_INVOCATION_DENIED\\n  exit 86", shell)
+        self.assertNotIn("cat /tmp/jscc-p4-auth-error", shell)
+
     def test_workflow_identity_uses_owner_issue663_and_no_automatic_deploy(self):
         workflow=WORKFLOW.read_text(encoding="utf8")
         for required in ("github.event.issue.number == 663",
