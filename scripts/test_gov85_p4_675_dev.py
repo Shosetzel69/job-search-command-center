@@ -236,6 +236,21 @@ class P4ReleaseControls(unittest.TestCase):
                            "add-iam-policy-binding"):
             self.assertNotIn(prohibited,shell,prohibited)
 
+    def test_rollback_digest_accepts_only_expected_image_identity(self):
+        import subprocess
+        shell = SHELL.read_text(encoding="utf8")
+        condition = next(line for line in shell.splitlines()
+                         if "JSCC_P4_ROLLBACK_DIGEST_CHANGED" in line)
+        digest = guard.OLD_DIGEST
+        repo = guard.IMAGE_REPO
+        for actual, expected in ((digest, 0), (repo + "@" + digest, 0),
+                                 ("other.example/image@" + digest, 86),
+                                 (repo + "@sha256:" + "0" * 64, 86)):
+            command = 'old_digest="$1"; image_repo="$2"; actual_old="$3"; ' + condition
+            result = subprocess.run(["bash", "-c", command, "test", digest, repo, actual],
+                                    capture_output=True, text=True, check=False)
+            self.assertEqual(result.returncode, expected, actual)
+
     def test_workflow_identity_uses_owner_issue663_and_no_automatic_deploy(self):
         workflow=WORKFLOW.read_text(encoding="utf8")
         for required in ("github.event.issue.number == 663",
