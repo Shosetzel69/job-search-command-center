@@ -265,7 +265,7 @@ class P4ReleaseControls(unittest.TestCase):
         ):
             for field in ("actual_old", "staged_digest", "rev_digest"):
                 command = ('image_repo="$1"; ' + function +
-                           '\\nvalue="$(normalize_revision_digest "$2")" || exit 86; ' +
+                           '\nvalue="$(normalize_revision_digest "$2")" || exit 86; ' +
                            '[[ "$value" == "$3" ]] || exit 86')
                 result = subprocess.run(
                     ["bash", "-c", command, field, repo, actual, digest],
