@@ -14,7 +14,12 @@ WORKFLOW = ROOT / ".github/workflows/gov85-p4-675-dev-service.yml"
 
 def fixture():
     return {
-        "spec": {"template": {"spec": {
+        "metadata": {"annotations": {"run.googleapis.com/ingress": "internal-and-cloud-load-balancing"}},
+        "spec": {"template": {"metadata": {"annotations": {
+            "run.googleapis.com/vpc-access-connector": "projects/jscc-dev/locations/europe-west1/connectors/existing",
+            "autoscaling.knative.dev/maxScale": "3",
+            "run.googleapis.com/cloudsql-instances": "jscc-dev:europe-west1:existing",
+        }}, "spec": {
             "serviceAccountName": guard.SA,
             "containers": [{"image": guard.IMAGE_REPO + "@sha256:" + "a"*64,
                             "env": [{"name": "APP_ENV", "value": "dev"},
@@ -24,7 +29,7 @@ def fixture():
                                     {"name": "RUNTIME_DATA_SHA", "value": "old"},
                                     {"name": "NILE_SECRET", "valueFrom": {"secretKeyRef": {"name": "nile"}}}]}],
             "containerConcurrency": 80, "timeoutSeconds": 300,
-        }}},
+        }}}},
         "status": {"traffic": [{"revisionName": guard.OLD_REV, "percent": 100}]},
     }
 
@@ -93,7 +98,7 @@ class P4ReleaseControls(unittest.TestCase):
 
     def test_staging_fails_closed_on_secret_vpc_scaling_sa_and_source_drift(self):
         original = fixture()
-        for mutation in ("secret", "scale", "sa", "source", "traffic"):
+        for mutation in ("secret", "scale", "sa", "source", "traffic", "vpc", "ingress"):
             candidate = staged(original)
             if mutation == "secret":
                 guard.template(candidate)["containers"][0]["env"][-1]["valueFrom"]["secretKeyRef"]["name"] = "different"
@@ -105,6 +110,10 @@ class P4ReleaseControls(unittest.TestCase):
                 next(x for x in guard.template(candidate)["containers"][0]["env"] if x["name"]=="SOURCE_SHA")["value"] = "bad"
             elif mutation == "traffic":
                 candidate["status"]["traffic"][0]["percent"] = 99
+            elif mutation == "vpc":
+                candidate["spec"]["template"]["metadata"]["annotations"]["run.googleapis.com/vpc-access-connector"] = "another"
+            elif mutation == "ingress":
+                candidate["metadata"]["annotations"]["run.googleapis.com/ingress"] = "all"
             self.assertEqual(rejects(guard.stage, original, candidate), 86, mutation)
 
     def test_image_provenance_must_match_digest_sha_and_build_service_account(self):
@@ -157,7 +166,9 @@ class P4ReleaseControls(unittest.TestCase):
             self.assertIn(required,workflow,required)
         self.assertNotIn("workflow_dispatch:",workflow)
         self.assertNotIn("push:",workflow)
-        self.assertNotIn("test_prod",workflow.lower())
+        self.assertIn("environment: dev",workflow)
+        self.assertNotIn("environment: prod",workflow.lower())
+        self.assertNotIn("environment: test",workflow.lower())
 
 
 if __name__ == "__main__":
