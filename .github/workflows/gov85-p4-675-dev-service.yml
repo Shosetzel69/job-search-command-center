@@ -135,6 +135,70 @@ jobs:
           service_account: ${{ env.GCP_WIF_SA }}
       - name: Install pinned gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: V5 verify DEV Cloud Build IAM without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$GCP_WIF_SA" != "jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com" ]]; then
+            echo JSCC_P4_V5_WRONG_DEPLOYER_IDENTITY
+            exit 86
+          fi
+          python3 - <<'PY'
+          import json
+          import subprocess
+          import urllib.error
+          import urllib.request
+
+          token = subprocess.check_output(
+              ["gcloud", "auth", "print-access-token"],
+              text=True, stderr=subprocess.DEVNULL
+          ).strip()
+          if not token:
+              raise SystemExit(86)
+
+          checks = (
+              (
+                  "project",
+                  "https://cloudresourcemanager.googleapis.com/v1/projects/jscc-shared:testIamPermissions",
+                  ["cloudbuild.builds.create", "cloudbuild.builds.get",
+                   "cloudbuild.builds.list", "serviceusage.services.use"],
+              ),
+              (
+                  "build-sa",
+                  "https://iam.googleapis.com/v1/projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com:testIamPermissions",
+                  ["iam.serviceAccounts.actAs"],
+              ),
+          )
+          for label, url, required in checks:
+              request = urllib.request.Request(
+                  url,
+                  data=json.dumps({"permissions": required}).encode("utf-8"),
+                  headers={"Authorization": "Bearer " + token,
+                           "Content-Type": "application/json"},
+                  method="POST",
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      granted = set(json.load(response).get("permissions", []))
+              except urllib.error.HTTPError as exc:
+                  print(f"JSCC_P4_V5_{label}_HTTP_{exc.code}")
+                  raise SystemExit(86)
+              except (urllib.error.URLError, ValueError, OSError):
+                  print(f"JSCC_P4_V5_{label}_REQUEST_FAILED")
+                  raise SystemExit(86)
+              missing = set(required) - granted
+              if missing:
+                  for permission in sorted(missing):
+                      print(f"JSCC_P4_V5_MISSING_{label}={permission}")
+                  raise SystemExit(86)
+              print(f"JSCC_P4_V5_{label}_IAM=PASS")
+          PY
+          if ! gcloud builds list --project=jscc-shared --region=europe-west1 \
+            --limit=1 --format='value(id)' >/dev/null 2>/tmp/jscc-p4-v5-build-list-error; then
+            echo JSCC_P4_V5_CLOUD_BUILD_LIST_DENIED
+            exit 86
+          fi
+          echo JSCC_P4_V5_READONLY_PERMISSION_PROBE=PASS
       - name: DEV preflight OR owner-authorized Service stage and cutover
         shell: bash
         env:
