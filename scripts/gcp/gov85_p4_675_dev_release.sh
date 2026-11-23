@@ -30,7 +30,7 @@ immutable="$(gcloud artifacts repositories describe jscc --project="$shared" --l
 gcloud run services describe "$service" --project="$project" --region="$region" --format=json > /tmp/jscc-p4-before.json
 python3 "$guard" baseline /tmp/jscc-p4-before.json
 actual_old="$(gcloud run revisions describe "$old_revision" --project="$project" --region="$region" --format='value(status.imageDigest)')"
-[[ "$actual_old" == "$old_digest" ]] || { echo JSCC_P4_ROLLBACK_DIGEST_CHANGED; exit 86; }
+[[ "$actual_old" == "$old_digest" || "$actual_old" == "$image_repo@$old_digest" ]] || { echo JSCC_P4_ROLLBACK_DIGEST_CHANGED; exit 86; }
 service_url="$(gcloud run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
 [[ "$service_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || { echo JSCC_P4_CANONICAL_URL_INVALID; exit 86; }
 id_token="$(gcloud auth print-identity-token --impersonate-service-account="$GCP_WIF_SA" \
