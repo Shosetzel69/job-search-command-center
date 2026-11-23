@@ -19,10 +19,6 @@ permissions:
   checks: read
   id-token: write
 
-concurrency:
-  group: gov85-p4-675-dev-service-only
-  cancel-in-progress: false
-
 jobs:
   source-contract:
     if: github.event_name == 'pull_request'
@@ -47,6 +43,9 @@ jobs:
 
   p4-service-release:
     if: github.event_name == 'issue_comment' && github.actor == 'Shosetzel69' && github.event.issue.number == 663 && startsWith(github.event.comment.body, '/jscc-p4-675 ')
+    concurrency:
+      group: gov85-p4-675-dev-service-only
+      cancel-in-progress: false
     runs-on: ubuntu-24.04
     environment: dev
     timeout-minutes: 65
@@ -83,11 +82,12 @@ jobs:
           test "$(jq -r '.merged' <<<"$pr")" = true || exit 86
           test "$(jq -r '.merge_commit_sha' <<<"$pr")" = "$target" || exit 86
           test "$(jq -r '.head.sha' <<<"$pr")" = d699b6efb1074c77ac3e5fdd2062ef182b6f2f9a || exit 86
-          checks="$(gh api "repos/$GITHUB_REPOSITORY/commits/$target/check-runs?per_page=100")"
-          for name in "Validate Command API" "Cloud Run Admin API v2 contract" "Secret scanning" "Project sanity snapshot"; do
-            jq -e --arg name "$name" '[.check_runs[] | select(.name == $name and .conclusion == "success")] | length > 0' \
-              <<<"$checks" >/dev/null || { echo JSCC_P4_MAIN_CI_UNVERIFIED; exit 86; }
-          done
+          # The GitHub check-runs endpoint reports *job* names. Check source
+          # SHA, app identity, completed/success and all five exact job names.
+          gh api "repos/$GITHUB_REPOSITORY/commits/$target/check-runs?per_page=100" \
+            > /tmp/jscc-p4-main-checks.json
+          python3 control/scripts/gcp/gov85_p4_675_dev_guard.py postmerge-ci \
+            /tmp/jscc-p4-main-checks.json "$target"
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
           echo "source_sha=$target" >> "$GITHUB_OUTPUT"
           echo "JSCC_P4_MODE=$mode" >> "$GITHUB_STEP_SUMMARY"
@@ -109,6 +109,23 @@ jobs:
           bash -n control/scripts/gcp/gov85_p4_675_dev_release.sh
           python3 -m py_compile control/scripts/gcp/gov85_p4_675_dev_guard.py
           PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s control/scripts -p 'test_gov85_p4_675_dev.py' -v
+      # This check MUST run before GCP auth. A shared owner comment is not a
+      # human authorization: GitHub must require an actual environment approval.
+      # If the environment rule is missing or unreadable, fail closed.
+      - name: Require verified DEV environment protection for RELEASE
+        if: steps.scope.outputs.mode == 'release'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/environments/dev" \
+            > /tmp/jscc-p4-dev-environment.json || {
+              echo JSCC_P4_DEV_ENV_PROTECTION_UNVERIFIABLE
+              exit 86
+            }
+          python3 control/scripts/gcp/gov85_p4_675_dev_guard.py environment-protection \
+            /tmp/jscc-p4-dev-environment.json
       - name: Authenticate using existing DEV WIF
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
