@@ -262,8 +262,8 @@ class P4ReleaseControls(unittest.TestCase):
             ("staged_digest", "digest", "JSCC_P4_TAG_CLEANUP_DIGEST_UNVERIFIED"),
             ("rev_digest", "digest", "JSCC_P4_STAGED_DIGEST_INVALID"),
         ):
-            self.assertIn(f'normalize_revision_digest "$${name}"', shell)
-            self.assertIn(f'[[ "$${name}" == "$${expected}" ]]', shell)
+            self.assertIn(f'normalize_revision_digest "${name}"', shell)
+            self.assertIn(f'[[ "${name}" == "${expected}" ]]', shell)
             self.assertIn(error, shell)
 
     def test_workflow_identity_uses_owner_issue663_and_no_automatic_deploy(self):
