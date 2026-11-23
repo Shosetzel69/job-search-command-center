@@ -213,6 +213,8 @@ class P4ReleaseControls(unittest.TestCase):
         self.assertIn("concurrency:", workflow)
         self.assertNotIn("\\nconcurrency:\\n", workflow)
         self.assertIn("environment: dev",workflow)
+        self.assertIn("vars.JSCC_DEV_R2_DEPLOYER_SERVICE_ACCOUNT", workflow)
+        self.assertNotIn("vars.JSCC_DEV_GCP_WIF_SERVICE_ACCOUNT", workflow)
 
     def test_shell_has_strict_owner_source_release_gate_and_rollback(self):
         shell=SHELL.read_text(encoding="utf8")
