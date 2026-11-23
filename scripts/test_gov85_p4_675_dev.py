@@ -219,10 +219,11 @@ class P4ReleaseControls(unittest.TestCase):
         for permission in ("cloudbuild.builds.create", "cloudbuild.builds.list",
                            "cloudbuild.builds.get", "serviceusage.services.use",
                            "iam.serviceAccounts.actAs", "iam.serviceAccounts.getOpenIdToken",
-                           "run.services.get", "run.services.update",
+                           "run.services.get", "run.services.update", "run.routes.invoke",
                            "artifactregistry.repositories.get",
                            "artifactregistry.repositories.downloadArtifacts",
-                           "storage.objects.create"):
+                           "storage.objects.create", "storage.buckets.get",
+                           "storage.buckets.list"):
             self.assertIn(permission, workflow)
         self.assertIn("JSCC_P4_V5_READONLY_PERMISSION_PROBE=PASS", workflow)
         self.assertLess(workflow.index("V5 verify DEV WIF deployment permissions without mutation"),
