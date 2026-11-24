@@ -1126,7 +1126,7 @@ export async function listProfileJobs(
     if(spec.quick==='b2b')where.push("lower(COALESCE(j.contract_type,'unknown')) IN ('contract','freelance')");
     if(spec.empty_modes||spec.empty_role_subfamilies||spec.empty_contract_types)where.push('false');
     if(spec.result_view==='unclassified')where.push("j.role_family='UNKNOWN'");
-    if(spec.result_view==='analysis')where.push('state.state->>'review_required_at' IS NOT NULL');
+    if(spec.result_view==='analysis')where.push("state.state->>'review_required_at' IS NOT NULL");
     if(spec.result_view==='archived')where.push('state.archived_at IS NOT NULL');
     else if (!spec.include_archived) where.push('state.archived_at IS NULL');
     if (spec.role_family.length) {
