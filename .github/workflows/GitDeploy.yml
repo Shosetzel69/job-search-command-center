@@ -134,8 +134,8 @@ jobs:
           test "$(git -C control rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$SOURCE_SHA" || exit 86
           git -C control merge-base --is-ancestor "$SOURCE_SHA" HEAD || exit 86
           gh api "repos/$GITHUB_REPOSITORY/environments/dev" >/tmp/gitdeploy-env.json
-          jq -e 'any(.protection_rules[]?; .type=="required_reviewers" and .prevent_self_review==true and any(.reviewers[]?; .type=="User" and .reviewer.login!="Shosetzel69"))' /tmp/gitdeploy-env.json >/dev/null || {
-            echo GITDEPLOY_DISTINCT_REVIEWER_REQUIRED; exit 86;
+          jq -e '(.can_admins_bypass == false) and any(.protection_rules[]?; .type=="required_reviewers" and .prevent_self_review==true and any(.reviewers[]?; .type=="User" and .reviewer.login!="Shosetzel69"))' /tmp/gitdeploy-env.json >/dev/null || {
+            echo GITDEPLOY_DISTINCT_REVIEWER_AND_NO_ADMIN_BYPASS_REQUIRED; exit 86;
           }
           test "$GCP_WIF_SA" = jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com || exit 86
           test -n "$GCP_WIF_PROVIDER" || exit 86
