@@ -38,7 +38,8 @@ def service(sha="old"):
                  {"name":"SOURCE_SHA","value":sha},
                  {"name":"RUNTIME_DATA_SHA","value":sha},
                  {"name":"NILE_SECRET","valueFrom":{"secretKeyRef":{"name":"nile"}}}]}]}}},
-      "status":{"traffic":[{"revisionName":OLD,"percent":100}]}}
+      "status":{"traffic":[{"revisionName":OLD,"percent":100}],
+                "latestCreatedRevisionName":OLD,"latestReadyRevisionName":OLD}}
 def staged():
     s=service()
     guard.shape(s)["containers"][0]["image"]=guard.IMAGE_REPO+"@"+DIGEST
@@ -47,7 +48,17 @@ def staged():
     s["status"]["traffic"].append({
       "revisionName":NEW,"percent":0,"tag":TAG,
       "url":"https://gdabc---jscc-command-api-dev-abc.a.run.app"})
+    s["status"]["latestCreatedRevisionName"]=NEW
+    s["status"]["latestReadyRevisionName"]=NEW
     return s
+
+def revision(name=OLD, sha="old", digest="sha256:"+"c"*64):
+    container=copy.deepcopy(guard.shape(service(sha))["containers"][0])
+    container["image"]=guard.IMAGE_REPO+"@"+digest
+    return {"metadata":{"name":name},
+            "spec":{"serviceAccountName":guard.RUNTIME_SA,
+                    "containers":[container]},
+            "status":{"imageDigest":guard.IMAGE_REPO+"@"+digest}}
 
 def deny(fn,*args):
     with contextlib.redirect_stderr(io.StringIO()):
@@ -92,21 +103,21 @@ class DeployRoutes(unittest.TestCase):
 
     def test_already_serving_same_sha_preflight_is_idempotent(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(guard.deployment_state(service(), SHA, TAG), "NEW")
+            self.assertEqual(guard.deployment_state(service(), revision(), SHA, TAG), "NEW")
         live=staged()
         live["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG,
             "url":"https://gdabc---jscc-command-api-dev-abc.a.run.app"}]
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(guard.deployment_state(live, SHA, TAG), "ALREADY_SERVING")
+            self.assertEqual(guard.deployment_state(live, revision(NEW,SHA,DIGEST), SHA, TAG), "ALREADY_SERVING")
         # Cloud Run can retain a 0%-traffic tag entry for the same 100%-serving revision.
         live["status"]["traffic"]=[
             {"revisionName":NEW,"percent":100},
             {"revisionName":NEW,"percent":0,"tag":TAG,
              "url":"https://gdabc---jscc-command-api-dev-abc.a.run.app"}]
         with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(guard.deployment_state(live, SHA, TAG), "ALREADY_SERVING")
+            self.assertEqual(guard.deployment_state(live, revision(NEW,SHA,DIGEST), SHA, TAG), "ALREADY_SERVING")
         engine=ENGINE.read_text()
-        self.assertIn('deployment-state "$work/before.json"',engine)
+        self.assertIn('deployment-state "$work/before.json" "$work/serving-revision.json"',engine)
         self.assertIn('if [[ "$deploy_state" == ALREADY_SERVING ]]',engine)
         self.assertIn('python3 "$guard" health "$work/old-health.json" staged "$sha"',engine)
         self.assertIn('python3 "$guard" db "$work/already-db.json"',engine)
@@ -117,26 +128,77 @@ class DeployRoutes(unittest.TestCase):
         self.assertLess(engine.index('if [[ "$deploy_state" == ALREADY_SERVING ]]'),
                         engine.index('gcp run services update "$service"'))
 
+    def test_m1_failed_stage_and_rollback_allow_same_sha_retry(self):
+        failed=staged()  # new service template, old revision still serves
+        failed["status"]["traffic"]=[{"revisionName":OLD,"percent":100}]
+        # Staging failure: latest revision was attempted but not Ready.
+        failed["status"]["latestReadyRevisionName"]=OLD
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.deployment_state(failed,revision(),SHA,TAG),"NEW")
+        # Rollback: newest ready revision is the failed SHA, traffic is old.
+        failed["status"]["latestReadyRevisionName"]=NEW
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.deployment_state(failed,revision(),SHA,TAG),"NEW")
+        # Even if the service reports the serving revision as latest Ready,
+        # its actual env SHA remains old and must not yield a false no-op.
+        failed["status"]["latestReadyRevisionName"]=OLD
+        failed["status"]["latestCreatedRevisionName"]=OLD
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.deployment_state(failed,revision(),SHA,TAG),"NEW")
+        # The engine must fetch the active revision independently.
+        engine=ENGINE.read_text()
+        self.assertIn('gcp run revisions describe "$serving_rev"',engine)
+        self.assertIn('deployment-state "$work/before.json" "$work/serving-revision.json"',engine)
+        self.assertLess(engine.index('gcp run revisions describe "$serving_rev"'),
+                        engine.index('deployment-state "$work/before.json"'))
+
+    def test_m1_already_serving_requires_real_revision_source_digest_and_status(self):
+        live=staged()
+        live["status"]["traffic"]=[{"revisionName":NEW,"percent":100}]
+        actual=revision(NEW,SHA,DIGEST)
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.deployment_state(live,actual,SHA,TAG),"ALREADY_SERVING")
+        for case in ("wrong_serving_revision","revision_source","revision_data_sha",
+                     "revision_digest","mutable_revision_image","service_digest",
+                     "newer_revision_pending"):
+            svc=copy.deepcopy(live)
+            rev=copy.deepcopy(actual)
+            if case=="wrong_serving_revision": rev["metadata"]["name"]=OLD
+            if case=="revision_source":
+                next(e for e in rev["spec"]["containers"][0]["env"] if e["name"]=="SOURCE_SHA")["value"]="0"*40
+            if case=="revision_data_sha":
+                next(e for e in rev["spec"]["containers"][0]["env"] if e["name"]=="RUNTIME_DATA_SHA")["value"]="0"*40
+            if case=="revision_digest": rev["status"]["imageDigest"]=guard.IMAGE_REPO+"@sha256:"+"d"*64
+            if case=="mutable_revision_image": rev["spec"]["containers"][0]["image"]="latest"
+            if case=="service_digest":
+                guard.shape(svc)["containers"][0]["image"]=guard.IMAGE_REPO+"@sha256:"+"d"*64
+            if case=="newer_revision_pending": svc["status"]["latestCreatedRevisionName"]=OLD
+            if case=="wrong_serving_revision":
+                self.assertEqual(deny(guard.deployment_state,svc,rev,SHA,TAG),86,case)
+            else:
+                with contextlib.redirect_stdout(io.StringIO()):
+                    self.assertEqual(guard.deployment_state(svc,rev,SHA,TAG),"NEW",case)
+
     def test_collision_still_denied_for_foreign_revision_or_wrong_sha(self):
         live=staged()
         live["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG}]
         bad=copy.deepcopy(live)
         bad["status"]["traffic"]=[{"revisionName":NEW,"percent":100},
                                    {"revisionName":OLD,"percent":0,"tag":TAG}]
-        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        self.assertEqual(deny(guard.deployment_state,bad,revision(NEW,SHA,DIGEST),SHA,TAG),86)
         bad=copy.deepcopy(live)
         guard.env(bad)["SOURCE_SHA"]["value"]="b"*40
-        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        self.assertEqual(deny(guard.deployment_state,bad,revision(NEW,SHA,DIGEST),SHA,TAG),86)
         bad=copy.deepcopy(live)
         guard.shape(bad)["containers"][0]["image"]="not-pinned"
-        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        self.assertEqual(deny(guard.deployment_state,bad,revision(NEW,SHA,DIGEST),SHA,TAG),86)
         bad=copy.deepcopy(live)
         bad["status"]["traffic"].append({"revisionName":NEW,"percent":0,"tag":TAG})
-        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        self.assertEqual(deny(guard.deployment_state,bad,revision(NEW,SHA,DIGEST),SHA,TAG),86)
         bad=copy.deepcopy(live)
         bad["status"]["traffic"]=[{"revisionName":NEW,"percent":50,"tag":TAG},
                                   {"revisionName":NEW,"percent":50}]
-        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        self.assertEqual(deny(guard.deployment_state,bad,revision(NEW,SHA,DIGEST),SHA,TAG),86)
 
     def test_retire_all_owned_staging_tags_preserving_100_percent_traffic(self):
         final=staged()
@@ -159,7 +221,7 @@ class DeployRoutes(unittest.TestCase):
             {"revisionName":OLD,"percent":0,"tag":"review-pin"}]
         with contextlib.redirect_stdout(io.StringIO()):
             guard.retire_verify(final,after,SHA,NEW)
-            self.assertEqual(guard.deployment_state(after,SHA,TAG),"ALREADY_SERVING")
+            self.assertEqual(guard.deployment_state(after,revision(NEW,SHA,DIGEST),SHA,TAG),"ALREADY_SERVING")
         shell=ENGINE.read_text()
         self.assertIn('python3 "$guard" retire-plan "$work/pre-retire.json"',shell)
         self.assertIn('python3 "$guard" retire-verify "$work/pre-retire.json"',shell)
