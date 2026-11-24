@@ -1,46 +1,24 @@
-# JSCC DEV Service release — GitDeploy / GCloudDeploy
+# JSCC DEV — GitDeploy + GCloudDeploy
 
-**Authority:** existing #492. **Environment:** GCP DEV only (`jscc-dev`, `europe-west1`). These are two execution transports for **one** reviewed, immutable release candidate. They share the same policy validator and runtime rollout engine.
+## Two routes, one Service deploy engine
 
-## GitDeploy — automatic
+**GitDeploy:** Automatic after `Validate Command API` finishes successfully on a `push` to `main` (including PR merges). The workflow authenticates with the existing DEV Workload Identity Federation service account, checks the exact `main` source SHA and all five mandatory canonical CI job results, then runs `scripts/deploy/GitDeploy.sh` and the common Service-only deploy engine. No GitHub Release, release tag, issue-comment command, second reviewer, or manual owner command is required.
 
-`.github/workflows/GitDeploy.yml` starts automatically when the owner publishes a **non-draft, non-prerelease GitHub Release** whose version tag matches `jscc-dev-vX.Y.Z`. A read-only admission job verifies the tag's SHA is reachable from `main`, then dispatches the protected deployment job on `main`; there is no issue-comment trigger and no automatic deploy on every merge.
+**GCloudDeploy:** Manual fallback in authenticated Cloud Shell. Run `bash scripts/deploy/GCloudDeploy.sh <40-char-main-SHA> preflight`, then `bash scripts/deploy/GCloudDeploy.sh <40-char-main-SHA> deploy`. It validates clean up-to-date `main`, uses a detached candidate worktree, checks the same canonical CI results, requires a TTY confirmation, and impersonates the DEV deployer service account. The operator must have effective GCP IAM rights. Don't use both routes simultaneously.
 
-The privileged job requires the existing `dev` environment to have **Required Reviewers, Prevent self-review, Prevent administrator bypass (`can_admins_bypass=false`), and a distinct eligible reviewer account** (not the shared owner/agent login). It verifies the published release record, the exact candidate SHA, a successful mandatory CI set, and the existing DEV WIF identity before invoking `scripts/deploy/GitDeploy.sh`. It only runs after the reviewer authorizes the protected environment. If this configuration or IAM is missing, it must fail closed.
+**Common:** DEV Cloud Run Service only (`jscc-dev`, `europe-west1`, `jscc-command-api-dev`). Immutable image digest, Cloud Build provenance, 0%-traffic staging, authenticated health+database checks, safe 100%-traffic cutover, and conditional rollback. **No changes to Nile data/schema, Search Job, IAM, TEST or PROD.** CI failure blocks deployment; no separate PR reviewer in solo-DEV mode.
 
-This two-event pattern preserves the existing GitHub main-branch WIF trust context. Review the effective WIF provider conditions before activating. **Do not publish a release for a candidate until the PR has independent exact-SHA review and owner release authorization.** Publishing a release is an operational release request and is visible in this public repository; never include credentials or private profile data.
+## One-time automatic activation requirements
 
-## GCloudDeploy — manual break-glass fallback
+The existing GitHub environment `dev` currently requires manual approval, so **automatic operation requires turning off Required Reviewers** there; keep environment names and existing WIF variables. This setting is not changeable through the current GitHub connector. Verify WIF subject/attribute restriction to the intended repository, `refs/heads/main`, and the approved DEV identity; do not allow untrusted PR branches to impersonate the deployer. The allowed WIF event/context (`workflow_run` + `environment=dev`) must also be verified. An overly broad WIF binding is not made safe by shell checks.
 
-`scripts/deploy/GCloudDeploy.sh` is run interactively from **Google Cloud Shell**, on a clean, fully updated `main` checkout. It takes the same immutable candidate SHA and already-published `jscc-dev-vX.Y.Z` release tag. The default action is **preflight**; the `deploy` action reruns preflight and requires an attached TTY and an exact confirmation read from `/dev/tty` (stdin pipes are rejected). A non-service-account active `gcloud` principal is required. Google Cloud operations impersonate the dedicated DEV deployer service account using the active Cloud Shell session (no JSON key). It does not create a release or bypass its approval record.
+The GitHub workflow does not auto-deploy documentation-only commits when `Validate Command API` does not run (existing workflow `paths` filter). Any code-relevant merge that triggers that validation will start GitDeploy once canonical CI is green. If `main` changes before the run starts, the stale candidate is rejected.
 
-**Break-glass security model:** GCloudDeploy is an operator-assisted recovery mechanism, **not equivalent to GitDeploy's independent environment-review gate**. A shell script, TTY and Cloud Shell environment variables are **not cryptographic human-identity attestations**: an authorized GCP principal could call `gcloud` without the wrapper. Before permitting manual deployments, independently inventory and restrict `roles/iam.serviceAccountTokenCreator` / impersonation of `jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com` to an exclusive human-owned GCP principal, not any agent-shared account; remove direct Cloud Run update privileges from non-break-glass principals. Require separately recorded owner approval and independent review of the exact candidate, followed by audited GCP IAM actions. If these conditions cannot be verified, **do not activate GCloudDeploy**. The script's Cloud Shell environment check is advisory only; the *effective GCP IAM binding* is the enforceable boundary.
+## Retirement of old DEV deployment entrypoints
 
-Manual channel example (placeholders, not authorization):
+**Only retire after one successful authenticated GitDeploy run AND a separate GCloudDeploy preflight.** Legacy P4 issue-comment deploy, old paired-image release and ad-hoc DEV GCP release workflows may then be removed from GitHub. Leave unrelated CI, search/validation, DEV diagnostics, TEST/PROD and legacy fail-closed `exit 86` protections alone. Existing GCP infrastructure, databases, service accounts, credentials and images are not 'old routes' and must not be deleted.
 
-```bash
-bash scripts/deploy/GCloudDeploy.sh <approved-40-char-SHA> jscc-dev-vX.Y.Z preflight
-bash scripts/deploy/GCloudDeploy.sh <approved-40-char-SHA> jscc-dev-vX.Y.Z deploy
-```
+### Operational readiness and evidence
 
-Do not start the manual route while GitDeploy is active for the same service. The engine checks revision/configuration/traffic drift and fails closed; nevertheless it does not establish a universal distributed lock across older workflows.
-
-**CI handling:** each mandatory GitHub Actions check is queried by `check_name` with `filter=latest` across all pages (bounded fail-closed). Its `details_url` must identify the same GitHub job ID, and its workflow-run record must match the **pinned workflow path and name**, `event=push`, `head_branch=main`, and exact source SHA. Only the latest **canonical workflow** job ID is accepted; a successful `validate` in `Validate Remote Executor` cannot mask a failed `validate` in `Validate Command API`. The workflow run must also be successful. This prevents stale results, foreign same-name checks and unrelated skipped comments from satisfying the release gate.
-
-## Shared execution contract
-
-`scripts/deploy/jscc-dev-service.sh` and `jscc_deploy_guard.py` enforce: verified GitHub release record, exact SHA on main, CI success, read-only DEV baseline, immutable Artifact Registry, dedicated identity, Cloud Build Service image provenance, config/secrets/VPC/scaling parity, 0% traffic stage, authenticated tagged /health and /health/db, 100% cutover and post-cutover smoke. The previous live revision is recorded dynamically and rollback is attempted on failure; concurrent external changes prevent blind rollback. Failed cleanup may require manual incident recovery. No Nile DDL, Search Job, runtime secrets, TEST or PROD operations.
-
-**Technical deployment PASS is not functional acceptance.** Run independent DEV user/tenant-level acceptance separately, and record the run ID, source SHA, serving revision and digest in #492 / applicable P4 item.
-
-## Migration policy
-
-Current existing release mechanisms, their `exit 86` controls and the unfinished #680 work remain **unchanged** while these two routes are developed and validated. No automatic cutover, retirement, IAM or environment-policy mutation is authorized by creating this PR. After independent review, validate both routes (preflight + at least one authorized real DEV release and Cloud Shell fallback dry run) and only then request approval to disable/remove older mechanisms.
-
-## Known activation dependencies
-
-- A distinct required GitHub reviewer, Prevent self-review and **disable administrator bypass** (`can_admins_bypass=false`) must be present on `dev`; agents sharing `Shosetzel69` cannot substitute for an independent reviewer.
-- Verify whether the existing WIF trust condition permits a GitHub-generated `workflow_dispatch` identity. Authentication failure is a blocker, not an invitation to grant broad IAM privileges.
-- Cloud Shell operator needs access to impersonate `jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com`; required least-privilege Cloud Build, Cloud Run, Artifact Registry and source-staging permissions must be effective.
-- Review actual DEV config parity on the first staged rollout and test controlled rollback. No rollout to TEST/PROD.
+PR #681 contains implementation and tests, not proof of effective WIF/IAM or a real Cloud Run release. A green CI contract is not functional acceptance. Successful staging and cutover plus independently checked DEV UI/tenant acceptance are required for declaring the app delivered.
 
