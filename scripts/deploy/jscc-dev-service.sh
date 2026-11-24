@@ -186,6 +186,27 @@ curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" "
 curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" "$service_url/health/db" >"$work/final-db.json"
 python3 "$guard" health "$work/final-health.json" staged "$sha"
 python3 "$guard" db "$work/final-db.json"
+# The new serving revision is healthy. Never roll back to an older revision
+# merely because tag retirement fails; report a failed deployment gate instead.
+cutover_attempted=0
+stage_attempted=0
+gcp run services describe "$service" --project="$project" --region="$region" \
+  --format=json >"$work/pre-retire.json"
+tags_to_retire="$(python3 "$guard" retire-plan "$work/pre-retire.json" "$sha" "$staged_rev" |
+  sed -n 's/^JSCC_DEPLOY_TAG_RETIRE_PLAN=//p')"
+if [[ -n "$tags_to_retire" ]]; then
+  gcp run services update-traffic "$service" --project="$project" --region="$region" \
+    --remove-tags="$tags_to_retire" --quiet >"$work/tag-retirement.log" 2>&1 || {
+      echo JSCC_DEPLOY_TAG_RETIREMENT_FAILED; exit 86;
+    }
+fi
+gcp run services describe "$service" --project="$project" --region="$region" \
+  --format=json >"$work/post-retire.json"
+python3 "$guard" retire-verify "$work/pre-retire.json" "$work/post-retire.json" "$sha" "$staged_rev"
+curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" \
+  "$service_url/health" >"$work/post-retire-health.json"
+python3 "$guard" health "$work/post-retire-health.json" staged "$sha"
 unset token
+echo JSCC_DEPLOY_STAGING_TAGS_RETIRED=PASS
 echo "JSCC_DEV_TECHNICAL_DEPLOY_PASS channel=$channel sha=$sha revision=$staged_rev digest=$digest"
 echo JSCC_DEV_FUNCTIONAL_ACCEPTANCE=PENDING
