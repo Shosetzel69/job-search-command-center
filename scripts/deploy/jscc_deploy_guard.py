@@ -204,6 +204,8 @@ def unchanged(before, after, sha, tag):
 def stage(before, after, sha, tag):
     baseline(before,sha,tag)
     fixed_dev(after)
+    # Recheck before cutover: a concurrent legacy tag could become public-stale.
+    reject_external_tags_before_deploy(after)
     if serving(after)!=serving(before):
         deny("EARLY_TRAFFIC_CUTOVER")
     if protected(before)!=protected(after):
