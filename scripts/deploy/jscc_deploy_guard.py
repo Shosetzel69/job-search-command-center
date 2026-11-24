@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Fail-closed, metadata-only DEV Cloud Run Service deployment contract.
+
+No credentials or raw Cloud Run resource snapshots are printed.
+Only the existing Service image and two build-identity variables may change.
+"""
+import json
+import re
+import sys
+from copy import deepcopy
+
+PROJECT = "jscc-dev"
+SERVICE = "jscc-command-api-dev"
+RUNTIME_SA = "jscc-dev-runtime@jscc-dev.iam.gserviceaccount.com"
+IMAGE_REPO = "europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc-service"
+BUILD_SA = "projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com"
+SHA_RE = re.compile(r"[0-9a-f]{40}\Z")
+REV_RE = re.compile(r"jscc-command-api-dev-[a-z0-9-]+\Z")
+DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}\Z")
+TAG_RE = re.compile(r"gd[0-9a-f]{10}\Z")
+SERVER_ANNOTATIONS = {
+    "run.googleapis.com/lastModifier",
+    "serving.knative.dev/lastModifier",
+    "run.googleapis.com/client-name",
+    "run.googleapis.com/client-version",
+    "run.googleapis.com/operation-id",
+}
+
+def deny(reason):
+    print("JSCC_DEPLOY_DENIED=" + reason, file=sys.stderr)
+    raise SystemExit(86)
+
+def read(path):
+    with open(path, encoding="utf8") as f:
+        return json.load(f)
+
+def shape(service):
+    part = service.get("spec", {}).get("template", {}).get("spec", {})
+    if not isinstance(part, dict) or len(part.get("containers", [])) != 1:
+        deny("SERVICE_TEMPLATE_SHAPE")
+    return part
+
+def env(service):
+    entries = shape(service)["containers"][0].get("env", [])
+    if not isinstance(entries, list):
+        deny("SERVICE_ENV_SHAPE")
+    result = {e.get("name"): e for e in entries if isinstance(e, dict)}
+    if len(result) != len(entries) or None in result:
+        deny("SERVICE_ENV_DUPLICATE_OR_INVALID")
+    return result
+
+def traffic(service):
+    entries = service.get("status", {}).get("traffic", [])
+    if not isinstance(entries, list):
+        deny("TRAFFIC_SHAPE")
+    return entries
+
+def serving(service):
+    try:
+        active = [(t.get("revisionName", ""), int(t.get("percent", 0)))
+                  for t in traffic(service) if int(t.get("percent", 0)) > 0]
+    except (TypeError, ValueError):
+        deny("TRAFFIC_PERCENT")
+    if len(active) != 1 or active[0][1] != 100 or not REV_RE.fullmatch(active[0][0]):
+        deny("TRAFFIC_NOT_ONE_HUNDRED")
+    return active[0][0]
+
+def fixed_dev(service):
+    t = shape(service)
+    if t.get("serviceAccountName") != RUNTIME_SA:
+        deny("RUNTIME_SERVICE_ACCOUNT_CHANGED")
+    values = {k: v.get("value") for k, v in env(service).items()}
+    for k, v in {"APP_ENV":"dev", "JSCC_RUNTIME_BACKEND":"gcp", "SEARCH_MODE":"disabled"}.items():
+        if values.get(k) != v:
+            deny("WRONG_DEV_SETTING_" + k)
+    return True
+
+def protected(service):
+    """Ignore only server bookkeeping and explicitly permitted image/identity fields."""
+    spec = deepcopy(service.get("spec", {}))
+    if not isinstance(spec, dict):
+        deny("SERVICE_SPEC_INVALID")
+    spec.pop("traffic", None)
+    tpl = spec.get("template", {})
+    if not isinstance(tpl, dict):
+        deny("SERVICE_TEMPLATE_INVALID")
+    metadata = tpl.get("metadata", {})
+    if isinstance(metadata, dict):
+        anns = metadata.get("annotations", {})
+        if isinstance(anns, dict):
+            metadata["annotations"] = {k:v for k,v in anns.items() if k not in SERVER_ANNOTATIONS}
+        # Revision labels can be created by the Cloud Run control-plane.
+        metadata.pop("name", None)
+    containers = tpl.get("spec", {}).get("containers", [])
+    if len(containers) != 1:
+        deny("SERVICE_CONTAINERS_CHANGED")
+    containers[0].pop("image", None)
+    containers[0]["env"] = sorted(
+        (v for v in containers[0].get("env", []) if v.get("name") not in
+         {"SOURCE_SHA", "RUNTIME_DATA_SHA"}), key=lambda x:x["name"])
+    root = service.get("metadata", {}).get("annotations", {})
+    if not isinstance(root, dict):
+        deny("SERVICE_METADATA_INVALID")
+    return spec, {k:v for k,v in root.items() if k not in SERVER_ANNOTATIONS}
+
+def baseline(service, sha, tag):
+    if not SHA_RE.fullmatch(sha) or not TAG_RE.fullmatch(tag) or tag != "gd"+sha[:10]:
+        deny("INVALID_IDENTITY")
+    fixed_dev(service)
+    revision = serving(service)
+    if any(t.get("tag")==tag for t in traffic(service)):
+        deny("STAGE_TAG_COLLISION")
+    print("JSCC_DEPLOY_BASELINE_REVISION=" + revision)
+    print("JSCC_DEPLOY_BASELINE=PASS")
+    return revision
+
+def unchanged(before, after, sha, tag):
+    baseline(before,sha,tag)
+    fixed_dev(after)
+    if serving(before) != serving(after):
+        deny("CONCURRENT_TRAFFIC_CHANGE")
+    if traffic(before) != traffic(after):
+        deny("CONCURRENT_TAG_OR_TRAFFIC_CHANGE")
+    if protected(before) != protected(after):
+        deny("CONCURRENT_CONFIG_CHANGE")
+    print("JSCC_DEPLOY_NO_DRIFT=PASS")
+
+def stage(before, after, sha, tag):
+    baseline(before,sha,tag)
+    fixed_dev(after)
+    if serving(after)!=serving(before):
+        deny("EARLY_TRAFFIC_CUTOVER")
+    if protected(before)!=protected(after):
+        deny("STAGED_CONFIG_DRIFT")
+    a,b=env(before),env(after)
+    if set(a)!=set(b):
+        deny("STAGED_ENV_KEYS_CHANGED")
+    for name in ("SOURCE_SHA","RUNTIME_DATA_SHA"):
+        if b.get(name,{}).get("value")!=sha:
+            deny("STAGED_SOURCE_IDENTITY")
+    for k in set(a)-{"SOURCE_SHA","RUNTIME_DATA_SHA"}:
+        if a[k]!=b[k]:
+            deny("STAGED_ENV_DRIFT")
+    image=shape(after)["containers"][0].get("image","")
+    if not image.startswith(IMAGE_REPO+"@sha256:") or not DIGEST_RE.fullmatch(image.split("@",1)[-1]):
+        deny("STAGED_IMAGE_NOT_PINNED")
+    added=[x for x in traffic(after) if x.get("tag")==tag and int(x.get("percent",0))==0]
+    if len(added)!=1 or not REV_RE.fullmatch(added[0].get("revisionName","")):
+        deny("STAGED_REVISION_NOT_UNIQUE")
+    if sum(int(x.get("percent",0)) for x in traffic(after)) != 100:
+        deny("STAGED_TOTAL_TRAFFIC")
+    if not added[0].get("url","").startswith("https://"):
+        deny("STAGED_TAG_URL_MISSING")
+    print("JSCC_DEPLOY_STAGE_REVISION="+added[0]["revisionName"])
+    print("JSCC_DEPLOY_STAGE_URL="+added[0]["url"])
+    print("JSCC_DEPLOY_STAGE_CONFIG_PARITY=PASS")
+    return added[0]["revisionName"]
+
+def final(before, after, sha, tag, revision):
+    baseline(before,sha,tag)
+    fixed_dev(after)
+    if serving(after)!=revision or revision==serving(before):
+        deny("CUTOVER_WRONG_REVISION")
+    if protected(before)!=protected(after):
+        deny("CUTOVER_CONFIG_DRIFT")
+    print("JSCC_DEPLOY_CUTOVER=PASS")
+
+def rollback(before, after, sha, tag):
+    if serving(after)!=serving(before):
+        deny("ROLLBACK_TRAFFIC_UNVERIFIED")
+    if protected(before)!=protected(after):
+        deny("ROLLBACK_CONFIG_DRIFT")
+    print("JSCC_DEPLOY_ROLLBACK=PASS")
+
+def attest_build(builds, sha, digest):
+    if not SHA_RE.fullmatch(sha) or not DIGEST_RE.fullmatch(digest):
+        deny("BUILD_INPUT_INVALID")
+    image=IMAGE_REPO+":"+sha
+    for b in builds:
+        if (b.get("status")=="SUCCESS" and b.get("serviceAccount")==BUILD_SA
+                and b.get("substitutions",{}).get("_GIT_SHA")==sha
+                and image in b.get("images",[]) and
+                any(i.get("name")==image and i.get("digest")==digest
+                    for i in b.get("results",{}).get("images",[]))):
+            print("JSCC_DEPLOY_BUILD_PROVENANCE=PASS")
+            return
+    deny("BUILD_PROVENANCE_UNVERIFIED")
+
+def check_ci(payload, sha):
+    expected={"validate","Nile-only native provider CI","gitleaks","api-version-policy","snapshot"}
+    checks=payload.get("check_runs",[])
+    found=set()
+    for check in checks:
+        if (check.get("name") in expected and check.get("head_sha")==sha
+            and check.get("app",{}).get("slug")=="github-actions"
+            and check.get("status")=="completed" and check.get("conclusion")=="success"):
+            found.add(check["name"])
+    if not SHA_RE.fullmatch(sha) or found!=expected:
+        deny("EXACT_SHA_CI_UNVERIFIED")
+    print("JSCC_DEPLOY_EXACT_SHA_CI=PASS")
+
+def check_release(release, sha, tag):
+    if (not SHA_RE.fullmatch(sha) or not isinstance(tag,str)
+        or not re.fullmatch(r"jscc-dev-v[0-9]+\.[0-9]+\.[0-9]+",tag)
+        or release.get("tag_name")!=tag
+        or release.get("draft") is not False
+        or release.get("prerelease") is not False
+        or release.get("author",{}).get("login")!="Shosetzel69"
+        or not isinstance(release.get("id"),int)):
+        deny("RELEASE_NOT_APPROVED")
+    print("JSCC_DEPLOY_RELEASE_RECORD=PASS")
+
+def main(argv):
+    if len(argv)<2:
+        deny("INVALID_COMMAND")
+    cmd=argv[1]
+    if cmd=="ci" and len(argv)==4:
+        return check_ci(read(argv[2]),argv[3])
+    if cmd=="release" and len(argv)==5:
+        return check_release(read(argv[2]),argv[3],argv[4])
+    if cmd=="attest" and len(argv)==5:
+        return attest_build(read(argv[2]),argv[3],argv[4])
+    if cmd=="baseline" and len(argv)==5:
+        return baseline(read(argv[2]),argv[3],argv[4])
+    if cmd in ("unchanged","stage","rollback") and len(argv)==6:
+        return globals()[cmd](read(argv[2]),read(argv[3]),argv[4],argv[5])
+    if cmd=="final" and len(argv)==7:
+        return final(read(argv[2]),read(argv[3]),argv[4],argv[5],argv[6])
+    deny("INVALID_COMMAND")
+
+if __name__=="__main__":
+    main(sys.argv)
