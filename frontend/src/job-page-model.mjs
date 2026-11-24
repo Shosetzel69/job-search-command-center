@@ -27,6 +27,7 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = jobPageSize
     for (const mode of modes) if (MODE_CODE[mode]) params.append('work_mode', MODE_CODE[mode]);
   }
   if (view) {
+    if (filters.unknownFamily === true) params.append('role_family', 'UNKNOWN');
     for (const code of new Set(filters.roleSubfamilies || [])) params.append('role_subfamily', String(code));
     for (const code of new Set(filters.contractTypes || [])) params.append('contract_type', String(code));
     if (filters.minFit != null && filters.minFit !== '') params.set('min_fit', String(filters.minFit));
@@ -37,7 +38,7 @@ export function buildJobsPath({ filters = {}, cursor = null, limit = jobPageSize
       params.set('sort',['fit','title','country','work_mode','publication','retrieve'].includes(key)?key:'publication');
       params.set('dir',dir==='asc'?'asc':'desc');
     }
-    params.set('result_view',['jobs','review','unclassified'].includes(view)?view:'jobs');
+    params.set('result_view',['jobs','review','unclassified','analysis','archived'].includes(view)?view:'jobs');
     params.set('quick',view==='unclassified'?'all':filters.quick||'all');
     params.set('kpi',view==='jobs'?kpiFilter:'all');
     if(Array.isArray(filters.workModes)&&filters.workModes.length===0)params.set('empty_modes','true');
