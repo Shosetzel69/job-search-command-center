@@ -199,22 +199,28 @@ class P4ReleaseControls(unittest.TestCase):
         rolled["status"]["traffic"][0]["revisionName"] = "jscc-command-api-dev-00102-new"
         self.assertEqual(rejects(guard.verify_rollback, rolled), 86)
 
-    def test_owner_scoped_github_only_dispatch_without_new_environment_policy(self):
+    def test_owner_scoped_manual_dispatch_with_required_environment_review(self):
         workflow = WORKFLOW.read_text(encoding="utf8")
-        self.assertNotIn("environment-protection", workflow)
-        self.assertNotIn("DEV_REQUIRED_REVIEWERS_MISSING", workflow)
-        self.assertNotIn("gh api \"repos/$GITHUB_REPOSITORY/environments/dev\"", workflow)
+        self.assertIn("workflow_dispatch:", workflow)
+        self.assertNotIn("issue_comment:", workflow)
+        self.assertNotIn("github.event.comment.body", workflow)
+        self.assertNotIn("github.event.issue.number", workflow)
         self.assertIn("postmerge-ci", workflow)
         self.assertNotIn('for name in "Validate Command API"', workflow)
         self.assertLess(workflow.index("postmerge-ci"),
                         workflow.index("Authenticate using existing DEV WIF"))
-        self.assertIn("github.actor == 'Shosetzel69'",workflow)
-        self.assertIn("github.event.issue.number == 663",workflow)
+        self.assertIn("github.actor == 'Shosetzel69'", workflow)
+        self.assertIn("github.ref == 'refs/heads/main'", workflow)
         self.assertIn("concurrency:", workflow)
-        self.assertNotIn("\\nconcurrency:\\n", workflow)
-        self.assertIn("environment: dev",workflow)
+        self.assertIn("environment: dev", workflow)
         self.assertIn("vars.JSCC_DEV_R2_DEPLOYER_SERVICE_ACCOUNT", workflow)
         self.assertNotIn("vars.JSCC_DEV_GCP_WIF_SERVICE_ACCOUNT", workflow)
+        self.assertIn("Verify required DEV environment review protection", workflow)
+        self.assertIn("required_reviewers", workflow)
+        self.assertIn("JSCC_P4_DEV_REQUIRED_REVIEWERS_UNVERIFIED", workflow)
+        self.assertIn("JSCC_P4_DEV_ENVIRONMENT_REVIEW_PROTECTION=PASS", workflow)
+        self.assertLess(workflow.index("Verify required DEV environment review protection"),
+                        workflow.index("Authenticate using existing DEV WIF"))
         self.assertIn("V5 verify DEV WIF deployment permissions without mutation", workflow)
         for permission in ("cloudbuild.builds.create", "cloudbuild.builds.list",
                            "cloudbuild.builds.get", "serviceusage.services.use",
@@ -347,23 +353,30 @@ class P4ReleaseControls(unittest.TestCase):
                 ])
                 self.assertNotIn("PRIVATE_MARKER", result.stdout + result.stderr)
 
-    def test_workflow_identity_uses_owner_issue663_and_no_automatic_deploy(self):
-        workflow=WORKFLOW.read_text(encoding="utf8")
-        for required in ("github.event.issue.number == 663",
+    def test_workflow_identity_is_manual_dev_only_and_fail_closed(self):
+        workflow = WORKFLOW.read_text(encoding="utf8")
+        for required in ("workflow_dispatch:",
+                         "options: [preflight, release]",
+                         "SOURCE_SHA: ${{ inputs.source_sha }}",
+                         "MODE: ${{ inputs.action }}",
+                         'test "$SOURCE_SHA" = "$target"',
+                         'test "$GITHUB_EVENT_NAME" = workflow_dispatch',
                          "github.actor == 'Shosetzel69'",
-                         "'/jscc-p4-675 '",
                          guard.TARGET_SHA,
                          "pulls/675", "check-runs",
                          "environment: dev",
                          "GCP_WIF_PROVIDER", "GCP_WIF_SA",
-                         "github.event.comment.body",
                          "gov85_p4_675_dev_release.sh"):
-            self.assertIn(required,workflow,required)
-        self.assertNotIn("workflow_dispatch:",workflow)
-        self.assertNotIn("push:",workflow)
-        self.assertIn("environment: dev",workflow)
-        self.assertNotIn("environment: prod",workflow.lower())
-        self.assertNotIn("environment: test",workflow.lower())
+            self.assertIn(required, workflow, required)
+        for forbidden in ("issue_comment:", "github.event.comment.body",
+                          "github.event.issue.number", "push:",
+                          "environment: prod", "environment: test"):
+            self.assertNotIn(forbidden, workflow, forbidden)
+        self.assertIn("required: true", workflow)
+        self.assertIn("case \"$MODE\" in", workflow)
+        self.assertIn("JSCC_P4_UNAPPROVED_SOURCE", workflow)
+        self.assertIn("JSCC_P4_UNAPPROVED_OPERATION", workflow)
+        self.assertIn("APPROVE_P4_675_B8FA506_DEV_SERVICE_ONLY", workflow)
 
 
 if __name__ == "__main__":
