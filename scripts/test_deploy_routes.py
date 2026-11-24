@@ -262,19 +262,40 @@ class DeployRoutes(unittest.TestCase):
             {"revisionName":OLD,"tag":"keepme"}]
         with contextlib.redirect_stdout(io.StringIO()):
             guard.retire_verify(obj,after,SHA,NEW)
-        for variant in ("duplicate","explicit_null","partial","non_numeric","bool"):
-            bad=copy.deepcopy(obj)
-            if variant=="duplicate":
-                bad["status"]["traffic"].append({"revisionName":OLD,"tag":old1})
-            elif variant=="explicit_null":
-                bad["status"]["traffic"][2]["percent"]=None
-            elif variant=="partial":
-                bad["status"]["traffic"][2]["percent"]=1
-            elif variant=="non_numeric":
-                bad["status"]["traffic"][2]["percent"]="not-a-number"
-            else:
-                bad["status"]["traffic"][2]["percent"]=False
-            self.assertEqual(deny(guard.retire_plan,bad,SHA,NEW),86,variant)
+        expected_reasons={
+            "duplicate":"MANAGED_TAG_DUPLICATE",
+            "explicit_null":"MANAGED_TAG_TRAFFIC_INVALID",
+            "partial":"MANAGED_TAG_TRAFFIC_UNEXPECTED",
+            "non_numeric":"MANAGED_TAG_TRAFFIC_INVALID",
+            "bool":"MANAGED_TAG_TRAFFIC_INVALID",
+            "fractional":"MANAGED_TAG_TRAFFIC_INVALID",
+            "numeric_text":"MANAGED_TAG_TRAFFIC_INVALID",
+        }
+        for variant,reason in expected_reasons.items():
+            with self.subTest(variant=variant):
+                bad=copy.deepcopy(obj)
+                if variant=="duplicate":
+                    bad["status"]["traffic"].append({"revisionName":OLD,"tag":old1})
+                elif variant=="explicit_null":
+                    bad["status"]["traffic"][2]["percent"]=None
+                elif variant=="partial":
+                    bad["status"]["traffic"][2]["percent"]=1
+                elif variant=="non_numeric":
+                    bad["status"]["traffic"][2]["percent"]="not-a-number"
+                elif variant=="bool":
+                    bad["status"]["traffic"][2]["percent"]=False
+                elif variant=="fractional":
+                    bad["status"]["traffic"][2]["percent"]=0.5
+                elif variant=="numeric_text":
+                    bad["status"]["traffic"][2]["percent"]="100"
+                captured=io.StringIO()
+                with contextlib.redirect_stderr(captured):
+                    with self.assertRaises(SystemExit) as raised:
+                        guard.retire_plan(bad,SHA,NEW)
+                self.assertEqual(raised.exception.code,86)
+                self.assertEqual(
+                    captured.getvalue().strip(),
+                    "JSCC_DEPLOY_DENIED="+reason)
 
     def test_tag_retirement_fails_closed_on_foreign_or_ambiguous_tags(self):
         final=staged()
