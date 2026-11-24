@@ -78,8 +78,18 @@ immutable="$(gcp artifacts repositories describe jscc --project="$shared" \
 [[ "$immutable" == True || "$immutable" == true ]] || { echo JSCC_DEPLOY_REGISTRY_NOT_IMMUTABLE; exit 86; }
 gcp run services describe "$service" --project="$project" --region="$region" \
  --format=json >"$work/before.json"
-old_rev="$(python3 "$guard" baseline "$work/before.json" "$sha" "$tag" |
-  sed -n 's/^JSCC_DEPLOY_BASELINE_REVISION=//p')"
+deploy_state="$(python3 "$guard" deployment-state "$work/before.json" "$sha" "$tag" |
+  sed -n 's/^JSCC_DEPLOY_STATE=//p')"
+case "$deploy_state" in
+  NEW)
+    old_rev="$(python3 "$guard" baseline "$work/before.json" "$sha" "$tag" |
+      sed -n 's/^JSCC_DEPLOY_BASELINE_REVISION=//p')"
+    ;;
+  ALREADY_SERVING)
+    old_rev="$(python3 "$guard" serving "$work/before.json")"
+    ;;
+  *) echo JSCC_DEPLOY_INVALID_STATE; exit 86 ;;
+esac
 [[ "$old_rev" =~ ^jscc-command-api-dev-[a-z0-9-]+$ ]] || exit 86
 old_digest="$(gcp run revisions describe "$old_rev" --project="$project" --region="$region" --format='value(status.imageDigest)')"
 old_digest="${old_digest##*@}"
@@ -92,6 +102,23 @@ token="$(gcloud auth print-identity-token --impersonate-service-account="$deploy
 curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" \
   "$service_url/health" >"$work/old-health.json"
 python3 "$guard" health "$work/old-health.json" baseline "$sha"
+if [[ "$deploy_state" == ALREADY_SERVING ]]; then
+  # No GCP mutation or staging when this SHA already serves 100% traffic.
+  # The source identity and tag ownership were verified by deployment-state.
+  python3 "$guard" health "$work/old-health.json" staged "$sha"
+  curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" \
+    "$service_url/health/db" >"$work/already-db.json"
+  python3 "$guard" db "$work/already-db.json"
+  unset token
+  echo "JSCC_DEPLOY_ALREADY_SERVING_PASS sha=$sha revision=$old_rev digest=$old_digest"
+  echo JSCC_DEPLOY_PREFLIGHT_PASS
+  if [[ "$mode" == preflight ]]; then
+    echo JSCC_DEPLOY_PREFLIGHT_NO_MUTATION
+  else
+    echo "JSCC_DEV_TECHNICAL_DEPLOY_PASS channel=$channel sha=$sha revision=$old_rev digest=$old_digest already_serving=true"
+  fi
+  exit 0
+fi
 unset token
 echo "JSCC_DEPLOY_PREFLIGHT_PASS sha=$sha old_rev=$old_rev digest=$old_digest"
 if [[ "$mode" == preflight ]]; then
