@@ -121,7 +121,8 @@ class DeployRoutes(unittest.TestCase):
         live=staged()
         live["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG}]
         bad=copy.deepcopy(live)
-        bad["status"]["traffic"][0]["revisionName"]=OLD
+        bad["status"]["traffic"]=[{"revisionName":NEW,"percent":100},
+                                   {"revisionName":OLD,"percent":0,"tag":TAG}]
         self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
         bad=copy.deepcopy(live)
         guard.env(bad)["SOURCE_SHA"]["value"]="b"*40
