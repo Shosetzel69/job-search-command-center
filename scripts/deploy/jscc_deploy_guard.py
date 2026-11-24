@@ -5,8 +5,11 @@ No credentials or raw Cloud Run resource snapshots are printed.
 Only the existing Service image and two build-identity variables may change.
 """
 import json
+import os
 import re
 import sys
+import urllib.parse
+import urllib.request
 from copy import deepcopy
 
 PROJECT = "jscc-dev"
@@ -186,18 +189,78 @@ def attest_build(builds, sha, digest):
             return
     deny("BUILD_PROVENANCE_UNVERIFIED")
 
+REQUIRED_CHECKS = (
+    "validate", "Nile-only native provider CI", "gitleaks",
+    "api-version-policy", "snapshot",
+)
+
+def newest_check_runs(payload, sha):
+    """Select most recent run by GitHub run ID per mandatory check, never any older PASS."""
+    if not SHA_RE.fullmatch(sha) or not isinstance(payload, dict):
+        deny("EXACT_SHA_CI_INVALID_INPUT")
+    checks = payload.get("check_runs")
+    if not isinstance(checks, list):
+        deny("EXACT_SHA_CI_INVALID_PAYLOAD")
+    selected = {}
+    for item in checks:
+        if not isinstance(item, dict) or item.get("name") not in REQUIRED_CHECKS:
+            continue
+        if item.get("head_sha") != sha or not isinstance(item.get("id", 0), int):
+            deny("EXACT_SHA_CI_WRONG_IDENTITY")
+        key = item["name"]
+        if key not in selected or item.get("id", 0) > selected[key].get("id", 0):
+            selected[key] = item
+    if set(selected) != set(REQUIRED_CHECKS):
+        deny("EXACT_SHA_CI_MISSING_CHECK")
+    return selected
+
 def check_ci(payload, sha):
-    expected={"validate","Nile-only native provider CI","gitleaks","api-version-policy","snapshot"}
-    checks=payload.get("check_runs",[])
-    found=set()
-    for check in checks:
-        if (check.get("name") in expected and check.get("head_sha")==sha
-            and check.get("app",{}).get("slug")=="github-actions"
-            and check.get("status")=="completed" and check.get("conclusion")=="success"):
-            found.add(check["name"])
-    if not SHA_RE.fullmatch(sha) or found!=expected:
-        deny("EXACT_SHA_CI_UNVERIFIED")
+    for name, check in newest_check_runs(payload, sha).items():
+        if (check.get("app", {}).get("slug") != "github-actions"
+            or check.get("status") != "completed" or check.get("conclusion") != "success"):
+            deny("EXACT_SHA_CI_LATEST_NOT_SUCCESS_" + re.sub(r"[^a-z0-9]+", "_", name.lower()))
     print("JSCC_DEPLOY_EXACT_SHA_CI=PASS")
+
+def fetch_ci_snapshot(sha, output, fetch_json=None):
+    """GitHub check_name+filter=latest, all pages, strictly bounded and fail-closed."""
+    if not SHA_RE.fullmatch(sha):
+        deny("EXACT_SHA_CI_INVALID_SHA")
+    if fetch_json is None:
+        def fetch_json(url):
+            token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+            headers = {"Accept": "application/vnd.github+json"}
+            if token:
+                headers["Authorization"] = "Bearer " + token
+            req = urllib.request.Request(url, headers=headers)
+            with urllib.request.urlopen(req, timeout=20) as response:
+                return json.load(response)
+    gathered = []
+    for name in REQUIRED_CHECKS:
+        for page in range(1, 21):
+            query = urllib.parse.urlencode({
+                "check_name": name, "filter": "latest", "per_page": 100, "page": page
+            })
+            url = ("https://api.github.com/repos/Shosetzel69/"
+                   "job-search-command-center/commits/" + sha + "/check-runs?" + query)
+            try:
+                data = fetch_json(url)
+            except Exception:
+                deny("EXACT_SHA_CI_REQUEST_FAILED")
+            rows = data.get("check_runs") if isinstance(data, dict) else None
+            if not isinstance(rows, list) or len(rows) > 100:
+                deny("EXACT_SHA_CI_MALFORMED_PAGE")
+            if any(not isinstance(row, dict) or row.get("name") != name for row in rows):
+                deny("EXACT_SHA_CI_CHECK_NAME_MISMATCH")
+            gathered.extend(rows)
+            if len(rows) < 100:
+                break
+        else:
+            deny("EXACT_SHA_CI_PAGINATION_LIMIT")
+    snapshot = {"check_runs": gathered}
+    check_ci(snapshot, sha)
+    with open(output, "w", encoding="utf8") as f:
+        json.dump(snapshot, f)
+    print("JSCC_DEPLOY_EXACT_SHA_CI_PAGINATED=PASS")
 
 def check_release(release, sha, tag):
     if (not SHA_RE.fullmatch(sha) or not isinstance(tag,str)
@@ -249,6 +312,8 @@ def main(argv):
         return check_db(read(argv[2]))
     if cmd=="cleanup-tag" and len(argv)==7:
         return cleanup_tag(read(argv[2]),argv[3],argv[4],argv[5],argv[6])
+    if cmd=="fetch-ci" and len(argv)==4:
+        return fetch_ci_snapshot(argv[2],argv[3])
     if cmd=="ci" and len(argv)==4:
         return check_ci(read(argv[2]),argv[3])
     if cmd=="release" and len(argv)==5:
