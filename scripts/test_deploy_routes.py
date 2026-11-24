@@ -239,6 +239,43 @@ class DeployRoutes(unittest.TestCase):
         self.assertLess(shell.index("cutover_attempted=0\nstage_attempted=0"),
                         shell.index('retire_managed_tags "$staged_rev"'))
 
+    def test_live_cloudrun_omits_zero_percent_on_tagged_revision(self):
+        obj=staged()
+        current_tag=TAG
+        old1="gd"+"5"*10
+        old2="gd"+"6"*10
+        old3="gd"+"7"*10
+        obj["status"]["traffic"]=[
+            {"revisionName":NEW,"percent":100},
+            {"revisionName":NEW,"tag":current_tag,
+             "url":"https://tag.example.run.app"},
+            {"revisionName":OLD,"tag":old1},
+            {"revisionName":"jscc-command-api-dev-00099-abc","tag":old2},
+            {"revisionName":"jscc-command-api-dev-00098-abc","tag":old3},
+            {"revisionName":OLD,"tag":"keepme"}]
+        expected=",".join(sorted((current_tag,old1,old2,old3)))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.retire_plan(obj,SHA,NEW),expected)
+        after=copy.deepcopy(obj)
+        after["status"]["traffic"]=[
+            {"revisionName":NEW,"percent":100},
+            {"revisionName":OLD,"tag":"keepme"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.retire_verify(obj,after,SHA,NEW)
+        for variant in ("duplicate","explicit_null","partial","non_numeric","bool"):
+            bad=copy.deepcopy(obj)
+            if variant=="duplicate":
+                bad["status"]["traffic"].append({"revisionName":OLD,"tag":old1})
+            elif variant=="explicit_null":
+                bad["status"]["traffic"][2]["percent"]=None
+            elif variant=="partial":
+                bad["status"]["traffic"][2]["percent"]=1
+            elif variant=="non_numeric":
+                bad["status"]["traffic"][2]["percent"]="not-a-number"
+            else:
+                bad["status"]["traffic"][2]["percent"]=False
+            self.assertEqual(deny(guard.retire_plan,bad,SHA,NEW),86,variant)
+
     def test_tag_retirement_fails_closed_on_foreign_or_ambiguous_tags(self):
         final=staged()
         final["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG},
