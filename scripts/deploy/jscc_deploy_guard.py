@@ -432,12 +432,20 @@ def managed_tags(service):
         revision = row.get("revisionName", "")
         if not REV_RE.fullmatch(revision):
             deny("MANAGED_TAG_REVISION_INVALID")
+        # Cloud Run omits percent on zero-traffic tagged entries.
+        # An omitted field is 0, but explicit null/bool/non-numeric values
+        # are invalid. Duplicated tags remain a hard failure.
+        raw = row.get("percent", 0)
+        if isinstance(raw, bool) or raw is None:
+            deny("MANAGED_TAG_TRAFFIC_INVALID")
         try:
-            percent = int(row.get("percent", -1))
+            percent = int(raw)
         except (ValueError, TypeError):
             deny("MANAGED_TAG_TRAFFIC_INVALID")
-        if percent not in (0, 100) or name in tags:
-            deny("MANAGED_TAG_AMBIGUOUS")
+        if percent not in (0, 100):
+            deny("MANAGED_TAG_TRAFFIC_UNEXPECTED")
+        if name in tags:
+            deny("MANAGED_TAG_DUPLICATE")
         tags[name] = (revision, percent)
     return tags
 
