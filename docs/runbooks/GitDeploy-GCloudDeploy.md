@@ -25,7 +25,7 @@ bash scripts/deploy/GCloudDeploy.sh <approved-40-char-SHA> jscc-dev-vX.Y.Z deplo
 
 Do not start the manual route while GitDeploy is active for the same service. The engine checks revision/configuration/traffic drift and fails closed; nevertheless it does not establish a universal distributed lock across older workflows.
 
-**CI handling:** each mandatory GitHub Actions check is queried by `check_name` with `filter=latest`, all pages are collected (bounded to fail closed), and only the latest run by check ID is accepted. An earlier green result cannot mask a newer failure. This prevents unrelated skipped issue-comment runs from pushing required checks beyond the first 100.
+**CI handling:** each mandatory GitHub Actions check is queried by `check_name` with `filter=latest` across all pages (bounded fail-closed). Its `details_url` must identify the same GitHub job ID, and its workflow-run record must match the **pinned workflow path and name**, `event=push`, `head_branch=main`, and exact source SHA. Only the latest **canonical workflow** job ID is accepted; a successful `validate` in `Validate Remote Executor` cannot mask a failed `validate` in `Validate Command API`. The workflow run must also be successful. This prevents stale results, foreign same-name checks and unrelated skipped comments from satisfying the release gate.
 
 ## Shared execution contract
 
