@@ -4,6 +4,9 @@ import contextlib
 import io
 import json
 import re
+import subprocess
+import tempfile
+import urllib.parse
 import unittest
 from pathlib import Path
 
@@ -129,6 +132,50 @@ class DeployRoutes(unittest.TestCase):
         build["serviceAccount"]="wrong"
         self.assertEqual(deny(guard.attest_build,[build],SHA,DIGEST),86)
 
+    def test_latest_check_fails_even_when_older_check_passed(self):
+        names=list(guard.REQUIRED_CHECKS)
+        checks={"check_runs":[{"name":n,"id":i+1,"head_sha":SHA,
+             "status":"completed","conclusion":"success",
+             "app":{"slug":"github-actions"}} for i,n in enumerate(names)]}
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.check_ci(checks,SHA)
+        stale={"name":"validate","id":999,"head_sha":SHA,
+               "status":"completed","conclusion":"failure",
+               "app":{"slug":"github-actions"}}
+        checks["check_runs"].append(stale)
+        self.assertEqual(deny(guard.check_ci,checks,SHA),86)
+
+    def test_ci_filter_latest_paginates_more_than_100_runs(self):
+        calls=[]
+        def fake_fetch(url):
+            parsed=urllib.parse.urlparse(url)
+            params=urllib.parse.parse_qs(parsed.query)
+            self.assertEqual(params["filter"],["latest"])
+            self.assertEqual(params["per_page"],["100"])
+            name=params["check_name"][0]
+            page=int(params["page"][0])
+            calls.append((name,page))
+            n=100 if name=="validate" and page==1 else 1 if page==1 or (name=="validate" and page==2) else 0
+            return {"check_runs":[{
+                "name":name,"id":(page-1)*100+i+1,
+                "head_sha":SHA,"status":"completed",
+                "conclusion":"success","app":{"slug":"github-actions"}
+            } for i in range(n)]}
+        with tempfile.TemporaryDirectory() as directory:
+            output=Path(directory)/"ci.json"
+            with contextlib.redirect_stdout(io.StringIO()):
+                guard.fetch_ci_snapshot(SHA,output,fetch_json=fake_fetch)
+            payload=json.loads(output.read_text())
+            self.assertEqual(len(payload["check_runs"]),105)
+        self.assertIn(("validate",2),calls)
+        self.assertEqual(len(calls),6)
+
+    def test_noninteractive_cloudshell_release_is_rejected_before_gcloud(self):
+        p=subprocess.run(["bash",str(CLOUD),SHA,"jscc-dev-v1.0.0","deploy"],
+                         input="DEPLOY DEV "+SHA+"\n",capture_output=True,text=True)
+        self.assertEqual(p.returncode,86)
+        self.assertIn("JSCC_CLOUD_DEPLOY_INTERACTIVE_TTY_REQUIRED",p.stdout)
+
     def test_release_auth_and_health(self):
         approved={"tag_name":"jscc-dev-v1.0.0","draft":False,
                   "prerelease":False,"author":{"login":"Shosetzel69"},"id":234}
@@ -151,6 +198,7 @@ class DeployRoutes(unittest.TestCase):
         for required in ("name: GitDeploy","release:","types: [published]",
             "workflow_dispatch:","github.event_name == 'workflow_dispatch'",
             "environment: dev","required_reviewers","prevent_self_review",
+            ".can_admins_bypass == false",
             '.reviewer.login!="Shosetzel69"',"actions: write",
             "id-token: write","GCP_WIF_PROVIDER","GCP_WIF_SA",
             "GitDeploy.sh preflight","GitDeploy.sh deploy",
@@ -166,7 +214,8 @@ class DeployRoutes(unittest.TestCase):
     def test_cloudshell_manual_and_execution_invariants(self):
         cloud=CLOUD.read_text(); engine=ENGINE.read_text()
         git=GIT.read_text()
-        for required in ("CLOUD_SHELL","DEVSHELL_PROJECT_ID","git -C \"$root\" fetch origin main",
+        for required in ("CLOUD_SHELL","DEVSHELL_PROJECT_ID","[[ -t 0 && -t 1 && -r /dev/tty ]]",
+            "gcloud auth list","git -C \"$root\" fetch origin main",
             "git -C \"$root\" worktree add --detach",
             "DEPLOY DEV $sha","IFS= read -r confirmation","preflight","deploy"):
             self.assertIn(required,cloud,required)
@@ -180,6 +229,9 @@ class DeployRoutes(unittest.TestCase):
             self.assertNotIn(forbidden,engine,forbidden)
         self.assertIn('channel=github',engine.replace("channel=$channel","channel=github"))
         self.assertIn("JSCC_DEV_FUNCTIONAL_ACCEPTANCE=PENDING",engine)
+        self.assertIn("fetch-ci",engine)
+        self.assertIn("^\u0028https://github[.]com/|git@github[.]com:\u0029",engine)
+        self.assertIn("IFS= read -r confirmation </dev/tty",cloud)
 
 if __name__=="__main__":
     unittest.main()
