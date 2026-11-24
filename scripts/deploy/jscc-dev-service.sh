@@ -1,19 +1,18 @@
 #!/usr/bin/env bash
 # Shared DEV Service-only deployment. No Nile migrations, Search Job, IAM, TEST or PROD.
 set -euo pipefail
-mode="${1:-}"; sha="${2:-}"; tag_name="${3:-}"; control="${4:-}"; candidate="${5:-}"; channel="${6:-}"
+mode="${1:-}"; sha="${2:-}"; control="${3:-}"; candidate="${4:-}"; channel="${5:-}"
 [[ "$mode" == preflight || "$mode" == deploy ]] || exit 86
-[[ "$sha" =~ ^[a-f0-9]{40}$ && "$tag_name" =~ ^jscc-dev-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 86
+[[ "$sha" =~ ^[a-f0-9]{40}$ ]] || exit 86
 [[ "$channel" == github || "$channel" == cloudshell ]] || exit 86
 [[ -f "$control/scripts/deploy/jscc_deploy_guard.py" && -f "$control/cloudbuild.531.dev-service.yaml" ]] || exit 86
 [[ "$(git -C "$candidate" rev-parse HEAD)" == "$sha" ]] || exit 86
 [[ -z "$(git -C "$candidate" status --porcelain)" ]] || exit 86
 git -C "$control" merge-base --is-ancestor "$sha" HEAD || { echo JSCC_DEPLOY_SOURCE_NOT_ON_MAIN; exit 86; }
-[[ "$(git -C "$control" rev-parse "refs/tags/$tag_name^{commit}")" == "$sha" ]] || exit 86
 [[ "$(git -C "$control" remote get-url origin)" =~ ^(https://github[.]com/|git@github[.]com:)Shosetzel69/job-search-command-center([.]git)?$ ]] || { echo JSCC_DEPLOY_UNTRUSTED_REPOSITORY_ORIGIN; exit 86; }
 deployer=jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com
 if [[ "$channel" == github ]]; then
-  [[ "${GITHUB_EVENT_NAME:-}" == workflow_dispatch && "${GITHUB_REF:-}" == refs/heads/main &&
+  [[ "${GITHUB_EVENT_NAME:-}" == workflow_run && "${JSCC_GITDEPLOY_SOURCE_SHA:-}" == "$sha" &&
       "${JSCC_GITDEPLOY_ADMITTED:-}" == true && "${GCP_WIF_SA:-}" == "$deployer" ]] || exit 86
 else
   [[ "${JSCC_CLOUDSHELL_ADMITTED:-}" == true ]] || exit 86
@@ -73,18 +72,6 @@ recover(){
 trap recover EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-github_api(){
-  local url="$1" output="$2"
-  if [[ -n "${GH_TOKEN:-${GITHUB_TOKEN:-}}" ]]; then
-    curl -fsS --connect-timeout 10 --max-time 30 -H 'Accept: application/vnd.github+json' \
-      -H "Authorization: Bearer ${GH_TOKEN:-${GITHUB_TOKEN}}" "$url" >"$output"
-  else
-    curl -fsS --connect-timeout 10 --max-time 30 -H 'Accept: application/vnd.github+json' "$url" >"$output"
-  fi
-}
-api=https://api.github.com/repos/Shosetzel69/job-search-command-center
-github_api "$api/releases/tags/$tag_name" "$work/release.json"
-python3 "$guard" release "$work/release.json" "$sha" "$tag_name"
 python3 "$guard" fetch-ci "$sha" "$work/checks.json"
 immutable="$(gcp artifacts repositories describe jscc --project="$shared" \
  --location="$region" --format='value(dockerConfig.immutableTags)')"
