@@ -117,6 +117,37 @@ def baseline(service, sha, tag):
     print("JSCC_DEPLOY_BASELINE=PASS")
     return revision
 
+def deployment_state(service, sha, tag):
+    """Allow an existing SHA only if its stage tag belongs to the serving revision.
+
+    A different tagged revision, wrong source identity, or mutable image is a
+    collision, not a safe retry. This check does not mutate Cloud Run.
+    """
+    if not SHA_RE.fullmatch(sha) or tag != "gd" + sha[:10] or not TAG_RE.fullmatch(tag):
+        deny("INVALID_IDENTITY")
+    fixed_dev(service)
+    revision = serving(service)
+    matches = [t for t in traffic(service) if t.get("tag") == tag]
+    if not matches:
+        print("JSCC_DEPLOY_STATE=NEW")
+        return "NEW"
+    if len(matches) != 1 or matches[0].get("revisionName") != revision:
+        deny("STAGE_TAG_COLLISION")
+    try:
+        percent = int(matches[0].get("percent", -1))
+    except (TypeError, ValueError):
+        deny("STAGE_TAG_COLLISION")
+    if percent not in (0, 100):
+        deny("STAGE_TAG_COLLISION")
+    values = env(service)
+    if any(values.get(k, {}).get("value") != sha for k in ("SOURCE_SHA", "RUNTIME_DATA_SHA")):
+        deny("STAGE_TAG_SOURCE_MISMATCH")
+    image = shape(service)["containers"][0].get("image", "")
+    if not image.startswith(IMAGE_REPO + "@") or not DIGEST_RE.fullmatch(image.split("@", 1)[-1]):
+        deny("STAGE_TAG_IMAGE_UNVERIFIED")
+    print("JSCC_DEPLOY_STATE=ALREADY_SERVING")
+    return "ALREADY_SERVING"
+
 def unchanged(before, after, sha, tag):
     baseline(before,sha,tag)
     fixed_dev(after)
@@ -370,6 +401,8 @@ def main(argv):
         return check_release(read(argv[2]),argv[3],argv[4])
     if cmd=="attest" and len(argv)==5:
         return attest_build(read(argv[2]),argv[3],argv[4])
+    if cmd=="deployment-state" and len(argv)==5:
+        return deployment_state(read(argv[2]),argv[3],argv[4])
     if cmd=="baseline" and len(argv)==5:
         return baseline(read(argv[2]),argv[3],argv[4])
     if cmd in ("unchanged","stage","rollback") and len(argv)==6:
