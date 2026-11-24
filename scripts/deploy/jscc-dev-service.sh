@@ -56,6 +56,8 @@ recover(){
   fi
   if ((rc!=0)) && ((stage_attempted==1)) && [[ -n "$staged_rev" && -n "$digest" ]]; then
     if gcp run services describe "$service" --project="$project" --region="$region" --format=json >"$work/tag.json" &&
+       staged_digest="$(gcp run revisions describe "$staged_rev" --project="$project" --region="$region" --format='value(status.imageDigest)')" &&
+       [[ "${staged_digest##*@}" == "$digest" ]] &&
        python3 "$guard" cleanup-tag "$work/tag.json" "$sha" "$tag" "$digest" "$staged_rev" >/dev/null; then
       gcp run services update-traffic "$service" --project="$project" --region="$region" \
         --remove-tags="$tag" --quiet >"$work/tag-cleanup.log" 2>&1 ||
@@ -95,7 +97,7 @@ old_digest="${old_digest##*@}"
 [[ "$old_digest" =~ ^sha256:[a-f0-9]{64}$ ]] || exit 86
 service_url="$(gcp run services describe "$service" --project="$project" --region="$region" --format='value(status.url)')"
 [[ "$service_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || exit 86
-token="$(gcp auth print-identity-token --impersonate-service-account="$deployer" \
+token="$(gcloud auth print-identity-token --impersonate-service-account="$deployer" \
   --audiences="$service_url" 2>"$work/token-error")" || { echo JSCC_DEPLOY_HEALTH_AUTH_DENIED; exit 86; }
 [[ "$token" =~ ^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$ ]] || exit 86
 curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" \
@@ -149,7 +151,7 @@ tag_url="$(sed -n 's/^JSCC_DEPLOY_STAGE_URL=//p' <<<"$proof")"
 [[ "$tag_url" =~ ^https://[a-z0-9-]+(\.a)?\.run\.app$ ]] || exit 86
 staged_digest="$(gcp run revisions describe "$staged_rev" --project="$project" --region="$region" --format='value(status.imageDigest)')"
 [[ "${staged_digest##*@}" == "$digest" ]] || exit 86
-token="$(gcp auth print-identity-token --impersonate-service-account="$deployer" \
+token="$(gcloud auth print-identity-token --impersonate-service-account="$deployer" \
  --audiences="$service_url" 2>"$work/staged-auth-error")" || exit 86
 curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" "$tag_url/health" >"$work/stage-health.json"
 curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" "$tag_url/health/db" >"$work/stage-db.json"
