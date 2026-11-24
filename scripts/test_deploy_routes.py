@@ -172,7 +172,7 @@ class DeployRoutes(unittest.TestCase):
                         shell.rindex('JSCC_DEV_TECHNICAL_DEPLOY_PASS channel='))
         # A failed tag-only mutation must not intentionally roll back a healthy,
         # verified serving revision to a vulnerable prior version.
-        self.assertLess(shell.index("cutover_attempted=0\\nstage_attempted=0"),
+        self.assertLess(shell.index("cutover_attempted=0\nstage_attempted=0"),
                         shell.index('--remove-tags="$tags_to_retire"'))
 
     def test_tag_retirement_fails_closed_on_foreign_or_ambiguous_tags(self):
@@ -204,7 +204,7 @@ class DeployRoutes(unittest.TestCase):
         with contextlib.redirect_stdout(io.StringIO()):
             guard.retire_verify(final,after,SHA,NEW)
         for case in ("left_old_tag","changed_traffic","changed_secret",
-                     "changed_unrelated_tag","changed_identity"):
+                     "changed_unrelated_tag","changed_identity","changed_image"):
             bad=copy.deepcopy(after)
             if case=="left_old_tag": bad["status"]["traffic"][0]["tag"]=TAG
             if case=="changed_traffic":
@@ -215,6 +215,8 @@ class DeployRoutes(unittest.TestCase):
                 bad["status"]["traffic"][1]["tag"]="different-pin"
             if case=="changed_identity":
                 guard.env(bad)["SOURCE_SHA"]["value"]="0"*40
+            if case=="changed_image":
+                guard.shape(bad)["containers"][0]["image"]="unauthorized:image"
             self.assertEqual(deny(guard.retire_verify,final,bad,SHA,NEW),86,case)
 
     def test_concurrent_change_rejected(self):
