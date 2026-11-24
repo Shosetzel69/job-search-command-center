@@ -117,32 +117,71 @@ def baseline(service, sha, tag):
     print("JSCC_DEPLOY_BASELINE=PASS")
     return revision
 
-def deployment_state(service, sha, tag):
-    """Allow an existing SHA only if its stage tag belongs to the serving revision.
+def serving_revision_identity(service, revision, sha):
+    """Only the actual 100%-serving revision can prove already-deployed SHA.
 
-    A different tagged revision, wrong source identity, or mutable image is a
-    collision, not a safe retry. This check does not mutate Cloud Run.
+    Cloud Run service.spec.template describes the newest attempted revision,
+    which may be unready or rolled back while the old revision still serves.
     """
+    current = serving(service)
+    if revision.get("metadata", {}).get("name") != current:
+        deny("SERVING_REVISION_MISMATCH")
+    spec = revision.get("spec", {})
+    if (not isinstance(spec, dict) or
+            spec.get("serviceAccountName") != RUNTIME_SA or
+            not isinstance(spec.get("containers"), list) or
+            len(spec["containers"]) != 1):
+        deny("SERVING_REVISION_SHAPE")
+    container = spec["containers"][0]
+    if not isinstance(container, dict) or not isinstance(container.get("env"), list):
+        deny("SERVING_REVISION_ENV_SHAPE")
+    entries = container["env"]
+    values = {row.get("name"): row.get("value") for row in entries if isinstance(row, dict)}
+    if len(values) != len(entries) or None in values:
+        deny("SERVING_REVISION_ENV_DUPLICATE")
+    digest = revision.get("status", {}).get("imageDigest", "")
+    if not isinstance(digest, str):
+        deny("SERVING_REVISION_DIGEST_MISSING")
+    digest = digest.rsplit("@", 1)[-1]
+    if not DIGEST_RE.fullmatch(digest):
+        deny("SERVING_REVISION_DIGEST_INVALID")
+    if container.get("image") != IMAGE_REPO + "@" + digest:
+        # Do not treat a mutable or different image as proof of a deployed SHA.
+        return False
+    if any(values.get(k) != v for k, v in {
+            "APP_ENV": "dev", "JSCC_RUNTIME_BACKEND": "gcp",
+            "SEARCH_MODE": "disabled"}.items()):
+        return False
+    if any(values.get(k) != sha for k in ("SOURCE_SHA", "RUNTIME_DATA_SHA")):
+        return False
+    # The template may be newer than the serving revision after failed stage.
+    if any(env(service).get(k, {}).get("value") != sha
+           for k in ("SOURCE_SHA", "RUNTIME_DATA_SHA")):
+        return False
+    if shape(service)["containers"][0].get("image") != IMAGE_REPO + "@" + digest:
+        return False
+    # No pending newer revision may be mistaken for an already-served SHA.
+    status = service.get("status", {})
+    if (status.get("latestCreatedRevisionName") != current or
+            status.get("latestReadyRevisionName") != current):
+        return False
+    return True
+
+
+def deployment_state(service, revision, sha, tag):
+    """Resolve idempotence from the traffic-serving revision, never template alone."""
     if not SHA_RE.fullmatch(sha) or tag != "gd" + sha[:10] or not TAG_RE.fullmatch(tag):
         deny("INVALID_IDENTITY")
     fixed_dev(service)
-    revision = serving(service)
-    matches = [t for t in traffic(service) if t.get("tag") == tag]
+    current = serving(service)
+    # Always verify the revision snapshot is for the active 100%-traffic revision.
+    already_serving = serving_revision_identity(service, revision, sha)
+    matches = [row for row in traffic(service) if row.get("tag") == tag]
     if not matches:
-        # A successful deployment retires its staging tag.  Check the exact
-        # serving source identity and immutable image before treating a retry
-        # without a tag as already deployed.
-        values = env(service)
-        image = shape(service)["containers"][0].get("image", "")
-        if (all(values.get(k, {}).get("value") == sha for k in
-                ("SOURCE_SHA", "RUNTIME_DATA_SHA")) and
-                image.startswith(IMAGE_REPO + "@") and
-                DIGEST_RE.fullmatch(image.split("@", 1)[-1])):
-            print("JSCC_DEPLOY_STATE=ALREADY_SERVING")
-            return "ALREADY_SERVING"
-        print("JSCC_DEPLOY_STATE=NEW")
-        return "NEW"
-    if len(matches) != 1 or matches[0].get("revisionName") != revision:
+        state = "ALREADY_SERVING" if already_serving else "NEW"
+        print("JSCC_DEPLOY_STATE=" + state)
+        return state
+    if len(matches) != 1 or matches[0].get("revisionName") != current:
         deny("STAGE_TAG_COLLISION")
     try:
         percent = int(matches[0].get("percent", -1))
@@ -150,12 +189,8 @@ def deployment_state(service, sha, tag):
         deny("STAGE_TAG_COLLISION")
     if percent not in (0, 100):
         deny("STAGE_TAG_COLLISION")
-    values = env(service)
-    if any(values.get(k, {}).get("value") != sha for k in ("SOURCE_SHA", "RUNTIME_DATA_SHA")):
+    if not already_serving:
         deny("STAGE_TAG_SOURCE_MISMATCH")
-    image = shape(service)["containers"][0].get("image", "")
-    if not image.startswith(IMAGE_REPO + "@") or not DIGEST_RE.fullmatch(image.split("@", 1)[-1]):
-        deny("STAGE_TAG_IMAGE_UNVERIFIED")
     print("JSCC_DEPLOY_STATE=ALREADY_SERVING")
     return "ALREADY_SERVING"
 
@@ -491,8 +526,8 @@ def main(argv):
         return check_release(read(argv[2]),argv[3],argv[4])
     if cmd=="attest" and len(argv)==5:
         return attest_build(read(argv[2]),argv[3],argv[4])
-    if cmd=="deployment-state" and len(argv)==5:
-        return deployment_state(read(argv[2]),argv[3],argv[4])
+    if cmd=="deployment-state" and len(argv)==6:
+        return deployment_state(read(argv[2]),read(argv[3]),argv[4],argv[5])
     if cmd=="baseline" and len(argv)==5:
         return baseline(read(argv[2]),argv[3],argv[4])
     if cmd in ("unchanged","stage","rollback") and len(argv)==6:
