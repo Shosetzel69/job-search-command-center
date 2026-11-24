@@ -54,6 +54,9 @@ recover(){
       fi
     fi
   fi
+  if ((rc!=0)) && ((stage_attempted==1)) && [[ -z "$staged_rev" || -z "$digest" ]]; then
+    echo JSCC_DEPLOY_STAGE_CLEANUP_MANUAL_RECOVERY_REQUIRED
+  fi
   if ((rc!=0)) && ((stage_attempted==1)) && [[ -n "$staged_rev" && -n "$digest" ]]; then
     if gcp run services describe "$service" --project="$project" --region="$region" --format=json >"$work/tag.json" &&
        staged_digest="$(gcp run revisions describe "$staged_rev" --project="$project" --region="$region" --format='value(status.imageDigest)')" &&
