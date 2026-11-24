@@ -75,7 +75,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = Shosetzel69/job-search-command-center || exit 86
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 86
           test "$VALIDATED_EVENT" = push || exit 86
-          test "$VALIDATED_WORKFLOW_PATH" = ".github/workflows/command-api-check.yml" || exit 86
+          test "$VALIDATED_WORKFLOW_ID" = "350908093" || exit 86
           [[ "$VALIDATED_RUN_ID" =~ ^[0-9]+$ ]] || exit 86
           test "$(git -C control rev-parse HEAD)" = "$SOURCE_SHA" || {
             echo GITDEPLOY_STALE_MAIN_EVENT_SKIPPED
