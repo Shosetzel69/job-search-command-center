@@ -9,6 +9,21 @@ operation="${3:-preflight}"
   exit 86
 }
 [[ "$operation" == preflight || "$operation" == deploy ]] || exit 86
+# TTY confirmation is an operator-safety check, not a security boundary.
+# Effective service account impersonation rights are the GCP authorization gate.
+if [[ "$operation" == deploy ]]; then
+  [[ -t 0 && -t 1 && -r /dev/tty ]] || {
+    echo JSCC_CLOUD_DEPLOY_INTERACTIVE_TTY_REQUIRED
+    exit 86
+  }
+fi
+active_identity="$(gcloud auth list --filter='status:ACTIVE' --format='value(account)' 2>/dev/null)" || exit 86
+[[ "$active_identity" =~ ^[^[:space:]@]+@[^[:space:]@]+$ &&
+   "$active_identity" != *".gserviceaccount.com" &&
+   "$active_identity" != jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com ]] || {
+  echo JSCC_CLOUD_DEPLOY_HUMAN_GCLOUD_SESSION_REQUIRED
+  exit 86
+}
 [[ -z "${GITHUB_ACTIONS:-}" ]] || { echo JSCC_CLOUD_DEPLOY_NO_ACTIONS_RUNNER; exit 86; }
 [[ "${CLOUD_SHELL:-}" == true || -n "${DEVSHELL_PROJECT_ID:-}" ]] || {
   echo JSCC_CLOUD_DEPLOY_REQUIRES_CLOUD_SHELL; exit 86;
@@ -33,7 +48,7 @@ if [[ "$operation" == preflight ]]; then exit 0; fi
 echo "Release: $tag | Candidate: $sha | GCP: jscc-dev | Service: jscc-command-api-dev"
 echo 'To authorize a DEV service-only deployment type the exact confirmation below:'
 echo "DEPLOY DEV $sha"
-IFS= read -r confirmation
+IFS= read -r confirmation </dev/tty
 [[ "$confirmation" == "DEPLOY DEV $sha" ]] || { echo JSCC_CLOUD_DEPLOY_NOT_APPROVED; exit 86; }
 bash "$root/scripts/deploy/jscc-dev-service.sh" \
   deploy "$sha" "$tag" "$root" "$candidate_tmp/candidate" cloudshell
