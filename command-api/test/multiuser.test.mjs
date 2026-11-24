@@ -843,3 +843,18 @@ test('B2B filter uses structured contract evidence, not description keywords',()
  assert.equal(contract.job.b2b,true);
  assert.equal(matchesResultView(contract.job,contract,{result_view:'jobs',quick:'b2b'},80),true);
 });
+
+test('P4 W2 manual queue and archive are independent of FIT, eligibility and legacy review',()=>{
+ const eligible={eligibilityState:'ELIGIBLE',eligibilityReasonCode:null};
+ const unconfirmed={eligibilityState:'UNKNOWN',eligibilityReasonCode:'ROLE_FAMILY_UNKNOWN'};
+ const base={fit:99,b2b:false,repost:false,remote:false,age:null,archived_at:null,review_required_at:null};
+ const analysis={result_view:'analysis',quick:'all',kpi:'all'};
+ const archived={result_view:'archived',quick:'all',kpi:'all'};
+ assert.equal(matchesResultView(base,eligible,analysis,80),false);
+ assert.equal(matchesResultView({...base,fit:null,review_required_at:'2026-11-24T00:00:00Z'},unconfirmed,analysis,80),true);
+ assert.equal(matchesResultView({...base,archived_at:'2026-11-24T00:00:00Z'},eligible,archived,80),true);
+ assert.equal(matchesResultView(base,eligible,archived,80),false);
+ const archivedSpec=normalizeJobSearchQuery({result_view:'archived'});
+ assert.equal(archivedSpec.include_archived,true);
+ assert.throws(()=>normalizeJobSearchQuery({result_view:'unknown-view'}),/Invalid result view/);
+});

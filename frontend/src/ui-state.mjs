@@ -3,7 +3,7 @@ import nomenclatures from '../../data/nomenclatures.json' with { type:'json' };
 
 export const UI_STATE_KEY = 'jscc-ui-state-v1';
 
-const VIEWS = new Set(['jobs','review','unclassified','applications','criteria','admin']);
+const VIEWS = new Set(['jobs','analysis','archived','applications','criteria','admin']);
 const SORTS = new Set(['fit','title','country','work_mode','publication','retrieve'].flatMap(key=>['asc','desc'].map(dir=>key+'-'+dir)));
 const MODES = new Set(['Remote','Hybrid','Onsite']);
 const ROLE_CODES=new Set(ROLE_FAMILIES.flatMap(family=>family.subfamilies.map(role=>role.code)));
@@ -28,6 +28,7 @@ function cleanFilters(input = {}) {
     : ['Remote','Hybrid','Onsite'];
   return {
     search:String(input.search || '').slice(0, 200),
+    unknownFamily:input.unknownFamily===true,
     quick:'all',
     freshness:finiteNumber(input.freshness, null),
     workModes:modes,
@@ -45,8 +46,8 @@ function cleanFilters(input = {}) {
 export function sanitizeUiState(input = {}) {
   return {
     schema_version:1,
-    view:VIEWS.has(input.view) ? input.view : 'jobs',
-    filters:cleanFilters(input.filters),
+    view:VIEWS.has(input.view) ? input.view : input.view==='review'?'analysis':'jobs',
+    filters:cleanFilters(input.view==='unclassified'?{...input.filters,unknownFamily:true}:input.filters),
     selectedJobId:input.selectedJobId ? String(input.selectedJobId) : null,
     scrollY:Math.max(0, finiteNumber(input.scrollY, 0)),
   };

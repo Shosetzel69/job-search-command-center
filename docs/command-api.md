@@ -141,6 +141,10 @@ Suprafata canonica:
 - `GET/PUT /me/preferences`;
 - `GET /me/jobs` cu paginare bounded/cursor;
 - `PUT /me/jobs/:job_id/state`;
+  - `review_required: boolean` toggles the manual analysis queue; `archived: boolean` archives/restores, independently of `seen: boolean`;
+  - state remains tenant/profile-scoped in `profile_job_state.state` JSONB and existing timestamp columns;
+  - `GET /me/jobs?result_view=analysis|archived` uses global list/count/cursor semantics; archived is archived-only;
+  - external Apply does not change state; only explicit user confirmation calls `POST /applications` with a canonical `job_id`.
 - `GET/POST /applications`;
 - `PUT/DELETE /applications/:application_id`;
 - `POST /me/refresh`;

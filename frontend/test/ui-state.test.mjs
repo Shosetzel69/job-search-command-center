@@ -27,8 +27,8 @@ test('transient UI state stores only the allowlisted return context', () => {
   assert.doesNotMatch(raw, /credential|applications|not-persisted/);
   assert.deepEqual(readUiState(store), {
     schema_version:1,
-    view:'review',
-    filters:{search:'project',quick:'all',freshness:48,workModes:['Remote'],roleSubfamilies:['project_management'],contractTypes:[],roleSubfamiliesNone:false,contractTypesNone:true,minFit:'65',sort:'fit-asc'},
+    view:'analysis',
+    filters:{search:'project',quick:'all',unknownFamily:false,freshness:48,workModes:['Remote'],roleSubfamilies:['project_management'],contractTypes:[],roleSubfamiliesNone:false,contractTypesNone:true,minFit:'65',sort:'fit-asc'},
     selectedJobId:'job-1',
     scrollY:321,
   });
@@ -99,4 +99,16 @@ test('P4 L1: obsolete option codes are never restored as hidden API filters',()=
  const all=sanitizeUiState({filters:{roleSubfamilies:[],contractTypes:[]}});
  assert.equal(all.filters.roleSubfamiliesNone,false);
  assert.equal(all.filters.contractTypesNone,false);
+});
+
+test('P4 W2 persists manual views and migrates legacy navigation without leaking old filters',()=>{
+  for(const view of ['jobs','analysis','archived','applications']){
+    assert.equal(sanitizeUiState({view}).view,view);
+  }
+  const legacy=sanitizeUiState({view:'unclassified',filters:{workModes:['Remote']}});
+  assert.equal(legacy.view,'jobs');
+  assert.equal(legacy.filters.unknownFamily,true);
+  assert.equal(sanitizeUiState({view:'review'}).view,'analysis');
+  const restored=sanitizeUiState({view:'archived',filters:{unknownFamily:true}});
+  assert.equal(restored.filters.unknownFamily,true);
 });

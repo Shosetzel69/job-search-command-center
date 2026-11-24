@@ -54,7 +54,7 @@ test('Mobile V1 keeps one responsive React product with compact navigation and f
   assert.match(main, /md:hidden/);
   assert.match(main, /fixed inset-0 z-\[60\]/);
   assert.match(main, /Detalii/);
-  assert.match(main, /Review/);
+  assert.match(main, /De analizat/);
   assert.match(main, /Aplica/);
   assert.match(main, /Arhiveaza/);
 });

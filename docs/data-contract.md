@@ -571,6 +571,14 @@ Application este profile-owned logic; fizic este tenant-aware cu `tenant_id = lo
 - daca exista job link, snapshot-ul minim pastreaza company/title/location/reference/source URL;
 - application lifecycle este independent de shared job lifecycle.
 
+### P4 W2 — personal review and archive (DEV candidate, #530/#663)
+
+`profile_job_state` remains the only per-profile job workflow authority. `seen_at` records viewing; `archived_at` records reversible archive membership; the existing `state` JSONB contains optional `review_required_at` for **user-selected** "De analizat" membership. All three are independent of FIT/Eligibility. No new DB column or migration is required.
+
+`GET /me/jobs?result_view=analysis` includes only active jobs with `state.review_required_at`; `result_view=archived` includes only archived jobs. Both reuse server-wide list/count/filter/sort/cursor and tenant isolation. `role_family=UNKNOWN` is a Jobs filter, not a separate main view. A state mutation invalidates stale listing cursors; changing GUI filters never dispatches Retrieve.
+
+An external "Aplica" link does not create an application. The explicit confirmation creates a tenant/profile-owned `applications` record with `job_id`; a linked application is not created twice, including under concurrent confirmation. The source URL is retained as evidence, not proof of submission. No automatic FIT recomputation or change to shared corpus occurs.
+
 ### Evaluation
 
 `User Profile + Shared Job -> User-Job Evaluation`

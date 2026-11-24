@@ -225,3 +225,16 @@ test('P4 explicit all vs none is encoded in the server-bound query',()=>{
  assert.equal(none.searchParams.get('empty_role_subfamilies'),'true');
  assert.equal(none.searchParams.get('empty_contract_types'),'true');
 });
+
+test('P4 W2 uses global server view for manual review and archived jobs',()=>{
+  for(const view of ['jobs','analysis','archived']){
+    const url=new URL(buildJobsPath({filters:{pageSize:20,sort:'publication-desc'},view}),'https://jscc.test');
+    assert.equal(url.searchParams.get('result_view'),view);
+    assert.equal(url.searchParams.has('include_archived'),false);
+    assert.equal(url.searchParams.get('sort'),'publication');
+  }
+  const unknown=new URL(buildJobsPath({filters:{unknownFamily:true,sort:'fit-desc',pageSize:20},view:'jobs'}),'https://jscc.test');
+  assert.deepEqual(unknown.searchParams.getAll('role_family'),['UNKNOWN']);
+  const known=new URL(buildJobsPath({filters:{unknownFamily:false,sort:'fit-desc',pageSize:20},view:'jobs'}),'https://jscc.test');
+  assert.equal(known.searchParams.has('role_family'),false);
+});
