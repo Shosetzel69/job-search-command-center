@@ -379,13 +379,28 @@ class DeployRoutes(unittest.TestCase):
                 if case=="fraction": tag_row["percent"]=0.5
                 if case=="numeric_string": tag_row["percent"]="0"
                 if case=="wrong_percent": tag_row["percent"]=5
+                # For malformed traffic the top-level serving() guard
+                # can reject the snapshot before deployment_state tests tag
+                # ownership. Test tag_percent's reason separately and require
+                # the complete workflow to reject without a false PASS.
+                if case not in ("foreign_revision","duplicate"):
+                    pct_error=io.StringIO()
+                    with contextlib.redirect_stderr(pct_error):
+                        with self.assertRaises(SystemExit) as pct_result:
+                            guard.tag_percent(tag_row,"STAGE_TAG_COLLISION",
+                                              "STAGE_TAG_COLLISION")
+                    self.assertEqual(pct_result.exception.code,86)
+                    self.assertEqual(pct_error.getvalue().strip(),
+                                     "JSCC_DEPLOY_DENIED=STAGE_TAG_COLLISION")
                 err=io.StringIO()
                 with contextlib.redirect_stderr(err):
                     with self.assertRaises(SystemExit) as result:
                         guard.deployment_state(bad,rev,SHA,TAG)
                 self.assertEqual(result.exception.code,86)
-                self.assertEqual(err.getvalue().strip(),
-                                 "JSCC_DEPLOY_DENIED="+expected)
+                self.assertTrue(err.getvalue().startswith("JSCC_DEPLOY_DENIED="))
+                if case in ("foreign_revision","duplicate"):
+                    self.assertEqual(err.getvalue().strip(),
+                                     "JSCC_DEPLOY_DENIED="+expected)
 
     def test_tag_retirement_fails_closed_on_foreign_or_ambiguous_tags(self):
         final=staged()
