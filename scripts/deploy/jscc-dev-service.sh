@@ -102,6 +102,28 @@ token="$(gcloud auth print-identity-token --impersonate-service-account="$deploy
 curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" \
   "$service_url/health" >"$work/old-health.json"
 python3 "$guard" health "$work/old-health.json" baseline "$sha"
+# Only the two authorized deploy routes invoke this helper. It does not
+# create revisions or change the 100%-serving revision; verification is mandatory.
+retire_managed_tags() {
+  local expected_revision="$1" tags_to_retire
+  gcp run services describe "$service" --project="$project" --region="$region" \
+    --format=json >"$work/pre-retire.json"
+  tags_to_retire="$(python3 "$guard" retire-plan "$work/pre-retire.json" "$sha" "$expected_revision" |
+    sed -n 's/^JSCC_DEPLOY_TAG_RETIRE_PLAN=//p')"
+  if [[ -n "$tags_to_retire" ]]; then
+    gcp run services update-traffic "$service" --project="$project" --region="$region" \
+      --remove-tags="$tags_to_retire" --quiet >"$work/tag-retirement.log" 2>&1 || {
+        echo JSCC_DEPLOY_TAG_RETIREMENT_FAILED; return 86;
+      }
+  fi
+  gcp run services describe "$service" --project="$project" --region="$region" \
+    --format=json >"$work/post-retire.json"
+  python3 "$guard" retire-verify "$work/pre-retire.json" "$work/post-retire.json" "$sha" "$expected_revision"
+  curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" \
+    "$service_url/health" >"$work/post-retire-health.json"
+  python3 "$guard" health "$work/post-retire-health.json" staged "$sha"
+  echo JSCC_DEPLOY_STAGING_TAGS_RETIRED=PASS
+}
 if [[ "$deploy_state" == ALREADY_SERVING ]]; then
   # No GCP mutation or staging when this SHA already serves 100% traffic.
   # The source identity and tag ownership were verified by deployment-state.
@@ -109,6 +131,10 @@ if [[ "$deploy_state" == ALREADY_SERVING ]]; then
   curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" \
     "$service_url/health/db" >"$work/already-db.json"
   python3 "$guard" db "$work/already-db.json"
+  if [[ "$mode" == deploy ]]; then
+    # A retry of a fully deployed SHA must also repair a prior tag cleanup failure.
+    retire_managed_tags "$old_rev"
+  fi
   unset token
   echo "JSCC_DEPLOY_ALREADY_SERVING_PASS sha=$sha revision=$old_rev digest=$old_digest"
   echo JSCC_DEPLOY_PREFLIGHT_PASS
@@ -190,22 +216,7 @@ python3 "$guard" db "$work/final-db.json"
 # merely because tag retirement fails; report a failed deployment gate instead.
 cutover_attempted=0
 stage_attempted=0
-gcp run services describe "$service" --project="$project" --region="$region" \
-  --format=json >"$work/pre-retire.json"
-tags_to_retire="$(python3 "$guard" retire-plan "$work/pre-retire.json" "$sha" "$staged_rev" |
-  sed -n 's/^JSCC_DEPLOY_TAG_RETIRE_PLAN=//p')"
-if [[ -n "$tags_to_retire" ]]; then
-  gcp run services update-traffic "$service" --project="$project" --region="$region" \
-    --remove-tags="$tags_to_retire" --quiet >"$work/tag-retirement.log" 2>&1 || {
-      echo JSCC_DEPLOY_TAG_RETIREMENT_FAILED; exit 86;
-    }
-fi
-gcp run services describe "$service" --project="$project" --region="$region" \
-  --format=json >"$work/post-retire.json"
-python3 "$guard" retire-verify "$work/pre-retire.json" "$work/post-retire.json" "$sha" "$staged_rev"
-curl -fsS --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $token" \
-  "$service_url/health" >"$work/post-retire-health.json"
-python3 "$guard" health "$work/post-retire-health.json" staged "$sha"
+retire_managed_tags "$staged_rev"
 unset token
 echo JSCC_DEPLOY_STAGING_TAGS_RETIRED=PASS
 echo "JSCC_DEV_TECHNICAL_DEPLOY_PASS channel=$channel sha=$sha revision=$staged_rev digest=$digest"
