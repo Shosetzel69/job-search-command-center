@@ -273,7 +273,7 @@ class DeployRoutes(unittest.TestCase):
             self.assertIn(required,cloud,required)
         for required in ("--no-traffic","--to-revisions=","--remove-tags=",
             "cloudbuild.531.dev-service.yaml","health/db",
-            "rollback","cleanup-tag","attest","sha256:","GITHUB_REF",
+            "rollback","cleanup-tag","attest","sha256:","JSCC_GITDEPLOY_SOURCE_SHA",
             "JSCC_CLOUDSHELL_ADMITTED"):
             self.assertIn(required,engine+git,required)
         for forbidden in ("gcloud run jobs deploy", "gcloud run jobs execute",
