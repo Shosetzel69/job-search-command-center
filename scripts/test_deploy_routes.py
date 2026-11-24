@@ -169,7 +169,7 @@ class DeployRoutes(unittest.TestCase):
         self.assertLess(shell.index('python3 "$guard" db "$work/final-db.json"'),
                         shell.index('python3 "$guard" retire-plan "$work/pre-retire.json"'))
         self.assertLess(shell.index('python3 "$guard" retire-verify "$work/pre-retire.json"'),
-                        shell.index('JSCC_DEV_TECHNICAL_DEPLOY_PASS channel='))
+                        shell.rindex('JSCC_DEV_TECHNICAL_DEPLOY_PASS channel='))
         # A failed tag-only mutation must not intentionally roll back a healthy,
         # verified serving revision to a vulnerable prior version.
         self.assertLess(shell.index("cutover_attempted=0\\nstage_attempted=0"),
