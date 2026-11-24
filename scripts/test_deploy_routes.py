@@ -230,43 +230,36 @@ class DeployRoutes(unittest.TestCase):
         self.assertEqual(len([c for c in calls if c[0]=="workflow"]),5)
 
     def test_noninteractive_cloudshell_release_is_rejected_before_gcloud(self):
-        p=subprocess.run(["bash",str(CLOUD),SHA,"jscc-dev-v1.0.0","deploy"],
+        p=subprocess.run(["bash",str(CLOUD),SHA,"deploy"],
                          input="DEPLOY DEV "+SHA+"\n",capture_output=True,text=True)
         self.assertEqual(p.returncode,86)
         self.assertIn("JSCC_CLOUD_DEPLOY_INTERACTIVE_TTY_REQUIRED",p.stdout)
 
-    def test_release_auth_and_health(self):
-        approved={"tag_name":"jscc-dev-v1.0.0","draft":False,
-                  "prerelease":False,"author":{"login":"Shosetzel69"},"id":234}
+    def test_sha_only_health_and_manual_contract(self):
         with contextlib.redirect_stdout(io.StringIO()):
-            guard.check_release(approved,SHA,"jscc-dev-v1.0.0")
             guard.check_health({"status":"ok","environment":"dev",
               "runtime_backend":"gcp","search_mode":"disabled",
               "source_sha":SHA,"runtime_data_sha":SHA},"staged",SHA)
             guard.check_db({"status":"ok","database":"jobsearch_dev"})
-        bad=copy.deepcopy(approved);bad["draft"]=True
-        self.assertEqual(deny(guard.check_release,bad,SHA,"jscc-dev-v1.0.0"),86)
-        bad=copy.deepcopy(approved);bad["author"]["login"]="untrusted"
-        self.assertEqual(deny(guard.check_release,bad,SHA,"jscc-dev-v1.0.0"),86)
         self.assertEqual(deny(guard.check_health,
            {"status":"ok","environment":"prod","runtime_backend":"gcp","search_mode":"disabled"},
            "baseline",SHA),86)
 
-    def test_github_automatic_release_triggers_with_human_gate(self):
+    def test_gitdeploy_auto_after_main_ci_not_release(self):
         w=WORKFLOW.read_text()
-        for required in ("name: GitDeploy","release:","types: [published]",
-            "workflow_dispatch:","github.event_name == 'workflow_dispatch'",
-            "environment: dev","required_reviewers","prevent_self_review",
-            ".can_admins_bypass == false",
-            '.reviewer.login!="Shosetzel69"',"actions: write",
-            "id-token: write","GCP_WIF_PROVIDER","GCP_WIF_SA",
-            "GitDeploy.sh preflight","GitDeploy.sh deploy",
-            "bash -n scripts/deploy/GCloudDeploy.sh"):
+        for required in ("name: GitDeploy","workflow_run:",
+            'workflows: ["Validate Command API"]',"types: [completed]",
+            "github.event.workflow_run.event == 'push'",
+            "github.event.workflow_run.conclusion == 'success'",
+            "environment: dev", "id-token: write","GCP_WIF_PROVIDER",
+            "GitDeploy.sh preflight", "GitDeploy.sh deploy",
+            "scripts.test_deploy_routes"):
             self.assertIn(required,w,required)
         self.assertNotIn("issue_comment:",w)
-        self.assertNotIn("push:",w)
-        self.assertLess(w.index("GITDEPLOY_RELEASE_GATE=PASS"),
-                        w.index("Authenticate via DEV WIF"))
+        self.assertNotIn("release:\n",w)
+        self.assertNotIn("workflow_dispatch:\n",w)
+        self.assertLess(w.index("GITDEPLOY_MAIN_SHA_ADMITTED=PASS"),
+                        w.index("Authenticate via existing DEV WIF"))
         self.assertNotIn("environment: prod",w.lower())
         self.assertNotIn("environment: test",w.lower())
 
