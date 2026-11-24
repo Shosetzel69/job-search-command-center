@@ -138,6 +138,85 @@ class DeployRoutes(unittest.TestCase):
                                   {"revisionName":NEW,"percent":50}]
         self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
 
+    def test_retire_all_owned_staging_tags_preserving_100_percent_traffic(self):
+        final=staged()
+        other_tag="gd"+"1"*10
+        legacy_tag="gd"+"2"*10
+        final["status"]["traffic"]=[
+            {"revisionName":NEW,"percent":100,"tag":TAG},
+            {"revisionName":OLD,"percent":0,"tag":other_tag},
+            {"revisionName":"jscc-command-api-dev-00099-abc","percent":0,
+             "tag":legacy_tag},
+            {"revisionName":OLD,"percent":0,"tag":"review-pin"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            plan=guard.retire_plan(final,SHA,NEW)
+        self.assertEqual(plan,",".join(sorted((TAG,other_tag,legacy_tag))))
+        after=copy.deepcopy(final)
+        # Provider may remove an obsolete tagged row or retain it untagged.
+        after["status"]["traffic"]=[
+            {"revisionName":NEW,"percent":100},
+            {"revisionName":OLD,"percent":0},
+            {"revisionName":OLD,"percent":0,"tag":"review-pin"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.retire_verify(final,after,SHA,NEW)
+            self.assertEqual(guard.deployment_state(after,SHA,TAG),"ALREADY_SERVING")
+        shell=ENGINE.read_text()
+        self.assertIn('python3 "$guard" retire-plan "$work/pre-retire.json"',shell)
+        self.assertIn('python3 "$guard" retire-verify "$work/pre-retire.json"',shell)
+        self.assertIn('gcp run services update-traffic "$service"',shell)
+        self.assertIn('--remove-tags="$tags_to_retire"',shell)
+        self.assertIn("JSCC_DEPLOY_STAGING_TAGS_RETIRED=PASS",shell)
+        self.assertLess(shell.index('python3 "$guard" db "$work/final-db.json"'),
+                        shell.index('python3 "$guard" retire-plan "$work/pre-retire.json"'))
+        self.assertLess(shell.index('python3 "$guard" retire-verify "$work/pre-retire.json"'),
+                        shell.index('JSCC_DEV_TECHNICAL_DEPLOY_PASS channel='))
+        # A failed tag-only mutation must not intentionally roll back a healthy,
+        # verified serving revision to a vulnerable prior version.
+        self.assertLess(shell.index("cutover_attempted=0\\nstage_attempted=0"),
+                        shell.index('--remove-tags="$tags_to_retire"'))
+
+    def test_tag_retirement_fails_closed_on_foreign_or_ambiguous_tags(self):
+        final=staged()
+        final["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG},
+                                   {"revisionName":OLD,"percent":0,"tag":"gd"+"1"*10}]
+        for case in ("wrong_sha","wrong_rev","wrong_env","bad_image",
+                     "bad_tag","bad_rev","duplicate","partial_tag"):
+            bad=copy.deepcopy(final)
+            given_sha=SHA
+            given_rev=NEW
+            if case=="wrong_sha": given_sha="0"*40
+            if case=="wrong_rev": given_rev=OLD
+            if case=="wrong_env": guard.env(bad)["RUNTIME_DATA_SHA"]["value"]="0"*40
+            if case=="bad_image": guard.shape(bad)["containers"][0]["image"]="mutable:latest"
+            if case=="bad_tag": bad["status"]["traffic"][1]["tag"]="gdNOTHEX"
+            if case=="bad_rev": bad["status"]["traffic"][1]["revisionName"]="evil"
+            if case=="duplicate": bad["status"]["traffic"].append(
+                {"revisionName":OLD,"percent":0,"tag":TAG})
+            if case=="partial_tag": bad["status"]["traffic"][1]["percent"]=50
+            self.assertEqual(deny(guard.retire_plan,bad,given_sha,given_rev),86,case)
+
+    def test_tag_retirement_verifies_poststate_and_preserves_unrelated_tags(self):
+        final=staged()
+        final["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG},
+                                   {"revisionName":OLD,"percent":0,"tag":"review-pin"}]
+        after=copy.deepcopy(final)
+        del after["status"]["traffic"][0]["tag"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.retire_verify(final,after,SHA,NEW)
+        for case in ("left_old_tag","changed_traffic","changed_secret",
+                     "changed_unrelated_tag","changed_identity"):
+            bad=copy.deepcopy(after)
+            if case=="left_old_tag": bad["status"]["traffic"][0]["tag"]=TAG
+            if case=="changed_traffic":
+                bad["status"]["traffic"][0]["percent"]=99
+            if case=="changed_secret":
+                guard.env(bad)["NILE_SECRET"]["valueFrom"]["secretKeyRef"]["name"]="wrong"
+            if case=="changed_unrelated_tag":
+                bad["status"]["traffic"][1]["tag"]="different-pin"
+            if case=="changed_identity":
+                guard.env(bad)["SOURCE_SHA"]["value"]="0"*40
+            self.assertEqual(deny(guard.retire_verify,final,bad,SHA,NEW),86,case)
+
     def test_concurrent_change_rejected(self):
         before=service()
         after=copy.deepcopy(before)
