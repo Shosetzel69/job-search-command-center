@@ -10,7 +10,7 @@ mode="${1:-}"; sha="${2:-}"; tag_name="${3:-}"; control="${4:-}"; candidate="${5
 [[ -z "$(git -C "$candidate" status --porcelain)" ]] || exit 86
 git -C "$control" merge-base --is-ancestor "$sha" HEAD || { echo JSCC_DEPLOY_SOURCE_NOT_ON_MAIN; exit 86; }
 [[ "$(git -C "$control" rev-parse "refs/tags/$tag_name^{commit}")" == "$sha" ]] || exit 86
-[[ "$(git -C "$control" remote get-url origin)" =~ github.com[:/]Shosetzel69/job-search-command-center(\.git)?$ ]] || exit 86
+[[ "$(git -C "$control" remote get-url origin)" =~ ^(https://github[.]com/|git@github[.]com:)Shosetzel69/job-search-command-center([.]git)?$ ]] || { echo JSCC_DEPLOY_UNTRUSTED_REPOSITORY_ORIGIN; exit 86; }
 deployer=jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com
 if [[ "$channel" == github ]]; then
   [[ "${GITHUB_EVENT_NAME:-}" == workflow_dispatch && "${GITHUB_REF:-}" == refs/heads/main &&
@@ -85,8 +85,7 @@ github_api(){
 api=https://api.github.com/repos/Shosetzel69/job-search-command-center
 github_api "$api/releases/tags/$tag_name" "$work/release.json"
 python3 "$guard" release "$work/release.json" "$sha" "$tag_name"
-github_api "$api/commits/$sha/check-runs?per_page=100" "$work/checks.json"
-python3 "$guard" ci "$work/checks.json" "$sha"
+python3 "$guard" fetch-ci "$sha" "$work/checks.json"
 immutable="$(gcp artifacts repositories describe jscc --project="$shared" \
  --location="$region" --format='value(dockerConfig.immutableTags)')"
 [[ "$immutable" == True || "$immutable" == true ]] || { echo JSCC_DEPLOY_REGISTRY_NOT_IMMUTABLE; exit 86; }
