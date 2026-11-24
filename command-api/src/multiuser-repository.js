@@ -1126,7 +1126,7 @@ export async function listProfileJobs(
     if(spec.quick==='b2b')where.push("lower(COALESCE(j.contract_type,'unknown')) IN ('contract','freelance')");
     if(spec.empty_modes||spec.empty_role_subfamilies||spec.empty_contract_types)where.push('false');
     if(spec.result_view==='unclassified')where.push("j.role_family='UNKNOWN'");
-    if(spec.result_view==='analysis')where.push('state.review_required_at IS NOT NULL');
+    if(spec.result_view==='analysis')where.push('state.state->>'review_required_at' IS NOT NULL');
     if(spec.result_view==='archived')where.push('state.archived_at IS NOT NULL');
     else if (!spec.include_archived) where.push('state.archived_at IS NULL');
     if (spec.role_family.length) {
@@ -1180,7 +1180,7 @@ export async function listProfileJobs(
               sp.source_name, sp.canonical_url, sp.posted_at, sp.last_seen_at AS posting_last_seen_at,
               publication.effective_posted_at,
               sp.repost_of_posting_id, sp.payload AS posting_payload,
-              state.seen_at, state.archived_at, state.review_required_at,
+              state.seen_at, state.archived_at, state.state->>'review_required_at' AS review_required_at,
               COALESCE(publication.effective_posted_at, '0001-01-01T00:00:00Z'::timestamptz) AS sort_at,
               eval.eligibility_state AS cached_eligibility_state,
               eval.eligibility_reason_code AS cached_eligibility_reason_code,
@@ -1386,21 +1386,25 @@ export async function setJobState(authContext, jobId, patch, env = process.env, 
     const exists = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id = $1', [jobId]);
     if (!exists.rows?.length) throw httpError('Job not found', 404);
     const result = await tx.query(
-      `INSERT INTO profile_job_state(tenant_id, job_id, seen_at, archived_at, review_required_at, updated_at)
+      `INSERT INTO profile_job_state(tenant_id, job_id, seen_at, archived_at, state, updated_at)
        VALUES ($1, $2,
                CASE WHEN $3::boolean THEN now() ELSE NULL END,
                CASE WHEN $4::boolean THEN now() ELSE NULL END,
-               CASE WHEN $5::boolean THEN now() ELSE NULL END, now())
+               CASE WHEN $5::boolean THEN jsonb_build_object('review_required_at', now()) ELSE '{}'::jsonb END, now())
        ON CONFLICT(tenant_id, job_id)
        DO UPDATE SET
          seen_at = CASE WHEN $3::boolean THEN COALESCE(profile_job_state.seen_at, now())
                         WHEN $3::boolean = false THEN NULL ELSE profile_job_state.seen_at END,
          archived_at = CASE WHEN $4::boolean THEN COALESCE(profile_job_state.archived_at, now())
                             WHEN $4::boolean = false THEN NULL ELSE profile_job_state.archived_at END,
-         review_required_at = CASE WHEN $5::boolean THEN COALESCE(profile_job_state.review_required_at, now())
-                                   WHEN $5::boolean = false THEN NULL ELSE profile_job_state.review_required_at END,
+         state = CASE WHEN $5::boolean
+                        THEN jsonb_set(profile_job_state.state, '{review_required_at}',
+                          COALESCE(profile_job_state.state->'review_required_at', to_jsonb(now())), true)
+                      WHEN $5::boolean = false
+                        THEN profile_job_state.state - 'review_required_at'
+                      ELSE profile_job_state.state END,
          updated_at = now()
-       RETURNING job_id, seen_at, archived_at, review_required_at`,
+       RETURNING job_id, seen_at, archived_at, state->>'review_required_at' AS review_required_at`,
       [authContext.profile_id, jobId, seen ?? null, archived ?? null, reviewRequired ?? null],
     );
     return result.rows[0];
@@ -2119,7 +2123,7 @@ export function buildGlobalListingQuery(tenant,basis,spec,anchor){
     AND p.profile_version=$6 AND COALESCE(pref.preferences,'{}'::jsonb)=$7::jsonb
     AND COALESCE(policy.policy,'{}'::jsonb)=$8::jsonb
   ), population AS (
-   SELECT ${EVALUATION_FIELDS_SQL}, state.archived_at, state.review_required_at,
+   SELECT ${EVALUATION_FIELDS_SQL}, state.archived_at, state.state->>'review_required_at' AS review_required_at,
     eval.score,eval.eligibility_state,eval.eligibility_reason_code,eval.eligible,
     eval.pros,eval.risks,eval.exclusion_reason,eval.fit_matrix,eval.sort_title,
     eval.display_country,eval.display_work_mode,eval.display_contract_type,
