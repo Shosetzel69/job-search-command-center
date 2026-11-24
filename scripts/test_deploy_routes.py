@@ -239,6 +239,169 @@ class DeployRoutes(unittest.TestCase):
         self.assertLess(shell.index("cutover_attempted=0\nstage_attempted=0"),
                         shell.index('retire_managed_tags "$staged_rev"'))
 
+    def test_live_cloudrun_omits_zero_percent_on_tagged_revision(self):
+        obj=staged()
+        current_tag=TAG
+        old1="gd"+"5"*10
+        old2="gd"+"6"*10
+        old3="gd"+"7"*10
+        obj["status"]["traffic"]=[
+            {"revisionName":NEW,"percent":100},
+            {"revisionName":NEW,"tag":current_tag,
+             "url":"https://tag.example.run.app"},
+            {"revisionName":OLD,"tag":old1},
+            {"revisionName":"jscc-command-api-dev-00099-abc","tag":old2},
+            {"revisionName":"jscc-command-api-dev-00098-abc","tag":old3},
+            {"revisionName":OLD,"tag":"keepme"}]
+        expected=",".join(sorted((current_tag,old1,old2,old3)))
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.retire_plan(obj,SHA,NEW),expected)
+        after=copy.deepcopy(obj)
+        after["status"]["traffic"]=[
+            {"revisionName":NEW,"percent":100},
+            {"revisionName":OLD,"tag":"keepme"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.retire_verify(obj,after,SHA,NEW)
+        expected_reasons={
+            "duplicate":"MANAGED_TAG_DUPLICATE",
+            "explicit_null":"MANAGED_TAG_TRAFFIC_INVALID",
+            "partial":"MANAGED_TAG_TRAFFIC_UNEXPECTED",
+            "non_numeric":"MANAGED_TAG_TRAFFIC_INVALID",
+            "bool":"MANAGED_TAG_TRAFFIC_INVALID",
+            "fractional":"MANAGED_TAG_TRAFFIC_INVALID",
+            "numeric_text":"MANAGED_TAG_TRAFFIC_INVALID",
+        }
+        for variant,reason in expected_reasons.items():
+            with self.subTest(variant=variant):
+                bad=copy.deepcopy(obj)
+                if variant=="duplicate":
+                    bad["status"]["traffic"].append({"revisionName":OLD,"tag":old1})
+                elif variant=="explicit_null":
+                    bad["status"]["traffic"][2]["percent"]=None
+                elif variant=="partial":
+                    bad["status"]["traffic"][2]["percent"]=1
+                elif variant=="non_numeric":
+                    bad["status"]["traffic"][2]["percent"]="not-a-number"
+                elif variant=="bool":
+                    bad["status"]["traffic"][2]["percent"]=False
+                elif variant=="fractional":
+                    bad["status"]["traffic"][2]["percent"]=0.5
+                elif variant=="numeric_text":
+                    bad["status"]["traffic"][2]["percent"]="100"
+                captured=io.StringIO()
+                # Isolate the unit under review: retire_plan may reject
+                # malformed traffic earlier in its separate serving() guard.
+                with contextlib.redirect_stderr(captured):
+                    with self.assertRaises(SystemExit) as raised:
+                        guard.managed_tags(bad)
+                self.assertEqual(raised.exception.code,86)
+                self.assertEqual(
+                    captured.getvalue().strip(),
+                    "JSCC_DEPLOY_DENIED="+reason)
+                # The complete retirement path must independently fail closed.
+                self.assertEqual(deny(guard.retire_plan,bad,SHA,NEW),86)
+
+    def test_live_omitted_percent_already_serving_retry_and_stage(self):
+        # Successful #685 cutover whose cleanup failed: SHA is actually
+        # serving, but its 0%-tag row omits percent in Cloud Run JSON.
+        live=staged()
+        live["status"]["traffic"]=[
+            {"revisionName":NEW,"percent":100},
+            {"revisionName":NEW,"tag":TAG,
+             "url":"https://tag.example.run.app"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.deployment_state(
+                live,revision(NEW,SHA,DIGEST),SHA,TAG),"ALREADY_SERVING")
+        # A newly staged revision must likewise be discoverable without 0.
+        before=service()
+        just_staged=staged()
+        del just_staged["status"]["traffic"][1]["percent"]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.stage(before,just_staged,SHA,TAG),NEW)
+        engine=ENGINE.read_text()
+        # The already-serving retry calls the retirement routine, while a
+        # failed stage calls cleanup-tag from the EXIT recovery handler.
+        self.assertIn('retire_managed_tags "$old_rev"',engine)
+        self.assertIn('python3 "$guard" cleanup-tag',engine)
+        self.assertIn('--remove-tags="$tag"',engine)
+
+    def test_live_omitted_percent_cleanup_after_failed_stage(self):
+        staged_obj=staged()
+        # A failed staging health check: only the staged 0%-traffic tag is
+        # eligible for removal. Cloud Run omits percent on that tag row.
+        del staged_obj["status"]["traffic"][1]["percent"]
+        captured=io.StringIO()
+        with contextlib.redirect_stdout(captured):
+            guard.cleanup_tag(staged_obj,SHA,TAG,DIGEST,NEW)
+        self.assertIn("JSCC_DEPLOY_TAG_CLEANUP_OWNERSHIP=PASS",captured.getvalue())
+        cases={
+            "wrong_revision":"CLEANUP_TAG_NOT_OWNED",
+            "tag_to_100":"CLEANUP_TAG_NOT_OWNED",
+            "null":"CLEANUP_TAG_NOT_OWNED",
+            "float":"CLEANUP_TAG_NOT_OWNED",
+            "bool":"CLEANUP_TAG_NOT_OWNED",
+            "numeric_string":"CLEANUP_TAG_NOT_OWNED",
+            "duplicate":"CLEANUP_TAG_NOT_OWNED",
+        }
+        for case,reason in cases.items():
+            with self.subTest(case=case):
+                bad=copy.deepcopy(staged_obj)
+                row=bad["status"]["traffic"][1]
+                if case=="wrong_revision": row["revisionName"]=OLD
+                if case=="tag_to_100": row["percent"]=100
+                if case=="null": row["percent"]=None
+                if case=="float": row["percent"]=0.5
+                if case=="bool": row["percent"]=False
+                if case=="numeric_string": row["percent"]="0"
+                if case=="duplicate": bad["status"]["traffic"].append(copy.deepcopy(row))
+                err=io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    with self.assertRaises(SystemExit) as result:
+                        guard.cleanup_tag(bad,SHA,TAG,DIGEST,NEW)
+                self.assertEqual(result.exception.code,86)
+                self.assertEqual(err.getvalue().strip(),
+                                 "JSCC_DEPLOY_DENIED="+reason)
+
+    def test_live_omitted_percent_retry_denies_foreign_and_malformed_tags(self):
+        good=staged()
+        good["status"]["traffic"]=[{"revisionName":NEW,"percent":100},
+                                  {"revisionName":NEW,"tag":TAG}]
+        rev=revision(NEW,SHA,DIGEST)
+        for case in ("foreign_revision","duplicate","null","fraction",
+                     "numeric_string","wrong_percent"):
+            with self.subTest(case=case):
+                bad=copy.deepcopy(good)
+                tag_row=bad["status"]["traffic"][1]
+                expected="STAGE_TAG_COLLISION"
+                if case=="foreign_revision": tag_row["revisionName"]=OLD
+                if case=="duplicate": bad["status"]["traffic"].append(copy.deepcopy(tag_row))
+                if case=="null": tag_row["percent"]=None
+                if case=="fraction": tag_row["percent"]=0.5
+                if case=="numeric_string": tag_row["percent"]="0"
+                if case=="wrong_percent": tag_row["percent"]=5
+                # For malformed traffic the top-level serving() guard
+                # can reject the snapshot before deployment_state tests tag
+                # ownership. Test tag_percent's reason separately and require
+                # the complete workflow to reject without a false PASS.
+                if case not in ("foreign_revision","duplicate"):
+                    pct_error=io.StringIO()
+                    with contextlib.redirect_stderr(pct_error):
+                        with self.assertRaises(SystemExit) as pct_result:
+                            guard.tag_percent(tag_row,"STAGE_TAG_COLLISION",
+                                              "STAGE_TAG_COLLISION")
+                    self.assertEqual(pct_result.exception.code,86)
+                    self.assertEqual(pct_error.getvalue().strip(),
+                                     "JSCC_DEPLOY_DENIED=STAGE_TAG_COLLISION")
+                err=io.StringIO()
+                with contextlib.redirect_stderr(err):
+                    with self.assertRaises(SystemExit) as result:
+                        guard.deployment_state(bad,rev,SHA,TAG)
+                self.assertEqual(result.exception.code,86)
+                self.assertTrue(err.getvalue().startswith("JSCC_DEPLOY_DENIED="))
+                if case in ("foreign_revision","duplicate"):
+                    self.assertEqual(err.getvalue().strip(),
+                                     "JSCC_DEPLOY_DENIED="+expected)
+
     def test_tag_retirement_fails_closed_on_foreign_or_ambiguous_tags(self):
         final=staged()
         final["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG},

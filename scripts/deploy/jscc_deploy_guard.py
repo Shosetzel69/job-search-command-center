@@ -183,12 +183,7 @@ def deployment_state(service, revision, sha, tag):
         return state
     if len(matches) != 1 or matches[0].get("revisionName") != current:
         deny("STAGE_TAG_COLLISION")
-    try:
-        percent = int(matches[0].get("percent", -1))
-    except (TypeError, ValueError):
-        deny("STAGE_TAG_COLLISION")
-    if percent not in (0, 100):
-        deny("STAGE_TAG_COLLISION")
+    tag_percent(matches[0], "STAGE_TAG_COLLISION", "STAGE_TAG_COLLISION")
     if not already_serving:
         deny("STAGE_TAG_SOURCE_MISMATCH")
     print("JSCC_DEPLOY_STATE=ALREADY_SERVING")
@@ -224,10 +219,14 @@ def stage(before, after, sha, tag):
     image=shape(after)["containers"][0].get("image","")
     if not image.startswith(IMAGE_REPO+"@sha256:") or not DIGEST_RE.fullmatch(image.split("@",1)[-1]):
         deny("STAGED_IMAGE_NOT_PINNED")
-    added=[x for x in traffic(after) if x.get("tag")==tag and int(x.get("percent",0))==0]
+    entries = traffic(after)
+    percents = [tag_percent(x, "STAGED_TRAFFIC_PERCENT", "STAGED_TRAFFIC_PERCENT")
+                for x in entries]
+    added = [x for x, percent in zip(entries, percents)
+             if x.get("tag") == tag and percent == 0]
     if len(added)!=1 or not REV_RE.fullmatch(added[0].get("revisionName","")):
         deny("STAGED_REVISION_NOT_UNIQUE")
-    if sum(int(x.get("percent",0)) for x in traffic(after)) != 100:
+    if sum(percents) != 100:
         deny("STAGED_TOTAL_TRAFFIC")
     if not added[0].get("url","").startswith("https://"):
         deny("STAGED_TAG_URL_MISSING")
@@ -416,6 +415,19 @@ def check_db(obj):
         deny("DB_HEALTH_UNVERIFIED")
     print("JSCC_DEPLOY_AUTHENTICATED_DB=PASS")
 
+def tag_percent(row, invalid_reason="MANAGED_TAG_TRAFFIC_INVALID",
+                unexpected_reason="MANAGED_TAG_TRAFFIC_UNEXPECTED"):
+    """Cloud Run tagged traffic: missing percent is 0; explicit JSON integer only."""
+    if not isinstance(row, dict):
+        deny(invalid_reason)
+    percent = row.get("percent", 0)
+    if type(percent) is not int:
+        deny(invalid_reason)
+    if percent not in (0, 100):
+        deny(unexpected_reason)
+    return percent
+
+
 def managed_tags(service):
     """Enumerate only protocol-owned traffic tags; reject ambiguous ownership."""
     tags = {}
@@ -432,12 +444,10 @@ def managed_tags(service):
         revision = row.get("revisionName", "")
         if not REV_RE.fullmatch(revision):
             deny("MANAGED_TAG_REVISION_INVALID")
-        try:
-            percent = int(row.get("percent", -1))
-        except (ValueError, TypeError):
-            deny("MANAGED_TAG_TRAFFIC_INVALID")
-        if percent not in (0, 100) or name in tags:
-            deny("MANAGED_TAG_AMBIGUOUS")
+        # Shared strict Cloud Run percent validation; ownership remains unique.
+        percent = tag_percent(row)
+        if name in tags:
+            deny("MANAGED_TAG_DUPLICATE")
         tags[name] = (revision, percent)
     return tags
 
@@ -497,7 +507,9 @@ def cleanup_tag(obj, sha, tag, digest, revision):
     if not REV_RE.fullmatch(revision or ""):
         deny("CLEANUP_REVISION_UNKNOWN")
     matches=[x for x in traffic(obj) if x.get("tag")==tag]
-    if len(matches)!=1 or matches[0].get("revisionName")!=revision or int(matches[0].get("percent",-1))!=0:
+    if len(matches)!=1 or matches[0].get("revisionName")!=revision:
+        deny("CLEANUP_TAG_NOT_OWNED")
+    if tag_percent(matches[0], "CLEANUP_TAG_NOT_OWNED", "CLEANUP_TAG_NOT_OWNED") != 0:
         deny("CLEANUP_TAG_NOT_OWNED")
     print("JSCC_DEPLOY_TAG_CLEANUP_OWNERSHIP=PASS")
 
