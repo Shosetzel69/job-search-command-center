@@ -219,6 +219,13 @@ class DeployRoutes(unittest.TestCase):
             {"revisionName":NEW,"percent":100},
             {"revisionName":OLD,"percent":0},
             {"revisionName":OLD,"percent":0,"tag":"review-pin"}]
+        # R2: legacy tags are no longer acceptable as a successful poststate.
+        self.assertEqual(deny(guard.reject_external_tags_before_deploy,final),86)
+        self.assertEqual(deny(guard.retire_verify,final,after,SHA,NEW),86)
+        final["status"]["traffic"]=[row for row in final["status"]["traffic"]
+                                    if row.get("tag")!="review-pin"]
+        after["status"]["traffic"]=[row for row in after["status"]["traffic"]
+                                    if row.get("tag")!="review-pin"]
         with contextlib.redirect_stdout(io.StringIO()):
             guard.retire_verify(final,after,SHA,NEW)
             self.assertEqual(guard.deployment_state(after,revision(NEW,SHA,DIGEST),SHA,TAG),"ALREADY_SERVING")
@@ -260,8 +267,16 @@ class DeployRoutes(unittest.TestCase):
         after["status"]["traffic"]=[
             {"revisionName":NEW,"percent":100},
             {"revisionName":OLD,"tag":"keepme"}]
+        # Cloud Run omission is valid, but a leftover foreign tag fails R2.
+        self.assertEqual(deny(guard.retire_verify,obj,after,SHA,NEW),86)
+        clean_before=copy.deepcopy(obj)
+        clean_after=copy.deepcopy(after)
+        clean_before["status"]["traffic"]=[row for row in clean_before["status"]["traffic"]
+                                         if row.get("tag")!="keepme"]
+        clean_after["status"]["traffic"]=[row for row in clean_after["status"]["traffic"]
+                                        if row.get("tag")!="keepme"]
         with contextlib.redirect_stdout(io.StringIO()):
-            guard.retire_verify(obj,after,SHA,NEW)
+            guard.retire_verify(clean_before,clean_after,SHA,NEW)
         expected_reasons={
             "duplicate":"MANAGED_TAG_DUPLICATE",
             "explicit_null":"MANAGED_TAG_TRAFFIC_INVALID",
