@@ -438,6 +438,9 @@ def retire_verify(before, after, sha, revision):
         deny("TAG_RETIRE_TRAFFIC_DRIFT")
     if protected(before) != protected(after):
         deny("TAG_RETIRE_CONFIG_DRIFT")
+    if (shape(before)["containers"][0].get("image") !=
+            shape(after)["containers"][0].get("image")):
+        deny("TAG_RETIRE_IMAGE_DRIFT")
     if managed_tags(after):
         deny("TAG_RETIRE_STALE_MANAGED_TAGS")
     def other_tags(service):
