@@ -109,7 +109,7 @@ export function dispatchEnvelope(body, context = {}) {
   if (text.startsWith("/jscc-validate")) {
     return { workflow:VALIDATION_WORKFLOW, payload:validationWorkflowDispatchPayload(parseValidationCommand(text, context)) };
   }
-  return { workflow:DEPLOY_WORKFLOW, payload:workflowDispatchPayload(parseDeployCommand(text, context)) };
+  throw new Error("Release via public issue comments is disabled; use the protected manual GitHub Actions workflow.");
 }
 
 function cli() {

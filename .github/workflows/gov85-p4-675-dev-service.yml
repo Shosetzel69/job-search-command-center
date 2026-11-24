@@ -1,5 +1,5 @@
 # P4 #663/#675: DEV Command API Service only. No legacy promotion.
-# Only an owner-authored command on existing issue #663 can run this release.
+# DEV-only manually dispatched release; public comments cannot trigger this privileged job.
 name: GOV85 P4 675 DEV Service-only release
 on:
   pull_request:
@@ -8,12 +8,20 @@ on:
       - 'scripts/gcp/gov85_p4_675_dev_release.sh'
       - 'scripts/gcp/gov85_p4_675_dev_guard.py'
       - 'scripts/test_gov85_p4_675_dev.py'
-  issue_comment:
-    types: [created]
+  workflow_dispatch:
+    inputs:
+      action:
+        description: "P4 DEV operation, separately approved in environment dev"
+        required: true
+        type: choice
+        options: [preflight, release]
+      source_sha:
+        description: "Exact immutable approved P4 application SHA"
+        required: true
+        type: string
 
 permissions:
   contents: read
-  issues: read
   pull-requests: read
   actions: read
   checks: read
@@ -56,7 +64,7 @@ jobs:
             /tmp/jscc-p4-main-checks-ci.json "$target"
 
   p4-service-release:
-    if: github.event_name == 'issue_comment' && github.actor == 'Shosetzel69' && github.event.issue.number == 663 && startsWith(github.event.comment.body, '/jscc-p4-675 ')
+    if: github.event_name == 'workflow_dispatch' && github.actor == 'Shosetzel69' && github.ref == 'refs/heads/main'
     concurrency:
       group: gov85-p4-675-dev-service-only
       cancel-in-progress: false
@@ -73,12 +81,13 @@ jobs:
           ref: ${{ github.sha }}
           path: control
           persist-credentials: false
-      - name: Admit exact owner command, PR675 merge identity and post-merge CI
+      - name: Admit exact manual dispatch, PR675 merge identity and post-merge CI
         id: scope
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          BODY: ${{ github.event.comment.body }}
+          MODE: ${{ inputs.action }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
           ACTOR: ${{ github.actor }}
         run: |
           set -euo pipefail
@@ -87,10 +96,11 @@ jobs:
           test "$ACTOR" = Shosetzel69 || exit 86
           test "$(git -C control rev-parse HEAD)" = "$GITHUB_SHA" || exit 86
           target=b8fa506987bd79053f5c3cf86137f32e41a4095b
-          case "$BODY" in
-            "/jscc-p4-675 preflight $target") mode=preflight ;;
-            "/jscc-p4-675 release $target") mode=release ;;
-            *) echo JSCC_P4_UNAPPROVED_OWNER_COMMAND; exit 86 ;;
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch || exit 86
+          test "$SOURCE_SHA" = "$target" || { echo JSCC_P4_UNAPPROVED_SOURCE; exit 86; }
+          case "$MODE" in
+            preflight|release) mode="$MODE" ;;
+            *) echo JSCC_P4_UNAPPROVED_OPERATION; exit 86 ;;
           esac
           pr="$(gh api "repos/$GITHUB_REPOSITORY/pulls/675")"
           test "$(jq -r '.merged' <<<"$pr")" = true || exit 86
@@ -123,10 +133,24 @@ jobs:
           bash -n control/scripts/gcp/gov85_p4_675_dev_release.sh
           python3 -m py_compile control/scripts/gcp/gov85_p4_675_dev_guard.py
           (cd control && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v scripts.test_gov85_p4_675_dev)
-      # Explicit owner authorization for this immutable DEV-only P4 release is
-      # documented in issue #663. No new required-reviewer environment rule is
-      # installed or assumed. Existing GCP WIF, GH actor, SHA and runtime guards
-      # remain mandatory. This workflow does not claim independent approval.
+      # DEV Required Reviewers must be preconfigured by the owner. This
+      # workflow checks the presence of that protection but cannot prove the
+      # reviewer is human when agents share the owner's GitHub identity.
+      # No environment settings are modified; independent release approval
+      # remains a separate operational gate before any GCP mutation.
+      - name: Verify required DEV environment review protection
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/environments/dev" > /tmp/jscc-p4-dev-environment.json
+          jq -e 'any(.protection_rules[]?; .type == "required_reviewers" and ((.reviewers // []) | length > 0))' \
+            /tmp/jscc-p4-dev-environment.json >/dev/null || {
+            echo JSCC_P4_DEV_REQUIRED_REVIEWERS_UNVERIFIED
+            exit 86
+          }
+          echo JSCC_P4_DEV_ENVIRONMENT_REVIEW_PROTECTION=PASS
       - name: Authenticate using existing DEV WIF
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
