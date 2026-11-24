@@ -289,13 +289,17 @@ class DeployRoutes(unittest.TestCase):
                 elif variant=="numeric_text":
                     bad["status"]["traffic"][2]["percent"]="100"
                 captured=io.StringIO()
+                # Isolate the unit under review: retire_plan may reject
+                # malformed traffic earlier in its separate serving() guard.
                 with contextlib.redirect_stderr(captured):
                     with self.assertRaises(SystemExit) as raised:
-                        guard.retire_plan(bad,SHA,NEW)
+                        guard.managed_tags(bad)
                 self.assertEqual(raised.exception.code,86)
                 self.assertEqual(
                     captured.getvalue().strip(),
                     "JSCC_DEPLOY_DENIED="+reason)
+                # The complete retirement path must independently fail closed.
+                self.assertEqual(deny(guard.retire_plan,bad,SHA,NEW),86)
 
     def test_tag_retirement_fails_closed_on_foreign_or_ambiguous_tags(self):
         final=staged()
