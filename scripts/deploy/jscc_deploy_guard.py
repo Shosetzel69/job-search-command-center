@@ -210,10 +210,45 @@ def check_release(release, sha, tag):
         deny("RELEASE_NOT_APPROVED")
     print("JSCC_DEPLOY_RELEASE_RECORD=PASS")
 
+
+def check_health(obj, mode, sha):
+    if (obj.get("status")!="ok" or obj.get("environment")!="dev" or
+        obj.get("runtime_backend")!="gcp" or obj.get("search_mode")!="disabled"):
+        deny("HEALTH_NOT_DEV")
+    if mode=="staged" and (obj.get("source_sha")!=sha or obj.get("runtime_data_sha")!=sha):
+        deny("HEALTH_SOURCE_MISMATCH")
+    if mode not in ("baseline","staged"):
+        deny("HEALTH_MODE_INVALID")
+    print("JSCC_DEPLOY_AUTHENTICATED_HEALTH=PASS")
+
+def check_db(obj):
+    if obj.get("status")!="ok" or obj.get("database")!="jobsearch_dev":
+        deny("DB_HEALTH_UNVERIFIED")
+    print("JSCC_DEPLOY_AUTHENTICATED_DB=PASS")
+
+def cleanup_tag(obj, sha, tag, digest, revision):
+    if not SHA_RE.fullmatch(sha) or tag!="gd"+sha[:10] or not DIGEST_RE.fullmatch(digest):
+        deny("CLEANUP_INVALID_IDENTITY")
+    if not REV_RE.fullmatch(revision or ""):
+        deny("CLEANUP_REVISION_UNKNOWN")
+    matches=[x for x in traffic(obj) if x.get("tag")==tag]
+    if len(matches)!=1 or matches[0].get("revisionName")!=revision or int(matches[0].get("percent",-1))!=0:
+        deny("CLEANUP_TAG_NOT_OWNED")
+    print("JSCC_DEPLOY_TAG_CLEANUP_OWNERSHIP=PASS")
+
 def main(argv):
     if len(argv)<2:
         deny("INVALID_COMMAND")
     cmd=argv[1]
+    if cmd=="serving" and len(argv)==3:
+        print(serving(read(argv[2])))
+        return
+    if cmd=="health" and len(argv)==5:
+        return check_health(read(argv[2]),argv[3],argv[4])
+    if cmd=="db" and len(argv)==3:
+        return check_db(read(argv[2]))
+    if cmd=="cleanup-tag" and len(argv)==7:
+        return cleanup_tag(read(argv[2]),argv[3],argv[4],argv[5],argv[6])
     if cmd=="ci" and len(argv)==4:
         return check_ci(read(argv[2]),argv[3])
     if cmd=="release" and len(argv)==5:
