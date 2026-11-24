@@ -90,6 +90,54 @@ class DeployRoutes(unittest.TestCase):
             if variant=="sha": sha="bad"
             self.assertEqual(deny(guard.baseline,obj,sha,TAG),86,variant)
 
+    def test_already_serving_same_sha_preflight_is_idempotent(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.deployment_state(service(), SHA, TAG), "NEW")
+        live=staged()
+        live["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG,
+            "url":"https://gdabc---jscc-command-api-dev-abc.a.run.app"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.deployment_state(live, SHA, TAG), "ALREADY_SERVING")
+        # Cloud Run can retain a 0%-traffic tag entry for the same 100%-serving revision.
+        live["status"]["traffic"]=[
+            {"revisionName":NEW,"percent":100},
+            {"revisionName":NEW,"percent":0,"tag":TAG,
+             "url":"https://gdabc---jscc-command-api-dev-abc.a.run.app"}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(guard.deployment_state(live, SHA, TAG), "ALREADY_SERVING")
+        engine=ENGINE.read_text()
+        self.assertIn('deployment-state "$work/before.json"',engine)
+        self.assertIn('if [[ "$deploy_state" == ALREADY_SERVING ]]',engine)
+        self.assertIn('python3 "$guard" health "$work/old-health.json" staged "$sha"',engine)
+        self.assertIn('python3 "$guard" db "$work/already-db.json"',engine)
+        self.assertIn("JSCC_DEPLOY_ALREADY_SERVING_PASS",engine)
+        self.assertLess(engine.index('if [[ "$deploy_state" == ALREADY_SERVING ]]'),
+                        engine.index('gcp builds list'))
+        # The early return is before any staged or serving-traffic mutation.
+        self.assertLess(engine.index('if [[ "$deploy_state" == ALREADY_SERVING ]]'),
+                        engine.index('gcp run services update "$service"'))
+
+    def test_collision_still_denied_for_foreign_revision_or_wrong_sha(self):
+        live=staged()
+        live["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG}]
+        bad=copy.deepcopy(live)
+        bad["status"]["traffic"]=[{"revisionName":NEW,"percent":100},
+                                   {"revisionName":OLD,"percent":0,"tag":TAG}]
+        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        bad=copy.deepcopy(live)
+        guard.env(bad)["SOURCE_SHA"]["value"]="b"*40
+        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        bad=copy.deepcopy(live)
+        guard.shape(bad)["containers"][0]["image"]="not-pinned"
+        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        bad=copy.deepcopy(live)
+        bad["status"]["traffic"].append({"revisionName":NEW,"percent":0,"tag":TAG})
+        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+        bad=copy.deepcopy(live)
+        bad["status"]["traffic"]=[{"revisionName":NEW,"percent":50,"tag":TAG},
+                                  {"revisionName":NEW,"percent":50}]
+        self.assertEqual(deny(guard.deployment_state,bad,SHA,TAG),86)
+
     def test_concurrent_change_rejected(self):
         before=service()
         after=copy.deepcopy(before)
