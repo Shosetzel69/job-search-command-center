@@ -189,40 +189,82 @@ def attest_build(builds, sha, digest):
             return
     deny("BUILD_PROVENANCE_UNVERIFIED")
 
-REQUIRED_CHECKS = (
-    "validate", "Nile-only native provider CI", "gitleaks",
-    "api-version-policy", "snapshot",
+# Exact source of each required job; job names alone are not release evidence.
+# In particular, Validate Remote Executor also produces a job named "validate".
+REQUIRED_WORKFLOWS = {
+    "validate": (".github/workflows/command-api-check.yml", "Validate Command API"),
+    "Nile-only native provider CI": (
+        ".github/workflows/command-api-check.yml", "Validate Command API"
+    ),
+    "gitleaks": (".github/workflows/secret-scanning.yml", "Secret scanning"),
+    "api-version-policy": (
+        ".github/workflows/cloud-run-api-version.yml",
+        "Cloud Run Admin API v2 contract"
+    ),
+    "snapshot": (".github/workflows/project-sanity.yml", "Project sanity snapshot"),
+}
+REQUIRED_CHECKS = tuple(REQUIRED_WORKFLOWS)
+DETAIL_URL = re.compile(
+    r"https://github[.]com/Shosetzel69/job-search-command-center/"
+    r"actions/runs/([0-9]+)/job/([0-9]+)\Z"
 )
 
+def run_id_for_check(check):
+    if not isinstance(check, dict) or not isinstance(check.get("id"), int):
+        return None
+    match = DETAIL_URL.fullmatch(check.get("details_url") or "")
+    if not match or int(match.group(2)) != check["id"]:
+        return None
+    return int(match.group(1))
+
+def is_canonical_run(run, job_name, sha, run_id):
+    expected_path, expected_name = REQUIRED_WORKFLOWS[job_name]
+    return (
+        isinstance(run, dict)
+        and run.get("id") == run_id
+        and run.get("path") == expected_path
+        and run.get("name") == expected_name
+        and run.get("event") == "push"
+        and run.get("head_sha") == sha
+        and run.get("head_branch") == "main"
+    )
+
 def newest_check_runs(payload, sha):
-    """Select most recent run by GitHub run ID per mandatory check, never any older PASS."""
+    """Select latest *canonical workflow* check by job ID, not latest same-name job."""
     if not SHA_RE.fullmatch(sha) or not isinstance(payload, dict):
         deny("EXACT_SHA_CI_INVALID_INPUT")
     checks = payload.get("check_runs")
-    if not isinstance(checks, list):
+    runs = payload.get("workflow_runs")
+    if not isinstance(checks, list) or not isinstance(runs, dict):
         deny("EXACT_SHA_CI_INVALID_PAYLOAD")
     selected = {}
-    for item in checks:
-        if not isinstance(item, dict) or item.get("name") not in REQUIRED_CHECKS:
+    for check in checks:
+        if not isinstance(check, dict) or check.get("name") not in REQUIRED_WORKFLOWS:
             continue
-        if item.get("head_sha") != sha or not isinstance(item.get("id", 0), int):
-            deny("EXACT_SHA_CI_WRONG_IDENTITY")
-        key = item["name"]
-        if key not in selected or item.get("id", 0) > selected[key].get("id", 0):
-            selected[key] = item
-    if set(selected) != set(REQUIRED_CHECKS):
-        deny("EXACT_SHA_CI_MISSING_CHECK")
+        run_id = run_id_for_check(check)
+        if run_id is None:
+            continue
+        job_name = check["name"]
+        run = runs.get(str(run_id))
+        if not is_canonical_run(run, job_name, sha, run_id):
+            continue
+        if check.get("head_sha") != sha or check.get("app", {}).get("slug") != "github-actions":
+            deny("EXACT_SHA_CI_WRONG_JOB_IDENTITY")
+        current = selected.get(job_name)
+        if current is None or check["id"] > current["id"]:
+            selected[job_name] = check
+    if set(selected) != set(REQUIRED_WORKFLOWS):
+        deny("EXACT_SHA_CI_MISSING_CANONICAL_WORKFLOW")
     return selected
 
 def check_ci(payload, sha):
     for name, check in newest_check_runs(payload, sha).items():
-        if (check.get("app", {}).get("slug") != "github-actions"
-            or check.get("status") != "completed" or check.get("conclusion") != "success"):
+        if check.get("status") != "completed" or check.get("conclusion") != "success":
             deny("EXACT_SHA_CI_LATEST_NOT_SUCCESS_" + re.sub(r"[^a-z0-9]+", "_", name.lower()))
     print("JSCC_DEPLOY_EXACT_SHA_CI=PASS")
 
 def fetch_ci_snapshot(sha, output, fetch_json=None):
-    """GitHub check_name+filter=latest, all pages, strictly bounded and fail-closed."""
+    """Fetch all latest check pages and bind every required job to its workflow run."""
     if not SHA_RE.fullmatch(sha):
         deny("EXACT_SHA_CI_INVALID_SHA")
     if fetch_json is None:
@@ -234,16 +276,15 @@ def fetch_ci_snapshot(sha, output, fetch_json=None):
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=20) as response:
                 return json.load(response)
+    root = "https://api.github.com/repos/Shosetzel69/job-search-command-center"
     gathered = []
     for name in REQUIRED_CHECKS:
         for page in range(1, 21):
             query = urllib.parse.urlencode({
                 "check_name": name, "filter": "latest", "per_page": 100, "page": page
             })
-            url = ("https://api.github.com/repos/Shosetzel69/"
-                   "job-search-command-center/commits/" + sha + "/check-runs?" + query)
             try:
-                data = fetch_json(url)
+                data = fetch_json(root + "/commits/" + sha + "/check-runs?" + query)
             except Exception:
                 deny("EXACT_SHA_CI_REQUEST_FAILED")
             rows = data.get("check_runs") if isinstance(data, dict) else None
@@ -256,11 +297,20 @@ def fetch_ci_snapshot(sha, output, fetch_json=None):
                 break
         else:
             deny("EXACT_SHA_CI_PAGINATION_LIMIT")
-    snapshot = {"check_runs": gathered}
+    ids = {rid for check in gathered if (rid := run_id_for_check(check)) is not None}
+    if len(ids) > 500:
+        deny("EXACT_SHA_CI_WORKFLOW_LOOKUP_LIMIT")
+    runs = {}
+    for run_id in sorted(ids):
+        try:
+            runs[str(run_id)] = fetch_json(root + "/actions/runs/" + str(run_id))
+        except Exception:
+            deny("EXACT_SHA_CI_WORKFLOW_LOOKUP_FAILED")
+    snapshot = {"check_runs": gathered, "workflow_runs": runs}
     check_ci(snapshot, sha)
     with open(output, "w", encoding="utf8") as f:
         json.dump(snapshot, f)
-    print("JSCC_DEPLOY_EXACT_SHA_CI_PAGINATED=PASS")
+    print("JSCC_DEPLOY_EXACT_SHA_CI_WORKFLOW_BOUND=PASS")
 
 def check_release(release, sha, tag):
     if (not SHA_RE.fullmatch(sha) or not isinstance(tag,str)
