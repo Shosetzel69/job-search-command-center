@@ -129,6 +129,17 @@ def deployment_state(service, sha, tag):
     revision = serving(service)
     matches = [t for t in traffic(service) if t.get("tag") == tag]
     if not matches:
+        # A successful deployment retires its staging tag.  Check the exact
+        # serving source identity and immutable image before treating a retry
+        # without a tag as already deployed.
+        values = env(service)
+        image = shape(service)["containers"][0].get("image", "")
+        if (all(values.get(k, {}).get("value") == sha for k in
+                ("SOURCE_SHA", "RUNTIME_DATA_SHA")) and
+                image.startswith(IMAGE_REPO + "@") and
+                DIGEST_RE.fullmatch(image.split("@", 1)[-1])):
+            print("JSCC_DEPLOY_STATE=ALREADY_SERVING")
+            return "ALREADY_SERVING"
         print("JSCC_DEPLOY_STATE=NEW")
         return "NEW"
     if len(matches) != 1 or matches[0].get("revisionName") != revision:
@@ -370,6 +381,78 @@ def check_db(obj):
         deny("DB_HEALTH_UNVERIFIED")
     print("JSCC_DEPLOY_AUTHENTICATED_DB=PASS")
 
+def managed_tags(service):
+    """Enumerate only protocol-owned traffic tags; reject ambiguous ownership."""
+    tags = {}
+    for row in traffic(service):
+        name = row.get("tag")
+        if not name:
+            continue
+        if not isinstance(name, str):
+            deny("TAG_NAME_INVALID")
+        if not TAG_RE.fullmatch(name):
+            if name.startswith("gd"):
+                deny("UNRECOGNIZED_MANAGED_TAG")
+            continue
+        revision = row.get("revisionName", "")
+        if not REV_RE.fullmatch(revision):
+            deny("MANAGED_TAG_REVISION_INVALID")
+        try:
+            percent = int(row.get("percent", -1))
+        except (ValueError, TypeError):
+            deny("MANAGED_TAG_TRAFFIC_INVALID")
+        if percent not in (0, 100) or name in tags:
+            deny("MANAGED_TAG_AMBIGUOUS")
+        tags[name] = (revision, percent)
+    return tags
+
+
+def retire_plan(service, sha, revision):
+    """Read-only plan: remove the owned gd* tags only after cutover + health."""
+    if not SHA_RE.fullmatch(sha) or not REV_RE.fullmatch(revision):
+        deny("TAG_RETIRE_IDENTITY_INVALID")
+    fixed_dev(service)
+    if serving(service) != revision:
+        deny("TAG_RETIRE_NOT_SERVING")
+    values = env(service)
+    if any(values.get(k, {}).get("value") != sha for k in
+           ("SOURCE_SHA", "RUNTIME_DATA_SHA")):
+        deny("TAG_RETIRE_SOURCE_MISMATCH")
+    image = shape(service)["containers"][0].get("image", "")
+    if not image.startswith(IMAGE_REPO + "@") or not DIGEST_RE.fullmatch(image.split("@", 1)[-1]):
+        deny("TAG_RETIRE_IMAGE_UNVERIFIED")
+    tags = managed_tags(service)
+    for tagged_revision, percent in tags.values():
+        if percent == 100 and tagged_revision != revision:
+            deny("TAG_RETIRE_SERVING_TAG_MISMATCH")
+    result = ",".join(sorted(tags))
+    print("JSCC_DEPLOY_TAG_RETIRE_PLAN=" + result)
+    return result
+
+
+def retire_verify(before, after, sha, revision):
+    """Postcondition: serving revision, other tags and protected config intact."""
+    retire_plan(before, sha, revision)
+    fixed_dev(after)
+    if serving(after) != revision:
+        deny("TAG_RETIRE_TRAFFIC_DRIFT")
+    if protected(before) != protected(after):
+        deny("TAG_RETIRE_CONFIG_DRIFT")
+    if managed_tags(after):
+        deny("TAG_RETIRE_STALE_MANAGED_TAGS")
+    def other_tags(service):
+        return sorted((row.get("tag"), row.get("revisionName"),
+                       int(row.get("percent", 0))) for row in traffic(service)
+                      if row.get("tag") and not TAG_RE.fullmatch(row["tag"]))
+    if other_tags(before) != other_tags(after):
+        deny("TAG_RETIRE_UNRELATED_TAG_DRIFT")
+    values = env(after)
+    if any(values.get(k, {}).get("value") != sha for k in
+           ("SOURCE_SHA", "RUNTIME_DATA_SHA")):
+        deny("TAG_RETIRE_SOURCE_DRIFT")
+    print("JSCC_DEPLOY_TAG_RETIRE_VERIFY=PASS")
+
+
 def cleanup_tag(obj, sha, tag, digest, revision):
     if not SHA_RE.fullmatch(sha) or tag!="gd"+sha[:10] or not DIGEST_RE.fullmatch(digest):
         deny("CLEANUP_INVALID_IDENTITY")
@@ -391,6 +474,10 @@ def main(argv):
         return check_health(read(argv[2]),argv[3],argv[4])
     if cmd=="db" and len(argv)==3:
         return check_db(read(argv[2]))
+    if cmd=="retire-plan" and len(argv)==5:
+        return retire_plan(read(argv[2]),argv[3],argv[4])
+    if cmd=="retire-verify" and len(argv)==6:
+        return retire_verify(read(argv[2]),read(argv[3]),argv[4],argv[5])
     if cmd=="cleanup-tag" and len(argv)==7:
         return cleanup_tag(read(argv[2]),argv[3],argv[4],argv[5],argv[6])
     if cmd=="fetch-ci" and len(argv)==4:
