@@ -55,6 +55,27 @@ def deny(fn,*args):
             fn(*args)
     return exc.exception.code
 
+def canonical_check(name, job_id, run_id, conclusion="success", sha=SHA):
+    return {"name":name, "id":job_id, "head_sha":sha,
+            "status":"completed", "conclusion":conclusion,
+            "app":{"slug":"github-actions"},
+            "details_url":(
+                f"https://github.com/Shosetzel69/job-search-command-center/"
+                f"actions/runs/{run_id}/job/{job_id}")}
+
+def canonical_run(name, run_id, sha=SHA):
+    path, workflow_name = guard.REQUIRED_WORKFLOWS[name]
+    return {"id":run_id, "path":path, "name":workflow_name,
+            "event":"push", "head_sha":sha, "head_branch":"main",
+            "status":"completed", "conclusion":"success"}
+
+def ci_fixture():
+    checks = [canonical_check(name, i+1, 101+i)
+              for i, name in enumerate(guard.REQUIRED_CHECKS)]
+    runs = {str(101+i): canonical_run(name,101+i)
+            for i,name in enumerate(guard.REQUIRED_CHECKS)}
+    return {"check_runs":checks, "workflow_runs":runs}
+
 class DeployRoutes(unittest.TestCase):
     def test_baseline_guards_environment_and_tag(self):
         with contextlib.redirect_stdout(io.StringIO()):
@@ -116,13 +137,11 @@ class DeployRoutes(unittest.TestCase):
             self.assertEqual(deny(guard.cleanup_tag,bad,source,TAG,DIGEST,NEW),86)
 
     def test_ci_and_build_attestation(self):
-        names=["validate","Nile-only native provider CI","gitleaks","api-version-policy","snapshot"]
-        checks={"check_runs":[{"name":n,"head_sha":SHA,"status":"completed",
-           "conclusion":"success","app":{"slug":"github-actions"}} for n in names]}
+        payload=ci_fixture()
         with contextlib.redirect_stdout(io.StringIO()):
-            guard.check_ci(checks,SHA)
-        checks["check_runs"][0]["conclusion"]="failure"
-        self.assertEqual(deny(guard.check_ci,checks,SHA),86)
+            guard.check_ci(payload,SHA)
+        payload["check_runs"][0]["conclusion"]="failure"
+        self.assertEqual(deny(guard.check_ci,payload,SHA),86)
         image=guard.IMAGE_REPO+":"+SHA
         build={"status":"SUCCESS","serviceAccount":guard.BUILD_SA,
                "substitutions":{"_GIT_SHA":SHA},"images":[image],
@@ -132,43 +151,83 @@ class DeployRoutes(unittest.TestCase):
         build["serviceAccount"]="wrong"
         self.assertEqual(deny(guard.attest_build,[build],SHA,DIGEST),86)
 
-    def test_latest_check_fails_even_when_older_check_passed(self):
-        names=list(guard.REQUIRED_CHECKS)
-        checks={"check_runs":[{"name":n,"id":i+1,"head_sha":SHA,
-             "status":"completed","conclusion":"success",
-             "app":{"slug":"github-actions"}} for i,n in enumerate(names)]}
+    def test_latest_canonical_check_failure_beats_older_pass(self):
+        payload=ci_fixture()
         with contextlib.redirect_stdout(io.StringIO()):
-            guard.check_ci(checks,SHA)
-        stale={"name":"validate","id":999,"head_sha":SHA,
-               "status":"completed","conclusion":"failure",
-               "app":{"slug":"github-actions"}}
-        checks["check_runs"].append(stale)
-        self.assertEqual(deny(guard.check_ci,checks,SHA),86)
+            guard.check_ci(payload,SHA)
+        payload["check_runs"].append(
+            canonical_check("validate",999,9999,conclusion="failure"))
+        payload["workflow_runs"]["9999"]=canonical_run("validate",9999)
+        self.assertEqual(deny(guard.check_ci,payload,SHA),86)
+
+    def test_n1_foreign_validate_success_cannot_mask_command_api_failure(self):
+        payload=ci_fixture()
+        payload["check_runs"][0]["conclusion"]="failure"
+        payload["check_runs"].append(canonical_check("validate",9999,9999))
+        foreign=canonical_run("validate",9999)
+        foreign["name"]="Validate Remote Executor"
+        foreign["path"]=".github/workflows/remote-executor-check.yml"
+        foreign["event"]="workflow_dispatch"
+        payload["workflow_runs"]["9999"]=foreign
+        self.assertEqual(deny(guard.check_ci,payload,SHA),86)
+        # If the canonical check is healthy, a foreign job must not poison it.
+        payload["check_runs"][0]["conclusion"]="success"
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.check_ci(payload,SHA)
+        # Also deny a same-named job from the wrong workflow even with push.
+        foreign["event"]="push"
+        self.assertEqual(deny(guard.check_ci,{
+            "check_runs":[x for x in payload["check_runs"] if x["id"]!=1],
+            "workflow_runs":payload["workflow_runs"]},SHA),86)
+        # Workflow metadata missing or mismatched must fail closed.
+        payload["check_runs"][0]["conclusion"]="failure"
+        foreign["path"]=".github/workflows/command-api-check.yml"
+        self.assertEqual(deny(guard.check_ci,payload,SHA),86)
+
+    def test_ci_workflow_binding_rejects_wrong_event_ref_and_sha(self):
+        for field,value in (("event","workflow_dispatch"),
+                            ("head_branch","feature/unsafe"),
+                            ("path",".github/workflows/remote-executor-check.yml"),
+                            ("head_sha","b"*40)):
+            payload=ci_fixture()
+            payload["workflow_runs"]["101"][field]=value
+            self.assertEqual(deny(guard.check_ci,payload,SHA),86,field)
+        payload=ci_fixture()
+        payload["check_runs"][0]["details_url"]="https://evil.example/actions/runs/101/job/1"
+        self.assertEqual(deny(guard.check_ci,payload,SHA),86)
 
     def test_ci_filter_latest_paginates_more_than_100_runs(self):
         calls=[]
+        names=list(guard.REQUIRED_CHECKS)
         def fake_fetch(url):
             parsed=urllib.parse.urlparse(url)
+            if "/actions/runs/" in parsed.path:
+                run_id=int(parsed.path.rsplit("/",1)[-1])
+                name=names[run_id-1000]
+                calls.append(("workflow",run_id))
+                return canonical_run(name,run_id)
             params=urllib.parse.parse_qs(parsed.query)
             self.assertEqual(params["filter"],["latest"])
             self.assertEqual(params["per_page"],["100"])
             name=params["check_name"][0]
             page=int(params["page"][0])
             calls.append((name,page))
-            n=100 if name=="validate" and page==1 else 1 if page==1 or (name=="validate" and page==2) else 0
-            return {"check_runs":[{
-                "name":name,"id":(page-1)*100+i+1,
-                "head_sha":SHA,"status":"completed",
-                "conclusion":"success","app":{"slug":"github-actions"}
-            } for i in range(n)]}
+            count=100 if name=="validate" and page==1 else (
+                1 if page==1 or (name=="validate" and page==2) else 0)
+            run_id=1000+names.index(name)
+            return {"check_runs":[
+                canonical_check(name,(page-1)*100+i+1,run_id)
+                for i in range(count)]}
         with tempfile.TemporaryDirectory() as directory:
             output=Path(directory)/"ci.json"
             with contextlib.redirect_stdout(io.StringIO()):
                 guard.fetch_ci_snapshot(SHA,output,fetch_json=fake_fetch)
             payload=json.loads(output.read_text())
             self.assertEqual(len(payload["check_runs"]),105)
+            self.assertEqual(len(payload["workflow_runs"]),5)
         self.assertIn(("validate",2),calls)
-        self.assertEqual(len(calls),6)
+        self.assertEqual(len([c for c in calls if c[0]!="workflow"]),6)
+        self.assertEqual(len([c for c in calls if c[0]=="workflow"]),5)
 
     def test_noninteractive_cloudshell_release_is_rejected_before_gcloud(self):
         p=subprocess.run(["bash",str(CLOUD),SHA,"jscc-dev-v1.0.0","deploy"],
