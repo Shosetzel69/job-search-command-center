@@ -1,0 +1,134 @@
+name: GitDeploy
+
+# Runs automatically after the canonical application CI workflow completes on main.
+# Never executes untrusted candidate script code, only reviewed main control-plane.
+on:
+  workflow_run:
+    workflows: ["Validate Command API"]
+    types: [completed]
+    branches: [main]
+  pull_request:
+    paths:
+      - ".github/workflows/GitDeploy.yml"
+      - "scripts/deploy/**"
+      - "scripts/test_deploy_routes.py"
+
+permissions:
+  contents: read
+
+jobs:
+  source-contract:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Validate both script-based routes without GCP mutation
+        run: |
+          set -euo pipefail
+          bash -n scripts/deploy/GitDeploy.sh scripts/deploy/GCloudDeploy.sh scripts/deploy/jscc-dev-service.sh
+          python3 -m py_compile scripts/deploy/jscc_deploy_guard.py
+          python3 -m unittest -v scripts.test_deploy_routes
+
+  deploy-dev:
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.name == 'Validate Command API'
+    concurrency:
+      group: jscc-dev-service-release
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    environment: dev
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      actions: read
+      checks: read
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      GCP_WIF_PROVIDER: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }}
+      GCP_WIF_SA: ${{ vars.JSCC_DEV_R2_DEPLOYER_SERVICE_ACCOUNT }}
+    steps:
+      - name: Check out trusted main scripts
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          fetch-depth: 0
+          path: control
+          persist-credentials: false
+      - name: Verify exact main SHA and canonical CI event
+        shell: bash
+        env:
+          VALIDATED_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          VALIDATED_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
+          VALIDATED_EVENT: ${{ github.event.workflow_run.event }}
+          VALIDATED_RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = Shosetzel69/job-search-command-center || exit 86
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 86
+          test "$VALIDATED_EVENT" = push || exit 86
+          test "$VALIDATED_WORKFLOW_ID" = "350908093" || exit 86
+          [[ "$VALIDATED_RUN_ID" =~ ^[0-9]+$ ]] || exit 86
+          test "$(git -C control rev-parse HEAD)" = "$SOURCE_SHA" || {
+            echo GITDEPLOY_STALE_MAIN_EVENT_SKIPPED
+            exit 86
+          }
+          test "$GCP_WIF_SA" = jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com || exit 86
+          test -n "$GCP_WIF_PROVIDER" || exit 86
+          echo GITDEPLOY_MAIN_SHA_ADMITTED=PASS
+      - name: Check out exact main candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          path: candidate
+          persist-credentials: false
+      - name: Validate main CI and scripts before GCP authentication
+        shell: bash
+        env:
+          JSCC_GITDEPLOY_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git -C candidate rev-parse HEAD)" = "$SOURCE_SHA" || exit 86
+          test -z "$(git -C candidate status --porcelain)" || exit 86
+          bash -n control/scripts/deploy/GitDeploy.sh control/scripts/deploy/GCloudDeploy.sh control/scripts/deploy/jscc-dev-service.sh
+          (cd control && python3 -m unittest -v scripts.test_deploy_routes)
+          # Other canonical main CI jobs may finish after the Command API workflow.
+          # The bounded wait avoids false failures while never approving a red job.
+          good=false
+          for attempt in $(seq 1 30); do
+            if python3 control/scripts/deploy/jscc_deploy_guard.py fetch-ci "$SOURCE_SHA" /tmp/jscc-gitdeploy-checks.json >/dev/null 2>&1; then
+              good=true
+              break
+            fi
+            sleep 20
+          done
+          [[ "$good" == true ]] || { echo GITDEPLOY_REQUIRED_MAIN_CI_NOT_GREEN; exit 86; }
+      - name: Authenticate via existing DEV WIF
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          project_id: jscc-dev
+          workload_identity_provider: ${{ env.GCP_WIF_PROVIDER }}
+          service_account: ${{ env.GCP_WIF_SA }}
+      - name: Configure pinned gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
+      - name: Automatically deploy reviewed DEV Service
+        shell: bash
+        env:
+          JSCC_GITDEPLOY_ADMITTED: "true"
+          JSCC_GITDEPLOY_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+          JSCC_CONTROL_DIR: ${{ github.workspace }}/control
+          JSCC_CANDIDATE_DIR: ${{ github.workspace }}/candidate
+        run: |
+          set -euo pipefail
+          bash control/scripts/deploy/GitDeploy.sh preflight "$SOURCE_SHA"
+          bash control/scripts/deploy/GitDeploy.sh deploy "$SOURCE_SHA"
+          echo "GITDEPLOY_DEV_TECHNICAL_DEPLOY=PASS" >>"$GITHUB_STEP_SUMMARY"
+          echo "User-level functional acceptance remains separate." >>"$GITHUB_STEP_SUMMARY"
