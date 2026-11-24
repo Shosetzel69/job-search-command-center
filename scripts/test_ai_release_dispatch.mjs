@@ -73,7 +73,8 @@ test("TEST search command is owner-only, SHA-bound and dispatches only controlle
     workflow:SEARCH_WORKFLOW,
     payload:{ ref:"main", inputs:{ source_sha:"a".repeat(40), owner_gate:"APPROVED" } },
   });
-  assert.equal(dispatchEnvelope(`/jscc-deploy dev ${SHA}`, { actor:OWNER_LOGIN, issueNumber:412, commentId:20002 }).workflow, DEPLOY_WORKFLOW);
+  assert.throws(() => dispatchEnvelope(`/jscc-deploy dev ${SHA}`, { actor:OWNER_LOGIN, issueNumber:412, commentId:20002 }), /Release via public issue comments is disabled/);
+  assert.throws(() => dispatchEnvelope(`/jscc-deploy test ${SHA} 35290000001`, { actor:OWNER_LOGIN, issueNumber:412, commentId:20002 }), /Release via public issue comments is disabled/);
 });
 
 test("TEST search rejects non-owner, malformed SHA, extra args and any non-TEST target", () => {
