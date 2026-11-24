@@ -166,14 +166,16 @@ class DeployRoutes(unittest.TestCase):
         self.assertIn('gcp run services update-traffic "$service"',shell)
         self.assertIn('--remove-tags="$tags_to_retire"',shell)
         self.assertIn("JSCC_DEPLOY_STAGING_TAGS_RETIRED=PASS",shell)
+        self.assertIn('if [[ "$mode" == deploy ]]; then\n    # A retry',shell)
+        self.assertIn('retire_managed_tags "$old_rev"',shell)
         self.assertLess(shell.index('python3 "$guard" db "$work/final-db.json"'),
-                        shell.index('python3 "$guard" retire-plan "$work/pre-retire.json"'))
-        self.assertLess(shell.index('python3 "$guard" retire-verify "$work/pre-retire.json"'),
+                        shell.index('retire_managed_tags "$staged_rev"'))
+        self.assertLess(shell.index('retire_managed_tags "$staged_rev"'),
                         shell.rindex('JSCC_DEV_TECHNICAL_DEPLOY_PASS channel='))
         # A failed tag-only mutation must not intentionally roll back a healthy,
         # verified serving revision to a vulnerable prior version.
         self.assertLess(shell.index("cutover_attempted=0\nstage_attempted=0"),
-                        shell.index('--remove-tags="$tags_to_retire"'))
+                        shell.index('retire_managed_tags "$staged_rev"'))
 
     def test_tag_retirement_fails_closed_on_foreign_or_ambiguous_tags(self):
         final=staged()
