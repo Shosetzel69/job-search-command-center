@@ -219,6 +219,13 @@ class DeployRoutes(unittest.TestCase):
             {"revisionName":NEW,"percent":100},
             {"revisionName":OLD,"percent":0},
             {"revisionName":OLD,"percent":0,"tag":"review-pin"}]
+        # R2: legacy tags are no longer acceptable as a successful poststate.
+        self.assertEqual(deny(guard.reject_external_tags_before_deploy,final),86)
+        self.assertEqual(deny(guard.retire_verify,final,after,SHA,NEW),86)
+        final["status"]["traffic"]=[row for row in final["status"]["traffic"]
+                                    if row.get("tag")!="review-pin"]
+        after["status"]["traffic"]=[row for row in after["status"]["traffic"]
+                                    if row.get("tag")!="review-pin"]
         with contextlib.redirect_stdout(io.StringIO()):
             guard.retire_verify(final,after,SHA,NEW)
             self.assertEqual(guard.deployment_state(after,revision(NEW,SHA,DIGEST),SHA,TAG),"ALREADY_SERVING")
@@ -260,8 +267,16 @@ class DeployRoutes(unittest.TestCase):
         after["status"]["traffic"]=[
             {"revisionName":NEW,"percent":100},
             {"revisionName":OLD,"tag":"keepme"}]
+        # Cloud Run omission is valid, but a leftover foreign tag fails R2.
+        self.assertEqual(deny(guard.retire_verify,obj,after,SHA,NEW),86)
+        clean_before=copy.deepcopy(obj)
+        clean_after=copy.deepcopy(after)
+        clean_before["status"]["traffic"]=[row for row in clean_before["status"]["traffic"]
+                                         if row.get("tag")!="keepme"]
+        clean_after["status"]["traffic"]=[row for row in clean_after["status"]["traffic"]
+                                        if row.get("tag")!="keepme"]
         with contextlib.redirect_stdout(io.StringIO()):
-            guard.retire_verify(obj,after,SHA,NEW)
+            guard.retire_verify(clean_before,clean_after,SHA,NEW)
         expected_reasons={
             "duplicate":"MANAGED_TAG_DUPLICATE",
             "explicit_null":"MANAGED_TAG_TRAFFIC_INVALID",
@@ -422,10 +437,50 @@ class DeployRoutes(unittest.TestCase):
             if case=="partial_tag": bad["status"]["traffic"][1]["percent"]=50
             self.assertEqual(deny(guard.retire_plan,bad,given_sha,given_rev),86,case)
 
-    def test_tag_retirement_verifies_poststate_and_preserves_unrelated_tags(self):
+    def test_r2_rejects_foreign_tags_before_any_deploy_mutation(self):
+        before=service()
+        revision={"metadata":{"name":OLD},"spec":{"serviceAccountName":guard.RUNTIME_SA,
+                  "containers":[{"image":guard.IMAGE_REPO+"@"+DIGEST,
+                                 "env":copy.deepcopy(guard.shape(before)["containers"][0]["env"])}]},
+                  "status":{"imageDigest":DIGEST}}
+        # Directly exercise the pre-mutation guard; no dependence on staged health.
+        for pct in (None,0,100):
+            bad=copy.deepcopy(before)
+            foreign={"revisionName":OLD,"tag":"perf659"}
+            if pct is not None: foreign["percent"]=pct
+            bad["status"]["traffic"].append(foreign)
+            self.assertEqual(deny(guard.reject_external_tags_before_deploy,bad),86)
+        bad=copy.deepcopy(before)
+        bad["status"]["traffic"].append({"revisionName":OLD,"tag":"gd"+"f"*10})
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.reject_external_tags_before_deploy(bad)
+
+    def test_r2_postcondition_rejects_all_zero_traffic_tags(self):
+        clean=staged()
+        clean["status"]["traffic"]=[{"revisionName":NEW,"percent":100}]
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.reject_stale_tag_routes(clean)
+        for name in ("perf659","pr591","gd"+"1"*10):
+            for percent in (None,0):
+                bad=copy.deepcopy(clean)
+                tagged={"revisionName":OLD,"tag":name}
+                if percent is not None: tagged["percent"]=percent
+                bad["status"]["traffic"].append(tagged)
+                self.assertEqual(deny(guard.reject_stale_tag_routes,bad),86,
+                                 (name,percent))
+        for invalid in (None,True,0.0,"0",50):
+            bad=copy.deepcopy(clean)
+            bad["status"]["traffic"].append({"revisionName":OLD,
+                "tag":"perf659","percent":invalid})
+            self.assertEqual(deny(guard.reject_stale_tag_routes,bad),86,invalid)
+        # A tag on the sole 100%-serving revision is not a stale route.
+        clean["status"]["traffic"][0]["tag"]="live-alias"
+        with contextlib.redirect_stdout(io.StringIO()):
+            guard.reject_stale_tag_routes(clean)
+
+    def test_tag_retirement_verifies_poststate_and_rejects_stale_external_tags(self):
         final=staged()
-        final["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG},
-                                   {"revisionName":OLD,"percent":0,"tag":"review-pin"}]
+        final["status"]["traffic"]=[{"revisionName":NEW,"percent":100,"tag":TAG}]
         after=copy.deepcopy(final)
         del after["status"]["traffic"][0]["tag"]
         with contextlib.redirect_stdout(io.StringIO()):
@@ -439,7 +494,7 @@ class DeployRoutes(unittest.TestCase):
             if case=="changed_secret":
                 guard.env(bad)["NILE_SECRET"]["valueFrom"]["secretKeyRef"]["name"]="wrong"
             if case=="changed_unrelated_tag":
-                bad["status"]["traffic"][1]["tag"]="different-pin"
+                bad["status"]["traffic"].append({"revisionName":OLD,"tag":"review-pin"})
             if case=="changed_identity":
                 guard.env(bad)["SOURCE_SHA"]["value"]="0"*40
             if case=="changed_image":

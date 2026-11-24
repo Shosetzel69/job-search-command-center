@@ -174,6 +174,7 @@ def deployment_state(service, revision, sha, tag):
         deny("INVALID_IDENTITY")
     fixed_dev(service)
     current = serving(service)
+    reject_external_tags_before_deploy(service)
     # Always verify the revision snapshot is for the active 100%-traffic revision.
     already_serving = serving_revision_identity(service, revision, sha)
     matches = [row for row in traffic(service) if row.get("tag") == tag]
@@ -203,6 +204,8 @@ def unchanged(before, after, sha, tag):
 def stage(before, after, sha, tag):
     baseline(before,sha,tag)
     fixed_dev(after)
+    # Recheck before cutover: a concurrent legacy tag could become public-stale.
+    reject_external_tags_before_deploy(after)
     if serving(after)!=serving(before):
         deny("EARLY_TRAFFIC_CUTOVER")
     if protected(before)!=protected(after):
@@ -428,6 +431,33 @@ def tag_percent(row, invalid_reason="MANAGED_TAG_TRAFFIC_INVALID",
     return percent
 
 
+def reject_external_tags_before_deploy(service):
+    """A foreign tag can become a public stale-revision route after cutover.
+
+    Refuse before any GCP mutation rather than leaving legacy tags behind.
+    Protocol-owned gd* tags are retired by the existing guarded flow.
+    """
+    for row in traffic(service):
+        if not isinstance(row, dict):
+            deny("TRAFFIC_SHAPE")
+        name = row.get("tag")
+        if name is None or name == "":
+            continue
+        if not isinstance(name, str) or not TAG_RE.fullmatch(name):
+            deny("EXTERNAL_TAG_PREDEPLOY")
+
+
+def reject_stale_tag_routes(service):
+    """Postcondition: no tagged route to a revision with zero traffic."""
+    for row in traffic(service):
+        if not isinstance(row, dict):
+            deny("TRAFFIC_SHAPE")
+        if row.get("tag"):
+            if tag_percent(row, "STALE_TAG_PERCENT_INVALID",
+                           "STALE_TAG_PERCENT_UNEXPECTED") == 0:
+                deny("STALE_TAG_ROUTE_REMAINS")
+
+
 def managed_tags(service):
     """Enumerate only protocol-owned traffic tags; reject ambiguous ownership."""
     tags = {}
@@ -488,6 +518,7 @@ def retire_verify(before, after, sha, revision):
         deny("TAG_RETIRE_IMAGE_DRIFT")
     if managed_tags(after):
         deny("TAG_RETIRE_STALE_MANAGED_TAGS")
+    reject_stale_tag_routes(after)
     def other_tags(service):
         return sorted((row.get("tag"), row.get("revisionName"),
                        int(row.get("percent", 0))) for row in traffic(service)
