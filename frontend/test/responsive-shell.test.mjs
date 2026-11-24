@@ -12,12 +12,13 @@ test('global application header is sticky and keeps environment visible', () => 
   assert.match(main, /\[\$\{label\}\]/);
 });
 
-test('mobile navigation exposes Jobs Review Applications and More', () => {
+test('P4 W2 mobile navigation exposes Jobs, manual analysis, applications, archived and More', () => {
   const start = main.indexOf('function BottomNav(');
   const end = main.indexOf('function ProfileMenu', start);
   const block = main.slice(start, end);
   assert.match(block, /\['jobs','Joburi'/);
-  assert.match(block, /\['review','Review'/);
+  assert.match(block, /\['analysis','De analizat'/);
+  assert.match(block, /\['archived','Arhivate'/);
   assert.match(block, /\['applications','Aplicari'/);
   assert.match(block, />More</);
   assert.match(block, /Criterii de selectie/);

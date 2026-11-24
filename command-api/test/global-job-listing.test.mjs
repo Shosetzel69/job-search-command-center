@@ -61,3 +61,19 @@ test('P4 explicit none selection has a distinct cursor scope and short-circuits 
  assert.doesNotMatch(allSql,/WHERE false AND/);
  assert.match(noneSql,/AND false/);
 });
+
+test('P4 W2 review queue is manual and archived-only never includes active jobs',()=>{
+ const jobs=normalizeGlobalQuery({sort:'publication',limit:20,result_view:'jobs'});
+ const analysis=normalizeGlobalQuery({sort:'publication',limit:20,result_view:'analysis'});
+ const archived=normalizeGlobalQuery({sort:'publication',limit:20,result_view:'archived'});
+ assert.notEqual(jobs.filter_hash,analysis.filter_hash);
+ assert.notEqual(jobs.filter_hash,archived.filter_hash);
+ const analysisSql=buildGlobalListingQuery(id,basis,analysis,anchor).sql;
+ const archivedSql=buildGlobalListingQuery(id,basis,archived,anchor).sql;
+ assert.match(analysisSql,/review_required_at IS NOT NULL/);
+ assert.match(analysisSql,/archived_at IS NULL/);
+ assert.doesNotMatch(analysisSql,/score IS NULL OR score </);
+ assert.match(archivedSql,/archived_at IS NOT NULL/);
+ assert.doesNotMatch(archivedSql,/archived_at IS NULL/);
+ assert.match(archivedSql,/state\.state->>'review_required_at'/);
+});
