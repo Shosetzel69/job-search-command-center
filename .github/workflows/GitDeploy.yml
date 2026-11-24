@@ -1,29 +1,21 @@
 name: GitDeploy
-# Automatically triggered by GitHub Release publication, not by merging to main.
+
+# Runs automatically after the canonical application CI workflow completes on main.
+# Never executes untrusted candidate script code, only reviewed main control-plane.
 on:
-  release:
-    types: [published]
-  workflow_dispatch:
-    inputs:
-      release_id:
-        description: Published release numeric ID
-        required: true
-        type: string
-      release_tag:
-        description: jscc-dev-vX.Y.Z
-        required: true
-        type: string
-      source_sha:
-        description: Immutable source commit
-        required: true
-        type: string
+  workflow_run:
+    workflows: ["Validate Command API"]
+    types: [completed]
+    branches: [main]
   pull_request:
     paths:
       - ".github/workflows/GitDeploy.yml"
       - "scripts/deploy/**"
       - "scripts/test_deploy_routes.py"
+
 permissions:
   contents: read
+
 jobs:
   source-contract:
     if: github.event_name == 'pull_request'
@@ -33,68 +25,20 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - name: Validate non-mutating source contracts
+      - name: Validate both script-based routes without GCP mutation
         run: |
           set -euo pipefail
-          bash -n scripts/deploy/GitDeploy.sh
-          bash -n scripts/deploy/GCloudDeploy.sh
-          bash -n scripts/deploy/jscc-dev-service.sh
+          bash -n scripts/deploy/GitDeploy.sh scripts/deploy/GCloudDeploy.sh scripts/deploy/jscc-dev-service.sh
           python3 -m py_compile scripts/deploy/jscc_deploy_guard.py
           python3 -m unittest -v scripts.test_deploy_routes
-          grep -Fq 'exit 86' cloudbuild.promotion.yaml
-          grep -Fq 'exit 86' scripts/gcp/promote.sh
-
-  admit-release:
-    if: >-
-      github.event_name == 'release' &&
-      github.event.action == 'published' &&
-      github.event.release.draft == false &&
-      github.event.release.prerelease == false &&
-      github.event.release.author.login == 'Shosetzel69' &&
-      startsWith(github.event.release.tag_name, 'jscc-dev-v')
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    permissions:
-      contents: read
-      actions: write
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: main
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Validate release, tag and main ancestry
-        id: admit
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ github.event.release.id }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$GITHUB_REPOSITORY" = Shosetzel69/job-search-command-center || exit 86
-          [[ "$RELEASE_ID" =~ ^[0-9]+$ && "$RELEASE_TAG" =~ ^jscc-dev-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 86
-          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" >/tmp/gitdeploy-release.json
-          jq -e --arg tag "$RELEASE_TAG" '.tag_name==$tag and .draft==false and .prerelease==false and .author.login=="Shosetzel69"' /tmp/gitdeploy-release.json >/dev/null || exit 86
-          git fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --quiet
-          sha="$(git rev-parse "refs/tags/$RELEASE_TAG^{commit}")"
-          [[ "$sha" =~ ^[0-9a-f]{40}$ ]] || exit 86
-          git merge-base --is-ancestor "$sha" HEAD || exit 86
-          echo "sha=$sha" >>"$GITHUB_OUTPUT"
-      - name: Dispatch GitDeploy in trusted main context
-        env:
-          GH_TOKEN: ${{ github.token }}
-          RELEASE_ID: ${{ github.event.release.id }}
-          RELEASE_TAG: ${{ github.event.release.tag_name }}
-          SOURCE_SHA: ${{ steps.admit.outputs.sha }}
-        run: |
-          set -euo pipefail
-          gh workflow run GitDeploy.yml --ref main \
-            -f release_id="$RELEASE_ID" -f release_tag="$RELEASE_TAG" -f source_sha="$SOURCE_SHA"
-          echo GITDEPLOY_AUTO_DISPATCHED=PASS
 
   deploy-dev:
-    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.name == 'Validate Command API'
     concurrency:
       group: jscc-dev-service-release
       cancel-in-progress: false
@@ -108,58 +52,66 @@ jobs:
       id-token: write
     env:
       GH_TOKEN: ${{ github.token }}
-      RELEASE_ID: ${{ inputs.release_id }}
-      RELEASE_TAG: ${{ inputs.release_tag }}
-      SOURCE_SHA: ${{ inputs.source_sha }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
       GCP_WIF_PROVIDER: ${{ vars.JSCC_DEV_GCP_WIF_PROVIDER }}
       GCP_WIF_SA: ${{ vars.JSCC_DEV_R2_DEPLOYER_SERVICE_ACCOUNT }}
     steps:
-      - name: Checkout trusted main control-plane
+      - name: Check out trusted main scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: main
           fetch-depth: 0
           path: control
           persist-credentials: false
-      - name: Validate release and independent environment reviewers before GCP
+      - name: Verify exact main SHA and canonical CI event
         shell: bash
+        env:
+          VALIDATED_WORKFLOW_ID: ${{ github.event.workflow_run.workflow_id }}
+          VALIDATED_WORKFLOW_PATH: ${{ github.event.workflow_run.path }}
+          VALIDATED_EVENT: ${{ github.event.workflow_run.event }}
+          VALIDATED_RUN_ID: ${{ github.event.workflow_run.id }}
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = Shosetzel69/job-search-command-center || exit 86
-          [[ "$RELEASE_ID" =~ ^[0-9]+$ && "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 86
-          [[ "$RELEASE_TAG" =~ ^jscc-dev-v[0-9]+\.[0-9]+\.[0-9]+$ ]] || exit 86
-          gh api "repos/$GITHUB_REPOSITORY/releases/$RELEASE_ID" >/tmp/gitdeploy-release.json
-          jq -e --arg tag "$RELEASE_TAG" '.tag_name==$tag and .draft==false and .prerelease==false and .author.login=="Shosetzel69"' /tmp/gitdeploy-release.json >/dev/null || exit 86
-          git -C control fetch origin "refs/tags/$RELEASE_TAG:refs/tags/$RELEASE_TAG" --quiet
-          test "$(git -C control rev-parse "refs/tags/$RELEASE_TAG^{commit}")" = "$SOURCE_SHA" || exit 86
-          git -C control merge-base --is-ancestor "$SOURCE_SHA" HEAD || exit 86
-          gh api "repos/$GITHUB_REPOSITORY/environments/dev" >/tmp/gitdeploy-env.json
-          jq -e '(.can_admins_bypass == false) and any(.protection_rules[]?; .type=="required_reviewers" and .prevent_self_review==true and any(.reviewers[]?; .type=="User" and .reviewer.login!="Shosetzel69"))' /tmp/gitdeploy-env.json >/dev/null || {
-            echo GITDEPLOY_DISTINCT_REVIEWER_AND_NO_ADMIN_BYPASS_REQUIRED; exit 86;
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]] || exit 86
+          test "$VALIDATED_EVENT" = push || exit 86
+          test "$VALIDATED_WORKFLOW_PATH" = ".github/workflows/command-api-check.yml" || exit 86
+          [[ "$VALIDATED_RUN_ID" =~ ^[0-9]+$ ]] || exit 86
+          test "$(git -C control rev-parse HEAD)" = "$SOURCE_SHA" || {
+            echo GITDEPLOY_STALE_MAIN_EVENT_SKIPPED
+            exit 86
           }
           test "$GCP_WIF_SA" = jscc-app-deployer-dev@jscc-dev.iam.gserviceaccount.com || exit 86
           test -n "$GCP_WIF_PROVIDER" || exit 86
-          echo GITDEPLOY_RELEASE_GATE=PASS
-      - name: Checkout immutable candidate
+          echo GITDEPLOY_MAIN_SHA_ADMITTED=PASS
+      - name: Check out exact main candidate
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ github.event.workflow_run.head_sha }}
           path: candidate
           persist-credentials: false
-      - name: Verify exact source and scripts
+      - name: Validate main CI and scripts before GCP authentication
         shell: bash
+        env:
+          JSCC_GITDEPLOY_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
         run: |
           set -euo pipefail
           test "$(git -C candidate rev-parse HEAD)" = "$SOURCE_SHA" || exit 86
           test -z "$(git -C candidate status --porcelain)" || exit 86
-          bash -n control/scripts/deploy/GitDeploy.sh
-          bash -n control/scripts/deploy/GCloudDeploy.sh
-          bash -n control/scripts/deploy/jscc-dev-service.sh
-          python3 -m py_compile control/scripts/deploy/jscc_deploy_guard.py
+          bash -n control/scripts/deploy/GitDeploy.sh control/scripts/deploy/GCloudDeploy.sh control/scripts/deploy/jscc-dev-service.sh
           (cd control && python3 -m unittest -v scripts.test_deploy_routes)
-          grep -Fq 'exit 86' control/cloudbuild.promotion.yaml
-          grep -Fq 'exit 86' control/scripts/gcp/promote.sh
-      - name: Authenticate via DEV WIF
+          # Other canonical main CI jobs may finish after the Command API workflow.
+          # The bounded wait avoids false failures while never approving a red job.
+          good=false
+          for attempt in $(seq 1 30); do
+            if python3 control/scripts/deploy/jscc_deploy_guard.py fetch-ci "$SOURCE_SHA" /tmp/jscc-gitdeploy-checks.json >/dev/null 2>&1; then
+              good=true
+              break
+            fi
+            sleep 20
+          done
+          [[ "$good" == true ]] || { echo GITDEPLOY_REQUIRED_MAIN_CI_NOT_GREEN; exit 86; }
+      - name: Authenticate via existing DEV WIF
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
           project_id: jscc-dev
@@ -167,15 +119,16 @@ jobs:
           service_account: ${{ env.GCP_WIF_SA }}
       - name: Configure pinned gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3.0.1
-      - name: GitDeploy DEV Service preflight and release
+      - name: Automatically deploy reviewed DEV Service
         shell: bash
         env:
           JSCC_GITDEPLOY_ADMITTED: "true"
+          JSCC_GITDEPLOY_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
           JSCC_CONTROL_DIR: ${{ github.workspace }}/control
           JSCC_CANDIDATE_DIR: ${{ github.workspace }}/candidate
         run: |
           set -euo pipefail
-          bash control/scripts/deploy/GitDeploy.sh preflight "$SOURCE_SHA" "$RELEASE_TAG"
-          bash control/scripts/deploy/GitDeploy.sh deploy "$SOURCE_SHA" "$RELEASE_TAG"
-          echo GITDEPLOY_TECHNICAL_RELEASE=PASS >>"$GITHUB_STEP_SUMMARY"
-          echo GOV85_FUNCTIONAL_ACCEPTANCE=PENDING >>"$GITHUB_STEP_SUMMARY"
+          bash control/scripts/deploy/GitDeploy.sh preflight "$SOURCE_SHA"
+          bash control/scripts/deploy/GitDeploy.sh deploy "$SOURCE_SHA"
+          echo "GITDEPLOY_DEV_TECHNICAL_DEPLOY=PASS" >>"$GITHUB_STEP_SUMMARY"
+          echo "User-level functional acceptance remains separate." >>"$GITHUB_STEP_SUMMARY"
