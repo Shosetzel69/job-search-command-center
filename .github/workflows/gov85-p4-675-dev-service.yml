@@ -133,10 +133,11 @@ jobs:
           bash -n control/scripts/gcp/gov85_p4_675_dev_release.sh
           python3 -m py_compile control/scripts/gcp/gov85_p4_675_dev_guard.py
           (cd control && PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v scripts.test_gov85_p4_675_dev)
-      # Explicit owner authorization for this immutable DEV-only P4 release is
-      # documented in issue #663. No new required-reviewer environment rule is
-      # installed or assumed. Existing GCP WIF, GH actor, SHA and runtime guards
-      # remain mandatory. This workflow does not claim independent approval.
+      # DEV Required Reviewers must be preconfigured by the owner. This
+      # workflow checks the presence of that protection but cannot prove the
+      # reviewer is human when agents share the owner's GitHub identity.
+      # No environment settings are modified; independent release approval
+      # remains a separate operational gate before any GCP mutation.
       - name: Verify required DEV environment review protection
         shell: bash
         env:
