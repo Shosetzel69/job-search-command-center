@@ -1009,7 +1009,7 @@ export function normalizeJobSearchQuery(input = {}) {
   const minFit = source.min_fit == null || source.min_fit === ''
     ? null
     : boundedInteger(source.min_fit, null, 0, 100, 'min_fit');
-  const includeArchived = source.include_archived === true || String(source.include_archived || '').toLowerCase() === 'true';
+  const includeArchived = source.result_view === 'archived' || source.include_archived === true || String(source.include_archived || '').toLowerCase() === 'true';
   const prefetch = boundedInteger(
     source.prefetch,
     Math.min(limit, 25),
@@ -1019,7 +1019,7 @@ export function normalizeJobSearchQuery(input = {}) {
   );
   const resultView=String(source.result_view||'');
   const quick=String(source.quick||'all'),kpi=String(source.kpi||'all');
-  if(resultView&&!['jobs','review','unclassified'].includes(resultView))throw httpError('Invalid result view',400);
+  if(resultView&&!['jobs','review','unclassified','analysis','archived'].includes(resultView))throw httpError('Invalid result view',400);
   if(!['all','high','b2b'].includes(quick)||!['all','new','high','repost','remote'].includes(kpi))throw httpError('Invalid result filter',400);
   const countOnly=String(source.count_only||'')==='true';
   if(countOnly&&!resultView)throw httpError('Result view required for counting',400);
@@ -1069,6 +1069,8 @@ function cachedEvaluation(row) {
 export function matchesResultView(job,evaluation,spec,threshold) {
   if(!job)return false;
   if(spec.result_view==='unclassified')return evaluation.eligibilityState==='UNKNOWN'&&evaluation.eligibilityReasonCode==='ROLE_FAMILY_UNKNOWN';
+  if(spec.result_view==='analysis')return Boolean(job.review_required_at);
+  if(spec.result_view==='archived')return Boolean(job.archived_at);
   if(spec.result_view==='review'&&job.fit!=null&&job.fit>=threshold)return false;
   if(spec.quick==='high'&&!(job.fit!=null&&job.fit>=threshold))return false;
   if(spec.quick==='b2b'&&!job.b2b)return false;
@@ -1124,7 +1126,9 @@ export async function listProfileJobs(
     if(spec.quick==='b2b')where.push("lower(COALESCE(j.contract_type,'unknown')) IN ('contract','freelance')");
     if(spec.empty_modes||spec.empty_role_subfamilies||spec.empty_contract_types)where.push('false');
     if(spec.result_view==='unclassified')where.push("j.role_family='UNKNOWN'");
-    if (!spec.include_archived) where.push('state.archived_at IS NULL');
+    if(spec.result_view==='analysis')where.push('state.review_required_at IS NOT NULL');
+    if(spec.result_view==='archived')where.push('state.archived_at IS NOT NULL');
+    else if (!spec.include_archived) where.push('state.archived_at IS NULL');
     if (spec.role_family.length) {
       const p = add(spec.role_family);
       where.push(`j.role_family = ANY(${p}::text[])`);
@@ -1176,7 +1180,7 @@ export async function listProfileJobs(
               sp.source_name, sp.canonical_url, sp.posted_at, sp.last_seen_at AS posting_last_seen_at,
               publication.effective_posted_at,
               sp.repost_of_posting_id, sp.payload AS posting_payload,
-              state.seen_at, state.archived_at,
+              state.seen_at, state.archived_at, state.review_required_at,
               COALESCE(publication.effective_posted_at, '0001-01-01T00:00:00Z'::timestamptz) AS sort_at,
               eval.eligibility_state AS cached_eligibility_state,
               eval.eligibility_reason_code AS cached_eligibility_reason_code,
@@ -1371,33 +1375,37 @@ export async function operationalHistory(authContext, env = process.env, { db = 
 export async function setJobState(authContext, jobId, patch, env = process.env, { db = getPool(env) } = {}) {
   const archived = patch?.archived;
   const seen = patch?.seen;
+  const reviewRequired = patch?.review_required;
   if (archived != null && typeof archived !== 'boolean') throw httpError('archived must be boolean', 400);
   if (seen != null && typeof seen !== 'boolean') throw httpError('seen must be boolean', 400);
+  if (reviewRequired != null && typeof reviewRequired !== 'boolean') throw httpError('review_required must be boolean', 400);
+  if (archived == null && seen == null && reviewRequired == null) throw httpError('No state change requested', 400);
 
   return withTenantTransaction(authContext, async tx => {
     await guardDevProjectionWrite(tx,env);
     const exists = await tx.query('SELECT 1 FROM canonical_jobs WHERE job_id = $1', [jobId]);
     if (!exists.rows?.length) throw httpError('Job not found', 404);
     const result = await tx.query(
-      `INSERT INTO profile_job_state(tenant_id, job_id, seen_at, archived_at, updated_at)
+      `INSERT INTO profile_job_state(tenant_id, job_id, seen_at, archived_at, review_required_at, updated_at)
        VALUES ($1, $2,
                CASE WHEN $3::boolean THEN now() ELSE NULL END,
                CASE WHEN $4::boolean THEN now() ELSE NULL END,
-               now())
+               CASE WHEN $5::boolean THEN now() ELSE NULL END, now())
        ON CONFLICT(tenant_id, job_id)
        DO UPDATE SET
          seen_at = CASE WHEN $3::boolean THEN COALESCE(profile_job_state.seen_at, now())
                         WHEN $3::boolean = false THEN NULL ELSE profile_job_state.seen_at END,
          archived_at = CASE WHEN $4::boolean THEN COALESCE(profile_job_state.archived_at, now())
                             WHEN $4::boolean = false THEN NULL ELSE profile_job_state.archived_at END,
+         review_required_at = CASE WHEN $5::boolean THEN COALESCE(profile_job_state.review_required_at, now())
+                                   WHEN $5::boolean = false THEN NULL ELSE profile_job_state.review_required_at END,
          updated_at = now()
-       RETURNING job_id, seen_at, archived_at`,
-      [authContext.profile_id, jobId, seen ?? null, archived ?? null],
+       RETURNING job_id, seen_at, archived_at, review_required_at`,
+      [authContext.profile_id, jobId, seen ?? null, archived ?? null, reviewRequired ?? null],
     );
     return result.rows[0];
   }, { env, db });
 }
-
 export async function listApplications(authContext, env = process.env, { db = getPool(env) } = {}) {
   return withTenantTransaction(authContext, async tx => {
     const result = await tx.query(
@@ -1410,6 +1418,11 @@ export async function listApplications(authContext, env = process.env, { db = ge
     );
     return { schema_version:'1.0', applications:result.rows || [] };
   }, { env, db });
+}
+
+function linkedApplicationId(profileId, jobId) {
+  const h=createHash('sha256').update(String(profileId)+':'+String(jobId)).digest('hex');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-5${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;
 }
 
 function applicationInput(input, { partial = false } = {}) {
@@ -1436,15 +1449,20 @@ async function validateSharedJobReference(tx, jobId) {
 
 export async function createApplication(authContext, input, env = process.env, { db = getPool(env) } = {}) {
   const value = applicationInput(input);
-  const id = randomUUID();
+  const id = value.job_id ? linkedApplicationId(authContext.profile_id, value.job_id) : randomUUID();
   return withTenantTransaction(authContext, async tx => {
     await validateSharedJobReference(tx, value.job_id || null);
+    if (value.job_id) {
+      const prior=await tx.query('SELECT application_id FROM applications WHERE tenant_id=$1 AND job_id=$2 LIMIT 1', [authContext.profile_id,value.job_id]);
+      if (prior.rows?.length) throw httpError('Application already recorded for this job',409);
+    }
     const result = await tx.query(
       `INSERT INTO applications(
           tenant_id, application_id, job_id, company, title, location, countries,
           reference, status, applied_at, next_status_check, source_url, snapshot
         )
         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13::jsonb)
+        ON CONFLICT(tenant_id, application_id) DO NOTHING
         RETURNING application_id AS id, job_id, company, title, location, countries,
                   reference, status, applied_at, next_status_check, source_url AS url`,
       [
@@ -1454,6 +1472,7 @@ export async function createApplication(authContext, input, env = process.env, {
         JSON.stringify(value),
       ],
     );
+    if (!result.rows?.length) throw httpError('Application already recorded for this job',409);
     return result.rows[0];
   }, { env, db });
 }
@@ -2054,7 +2073,9 @@ export function buildGlobalListingQuery(tenant,basis,spec,anchor){
   const add=v=>{p.push(v);return '$'+p.length;};
   const threshold=add(Number(basis.preferences.fit_threshold??80));
   const structural=[];
-  if(!spec.include_archived)structural.push('archived_at IS NULL');
+  if(spec.result_view==='archived')structural.push('archived_at IS NOT NULL');
+  else if(!spec.include_archived)structural.push('archived_at IS NULL');
+  if(spec.result_view==='analysis')structural.push('review_required_at IS NOT NULL');
   if(spec.empty_modes||spec.empty_role_subfamilies||spec.empty_contract_types)structural.push('false');
   if(spec.role_family.length)structural.push('role_family=ANY('+add(spec.role_family)+'::text[])');
   if(spec.role_subfamily.length)structural.push('role_subfamily && '+add(spec.role_subfamily)+'::text[]');
@@ -2098,7 +2119,7 @@ export function buildGlobalListingQuery(tenant,basis,spec,anchor){
     AND p.profile_version=$6 AND COALESCE(pref.preferences,'{}'::jsonb)=$7::jsonb
     AND COALESCE(policy.policy,'{}'::jsonb)=$8::jsonb
   ), population AS (
-   SELECT ${EVALUATION_FIELDS_SQL}, state.archived_at,
+   SELECT ${EVALUATION_FIELDS_SQL}, state.archived_at, state.review_required_at,
     eval.score,eval.eligibility_state,eval.eligibility_reason_code,eval.eligible,
     eval.pros,eval.risks,eval.exclusion_reason,eval.fit_matrix,eval.sort_title,
     eval.display_country,eval.display_work_mode,eval.display_contract_type,
@@ -2111,7 +2132,7 @@ export function buildGlobalListingQuery(tenant,basis,spec,anchor){
   ), summary AS (
    SELECT COUNT(*) FILTER(WHERE NOT current_evaluation)::integer AS pending,
     encode(sha256(convert_to(COALESCE(string_agg(
-      jsonb_build_array(job_id,input_digest,current_evaluation,archived_at,score,
+      jsonb_build_array(job_id,input_digest,current_evaluation,archived_at,review_required_at,score,
         sort_title,display_country,display_work_mode,display_contract_type,
         publication_at,retrieve_at,eligibility_state,eligibility_reason_code,b2b,is_remote,is_repost)::text,
       E'\\n' ORDER BY job_id),''),'UTF8')),'hex') AS watermark

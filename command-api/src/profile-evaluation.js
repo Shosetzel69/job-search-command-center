@@ -274,6 +274,7 @@ export function evaluateSharedJob(row, preferences, nomenclatures, now = new Dat
       source:row.source_name || payload.source || 'Nespecificata',
       verified_at:payload.verified_at || null,
       archived_at:row.archived_at || null,
+    review_required_at:row.review_required_at || null,
     },
   };
 }
@@ -335,5 +336,6 @@ export function materializeCachedJob(row, cached, preferences, now = new Date())
     source:row.source_name || payload.source || 'Nespecificata',
     verified_at:payload.verified_at || null,
     archived_at:row.archived_at || null,
+    review_required_at:row.review_required_at || null,
   };
 }
