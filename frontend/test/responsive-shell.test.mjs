@@ -68,18 +68,18 @@ test('pagination arrows are shared by mobile and web, top and bottom, with acces
   assert.match(block, />‹<\/button>/);
   assert.match(block, />›<\/button>/);
   assert.match(block, /min-h-11 min-w-11/);
-  const previous = block.match(/<button\\b[^>]*aria-label="Pagina anterioara"[^>]*>‹<\\/button>/)?.[0];
-  const next = block.match(/<button\\b[^>]*aria-label="Pagina urmatoare"[^>]*>›<\\/button>/)?.[0];
+  const previous = block.match(/<button\b[^>]*aria-label="Pagina anterioara"[^>]*>‹<\/button>/)?.[0];
+  const next = block.match(/<button\b[^>]*aria-label="Pagina urmatoare"[^>]*>›<\/button>/)?.[0];
   assert.ok(previous, 'previous pagination button exists');
   assert.ok(next, 'next pagination button exists');
   for (const button of [previous, next]) {
-    assert.match(button, /\\bmin-h-11\\b/);
-    assert.match(button, /\\bmin-w-11\\b/);
+    assert.match(button, /\bmin-h-11\b/);
+    assert.match(button, /\bmin-w-11\b/);
   }
-  assert.match(previous, /disabled=\\{loading\\|\\|loadingMore\\|\\|page===1\\}/);
-  assert.match(previous, /onClick=\\{onPrevious\\}/);
-  assert.match(next, /disabled=\\{loading\\|\\|loadingMore\\|\\|!hasMore\\}/);
-  assert.match(next, /onClick=\\{onNext\\}/);
+  assert.match(previous, /disabled=\{loading\|\|loadingMore\|\|page===1\}/);
+  assert.match(previous, /onClick=\{onPrevious\}/);
+  assert.match(next, /disabled=\{loading\|\|loadingMore\|\|!hasMore\}/);
+  assert.match(next, /onClick=\{onNext\}/);
 
   assert.match(block, /paginate&&controls\("sus"\)/);
   assert.match(block, /paginate&&controls\('jos'\)/);
