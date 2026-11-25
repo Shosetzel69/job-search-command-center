@@ -19,8 +19,8 @@ test('profile jobs are bounded and paginated in the UI', () => {
   assert.match(main, /nextCursor/);
   assert.match(main, /loadMoreJobs/);
   assert.match(main, /Navigare pagini joburi/);
-  assert.match(main, /Anterioara/);
-  assert.match(main, /Urmatoarea/);
+  assert.match(main, /aria-label="Pagina anterioara"/);
+  assert.match(main, /aria-label="Pagina urmatoare"/);
   assert.match(main, /rezultate pe pagina/);
 });
 

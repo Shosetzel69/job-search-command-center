@@ -318,9 +318,9 @@ function JobTable({rows,threshold,onDetails,onArchive,onRestore,onToggleAnalysis
   if(!rows.length&&!loading&&!paginate)return<div className="rounded-2xl border border-slate-200 bg-white px-6 py-14 text-center text-sm text-slate-500 shadow-sm">Niciun rezultat.</div>;
   const controls=(position)=><nav aria-label={'Navigare pagini joburi '+position} className="flex flex-wrap items-center justify-between gap-2 border-y border-slate-100 bg-slate-50 px-4 py-2 text-xs text-slate-600">
     <label>Inregistrari/pagina <select aria-label={'Inregistrari pe pagina '+position} value={pageSize} disabled={loading||loadingMore} onChange={e=>onPageSize?.(Number(e.target.value))} className="ml-1 rounded-md border border-slate-200 bg-white p-2">{JOBS_PAGE_SIZES.map(n=><option key={n} value={n}>{n}</option>)}</select></label>
-    <div className="flex items-center gap-2"><button type="button" disabled={loading||loadingMore||page===1} onClick={onPrevious} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold disabled:opacity-50">Anterioara</button>
+    <div className="flex items-center gap-2"><button type="button" disabled={loading||loadingMore||page===1} onClick={onPrevious} aria-label="Pagina anterioara" title="Pagina anterioara" className="min-h-11 min-w-11 rounded-xl border border-slate-200 bg-white px-3 text-lg font-semibold disabled:opacity-50">‹</button>
     <span title={totalPages==null?'Totalul global nu este inca disponibil':undefined}>{page}/{totalPages??'?'}</span>
-    <button type="button" disabled={loading||loadingMore||!hasMore} onClick={onNext} className="min-h-11 rounded-xl border border-slate-200 bg-white px-3 font-semibold disabled:opacity-50">Urmatoarea</button></div>
+    <button type="button" disabled={loading||loadingMore||!hasMore} onClick={onNext} aria-label="Pagina urmatoare" title="Pagina urmatoare" className="min-h-11 min-w-11 rounded-xl border border-slate-200 bg-white px-3 text-lg font-semibold disabled:opacity-50">›</button></div>
   </nav>;
   return <div data-testid="job-table" className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
     {paginate&&controls("sus")}
