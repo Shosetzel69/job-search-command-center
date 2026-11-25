@@ -130,7 +130,7 @@ export function googleIdentityOptions({ clientId, loginHint, allowAutoRestore = 
     callback: ({ credential }) => deliver(credential),
     auto_select: effectiveAutoSelect,
     cancel_on_tap_outside: true,
-    ...(normalizedHint ? { login_hint: normalizedHint } : {}),
+    ...(normalizedHint && serverRestoreAllowed ? { login_hint: normalizedHint } : {}),
   };
 }
 
