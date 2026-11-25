@@ -115,3 +115,14 @@ test('P4 M1 reset runs for both logout and permanent account deletion',()=>{
  const persist=main.slice(main.indexOf('const rememberUi=useCallback('),main.indexOf('const clearData=useCallback('));
  assert.match(persist,/if\(auth\.status==='authenticated'\)rememberUi\(\)/);
 });
+
+
+test('mobile listing filters are staged until Apply; dismiss does not commit',()=>{
+  const block=main.slice(main.indexOf('function Filters('),main.indexOf('function FitBadge('));
+  assert.ok(block.includes('setDraftFilters({...filters})'));
+  assert.ok(block.includes('filters={draftFilters} setFilters={setDraftFilters}'));
+  assert.ok(block.includes('setFilters(draftFilters)'));
+  assert.ok(block.includes('onClick={apply}'));
+  assert.ok(block.includes('onClick={close}'));
+  assert.ok(block.includes('if(resetKpi)onResetKpi?.()'));
+});
