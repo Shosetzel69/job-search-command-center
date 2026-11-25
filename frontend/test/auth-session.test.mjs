@@ -81,6 +81,7 @@ test('persisted logout marker prevents automatic restore on a later page load', 
     onCredential() {},
   });
   assert.equal(options.auto_select, false);
+  assert.equal('login_hint' in options, false);
   disableAutoRestore(storage);
   assert.equal(storage.getItem(GOOGLE_AUTO_RESTORE_DISABLED_KEY), '1');
 });
