@@ -65,10 +65,10 @@ export function needsPageReload({page = 1, loadedServerPath = '', nextServerPath
   return page !== 1 || !loadedServerPath || loadedServerPath !== nextServerPath;
 }
 
-// Ignore outdated navigation without leaving the current page permanently loading.
-export function ignorePageResponse({requestSerial, currentSerial, append, navigationContext, currentContext}, setPage) {
+// Reject outdated first-page and navigation responses without clearing newer requests.
+export function ignorePageResponse({requestSerial, currentSerial, navigationContext, currentContext}, setPage) {
   if (requestSerial !== currentSerial) return true;
-  if (!append || navigationContext === currentContext) return false;
+  if (navigationContext === currentContext) return false;
   setPage(current => ({...current, loading:false, loadingMore:false}));
   return true;
 }
