@@ -20,7 +20,7 @@ test('#696: one shared responsive public page, sign-in before features on mobile
   assert.match(landing, /data-testid="public-landing"/);
   assert.match(landing, /lg:grid-cols-/);
   assert.match(landing, /sm:grid-cols-3/);
-  assert.match(landing, /\/icons\/icon-192\.svg/);
+  assert.match(landing, /function Logo\(/);
   assert.ok(landing.indexOf('data-testid="landing-signin"') < landing.indexOf('features.map'));
   assert.ok(landing.includes('{signIn}'));
   assert.ok(landing.includes('{environmentMarker}'));
@@ -32,4 +32,15 @@ test('#696: one shared responsive public page, sign-in before features on mobile
 test('#696: landing layout does not access private application data or implement auth', () => {
   assert.doesNotMatch(landing, /fetch\(|commandApi\(|localStorage|sessionStorage|\/me\/|\/admin\/|\/applications|google\.accounts/);
   assert.doesNotMatch(landing, /ATS Score|CV parsing|aplicare automată/);
+});
+
+test('#696 web mockup: public navigation targets are real and the preview is explicitly illustrative', () => {
+  for (const id of ['overview','benefits','security','signin']) {
+    assert.ok(landing.includes('href="#'+id+'"'));
+    assert.ok(landing.includes('id="'+id+'"'));
+  }
+  assert.ok(landing.includes('Your job search.'));
+  assert.ok(landing.includes('Under control.'));
+  assert.ok(landing.includes('Example data · not a live dashboard'));
+  assert.ok(landing.includes('See how it works'));
 });
