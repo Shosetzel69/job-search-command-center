@@ -1,4 +1,6 @@
+import io
 import json
+import urllib.error
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +17,62 @@ class Store:
         return ("11" if name==supervisor.LOCK else "12", self.descriptor)
     def delete(self,name,generation):
         self.deleted.append((name,generation))
+
+class StorageTest(unittest.TestCase):
+    def storage(self, responses):
+        request = Mock(side_effect=responses)
+        return supervisor.Storage("test-bucket", request=request), request
+
+    @staticmethod
+    def token(value):
+        return io.BytesIO(json.dumps({"access_token": value}).encode())
+
+    @staticmethod
+    def error(code):
+        return urllib.error.HTTPError("https://storage.googleapis.com/", code, "error", {}, None)
+
+    def test_read_refreshes_after_401_and_pins_media_generation(self):
+        store, request = self.storage([
+            self.token("old"), self.error(401),
+            self.token("fresh"), io.BytesIO(b'{"generation":"11"}'),
+            self.token("media"), io.BytesIO(b'{"run_id":"owned"}'),
+        ])
+        self.assertEqual(store.read(supervisor.LOCK), ("11", {"run_id": "owned"}))
+        calls = [call.args[0] for call in request.call_args_list]
+        self.assertEqual(calls[1].full_url, calls[3].full_url)
+        self.assertEqual(calls[3].get_header("Authorization"), "Bearer fresh")
+        self.assertTrue(calls[5].full_url.endswith("?alt=media&generation=11"))
+        self.assertEqual(calls[5].get_header("Authorization"), "Bearer media")
+
+    def test_delete_refresh_preserves_generation(self):
+        store, request = self.storage([
+            self.token("old"), self.error(401),
+            self.token("fresh"), io.BytesIO(b""),
+        ])
+        store.delete(supervisor.ACTIVE, "12")
+        first, second = [request.call_args_list[i].args[0] for i in (1, 3)]
+        self.assertEqual(first.full_url, second.full_url)
+        self.assertTrue(second.full_url.endswith("?ifGenerationMatch=12"))
+        self.assertEqual(second.get_method(), "DELETE")
+        self.assertEqual(second.get_header("Authorization"), "Bearer fresh")
+
+    def test_persistent_401_stops_after_one_retry(self):
+        store, request = self.storage([
+            self.token("old"), self.error(401), self.token("fresh"), self.error(401),
+        ])
+        with self.assertRaises(urllib.error.HTTPError) as error:
+            store.read(supervisor.LOCK)
+        self.assertEqual(error.exception.code, 401)
+        self.assertEqual(request.call_count, 4)
+
+    def test_other_errors_do_not_retry_delete(self):
+        for failure in (self.error(403), self.error(412), TimeoutError("uncertain")):
+            with self.subTest(failure=failure):
+                store, request = self.storage([self.token("fresh"), failure])
+                with self.assertRaises(type(failure)):
+                    store.delete(supervisor.LOCK, "11")
+                self.assertEqual(request.call_count, 2)
+
 
 class SupervisorTest(unittest.TestCase):
     def setUp(self):
