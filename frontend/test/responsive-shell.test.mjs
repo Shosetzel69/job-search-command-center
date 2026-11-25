@@ -69,7 +69,7 @@ test('pagination arrows are shared by mobile and web, top and bottom, with acces
   assert.match(block, />›<\/button>/);
   assert.match(block, /min-h-11 min-w-11/);
   assert.match(block, /paginate&&controls\("sus"\)/);
-  assert.match(block, /paginate&&controls\("jos"\)/);
+  assert.match(block, /paginate&&controls\('jos'\)/);
   assert.doesNotMatch(block, />Anterioara<\/button>|>Urmatoarea<\/button>/);
 });
 
