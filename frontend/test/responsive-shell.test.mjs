@@ -61,6 +61,18 @@ test('bounded jobs pagination remains the only mobile list loading path', () => 
   assert.match(main, /onNext=\{loadMoreJobs\}/);
 });
 
+test('pagination arrows are shared by mobile and web, top and bottom, with accessible names', () => {
+  const block = main.slice(main.indexOf('function JobTable('), main.indexOf('function ErrorPanel('));
+  assert.match(block, /aria-label="Pagina anterioara" title="Pagina anterioara"/);
+  assert.match(block, /aria-label="Pagina urmatoare" title="Pagina urmatoare"/);
+  assert.match(block, />‹<\\/button>/);
+  assert.match(block, />›<\\/button>/);
+  assert.match(block, /min-h-11 min-w-11/);
+  assert.match(block, /paginate&&controls\\("sus"\\)/);
+  assert.match(block, /paginate&&controls\\("jos"\\)/);
+  assert.doesNotMatch(block, />Anterioara<\\/button>|>Urmatoarea<\\/button>/);
+});
+
 test('PASS promotion state is compact while non-PASS states retain checklist', () => {
   assert.match(promotion, /status\.status === 'PASS'/);
   assert.match(promotion, /Promotion PASS/);
