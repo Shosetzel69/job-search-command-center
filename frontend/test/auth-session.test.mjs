@@ -66,7 +66,7 @@ test('Google Identity auto restore requires a remembered account and remains sup
     storage,
     onCredential() {},
   });
-  assert.equal(disabled.login_hint, 'allowed@example.test');
+  assert.equal(disabled.login_hint, undefined);
   assert.equal(disabled.auto_select, false);
   assert.equal(autoRestoreDisabled(storage), true);
 });
