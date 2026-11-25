@@ -286,6 +286,13 @@ function ListingFilters({filters,setFilters,defaultFreshness,onReset}) {
 }
 function Filters({filters,setFilters,defaultFreshness,onResetKpi}) {
   const[mobileOpen,setMobileOpen]=useState(false),[draftFilters,setDraftFilters]=useState(null),[resetKpi,setResetKpi]=useState(false);
+  const filterTriggerRef=useRef(null),filterCloseRef=useRef(null);
+  useLayoutEffect(()=>{
+    if(!mobileOpen)return;
+    const trigger=filterTriggerRef.current;
+    filterCloseRef.current?.focus();
+    return()=>{if(trigger?.isConnected)trigger.focus();};
+  },[mobileOpen]);
   const open=()=>{setDraftFilters({...filters});setResetKpi(false);setMobileOpen(true);};
   const close=()=>{setMobileOpen(false);setDraftFilters(null);setResetKpi(false);};
   const reset=()=>{setDraftFilters({search:'',quick:'all',unknownFamily:false,freshness:defaultFreshness||24,workModes:[...ALL_WORK_MODES],roleSubfamilies:[],roleSubfamiliesNone:false,contractTypes:[],contractTypesNone:false,minFit:'',sort:'fit-desc',pageSize:jobPageSize(filters.pageSize)});setResetKpi(true);};
@@ -295,13 +302,13 @@ function Filters({filters,setFilters,defaultFreshness,onResetKpi}) {
     <div className="sticky top-14 z-30 -mx-3 border-y border-slate-200 bg-slate-50/95 px-3 py-2 backdrop-blur md:static md:mx-0 md:rounded-2xl md:border md:bg-white md:p-0 md:shadow-sm">
       <div className="flex gap-2 md:border-b md:border-slate-100 md:p-4">
         <label className="relative min-w-0 flex-1"><Icon name="search" className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400"/><input value={filters.search} onChange={e=>setFilters(v=>({...v,search:e.target.value}))} type="search" placeholder="Cauta joburi..." className="h-10 w-full rounded-xl border border-slate-200 bg-white pl-10 pr-3 text-sm text-slate-800 outline-none md:h-11 md:bg-slate-50"/></label>
-        <button type="button" aria-haspopup="dialog" aria-expanded={mobileOpen} aria-controls="jscc-mobile-filters" onClick={open} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 md:hidden">Filtre{secondaryCount>0&&<span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">{secondaryCount}</span>}</button>
+        <button ref={filterTriggerRef} type="button" aria-haspopup="dialog" aria-expanded={mobileOpen} aria-controls="jscc-mobile-filters" onClick={open} className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 md:hidden">Filtre{secondaryCount>0&&<span className="rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] text-blue-700">{secondaryCount}</span>}</button>
       </div>
       
     </div>
-    {mobileOpen&&<><button type="button" aria-label="Inchide filtrele" className="fixed inset-0 z-[70] bg-slate-950/30 md:hidden" onClick={close}/><section id="jscc-mobile-filters" role="dialog" aria-modal="true" aria-label="Filtre afisare" className="safe-bottom fixed inset-x-0 bottom-0 z-[80] rounded-t-3xl bg-white p-4 shadow-2xl md:hidden">
+    {mobileOpen&&<><button type="button" aria-label="Inchide filtrele" className="fixed inset-0 z-[70] bg-slate-950/30 md:hidden" onClick={close}/><section id="jscc-mobile-filters" role="dialog" aria-modal="true" aria-label="Filtre afisare" onKeyDown={event=>{if(event.key==='Escape'){event.preventDefault();close();}}} className="safe-bottom fixed inset-x-0 bottom-0 z-[80] rounded-t-3xl bg-white p-4 shadow-2xl md:hidden">
       <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-200"/>
-      <div className="flex items-center justify-between"><div><div className="flex items-center gap-2"><h2 className="font-display text-lg font-bold text-slate-950">Filtre</h2><ScopeBadge scope="GUI ONLY"/></div><p className="mt-0.5 text-xs text-slate-400" title="Filtrele de afisare nu pornesc Retrieve si nu apeleaza provideri.">Mod lucru: Toate include si N/A · doar afisare</p></div><button type="button" aria-label="Inchide filtrele" title="Inchide filtrele" onClick={close} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-500"><Icon name="close"/></button></div>
+      <div className="flex items-center justify-between"><div><div className="flex items-center gap-2"><h2 className="font-display text-lg font-bold text-slate-950">Filtre</h2><ScopeBadge scope="GUI ONLY"/></div><p className="mt-0.5 text-xs text-slate-400" title="Filtrele de afisare nu pornesc Retrieve si nu apeleaza provideri.">Mod lucru: Toate include si N/A · doar afisare</p></div><button ref={filterCloseRef} type="button" aria-label="Inchide filtrele" title="Inchide filtrele" onClick={close} className="grid min-h-11 min-w-11 place-items-center rounded-xl text-slate-500"><Icon name="close"/></button></div>
       <div className="mt-4 max-h-[60vh] overflow-y-auto"><ListingFilters filters={draftFilters} setFilters={setDraftFilters} defaultFreshness={defaultFreshness} onReset={()=>setResetKpi(true)}/></div>
       <div className="mt-5 grid grid-cols-2 gap-2"><button type="button" onClick={reset} className="min-h-11 rounded-xl border border-slate-200 font-semibold text-slate-600">Reseteaza</button><button type="button" onClick={apply} className="min-h-11 rounded-xl bg-blue-600 font-semibold text-white">Aplica</button></div>
     </section></>}
@@ -401,18 +408,16 @@ function FitRatingsEditor({ratings,onChange,criterion}){
   <div className="flex flex-wrap gap-2">{choices?<select aria-label="Preferinta" value={label} onChange={e=>setLabel(e.target.value)}><option value="">Selecteaza</option>{choices.map(x=><option key={x}>{x}</option>)}</select>:<input aria-label="Preferinta" value={label} maxLength={160} placeholder="Valoare exacta din anunt" onChange={e=>setLabel(e.target.value)} className="min-w-0 flex-1 rounded border p-2"/>}<select aria-label="Nota preferintei" value={grade} onChange={e=>setGrade(Number(e.target.value))}>{[0,1,2,3,4,5].map(n=><option key={n}>{n}</option>)}</select><button type="button" disabled={!label.trim()} onClick={()=>{onChange({...ratings,[label.normalize('NFKC').trim().toLowerCase()]:grade});setLabel('');}} className="rounded border px-2">Adauga</button></div></div>;
 }
 function FitMatrix({matrix,fit}){
-  if(!Array.isArray(matrix)||matrix.length===0)return <section className="rounded-xl border p-3" aria-label="Matrice FIT"><h3 className="font-semibold">Matrice FIT</h3><p className="mt-2 text-sm">FIT necalculat.</p></section>;
+  if(!Array.isArray(matrix)||matrix.length===0)return <section className="rounded-lg border px-2 py-1 text-xs" aria-label="Matrice FIT"><h3 className="inline font-semibold">Matrice FIT</h3> · <span>FIT necalculat.</span></section>;
   const rows=FIT_CRITERIA.map(key=>matrix.find(row=>row.criterion===key)).filter(Boolean);
   const totalWeight=rows.reduce((sum,row)=>sum+(Number(row.weight)||0),0);
   const reasonLabel={MISSING_DATA:'Date lipsa',NO_MATCH:'Nu corespunde',MATCH:'Preferinta confirmata',DISABLED:'Criteriu dezactivat'};
-  return <section className="rounded-xl border p-3" aria-label="Matrice FIT">
-    <h3 className="font-semibold">Matrice FIT</h3>
-    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {rows.map(row=><div key={row.criterion} className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm"><strong className="block text-slate-800">{FIT_LABELS[row.criterion]||row.criterion}</strong><p className="mt-1">Pondere {row.weight}% · Nota {row.grade}/5 · {row.points} puncte</p><meter className="mt-2 w-full" min={0} max={5} value={row.grade} aria-label={FIT_LABELS[row.criterion]||row.criterion}/><p className="mt-1 text-xs text-slate-600">{reasonLabel[row.reason]||row.reason}</p></div>)}
-      <div className="rounded-lg border border-slate-200 p-3 text-sm"><strong>FIT total</strong><p>{fit==null?'—':fit+'%'}</p></div>
-      <div className="rounded-lg border border-slate-200 p-3 text-sm"><strong>Total ponderi</strong><p>{totalWeight}%</p></div>
-      <div className="rounded-lg border border-slate-200 p-3 text-sm"><strong>Stare evaluare</strong><p>{fit==null?'Necalculat':'Calculat'}</p></div>
-    </div>
+  return <section className="rounded-lg border px-2 py-1 text-xs" aria-label="Matrice FIT">
+    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5"><h3 className="font-semibold">Matrice FIT</h3><strong>FIT total: {fit==null?'—':fit+'%'}</strong><span>Total ponderi: {totalWeight}%</span><span>Stare evaluare: {fit==null?'Necalculat':'Calculat'}</span></div>
+    <p className="text-slate-600">Pondere · Nota · Puncte</p>
+    <dl className="flex flex-wrap gap-x-3 gap-y-1">
+      {rows.map(row=><div key={row.criterion} className="min-w-0 flex-[1_1_7rem]"><dt className="font-semibold text-slate-800">{FIT_LABELS[row.criterion]||row.criterion}</dt><dd className="tabular-nums">{row.weight}% · {row.grade}/5 · {row.points}</dd><dd className="text-slate-600">{reasonLabel[row.reason]||row.reason}</dd></div>)}
+    </dl>
   </section>;
 }
 

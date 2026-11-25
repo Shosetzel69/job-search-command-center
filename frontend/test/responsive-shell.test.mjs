@@ -92,10 +92,16 @@ test('PASS promotion state is compact while non-PASS states retain checklist', (
   assert.match(promotion, /Checklist promovare/);
 });
 
-test('P4 FIT details render as a compact grid with one six-criterion matrix',()=>{
+test('UX-U1-01: FIT details render a compact wrapping numeric summary without cards or meters',()=>{
   const start=main.indexOf('function FitMatrix(');
   const block=main.slice(start,main.indexOf('function CriteriaPage(',start));
-  assert.match(block,/lg:grid-cols-3/);
+  assert.match(block,/flex flex-wrap gap-x-3 gap-y-1/);
+  assert.doesNotMatch(block,/<meter|<input|rounded-xl|shadow/);
+  assert.match(block,/row\.weight/);
+  assert.match(block,/row\.grade/);
+  assert.match(block,/row\.points/);
+  assert.match(block,/reasonLabel\[row\.reason\]/);
+  assert.match(block,/FIT necalculat/);
   assert.match(block,/FIT_CRITERIA\.map/);
   assert.match(block,/FIT total/);
   assert.match(block,/Total ponderi/);
@@ -138,4 +144,12 @@ test('mobile listing filters are staged until Apply; dismiss does not commit',()
   assert.ok(block.includes('onClick={apply}'));
   assert.ok(block.includes('onClick={close}'));
   assert.ok(block.includes('if(resetKpi)onResetKpi?.()'));
+});
+
+test('A11Y-01: opening mobile filters focuses the close control and dismissal restores trigger focus',()=>{
+  const block=main.slice(main.indexOf('function Filters('),main.indexOf('function FitBadge('));
+  assert.match(block,/ref=\{filterTriggerRef\}[^>]*aria-haspopup="dialog"/);
+  assert.match(block,/ref=\{filterCloseRef\}[^>]*aria-label="Inchide filtrele"/);
+  assert.match(block,/useLayoutEffect\(\(\)=>\{\s*if\(!mobileOpen\)return;\s*const trigger=filterTriggerRef\.current;\s*filterCloseRef\.current\?\.focus\(\);\s*return\(\)=>\{if\(trigger\?\.isConnected\)trigger\.focus\(\);\};\s*\},\[mobileOpen\]\)/);
+  assert.match(block,/event\.key==='Escape'.*close\(\)/);
 });
