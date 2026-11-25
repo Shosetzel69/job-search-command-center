@@ -408,16 +408,19 @@ function FitRatingsEditor({ratings,onChange,criterion}){
   <div className="flex flex-wrap gap-2">{choices?<select aria-label="Preferinta" value={label} onChange={e=>setLabel(e.target.value)}><option value="">Selecteaza</option>{choices.map(x=><option key={x}>{x}</option>)}</select>:<input aria-label="Preferinta" value={label} maxLength={160} placeholder="Valoare exacta din anunt" onChange={e=>setLabel(e.target.value)} className="min-w-0 flex-1 rounded border p-2"/>}<select aria-label="Nota preferintei" value={grade} onChange={e=>setGrade(Number(e.target.value))}>{[0,1,2,3,4,5].map(n=><option key={n}>{n}</option>)}</select><button type="button" disabled={!label.trim()} onClick={()=>{onChange({...ratings,[label.normalize('NFKC').trim().toLowerCase()]:grade});setLabel('');}} className="rounded border px-2">Adauga</button></div></div>;
 }
 function FitMatrix({matrix,fit}){
-  if(!Array.isArray(matrix)||matrix.length===0)return <section className="rounded-lg border px-2 py-1 text-xs" aria-label="Matrice FIT"><h3 className="inline font-semibold">Matrice FIT</h3> · <span>FIT necalculat.</span></section>;
+  const [expanded,setExpanded]=useState(false);
+  if(!Array.isArray(matrix)||matrix.length===0)return <p className="text-xs text-slate-600">FIT necalculat.</p>;
   const rows=FIT_CRITERIA.map(key=>matrix.find(row=>row.criterion===key)).filter(Boolean);
-  const totalWeight=rows.reduce((sum,row)=>sum+(Number(row.weight)||0),0);
+  const shortLabels={compensation:'Comp',work_mode:'Mod',contract_type:'Contract',industry:'Ind',career:'Cariera',company:'Companie'};
   const reasonLabel={MISSING_DATA:'Date lipsa',NO_MATCH:'Nu corespunde',MATCH:'Preferinta confirmata',DISABLED:'Criteriu dezactivat'};
-  return <section className="rounded-lg border px-2 py-1 text-xs" aria-label="Matrice FIT">
-    <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5"><h3 className="font-semibold">Matrice FIT</h3><strong>FIT total: {fit==null?'—':fit+'%'}</strong><span>Total ponderi: {totalWeight}%</span><span>Stare evaluare: {fit==null?'Necalculat':'Calculat'}</span></div>
-    <p className="text-slate-600">Pondere · Nota · Puncte</p>
-    <dl className="flex flex-wrap gap-x-3 gap-y-1">
-      {rows.map(row=><div key={row.criterion} className="min-w-0 flex-[1_1_7rem]"><dt className="font-semibold text-slate-800">{FIT_LABELS[row.criterion]||row.criterion}</dt><dd className="tabular-nums">{row.weight}% · {row.grade}/5 · {row.points}</dd><dd className="text-slate-600">{reasonLabel[row.reason]||row.reason}</dd></div>)}
-    </dl>
+  return <section className="min-w-0 text-xs" aria-label="Matrice FIT">
+    <div className="max-w-full overflow-x-auto whitespace-nowrap py-1 tabular-nums" tabIndex={0} role="region" aria-label="Rezumat numeric FIT">
+      <strong>{fit==null?'FIT necalculat':'FIT '+fit+'%'}</strong>{rows.map(row=><React.Fragment key={row.criterion}>{' · '}<span title={FIT_LABELS[row.criterion]||row.criterion}>{shortLabels[row.criterion]||row.criterion} {row.grade}</span></React.Fragment>)}{' · '}<button type="button" aria-expanded={expanded} onClick={()=>setExpanded(value=>!value)} className="text-blue-700 underline">{expanded?'Ascunde detalii':'Detalii FIT'}</button>
+    </div>
+    {expanded&&<div className="space-y-1 py-1 text-slate-600">
+      {rows.map(row=><p key={row.criterion}><strong>{FIT_LABELS[row.criterion]||row.criterion}</strong>{' · Pondere '}{row.weight}%{' · Nota '}{row.grade}/5{' · Puncte '}{row.points}{' · '}{reasonLabel[row.reason]||row.reason}</p>)}
+      <p>Total ponderi: {rows.reduce((sum,row)=>sum+(Number(row.weight)||0),0)}% · Stare evaluare: {fit==null?'Necalculat':'Calculat'}</p>
+    </div>}
   </section>;
 }
 

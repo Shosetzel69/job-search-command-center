@@ -92,21 +92,31 @@ test('PASS promotion state is compact while non-PASS states retain checklist', (
   assert.match(promotion, /Checklist promovare/);
 });
 
-test('UX-U1-01: FIT details render a compact wrapping numeric summary without cards or meters',()=>{
+test('UX-U1-01: FIT summary is a single scrollable numeric line with explanations on demand',()=>{
   const start=main.indexOf('function FitMatrix(');
   const block=main.slice(start,main.indexOf('function CriteriaPage(',start));
-  assert.match(block,/flex flex-wrap gap-x-3 gap-y-1/);
-  assert.doesNotMatch(block,/<meter|<input|rounded-xl|shadow/);
-  assert.match(block,/row\.weight/);
-  assert.match(block,/row\.grade/);
-  assert.match(block,/row\.points/);
-  assert.match(block,/reasonLabel\[row\.reason\]/);
+  const summary=block.slice(block.indexOf('<div className="max-w-full'),block.indexOf('{expanded&&'));
+  const details=block.slice(block.indexOf('{expanded&&'));
+  assert.match(block,/useState\(false\)/);
   assert.match(block,/FIT necalculat/);
   assert.match(block,/FIT_CRITERIA\.map/);
-  assert.match(block,/FIT total/);
-  assert.match(block,/Total ponderi/);
-  assert.match(block,/Stare evaluare/);
-  assert.doesNotMatch(main,/aria-label="Rezumat FIT"/);
+  assert.match(summary,/overflow-x-auto whitespace-nowrap/);
+  assert.match(summary,/tabIndex=\{0\}/);
+  assert.match(summary,/'FIT '\+fit\+'%'/);
+  assert.match(summary,/shortLabels\[row\.criterion\]/);
+  assert.match(summary,/row\.grade/);
+  assert.match(summary,/\{' · '\}/);
+  assert.match(summary,/aria-expanded=\{expanded\}/);
+  assert.match(summary,/setExpanded\(value=>!value\)/);
+  assert.doesNotMatch(summary,/row\.weight|row\.points|row\.reason|flex-wrap|<p\b/);
+  assert.doesNotMatch(block,/<h[1-6]\b|<dl\b|<meter|<input|grid-cols|flex-wrap/);
+  assert.match(details,/\{expanded&&/);
+  assert.match(details,/row\.weight/);
+  assert.match(details,/row\.grade/);
+  assert.match(details,/row\.points/);
+  assert.match(details,/reasonLabel\[row\.reason\]/);
+  assert.match(details,/Total ponderi/);
+  assert.match(details,/Stare evaluare/);
 });
 
 test('P4 removes duplicate Review action but keeps Details and responsive filters',()=>{
