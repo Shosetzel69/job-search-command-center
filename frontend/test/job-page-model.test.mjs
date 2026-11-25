@@ -102,8 +102,8 @@ test('B1: ignored in-flight Next response restores idle pagination after page-1 
   assert.equal(ignorePageResponse({
     requestSerial:8,currentSerial:8,append:false,
     navigationContext:context,currentContext:'review:all',
-  },setPage),false);
-  assert.equal(updates,3);
+  },setPage),true);
+  assert.equal(updates,4);
 });
 
 test('N5: Next, Previous and Next use stable cursor history, without appending', async () => {
@@ -237,4 +237,17 @@ test('P4 W2 uses global server view for manual review and archived jobs',()=>{
   assert.deepEqual(unknown.searchParams.getAll('role_family'),['UNKNOWN']);
   const known=new URL(buildJobsPath({filters:{unknownFamily:false,sort:'fit-desc',pageSize:20},view:'jobs'}),'https://jscc.test');
   assert.equal(known.searchParams.has('role_family'),false);
+});
+
+
+test('U2: first-page response cannot publish after search, filter, sort or view changes',()=>{
+  const original={filters:{search:'architect',pageSize:20,sort:'fit-desc',workModes:['Remote']},view:'jobs',kpiFilter:'all'};
+  const navigationContext=pageRequestKey(original);
+  const changed=[{...original,filters:{...original.filters,search:'developer'}},{...original,filters:{...original.filters,workModes:['Hybrid']}},{...original,filters:{...original.filters,sort:'title-asc'}},{...original,view:'analysis'},{...original,kpiFilter:'remote'}];
+  for(const scope of changed){
+    let state={loading:true,loadingMore:false};
+    assert.equal(ignorePageResponse({requestSerial:9,currentSerial:9,navigationContext,currentContext:pageRequestKey(scope)},update=>{state=update(state);}),true);
+    assert.equal(state.loading,false);
+  }
+  assert.equal(ignorePageResponse({requestSerial:9,currentSerial:9,navigationContext,currentContext:navigationContext},()=>assert.fail('current response must not be cleared')),false);
 });
