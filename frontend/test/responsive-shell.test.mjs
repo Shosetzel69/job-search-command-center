@@ -92,15 +92,31 @@ test('PASS promotion state is compact while non-PASS states retain checklist', (
   assert.match(promotion, /Checklist promovare/);
 });
 
-test('P4 FIT details render as a compact grid with one six-criterion matrix',()=>{
+test('UX-U1-01: FIT summary is a single scrollable numeric line with explanations on demand',()=>{
   const start=main.indexOf('function FitMatrix(');
   const block=main.slice(start,main.indexOf('function CriteriaPage(',start));
-  assert.match(block,/lg:grid-cols-3/);
+  const summary=block.slice(block.indexOf('<div className="max-w-full'),block.indexOf('{expanded&&'));
+  const details=block.slice(block.indexOf('{expanded&&'));
+  assert.match(block,/useState\(false\)/);
+  assert.match(block,/FIT necalculat/);
   assert.match(block,/FIT_CRITERIA\.map/);
-  assert.match(block,/FIT total/);
-  assert.match(block,/Total ponderi/);
-  assert.match(block,/Stare evaluare/);
-  assert.doesNotMatch(main,/aria-label="Rezumat FIT"/);
+  assert.match(summary,/overflow-x-auto whitespace-nowrap/);
+  assert.match(summary,/tabIndex=\{0\}/);
+  assert.match(summary,/'FIT '\+fit\+'%'/);
+  assert.match(summary,/shortLabels\[row\.criterion\]/);
+  assert.match(summary,/row\.grade/);
+  assert.match(summary,/\{' · '\}/);
+  assert.match(summary,/aria-expanded=\{expanded\}/);
+  assert.match(summary,/setExpanded\(value=>!value\)/);
+  assert.doesNotMatch(summary,/row\.weight|row\.points|row\.reason|flex-wrap|<p\b/);
+  assert.doesNotMatch(block,/<h[1-6]\b|<dl\b|<meter|<input|grid-cols|flex-wrap/);
+  assert.match(details,/\{expanded&&/);
+  assert.match(details,/row\.weight/);
+  assert.match(details,/row\.grade/);
+  assert.match(details,/row\.points/);
+  assert.match(details,/reasonLabel\[row\.reason\]/);
+  assert.match(details,/Total ponderi/);
+  assert.match(details,/Stare evaluare/);
 });
 
 test('P4 removes duplicate Review action but keeps Details and responsive filters',()=>{
@@ -138,4 +154,12 @@ test('mobile listing filters are staged until Apply; dismiss does not commit',()
   assert.ok(block.includes('onClick={apply}'));
   assert.ok(block.includes('onClick={close}'));
   assert.ok(block.includes('if(resetKpi)onResetKpi?.()'));
+});
+
+test('A11Y-01: opening mobile filters focuses the close control and dismissal restores trigger focus',()=>{
+  const block=main.slice(main.indexOf('function Filters('),main.indexOf('function FitBadge('));
+  assert.match(block,/ref=\{filterTriggerRef\}[^>]*aria-haspopup="dialog"/);
+  assert.match(block,/ref=\{filterCloseRef\}[^>]*aria-label="Inchide filtrele"/);
+  assert.match(block,/useLayoutEffect\(\(\)=>\{\s*if\(!mobileOpen\)return;\s*const trigger=filterTriggerRef\.current;\s*filterCloseRef\.current\?\.focus\(\);\s*return\(\)=>\{if\(trigger\?\.isConnected\)trigger\.focus\(\);\};\s*\},\[mobileOpen\]\)/);
+  assert.match(block,/event\.key==='Escape'.*close\(\)/);
 });

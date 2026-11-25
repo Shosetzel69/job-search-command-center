@@ -35,25 +35,34 @@ class Storage:
     def __init__(self, bucket, request=urllib.request.urlopen):
         self.request = request
         self.base = "https://storage.googleapis.com/storage/v1/b/" + urllib.parse.quote(bucket, safe="") + "/o/"
-        with request(urllib.request.Request(
-                "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
-                headers={"Metadata-Flavor": "Google"}), timeout=15) as response:
-            token = json.load(response)["access_token"]
-        self.headers = {"Authorization": "Bearer " + token}
+
+    def authorized_request(self, url, *, method="GET"):
+        for attempt in range(2):
+            with self.request(urllib.request.Request(
+                    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token",
+                    headers={"Metadata-Flavor": "Google"}), timeout=15) as response:
+                token = json.load(response)["access_token"]
+            req = urllib.request.Request(url, headers={"Authorization": "Bearer " + token}, method=method)
+            try:
+                return self.request(req, timeout=20)
+            except urllib.error.HTTPError as exc:
+                if exc.code != 401 or attempt != 0:
+                    raise
+                exc.close()
 
     def read(self, name):
         url = self.base + urllib.parse.quote(name, safe="")
-        with self.request(urllib.request.Request(url, headers=self.headers), timeout=20) as response:
+        with self.authorized_request(url) as response:
             generation = str(json.load(response)["generation"])
         if not re.fullmatch(r"[1-9][0-9]*", generation):
             raise RuntimeError("Invalid run ownership generation")
         media = url + "?alt=media&generation=" + generation
-        with self.request(urllib.request.Request(media, headers=self.headers), timeout=20) as response:
+        with self.authorized_request(media) as response:
             return generation, json.load(response)
 
     def delete(self, name, generation):
         url = self.base + urllib.parse.quote(name, safe="") + "?ifGenerationMatch=" + generation
-        with self.request(urllib.request.Request(url, headers=self.headers, method="DELETE"), timeout=20):
+        with self.authorized_request(url, method="DELETE"):
             pass
 
 
