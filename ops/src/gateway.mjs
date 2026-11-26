@@ -7,7 +7,7 @@ import {
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow,
   normalizeExecutionName, operationObject, authenticatedEvidence, accessTokenRecordError, authorizationCodeRecordError,
-  selectOperationWorker, randomToken, releaseLease, resolveIdempotencyReservation, sha256, sanitizeText, isAllowedChatGptClientId, validateChatGptRedirectUris, validateTaskRequest
+  NILE_JOB, selectOperationWorker, randomToken, releaseLease, resolveIdempotencyReservation, sha256, sanitizeText, isAllowedChatGptClientId, validateChatGptRedirectUris, validateTaskRequest
 } from './lib.mjs';
 
 const cfg = envConfig();
@@ -192,18 +192,18 @@ async function runDiagnosticsJob(job) {
   if (!r.ok) throw new Error(`run_job_${r.status}`);
   return r.json();
 }
-function extractExecutionName(op) {
+function extractExecutionName(op, job) {
   const values = [op?.response?.name, op?.metadata?.name, op?.metadata?.execution, op?.metadata?.target];
   for (const v of values) {
-    if (typeof v === 'string' && v.includes('/executions/')) return normalizeExecutionName(v);
+    if (typeof v === 'string' && v.includes('/executions/')) return normalizeExecutionName(v, job===NILE_JOB);
     if (typeof v === 'string' && /^jscc-(diagnostics|nile-observer)-dev-/.test(v)) return normalizeExecutionName(v);
   }
   return null;
 }
-async function resolveExecution(lro) {
+async function resolveExecution(lro, job) {
   let op = lro;
   for (let i = 0; i < 120; i++) {
-    const direct = extractExecutionName(op);
+    const direct = extractExecutionName(op, job);
     if (direct) return direct;
     if (!op?.name) break;
     await new Promise(r => setTimeout(r, 500));
@@ -270,7 +270,7 @@ async function acceptOperation(auth, toolArgs) {
     await acquireLease(cfg.bucket, opId, timeout + 60_000);
 
     const lro = await runDiagnosticsJob(target.job);
-    const execution = await resolveExecution(lro);
+    const execution = await resolveExecution(lro, target.job);
     if (!execution.startsWith(target.job+'-')) throw new Error('execution_job_mismatch');
     const dispatch = {
       schema_version: '1.0', operation_id: opId, work_item_ref: workItem, execution_name: execution, task: op.task,
