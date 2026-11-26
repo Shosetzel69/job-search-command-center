@@ -104,6 +104,25 @@ class SupervisorTest(unittest.TestCase):
     def call(self,**kwargs):
         return supervisor.run(self.env,root=self.root,storage=self.store,
                               execute=kwargs.get("execute",self.execute),publish=kwargs.get("publish",self.publish))
+    def test_admission_denials_identify_only_failed_predicate(self):
+        cases = (
+            ("APP_ENV", "APP_ENV", "prod"),
+            ("CLOUD_RUN_JOB", "CLOUD_RUN_JOB", "other-job"),
+            ("GCP_RUNTIME_BUCKET", "GCP_RUNTIME_BUCKET", "different-bucket"),
+            ("JSCC_RUN_ID", "JSCC_RUN_ID", "invalid"),
+            ("SOURCE_SHA_FORMAT", "SOURCE_SHA", "bad"),
+            ("SOURCE_SHA_BUILD_MATCH", "JSCC_JOB_BUILD_SHA", "b" * 40),
+        )
+        for reason, key, value in cases:
+            with self.subTest(reason=reason):
+                proposed = dict(self.env, **{key: value})
+                with self.assertRaisesRegex(RuntimeError, "DEV supervisor scope denied: " + reason):
+                    supervisor.admit(proposed)
+        # Never disclose the actual mismatching value.
+        with self.assertRaises(RuntimeError) as mismatch:
+            supervisor.admit(dict(self.env, JSCC_JOB_BUILD_SHA="c" * 40))
+        self.assertNotIn("c" * 40, str(mismatch.exception))
+
     def test_native_crash_finalizes_new_run_and_releases_owned_generations(self):
         self.assertEqual(self.call(),1)
         self.assertEqual(self.published[0]["status"],"failed")
