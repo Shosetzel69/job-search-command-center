@@ -20,7 +20,7 @@ export async function verifyDiagnosticCaller(request,env,verify=jwtVerify){
     return payload.sub===env.JSCC_DEV_NILE_DIAGNOSTIC_CALLER_SUB && payload.aud===AUDIENCE;
   }catch{return false;}
 }
-export async function handleDevNileDiagnostic(request,env,{authorize=verifyDiagnosticCaller,read=readNomenclatures,observe=observeDevNilePlan}={}){
+export async function handleDevNileDiagnostic(request,env,{authorize=verifyDiagnosticCaller,read=readNomenclatures,observe=observeDevNilePlan,sourceSha=BUILD_IDENTITY.sourceSha}={}){
   if(env.APP_ENV!=='dev'||env.JSCC_DEV_NILE_DIAGNOSTICS!=='true')return reply({error:'not_found'},404);
   if(request.method!=='GET')return reply({error:'method_denied'},405);
   if(!(await authorize(request,env)))return reply({error:'forbidden'},403);
@@ -29,15 +29,15 @@ export async function handleDevNileDiagnostic(request,env,{authorize=verifyDiagn
   const operation=url.searchParams.get('operation');
   if(keys.length!==2||!keys.includes('operation')||!keys.includes('expected_source_sha')||!OPERATIONS.has(operation))return reply({error:'invalid_operation'},400);
   const expected=url.searchParams.get('expected_source_sha');
-  if(!/^[0-9a-f]{40}$/.test(expected||'')||BUILD_IDENTITY.sourceSha!==expected)return reply({error:'source_mismatch'},409);
+  if(!/^[0-9a-f]{40}$/.test(expected||'')||sourceSha!==expected)return reply({error:'source_mismatch'},409);
   if(active||Date.now()-lastStart<10000)return reply({error:'diagnostic_busy'},429);
   active=true;
   lastStart=Date.now();
   try{
     const result=await observe(operation,(await read(env)).payload,env);
     console.log(JSON.stringify({event:'dev_nile_diagnostic',operation,status:result.status}));
-    return reply({...result,source_sha:BUILD_IDENTITY.sourceSha},result.status==='COLLECTED'?200:503);
+    return reply({...result,source_sha:sourceSha},result.status==='COLLECTED'?200:503);
   }catch{
-    return reply({status:'ERROR',operation,stage:'route',sqlstate:null,source_sha:BUILD_IDENTITY.sourceSha},503);
+    return reply({status:'ERROR',operation,stage:'route',sqlstate:null,source_sha:sourceSha},503);
   }finally{active=false;}
 }
