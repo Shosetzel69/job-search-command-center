@@ -18,6 +18,7 @@ export const OUTPUT_MAX_BYTES = 64 * 1024;
 export const DAILY_OPERATION_LIMIT = 50;
 
 export const TASK_CATALOG = Object.freeze({
+  observe_dev_nile: Object.freeze({class:'OBSERVE',params:Object.freeze({environment:'dev_env',operation:'nile_observation'})}),
   describe_execution: Object.freeze({
     class: 'OBSERVE',
     params: Object.freeze({ execution_id: 'execution_id' }),
@@ -118,6 +119,9 @@ export function validateTaskRequest(task, args) {
     else if (type === 'dev_env') {
       if (value !== 'dev') throw new Error('environment_denied');
       clean[name] = 'dev';
+    } else if (type === 'nile_observation') {
+      if (!['schema_probe','evaluation_count_plan'].includes(value)) throw new Error('nile_operation_denied');
+      clean[name]=value;
     } else if (type === 'dev_service') {
       clean[name] = admitDevRequest({environment:'dev',task:'describe_dev_runtime',service:value}).service;
     } else if (type === 'known_build') {
@@ -185,6 +189,7 @@ const AUTHENTICATED_ASSERTION_FIELDS = Object.freeze([
   'expected_current_digest','proposed_image_digest','expected_source_sha',
   'source_image_link','change_required','deployment_authorized','approval_required',
   'preflight_verdict',
+  'nile_status','nile_stage','nile_sqlstate','nile_evidence_json',
   'script_id','script_sha256','script_step_count','script_verdict',
   'runtime_service','runtime_revision_count','script_source_provenance'
 ]);
