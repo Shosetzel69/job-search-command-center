@@ -69,11 +69,19 @@ class Storage:
 def admit(env):
     run_id = env.get("JSCC_RUN_ID", "")
     source = env.get("SOURCE_SHA", "")
-    if (env.get("APP_ENV") != "dev" or env.get("CLOUD_RUN_JOB") != "jscc-search-dev"
-            or env.get("GCP_RUNTIME_BUCKET") != "jscc-dev-runtime-828902654738"
-            or not RUN_ID.fullmatch(run_id) or not re.fullmatch(r"[0-9a-f]{40}", source)
-            or source != env.get("JSCC_JOB_BUILD_SHA")):
-        raise RuntimeError("DEV supervisor scope denied")
+    # #520: retain fail-closed admission, but name only the denied predicate.
+    # Never print environment values, tokens, user data, or database URLs.
+    predicates = (
+        ("APP_ENV", env.get("APP_ENV") == "dev"),
+        ("CLOUD_RUN_JOB", env.get("CLOUD_RUN_JOB") == "jscc-search-dev"),
+        ("GCP_RUNTIME_BUCKET", env.get("GCP_RUNTIME_BUCKET") == "jscc-dev-runtime-828902654738"),
+        ("JSCC_RUN_ID", bool(RUN_ID.fullmatch(run_id))),
+        ("SOURCE_SHA_FORMAT", bool(re.fullmatch(r"[0-9a-f]{40}", source))),
+        ("SOURCE_SHA_BUILD_MATCH", source == env.get("JSCC_JOB_BUILD_SHA")),
+    )
+    for reason, accepted in predicates:
+        if not accepted:
+            raise RuntimeError("DEV supervisor scope denied: " + reason)
     return run_id
 
 

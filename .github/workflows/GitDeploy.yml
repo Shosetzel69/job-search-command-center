@@ -29,8 +29,8 @@ jobs:
         run: |
           set -euo pipefail
           bash -n scripts/deploy/GitDeploy.sh scripts/deploy/GCloudDeploy.sh scripts/deploy/jscc-dev-service.sh
-          python3 -m py_compile scripts/deploy/jscc_deploy_guard.py
-          python3 -m unittest -v scripts.test_deploy_routes
+          python3 -m py_compile scripts/deploy/jscc_deploy_guard.py scripts/deploy/jscc_search_pair_guard.py
+          python3 -m unittest -v scripts.test_deploy_routes scripts.test_jscc_search_pair_guard scripts.test_gcp_dev_run_supervisor
 
   deploy-dev:
     if: >-
@@ -99,7 +99,7 @@ jobs:
           test "$(git -C candidate rev-parse HEAD)" = "$SOURCE_SHA" || exit 86
           test -z "$(git -C candidate status --porcelain)" || exit 86
           bash -n control/scripts/deploy/GitDeploy.sh control/scripts/deploy/GCloudDeploy.sh control/scripts/deploy/jscc-dev-service.sh
-          (cd control && python3 -m unittest -v scripts.test_deploy_routes)
+          (cd control && python3 -m unittest -v scripts.test_deploy_routes scripts.test_jscc_search_pair_guard scripts.test_gcp_dev_run_supervisor)
           # Other canonical main CI jobs may finish after the Command API workflow.
           # The bounded wait avoids false failures while never approving a red job.
           good=false
