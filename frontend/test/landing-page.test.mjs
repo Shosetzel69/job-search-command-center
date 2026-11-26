@@ -18,8 +18,8 @@ test('#696: public landing preserves signed-out boundary and Google credential w
 
 test('#696: one shared responsive public page, sign-in before features on mobile', () => {
   assert.match(landing, /data-testid="public-landing"/);
-  assert.match(landing, /lg:grid-cols-/);
-  assert.match(landing, /sm:grid-cols-3/);
+  assert.match(landing, /xl:grid-cols-/);
+  assert.match(landing, /xl:grid-cols-3/);
   assert.match(landing, /function Logo\(/);
   assert.ok(landing.indexOf('data-testid="landing-signin"') < landing.indexOf('features.map'));
   assert.ok(landing.includes('{signIn}'));
@@ -43,4 +43,15 @@ test('#696 web mockup: public navigation targets are real and the preview is exp
   assert.ok(landing.includes('Under control.'));
   assert.ok(landing.includes('Example data · not a live dashboard'));
   assert.ok(landing.includes('See how it works'));
+});
+
+test('#696: tablet and mobile follow the compact light reference; desktop keeps the dark reference', () => {
+  assert.ok(landing.includes('bg-white text-slate-900 xl:bg-[#071326]'));
+  assert.ok(landing.includes('Your Job Search<br/>Under Control.'));
+  assert.ok(landing.includes('Find, review, and manage job opportunities in one place.'));
+  assert.ok(landing.includes('<CompactWorkspacePreview/>'));
+  assert.ok(landing.includes('data-testid="compact-benefits"'));
+  for (const label of ['Find relevant jobs','Stay organized','Be more effective','Your data, your control']) assert.ok(landing.includes(label));
+  assert.ok(landing.includes('aria-label="Mobile navigation"'));
+  assert.equal((landing.match(/\{signIn\}/g)||[]).length,1);
 });
