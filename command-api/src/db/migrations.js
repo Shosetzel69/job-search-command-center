@@ -35,6 +35,7 @@ export async function migrate({ env = process.env, db = getMigrationPool(env), d
   const migrations = await loadMigrations(dir);
   const client = await db.connect();
   const executed = [];
+  let discard = false;
   try {
     await client.query('BEGIN');
     await client.query(`SELECT pg_advisory_xact_lock(hashtext('jscc-schema-migrate'))`);
@@ -55,9 +56,10 @@ export async function migrate({ env = process.env, db = getMigrationPool(env), d
     await client.query('COMMIT');
     return { applied:executed, current:migrations.at(-1).version };
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    try { await client.query('ROLLBACK'); } catch { discard = true; }
     throw error;
   } finally {
-    client.release();
+    if (discard) client.release(true);
+    else client.release();
   }
 }
