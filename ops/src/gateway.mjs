@@ -278,7 +278,7 @@ async function acceptOperation(auth, toolArgs) {
       ops_source_sha: cfg.opsSourceSha, worker_image_digest: target.digest,
       expires_at_ms: Date.now() + timeout, created_at: isoNow(),
     };
-    await gcsWriteJson(cfg.bucket, `dispatch/${execution}.json`, dispatch, 0);
+    await gcsWriteJson(cfg.bucket, `${op.task === 'observe_dev_nile' ? 'nile/dispatch' : 'dispatch'}/${execution}.json`, dispatch, 0);
     await updateOperation(opId, () => ({ operation_state: 'RUNNING', execution_name: execution, started_at: isoNow() }));
     return { operation_id: opId, duplicate: false, operation_state: 'RUNNING' };
   } catch (e) {
@@ -300,7 +300,7 @@ async function getOperation(id) {
   if (!/^op-[a-z0-9_-]{10,100}$/.test(opId)) throw new Error('invalid_operation_id');
   const rec = await gcsReadJson(cfg.bucket, `operations/${opId}.json`);
   if (!rec) throw new Error('operation_not_found');
-  const result = await gcsReadJson(cfg.bucket, `results/${opId}.json`);
+  const result = await gcsReadJson(cfg.bucket, `${rec.data.task === 'observe_dev_nile' ? 'nile/results' : 'results'}/${opId}.json`);
   return result ? authenticatedEvidence({ ...rec.data, ...result.data }) : authenticatedEvidence(rec.data);
 }
 
