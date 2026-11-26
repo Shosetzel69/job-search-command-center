@@ -14,6 +14,7 @@ def job(image=IMAGE + "@" + DIGEST, app_env="dev",
         bucket="jscc-dev-runtime-828902654738", version=2):
     c = {"image": image, "env": [
         {"name": "APP_ENV", "value": app_env},
+        {"name": "CLOUD_RUN_JOB", "value": "jscc-search-dev"},
         {"name": "GCP_RUNTIME_BUCKET", "value": bucket},
     ]}
     if version == 2:
@@ -48,6 +49,11 @@ class SearchPairTest(unittest.TestCase):
 
     def test_non_dev_refused(self):
         self.check_denied(job(app_env="prod"), "JOB_DEV_CONFIGURATION_MISMATCH")
+
+    def test_wrong_job_identity_refused(self):
+        payload = job()
+        payload["template"]["template"]["containers"][0]["env"][1]["value"] = "other-job"
+        self.check_denied(payload, "JOB_DEV_CONFIGURATION_MISMATCH")
 
     def test_bucket_drift_refused(self):
         self.check_denied(job(bucket="other"), "JOB_DEV_CONFIGURATION_MISMATCH")
