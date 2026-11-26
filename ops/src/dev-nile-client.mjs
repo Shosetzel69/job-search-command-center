@@ -3,9 +3,15 @@
 const AUDIENCE='urn:jscc:dev:nile-diagnostic';
 const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze']);
 const METRICS=['Plan Rows','Plan Width','Startup Cost','Total Cost','Actual Rows','Actual Loops','Actual Total Time','Shared Hit Blocks','Shared Read Blocks'];
+const DIAGNOSTIC_PLAN_ENUMS=Object.freeze({
+  'Node Type':new Set(['Aggregate','Append','BitmapAnd','BitmapOr','Bitmap Heap Scan','Bitmap Index Scan','CTE Scan','Custom Scan','Foreign Scan','Function Scan','Gather','Gather Merge','Group','Hash','Hash Join','Incremental Sort','Index Scan','Index Only Scan','Limit','LockRows','Materialize','Memoize','Merge Append','Merge Join','Nested Loop','ProjectSet','Recursive Union','Result','Sample Scan','Seq Scan','SetOp','Sort','Subquery Scan','Tid Scan','Tid Range Scan','Unique','Values Scan','WindowAgg','WorkTable Scan']),
+  'Join Type':new Set(['Inner','Left','Right','Full','Semi','Anti','Right Anti','Right Semi']),
+  'Strategy':new Set(['Plain','Sorted','Hashed','Mixed'])
+});
 function planSummary(node,budget={remaining:128},depth=0){
   if(!node||typeof node!=='object'||depth>16||--budget.remaining<0)throw Error('invalid_plan');
   const out={};
+  for(const [key,allowed] of Object.entries(DIAGNOSTIC_PLAN_ENUMS))if(allowed.has(node[key]))out[key]=node[key];
   for(const k of METRICS)if(Number.isFinite(node[k]))out[k]=node[k];
   if(Array.isArray(node.children))out.children=node.children.map(x=>planSummary(x,budget,depth+1));
   return out;
