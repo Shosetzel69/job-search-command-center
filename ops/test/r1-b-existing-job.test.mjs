@@ -36,7 +36,7 @@ test('R1 B evidence projection does not return arbitrary worker-private response
 });
 
 test('R3 catalog version rejects old R33/R1-B dispatch in changed worker',()=>{
- assert.equal(CATALOG_VERSION,'589-r4-v1');
+ assert.equal(CATALOG_VERSION,'589-r4-v2');
  const now=Date.now();
  const base={
   execution_name:'jscc-diagnostics-dev-123',
@@ -46,5 +46,6 @@ test('R3 catalog version rejects old R33/R1-B dispatch in changed worker',()=>{
  };
  const expected={catalog_version:CATALOG_VERSION,ops_source_sha:base.ops_source_sha,worker_image_digest:base.worker_image_digest};
  assert.throws(()=>validateDispatchBinding({...base,catalog_version:'537-v1'},base.execution_name,expected,now),/catalog_version_mismatch/);
+ assert.throws(()=>validateDispatchBinding({...base,catalog_version:'589-r4-v1'},base.execution_name,expected,now),/catalog_version_mismatch/);
  assert.equal(validateDispatchBinding({...base,catalog_version:CATALOG_VERSION},base.execution_name,expected,now).catalog_version,CATALOG_VERSION);
 });
