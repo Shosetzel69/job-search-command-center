@@ -1,7 +1,13 @@
 import crypto from 'node:crypto';
 import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
-export const CATALOG_VERSION = '589-r4-v1';
+export const CATALOG_VERSION = '589-r4-v2';
+export const NILE_JOB = 'jscc-nile-observer-dev';
+export function selectOperationWorker(cfg, task) {
+  if (task !== 'observe_dev_nile') return {job:cfg.diagnosticsJob,digest:cfg.workerDigest};
+  if (!/^sha256:[0-9a-f]{64}$/.test(cfg.nileWorkerDigest || '')) throw new Error('nile_operator_not_configured');
+  return {job:NILE_JOB,digest:cfg.nileWorkerDigest};
+}
 export const DEV_DIAGNOSTIC_SCRIPT_ID = 'dev_runtime_build_inventory_v1';
 export const DEV_DIAGNOSTIC_SCRIPT_SHA256 = '60f9c0f87abd9da979e1dc66c5a5e2580faa5a4483aacb7f3b8bdd2478bea73b';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
@@ -76,7 +82,7 @@ export function parseJson(text, fallback = null) {
 export function normalizeExecutionId(value) {
   const v = String(value || '').trim();
   if (!/^[a-z][a-z0-9-]{5,62}$/.test(v)) throw new Error('invalid_execution_id');
-  if (!(v.startsWith('jscc-search-dev-') || v.startsWith('jscc-diagnostics-dev-'))) {
+  if (!(v.startsWith('jscc-search-dev-') || v.startsWith('jscc-diagnostics-dev-') || v.startsWith(NILE_JOB+'-'))) {
     throw new Error('execution_not_allowlisted');
   }
   return v;
@@ -86,6 +92,7 @@ export function executionJobName(executionId) {
   const id = normalizeExecutionId(executionId);
   if (id.startsWith('jscc-search-dev-')) return 'jscc-search-dev';
   if (id.startsWith('jscc-diagnostics-dev-')) return 'jscc-diagnostics-dev';
+  if (id.startsWith(NILE_JOB+'-')) return NILE_JOB;
   throw new Error('execution_not_allowlisted');
 }
 
@@ -290,6 +297,7 @@ export function envConfig(env = process.env) {
     devBaseUrl: String(env.DEV_BASE_URL || '').replace(/\/$/, ''),
     gatewayDigest: env.GATEWAY_IMAGE_DIGEST,
     workerDigest: env.WORKER_IMAGE_DIGEST,
+    nileWorkerDigest: String(env.NILE_WORKER_IMAGE_DIGEST || ''),
     diagnosticsJob: String(env.DIAGNOSTICS_JOB || 'jscc-diagnostics-dev'),
     logViewResource: String(env.LOG_VIEW_RESOURCE || ''),
     googleClientId: String(env.GOOGLE_CLIENT_ID || ''),
