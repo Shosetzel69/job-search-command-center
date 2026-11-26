@@ -9,7 +9,7 @@ async function main(){
   if(!/^sha256:[0-9a-f]{64}$/.test(cfg.nileWorkerDigest)) throw Error('missing_worker_digest');
   let dispatch;
   for(let i=0;i<240;i++){
-    const rec=await gcsReadJson(cfg.bucket,'dispatch/'+execution+'.json');
+    const rec=await gcsReadJson(cfg.bucket,'nile/dispatch/'+execution+'.json');
     if(rec){dispatch=rec.data;break;}
     await new Promise(resolve=>setTimeout(resolve,500));
   }
@@ -28,7 +28,7 @@ async function main(){
   finally{if(pool)await pool.end();}
   const state=result.status==='COLLECTED'?'SUCCEEDED':'FAILED';
   const evidence={operation_id:id,task:task.task,operation_state:state,ops_source_sha:cfg.opsSourceSha,worker_image_digest:cfg.nileWorkerDigest,finished_at:isoNow(),assertions:{nile_status:result.status,nile_stage:result.stage??null,nile_sqlstate:result.sqlstate??null,nile_evidence_json:JSON.stringify(result)}};
-  await gcsWriteJson(cfg.bucket,'results/'+id+'.json',evidence,0);
+  await gcsWriteJson(cfg.bucket,'nile/results/'+id+'.json',evidence,0);
   const key='operations/'+id+'.json';
   for(let i=0;i<4;i++){
     const rec=await gcsReadJson(cfg.bucket,key);
