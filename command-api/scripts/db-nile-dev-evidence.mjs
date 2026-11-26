@@ -81,6 +81,7 @@ export async function collectNileDevEvidence(
     );
 
     const client = await db.connect();
+    let discard = true;
     try {
       await client.query('BEGIN');
       await client.query(`SET LOCAL nile.tenant_id = '${tenantA}'`);
@@ -121,7 +122,7 @@ export async function collectNileDevEvidence(
       } catch {
         crossTenantRejected = true;
       }
-      await client.query('ROLLBACK').catch(() => {});
+      await client.query('ROLLBACK');
       assert(crossTenantRejected, 'Tenant A context accepted a write for tenant B');
 
       const afterRollback = await client.query(
@@ -140,8 +141,10 @@ export async function collectNileDevEvidence(
         'Tenant B context exposed another tenant',
       );
       await client.query('COMMIT');
+      discard = false;
     } finally {
-      client.release();
+      if (discard) client.release(true);
+      else client.release();
     }
 
     // Verify the approved staged account lifecycle on tenant A using only
