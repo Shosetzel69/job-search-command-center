@@ -4,6 +4,7 @@ substitutions:
   _TRUSTED_REF: ""
   _GATEWAY_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway"
   _WORKER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-diagnostics"
+  _NILE_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-nile-observer"
 steps:
   - id: trusted-source-admission
     name: gcr.io/cloud-builders/git
@@ -34,6 +35,8 @@ steps:
         node --check src/lib.mjs
         node --check src/gateway.mjs
         node --check src/worker.mjs
+        node --check nile/worker.mjs
+        node --check nile/dev-nile-observer.mjs
         node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
   - id: registry-immutability
     name: gcr.io/cloud-builders/gcloud
@@ -50,7 +53,7 @@ steps:
     args:
       - -ceu
       - |
-        rm -f /workspace/.gateway-exists /workspace/.worker-exists
+        rm -f /workspace/.gateway-exists /workspace/.worker-exists /workspace/.nile-exists
         if gcloud artifacts docker images describe "${_GATEWAY_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.gateway-exists
           echo "REUSE_GATEWAY_TAG=${_GIT_SHA}"
@@ -58,6 +61,10 @@ steps:
         if gcloud artifacts docker images describe "${_WORKER_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.worker-exists
           echo "REUSE_WORKER_TAG=${_GIT_SHA}"
+        fi
+
+        if gcloud artifacts docker images describe "${_NILE_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+          touch /workspace/.nile-exists
         fi
 
   - id: build-gateway
@@ -107,13 +114,23 @@ steps:
         else
           docker push "${_WORKER_IMAGE}:${_GIT_SHA}"
         fi
+  - id: build-push-nile
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        if [[ ! -f /workspace/.nile-exists ]]; then
+          docker build --pull -f ops/Dockerfile.nile --build-arg "SOURCE_SHA=${_GIT_SHA}" -t "${_NILE_IMAGE}:${_GIT_SHA}" .
+          docker push "${_NILE_IMAGE}:${_GIT_SHA}"
+        fi
   - id: evidence
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
     args:
       - -ceu
       - |
-        for image in "${_GATEWAY_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}"; do
+        for image in "${_GATEWAY_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}" "${_NILE_IMAGE}:${_GIT_SHA}"; do
           digest="$(gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)')"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           echo "OPS_IMAGE=$image@$digest"
