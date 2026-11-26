@@ -79,10 +79,10 @@ export function parseJson(text, fallback = null) {
   try { return JSON.parse(text); } catch { return fallback; }
 }
 
-export function normalizeExecutionId(value) {
+export function normalizeExecutionId(value, allowNile = false) {
   const v = String(value || '').trim();
   if (!/^[a-z][a-z0-9-]{5,62}$/.test(v)) throw new Error('invalid_execution_id');
-  if (!(v.startsWith('jscc-search-dev-') || v.startsWith('jscc-diagnostics-dev-') || v.startsWith(NILE_JOB+'-'))) {
+  if (!(v.startsWith('jscc-search-dev-') || v.startsWith('jscc-diagnostics-dev-') || (allowNile && v.startsWith(NILE_JOB+'-')))) {
     throw new Error('execution_not_allowlisted');
   }
   return v;
@@ -92,7 +92,6 @@ export function executionJobName(executionId) {
   const id = normalizeExecutionId(executionId);
   if (id.startsWith('jscc-search-dev-')) return 'jscc-search-dev';
   if (id.startsWith('jscc-diagnostics-dev-')) return 'jscc-diagnostics-dev';
-  if (id.startsWith(NILE_JOB+'-')) return NILE_JOB;
   throw new Error('execution_not_allowlisted');
 }
 
@@ -467,8 +466,8 @@ export function operationObject(operationId, taskRequest, ctx = {}) {
   };
 }
 
-export function normalizeExecutionName(name) {
+export function normalizeExecutionName(name, allowNile = false) {
   const v = String(name || '');
   const base = v.includes('/') ? v.slice(v.lastIndexOf('/') + 1) : v;
-  return normalizeExecutionId(base);
+  return normalizeExecutionId(base, allowNile);
 }
