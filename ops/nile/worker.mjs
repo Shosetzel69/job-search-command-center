@@ -1,10 +1,10 @@
 import pg from 'pg';
 import {observeNile} from './dev-nile-observer.mjs';
-import {CATALOG_VERSION,NILE_JOB,envConfig,gcsReadJson,gcsWriteJson,isoNow,normalizeExecutionId,validateDispatchBinding,validateTaskRequest,gcsReplaceJson,releaseLease} from '../src/lib.mjs';
+import {CATALOG_VERSION,NILE_JOB,envConfig,gcsReadJson,gcsWriteJson,isoNow,normalizeExecutionId,validateDispatchBinding,validateTaskRequest,releaseLease} from '../src/lib.mjs';
 
 async function main(){
   const cfg=envConfig();
-  const execution=normalizeExecutionId(process.env.CLOUD_RUN_EXECUTION);
+  const execution=normalizeExecutionId(process.env.CLOUD_RUN_EXECUTION,true);
   if(process.env.CLOUD_RUN_JOB!==NILE_JOB || !execution.startsWith(NILE_JOB+'-')) throw Error('wrong_job');
   if(!/^sha256:[0-9a-f]{64}$/.test(cfg.nileWorkerDigest)) throw Error('missing_worker_digest');
   let dispatch;
@@ -17,6 +17,7 @@ async function main(){
   const task=validateTaskRequest(dispatch.task,dispatch.args);
   if(task.task!=='observe_dev_nile'||!/^op-[a-z0-9_-]{10,100}$/.test(dispatch.operation_id)) throw Error('invalid_dispatch');
   const id=dispatch.operation_id;
+  const startedAt=isoNow();
   let result={status:'ERROR',stage:'configuration',sqlstate:null};
   let pool;
   try{
@@ -27,15 +28,8 @@ async function main(){
   }catch{result={status:'ERROR',stage:'operator',sqlstate:null};}
   finally{if(pool)await pool.end();}
   const state=result.status==='COLLECTED'?'SUCCEEDED':'FAILED';
-  const evidence={operation_id:id,task:task.task,operation_state:state,ops_source_sha:cfg.opsSourceSha,worker_image_digest:cfg.nileWorkerDigest,finished_at:isoNow(),assertions:{nile_status:result.status,nile_stage:result.stage??null,nile_sqlstate:result.sqlstate??null,nile_evidence_json:JSON.stringify(result)}};
+  const evidence={operation_id:id,work_item_ref:dispatch.work_item_ref,task:task.task,task_class:task.task_class,operation_state:state,ops_source_sha:cfg.opsSourceSha,gateway_image_digest:cfg.gatewayDigest,worker_image_digest:cfg.nileWorkerDigest,started_at:startedAt,finished_at:isoNow(),assertions:{nile_status:result.status,nile_stage:result.stage??null,nile_sqlstate:result.sqlstate??null,nile_evidence_json:JSON.stringify(result)}};
   await gcsWriteJson(cfg.bucket,'nile/results/'+id+'.json',evidence,0);
-  const key='operations/'+id+'.json';
-  for(let i=0;i<4;i++){
-    const rec=await gcsReadJson(cfg.bucket,key);
-    if(!rec)throw Error('operation_missing');
-    try{await gcsReplaceJson(cfg.bucket,key,{...rec.data,operation_state:state,finished_at:evidence.finished_at},rec.generation);break;}
-    catch(e){if(e.message!=='generation_precondition_failed'||i===3)throw e;}
-  }
   await releaseLease(cfg.bucket,id);
   if(state==='FAILED')process.exitCode=1;
 }
