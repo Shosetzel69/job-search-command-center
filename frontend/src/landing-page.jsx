@@ -1,4 +1,5 @@
 import React from 'react';
+import desktopApprovedImage from './assets/jscc-desktop-approved.webp';
 
 const features = [
   { number:'01', title:'Find what is new', description:'Surface relevant opportunities using your own search criteria.', icon:<><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></> },
@@ -44,37 +45,9 @@ function Logo(){
 }
 
 function WorkspacePreview(){
-  // Illustrative presentation only: no data requests, metrics or live account content.
-  const jobs=[['Delivery Manager','Hybrid','FIT 85%'],['IT Project Manager','Remote','FIT 80%'],['Service Manager','Onsite','FIT 70%']];
-  return <figure aria-label="Illustrative JSCC workspace preview" className="relative isolate hidden min-w-0 py-6 xl:block xl:px-3 xl:py-10">
-    <div aria-hidden="true" className="absolute inset-x-5 inset-y-4 -z-10 -rotate-3 rounded-3xl border border-blue-400/60 bg-gradient-to-br from-indigo-700/40 to-cyan-500/40 shadow-[0_0_60px_#0ea5e966]"/>
-    <div aria-hidden="true" className="absolute inset-x-1 inset-y-9 -z-10 rotate-2 rounded-3xl border border-blue-600/60 bg-blue-900/30"/>
-    <div className="relative min-w-0 rounded-2xl border border-sky-300/80 bg-[#0d192d] shadow-[0_0_24px_#0ea5e955,0_18px_60px_#020617] sm:rounded-3xl">
-      <div className="flex items-center justify-between gap-2 border-b border-slate-700/70 px-3 py-3 sm:px-5">
-        <div className="flex gap-1.5" aria-hidden="true"><span className="h-2 w-2 rounded-full bg-red-400"/><span className="h-2 w-2 rounded-full bg-amber-300"/><span className="h-2 w-2 rounded-full bg-emerald-400"/></div>
-        <span className="text-[10px] font-medium uppercase tracking-wider text-slate-300">Illustrative preview</span>
-      </div>
-      <div className="grid min-w-0 grid-cols-1 sm:grid-cols-[112px_minmax(0,1fr)]">
-        <div className="hidden border-r border-slate-700/70 bg-slate-950/50 px-3 py-4 sm:block">
-          <Logo/>
-          <div className="mt-5 space-y-2 text-[11px] text-slate-300">
-            {['Jobs','Review queue','Applications','Archived','Preferences'].map((item,i)=><div key={item} className={'rounded-md px-2 py-2 '+(i===0?'bg-blue-800/70 text-sky-100':'')}>{item}</div>)}
-          </div>
-        </div>
-        <div className="min-w-0 space-y-3 p-3 sm:p-4 lg:p-5">
-          <div><h2 className="font-display text-base font-bold sm:text-lg">Job Search Command Center</h2><p className="mt-1 text-[11px] text-slate-300">Your opportunities, decisions and applications in one place.</p></div>
-          <div className="grid grid-cols-3 gap-2">
-            {['New jobs','Review queue','Applications'].map((item,i)=><div key={item} className={'min-w-0 rounded-lg border p-2 sm:p-3 '+['border-blue-400/40 bg-blue-900/40','border-violet-400/40 bg-violet-900/30','border-cyan-400/40 bg-cyan-900/30'][i]}><p className="break-words text-[10px] font-semibold sm:text-xs">{item}</p><p className="mt-2 font-display text-xl font-bold sm:text-2xl">{['24','8','17'][i]}</p></div>)}
-          </div>
-          <div className="rounded-lg border border-slate-700 bg-slate-800/60 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2"><h3 className="text-xs font-bold">Job opportunities</h3><span className="rounded bg-blue-900/70 px-2 py-1 text-[10px] text-sky-200">FIT score</span></div>
-            <div className="mt-2 divide-y divide-slate-700">{jobs.map(([title,mode,fit])=><div key={title} className="flex min-w-0 items-center gap-2 py-3"><div className="min-w-0 flex-1"><p className="text-xs font-semibold">{title}</p><p className="mt-1 text-[10px] text-slate-400">{mode}</p></div><span className="shrink-0 rounded bg-emerald-900/60 px-2 py-1 text-[10px] font-semibold text-emerald-200">{fit}</span></div>)}</div>
-          </div>
-          <div className="flex flex-wrap gap-2 text-[10px] text-slate-300"><span className="rounded-md border border-slate-600 px-2 py-1">Review</span><span className="rounded-md border border-slate-600 px-2 py-1">Apply</span><span className="rounded-md border border-slate-600 px-2 py-1">Archive</span></div>
-        </div>
-      </div>
-    </div>
-    <figcaption className="mt-3 text-center text-xs text-slate-400">Example data · not a live dashboard</figcaption>
+  return <figure aria-label="Approved desktop design concept" className="hidden min-w-0 xl:block" data-testid="desktop-approved-preview">
+    <img src={desktopApprovedImage} width={885} height={660} alt="JSCC desktop design concept showing an illustrative dashboard, summary cards and application charts" className="block h-auto w-full rounded-xl object-contain" decoding="async"/>
+    <figcaption className="mt-3 text-center text-xs leading-relaxed text-slate-300">Concept illustration. Example data · not a live dashboard. Analytics shown are illustrative, not currently available.</figcaption>
   </figure>;
 }
 

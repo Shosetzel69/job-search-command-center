@@ -55,3 +55,17 @@ test('#696: tablet and mobile follow the compact light reference; desktop keeps 
   assert.ok(landing.includes('aria-label="Mobile navigation"'));
   assert.equal((landing.match(/\{signIn\}/g)||[]).length,1);
 });
+
+test('#696: desktop uses the supplied approved image, while compact layout remains separate', () => {
+  const start = landing.indexOf('function WorkspacePreview(){');
+  const end = landing.indexOf('export default function LandingPage(', start);
+  const preview = landing.slice(start, end);
+  assert.ok(landing.includes("import desktopApprovedImage from './assets/jscc-desktop-approved.webp'"));
+  assert.ok(preview.includes('src={desktopApprovedImage}'));
+  assert.ok(preview.includes('xl:block'));
+  assert.ok(preview.includes('Analytics shown are illustrative, not currently available.'));
+  assert.ok(landing.includes('<CompactWorkspacePreview/>'));
+  const image = readFileSync(new URL('../src/assets/jscc-desktop-approved.webp', import.meta.url));
+  assert.equal(image.toString('ascii', 0, 4), 'RIFF');
+  assert.equal(image.toString('ascii', 8, 12), 'WEBP');
+});
