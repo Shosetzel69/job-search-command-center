@@ -22,7 +22,11 @@ async function main(){
   let pool;
   try{
     const uri=new URL(process.env.NILE_OBSERVER_DATABASE_URL);
-    if(!['postgres:','postgresql:'].includes(uri.protocol)||uri.pathname!=='/jobsearch_dev'||uri.search||uri.hash||!uri.hostname||!uri.username||!uri.password) throw Error('invalid_db_binding');
+    const host=process.env.NILE_OBSERVER_DB_HOST;
+    if(!['postgres:','postgresql:'].includes(uri.protocol)||uri.pathname!=='/jobsearch_dev'||uri.hash||!uri.username||!uri.password||!host||uri.hostname!==host||!host.endsWith('.db.thenile.dev')||!['','5432'].includes(uri.port)) throw Error('invalid_db_binding');
+    const keys=[...uri.searchParams.keys()];
+    if(keys.length>1||(keys.length===1&&(keys[0]!=='sslmode'||!['require','verify-full'].includes(uri.searchParams.get('sslmode'))))) throw Error('invalid_db_options');
+    uri.search='';
     pool=new pg.Pool({connectionString:uri.toString(),ssl:{rejectUnauthorized:true},max:1,connectionTimeoutMillis:5000,query_timeout:12000});
     result=await observeNile({pool,authorizedTenant:process.env.NILE_OBSERVER_TENANT_ID,expectedRole:process.env.NILE_OBSERVER_ROLE},task.args);
   }catch{result={status:'ERROR',stage:'operator',sqlstate:null};}
