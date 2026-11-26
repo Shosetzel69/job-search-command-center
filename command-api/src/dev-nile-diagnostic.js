@@ -6,7 +6,7 @@ import {BUILD_IDENTITY} from './build-identity.generated.js';
 const JWKS=createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 export const DIAGNOSTIC_PATH='/admin/dev/nile-diagnostic';
 const AUDIENCE='urn:jscc:dev:nile-diagnostic';
-const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan']);
+const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze']);
 let active=false;
 let lastStart=0;
 const reply=(body,status)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json','cache-control':'no-store'}});
