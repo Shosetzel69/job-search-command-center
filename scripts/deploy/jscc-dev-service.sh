@@ -76,6 +76,23 @@ python3 "$guard" fetch-ci "$sha" "$work/checks.json"
 immutable="$(gcp artifacts repositories describe jscc --project="$shared" \
  --location="$region" --format='value(dockerConfig.immutableTags)')"
 [[ "$immutable" == True || "$immutable" == true ]] || { echo JSCC_DEPLOY_REGISTRY_NOT_IMMUTABLE; exit 86; }
+# #520: fail closed before any Service mutation if Search Job is not built
+# from the same exact immutable candidate SHA. Service-only rollout cannot
+# silently break Retrieve's SOURCE_SHA == JSCC_JOB_BUILD_SHA admission guard.
+job_image="europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc:$sha"
+if ! gcp artifacts docker images describe "$job_image" --project="$shared" \
+  --format='value(image_summary.digest)' >"$work/search-digest" 2>/dev/null; then
+  echo JSCC_RETRIEVE_PAIR_CANDIDATE_IMAGE_NOT_FOUND
+  exit 86
+fi
+job_digest="$(cat "$work/search-digest")"
+[[ "$job_digest" =~ ^sha256:[0-9a-f]{64}$ ]] || { echo JSCC_RETRIEVE_PAIR_DIGEST_UNVERIFIED; exit 86; }
+if ! gcp run jobs describe jscc-search-dev --project="$project" --region="$region" \
+  --format=json >"$work/search-job.json"; then
+  echo JSCC_RETRIEVE_PAIR_JOB_READ_DENIED
+  exit 86
+fi
+python3 "$control/scripts/deploy/jscc_search_pair_guard.py" "$work/search-job.json" "$sha" "$job_digest"
 gcp run services describe "$service" --project="$project" --region="$region" \
  --format=json >"$work/before.json"
 serving_rev="$(python3 "$guard" serving "$work/before.json")"
