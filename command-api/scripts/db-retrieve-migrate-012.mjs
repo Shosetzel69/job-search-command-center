@@ -109,6 +109,7 @@ export async function prepareOrApplyRetrieve012({env=process.env,buildIdentity,d
   const pool=db || getMigrationPool(env);
   const client=await pool.connect();
   let committed=false;
+  let discard=false;
   try {
     await client.query(admitted.mode==='inspect' ? 'BEGIN READ ONLY' : 'BEGIN');
     const actual=(await client.query('SELECT current_database() AS database_name')).rows[0]?.database_name;
@@ -143,9 +144,11 @@ export async function prepareOrApplyRetrieve012({env=process.env,buildIdentity,d
     return {status:'ok',environment:'dev',source_sha:admitted.source,mode:admitted.mode,
       before,after,applied,migration:TARGET,checksum:files.at(-1).checksum};
   } catch(error) {
-    if (!committed) await client.query('ROLLBACK').catch(()=>{});
+    if (!committed) {
+      try { await client.query('ROLLBACK'); } catch { discard=true; }
+    }
     throw error;
-  } finally { client.release(); }
+  } finally { if (discard) client.release(true); else client.release(); }
 }
 
 if (process.argv[1] && import.meta.url===pathToFileURL(process.argv[1]).href) {
