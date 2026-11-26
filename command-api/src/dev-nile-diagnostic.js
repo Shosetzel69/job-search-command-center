@@ -16,7 +16,7 @@ export async function verifyDiagnosticCaller(request,env,verify=jwtVerify){
   const token=request.headers.get('Authorization')?.match(/^Bearer ([^\s]+)$/)?.[1];
   if(!token||token.length>8192)return false;
   try {
-    const {payload}=await verify(token,JWKS,{issuer:['https://accounts.google.com','accounts.google.com'],audience:AUDIENCE,algorithms:['RS256'],requiredClaims:['sub','iat','exp'],maxTokenAge:'5m'});
+    const {payload}=await verify(token,JWKS,{issuer:['https://accounts.google.com','accounts.google.com'],audience:AUDIENCE,algorithms:['RS256'],requiredClaims:['sub','iat','exp'],maxTokenAge:'1h'});
     return payload.sub===env.JSCC_DEV_NILE_DIAGNOSTIC_CALLER_SUB && payload.aud===AUDIENCE;
   }catch{return false;}
 }
@@ -27,7 +27,9 @@ export async function handleDevNileDiagnostic(request,env,{authorize=verifyDiagn
   const url=new URL(request.url);
   const keys=[...url.searchParams.keys()];
   const operation=url.searchParams.get('operation');
-  if(keys.length!==1||keys[0]!=='operation'||!OPERATIONS.has(operation))return reply({error:'invalid_operation'},400);
+  if(keys.length!==2||!keys.includes('operation')||!keys.includes('expected_source_sha')||!OPERATIONS.has(operation))return reply({error:'invalid_operation'},400);
+  const expected=url.searchParams.get('expected_source_sha');
+  if(!/^[0-9a-f]{40}$/.test(expected||'')||BUILD_IDENTITY.sourceSha!==expected)return reply({error:'source_mismatch'},409);
   if(active||Date.now()-lastStart<10000)return reply({error:'diagnostic_busy'},429);
   active=true;
   lastStart=Date.now();
