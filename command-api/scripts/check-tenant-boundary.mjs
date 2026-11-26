@@ -3,18 +3,7 @@ import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const SRC_ROOT = fileURLToPath(new URL('../src/', import.meta.url));
-const PERSONAL_TABLES = [
-  'candidate_profile',
-  'search_profile',
-  'search_profile_preferences',
-  'profile_preferences',
-  'profile_job_state',
-  'profile_job_evaluation',
-  'applications',
-  'profile_notes',
-  'profile_ui_preferences',
-  'refresh_requests',
-];
+import { PERSONAL_TABLES } from '../src/db/personal-table-registry.js';
 
 const PERSONAL_SQL_ALLOWED = new Set([
   'multiuser-repository.js',
