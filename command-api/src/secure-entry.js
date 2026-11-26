@@ -6,6 +6,7 @@ import { withInternalAuthContext } from './internal-auth-context.js';
 import { handleAuthRoute, handleAuthenticatedRoute, sessionContext } from './multiuser-api.js';
 import { clearSessionCookie } from './session-cookie.js';
 import { databaseReadiness } from './db/readiness.js';
+import { DIAGNOSTIC_PATH,handleDevNileDiagnostic } from './dev-nile-diagnostic.js';
 
 const GITHUB_ACTIONS_OIDC_ISSUER = 'https://token.actions.githubusercontent.com';
 const PROTECTED_DATA = protectedDataPaths();
@@ -69,6 +70,7 @@ export default {
         return noStoreResponse(json(await databaseReadiness(env)));
       }
 
+      if (url.pathname===DIAGNOSTIC_PATH) return noStoreResponse(await handleDevNileDiagnostic(request,env));
       const authRoute = await handleAuthRoute(request, env);
       if (authRoute) return noStoreResponse(authRoute);
 
