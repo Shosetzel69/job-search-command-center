@@ -11,6 +11,7 @@ import {
   verifyTenantPersonalResidue,
   withTenantTransaction,
   withDevDiagnosticTransaction,
+  withDevDiagnosticAccountLookup,
 } from './db/tenant-gateway.js';
 import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
 import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from './profile-evaluation.js';
@@ -2213,7 +2214,7 @@ export async function listGlobalProfileJobs(authContext,nomenclatures,query,env=
 
 // #589 / #659: diagnostics share the production SQL builders. No request SQL,
 // tenant identifiers, filters, cursor, or raw query-plan data cross this boundary.
-const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan']);
+const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze']);
 function summarizeDiagnosticPlan(node, budget={remaining:128}, depth=0) {
   if(!node || typeof node!=='object' || depth>16 || --budget.remaining<0) throw Error('plan_limit');
   const out={};
@@ -2226,7 +2227,8 @@ export async function observeDevNilePlan(operation,nomenclatures,env=process.env
   if(env.APP_ENV!=='dev'||env.JSCC_DEV_NILE_DIAGNOSTICS!=='true'||!DIAGNOSTIC_PLAN_TYPES.has(operation)) throw httpError('Diagnostic denied',403);
   let stage='account';
   try {
-    const row=await verifyAccountReadyForSession(db,requireUuid(env.JSCC_DEV_NILE_DIAGNOSTIC_USER_ID,'diagnostic user'));
+    const userId=requireUuid(env.JSCC_DEV_NILE_DIAGNOSTIC_USER_ID,'diagnostic user');
+    const row=await withDevDiagnosticAccountLookup(tx=>verifyAccountReadyForSession(tx,userId),{env,db});
     const context=accountContext(row);
     if(context.role!=='ADMIN') throw httpError('Diagnostic account not authorized',403);
     stage='transaction';
@@ -2234,15 +2236,18 @@ export async function observeDevNilePlan(operation,nomenclatures,env=process.env
       stage='basis';
       const basis=await readEvaluationBasisTx(tx,nomenclatures);
       let q;
-      if(operation==='fit_verify_plan') q={sql:EVALUATION_VERIFY_SQL,params:[tx.tenantId,now,basis.search_profile_id,basis.preference_digest,FIT_ALGORITHM_VERSION]};
-      else q=buildGlobalListingQuery(tx.tenantId,basis,normalizeGlobalQuery({sort:'publication',dir:'desc',limit:20}),now);
+      if(operation.startsWith('fit_verify_')) q={sql:EVALUATION_VERIFY_SQL,params:[tx.tenantId,now,basis.search_profile_id,basis.preference_digest,FIT_ALGORITHM_VERSION]};
+      else q=buildGlobalListingQuery(tx.tenantId,basis,normalizeGlobalQuery({sort:'publication',dir:'desc',limit:40}),now);
       stage='explain';
       const start=performance.now();
-      const raw=(await tx.query('EXPLAIN (FORMAT JSON) '+q.sql,q.params)).rows?.[0]?.['QUERY PLAN']?.[0];
+      const prefix=operation.endsWith('_analyze')?'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ':'EXPLAIN (FORMAT JSON) ';
+      const raw=(await tx.query(prefix+q.sql,q.params)).rows?.[0]?.['QUERY PLAN']?.[0];
       const elapsed_ms=Math.round(performance.now()-start);
-      return {status:'COLLECTED',operation,elapsed_ms,plan:summarizeDiagnosticPlan(raw?.Plan)};
+      const timing={};
+      for(const k of ['Planning Time','Execution Time'])if(Number.isFinite(raw?.[k]))timing[k]=raw[k];
+      return {status:'COLLECTED',operation,elapsed_ms,timing,plan:summarizeDiagnosticPlan(raw?.Plan)};
     },{env,db});
   } catch(error) {
-    return {status:'ERROR',operation,stage,sqlstate:/^[0-9A-Z]{5}$/.test(error?.code||'')?error.code:null};
+    return {status:'ERROR',operation,stage:error?.diagnosticStage||stage,sqlstate:/^[0-9A-Z]{5}$/.test(error?.code||'')?error.code:null};
   }
 }
