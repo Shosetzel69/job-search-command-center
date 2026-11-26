@@ -4,13 +4,14 @@ import {observeNile} from '../nile/dev-nile-observer.mjs';
 
 const tenant='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const role='jscc_nile_observer';
-function fixture({guard={},failAt=null}={}) {
+function fixture({guard={},privileges={},failAt=null}={}) {
   const calls=[], releases=[];
   const client={
     async query(sql,args) {
       calls.push({sql,args});
       if (failAt && sql.startsWith(failAt)) throw Object.assign(new Error('private message'),{code:'0A000'});
       if (sql.startsWith('SELECT current_database')) return {rows:[{db:'jobsearch_dev',role,ro:'on',tenant,...guard}]};
+      if (sql.startsWith('SELECT NOT (r.rolsuper')) return {rows:[{role_safe:true,tables_safe:true,can_read:true,...privileges}]};
       if (sql.startsWith('EXPLAIN')) return {rows:[{'QUERY PLAN':[{Plan:{'Plan Rows':4,'Total Cost':5,Filter:tenant,'Relation Name':'private',Plans:[{'Plan Rows':2,Filter:'private'}]}}]}]};
       if (sql.startsWith('SELECT COUNT')) return {rows:[{count:3}]};
       return {rows:[]};
@@ -55,4 +56,13 @@ test('returns stage and SQLSTATE without raw provider error',async()=>{
   const result=await observeNile(f.input,{environment:'dev',operation:'schema_probe'});
   assert.deepEqual(result,{status:'ERROR',stage:'tenant_set',sqlstate:'0A000'});
   assert.equal(f.calls.at(-1).sql,'ROLLBACK');
+});
+
+test('denies diagnostic when the dedicated DB principal can write or cannot read',async()=>{
+  for(const privileges of [{role_safe:false},{tables_safe:false},{can_read:false}]){
+    const f=fixture({privileges});
+    const result=await observeNile(f.input,{environment:'dev',operation:'evaluation_count_plan'});
+    assert.equal(result.stage,'privilege_guard');
+    assert.equal(f.calls.some(c=>c.sql.startsWith('EXPLAIN')),false);
+  }
 });
