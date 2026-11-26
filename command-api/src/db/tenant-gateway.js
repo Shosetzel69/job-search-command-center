@@ -1,18 +1,8 @@
 import { getPool, withTransaction } from './pool.js';
 import { devPurgeActive } from '../runtime-gcp.js';
 
-export const PERSONAL_TABLES = Object.freeze([
-  'candidate_profile',
-  'search_profile',
-  'search_profile_preferences',
-  'profile_preferences',
-  'profile_job_state',
-  'profile_job_evaluation',
-  'applications',
-  'profile_notes',
-  'profile_ui_preferences',
-  'refresh_requests',
-]);
+import { PERSONAL_TABLES } from './personal-table-registry.js';
+export { PERSONAL_TABLES };
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -152,20 +142,13 @@ export async function verifyTenantPersonalResidue(
   const result = await db.query(
     `SELECT
        (SELECT count(*)::integer FROM tenants WHERE id=$1) AS tenants,
-       (SELECT count(*)::integer FROM candidate_profile WHERE tenant_id=$1) AS candidate_profiles,
-       (SELECT count(*)::integer FROM search_profile WHERE tenant_id=$1) AS search_profiles,
-       (SELECT count(*)::integer FROM search_profile_preferences WHERE tenant_id=$1) AS search_profile_preferences,
-       (SELECT count(*)::integer FROM profile_preferences WHERE tenant_id=$1) AS preferences,
-       (SELECT count(*)::integer FROM profile_job_state WHERE tenant_id=$1) AS job_state,
-       (SELECT count(*)::integer FROM profile_job_evaluation WHERE tenant_id=$1) AS evaluations,
-       (SELECT count(*)::integer FROM applications WHERE tenant_id=$1) AS applications,
-       (SELECT count(*)::integer FROM profile_notes WHERE tenant_id=$1) AS notes,
-       (SELECT count(*)::integer FROM profile_ui_preferences WHERE tenant_id=$1) AS ui_preferences,
-       (SELECT count(*)::integer FROM refresh_requests WHERE tenant_id=$1) AS refresh_requests`,
+       ${PERSONAL_TABLES.map(table => `(SELECT count(*)::integer FROM ${table} WHERE tenant_id=$1) AS ${table}`).join(',\n       ')}`,
     [tenantId],
   );
-  const counts = result.rows?.[0] || {};
-  if (Object.values(counts).some(value => Number(value) !== 0)) {
+  const counts = result.rows?.[0];
+  if (!counts || ['tenants', ...PERSONAL_TABLES].some(table =>
+    counts[table] === undefined || counts[table] === null || Number(counts[table]) !== 0
+  )) {
     throw httpError('Tenant deletion left personal residue', 503);
   }
   return Object.freeze({ status:'ok', profile_id:tenantId });
