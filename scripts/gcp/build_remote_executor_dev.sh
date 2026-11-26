@@ -14,4 +14,6 @@ export SOURCE_SHA TRUSTED_OPS_REF
 
 bash scripts/gcp/assert_trusted_ops_source.sh
 
-gcloud builds submit   --project="$SHARED"   --region="$REGION"   --gcs-source-staging-dir="gs://$OPS_BUILD_SOURCE_BUCKET/source"   --config=cloudbuild.ops.yaml   --substitutions="_GIT_SHA=$SOURCE_SHA,_TRUSTED_REF=$TRUSTED_OPS_REF"   .
+BUILD_NILE="${BUILD_NILE:-false}"
+[[ "$BUILD_NILE" == "true" || "$BUILD_NILE" == "false" ]]
+gcloud builds submit   --project="$SHARED"   --region="$REGION"   --gcs-source-staging-dir="gs://$OPS_BUILD_SOURCE_BUCKET/source"   --config=cloudbuild.ops.yaml   --substitutions="_GIT_SHA=$SOURCE_SHA,_TRUSTED_REF=$TRUSTED_OPS_REF,_BUILD_NILE=$BUILD_NILE"   .
