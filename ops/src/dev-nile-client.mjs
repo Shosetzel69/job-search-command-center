@@ -1,7 +1,7 @@
 // #589: existing diagnostics worker uses only its own Google identity.
 // This module never receives a DB connection string or caller-supplied URL.
 const AUDIENCE='urn:jscc:dev:nile-diagnostic';
-const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan']);
+const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze']);
 const METRICS=['Plan Rows','Plan Width','Startup Cost','Total Cost','Actual Rows','Actual Loops','Actual Total Time','Shared Hit Blocks','Shared Read Blocks'];
 function planSummary(node,budget={remaining:128},depth=0){
   if(!node||typeof node!=='object'||depth>16||--budget.remaining<0)throw Error('invalid_plan');
@@ -44,11 +44,13 @@ export async function observeDevNile(args,cfg,{fetchImpl=fetch}={}){
     const raw=await boundedJson(response);
     if(raw.source_sha!==args.expected_source_sha||raw.operation!==args.operation)return fail('source_or_response');
     if(!response.ok||raw.status!=='COLLECTED'){
-      const stage=['account','transaction','basis','explain','route'].includes(raw.stage)?raw.stage:'api';
+      const stage=['account','transaction','basis','explain','route','connect','begin','tenant_set','tenant_verify','statement_timeout','lock_timeout','database_guard','rollback'].includes(raw.stage)?raw.stage:'api';
       return fail(stage,/^[0-9A-Z]{5}$/.test(raw.sqlstate||'')?raw.sqlstate:null);
     }
     if(!Number.isSafeInteger(raw.elapsed_ms)||raw.elapsed_ms<0)return fail('metrics');
-    const evidence={operation:args.operation,elapsed_ms:raw.elapsed_ms,plan:planSummary(raw.plan)};
+    const timing={};
+    for(const k of ['Planning Time','Execution Time'])if(Number.isFinite(raw.timing?.[k]))timing[k]=raw.timing[k];
+    const evidence={operation:args.operation,elapsed_ms:raw.elapsed_ms,timing,plan:planSummary(raw.plan)};
     return {nile_status:'COLLECTED',nile_evidence_json:JSON.stringify(evidence),target_source_sha:raw.source_sha,exit_code:0};
   }catch{return fail('transport_or_response');}
 }
