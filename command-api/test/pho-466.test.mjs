@@ -86,3 +86,37 @@ test('#466 F04: missing snapshot table fails readiness even in shared-role excep
   assert.equal(result.status, 'unsafe');
   assert.equal(result.tenant_tables.find(row => row.table === 'profile_job_count_snapshots').present, false);
 });
+
+test('#466 F-01: strict provisioning grants DML on every registered personal table', async () => {
+  const { provisionRuntimeRole } = await import('../scripts/db-provision-runtime.mjs');
+  const calls = [];
+  const db = { async query(sql) {
+    calls.push(sql);
+    if (sql.includes('pg_roles')) return { rows:[{ ident:'runtime', exists:true }] };
+    if (sql.includes('current_database()')) return { rows:[{ ident:'jobsearch_dev' }] };
+    return { rows:[] };
+  } };
+  const result = await provisionRuntimeRole({
+    APP_ENV:'dev', NILE_DATABASE_URL:'postgresql://runtime:secret@db.example/jobsearch_dev',
+  }, { db });
+  assert.equal(result.mode, 'strict');
+  const grant = calls.find(sql => sql.startsWith('GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE'));
+  assert.ok(grant);
+  for (const table of PERSONAL_TABLES) assert.ok(grant.includes('public."' + table + '"'), table);
+});
+
+test('#466 F-02: migration rollback failure discards client', async () => {
+  const { migrate } = await import('../src/db/migrations.js');
+  const original = new Error('migration failed');
+  const releases = [];
+  const client = {
+    async query(sql) {
+      if (sql === 'BEGIN') return { rows:[] };
+      if (sql === 'ROLLBACK') throw new Error('rollback failed');
+      throw original;
+    },
+    release(destroy) { releases.push(destroy); },
+  };
+  await assert.rejects(migrate({ db:{ connect:async () => client } }), error => error === original);
+  assert.deepEqual(releases, [true]);
+});
