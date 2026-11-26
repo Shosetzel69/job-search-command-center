@@ -61,6 +61,7 @@ try {
   const count=await db.query('SELECT count(*)::integer AS count FROM profile_job_evaluation');
   if(Number(count.rows[0]?.count)!==0)throw Error('EVALUATION013_ROLLBACK_NONEMPTY_DENIED');
   const rollbackClient=await db.connect();
+  let discardRollbackClient=false;
   try{
     await rollbackClient.query('BEGIN');
     const lock=await rollbackClient.query("SELECT version FROM schema_migrations WHERE version='012' FOR UPDATE");
@@ -71,8 +72,8 @@ try {
     const removed=await rollbackClient.query("DELETE FROM schema_migrations WHERE version='013' AND checksum=$1 RETURNING version",[items.at(-1).checksum]);
     if(removed.rows.length!==1)throw Error('EVALUATION013_ROLLBACK_LEDGER_DENIED');
     await rollbackClient.query('COMMIT');
-  }catch(e){await rollbackClient.query('ROLLBACK').catch(()=>{});throw e;}
-  finally{rollbackClient.release();}
+  }catch(e){try{await rollbackClient.query('ROLLBACK');}catch{discardRollbackClient=true;}throw e;}
+  finally{if(discardRollbackClient)rollbackClient.release(true);else rollbackClient.release();}
   const rolledBack=await prepareOrApplyEvaluation013({env:evaluationEnv,buildIdentity,db,migrations:items});
   if(rolledBack.before!=='PENDING_013')throw Error('EVALUATION013_ROLLBACK_POSTCHECK_FAILED');
   const restored013=await prepareOrApplyEvaluation013({env:apply013,buildIdentity,db,migrations:items});
