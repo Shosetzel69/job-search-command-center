@@ -196,7 +196,7 @@ function extractExecutionName(op, job) {
   const values = [op?.response?.name, op?.metadata?.name, op?.metadata?.execution, op?.metadata?.target];
   for (const v of values) {
     if (typeof v === 'string' && v.includes('/executions/')) return normalizeExecutionName(v, job===NILE_JOB);
-    if (typeof v === 'string' && /^jscc-(diagnostics|nile-observer)-dev-/.test(v)) return normalizeExecutionName(v);
+    if (typeof v === 'string' && v.startsWith(job+'-')) return normalizeExecutionName(v, job===NILE_JOB);
   }
   return null;
 }
