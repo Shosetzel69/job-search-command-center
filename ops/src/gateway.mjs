@@ -7,7 +7,7 @@ import {
   REQUIRED_SCOPE, STATE_TTL_MS, VERIFY_TIMEOUT_MS, acquireLease, consumeJson, envConfig, gcpFetch,
   gcsReadJson, gcsReplaceJson, gcsWriteJson, incrementDailyCounter, isoNow,
   normalizeExecutionName, operationObject, authenticatedEvidence, accessTokenRecordError, authorizationCodeRecordError,
-  randomToken, releaseLease, resolveIdempotencyReservation, sha256, sanitizeText, isAllowedChatGptClientId, validateChatGptRedirectUris, validateTaskRequest
+  selectOperationWorker, randomToken, releaseLease, resolveIdempotencyReservation, sha256, sanitizeText, isAllowedChatGptClientId, validateChatGptRedirectUris, validateTaskRequest
 } from './lib.mjs';
 
 const cfg = envConfig();
@@ -186,8 +186,8 @@ function unauthorized(req, res, error) {
   sendJson(res, 401, { error }, { 'www-authenticate': `Bearer resource_metadata="${base(req)}/.well-known/oauth-protected-resource", error="${error}"` });
 }
 
-async function runDiagnosticsJob() {
-  const url = `https://run.googleapis.com/v2/projects/${cfg.project}/locations/${cfg.region}/jobs/${cfg.diagnosticsJob}:run`;
+async function runDiagnosticsJob(job) {
+  const url = `https://run.googleapis.com/v2/projects/${cfg.project}/locations/${cfg.region}/jobs/${job}:run`;
   const r = await gcpFetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
   if (!r.ok) throw new Error(`run_job_${r.status}`);
   return r.json();
@@ -196,7 +196,7 @@ function extractExecutionName(op) {
   const values = [op?.response?.name, op?.metadata?.name, op?.metadata?.execution, op?.metadata?.target];
   for (const v of values) {
     if (typeof v === 'string' && v.includes('/executions/')) return normalizeExecutionName(v);
-    if (typeof v === 'string' && /^jscc-diagnostics-dev-/.test(v)) return normalizeExecutionName(v);
+    if (typeof v === 'string' && /^jscc-(diagnostics|nile-observer)-dev-/.test(v)) return normalizeExecutionName(v);
   }
   return null;
 }
@@ -231,6 +231,7 @@ async function acceptOperation(auth, toolArgs) {
   if (!/^[A-Za-z0-9._:-]{12,128}$/.test(idem)) throw new Error('invalid_idempotency_key');
 
   const taskReq = validateTaskRequest(toolArgs.task, toolArgs.args || {});
+  const target = selectOperationWorker(cfg, taskReq.task);
   const idemHash = sha256(idem);
   const requestHash = sha256(JSON.stringify({ work_item_ref: workItem, task: taskReq.task, args: taskReq.args }));
   const idemName = `idempotency/${idemHash}.json`;
@@ -260,7 +261,7 @@ async function acceptOperation(auth, toolArgs) {
     actor_sub_hash: sha256(auth.record.actor_sub),
     ops_source_sha: cfg.opsSourceSha,
     gateway_image_digest: cfg.gatewayDigest,
-    worker_image_digest: cfg.workerDigest,
+    worker_image_digest: target.digest,
   });
 
   try {
@@ -268,12 +269,13 @@ async function acceptOperation(auth, toolArgs) {
     await incrementDailyCounter(cfg.bucket, new Date().toISOString().slice(0,10));
     await acquireLease(cfg.bucket, opId, timeout + 60_000);
 
-    const lro = await runDiagnosticsJob();
+    const lro = await runDiagnosticsJob(target.job);
     const execution = await resolveExecution(lro);
+    if (!execution.startsWith(target.job+'-')) throw new Error('execution_job_mismatch');
     const dispatch = {
       schema_version: '1.0', operation_id: opId, work_item_ref: workItem, execution_name: execution, task: op.task,
       task_class: op.task_class, args: op.args, catalog_version: CATALOG_VERSION,
-      ops_source_sha: cfg.opsSourceSha, worker_image_digest: cfg.workerDigest,
+      ops_source_sha: cfg.opsSourceSha, worker_image_digest: target.digest,
       expires_at_ms: Date.now() + timeout, created_at: isoNow(),
     };
     await gcsWriteJson(cfg.bucket, `dispatch/${execution}.json`, dispatch, 0);
