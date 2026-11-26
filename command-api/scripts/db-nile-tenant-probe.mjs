@@ -3,6 +3,7 @@ import { getMigrationPool, closeMigrationPool } from '../src/db/pool.js';
 
 export async function probeNileTenantContext(env = process.env, { db = getMigrationPool(env) } = {}) {
   const client = await db.connect();
+  let discard = false;
   const tenantId = randomUUID();
   const tenantName = `jscc-probe-${tenantId}`;
 
@@ -54,10 +55,11 @@ export async function probeNileTenantContext(env = process.env, { db = getMigrat
       shared_visibility:'deferred_to_post_migration_evidence',
     };
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    try { await client.query('ROLLBACK'); } catch { discard = true; }
     throw error;
   } finally {
-    client.release();
+    if (discard) client.release(true);
+    else client.release();
   }
 }
 
