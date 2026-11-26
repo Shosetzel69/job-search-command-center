@@ -13,7 +13,7 @@ ChatGPT custom MCP
   -> jscc-diagnostics-dev
 ```
 
-It does not provision or mutate TEST/PROD and does not add DB/Nile access.
+It does not provision or mutate TEST/PROD. The #589 DEV-only Nile diagnostic extension below uses the Command API, never direct DB credentials in Remote Executor.
 
 The retired AV-537-01 Render endpoint is not used.
 
@@ -182,3 +182,17 @@ Evidence Bundle must record:
 - operation -> exact Cloud Run execution -> result correlation;
 - sanitizer/public projection evidence;
 - DEV functional acceptance.
+
+
+## #589 RE-07 — Command API mediated Nile observations
+
+Owner-approved alternative to the unavailable dedicated native read-only credential. This replaces the isolated-DB-operator approach preserved in draft #701. It reuses the existing diagnostics Job identity and the product Command API connection. The application identity is not database-role read-only; protection comes from the fixed endpoint, exact caller authentication, server-selected tenant, database read-only transactions and unconditional rollback. Native transaction compatibility remains a live acceptance gate.
+
+- Command API DEV only: `JSCC_DEV_NILE_DIAGNOSTICS=true`, `JSCC_DEV_NILE_DIAGNOSTIC_CALLER_SUB` (numeric Google subject of the existing diagnostics Job service account), `JSCC_DEV_NILE_DIAGNOSTIC_USER_ID` (approved active ADMIN account ID, server-side only). Absent/disabled flag denies access. Resolve identifiers from trusted DEV resources; never publish their values or tokens.
+- Existing diagnostics Job `DEV_BASE_URL` must be the verified canonical HTTPS Cloud Run origin of the DEV Command API. The worker requests a Google ID token with the fixed diagnostic audience using its existing identity; no additional DB secret, account, role, dependency, or IAM elevation.
+- Typed task `observe_dev_nile`: environment=dev, expected_source_sha, operation restricted to `fit_verify_plan`, `global_listing_plan`, `fit_verify_analyze`, `global_listing_analyze`. No arbitrary SQL, tenant, filter, URL or cursor parameters. Global listing uses the fixed publication-descending first-page limit 40, not arbitrary user traffic. Only sanitized plan metrics and known node classifications are returned, through authenticated operation evidence.
+- Account lookup and tenant diagnostics use distinct read-only transactions. Tenant binding is established before other queries in the tenant transaction. Failure to establish context, read-only state, database binding, timeout or rollback fails closed; no fallback to writable transactions. `EXPLAIN ANALYZE` executes the fixed SELECT and may consume DEV capacity; obtain cost admission before live execution.
+- Existing gateway/worker must be upgraded together because the catalog version changes to `589-nile-api-v1`. Product Command API must be deployed from the independently reviewed source first, with diagnostics disabled until trusted configuration and effective runtime identity have been verified. Activation is a separate DEV configuration operation, not part of the image-only deploy. Verify live MCP tool schema after gateway upgrade; refresh connector if needed.
+- Independent reviewer checks exact SHA, negative route/caller/source/tenant/database cases, rollback and absence of DB credentials in worker, existing task regression, no raw plan predicates or PII, and live provider support for EXPLAIN/ANALYZE and transaction controls. Existing DEV-only cost and deployment gates remain. Disable flag for rollback of feature admission; restore prior reviewed images via existing routes if needed.
+- This is a bounded #659 diagnostic capability, not completion of #589 RE-07: arbitrary SQL, schema/migration/restore operations and disposable Nile container remain outside this delivery.
+
