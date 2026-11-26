@@ -50,15 +50,21 @@ export async function closeMigrationPool() {
 export async function withTransaction(fn, { env = process.env, db = getPool(env) } = {}) {
   if (typeof fn !== 'function') throw new TypeError('transaction callback is required');
   const client = await db.connect();
+  let discard = false;
   try {
     await client.query('BEGIN');
     const result = await fn({ query:(text, params=[]) => client.query(text, params) });
     await client.query('COMMIT');
     return result;
   } catch (error) {
-    await client.query('ROLLBACK').catch(() => {});
+    try {
+      await client.query('ROLLBACK');
+    } catch {
+      discard = true;
+    }
     throw error;
   } finally {
-    client.release();
+    if (discard) client.release(true);
+    else client.release();
   }
 }
