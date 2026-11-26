@@ -1,12 +1,26 @@
 import { getMigrationPool, closeMigrationPool } from '../src/db/pool.js';
 import { databaseConfig, devTestSharedDbRoleAllowed } from '../src/db/config.js';
 
+import { PERSONAL_TABLES } from '../src/db/personal-table-registry.js';
+
 const TABLES = Object.freeze([
-  'tenants','app_user','user_identity','profile','user_session','candidate_profile',
-  'search_profile','search_profile_preferences','profile_preferences','profile_job_state','profile_job_evaluation','applications','profile_notes',
-  'profile_ui_preferences','refresh_requests','collection_policy','system_bootstrap',
-  'account_capacity_policy','account_deletion_audit','canonical_jobs',
-  'source_postings','search_runs','source_run_results','coverage_scope_state','scheduler_config','scheduler_state',
+  ...PERSONAL_TABLES,
+  'tenants',
+  'app_user',
+  'user_identity',
+  'profile',
+  'user_session',
+  'collection_policy',
+  'system_bootstrap',
+  'account_capacity_policy',
+  'account_deletion_audit',
+  'canonical_jobs',
+  'source_postings',
+  'search_runs',
+  'source_run_results',
+  'coverage_scope_state',
+  'scheduler_config',
+  'scheduler_state',
 ]);
 
 function roleFromRuntimeUrl(env) {

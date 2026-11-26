@@ -32,6 +32,8 @@ const {
 const { aggregateAdminRefreshScopes } = await import('../src/db/cross-tenant-refresh-scope-aggregator.js');
 const { backfillSearchProfileFoundations } = await import('../src/db/search-profile-backfill.js');
 const { withTenantTransaction } = await import('../src/db/tenant-gateway.js');
+const { PERSONAL_TABLES } = await import('../src/db/personal-table-registry.js');
+const { randomUUID } = await import('node:crypto');
 const { deleteNomenclatureValue } = await import('../src/nomenclature-governance.js');
 import { readFile } from 'node:fs/promises';
 import { parsePostedDate } from '../src/posted-date.mjs';
@@ -59,6 +61,29 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
 
   try {
   await attestNativeDatabase(runtimeDb);
+  async function seedDeletionProjections(account) {
+    await withTenantTransaction(account, async tx => {
+      const profile = await tx.query("SELECT search_profile_id, profile_version FROM search_profile WHERE tenant_id=$1 AND status='ACTIVE'", [tx.tenantId]);
+      assert.equal(profile.rows.length, 1);
+      const { search_profile_id: profileId, profile_version: version } = profile.rows[0];
+      const scope = 'pho-466-' + randomUUID();
+      const requestId = randomUUID();
+      await tx.query(`INSERT INTO profile_job_count_snapshots
+        (tenant_id, search_profile_id, scope_key, profile_version, fit_algorithm_version, totals)
+        VALUES ($1,$2,$3,$4,'pho-466','{}'::jsonb)`, [tx.tenantId, profileId, scope, version]);
+      await tx.query(`INSERT INTO refresh_requests
+        (tenant_id, request_id, search_profile_id, actor_role, intent, outcome)
+        VALUES ($1,$2,$3,$4,'manual','REUSED_CORPUS')`, [tx.tenantId, requestId, profileId, account.role]);
+      assert.equal((await tx.query('SELECT scope_key FROM profile_job_count_snapshots WHERE tenant_id=$1 AND scope_key=$2', [tx.tenantId, scope])).rows.length, 1);
+      assert.equal((await tx.query('SELECT request_id FROM refresh_requests WHERE tenant_id=$1 AND request_id=$2', [tx.tenantId, requestId])).rows.length, 1);
+    }, { env, db:runtimeDb });
+  }
+  async function assertNoPersonalResidue(tenantId) {
+    for (const table of PERSONAL_TABLES) {
+      const result = await adminDb.query(`SELECT count(*)::integer AS count FROM ${table} WHERE tenant_id=$1`, [tenantId]);
+      assert.equal(result.rows[0]?.count, 0, table + ' deletion residue');
+    }
+  }
   await t.test('P659 native Nile SQL telemetry preserves query and sanitizes events',async()=>{
     // Native Nile provider admission occurred before this suite; not local PG.
     const {measureNileSql}=await import('../src/performance-telemetry.js');
@@ -882,10 +907,12 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
       'SELECT count(*)::integer AS count FROM canonical_jobs',
     )).rows[0].count);
 
+    await seedDeletionProjections(user);
     const selfDelete = await deleteOwnAccount(user, env, { db:runtimeDb });
     assert.equal(selfDelete.result, 'DELETED');
     await assert.rejects(resolveSession(freshSession.rawToken, env, { db:runtimeDb }), error => error?.status === 401);
 
+    await assertNoPersonalResidue(originalUserProfileId);
     const userResidue = await adminDb.query(
       `SELECT
          (SELECT count(*)::integer FROM tenants WHERE name=$3) AS tenants,
@@ -948,7 +975,9 @@ test('W025 Nile native multiuser integration with preserved functional oracles',
 
     originalOwnerUserId = ownerA.user_id;
     originalOwnerProfileId = ownerA.profile_id;
+    await seedDeletionProjections(ownerA);
     await deleteAccount(ownerA, originalOwnerUserId, env, { db:runtimeDb });
+    await assertNoPersonalResidue(originalOwnerProfileId);
 
     const residue = await adminDb.query(
       `SELECT

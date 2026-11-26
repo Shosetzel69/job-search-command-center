@@ -88,6 +88,7 @@ export async function prepareOrApplyEvaluation013({env=process.env,buildIdentity
  const files=migrations||await loadMigrations();
  const client=await (db||getMigrationPool(env)).connect();
  let committed=false;
+ let discard=false;
  try{
   await client.query(admitted.mode==='inspect'?'BEGIN READ ONLY':'BEGIN');
   if((await client.query('SELECT current_database() AS database_name')).rows[0]?.database_name!=='jobsearch_dev')
@@ -108,8 +109,8 @@ export async function prepareOrApplyEvaluation013({env=process.env,buildIdentity
   if(applied&&after!=='ALREADY_APPLIED')fail('EVALUATION013_POSTCHECK_FAILED');
   return {status:'ok',environment:'dev',mode:admitted.mode,source_sha:admitted.source,
    before,after,applied,migration:TARGET,checksum:files.at(-1).checksum};
- }catch(e){if(!committed)await client.query('ROLLBACK').catch(()=>{});throw e;}
- finally{client.release();}
+ }catch(e){if(!committed){try{await client.query('ROLLBACK');}catch{discard=true;}}throw e;}
+ finally{if(discard)client.release(true);else client.release();}
 }
 if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href){
  try{

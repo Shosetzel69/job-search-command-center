@@ -1,18 +1,8 @@
 import { devTestSharedDbRoleAllowed } from './config.js';
 import { getPool } from './pool.js';
 
-export const TENANT_AWARE_TABLES = Object.freeze([
-  'candidate_profile',
-  'search_profile',
-  'search_profile_preferences',
-  'profile_preferences',
-  'profile_job_state',
-  'profile_job_evaluation',
-  'applications',
-  'profile_notes',
-  'profile_ui_preferences',
-  'refresh_requests',
-]);
+import { PERSONAL_TABLES } from './personal-table-registry.js';
+export const TENANT_AWARE_TABLES = PERSONAL_TABLES;
 
 // Compatibility alias for older callers/tests; RLS is no longer the enforcement model.
 export const PROTECTED_RLS_TABLES = TENANT_AWARE_TABLES;
