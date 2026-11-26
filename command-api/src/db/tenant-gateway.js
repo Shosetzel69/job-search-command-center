@@ -60,6 +60,26 @@ export async function withTenantTransaction(
   }, { env, db });
 }
 
+// DEV diagnostics only: never commits and never falls back to a writable transaction.
+export async function withDevDiagnosticTransaction(authContext, fn, {env=process.env,db=getPool(env)}={}) {
+  if(env.APP_ENV!=='dev' || env.JSCC_DEV_NILE_DIAGNOSTICS!=='true') throw httpError('Diagnostic disabled',404);
+  const context=requireTenantAuthContext(authContext);
+  if(context.status!=='ACTIVE') throw httpError('Diagnostic account unavailable',403);
+  const client=await db.connect();
+  let discard=true;
+  try {
+    await client.query('BEGIN READ ONLY');
+    const tenantId=await establishTenantContext(client,context.profile_id);
+    await client.query("SET LOCAL statement_timeout='10000ms'");
+    await client.query("SET LOCAL lock_timeout='1000ms'");
+    const check=(await client.query("SELECT current_database() AS db, current_setting('transaction_read_only') AS ro")).rows?.[0];
+    if(check?.db!=='jobsearch_dev'||check.ro!=='on') throw httpError('Diagnostic database guard failed',503);
+    return await fn(Object.freeze({tenantId,authContext:context,query:(sql,params=[])=>client.query(sql,params)}));
+  } finally {
+    try {await client.query('ROLLBACK');discard=false;} finally {client.release(discard);}
+  }
+}
+
 // Managed Nile requires tenants-table DML to be the first SQL statement after BEGIN.
 export async function createTenantFirst(tx, profileId) {
   const tenantId = requireUuid(profileId, 'profile_id');
