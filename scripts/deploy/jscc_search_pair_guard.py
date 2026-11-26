@@ -48,7 +48,9 @@ def check(job, sha, immutable_digest):
         if not name or name in values:
             deny("JOB_ENV_INVALID")
         values[name] = entry.get("value")
-    if values.get("APP_ENV") != "dev" or values.get("GCP_RUNTIME_BUCKET") != "jscc-dev-runtime-828902654738":
+    if (values.get("APP_ENV") != "dev" or
+            values.get("CLOUD_RUN_JOB") != "jscc-search-dev" or
+            values.get("GCP_RUNTIME_BUCKET") != "jscc-dev-runtime-828902654738"):
         deny("JOB_DEV_CONFIGURATION_MISMATCH")
     # IMAGE provenance: immutable registry SHA tag must resolve to candidate
     # digest; deployer compares that against the pinned/immutable Job image.
