@@ -10,6 +10,7 @@ import {
   verifyTenantMapping,
   verifyTenantPersonalResidue,
   withTenantTransaction,
+  withDevDiagnosticTransaction,
 } from './db/tenant-gateway.js';
 import { crossTenantNomenclatureReferenceCount } from './db/cross-tenant-reference-guard.js';
 import { FIT_ALGORITHM_VERSION, evaluateSharedJob, materializeCachedJob } from './profile-evaluation.js';
@@ -1798,6 +1799,10 @@ const TENANT_EVALUATION_CTE = `tenant_evaluation AS MATERIALIZED (
  SELECT * FROM profile_job_evaluation WHERE tenant_id=$1 AND search_profile_id=$3
 )`;
 export const EVALUATION_JOIN_SQL = `LEFT JOIN tenant_evaluation eval ON eval.job_id=j.job_id`;
+const EVALUATION_VERIFY_SQL = `WITH ${TENANT_EVALUATION_CTE}
+          SELECT COUNT(*)::integer AS pending
+          ${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
+          WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`;
 
 export const ADVANCE_BATCH_MAX=100;
 export const ADVANCE_BUDGET_MS=8000;
@@ -1960,10 +1965,7 @@ export async function advanceProfileEvaluation(authContext,nomenclatures,env=pro
         // Once per completed scan, an exact tenant-scoped check prevents false COMPLETE
         // after concurrent source edits or an untrusted/forged scan cursor.
         await budget();
-        const verification=await measureNileSql('advance_verify_sql', tx, `WITH ${TENANT_EVALUATION_CTE}
-          SELECT COUNT(*)::integer AS pending
-          ${EVALUATION_SOURCE_SQL} ${EVALUATION_JOIN_SQL}
-          WHERE ${EVALUATION_VISIBLE_SQL} AND ${EVALUATION_PENDING_SQL}`,args,env);
+        const verification=await measureNileSql('advance_verify_sql', tx, EVALUATION_VERIFY_SQL,args,env);
         const pending=Number(verification.rows?.[0]?.pending);
         if(!Number.isSafeInteger(pending)||pending<0)throw httpError('Evaluation verification unavailable',503);
         return {status:pending===0?'COMPLETE':'INCOMPLETE',pending,evaluated:0,scan_cursor:null,
@@ -2206,4 +2208,41 @@ export async function listGlobalProfileJobs(authContext,nomenclatures,query,env=
         remote:Number(t.remote),repost:Number(t.repost),new24h:Number(t.new24h)}:null,
       results:jobs.length,jobs};
   },{env,db});
+}
+
+
+// #589 / #659: diagnostics share the production SQL builders. No request SQL,
+// tenant identifiers, filters, cursor, or raw query-plan data cross this boundary.
+const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan']);
+function summarizeDiagnosticPlan(node, budget={remaining:128}, depth=0) {
+  if(!node || typeof node!=='object' || depth>16 || --budget.remaining<0) throw Error('plan_limit');
+  const out={};
+  for(const key of ['Plan Rows','Plan Width','Startup Cost','Total Cost','Actual Rows','Actual Loops','Actual Total Time','Shared Hit Blocks','Shared Read Blocks'])
+    if(Number.isFinite(node[key])) out[key]=node[key];
+  if(Array.isArray(node.Plans)) out.children=node.Plans.map(child=>summarizeDiagnosticPlan(child,budget,depth+1));
+  return out;
+}
+export async function observeDevNilePlan(operation,nomenclatures,env=process.env,{db=getPool(env),now=new Date()}={}) {
+  if(env.APP_ENV!=='dev'||env.JSCC_DEV_NILE_DIAGNOSTICS!=='true'||!DIAGNOSTIC_PLAN_TYPES.has(operation)) throw httpError('Diagnostic denied',403);
+  let stage='account';
+  try {
+    const row=await verifyAccountReadyForSession(db,requireUuid(env.JSCC_DEV_NILE_DIAGNOSTIC_USER_ID,'diagnostic user'));
+    const context=accountContext(row);
+    if(context.role!=='ADMIN') throw httpError('Diagnostic account not authorized',403);
+    stage='transaction';
+    return await withDevDiagnosticTransaction(context,async tx=>{
+      stage='basis';
+      const basis=await readEvaluationBasisTx(tx,nomenclatures);
+      let q;
+      if(operation==='fit_verify_plan') q={sql:EVALUATION_VERIFY_SQL,params:[tx.tenantId,now,basis.search_profile_id,basis.preference_digest,FIT_ALGORITHM_VERSION]};
+      else q=buildGlobalListingQuery(tx.tenantId,basis,normalizeGlobalQuery({sort:'publication',dir:'desc',limit:20}),now);
+      stage='explain';
+      const start=performance.now();
+      const raw=(await tx.query('EXPLAIN (FORMAT JSON) '+q.sql,q.params)).rows?.[0]?.['QUERY PLAN']?.[0];
+      const elapsed_ms=Math.round(performance.now()-start);
+      return {status:'COLLECTED',operation,elapsed_ms,plan:summarizeDiagnosticPlan(raw?.Plan)};
+    },{env,db});
+  } catch(error) {
+    return {status:'ERROR',operation,stage,sqlstate:/^[0-9A-Z]{5}$/.test(error?.code||'')?error.code:null};
+  }
 }
