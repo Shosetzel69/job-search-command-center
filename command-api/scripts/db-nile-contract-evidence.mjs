@@ -10,7 +10,8 @@ function compactError(error) {
 }
 
 async function safeRollback(client) {
-  await client.query('ROLLBACK').catch(() => {});
+  // A failed rollback aborts the probe; main closes this dedicated client.
+  await client.query('ROLLBACK');
 }
 
 async function createTenant(client, tenantId, name) {
