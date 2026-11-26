@@ -4,6 +4,7 @@ substitutions:
   _TRUSTED_REF: ""
   _GATEWAY_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway"
   _WORKER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-diagnostics"
+  _BUILD_NILE: "false"
   _NILE_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-nile-observer"
 steps:
   - id: trusted-source-admission
@@ -63,7 +64,7 @@ steps:
           echo "REUSE_WORKER_TAG=${_GIT_SHA}"
         fi
 
-        if gcloud artifacts docker images describe "${_NILE_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+        if [[ "${_BUILD_NILE}" == "true" ]] && gcloud artifacts docker images describe "${_NILE_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.nile-exists
         fi
 
@@ -120,6 +121,7 @@ steps:
     args:
       - -ceu
       - |
+        [[ "${_BUILD_NILE}" == "true" ]] || exit 0
         if [[ ! -f /workspace/.nile-exists ]]; then
           docker build --pull -f ops/Dockerfile.nile --build-arg "SOURCE_SHA=${_GIT_SHA}" -t "${_NILE_IMAGE}:${_GIT_SHA}" .
           docker push "${_NILE_IMAGE}:${_GIT_SHA}"
@@ -130,7 +132,9 @@ steps:
     args:
       - -ceu
       - |
-        for image in "${_GATEWAY_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}" "${_NILE_IMAGE}:${_GIT_SHA}"; do
+        images=("${_GATEWAY_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}")
+        if [[ "${_BUILD_NILE}" == "true" ]]; then images+=("${_NILE_IMAGE}:${_GIT_SHA}"); fi
+        for image in "${images[@]}"; do
           digest="$(gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)')"
           [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
           echo "OPS_IMAGE=$image@$digest"
