@@ -182,3 +182,24 @@ Evidence Bundle must record:
 - operation -> exact Cloud Run execution -> result correlation;
 - sanitizer/public projection evidence;
 - DEV functional acceptance.
+
+
+## #589 RE-07 — DEV Nile observation source slice (not enabled)
+
+The Nile path extends the existing typed gateway, not the product runtime or the workspace sandbox. Until the independently reviewed activation is complete, the gateway must not configure `NILE_WORKER_IMAGE_DIGEST`. An absent digest rejects the operation before dispatch. The existing pair must be upgraded together because the catalog version changes.
+
+### Configuration and identity contract
+
+- Dedicated Cloud Run Job and identity: `jscc-nile-observer-dev`, project `jscc-dev`, region `europe-west1`. One task, no retries, bounded execution. Do not give its identity a shell, deployment permissions, product runtime bucket access or project-wide secret access.
+- Gateway: exact immutable Nile image digest in `NILE_WORKER_IMAGE_DIGEST`. Existing run-only IAM role on the dedicated Job, never override/cancel permission. Gateway needs conditional object access on the existing ops bucket for `nile/dispatch/` and `nile/results/`. No Nile credentials on gateway or general worker.
+- Dedicated Job: reuse existing source/digest and ops bucket metadata. Bind `NILE_OBSERVER_DATABASE_URL` and `NILE_OBSERVER_TENANT_ID` from separate dedicated, version-pinned DEV secrets; `NILE_OBSERVER_DB_HOST` and `NILE_OBSERVER_ROLE` must match the verified DEV endpoint and principal. Never use the runtime/migration URL. Grant secret access only to the dedicated identity and only at each named secret.
+- Give the dedicated identity read-only dispatch access on `nile/dispatch/`, create-only result access on `nile/results/` and conditional read/update on the existing diagnostic lease object. No general operations/auth/public object access. Existing general worker must not gain access to either Nile prefix.
+- Create/verify a separate DB principal with effective SELECT only for the probe tables and no ownership, write, create or elevated privileges. Managed Nile does not promise SQL CREATE ROLE support; use only a provider-supported credential/privilege procedure and independently verify effective permissions. If unavailable, activation is blocked; do not use the existing DEV shared-role exception.
+- Pin the tenant in the Job configuration (not a remote parameter); prove authorization and tenant mapping independently. TLS certificate/hostname validation is mandatory. A live provider rejection of read-only transaction, tenant context or catalog privilege guard fails closed; no fallback to unrestricted SQL.
+- The existing trusted ops Cloud Build route supports an opt-in Nile image. Do not opt in until incremental cost admission and exact-SHA review are recorded. Do not expose the gateway task until the dedicated Job, identity, immutable digest, IAM and secret references are verified. No TEST/PROD scope.
+
+### Scope and evidence
+
+The initial fixed operations are `schema_probe` and `evaluation_count_plan`. These are diagnostic admission probes, not the exact #659 FIT VERIFY or Global Listing statements. The evidence reports collection status, coarse stage/SQLSTATE and bounded aggregate plan metrics, never raw predicates, connection details or personal data. Result evidence is available via the authenticated operation-status projection only.
+
+Independent review must cover gateway/worker binding and legacy regression, disabled-path denial, principal write/ownership denial, cross-environment denial, tenant isolation, TLS and timeout behavior, sanitized evidence, rollback and cost. The source-only branch does not establish provider compatibility or live deployment readiness. Dedicated credential provisioning, IAM activation, exact #659 query registration and independent DEV live evidence remain outstanding.
