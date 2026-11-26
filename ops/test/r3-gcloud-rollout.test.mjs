@@ -12,8 +12,8 @@ const obs=(rows)=>({task:'describe_dev_runtime',environment:'dev',
  observed_at:'2026-11-05T00:00:00Z',effective_revisions:rows});
 const row=(rev,percent,digest)=>({revision:service+'-'+rev,percent,image_digest:digest});
 
-test('R3 catalogue retains existing operations and has exact R3 version',()=>{
- assert.equal(CATALOG_VERSION,'589-r4-v1');
+test('Catalogue retains existing rollout operations and exact version',()=>{
+ assert.equal(CATALOG_VERSION,'589-r4-v2');
  assert.equal(TASK_CATALOG.inspect_dev_rollout.class,'OBSERVE');
  assert.ok(TASK_CATALOG.describe_execution);
  assert.ok(TASK_CATALOG.read_execution_logs);
