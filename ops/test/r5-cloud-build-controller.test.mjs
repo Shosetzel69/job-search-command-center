@@ -16,8 +16,8 @@ const digest='sha256:'+'d'.repeat(64);
 const input={environment:'dev',work_item_ref:'#589',source_sha:source,trusted_ref:ref};
 const proof=(kind)=>({verified:true,kind,source_sha:source,trusted_ref:ref,work_item_ref:'#589'});
 
-test('R5 module remains dormant; Delivery 1 catalog is unchanged',()=>{
- assert.equal(CATALOG_VERSION,'589-r4-v1');
+test('R5 module remains dormant; legacy operations remain admitted',()=>{
+ assert.equal(CATALOG_VERSION,'589-nile-api-v1');
  for(const key of ['describe_execution','read_execution_logs','inspect_runtime_snapshot',
    'run_test_suite','describe_dev_runtime','inspect_dev_rollout','plan_dev_deployment']) {
    assert.ok(TASK_CATALOG[key]);
