@@ -19,6 +19,7 @@ UPLOAD = f"https://storage.googleapis.com/upload/storage/v1/b/{BUCKET}/o"
 LEASE = "leases/diagnostics.json"
 JOBS = ("jscc-search-dev", "jscc-diagnostics-dev")
 TERMINAL = {"SUCCEEDED", "FAILED", "REJECTED"}
+MAX_PAGES_PER_COLLECTION = 20
 # Compatible with the existing gateway's numeric expiry comparison.
 # Explicit release only; bucket lifecycle still limits retention.
 MAINTENANCE_EXPIRY = 9007199254740991
@@ -68,17 +69,18 @@ class OperatorAPI:
 
     def pages(self, url, field, **params):
         seen = set()
-        while True:
+        for _ in range(MAX_PAGES_PER_COLLECTION):
             data, _ = self.request(url + "?" + urlencode({"pageSize": 100, **params}))
             values = data.get(field, [])
             require(isinstance(values, list), "invalid_page")
             yield from values
             token = data.get("nextPageToken")
             if not token:
-                break
+                return
             require(isinstance(token, str) and token not in seen, "invalid_page_token")
             seen.add(token)
             params["pageToken"] = token
+        raise Blocked("page_limit_exceeded")
 
     def service(self):
         return self.request(RUN_ROOT + "/services/jscc-command-api-dev")[0]
@@ -232,6 +234,9 @@ if __name__ == "__main__":
     try:
         print("RETRIEVE_BASELINE=" + MaintenanceGuard(OperatorAPI()).inspect())
         print("OPS_DRAIN_PREFLIGHT=PASS")
-    except (Blocked, ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError):
-        print("OPS_DRAIN_PREFLIGHT=BLOCKED")
+    except Blocked as error:
+        print("OPS_DRAIN_PREFLIGHT=BLOCKED reason=" + str(error))
+        raise SystemExit(2)
+    except (ValueError, OSError, subprocess.SubprocessError, KeyError, TypeError, AttributeError):
+        print("OPS_DRAIN_PREFLIGHT=BLOCKED reason=inspection_failed")
         raise SystemExit(2)
