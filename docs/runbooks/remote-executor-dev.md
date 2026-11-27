@@ -146,15 +146,7 @@ The deployer can update only:
 - `jscc-ops-gateway-dev`;
 - `jscc-diagnostics-dev`.
 
-It cannot update JSCC product services/jobs.
-
-### #589 maintenance admission (source slice, not live deployment authority)
-
-`scripts/gcp/remote_executor_dev_maintenance.py` implements operator-side primitives for the existing R6 freeze/unfreeze boundary. Its standalone entry point is strictly read-only: it fingerprints the Command API effective revision, template and traffic plus the Search Job template; consumes execution pages for both DEV jobs and operation/dispatch pages from the existing private ops bucket; and refuses unresolved records, active or ambiguous leases, missing permissions, pagination overflow and protected-state drift. Only the fingerprint and coarse status are emitted. This may require many GCS read operations; cost admission remains external and mandatory.
-
-The source-level freeze primitive uses the **same** `leases/diagnostics.json` object and generation-CAS semantics as the existing gateway, without a second lock store or any change to Retrieve locks. It never overwrites an ACTIVE lease, even an expired one. After acquisition it checks ownership, complete drain and protected state again. The maintenance marker uses the existing ACTIVE state and a safe-integer far-future expiry so ordinary gateway lease acquisition rejects it; the existing bucket lifecycle still limits retention. Do not rely on this marker for unattended long-term recovery. A lost or ambiguous acquisition, failed verification or interrupted process requires explicit operator recovery; never delete/force-release the marker. Release uses the owned generation and operation ID and requires a trusted actual-pair verifier and protected-state parity.
-
-This slice does **not** wire the live R6 approval/cost/pair-verification or rollback adapters, prove operator IAM, prove exclusion on all historical tagged gateway revisions, or make the existing routine deploy script safe to execute by itself. The existing owner maintenance window must exclude new Retrieve and other deployment activity; read-only checks cannot atomically prevent a product-side launch. No automatic rollback or live freeze is authorized by this source. Continue with independently reviewed integration before executing the approved paired rollout, explicit traffic cutover and recovery. No new IAM, database, secret, TEST or PROD changes.
+It cannot update JSCC product services/jobs. See [#589 maintenance admission and recovery](../589-R1B-STAGED-ROLLBACK.md#589-maintenance-admission-source-slice-not-live-deployment-authority).
 
 ## Rollback
 
