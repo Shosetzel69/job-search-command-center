@@ -42,3 +42,27 @@ test('Nile evidence is private to authenticated operation response',()=>{
   assert.equal(authenticatedEvidence(e).assertions.nile_status,'COLLECTED');
   assert.deepEqual(publicEvidence(e).assertions,{});
 });
+
+test('schema inventory binds the source and projects only bounded metadata',async()=>{
+ const tables=['schema_migrations','tenants','app_user','user_identity','profile','user_session',
+ 'collection_policy','system_bootstrap','account_capacity_policy','account_deletion_audit',
+ 'canonical_jobs','source_postings','search_runs','source_run_results','scheduler_config',
+ 'scheduler_state','coverage_scope_state','candidate_profile','search_profile','search_profile_preferences',
+ 'profile_preferences','profile_job_state','profile_job_evaluation','applications','profile_notes',
+ 'profile_ui_preferences','refresh_requests','profile_job_count_snapshots'];
+ const schema={database:'jobsearch_dev',read_only:true,migration_state:'MATCH',table_state:'PRESENT',
+  migration_checksum:'a'.repeat(64),catalog_checksum:'b'.repeat(64),extra_versions:[],
+  migrations:[{version:'001',expected_checksum:'a'.repeat(64),actual_checksum:'a'.repeat(64),state:'MATCH'}],
+  tables:tables.map(table=>({table,present:true,indexes:[],constraints:[],rows:['PRIVATE']}))};
+ const run=async(value)=>{
+  let calls=0;
+  return observeDevNile({...args,operation:'schema_inventory'},cfg,{fetchImpl:async()=>++calls===1?
+   new Response('a.b.c'):Response.json({source_sha:sha,operation:'schema_inventory',status:'COLLECTED',elapsed_ms:1,schema:value})});
+ };
+ const out=await run(schema);
+ assert.equal(out.nile_status,'COLLECTED');
+ assert.equal(JSON.parse(out.nile_evidence_json).schema.table_state,'PRESENT');
+ assert.equal(out.nile_evidence_json.includes('PRIVATE'),false);
+ assert.equal((await run({...schema,database:'jobsearch_prod'})).nile_status,'ERROR');
+ assert.equal((await run({...schema,tables:schema.tables.slice(1)})).nile_status,'ERROR');
+});
