@@ -24,11 +24,20 @@ test('ops admission rejects a clean checkout with a different HEAD', { skip: spa
     writeFileSync(join(dir, 'fixture'), 'second');
     git('commit', '-am', 'second');
     const approved = git('rev-parse', 'HEAD');
-    const run = () => spawnSync('bash', [admission], {
+    const run = (ref = 'refs/heads/main', script = admission) => spawnSync('bash', [script], {
       cwd: dir, encoding: 'utf8',
-      env: { ...process.env, SOURCE_SHA: approved, TRUSTED_OPS_REF: 'refs/heads/main', OPS_SOURCE_REMOTE: dir },
+      env: { ...process.env, SOURCE_SHA: approved, TRUSTED_OPS_REF: ref, OPS_SOURCE_REMOTE: dir, OPS_SOURCE_URL: dir },
     });
     assert.equal(run().status, 0);
+    const verifier = join(root, 'scripts/gcp/verify_trusted_ops_ref.sh');
+    git('tag', 'jscc-ops-approved/valid-1.2');
+    git('tag', 'jscc-ops-approved/unsafe;tag');
+    for (const [script, code] of [[admission, 4], [verifier, 42]]) {
+      assert.equal(run('refs/tags/jscc-ops-approved/valid-1.2', script).status, 0);
+      const invalid = run('refs/tags/jscc-ops-approved/unsafe;tag', script);
+      assert.equal(invalid.status, code);
+      assert.match(invalid.stderr, /invalid_trusted_ref/);
+    }
     git('checkout', '--detach', old);
     const wrong = run();
     assert.equal(wrong.status, 4);
@@ -55,6 +64,10 @@ test('ops build consumes the verified archive and gates both image pushes', () =
   for (const id of ['python-contract-tests', 'ops-contract-tests', 'build-gateway', 'build-worker']) {
     assert.match(step(id), /\/workspace\/jscc589-ops-verified-src/);
   }
+  const materialize = step('materialize-verified-source');
+  assert.ok(materialize.includes("TRUSTED_OPS_REF=${_TRUSTED_REF}"));
+  assert.ok(materialize.includes('"$TRUSTED_OPS_REF"'));
+  assert.ok(materialize.includes('"$SOURCE_SHA"'));
   const verify = step('verify-image-source');
   assert.match(verify, /docker pull/);
   assert.match(verify, /docker inspect/);
