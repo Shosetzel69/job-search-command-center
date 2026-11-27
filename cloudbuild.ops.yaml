@@ -22,23 +22,23 @@ steps:
         set -o pipefail
         git_root=/workspace/jscc589-ops-verified-git
         source_root=/workspace/jscc589-ops-verified-src
-        [[ ! -e "$git_root" && ! -e "$source_root" ]]
-        mkdir -p "$source_root"
-        git init --quiet "$git_root"
-        git -C "$git_root" remote add origin https://github.com/Shosetzel69/job-search-command-center.git
-        git -C "$git_root" fetch --quiet --no-tags --depth=1 origin "${_TRUSTED_REF}"
-        [[ "$(git -C "$git_root" rev-parse FETCH_HEAD)" == "${_GIT_SHA}" ]] || {
+        [[ ! -e "$$git_root" && ! -e "$$source_root" ]]
+        mkdir -p "$$source_root"
+        git init --quiet "$$git_root"
+        git -C "$$git_root" remote add origin https://github.com/Shosetzel69/job-search-command-center.git
+        git -C "$$git_root" fetch --quiet --no-tags --depth=1 origin "${_TRUSTED_REF}"
+        [[ "$$(git -C "$$git_root" rev-parse FETCH_HEAD)" == "${_GIT_SHA}" ]] || {
           echo "TRUSTED_BUILD_CONTEXT=BLOCKED source_sha_mismatch" >&2
           exit 42
         }
-        git -C "$git_root" archive --format=tar "${_GIT_SHA}" | tar -xf - -C "$source_root"
-        [[ -f "$source_root/ops/src/lib.mjs" ]]
+        git -C "$$git_root" archive --format=tar "${_GIT_SHA}" | tar -xf - -C "$$source_root"
+        [[ -f "$$source_root/ops/src/lib.mjs" ]]
         echo "TRUSTED_BUILD_CONTEXT=VERIFIED"
 
   - id: validate-candidate
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
-    args: ['-ceu', '[[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]']
+    args: ['-ceu', '[[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$$ ]]']
   - id: python-contract-tests
     name: python:3.12-slim-bookworm
     entrypoint: python3
@@ -66,8 +66,8 @@ steps:
     args:
       - -ceu
       - |
-        v="$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
-        [[ "$v" == "True" || "$v" == "true" ]]
+        v="$$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
+        [[ "$$v" == "True" || "$$v" == "true" ]]
 
   - id: detect-existing-images
     name: gcr.io/cloud-builders/gcloud
@@ -119,25 +119,25 @@ steps:
         set -o pipefail
         root=/workspace/jscc589-ops-verified-src/ops
         verify_image() {
-          local image="$1" marker="$2" role="$3" tmp cid=
-          if [[ -f "$marker" ]]; then docker pull "$image"; fi
-          docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$image" |
+          local image="$$1" marker="$$2" role="$$3" tmp cid=
+          if [[ -f "$$marker" ]]; then docker pull "$$image"; fi
+          docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$$image" |
             grep -Fx 'SOURCE_SHA=${_GIT_SHA}' >/dev/null
-          tmp="$(mktemp -d)"
+          tmp="$$(mktemp -d)"
           (
-            trap 'if [[ -n "$cid" ]]; then docker rm "$cid" >/dev/null; fi; rm -rf "$tmp"' EXIT
-            cid="$(docker create --network none "$image")"
-            docker cp "$cid:/workspace/ops/src" "$tmp/src"
-            diff -qr "$root/src" "$tmp/src"
-            docker cp "$cid:/workspace/ops/package.json" "$tmp/package.json"
-            cmp "$root/package.json" "$tmp/package.json"
-            docker cp "$cid:/workspace/ops/observation/dev-runtime-observer.mjs" "$tmp/observer.mjs"
-            cmp "$root/observation/dev-runtime-observer.mjs" "$tmp/observer.mjs"
-            if [[ "$role" == worker ]]; then
-              docker cp "$cid:/workspace/ops/observation/dev-rollout-evaluator.mjs" "$tmp/evaluator.mjs"
-              cmp "$root/observation/dev-rollout-evaluator.mjs" "$tmp/evaluator.mjs"
+            trap 'if [[ -n "$$cid" ]]; then docker rm "$$cid" >/dev/null; fi; rm -rf "$$tmp"' EXIT
+            cid="$$(docker create --network none "$$image")"
+            docker cp "$$cid:/workspace/ops/src" "$$tmp/src"
+            diff -qr "$$root/src" "$$tmp/src"
+            docker cp "$$cid:/workspace/ops/package.json" "$$tmp/package.json"
+            cmp "$$root/package.json" "$$tmp/package.json"
+            docker cp "$$cid:/workspace/ops/observation/dev-runtime-observer.mjs" "$$tmp/observer.mjs"
+            cmp "$$root/observation/dev-runtime-observer.mjs" "$$tmp/observer.mjs"
+            if [[ "$$role" == worker ]]; then
+              docker cp "$$cid:/workspace/ops/observation/dev-rollout-evaluator.mjs" "$$tmp/evaluator.mjs"
+              cmp "$$root/observation/dev-rollout-evaluator.mjs" "$$tmp/evaluator.mjs"
             fi
-            echo "OPS_IMAGE_SOURCE_VERIFIED=$role"
+            echo "OPS_IMAGE_SOURCE_VERIFIED=$$role"
           )
         }
         verify_image "${_GATEWAY_IMAGE}:${_GIT_SHA}" /workspace/.gateway-exists gateway
@@ -173,9 +173,9 @@ steps:
       - -ceu
       - |
         for image in "${_GATEWAY_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}"; do
-          digest="$(gcloud artifacts docker images describe "$image" --project=jscc-shared --format='value(image_summary.digest)')"
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          echo "OPS_IMAGE=$image@$digest"
+          digest="$$(gcloud artifacts docker images describe "$$image" --project=jscc-shared --format='value(image_summary.digest)')"
+          [[ "$$digest" =~ ^sha256:[0-9a-f]{64}$$ ]]
+          echo "OPS_IMAGE=$$image@$$digest"
         done
 serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com
 options:
