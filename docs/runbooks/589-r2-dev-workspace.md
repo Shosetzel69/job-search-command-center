@@ -84,3 +84,15 @@ current image lineage. Do not build from arbitrary branch or image tags.
 5. DEV smoke and rollback proof; no TEST/PROD or Nile schema changes.
 
 **Current status:** SOURCE_IMPLEMENTED, TESTED_IN_CI, NOT_DEPLOYED.
+
+## RE-02 selectable working directory (source only)
+
+`workspace_run` accepts optional `cwd` for all existing tasks. Omit it or pass `"."` for the existing snapshot root; for example:
+
+```json
+{"task":"command","argv":["python3","app.py"],"cwd":"src"}
+```
+
+The Gateway validates the path syntax, Manager requires an existing directory implied by the exact snapshot files, and Worker independently validates and resolves it inside the fresh temporary snapshot before process launch. Absolute, traversal, restricted, missing and file paths are denied. No directory is created from `cwd` itself; the existing executable allowlist, environment, limits, DEV OAuth scopes and unprivileged execution boundary remain unchanged. Root requests omit the new field on the wire for compatibility with the existing Manager/Worker protocol. A selected subdirectory is **not** supported by the old Worker or Manager; it must fail rather than silently execute in the root.
+
+The current R2 Manager-only overlay (`Dockerfile.r2-tools`) and cap-100 common-only overlay (`Dockerfile.cap100`) cannot publish the changed worker entrypoint. A subsequent separately authorized, independently reviewed exact-source build/release must cover the existing Gateway, Manager and Sandbox Worker images, using their existing lineages and immutable baselines, with the Manager/Worker protocol compatibility and rollback verified. No new service, identity, permission, dependency or runtime is required; no build, rollout or live acceptance is performed by this source slice. Existing cost admission and Retrieve protection remain mandatory.
