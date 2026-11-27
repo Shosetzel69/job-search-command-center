@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.request
 from .httpbase import BaseHandler, serve
 from .backend import GCSBackend, LocalBackend, GenerationConflict
-from .common import checked_path, checked_content, checked_task, MAX_FILES, MAX_TOTAL, MAX_REQUEST, json_bytes
+from .common import checked_path, checked_content, checked_task, checked_workdir, MAX_FILES, MAX_TOTAL, MAX_REQUEST, json_bytes
 from .workspace_ops import checksum, find_literal, compare, replace_once
 
 WORKER_URL = os.environ.get('WORKER_URL','').rstrip('/')
@@ -25,9 +25,12 @@ else:
         raise SystemExit('local_worker_required')
     backend = LocalBackend(os.environ['JSCC_LOCAL_BACKEND'])
 
-def execute_worker(snapshot, task, argv=None):
+def execute_worker(snapshot, task, argv=None, cwd='.'):
     files = {k:base64.b64encode(v).decode() for k,v in snapshot.items()}
-    payload = json_bytes({'files':files,'task':task,'argv':argv})
+    payload = {'files':files,'task':task,'argv':argv}
+    if cwd != '.':
+        payload['cwd'] = cwd
+    payload = json_bytes(payload)
     headers = {'Content-Type':'application/json'}
     if os.environ.get('K_SERVICE'):
         import google.auth.transport.requests
@@ -146,13 +149,14 @@ class Handler(BaseHandler):
             return self.out(404,{'error':'not_found'})
         try:
             o=self.body()
-            if not isinstance(o,dict) or set(o)-{'task','argv'}:
+            if not isinstance(o,dict) or set(o)-{'task','argv','cwd'}:
                 raise ValueError('invalid_request')
             cmd=checked_task(o.get('task'),o.get('argv'))
             snap=backend.snapshot()
             if len(snap)>MAX_FILES or sum(map(len,snap.values()))>MAX_TOTAL:
                 raise ValueError('workspace_limit')
-            return self.out(200,execute_worker(snap,o['task'],o.get('argv')))
+            cwd=checked_workdir(o.get('cwd','.'),snap)
+            return self.out(200,execute_worker(snap,o['task'],o.get('argv'),cwd))
         except ValueError as e:
             return self.out(400,{'error':str(e)})
         except urllib.error.HTTPError as e:
