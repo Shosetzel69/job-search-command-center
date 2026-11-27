@@ -44,14 +44,14 @@ export async function collectDevSchemaInventory(tx,{readMigrations=loadMigration
  });
  const extra_versions=actual.filter(x=>!known.has(x.version)).map(x=>x.version);
  const rows=boundedRows(await tx.query(
-  `SELECT c.relname AS table_name,
-          ARRAY(SELECT i.relname FROM pg_catalog.pg_index ix
+  `SELECT c.relname::text AS table_name,
+          ARRAY(SELECT i.relname::text FROM pg_catalog.pg_index ix
             JOIN pg_catalog.pg_class i ON i.oid=ix.indexrelid
             WHERE ix.indrelid=c.oid ORDER BY i.relname LIMIT 129) AS indexes,
-          ARRAY(SELECT k.conname FROM pg_catalog.pg_constraint k
+          ARRAY(SELECT k.conname::text FROM pg_catalog.pg_constraint k
             WHERE k.conrelid=c.oid ORDER BY k.conname LIMIT 129) AS constraints
      FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid=c.relnamespace
-    WHERE n.nspname='public' AND c.relname=ANY($1::text[]) AND c.relkind IN ('r','p')
+    WHERE n.nspname='public' AND c.relname::text=ANY($1::text[]) AND c.relkind IN ('r','p')
     ORDER BY c.relname LIMIT 129`,[DEV_SCHEMA_TABLES]),128);
  const tableMap=new Map();
  for(const row of rows){
