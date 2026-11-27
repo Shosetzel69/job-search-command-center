@@ -143,15 +143,29 @@ export function createDevObserver({ transport, now = () => new Date().toISOStrin
         if (revision.name !== revPath.slice(4)) throw new Error('RESOURCE_MISMATCH');
         // Status array order is not evidence of which container is the main
         // application. Match the image status to the first declared container.
-        const primaryName = revision.containers?.[0]?.name;
+        const primary = revision.containers?.[0];
+        const primaryName = primary?.name;
         const statuses = revision.containerStatuses;
-        const primaryStatus = typeof primaryName === 'string' &&
-          Array.isArray(statuses)
-          ? statuses.find(s => s?.name === primaryName) : null;
+        const matching = typeof primaryName === 'string' && Array.isArray(statuses)
+          ? statuses.filter(s => s?.name === primaryName) : [];
+        // A v2 Revision may expose only the immutable configured image.
+        // Never resolve a mutable tag or use the service template as evidence.
+        // Only the single-container case admits the explicit pin fallback.
+        const configured = Array.isArray(revision.containers) &&
+          revision.containers.length === 1 &&
+          typeof primary?.image === 'string' &&
+          /^[^@\s]+\/[^@\s]+@sha256:[a-f0-9]{64}$/.test(primary.image)
+          ? safeDigest(primary.image) : 'UNKNOWN';
+        const resolved = matching.length === 1
+          ? safeDigest(matching[0]?.imageDigest) : 'UNKNOWN';
+        const digest = matching.length > 1 ||
+          (matching.length === 1 && resolved === 'UNKNOWN') ||
+          (configured !== 'UNKNOWN' && resolved !== 'UNKNOWN' && configured !== resolved)
+          ? 'UNKNOWN' : resolved !== 'UNKNOWN' ? resolved : configured;
         revisions.push(Object.freeze({
           revision:item.revision, percent:item.percent,
           ...(item.resolved_from ? { resolved_from:item.resolved_from } : {}),
-          image_digest:safeDigest(primaryStatus?.imageDigest),
+          image_digest:digest,
         }));
       }
       const account = data.template?.serviceAccount;
