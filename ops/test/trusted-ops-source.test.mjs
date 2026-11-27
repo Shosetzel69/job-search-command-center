@@ -10,7 +10,7 @@ const root = fileURLToPath(new URL('../../', import.meta.url));
 const admission = join(root, 'scripts/gcp/assert_trusted_ops_source.sh');
 const config = readFileSync(join(root, 'cloudbuild.ops.yaml'), 'utf8');
 
-test('ops admission rejects a clean checkout with a different HEAD', () => {
+test('ops admission rejects a clean checkout with a different HEAD', { skip: spawnSync('git', ['--version']).status !== 0 && 'git unavailable in slim build image' }, () => {
   const dir = mkdtempSync(join(tmpdir(), 'ops-source-'));
   try {
     const git = (...args) => execFileSync('git', args, { cwd: dir, encoding: 'utf8' }).trim();
