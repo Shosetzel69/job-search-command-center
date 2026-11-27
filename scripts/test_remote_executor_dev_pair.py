@@ -4,7 +4,7 @@ import pathlib
 import subprocess
 import sys
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, create_autospec, patch
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "gcp"))
 import remote_executor_dev_pair as pair
@@ -21,6 +21,7 @@ BASE = "projects/jscc-dev/locations/europe-west1/"
 def task(kind, values):
     name = pair.GATEWAY if kind == "gateway" else pair.WORKER
     return {"serviceAccount": name+"@jscc-dev.iam.gserviceaccount.com",
+            "labels": {"client.knative.dev/nonce": "initial", "fixture": "preserved"},
             "containers": [{"image": pair.image(kind, values), "env": [
                 *({"name": key, "value": value} for key, value in values.items()),
                 {"name": "OTHER", "value": "unchanged"},
@@ -43,7 +44,8 @@ class API:
         self.worker_data = {"name": BASE+"jobs/"+pair.WORKER,
             "generation": "1", "observedGeneration": "1",
             "terminalCondition": {"state": "CONDITION_SUCCEEDED"},
-            "template": {"taskCount": 1, "template": task("worker", OLD)}}
+            "template": {"taskCount": 1, "labels": {"client.knative.dev/nonce": "initial"},
+                         "template": task("worker", OLD)}}
         self.revisions = {OLD_REV: self.revision(OLD_REV, OLD)}
         self.calls = []
 
@@ -79,9 +81,12 @@ class API:
         vals = dict(x.split("=",1) for x in next(x for x in argv if x.startswith("--update-env-vars=")).split("=",1)[1].split(","))
         if argv[2] == "jobs":
             self.worker_data["template"] = pair.expected_template(self.worker_data["template"], "worker", vals)
+            self.worker_data["template"]["labels"]["client.knative.dev/nonce"] = str(len(self.calls))
+            self.worker_data["template"]["template"]["labels"]["client.knative.dev/nonce"] = str(len(self.calls))
         else:
             assert "--no-traffic" in argv
             self.service_data["template"] = pair.expected_template(self.service_data["template"], "gateway", vals)
+            self.service_data["template"]["labels"]["client.knative.dev/nonce"] = str(len(self.calls))
             rev = NEW_REV if vals == NEW else pair.GATEWAY+"-00017-def"
             self.revisions[rev] = self.revision(rev, vals)
             self.service_data["latestReadyRevision"] = rev
@@ -92,7 +97,7 @@ class PairTests(unittest.TestCase):
     def setUp(self):
         self.api = API()
         self.p = pair.PairOperator(self.api, self.api.run, lambda uri: CAT)
-        self.p.guard = Mock()
+        self.p.guard = create_autospec(pair.MaintenanceGuard, instance=True)
         self.p.guard.baseline = "protected"
         self.p.guard.inspect.return_value = "protected"
         self.p.guard.release_after_verified.side_effect = lambda verifier: self.assertTrue(verifier())
@@ -157,6 +162,40 @@ class PairTests(unittest.TestCase):
         self.api.service_data["scaling"]["maxInstanceCount"] = 2
         with self.assertRaisesRegex(pair.Blocked, "resource_policy_drift"):
             self.p.verify_pair(False)
+
+    def test_nonce_rotation_is_not_template_drift_but_other_labels_are(self):
+        self.p.freeze()
+        self.p.deploy_worker()
+        self.p.deploy_gateway()
+        self.assertNotEqual(self.api.service_data["template"]["labels"]["client.knative.dev/nonce"],
+                            self.p.old["gateway"]["labels"]["client.knative.dev/nonce"])
+        self.assertNotEqual(self.api.worker_data["template"]["labels"]["client.knative.dev/nonce"],
+                            self.p.old["worker"]["labels"]["client.knative.dev/nonce"])
+        self.p.verify_pair(False)
+        self.api.service_data["template"]["labels"]["fixture"] = "changed"
+        with self.assertRaisesRegex(pair.Blocked, "template_drift"):
+            self.p.verify_pair(False)
+        self.api.service_data["template"]["labels"]["fixture"] = "preserved"
+        self.api.worker_data["template"]["template"]["labels"]["client.knative.dev/other"] = "changed"
+        with self.assertRaisesRegex(pair.Blocked, "template_drift"):
+            self.p.verify_pair(False)
+        self.api.worker_data["template"]["template"]["labels"].pop("client.knative.dev/other")
+        self.api.service_data["template"]["annotations"] = {"client.knative.dev/user-image": "changed"}
+        with self.assertRaisesRegex(pair.Blocked, "template_drift"):
+            self.p.verify_pair(False)
+        self.api.service_data["template"].pop("annotations")
+        self.p.rollback_gateway()
+        self.p.rollback_worker()
+        self.p.verify_pair(True)
+        self.p.release()
+
+    def test_nonce_only_label_map_can_be_absent(self):
+        baseline = task("gateway", OLD)
+        baseline.pop("labels")
+        after = copy.deepcopy(baseline)
+        after["labels"] = {"client.knative.dev/nonce": "generated"}
+        self.assertEqual(pair.normalized(baseline), pair.normalized(after))
+        self.assertIn("client.knative.dev/nonce", after["labels"])
 
     def test_wrong_effective_image_or_catalog_blocks_verification(self):
         self.p.freeze()
