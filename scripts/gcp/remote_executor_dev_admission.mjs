@@ -141,10 +141,16 @@ function validPath(path){return typeof path==='string'&&/^control\/v1\/deploymen
 /** Existing GCS store contract, with the separately authorized operator's
  * credentials rather than a gateway/worker metadata token. No new IAM here.
  */
-export function operatorPairStore({getToken,fetchImpl=fetch}={}){
+export function operatorPairStore(options={}){
+ return operatorStateStore(validPath,options);
+}
+export function operatorBuildStore(options={}){
+ return operatorStateStore(path=>typeof path==='string'&&/^control\/v1\/builds\/[a-f0-9]{64}\.json$/.test(path),options);
+}
+function operatorStateStore(allowedPath,{getToken,fetchImpl=fetch}={}){
  const tokenProvider=getToken||asyncToken;
  async function request(bucket,path,{write=false,data,generation}={}){
-  require(bucket===BUCKET&&validPath(path),'pair_store_path_denied');
+  require(bucket===BUCKET&&allowedPath(path),'pair_store_path_denied');
   const token=await tokenProvider();
   require(typeof token==='string'&&token.length>0,'operator_token_missing');
   const root='https://storage.googleapis.com';
