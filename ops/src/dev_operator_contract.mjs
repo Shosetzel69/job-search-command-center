@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','gcloud_inventory','gcs_artifact']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','gcloud_inventory','gcs_artifact','gcp_metadata']);
 const STATES=new Set(['DISPATCH_PENDING_OR_UNKNOWN','SUBMITTED','WORKING','SUCCEEDED','FAILED','BLOCKED',
  'CANCELLED','SUBMISSION_UNKNOWN','ROLLED_BACK','RECOVERY_REQUIRED','FREEZE_UNCERTAIN',
  'ROLLBACK_BLOCKED','UNFREEZE_UNCERTAIN','ADMISSION_BLOCKED','OBSERVED']);
@@ -93,6 +93,11 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
   operatorRequire(operatorExact(v.bundle,['original_approval_ref'])&&
    match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref,
    'operator_observation_approval_mismatch');
+ }else if(v.action==='gcp_metadata'){
+  operatorRequire(v.bundle.environment==='dev'&&(
+   v.bundle.kind==='artifact_tag'&&operatorExact(v.bundle,['environment','kind','package','source_sha'])||
+   ['secret','run_job','run_service'].includes(v.bundle.kind)&&operatorExact(v.bundle,['environment','kind','name'])),
+   'operator_metadata_approval_mismatch');
  }else if(v.action==='gcs_artifact'){
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.operation==='metadata'&&operatorExact(v.bundle,['environment','operation','bucket','object','generation'])||
@@ -119,6 +124,53 @@ export function validateOperatorRequest(value,admission){
   operatorHash(value)===operatorHash(expected),'operator_request_binding_mismatch');
  return value;
 }
+function projectMetadata(m){
+ const safeName=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,255}$/.test(x);
+ if(!m||!['artifact_tag','secret','run_job','run_service'].includes(m.kind))throw Error('operator_metadata_invalid');
+ if(m.kind==='artifact_tag'){
+  operatorRequire(['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator','jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100'].includes(m.package)&&
+   match(SHA,m.source_sha)&&/^sha256:[a-f0-9]{64}$/.test(m.digest||'')&&m.immutable_tags===true&&
+   m.uri==='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/'+m.package+'@'+m.digest,'operator_metadata_invalid');
+  return {kind:m.kind,package:m.package,source_sha:m.source_sha,digest:m.digest,uri:m.uri,
+   immutable_tags:true,source_provenance:'UNVERIFIED'};
+ }
+ if(m.kind==='secret'){
+  operatorRequire(['JSCC_OPS_GOOGLE_CLIENT_ID','JSCC_OPS_GOOGLE_CLIENT_SECRET','JSCC_OPS_GOOGLE_ALLOWED_SUB','NILE_DATABASE_URL'].includes(m.name)&&
+   ['automatic','user_managed','UNKNOWN'].includes(m.replication),'operator_metadata_invalid');
+  return {kind:m.kind,name:m.name,replication:m.replication};
+ }
+ operatorRequire(safeName(m.name)&&Array.isArray(m.containers)&&m.containers.length>0&&m.containers.length<=4,
+  'operator_metadata_invalid');
+ const out={kind:m.kind,name:m.name,
+  service_account:typeof m.service_account==='string'&&/^[a-z][a-z0-9-]{3,120}@jscc-dev\.iam\.gserviceaccount\.com$/.test(m.service_account)?m.service_account:'UNKNOWN',
+  containers:m.containers.map(c=>{
+   operatorRequire(Array.isArray(c.env)&&c.env.length<=128,'operator_metadata_invalid');
+   const image=typeof c.image==='string'&&/^europe-west1-docker\.pkg\.dev\/jscc-shared\/(?:jscc|jscc-ops)\/[a-z0-9._-]+@sha256:[a-f0-9]{64}$/.test(c.image)?c.image:'UNKNOWN';
+   const env=c.env.map(x=>{
+    operatorRequire(typeof x.name==='string'&&/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(x.name)&&
+     ['plain','secret_reference','reference_unverified'].includes(x.kind),'operator_metadata_invalid');
+    if(x.kind!=='secret_reference')return {name:x.name,kind:x.kind};
+    operatorRequire(typeof x.secret==='string'&&/^(?:projects\/jscc-dev\/secrets\/)?[A-Za-z0-9_-]{1,255}$/.test(x.secret)&&
+     typeof x.version==='string'&&(/^[0-9]{1,20}$/.test(x.version)||x.version==='latest'),'operator_metadata_invalid');
+    return {name:x.name,kind:x.kind,secret:x.secret,version:x.version};
+   });
+   return {image,env};
+  })};
+ for(const key of ['task_count','parallelism','max_retries'])if(Number.isSafeInteger(m[key])&&m[key]>=0)out[key]=m[key];
+ if(typeof m.timeout==='string'&&/^[0-9]{1,6}s$/.test(m.timeout))out.timeout=m.timeout;
+ if(m.kind==='run_service'){
+  operatorRequire(Array.isArray(m.traffic)&&m.traffic.length>0&&m.traffic.length<=20,'operator_metadata_invalid');
+  out.configuration_scope='service_template';
+  out.traffic=m.traffic.map(x=>{
+   operatorRequire(typeof x.revision==='string'&&x.revision.startsWith(m.name+'-')&&/^[a-z0-9-]{1,100}$/.test(x.revision)&&
+    Number.isInteger(x.percent)&&x.percent>=0&&x.percent<=100,'operator_metadata_invalid');
+   return {revision:x.revision,percent:x.percent,...(typeof x.tag==='string'&&/^[a-z0-9-]{1,63}$/.test(x.tag)?{tag:x.tag}:{})};
+  });
+  operatorRequire(out.traffic.reduce((n,x)=>n+x.percent,0)===100,'operator_metadata_invalid');
+ }
+ operatorRequire(Buffer.byteLength(JSON.stringify(out))<=32768,'operator_metadata_limit');
+ return out;
+}
 export function projectOperatorResult(request,record){
  if(!record)return {operation_id:request.operation_id,action:request.action,
   state:'DISPATCH_PENDING_OR_UNKNOWN',automatic_retry:false};
@@ -138,6 +190,8 @@ export function projectOperatorResult(request,record){
   typeof m.crc32c==='string'&&/^[a-zA-Z0-9+/]{6}==$/.test(m.crc32c)&&
   (m.md5===null||typeof m.md5==='string'&&/^[a-zA-Z0-9+/]{22}==$/.test(m.md5)))
   out.artifact_metadata={bucket:m.bucket,name:m.name,generation:m.generation,size:m.size,crc32c:m.crc32c,md5:m.md5};
+ if(request.action==='gcs_artifact'&&['SUCCEEDED','OBSERVED'].includes(v.state))operatorRequire(out.artifact_metadata,'operator_artifact_result_invalid');
+ if(request.action==='gcp_metadata'&&v.state==='OBSERVED')out.metadata=projectMetadata(v.metadata);
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;
 }
