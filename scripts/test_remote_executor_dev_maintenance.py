@@ -1,5 +1,6 @@
 """Offline contracts for the operator-side DEV maintenance guard."""
 import copy
+import json
 import pathlib
 import sys
 import unittest
@@ -10,6 +11,7 @@ import remote_executor_dev_maintenance as guard
 
 class FakeAPI:
     def __init__(self):
+        self.lifecycle = json.loads(guard.LIFECYCLE_FILE.read_text(encoding='utf-8'))
         self.lease = None
         self.generation = "0"
         self.active = {name: [] for name in guard.JOBS}
@@ -17,6 +19,10 @@ class FakeAPI:
         self.writes = []
         self.job_template = {"template": {"containers": [{"image": "search"}]}}
         self.drift_after_cas = False
+
+    def bucket_metadata(self):
+        return {'name': guard.BUCKET, 'location': 'EUROPE-WEST1',
+                'lifecycle': copy.deepcopy(self.lifecycle)}
 
     def service(self):
         return {"name": "projects/jscc-dev/locations/europe-west1/services/jscc-command-api-dev",
@@ -63,6 +69,58 @@ class MaintenanceTests(unittest.TestCase):
         self.guard.release_after_verified(lambda: True)
         self.assertEqual([x["state"] for x in self.api.writes], ["ACTIVE", "RELEASED"])
         self.assertEqual(self.api.writes[0]["operation_id"], self.api.writes[1]["operation_id"])
+
+    def test_scoped_policy_matches_only_known_transient_objects(self):
+        rule = self.api.lifecycle["rule"][0]
+        self.assertEqual(self.api.lifecycle, {"rule": [{
+            "action": {"type": "Delete"},
+            "condition": {"age": 14, "matchesPrefix": [
+                "auth/codes/", "auth/tokens/", "auth/upstream/", "limits/"]}}]})
+        prefixes = tuple(rule["condition"]["matchesPrefix"])
+        for name in ("auth/codes/a.json", "auth/tokens/a.json",
+                     "auth/upstream/a.json", "limits/2026-11-27.json"):
+            self.assertTrue(name.startswith(prefixes))
+        for name in ("leases/diagnostics.json", "control/v1/deployments/a.json",
+                     "control/v1/builds/a.json", "operations/a.json",
+                     "dispatch/a.json", "idempotency/a.json", "results/a.json",
+                     "public/a.json", "auth/unknown/a.json", "unknown/a.json"):
+            self.assertFalse(name.startswith(prefixes))
+
+    def test_unsafe_lifecycle_blocks_inspection_and_freeze(self):
+        baseline = self.guard.inspect()
+        expected = copy.deepcopy(self.api.lifecycle)
+        variants = [None, {"rule": []},
+                    {"rule": [{"action": {"type": "Delete"}, "condition": {"age": 14}}]}]
+        broad = copy.deepcopy(expected)
+        broad["rule"][0]["condition"]["matchesPrefix"].append("control/")
+        variants.append(broad)
+        extra = copy.deepcopy(expected)
+        extra["rule"].append({"action": {"type": "Delete"}, "condition": {"age": 99}})
+        variants.append(extra)
+        for policy in variants:
+            self.api.lifecycle = policy
+            with self.subTest(policy=policy), self.assertRaisesRegex(
+                    guard.Blocked, "ops_lifecycle_not_scoped"):
+                self.guard.freeze(baseline)
+            self.assertEqual(self.api.writes, [])
+        self.api.lifecycle = expected
+        self.api.lifecycle["rule"][0]["condition"]["matchesPrefix"].reverse()
+        self.assertEqual(self.guard.inspect(), baseline)
+
+    def test_policy_drift_does_not_prevent_owned_verified_release(self):
+        self.guard.freeze(self.guard.inspect())
+        self.api.lifecycle = {"rule": [{"action": {"type": "Delete"},
+                                       "condition": {"age": 14}}]}
+        self.guard.release_after_verified(lambda: True)
+        self.assertEqual(self.api.lease["state"], "RELEASED")
+
+    def test_bucket_metadata_request_is_fixed_read_only(self):
+        from unittest.mock import Mock
+        api = guard.OperatorAPI(token="fixture")
+        api.request = Mock(return_value=({"name": guard.BUCKET}, {}))
+        self.assertEqual(api.bucket_metadata(), {"name": guard.BUCKET})
+        api.request.assert_called_once_with(
+            guard.BUCKET_METADATA + "?fields=name,location,lifecycle")
 
     def test_active_or_expired_active_lease_never_overwritten(self):
         for expiry in (guard.now_ms() - 1, guard.now_ms() + 100000):
