@@ -79,9 +79,8 @@ export async function runApprovedPair({
       verifyApproval:async p=>verifyApproval(p,observed),
       verifyImagePair:async p=>verifyImagePair(p,{...observed,catalog,previous_catalog}),
       verifyCost:async p=>verifyCost(p),
-      verifyCurrentState:async p=>proof('CURRENT_STATE',p,rollback?
-        await session.call('verify_pair',true):captured),
-      freezeOps:async p=>{
+      verifyCurrentState:async p=>{
+        if(rollback)return proof('CURRENT_STATE',p,await session.call('verify_pair',true));
         const window=await verifyMaintenanceWindow(p,observed);
         if(window?.verified!==true||window.kind!=='MAINTENANCE_WINDOW'||
            window.environment!=='dev'||window.source_sha!==p.source_sha||
@@ -89,8 +88,9 @@ export async function runApprovedPair({
            window.retrieve_and_deploy_excluded!==true||window.tagged_revision_lease_compatible!==true||
            window.rollback_authorized!==true||window.operator_access_verified!==true)
           throw new Error('maintenance_window_not_verified');
-        await session.call('freeze');
+        return proof('CURRENT_STATE',p,captured);
       },
+      freezeOps:async()=>session.call('freeze'),
       deployWorker:async()=>session.call('deploy_worker'),
       deployGateway:async()=>session.call('deploy_gateway'),
       verifyPair:async p=>proof('DEPLOYED_PAIR',p,await session.call('verify_pair',false)),
