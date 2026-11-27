@@ -9,13 +9,14 @@ import subprocess
 import tempfile
 import time
 from .httpbase import BaseHandler, serve
-from .common import checked_files, checked_task, MAX_OUTPUT
+from .common import checked_files, checked_task, checked_workdir, MAX_OUTPUT
 
 TIMEOUT = 35
 
-def execute(files, task, argv=None):
+def execute(files, task, argv=None, cwd='.'):
     decoded = checked_files(files)
     command = checked_task(task, argv)
+    directory = checked_workdir(cwd, decoded)
     if command[0] in ('python','python3'):
         command = [sys.executable, *command[1:]]
     with tempfile.TemporaryDirectory(prefix='jscc-dev-sandbox-') as tmp:
@@ -24,6 +25,9 @@ def execute(files, task, argv=None):
             target = root.joinpath(*name.split('/'))
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
+        working_dir = root if directory == '.' else root.joinpath(*directory.split('/'))
+        if not working_dir.is_dir() or not working_dir.resolve().is_relative_to(root.resolve()):
+            raise ValueError('invalid_working_directory')
         env = {
             'PATH': '/usr/local/bin:/usr/bin:/bin',
             'HOME': tmp,
@@ -40,7 +44,7 @@ def execute(files, task, argv=None):
             resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
         timed_out = False
         with open(root/'stdout.log', 'wb') as out, open(root/'stderr.log', 'wb') as err:
-            p = subprocess.Popen(command, cwd=tmp, env=env, stdout=out,
+            p = subprocess.Popen(command, cwd=working_dir, env=env, stdout=out,
                                  stderr=err, start_new_session=True, preexec_fn=limits)
             try:
                 p.wait(timeout=TIMEOUT)
@@ -71,9 +75,9 @@ class Handler(BaseHandler):
             return self.out(404, {'error':'not_found'})
         try:
             data = self.body()
-            if not isinstance(data, dict) or set(data) - {'files','task','argv'}:
+            if not isinstance(data, dict) or set(data) - {'files','task','argv','cwd'}:
                 raise ValueError('invalid_request')
-            return self.out(200, execute(data.get('files'), data.get('task'), data.get('argv')))
+            return self.out(200, execute(data.get('files'), data.get('task'), data.get('argv'), data.get('cwd','.')))
         except ValueError as e:
             return self.out(400, {'error':str(e)})
         except Exception:
