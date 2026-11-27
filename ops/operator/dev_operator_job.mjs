@@ -12,6 +12,7 @@ import {runApprovedPair,observePairRecovery} from '../../scripts/gcp/remote_exec
 import {operatorPairStore} from '../../scripts/gcp/remote_executor_dev_admission.mjs';
 import {createDevObserver,admitDevRequest} from '../observation/dev-runtime-observer.mjs';
 import {executeDevGcloudScript} from '../diagnostics/dev-gcloud-script-runner.mjs';
+import {executeDevGcsArtifact} from './dev_gcs_artifacts.mjs';
 
 const SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
 const META='http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/';
@@ -62,6 +63,7 @@ async function inventoryTransport({api,path}){
 }
 
 const defaultHandlers={
+ gcs_artifact:async a=>executeDevGcsArtifact(a.bundle),
  build:async a=>runApprovedBuild({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash},
   {getToken:()=>metadataAccessToken(),verifyStagedConfig:true}),
  deploy_ops_pair:async a=>runApprovedPair({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash,
