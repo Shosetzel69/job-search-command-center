@@ -66,8 +66,8 @@ test('ops build consumes the verified archive and gates both image pushes', () =
   }
   const materialize = step('materialize-verified-source');
   assert.ok(materialize.includes("TRUSTED_OPS_REF=${_TRUSTED_REF}"));
-  assert.ok(materialize.includes('"$TRUSTED_OPS_REF"'));
-  assert.ok(materialize.includes('"$SOURCE_SHA"'));
+  assert.ok(materialize.includes('"$$TRUSTED_OPS_REF"'));
+  assert.ok(materialize.includes('"$$SOURCE_SHA"'));
   const verify = step('verify-image-source');
   assert.match(verify, /docker pull/);
   assert.match(verify, /docker inspect/);
