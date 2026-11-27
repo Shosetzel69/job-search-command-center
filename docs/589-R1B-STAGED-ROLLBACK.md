@@ -127,3 +127,22 @@ digests, drain proof, smoke test records, rollback verification, and owner
 approvals must all be recorded in PR #595.
 
 **Status:** DRAFT / REVIEW_FAIL / NO DEPLOY AUTHORIZATION.
+
+## #589 maintenance admission (source slice, not live deployment authority)
+
+`scripts/gcp/remote_executor_dev_maintenance.py` implements operator-side primitives for the existing R6 freeze/unfreeze boundary. Its standalone entry point is strictly read-only: it fingerprints the Command API effective revision, template and traffic plus the Search Job template; consumes execution pages for both DEV jobs and operation/dispatch pages from the existing private ops bucket; and refuses unresolved records, active or ambiguous leases, missing permissions, pagination overflow and protected-state drift. Only the fingerprint and coarse status are emitted. This may require many GCS read operations; cost admission remains external and mandatory.
+
+The source-level freeze primitive uses the **same** `leases/diagnostics.json` object and generation-CAS semantics as the existing gateway, without a second lock store or any change to Retrieve locks. It never overwrites an ACTIVE lease, even an expired one. After acquisition it checks ownership, complete drain and protected state again. The maintenance marker uses the existing ACTIVE state and a safe-integer far-future expiry so ordinary gateway lease acquisition rejects it; the existing bucket lifecycle still limits retention. Do not rely on this marker for unattended long-term recovery. A lost or ambiguous acquisition, failed verification or interrupted process requires explicit operator recovery; never delete/force-release the marker. Release uses the owned generation and operation ID and requires a trusted actual-pair verifier and protected-state parity.
+
+This slice does **not** wire the live R6 approval/cost/pair-verification or rollback adapters, prove operator IAM, prove exclusion on all historical tagged gateway revisions, or make the existing routine deploy script safe to execute by itself. The existing owner maintenance window must exclude new Retrieve and other deployment activity; read-only checks cannot atomically prevent a product-side launch. No automatic rollback or live freeze is authorized by this source. Continue with independently reviewed integration before executing the approved paired rollout, explicit traffic cutover and recovery. No new IAM, database, secret, TEST or PROD changes.
+
+### Unresolved records and manual recovery (R706-F04)
+
+If a historical operation or dispatch remains nonterminal or lacks its exact execution binding, inspection, acquisition and release remain blocked even if no job appears active. Do not use record age as proof of completion, delete records, shorten the maintenance expiry or release a lock by force.
+
+1. Stop new submissions and all concurrent release activity. Keep an owned maintenance marker intact; if ownership or generation is uncertain, stop all mutations.
+2. Correlate the exact operation ID, dispatch execution name, immutable source and worker digest, Cloud Run terminal execution evidence and existing result/operation records. Inspect only privately; retain sanitized evidence of the original generations, disagreement and terminal state. Missing or contradictory proof means the operation remains unresolved.
+3. Submit a separate, exact-record repair proposal in #589 for independent review and explicit owner approval. Only an authorized operator may repair proven terminal status or the proven execution binding, using the captured generation as a compare-and-swap precondition and recording before/after evidence. Never fabricate a success verdict or modify Retrieve locks. No repair command or repair capability is provided by this source slice.
+4. Recheck every page of operations, dispatches and executions, actual serving gateway/worker pair, protected Retrieve fingerprint and maintenance ownership. Resume the reviewed R6 release or recovery path only after all checks agree; if the process lost its ownership context, an independently reviewed recovery procedure is required. Otherwise retain the lock and escalate the incident. Bucket lifecycle expiry is not a recovery mechanism.
+
+This is a current #589 maintenance source contract appended to the historical R1-B plan. It does not reopen that draft's approval, revive historic IAM decisions or authorize live freeze, repair or deployment.

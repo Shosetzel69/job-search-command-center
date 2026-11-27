@@ -146,7 +146,7 @@ The deployer can update only:
 - `jscc-ops-gateway-dev`;
 - `jscc-diagnostics-dev`.
 
-It cannot update JSCC product services/jobs.
+It cannot update JSCC product services/jobs. See [#589 maintenance admission and recovery](../589-R1B-STAGED-ROLLBACK.md#589-maintenance-admission-source-slice-not-live-deployment-authority).
 
 ## Rollback
 
