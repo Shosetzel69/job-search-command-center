@@ -243,6 +243,39 @@ class PairTests(unittest.TestCase):
         self.p.guard.freeze.assert_not_called()
         self.assertEqual(self.api.calls, [])
 
+    def test_private_rpc_requires_matching_durable_intent(self):
+        approval = "#589/1001"
+        operation_id = pair.fingerprint({"environment": "dev", "work_item_ref": "#589",
+                                         "operation": "dev-ops-pair", "approval_ref": approval})
+        maintenance_id = "maintenance-" + operation_id
+        target = {"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]],
+                  "worker_digest": NEW[pair.KEYS[2]], "catalog": CAT, "previous_catalog": CAT}
+        now = pair.now_ms()
+        bundle = {"environment": "dev", "work_item_ref": "#589", "previous": self.anchor,
+                  "next": target, "evidence": {"approval": approval},
+                  "issued_at_ms": now-1000, "expires_at_ms": now+60000}
+        record = {"schema_version": "1.0", "environment": "dev",
+                  "operation_kind": "dev-ops-pair", "operation_id": operation_id,
+                  "maintenance_id": maintenance_id, "state": "RUNNING",
+                  "approval_ref": approval, "evidence_hash": pair.fingerprint(bundle),
+                  "bundle": bundle, "history": [{"step": "freeze", "outcome": "INTENT"}]}
+        api = Mock()
+        api.request.return_value = (record, {"x-goog-generation": "99"})
+        pair.require_journal_intent(api, maintenance_id, "freeze", self.anchor, target)
+        self.assertTrue(api.request.call_args.args[0].endswith(
+            "control%2Fv1%2Fdeployments%2F" + operation_id + ".json?alt=media"))
+        with self.assertRaisesRegex(pair.Blocked, "durable_intent_mismatch"):
+            pair.require_journal_intent(api, maintenance_id, "deploy_worker", self.anchor, target)
+        record["history"][-1]["outcome"] = "CONFIRMED"
+        with self.assertRaisesRegex(pair.Blocked, "durable_intent_mismatch"):
+            pair.require_journal_intent(api, maintenance_id, "freeze", self.anchor, target)
+        record["history"][-1]["outcome"] = "INTENT"
+        bundle["issued_at_ms"], bundle["expires_at_ms"] = now-60000, now-1000
+        record["evidence_hash"] = pair.fingerprint(bundle)
+        with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+            pair.require_journal_intent(api, maintenance_id, "freeze", self.anchor, target)
+        self.assertEqual(self.api.calls, [])
+
     def test_missing_lease_ownership_blocks_before_cli(self):
         self.p.freeze()
         self.p.guard.assert_owned.side_effect = pair.Blocked("not-owned")
