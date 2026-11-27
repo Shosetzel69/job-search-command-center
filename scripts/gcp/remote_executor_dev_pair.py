@@ -66,6 +66,15 @@ def normalized(template):
     if "template" in result:
         for key in ("client", "clientVersion"):
             result["template"].pop(key, None)
+    # #520 evidence 7165263147: gcloud rotates only this nonce label.
+    # Cloud Run v2 exposes labels on the revision/execution and task templates.
+    for level in (result, result.get("template", {})):
+        if "labels" in level:
+            labels = level["labels"]
+            require(isinstance(labels, dict), "invalid_template_labels")
+            labels.pop("client.knative.dev/nonce", None)
+            if not labels:
+                level.pop("labels")
     return result
 
 
