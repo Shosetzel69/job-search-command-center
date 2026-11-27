@@ -22,7 +22,7 @@ const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const STEPS=['trusted-source-admission','materialize-verified-source','validate-candidate',
  'python-contract-tests','ops-contract-tests','registry-immutability','detect-existing-images',
- 'build-gateway','build-worker','verify-image-source','push-gateway','push-worker','evidence'];
+ 'build-gateway','build-worker','build-operator','verify-image-source','push-gateway','push-worker','push-operator','evidence'];
 const exact=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&
  Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
 function require(ok,code){if(!ok)throw Error(code);}
@@ -56,10 +56,11 @@ export function admitBuildBundle(bundle,pin,now=Date.now){
  // additionally parses and compares the archived YAML before submission.
  require(exact(config,['steps','substitutions','serviceAccount','options'])&&
   config.serviceAccount===SA&&exact(config.options,['logging'])&&config.options.logging==='CLOUD_LOGGING_ONLY'&&
-  exact(config.substitutions,['_GIT_SHA','_TRUSTED_REF','_GATEWAY_IMAGE','_WORKER_IMAGE'])&&
+  exact(config.substitutions,['_GIT_SHA','_TRUSTED_REF','_GATEWAY_IMAGE','_WORKER_IMAGE','_OPERATOR_IMAGE'])&&
   config.substitutions._GIT_SHA===''&&config.substitutions._TRUSTED_REF===''&&
   config.substitutions._GATEWAY_IMAGE===REGISTRY+'jscc-ops-gateway'&&
   config.substitutions._WORKER_IMAGE===REGISTRY+'jscc-diagnostics'&&
+  config.substitutions._OPERATOR_IMAGE===REGISTRY+'jscc-ops-operator'&&
   Array.isArray(config.steps)&&config.steps.length===STEPS.length&&
   config.steps.every((s,i)=>s&&s.id===STEPS[i])&&JSON.stringify(config).length<=65536,
   'build_config_scope_denied');
