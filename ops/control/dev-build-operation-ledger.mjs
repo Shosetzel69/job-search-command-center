@@ -27,7 +27,7 @@ export function operationIdentity({actor_sub_hash,idempotency_key,request}) {
 }
 
 export function gcsDevOperationStore(bucket,{read=gcsReadJson,create=gcsWriteJson,replace=gcsReplaceJson}={}) {
-  if(typeof bucket!=='string' || !/^jscc-dev-[a-z0-9-]{3,80}$/.test(bucket))
+  if(bucket!=='jscc-dev-ops-state')
     throw new Error('invalid_dev_state_bucket');
   return Object.freeze({
     get:async path=>read(bucket,path),
@@ -97,6 +97,34 @@ export async function executeApprovedDevBuildOnce(identity,store,trust) {
       verifySourceSnapshot:trust?.verifySourceSnapshot,
       verifyCostAdmission:trust?.verifyCostAdmission,
       dispatch:typeof trust?.dispatch==='function' ? async request=>{
+        // One authoritative approval is single-use even when a caller changes
+        // the idempotency key or actor. Reserve before any remote submission.
+        const approvalPath='control/v1/builds/'+HASH({
+          environment:'dev',operation:'dev-ops-build-approval',
+          approval_ref:request.approval_ref
+        })+'.json';
+        const approvalRecord={
+          schema_version:'1.0',environment:'dev',operation_kind:'dev-ops-build-approval',
+          approval_ref:request.approval_ref,operation_id:identity.key,
+          request_hash:identity.request_hash,source_sha:request.source_sha,
+          source_object:request.approved_source_object,
+          source_generation:request.approved_source_generation,
+          source_sha256:request.approved_source_sha256,
+        };
+        try {await store.create(approvalPath,approvalRecord);}
+        catch(e){
+          if(e?.message==='generation_precondition_failed')throw Error('build_approval_already_consumed');
+          throw e;
+        }
+        const receipt=await store.get(approvalPath);
+        if(!receipt?.generation || HASH(receipt.data)!==HASH(approvalRecord))
+          throw Error('build_approval_reservation_unconfirmed');
+        ({record,generation}=await advance(identity,store,record,generation,{
+          state:'SUBMITTING',approval_ref:request.approval_ref,
+          source_object:request.approved_source_object,
+          source_generation:request.approved_source_generation,
+          source_sha256:request.approved_source_sha256,
+        }));
         dispatchEntered=true;
         return trust.dispatch(request);
       } : undefined,
