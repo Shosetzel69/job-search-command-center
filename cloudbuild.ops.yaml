@@ -135,7 +135,7 @@ steps:
           local image="$$1" marker="$$2" role="$$3" tmp cid=
           if [[ -f "$$marker" ]]; then docker pull "$$image"; fi
           docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$$image" |
-            grep -Fx "SOURCE_SHA=$SOURCE_SHA" >/dev/null
+            grep -Fx "SOURCE_SHA=$$SOURCE_SHA" >/dev/null
           tmp="$$(mktemp -d)"
           (
             trap 'if [[ -n "$$cid" ]]; then docker rm "$$cid" >/dev/null; fi; rm -rf "$$tmp"' EXIT
