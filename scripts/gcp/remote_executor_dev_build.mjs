@@ -52,8 +52,8 @@ export function admitBuildBundle(bundle,pin,now=Date.now){
    'cost','operator_access','lifecycle'])&&Object.values(x.evidence).every(v=>typeof v==='string'&&REF.test(v)),
   'build_authoritative_evidence_missing');
  const config=x.build_config;
- // JSON translation of the existing reviewed YAML is attested out-of-band
- // by config_equivalence. No alternate config, identity or extra fields.
+ // The protected approval pins the exact JSON translation. The remote Job
+ // additionally parses and compares the archived YAML before submission.
  require(exact(config,['steps','substitutions','serviceAccount','options'])&&
   config.serviceAccount===SA&&exact(config.options,['logging'])&&config.options.logging==='CLOUD_LOGGING_ONLY'&&
   exact(config.substitutions,['_GIT_SHA','_TRUSTED_REF','_GATEWAY_IMAGE','_WORKER_IMAGE'])&&
@@ -110,13 +110,13 @@ async function verifyLifecycle(request,now){
 }
 // Inspect only the top-level reviewed build YAML. The tar is never extracted
 // to disk; the parser is a fixed stdlib program with bounded input/output.
-export async function archiveConfigHash(bytes){
+export async function archiveConfigHash(bytes,{verifyConfig=false}={}){
  require(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=64*1024*1024,'build_archive_size_limit');
  const code=[
   'import sys,tarfile,hashlib,resource',
   'resource.setrlimit(resource.RLIMIT_CPU,(10,10))',
   'resource.setrlimit(resource.RLIMIT_AS,(384*1024*1024,384*1024*1024))',
-  'seen=0; total=0; count=0; digest=None',
+  'seen=0; total=0; count=0; digest=None; data=None',
   'with tarfile.open(fileobj=sys.stdin.buffer,mode="r|gz") as archive:',
   '    for member in archive:',
   '        count+=1; total+=member.size',
@@ -128,23 +128,41 @@ export async function archiveConfigHash(bytes){
   '        if len(data)!=member.size: raise ValueError("config_member_size")',
   '        digest=hashlib.sha256(data).hexdigest()',
   'if seen!=1 or digest is None: raise ValueError("config_member_missing")',
-  'print(digest)',
+  'if sys.argv[1]=="verify":',
+  '    import json,yaml',
+  '    class UniqueLoader(yaml.SafeLoader): pass',
+  '    def mapping(loader,node):',
+  '        out={}',
+  '        for k,v in node.value:',
+  '            key=loader.construct_object(k)',
+  '            if not isinstance(key,str) or key in out: raise ValueError("config_duplicate_key")',
+  '            out[key]=loader.construct_object(v)',
+  '        return out',
+  '    UniqueLoader.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG,mapping)',
+  '    value=yaml.load(data,Loader=UniqueLoader)',
+  '    print(json.dumps({"sha256":digest,"config":value},allow_nan=False,separators=(",",":")))',
+  'else: print(digest)',
  ].join('\n');
  return new Promise((resolve,reject)=>{
-  const child=spawn('python3',['-I','-c',code],{stdio:['pipe','pipe','ignore'],timeout:20000});
+  const child=spawn('python3',['-I','-c',code,verifyConfig?'verify':'hash'],{stdio:['pipe','pipe','ignore'],timeout:20000});
   let out='',failed=false;
   const fail=()=>{if(!failed){failed=true;reject(Error('build_archive_config_invalid'));}};
   child.on('error',fail);
   child.stdin.on('error',fail);
   child.stdout.on('data',data=>{
    out+=data.toString('ascii');
-   if(out.length>128){child.kill('SIGKILL');fail();}
+   if(out.length>(verifyConfig?131072:128)){child.kill('SIGKILL');fail();}
   });
   child.on('close',status=>{
    if(failed)return;
    const value=out.trim();
-   if(status!==0||!HEX.test(value))return fail();
-   resolve(value);
+   if(status!==0)return fail();
+   if(!verifyConfig){if(!HEX.test(value))return fail();resolve(value);return;}
+   try{
+    const parsed=JSON.parse(value);
+    if(!HEX.test(parsed?.sha256||'')||!parsed.config||typeof parsed.config!=='object')return fail();
+    resolve(parsed);
+   }catch{return fail();}
   });
   child.stdin.end(bytes);
  });
@@ -165,7 +183,11 @@ async function verifyArchive(request,archive,expectedConfig=null){
   if(expectedConfig!==null)chunks.push(Buffer.from(chunk));
  }
  require(size>0&&'sha256:'+digest.digest('hex')===archive.sha256,'build_archive_digest_mismatch');
- if(expectedConfig!==null)require(await archiveConfigHash(Buffer.concat(chunks))===expectedConfig,'build_archive_config_mismatch');
+ if(expectedConfig!==null){
+  const parsed=await archiveConfigHash(Buffer.concat(chunks),{verifyConfig:true});
+  require(parsed.sha256===expectedConfig.sha256&&evidenceDigest(parsed.config)===expectedConfig.config_hash,
+   'build_archive_config_mismatch');
+ }
 }
 
 /** Only an already admitted independent operator calls this function.
@@ -190,7 +212,7 @@ export async function runApprovedBuild({bundle,trustedEvidenceHash}, {
   verifyApproval:async()=>{a.fresh();return {...a.proof('OWNER_APPROVAL'),approval_ref:x.evidence.approval};},
   verifyTrustedRef:async()=>{a.fresh();return a.proof('TRUSTED_REF');},
   verifySourceSnapshot:async()=>{
-   a.fresh();await verifyArchive(request,x.archive,verifyStagedConfig?x.config_yaml_sha256:null);a.fresh();
+   a.fresh();await verifyArchive(request,x.archive,verifyStagedConfig?{sha256:x.config_yaml_sha256,config_hash:evidenceDigest(x.build_config)}:null);a.fresh();
    return {...a.proof('SOURCE_SNAPSHOT'),object:x.archive.object,
     generation:x.archive.generation,object_sha256:x.archive.sha256};
   },
