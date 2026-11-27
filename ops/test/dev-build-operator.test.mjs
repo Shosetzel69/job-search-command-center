@@ -24,9 +24,9 @@ function bundle(){
   // Synthetic, independently pinned structural fixture. Never usable as a live build config.
   build_config:{steps:['trusted-source-admission','materialize-verified-source','validate-candidate',
    'python-contract-tests','ops-contract-tests','registry-immutability','detect-existing-images',
-   'build-gateway','build-worker','verify-image-source','push-gateway','push-worker','evidence'].map(id=>({id})),
+   'build-gateway','build-worker','build-operator','verify-image-source','push-gateway','push-worker','push-operator','evidence'].map(id=>({id})),
    substitutions:{_GIT_SHA:'',_TRUSTED_REF:'',_GATEWAY_IMAGE:registry+'jscc-ops-gateway',
-    _WORKER_IMAGE:registry+'jscc-diagnostics'},serviceAccount:sa,options:{logging:'CLOUD_LOGGING_ONLY'}},
+    _WORKER_IMAGE:registry+'jscc-diagnostics',_OPERATOR_IMAGE:registry+'jscc-ops-operator'},serviceAccount:sa,options:{logging:'CLOUD_LOGGING_ONLY'}},
   evidence:{approval:'#589/1',independent_review:'#589/2',source_snapshot:'#589/3',
    config_equivalence:'#589/4',cost:'#589/5',operator_access:'#589/6',lifecycle:'#589/7'},
   issued_at_ms:now()-1000,expires_at_ms:now()+1000};
