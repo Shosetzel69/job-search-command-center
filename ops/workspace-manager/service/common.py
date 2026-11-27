@@ -19,6 +19,15 @@ def checked_path(path):
         raise ValueError('invalid_path')
     return path
 
+def checked_workdir(cwd, files):
+    if cwd == '.':
+        return cwd
+    directory = checked_path(cwd)
+    if directory in files or not any(name.startswith(directory + '/') for name in files):
+        raise ValueError('invalid_working_directory')
+    return directory
+
+
 def checked_content(content):
     if not isinstance(content, str):
         raise ValueError('invalid_content')
