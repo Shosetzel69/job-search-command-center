@@ -16,6 +16,9 @@ steps:
   - id: materialize-verified-source
     name: gcr.io/cloud-builders/git
     entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
+      - 'TRUSTED_OPS_REF=${_TRUSTED_REF}'
     args:
       - -ceu
       - |
@@ -26,19 +29,21 @@ steps:
         mkdir -p "$$source_root"
         git init --quiet "$$git_root"
         git -C "$$git_root" remote add origin https://github.com/Shosetzel69/job-search-command-center.git
-        git -C "$$git_root" fetch --quiet --no-tags --depth=1 origin "${_TRUSTED_REF}"
-        [[ "$$(git -C "$$git_root" rev-parse FETCH_HEAD)" == "${_GIT_SHA}" ]] || {
+        git -C "$$git_root" fetch --quiet --no-tags --depth=1 origin "$$TRUSTED_OPS_REF"
+        [[ "$$(git -C "$$git_root" rev-parse FETCH_HEAD)" == "$$SOURCE_SHA" ]] || {
           echo "TRUSTED_BUILD_CONTEXT=BLOCKED source_sha_mismatch" >&2
           exit 42
         }
-        git -C "$$git_root" archive --format=tar "${_GIT_SHA}" | tar -xf - -C "$$source_root"
+        git -C "$$git_root" archive --format=tar "$$SOURCE_SHA" | tar -xf - -C "$$source_root"
         [[ -f "$$source_root/ops/src/lib.mjs" ]]
         echo "TRUSTED_BUILD_CONTEXT=VERIFIED"
 
   - id: validate-candidate
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
-    args: ['-ceu', '[[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$$ ]]']
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
+    args: ['-ceu', '[[ "$$SOURCE_SHA" =~ ^[0-9a-f]{40}$$ ]]']
   - id: python-contract-tests
     name: python:3.12-slim-bookworm
     entrypoint: python3
@@ -72,47 +77,55 @@ steps:
   - id: detect-existing-images
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
     args:
       - -ceu
       - |
         rm -f /workspace/.gateway-exists /workspace/.worker-exists
-        if gcloud artifacts docker images describe "${_GATEWAY_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+        if gcloud artifacts docker images describe "${_GATEWAY_IMAGE}:$$SOURCE_SHA" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.gateway-exists
-          echo "REUSE_GATEWAY_TAG=${_GIT_SHA}"
+          echo "REUSE_GATEWAY_TAG=$$SOURCE_SHA"
         fi
-        if gcloud artifacts docker images describe "${_WORKER_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+        if gcloud artifacts docker images describe "${_WORKER_IMAGE}:$$SOURCE_SHA" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.worker-exists
-          echo "REUSE_WORKER_TAG=${_GIT_SHA}"
+          echo "REUSE_WORKER_TAG=$$SOURCE_SHA"
         fi
 
   - id: build-gateway
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
     args:
       - -ceu
       - |
         if [[ -f /workspace/.gateway-exists ]]; then
           echo "SKIP_GATEWAY_BUILD_EXISTING_IMMUTABLE_TAG"
         else
-          docker build --pull -f /workspace/jscc589-ops-verified-src/ops/Dockerfile.gateway --build-arg "SOURCE_SHA=${_GIT_SHA}" -t "${_GATEWAY_IMAGE}:${_GIT_SHA}" /workspace/jscc589-ops-verified-src
+          docker build --pull -f /workspace/jscc589-ops-verified-src/ops/Dockerfile.gateway --build-arg "SOURCE_SHA=$$SOURCE_SHA" -t "${_GATEWAY_IMAGE}:$$SOURCE_SHA" /workspace/jscc589-ops-verified-src
         fi
 
   - id: build-worker
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
     args:
       - -ceu
       - |
         if [[ -f /workspace/.worker-exists ]]; then
           echo "SKIP_WORKER_BUILD_EXISTING_IMMUTABLE_TAG"
         else
-          docker build --pull -f /workspace/jscc589-ops-verified-src/ops/Dockerfile.worker --build-arg "SOURCE_SHA=${_GIT_SHA}" -t "${_WORKER_IMAGE}:${_GIT_SHA}" /workspace/jscc589-ops-verified-src
+          docker build --pull -f /workspace/jscc589-ops-verified-src/ops/Dockerfile.worker --build-arg "SOURCE_SHA=$$SOURCE_SHA" -t "${_WORKER_IMAGE}:$$SOURCE_SHA" /workspace/jscc589-ops-verified-src
         fi
 
 
   - id: verify-image-source
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
     args:
       - -ceu
       - |
@@ -122,7 +135,7 @@ steps:
           local image="$$1" marker="$$2" role="$$3" tmp cid=
           if [[ -f "$$marker" ]]; then docker pull "$$image"; fi
           docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$$image" |
-            grep -Fx 'SOURCE_SHA=${_GIT_SHA}' >/dev/null
+            grep -Fx "SOURCE_SHA=$SOURCE_SHA" >/dev/null
           tmp="$$(mktemp -d)"
           (
             trap 'if [[ -n "$$cid" ]]; then docker rm "$$cid" >/dev/null; fi; rm -rf "$$tmp"' EXIT
@@ -140,39 +153,45 @@ steps:
             echo "OPS_IMAGE_SOURCE_VERIFIED=$$role"
           )
         }
-        verify_image "${_GATEWAY_IMAGE}:${_GIT_SHA}" /workspace/.gateway-exists gateway
-        verify_image "${_WORKER_IMAGE}:${_GIT_SHA}" /workspace/.worker-exists worker
+        verify_image "${_GATEWAY_IMAGE}:$$SOURCE_SHA" /workspace/.gateway-exists gateway
+        verify_image "${_WORKER_IMAGE}:$$SOURCE_SHA" /workspace/.worker-exists worker
 
   - id: push-gateway
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
     args:
       - -ceu
       - |
         if [[ -f /workspace/.gateway-exists ]]; then
           echo "REUSE_GATEWAY_IMMUTABLE_TAG"
         else
-          docker push "${_GATEWAY_IMAGE}:${_GIT_SHA}"
+          docker push "${_GATEWAY_IMAGE}:$$SOURCE_SHA"
         fi
 
   - id: push-worker
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
     args:
       - -ceu
       - |
         if [[ -f /workspace/.worker-exists ]]; then
           echo "REUSE_WORKER_IMMUTABLE_TAG"
         else
-          docker push "${_WORKER_IMAGE}:${_GIT_SHA}"
+          docker push "${_WORKER_IMAGE}:$$SOURCE_SHA"
         fi
   - id: evidence
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
     args:
       - -ceu
       - |
-        for image in "${_GATEWAY_IMAGE}:${_GIT_SHA}" "${_WORKER_IMAGE}:${_GIT_SHA}"; do
+        for image in "${_GATEWAY_IMAGE}:$$SOURCE_SHA" "${_WORKER_IMAGE}:$$SOURCE_SHA"; do
           digest="$$(gcloud artifacts docker images describe "$$image" --project=jscc-shared --format='value(image_summary.digest)')"
           [[ "$$digest" =~ ^sha256:[0-9a-f]{64}$$ ]]
           echo "OPS_IMAGE=$$image@$$digest"
