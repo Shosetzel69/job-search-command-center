@@ -84,7 +84,7 @@ After the first gateway deployment:
 5. Connect the private ChatGPT custom MCP to:
    `<gateway-url>/mcp`.
 
-The gateway OAuth contract is Authorization Code + PKCE S256 using `@node-oauth/oauth2-server`, with Google OIDC verification delegated to `openid-client`, exact owner `sub`, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, 15-minute opaque access token, no refresh token. Custom OAuth/OIDC cryptographic protocol code is prohibited.
+The gateway OAuth contract is Authorization Code + PKCE S256 using `@node-oauth/oauth2-server`, with Google OIDC verification delegated to `openid-client`, exact owner `sub`, scope `jscc.ops.dev`, audience `urn:jscc:ops:dev`, 60-minute opaque access token for newly issued tokens, no refresh token; previously issued tokens retain their recorded expiry. Custom OAuth/OIDC cryptographic protocol code is prohibited.
 
 ## Verification
 
