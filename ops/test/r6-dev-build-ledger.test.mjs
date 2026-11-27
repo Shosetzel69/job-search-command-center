@@ -14,7 +14,7 @@ const proof=kind=>({verified:true,kind,source_sha:sourceSha,trusted_ref:ref,work
 const callbacks=()=>({
  verifyApproval:async()=>({...proof('OWNER_APPROVAL'),approval_ref:'#589/APPROVE_BUILD'}),
  verifyTrustedRef:async()=>proof('TRUSTED_REF'),
- verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),generation:'19',object_sha256:digest}),
+ verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),object:'source/approved.tar.gz',generation:'19',object_sha256:digest}),
  verifyCostAdmission:async()=>({...proof('COST_ADMISSION'),no_incremental_cost_proven:true}),
  dispatch:async()=>({build_id:buildId,project:'jscc-shared',region:'europe-west1',
    source_sha:sourceSha,approval_ref:'#589/APPROVE_BUILD'}),
@@ -81,7 +81,7 @@ test('R6 exactly one dispatch across repeated user calls with same idempotency k
  assert.equal(dup.state,'SUBMITTED');
  assert.equal(dup.retry_dispatched,false);
  assert.equal(dispatches,1);
- assert.deepEqual(store.events.slice(0,4),['create','replace:VERIFYING','replace:SUBMITTED']);
+ assert.deepEqual(store.events,['create','replace:VERIFYING','create','replace:SUBMITTING','replace:SUBMITTED']);
 });
 
 test('R6 gate denial leaves BLOCKED record and never dispatches upon retry',async()=>{
@@ -164,4 +164,28 @@ test('R6 optimistic CAS rejects concurrent conflicting mutation',async()=>{
  const duplicate=await reserveDevBuildOperation(a,store);
  assert.equal(duplicate.created,false);
  assert.equal(duplicate.record.state,'SUBMITTING');
+});
+
+test('R6 approval cannot launch twice across different actor or idempotency keys',async()=>{
+ const store=fakeStore(),cb=callbacks();let launches=0;
+ cb.dispatch=async()=>{launches++;return callbacks().dispatch();};
+ const first=identity();
+ assert.equal((await executeApprovedDevBuildOnce(first,store,cb)).state,'SUBMITTED');
+ for(const second of [
+  operationIdentity({actor_sub_hash:actor,idempotency_key:'other-key-123',request}),
+  operationIdentity({actor_sub_hash:'b'.repeat(64),idempotency_key:'r6-case-12345',request}),
+ ]){
+  assert.equal((await executeApprovedDevBuildOnce(second,store,cb)).state,'BLOCKED');
+ }
+ assert.equal(launches,1);
+});
+test('R6 intent failure prevents dispatch even after approval reservation',async()=>{
+ const store=fakeStore(),cb=callbacks(),replace=store.replace;let launches=0;
+ store.replace=async(name,data,gen)=>{
+  if(data.state==='SUBMITTING')throw Error('lost_intent');
+  return replace(name,data,gen);
+ };
+ cb.dispatch=async()=>{launches++;return callbacks().dispatch();};
+ assert.equal((await executeApprovedDevBuildOnce(identity(),store,cb)).state,'BLOCKED');
+ assert.equal(launches,0);
 });
