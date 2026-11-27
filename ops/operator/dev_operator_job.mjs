@@ -9,6 +9,7 @@ import {verifyOperatorLifecycle} from '../src/dev_operator_gateway.mjs';
 import {operationIdentity} from '../control/dev-build-operation-ledger.mjs';
 import {runApprovedBuild,observeApprovedBuild} from '../../scripts/gcp/remote_executor_dev_build.mjs';
 import {runApprovedPair,observePairRecovery} from '../../scripts/gcp/remote_executor_dev_pair.mjs';
+import {operatorPairStore} from '../../scripts/gcp/remote_executor_dev_admission.mjs';
 import {createDevObserver,admitDevRequest} from '../observation/dev-runtime-observer.mjs';
 import {executeDevGcloudScript} from '../diagnostics/dev-gcloud-script-runner.mjs';
 
@@ -63,7 +64,8 @@ async function inventoryTransport({api,path}){
 const defaultHandlers={
  build:async a=>runApprovedBuild({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash},
   {getToken:()=>metadataAccessToken(),verifyStagedConfig:true}),
- deploy_ops_pair:async a=>runApprovedPair({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash},
+ deploy_ops_pair:async a=>runApprovedPair({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash,
+  store:operatorPairStore({getToken:()=>metadataAccessToken()})},
   undefined,async()=>a.operator_source_sha),
  observe_build:async(a,get)=>{
   const original=await readOriginal(a.bundle.original_approval_ref,a.actor_sub_hash,get);
@@ -75,7 +77,8 @@ const defaultHandlers={
  observe_pair:async(a,get)=>{
   const original=await readOriginal(a.bundle.original_approval_ref,a.actor_sub_hash,get);
   operatorRequire(original.action==='deploy_ops_pair','operator_observation_action_mismatch');
-  const result=await observePairRecovery({approvalRef:original.approval_ref});
+  const result=await observePairRecovery({approvalRef:original.approval_ref,
+   store:operatorPairStore({getToken:()=>metadataAccessToken()})});
   return {...result,state:'OBSERVED'};
  },
  gcloud_inventory:async a=>{
