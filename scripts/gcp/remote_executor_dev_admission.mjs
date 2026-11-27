@@ -79,6 +79,21 @@ function validateBundle(bundle,pin){
   bundle.issued_at_ms>=0&&bundle.expires_at_ms>bundle.issued_at_ms&&
   bundle.expires_at_ms-bundle.issued_at_ms<=MAX_WINDOW_MS,'invalid_evidence_window');
 }
+// R708-F01: expiry stops forward dispatch, not bounded compensation in
+// the already admitted session. The journal and owned lease remain mandatory.
+function checkStepWindow(bundle,now,step,history){
+ const current=now();
+ require(Number.isSafeInteger(current)&&current>=bundle.issued_at_ms,'evidence_window_closed');
+ if(current<bundle.expires_at_ms)return;
+ const confirmed=name=>history.some(e=>e.step===name&&e.outcome==='CONFIRMED');
+ const last=history.at(-1);
+ const completion=['rollback_gateway','rollback_worker','verify_previous'].includes(step)||
+  (step==='verify_next'&&confirmed('deploy_worker')&&confirmed('deploy_gateway'))||
+  (step==='release'&&last?.outcome==='CONFIRMED'&&
+   ['verify_next','verify_previous'].includes(last.step));
+ require(completion&&confirmed('freeze'),'evidence_window_closed');
+}
+
 function checkWindow(bundle,now){
  const current=now();
  require(Number.isSafeInteger(current)&&current>=bundle.issued_at_ms&&current<bundle.expires_at_ms,
@@ -250,14 +265,15 @@ export class PairJournal {
  }
  async step(step,invoke){
   require(!this.poisoned&&!this.inFlight&&!TERMINALS.has(this.record.state),'pair_journal_blocked');
-  this.admission.assertFresh();
+  const history=this.record.history;
+  checkStepWindow(this.admission.bundle,this.now,step,history);
   this.inFlight=true;
   try{
    // Confirm the write-ahead intent before dispatch. A compound gateway step
    // can include staging and traffic transfer; recovery never replays either.
    await this.event(step,'INTENT');
    let result;
-   try{this.admission.assertFresh();result=await invoke();}
+   try{checkStepWindow(this.admission.bundle,this.now,step,history);result=await invoke();}
    catch(e){await this.event(step,'UNKNOWN');throw e;}
    await this.event(step,'CONFIRMED');
    return result;
