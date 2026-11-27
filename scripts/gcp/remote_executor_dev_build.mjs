@@ -2,7 +2,7 @@
 // The independently obtained pin is mandatory; a caller must never hash its own
 // request to manufacture approval. No gateway/diagnostics/sandbox credentials.
 import {createHash} from 'node:crypto';
-import {execFile} from 'node:child_process';
+import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
@@ -108,7 +108,48 @@ async function verifyLifecycle(request,now){
   Number.isFinite(Date.parse(value.updated))&&now()-Date.parse(value.updated)>=86400000,
   'build_ledger_lifecycle_not_settled');
 }
-async function verifyArchive(request,archive){
+// Inspect only the top-level reviewed build YAML. The tar is never extracted
+// to disk; the parser is a fixed stdlib program with bounded input/output.
+export async function archiveConfigHash(bytes){
+ require(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=64*1024*1024,'build_archive_size_limit');
+ const code=[
+  'import sys,tarfile,hashlib,resource',
+  'resource.setrlimit(resource.RLIMIT_CPU,(10,10))',
+  'resource.setrlimit(resource.RLIMIT_AS,(384*1024*1024,384*1024*1024))',
+  'seen=0; total=0; count=0; digest=None',
+  'with tarfile.open(fileobj=sys.stdin.buffer,mode="r|gz") as archive:',
+  '    for member in archive:',
+  '        count+=1; total+=member.size',
+  '        if count>20000 or total>128*1024*1024 or member.size<0: raise ValueError("archive_limit")',
+  '        if member.name not in ("cloudbuild.ops.yaml","./cloudbuild.ops.yaml"): continue',
+  '        seen+=1',
+  '        if seen!=1 or not member.isfile() or member.size>65536: raise ValueError("config_member_invalid")',
+  '        data=archive.extractfile(member).read(65537)',
+  '        if len(data)!=member.size: raise ValueError("config_member_size")',
+  '        digest=hashlib.sha256(data).hexdigest()',
+  'if seen!=1 or digest is None: raise ValueError("config_member_missing")',
+  'print(digest)',
+ ].join('\n');
+ return new Promise((resolve,reject)=>{
+  const child=spawn('python3',['-I','-c',code],{stdio:['pipe','pipe','ignore'],timeout:20000});
+  let out='',failed=false;
+  const fail=()=>{if(!failed){failed=true;reject(Error('build_archive_config_invalid'));}};
+  child.on('error',fail);
+  child.stdin.on('error',fail);
+  child.stdout.on('data',data=>{
+   out+=data.toString('ascii');
+   if(out.length>128){child.kill('SIGKILL');fail();}
+  });
+  child.on('close',status=>{
+   if(failed)return;
+   const value=out.trim();
+   if(status!==0||!HEX.test(value))return fail();
+   resolve(value);
+  });
+  child.stdin.end(bytes);
+ });
+}
+async function verifyArchive(request,archive,expectedConfig=null){
  const url='https://storage.googleapis.com/storage/v1/b/'+BUCKET+'/o/'+
   encodeURIComponent(archive.object)+'?'+new URLSearchParams({alt:'media',generation:archive.generation});
  const response=await request(url,{timeout:60000});
@@ -116,13 +157,15 @@ async function verifyArchive(request,archive){
  require(generation===null||generation===archive.generation,'build_archive_generation_mismatch');
  require(response.body,'build_archive_missing_body');
  const digest=createHash('sha256');
- let size=0;
+ let size=0;const chunks=[];
  for await(const chunk of response.body){
   size+=chunk.byteLength;
   require(size<=64*1024*1024,'build_archive_size_limit');
   digest.update(chunk);
+  if(expectedConfig!==null)chunks.push(Buffer.from(chunk));
  }
  require(size>0&&'sha256:'+digest.digest('hex')===archive.sha256,'build_archive_digest_mismatch');
+ if(expectedConfig!==null)require(await archiveConfigHash(Buffer.concat(chunks))===expectedConfig,'build_archive_config_mismatch');
 }
 
 /** Only an already admitted independent operator calls this function.
@@ -131,20 +174,23 @@ async function verifyArchive(request,archive){
  */
 export async function runApprovedBuild({bundle,trustedEvidenceHash}, {
  getToken=token,fetchImpl=fetch,store=operatorBuildStore({getToken,fetchImpl}),
- readSource=checkedSource,now=Date.now,
+ readSource=checkedSource,verifyStagedConfig=false,now=Date.now,
 }={}){
  const a=admitBuildBundle(bundle,trustedEvidenceHash,now),x=a.bundle;
  const request=operatorTransport(getToken,fetchImpl);
  // Check the independently pinned cost and access evidence before these
  // observations; the actual financial proof is supplied out of band.
- require(await readSource(a.plan)===x.config_yaml_sha256,'build_config_yaml_mismatch');
+ // A deployed operator uses the independently reviewed staged archive, not
+ // its own code checkout as the future candidate source. Cloud Build still
+ // independently verifies the exact trusted Git ref before building.
+ if(!verifyStagedConfig)require(await readSource(a.plan)===x.config_yaml_sha256,'build_config_yaml_mismatch');
  await verifyLifecycle(request,now);
  a.fresh();
  return executeApprovedDevBuildOnce(a.identity,store,{
   verifyApproval:async()=>{a.fresh();return {...a.proof('OWNER_APPROVAL'),approval_ref:x.evidence.approval};},
   verifyTrustedRef:async()=>{a.fresh();return a.proof('TRUSTED_REF');},
   verifySourceSnapshot:async()=>{
-   a.fresh();await verifyArchive(request,x.archive);a.fresh();
+   a.fresh();await verifyArchive(request,x.archive,verifyStagedConfig?x.config_yaml_sha256:null);a.fresh();
    return {...a.proof('SOURCE_SNAPSHOT'),object:x.archive.object,
     generation:x.archive.generation,object_sha256:x.archive.sha256};
   },
