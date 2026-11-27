@@ -4,6 +4,9 @@ PROJECT=jscc-dev
 SHARED=jscc-shared
 REGION=europe-west1
 OPS_BUCKET="${OPS_BUCKET:-jscc-dev-ops-state}"
+[[ "$OPS_BUCKET" == jscc-dev-ops-state ]] || { echo "unexpected DEV ops bucket" >&2; exit 2; }
+LIFECYCLE_FILE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/remote_executor_dev_lifecycle.json"
+[[ -r "$LIFECYCLE_FILE" ]] || { echo "missing DEV ops lifecycle policy" >&2; exit 2; }
 RUNTIME_BUCKET="${GCP_RUNTIME_BUCKET:?GCP_RUNTIME_BUCKET required}"
 OWNER_SUB="${GOOGLE_ALLOWED_SUB:?GOOGLE_ALLOWED_SUB required}"
 GOOGLE_CLIENT_ID_VALUE="${GOOGLE_CLIENT_ID:?GOOGLE_CLIENT_ID required}"
@@ -35,10 +38,7 @@ if gcloud projects get-iam-policy "$SHARED" --flatten='bindings[].members' --fil
 fi
 
 gcloud storage buckets describe "gs://$OPS_BUCKET" --project="$PROJECT" >/dev/null 2>&1 || gcloud storage buckets create "gs://$OPS_BUCKET" --project="$PROJECT" --location="$REGION" --uniform-bucket-level-access
-cat >/tmp/jscc537-lifecycle.json <<JSON
-{"rule":[{"action":{"type":"Delete"},"condition":{"age":14}}]}
-JSON
-gcloud storage buckets update "gs://$OPS_BUCKET" --lifecycle-file=/tmp/jscc537-lifecycle.json >/dev/null
+gcloud storage buckets update "gs://$OPS_BUCKET" --project="$PROJECT" --lifecycle-file="$LIFECYCLE_FILE" >/dev/null
 
 put_secret(){
   local n="$1" v="$2" current=""
