@@ -2243,7 +2243,7 @@ export async function observeDevNilePlan(operation,nomenclatures,env=process.env
       const basis=await readEvaluationBasisTx(tx,nomenclatures);
       let q;
       if(operation.startsWith('fit_verify_')) q={sql:EVALUATION_VERIFY_SQL,params:[tx.tenantId,now,basis.search_profile_id,basis.preference_digest,FIT_ALGORITHM_VERSION]};
-      else q=buildGlobalListingQuery(tx.tenantId,basis,normalizeGlobalQuery({sort:'publication',dir:'desc',limit:40}),now);
+      else q=buildGlobalListingQuery(tx.tenantId,basis,normalizeGlobalQuery({sort:'publication',dir:'desc',limit:20}),now);
       stage='explain';
       const start=performance.now();
       const prefix=operation.endsWith('_analyze')?'EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ':'EXPLAIN (FORMAT JSON) ';
