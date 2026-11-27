@@ -4,7 +4,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { extname, join, relative } from 'node:path';
 
-export const DEFAULT_ROOTS = ['ops/src', 'command-api/src', 'scripts', 'frontend/src'];
+export const DEFAULT_ROOTS = ['ops/src', 'ops/operator', 'command-api/src', 'scripts', 'frontend/src'];
 const EXTENSIONS = new Set(['.mjs', '.js', '.cjs', '.ts', '.tsx', '.py', '.sh']);
 const EXCLUDE = new Set(['node_modules', 'dist', '.git', '__pycache__']);
 const EXCLUDE_FILES = new Set(['scripts/test_cloud_run_api_version.mjs']);
