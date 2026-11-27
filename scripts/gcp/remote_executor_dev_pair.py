@@ -123,6 +123,7 @@ class PairOperator:
         self.uncertain = False
         self.release_attempted = False
         self.verified = None
+        self.admitted = False
 
     def gateway(self):
         value = self.api.request(RUN_ROOT + "/services/" + GATEWAY)[0]
@@ -172,6 +173,7 @@ class PairOperator:
                     for x in (self.new_catalog, self.old_catalog)), "invalid_catalog")
         svc, worker = self.gateway(), self.worker_resource()
         job = worker["template"]
+        require(job.get("taskCount") == 1, "unexpected_worker_task_count")
         revision = primary_revision(svc)
         values = metadata(svc["template"])
         require(metadata(job) == values and container(job)["image"] == image("worker", values)
@@ -223,9 +225,11 @@ class PairOperator:
         baseline = self.guard.inspect()
         self.guard.freeze(baseline)
         self.verify(restored=True)
+        self.admitted = True
         return True
 
     def before_mutation(self):
+        require(self.admitted, "maintenance_not_admitted")
         require(not self.uncertain and not self.release_attempted, "mutation_outcome_uncertain")
         self.guard.assert_owned()
         assert_drained(self.api)
@@ -263,6 +267,7 @@ class PairOperator:
                 "cutover_not_effective")
 
     def deploy_worker(self):
+        self.check_config("gateway", self.old["values"])
         self.check_config("worker", self.old["values"])
         self.update("worker", self.new)
         return True
