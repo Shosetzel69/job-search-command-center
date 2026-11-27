@@ -1,5 +1,6 @@
 // #589: Gateway requests only an independently admitted fixed DEV Job.
 // No user-provided scripts, credentials, build configuration or job overrides.
+import {readFileSync} from 'node:fs';
 import {gcpFetch,gcsReadJson,gcsWriteJson} from './lib.mjs';
 import {OPERATOR_BUCKET,OPERATOR_ROOT,OPERATOR_JOB,operatorActor,operatorPaths,
  operatorExecution,operatorLro,operatorDispatchPath,operatorHash,operatorRequest,
@@ -7,6 +8,8 @@ import {OPERATOR_BUCKET,OPERATOR_ROOT,OPERATOR_JOB,operatorActor,operatorPaths,
  projectOperatorResult} from './dev_operator_contract.mjs';
 
 const RUN='https://run.googleapis.com/v2/';
+const OPERATOR_SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
+const OPERATOR_IMAGE='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-operator@';
 export const operatorTools=Object.freeze([
  {name:'operator_start',description:'Start one independently approved DEV operator action by GitHub approval reference; no arbitrary scripts or parameters.',
   inputSchema:{type:'object',required:['approval_ref'],properties:{approval_ref:{type:'string',pattern:'^#589/[1-9][0-9]{0,19}$'}},additionalProperties:false}},
@@ -16,9 +19,10 @@ export const operatorTools=Object.freeze([
 export function operatorGatewayConfig(env=process.env){
  if(env.JSCC_DEV_OPERATOR_ENABLED!=='true')return null;
  operatorRequire(env.GCP_PROJECT==='jscc-dev'&&env.GCP_REGION==='europe-west1'&&
-  env.OPS_BUCKET===OPERATOR_BUCKET&&/^[a-f0-9]{40}$/.test(env.JSCC_DEV_OPERATOR_SOURCE_SHA||''),
+  env.OPS_BUCKET===OPERATOR_BUCKET&&/^[a-f0-9]{40}$/.test(env.JSCC_DEV_OPERATOR_SOURCE_SHA||'')&&
+  /^sha256:[a-f0-9]{64}$/.test(env.JSCC_DEV_OPERATOR_IMAGE_DIGEST||''),
   'operator_config_invalid');
- return Object.freeze({sourceSha:env.JSCC_DEV_OPERATOR_SOURCE_SHA});
+ return Object.freeze({sourceSha:env.JSCC_DEV_OPERATOR_SOURCE_SHA,imageDigest:env.JSCC_DEV_OPERATOR_IMAGE_DIGEST});
 }
 const defaultRead=path=>gcsReadJson(OPERATOR_BUCKET,path);
 const defaultCreate=(path,data)=>gcsWriteJson(OPERATOR_BUCKET,path,data,0);
@@ -27,6 +31,31 @@ async function cloudRun(method,path){
   ...(method==='POST'?{headers:{'content-type':'application/json'},body:'{}'}:{})});
  operatorRequire(response.ok,'operator_dispatch_http_error');
  return response.json();
+}
+export async function verifyOperatorLifecycle(now=Date.now(),fetchImpl=gcpFetch){
+ const policy=JSON.parse(readFileSync(new URL('../../scripts/gcp/remote_executor_dev_lifecycle.json',import.meta.url),'utf8'));
+ const r=await fetchImpl('https://storage.googleapis.com/storage/v1/b/'+OPERATOR_BUCKET+
+  '?fields=name,location,lifecycle,updated',{redirect:'error',signal:AbortSignal.timeout(5000)});
+ operatorRequire(r.ok,'operator_lifecycle_unavailable');
+ const bucket=await r.json();
+ const updated=Date.parse(bucket.updated);
+ operatorRequire(bucket.name===OPERATOR_BUCKET&&String(bucket.location).toUpperCase()==='EUROPE-WEST1'&&
+  operatorHash(bucket.lifecycle)===operatorHash(policy)&&Number.isFinite(updated)&&now-updated>=86400000,
+  'operator_lifecycle_not_settled');
+}
+async function verifyJob(call,config){
+ const job=await call('GET',OPERATOR_ROOT+'/jobs/'+OPERATOR_JOB);
+ const execution=job?.template,task=execution?.template,container=task?.containers?.[0];
+ const env=(name)=>{const values=container?.env?.filter(x=>x.name===name)||[];
+  return values.length===1?values[0].value:null;};
+ operatorRequire((job.name===OPERATOR_ROOT+'/jobs/'+OPERATOR_JOB||
+  job.name==='projects/828902654738/locations/europe-west1/jobs/'+OPERATOR_JOB)&&
+  job.reconciling!==true&&execution?.taskCount===1&&execution?.parallelism===1&&
+  task?.maxRetries===0&&task?.serviceAccount===OPERATOR_SA&&
+  task?.containers?.length===1&&container.image===OPERATOR_IMAGE+config.imageDigest&&
+  (!container.command||container.command.length===0)&&(!container.args||container.args.length===0)&&
+  env('SOURCE_SHA')===config.sourceSha&&env('GCP_PROJECT')==='jscc-dev'&&env('GCP_REGION')==='europe-west1'&&
+  env('OPS_BUCKET')===OPERATOR_BUCKET,'operator_job_binding_mismatch');
 }
 async function startExecution(call,sleep){
  let op=await call('POST',OPERATOR_ROOT+'/jobs/'+OPERATOR_JOB+':run');
@@ -46,8 +75,10 @@ async function startExecution(call,sleep){
 export async function invokeDevOperator(name,args,actorSub,config,{
  read=defaultRead,create=defaultCreate,call=cloudRun,now=Date.now,
  sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),
+ verifyLifecycle=verifyOperatorLifecycle,
 }={}){
- operatorRequire(config&&/^[a-f0-9]{40}$/.test(config.sourceSha),'operator_not_configured');
+ operatorRequire(config&&/^[a-f0-9]{40}$/.test(config.sourceSha)&&
+  /^sha256:[a-f0-9]{64}$/.test(config.imageDigest||''),'operator_not_configured');
  operatorRequire(name==='operator_start'||name==='operator_status','operator_tool_denied');
  const ref=validateOperatorToolArgs(args),actor=operatorActor(actorSub),paths=operatorPaths(ref);
  const previous=await read(paths.request);
@@ -64,6 +95,8 @@ export async function invokeDevOperator(name,args,actorSub,config,{
  const admission=validateOperatorApproval(await read(paths.approval),{
   ref,actor,sourceSha:config.sourceSha,now:now()
  });
+ await verifyLifecycle(now());
+ await verifyJob(call,config);
  const req=operatorRequest(admission,now());
  validateOperatorRequest(req,admission);
  try{await create(paths.request,req);}
