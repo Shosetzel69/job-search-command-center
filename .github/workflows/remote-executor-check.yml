@@ -12,6 +12,7 @@ on:
       - "scripts/gcp/remote_executor_dev_pair.py"
       - "scripts/gcp/remote_executor_dev_pair.mjs"
       - "scripts/gcp/remote_executor_dev_admission.mjs"
+      - "scripts/gcp/remote_executor_dev_build.mjs"
       - "scripts/test_remote_executor_dev_pair.py"
       - "scripts/test_remote_executor_dev_pair.mjs"
       - "docs/runbooks/remote-executor-dev.md"
@@ -30,6 +31,7 @@ on:
       - "scripts/gcp/remote_executor_dev_pair.py"
       - "scripts/gcp/remote_executor_dev_pair.mjs"
       - "scripts/gcp/remote_executor_dev_admission.mjs"
+      - "scripts/gcp/remote_executor_dev_build.mjs"
       - "scripts/test_remote_executor_dev_pair.py"
       - "scripts/test_remote_executor_dev_pair.mjs"
       - "docs/runbooks/remote-executor-dev.md"
@@ -87,6 +89,7 @@ jobs:
           node --check ops/observation/dev-runtime-observer.mjs
           node --check ops/observation/dev-rollout-evaluator.mjs
           node --check ops/diagnostics/dev-gcloud-script-runner.mjs
+          node --check scripts/gcp/remote_executor_dev_build.mjs
 
       - name: Validate DEV scripts
         run: |
