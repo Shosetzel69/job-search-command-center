@@ -1,0 +1,142 @@
+"""Offline contracts for the operator-side DEV maintenance guard."""
+import copy
+import pathlib
+import sys
+import unittest
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent / "gcp"))
+import remote_executor_dev_maintenance as guard
+
+
+class FakeAPI:
+    def __init__(self):
+        self.lease = None
+        self.generation = "0"
+        self.active = {name: [] for name in guard.JOBS}
+        self.records = {"operations/": [], "dispatch/": []}
+        self.writes = []
+        self.job_template = {"template": {"containers": [{"image": "search"}]}}
+        self.drift_after_cas = False
+
+    def service(self):
+        return {"name": "projects/jscc-dev/locations/europe-west1/services/jscc-command-api-dev",
+                "uri": "https://jscc-command-api-dev-example.run.app",
+                "latestReadyRevision": "jscc-command-api-dev-00123-abc",
+                "trafficStatuses": [{"revision": "jscc-command-api-dev-00123-abc", "percent": 100}],
+                "template": {"containers": [{"image": "service"}]}}
+
+    def job(self, name):
+        return {"name": f"projects/jscc-dev/locations/europe-west1/jobs/{name}",
+                "template": copy.deepcopy(self.job_template)}
+
+    def executions(self, name):
+        yield from self.active[name]
+
+    def objects(self, prefix):
+        yield from self.records[prefix]
+
+    def read_lease(self):
+        return copy.deepcopy(self.lease), self.generation
+
+    def replace_lease(self, value, generation):
+        if generation != self.generation:
+            raise guard.Blocked("api_http_412")
+        self.generation = str(int(self.generation) + 1)
+        self.lease = copy.deepcopy(value)
+        self.writes.append(copy.deepcopy(value))
+        if self.drift_after_cas:
+            self.job_template["changed"] = True
+        return self.generation
+
+
+class MaintenanceTests(unittest.TestCase):
+    def setUp(self):
+        self.api = FakeAPI()
+        self.guard = guard.MaintenanceGuard(self.api)
+
+    def test_read_only_and_owned_release(self):
+        baseline = self.guard.inspect()
+        self.assertEqual(self.api.writes, [])
+        self.guard.freeze(baseline)
+        self.assertEqual(self.api.lease["state"], "ACTIVE")
+        self.assertEqual(self.api.lease["expires_at_ms"], guard.MAINTENANCE_EXPIRY)
+        self.guard.release_after_verified(lambda: True)
+        self.assertEqual([x["state"] for x in self.api.writes], ["ACTIVE", "RELEASED"])
+        self.assertEqual(self.api.writes[0]["operation_id"], self.api.writes[1]["operation_id"])
+
+    def test_active_or_expired_active_lease_never_overwritten(self):
+        for expiry in (guard.now_ms() - 1, guard.now_ms() + 100000):
+            self.api.lease = {"state": "ACTIVE", "operation_id": "op-other", "expires_at_ms": expiry}
+            with self.assertRaisesRegex(guard.Blocked, "lease_active_or_ambiguous"):
+                self.guard.inspect()
+        self.assertEqual(self.api.writes, [])
+
+    def test_unfinished_execution_on_either_job_blocks(self):
+        for name in guard.JOBS:
+            self.api.active[name] = [{"completionTime": "2026-11-26T00:00:00Z"}, {}]
+            with self.assertRaisesRegex(guard.Blocked, "unfinished_execution"):
+                self.guard.inspect()
+            self.api.active[name] = []
+        self.assertEqual(self.api.writes, [])
+
+    def test_unresolved_operations_and_dispatches_block(self):
+        op = {"operation_id": "op-test", "operation_state": "RUNNING"}
+        self.api.records["operations/"] = [("operations/op-test.json", op)]
+        with self.assertRaisesRegex(guard.Blocked, "unresolved_operation"):
+            self.guard.inspect()
+        op.update(operation_state="FAILED", finished_at="2026-11-26T00:00:00Z")
+        self.api.records["dispatch/"] = [("dispatch/ex-test.json", {"operation_id": "op-test",
+                                                                    "execution_name": "ex-test"})]
+        with self.assertRaisesRegex(guard.Blocked, "unresolved_dispatch"):
+            self.guard.inspect()
+        op["execution_name"] = "ex-test"
+        self.guard.inspect()
+        self.assertEqual(self.api.writes, [])
+
+    def test_cas_conflict_does_not_release_or_retry(self):
+        baseline = self.guard.inspect()
+        def conflict(*args):
+            raise guard.Blocked("api_http_412")
+        self.api.replace_lease = conflict
+        with self.assertRaisesRegex(guard.Blocked, "api_http_412"):
+            self.guard.freeze(baseline)
+        with self.assertRaisesRegex(guard.Blocked, "maintenance_lease_not_owned"):
+            self.guard.release_after_verified(lambda: True)
+        self.assertEqual(self.api.writes, [])
+
+    def test_protected_drift_before_and_after_cas(self):
+        baseline = self.guard.inspect()
+        self.api.job_template["changed"] = True
+        with self.assertRaisesRegex(guard.Blocked, "protected_state_drift"):
+            self.guard.freeze(baseline)
+        self.assertEqual(self.api.writes, [])
+        baseline = self.guard.inspect()
+        self.api.drift_after_cas = True
+        self.api.job_template.pop("changed")
+        baseline = self.guard.inspect()
+        with self.assertRaisesRegex(guard.Blocked, "protected_state_drift"):
+            self.guard.freeze(baseline)
+        self.assertEqual(self.api.lease["state"], "ACTIVE")
+
+    def test_release_requires_verification_and_generation(self):
+        self.guard.freeze(self.guard.inspect())
+        with self.assertRaisesRegex(guard.Blocked, "pair_verification_required"):
+            self.guard.release_after_verified(lambda: False)
+        self.api.generation = "999"
+        with self.assertRaisesRegex(guard.Blocked, "maintenance_lease_not_owned"):
+            self.guard.release_after_verified(lambda: True)
+        self.assertEqual(len(self.api.writes), 1)
+
+    def test_pagination_consumes_later_pages_and_rejects_loop(self):
+        api = guard.OperatorAPI(token="fixture")
+        responses = iter([({"executions": [{"completionTime": "done"}], "nextPageToken": "a"}, {}),
+                          ({"executions": [{}]}, {})])
+        api.request = lambda *args, **kwargs: next(responses)
+        self.assertEqual(list(api.executions("jscc-search-dev")), [{"completionTime": "done"}, {}])
+        api.request = lambda *args, **kwargs: ({"nextPageToken": "a"}, {})
+        with self.assertRaisesRegex(guard.Blocked, "invalid_page_token"):
+            list(api.executions("jscc-search-dev"))
+
+
+if __name__ == "__main__":
+    unittest.main()
