@@ -51,9 +51,13 @@ async function verifyJob(call,config){
  operatorRequire((job.name===OPERATOR_ROOT+'/jobs/'+OPERATOR_JOB||
   job.name==='projects/828902654738/locations/europe-west1/jobs/'+OPERATOR_JOB)&&
   job.reconciling!==true&&execution?.taskCount===1&&execution?.parallelism===1&&
-  task?.maxRetries===0&&task?.serviceAccount===OPERATOR_SA&&
+  task?.maxRetries===0&&task?.serviceAccount===OPERATOR_SA&&task?.timeout==='1800s'&&
+  (!task.volumes||task.volumes.length===0)&&
   task?.containers?.length===1&&container.image===OPERATOR_IMAGE+config.imageDigest&&
   (!container.command||container.command.length===0)&&(!container.args||container.args.length===0)&&
+  (!container.volumeMounts||container.volumeMounts.length===0)&&
+  container.resources?.limits?.cpu==='1'&&container.resources?.limits?.memory==='1Gi'&&
+  Array.isArray(container.env)&&container.env.length===4&&container.env.every(x=>!x.valueSource)&&
   env('SOURCE_SHA')===config.sourceSha&&env('GCP_PROJECT')==='jscc-dev'&&env('GCP_REGION')==='europe-west1'&&
   env('OPS_BUCKET')===OPERATOR_BUCKET,'operator_job_binding_mismatch');
 }
