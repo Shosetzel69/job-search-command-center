@@ -105,7 +105,7 @@ class PairTests(unittest.TestCase):
             patcher = patch.object(pair, method, return_value=value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        self.p.capture({"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]],
+        self.anchor = self.p.capture({"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]],
                         "worker_digest": NEW[pair.KEYS[2]], "catalog": CAT, "previous_catalog": CAT})
 
     def test_explicit_cutover_and_owned_release(self):
@@ -208,6 +208,40 @@ class PairTests(unittest.TestCase):
         self.api.revisions[NEW_REV]["containers"][0]["image"] = pair.image("gateway", OLD)
         with self.assertRaisesRegex(pair.Blocked, "effective_revision_binding_mismatch"):
             self.p.verify_pair(False)
+
+    def test_recovery_anchors_and_live_lease_are_read_only(self):
+        maintenance_id = "maintenance-" + "a" * 64
+        self.api.read_lease = Mock(return_value=(
+            {"operation_id": maintenance_id, "state": "ACTIVE",
+             "expires_at_ms": pair.MAINTENANCE_EXPIRY}, "123"))
+        baseline = self.p.observe_recovery(maintenance_id)
+        self.assertEqual(baseline["lease_state"], "OWNED_ACTIVE")
+        self.assertEqual(baseline["lease_generation"], "123")
+        self.assertEqual(baseline["gateway_template_hash"], self.anchor["gateway_template_hash"])
+        self.assertEqual(baseline["worker_template_hash"], self.anchor["worker_template_hash"])
+        self.assertEqual(self.api.calls, [])
+        self.p.freeze(maintenance_id)
+        self.p.guard.freeze.assert_called_once_with("protected", maintenance_id)
+        self.p.deploy_worker()
+        self.p.deploy_gateway()
+        after = self.p.observe_recovery(maintenance_id)
+        self.assertEqual(after["gateway_template_hash"], self.anchor["next_gateway_template_hash"])
+        self.assertEqual(after["worker_template_hash"], self.anchor["next_worker_template_hash"])
+        self.assertEqual(after["effective_binding"]["source_sha"], NEW[pair.KEYS[0]])
+        self.api.read_lease.return_value = (
+            {"operation_id": "unrelated", "state": "ACTIVE", "expires_at_ms": 100}, "456")
+        other = self.p.observe_recovery(maintenance_id)
+        self.assertEqual(other["lease_state"], "OTHER")
+        self.assertIsNone(other["lease_generation"])
+        self.assertNotIn("unrelated", str(other))
+        self.assertNotIn("fixture-secret", str(other))
+
+    def test_protected_baseline_changes_after_capture_block_freeze(self):
+        self.p.guard.inspect.return_value = "changed"
+        with self.assertRaisesRegex(pair.Blocked, "protected_state_drift_since_capture"):
+            self.p.freeze("maintenance-" + "a" * 64)
+        self.p.guard.freeze.assert_not_called()
+        self.assertEqual(self.api.calls, [])
 
     def test_missing_lease_ownership_blocks_before_cli(self):
         self.p.freeze()
