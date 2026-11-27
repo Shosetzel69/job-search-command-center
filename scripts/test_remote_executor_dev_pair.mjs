@@ -47,7 +47,7 @@ function fakeStore(){
   },
  };
 }
-async function fixture(failMethod=null){
+async function fixture(failMethod=null,expireAfter=null){
  const events=[],store=fakeStore();
  let observation=live(),capture=old,currentTime=NOW;
  const stepName=(method,args)=>method==='verify_pair'?(args[0]?'verify_previous':'verify_next'):method;
@@ -58,6 +58,7 @@ async function fixture(failMethod=null){
   assert.deepEqual(store.current.data.history.at(-1),{
    step:stepName(method,args),outcome:'INTENT',at_ms:currentTime});
   if(method==='freeze')assert.equal(args[0],pairOperationIdentity(approvalRef).maintenance_id);
+  if(method===expireAfter)currentTime=NOW+10000;
   if(method===failMethod)throw Error('fixture_failure');
   if(method==='verify_pair')return pair(args[0]?old:next);
   return true;
@@ -128,6 +129,49 @@ test('R6 restores both resources, verifies restored pair, then releases',async()
  assert.deepEqual(f.events,['capture','freeze','deploy_worker','deploy_gateway','rollback_gateway',
  'rollback_worker','verify_pair:true','release','close']);
  assert.ok(f.store.current.data.history.some(x=>x.step==='deploy_gateway'&&x.outcome==='UNKNOWN'));
+});
+test('R708-F01 expiry after failed gateway preserves paired rollback and release',async()=>{
+ const f=await fixture('deploy_gateway','deploy_gateway');
+ const result=await f.run();
+ assert.equal(result.state,'ROLLED_BACK');
+ assert.deepEqual(f.events,['capture','freeze','deploy_worker','deploy_gateway','rollback_gateway',
+ 'rollback_worker','verify_pair:true','release','close']);
+ assert.equal(f.store.current.data.history.at(-1).outcome,'CONFIRMED');
+ assert.equal(f.store.current.data.state,'ROLLED_BACK');
+});
+test('R708-F01 expiry after worker denies new gateway deployment but restores both',async()=>{
+ const f=await fixture(null,'deploy_worker');
+ const result=await f.run();
+ assert.equal(result.state,'ROLLED_BACK');
+ assert.deepEqual(f.events,['capture','freeze','deploy_worker','rollback_gateway',
+ 'rollback_worker','verify_pair:true','release','close']);
+ assert.ok(!f.store.current.data.history.some(x=>x.step==='deploy_gateway'));
+});
+test('R708-F01 completed forward pair may be verified and released after expiry',async()=>{
+ for(const after of ['deploy_gateway','verify_pair']){
+  const f=await fixture(null,after);
+  const result=await f.run();
+  assert.equal(result.state,'SUCCEEDED');
+  assert.deepEqual(f.events,['capture','freeze','deploy_worker','deploy_gateway','verify_pair:false','release','close']);
+ }
+});
+test('R708-F01 expiry before freeze dispatch after reservation makes no mutation',async()=>{
+ const f=await fixture();
+ const create=f.store.create.bind(f.store);
+ f.store.create=async(...args)=>{await create(...args);f.setTime(NOW+10000);};
+ const result=await f.run();
+ assert.notEqual(result.state,'SUCCEEDED');
+ assert.deepEqual(f.events,['capture','close']);
+ assert.deepEqual(f.store.current.data.history,[]);
+});
+test('R708-F01 expiry does not override uncertain journal or uncertain release',async()=>{
+ const f=await fixture(null,'deploy_worker');
+ f.store.failReplace=r=>r.history.at(-1)?.step==='deploy_worker'&&r.history.at(-1)?.outcome==='CONFIRMED';
+ assert.equal((await f.run()).state,'RECOVERY_REQUIRED');
+ assert.deepEqual(f.events,['capture','freeze','deploy_worker','close']);
+ const release=await fixture('release','deploy_gateway');
+ assert.equal((await release.run()).state,'UNFREEZE_UNCERTAIN');
+ assert.deepEqual(release.events,['capture','freeze','deploy_worker','deploy_gateway','verify_pair:false','release','close']);
 });
 test('uncertain release never initiates rollback after exclusion may be lost',async()=>{
  const f=await fixture('release');
