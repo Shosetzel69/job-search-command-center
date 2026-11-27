@@ -10,6 +10,11 @@ OPS_SOURCE_REMOTE="${OPS_SOURCE_REMOTE:-origin}"
   exit 4
 }
 
+[[ "$(git rev-parse HEAD)" == "$SOURCE_SHA" ]] || {
+  echo "TRUSTED_OPS_SOURCE=BLOCKED local_head_mismatch" >&2
+  exit 4
+}
+
 [[ -z "$(git status --porcelain)" ]] || {
   echo "TRUSTED_OPS_SOURCE=BLOCKED dirty_worktree" >&2
   exit 4
