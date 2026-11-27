@@ -4,6 +4,7 @@ substitutions:
   _TRUSTED_REF: ""
   _GATEWAY_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway"
   _WORKER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-diagnostics"
+  _OPERATOR_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-operator"
 steps:
   - id: trusted-source-admission
     name: gcr.io/cloud-builders/git
@@ -82,7 +83,7 @@ steps:
     args:
       - -ceu
       - |
-        rm -f /workspace/.gateway-exists /workspace/.worker-exists
+        rm -f /workspace/.gateway-exists /workspace/.worker-exists /workspace/.operator-exists
         if gcloud artifacts docker images describe "${_GATEWAY_IMAGE}:$$SOURCE_SHA" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.gateway-exists
           echo "REUSE_GATEWAY_TAG=$$SOURCE_SHA"
@@ -90,6 +91,10 @@ steps:
         if gcloud artifacts docker images describe "${_WORKER_IMAGE}:$$SOURCE_SHA" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.worker-exists
           echo "REUSE_WORKER_TAG=$$SOURCE_SHA"
+        fi
+        if gcloud artifacts docker images describe "${_OPERATOR_IMAGE}:$$SOURCE_SHA" --project=jscc-shared >/dev/null 2>&1; then
+          touch /workspace/.operator-exists
+          echo "REUSE_OPERATOR_TAG=$$SOURCE_SHA"
         fi
 
   - id: build-gateway
@@ -121,6 +126,20 @@ steps:
         fi
 
 
+  - id: build-operator
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.operator-exists ]]; then
+          echo "SKIP_OPERATOR_BUILD_EXISTING_IMMUTABLE_TAG"
+        else
+          docker build --pull -f /workspace/jscc589-ops-verified-src/ops/Dockerfile.operator --build-arg "SOURCE_SHA=$$SOURCE_SHA" -t "${_OPERATOR_IMAGE}:$$SOURCE_SHA" /workspace/jscc589-ops-verified-src
+        fi
+
   - id: verify-image-source
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
@@ -146,7 +165,11 @@ steps:
             cmp "$$root/package.json" "$$tmp/package.json"
             docker cp "$$cid:/workspace/ops/observation/dev-runtime-observer.mjs" "$$tmp/observer.mjs"
             cmp "$$root/observation/dev-runtime-observer.mjs" "$$tmp/observer.mjs"
-            if [[ "$$role" == worker ]]; then
+            if [[ "$role" == gateway ]]; then
+              docker cp "$cid:/workspace/scripts/gcp/remote_executor_dev_lifecycle.json" "$tmp/lifecycle.json"
+              cmp "$root/../scripts/gcp/remote_executor_dev_lifecycle.json" "$tmp/lifecycle.json"
+            fi
+            if [[ "$role" == worker ]]; then
               docker cp "$$cid:/workspace/ops/observation/dev-rollout-evaluator.mjs" "$$tmp/evaluator.mjs"
               cmp "$$root/observation/dev-rollout-evaluator.mjs" "$$tmp/evaluator.mjs"
             fi
@@ -155,6 +178,31 @@ steps:
         }
         verify_image "${_GATEWAY_IMAGE}:$$SOURCE_SHA" /workspace/.gateway-exists gateway
         verify_image "${_WORKER_IMAGE}:$$SOURCE_SHA" /workspace/.worker-exists worker
+        operator="${_OPERATOR_IMAGE}:$$SOURCE_SHA"
+        if [[ -f /workspace/.operator-exists ]]; then docker pull "$$operator"; fi
+        docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$$operator" |
+          grep -Fx "SOURCE_SHA=$$SOURCE_SHA" >/dev/null
+        tmp="$$(mktemp -d)"
+        (
+          cid=
+          trap 'if [[ -n "$$cid" ]]; then docker rm "$$cid" >/dev/null; fi; rm -rf "$$tmp"' EXIT
+          cid="$$(docker create --network none "$$operator")"
+          docker cp "$$cid:/workspace/ops/operator-source-sha" "$$tmp/operator-source-sha"
+          [[ "$$(cat "$$tmp/operator-source-sha")" == "$$SOURCE_SHA" ]]
+          for d in operator build control diagnostics observation; do
+            docker cp "$$cid:/workspace/ops/$$d" "$$tmp/$$d"
+            diff -qr "$$root/$$d" "$$tmp/$$d"
+          done
+          for f in lib.mjs dev_operator_contract.mjs dev_operator_gateway.mjs; do
+            docker cp "$$cid:/workspace/ops/src/$$f" "$$tmp/$$f"
+            cmp "$$root/src/$$f" "$$tmp/$$f"
+          done
+          for f in remote_executor_dev_build.mjs remote_executor_dev_admission.mjs remote_executor_dev_pair.mjs remote_executor_dev_pair.py remote_executor_dev_maintenance.py remote_executor_dev_lifecycle.json cloud_run_v2_read.py; do
+            docker cp "$$cid:/workspace/scripts/gcp/$$f" "$$tmp/$$f"
+            cmp "$$root/../scripts/gcp/$$f" "$$tmp/$$f"
+          done
+          echo "OPS_IMAGE_SOURCE_VERIFIED=operator"
+        )
 
   - id: push-gateway
     name: gcr.io/cloud-builders/docker
@@ -183,6 +231,19 @@ steps:
         else
           docker push "${_WORKER_IMAGE}:$$SOURCE_SHA"
         fi
+  - id: push-operator
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    env:
+      - 'SOURCE_SHA=${_GIT_SHA}'
+    args:
+      - -ceu
+      - |
+        if [[ -f /workspace/.operator-exists ]]; then
+          echo "REUSE_OPERATOR_IMMUTABLE_TAG"
+        else
+          docker push "${_OPERATOR_IMAGE}:$$SOURCE_SHA"
+        fi
   - id: evidence
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
@@ -191,7 +252,7 @@ steps:
     args:
       - -ceu
       - |
-        for image in "${_GATEWAY_IMAGE}:$$SOURCE_SHA" "${_WORKER_IMAGE}:$$SOURCE_SHA"; do
+        for image in "${_GATEWAY_IMAGE}:$SOURCE_SHA" "${_WORKER_IMAGE}:$SOURCE_SHA" "${_OPERATOR_IMAGE}:$SOURCE_SHA"; do
           digest="$$(gcloud artifacts docker images describe "$$image" --project=jscc-shared --format='value(image_summary.digest)')"
           [[ "$$digest" =~ ^sha256:[0-9a-f]{64}$$ ]]
           echo "OPS_IMAGE=$$image@$$digest"
