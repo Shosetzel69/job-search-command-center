@@ -45,6 +45,10 @@ function canonical(value){
 }
 export function evidenceDigest(value){return createHash('sha256').update(canonical(value)).digest('hex');}
 const same=(a,b)=>evidenceDigest(a)===evidenceDigest(b);
+function deepFreeze(x){
+ if(x&&typeof x==='object'){Object.values(x).forEach(deepFreeze);Object.freeze(x);}
+ return x;
+}
 const match=(re,x)=>typeof x==='string'&&re.test(x);
 
 function validateTags(tags){
@@ -88,7 +92,7 @@ function checkWindow(bundle,now){
  */
 export function pinnedPairAdmission(bundle,trustedPin,now=Date.now){
  validateBundle(bundle,trustedPin);
- const admitted=JSON.parse(canonical(bundle));
+ const admitted=deepFreeze(JSON.parse(canonical(bundle)));
  const assertFresh=()=>checkWindow(admitted,now);
  assertFresh();
  const base=p=>({verified:true,environment:'dev',work_item_ref:'#589',
@@ -170,15 +174,24 @@ function storeValid(store){
 }
 function checkedRecord(current,identity){
  const r=current?.data;
- require(match(GEN,current?.generation)&&plain(r)&&r.schema_version==='1.0'&&
+ require(match(GEN,current?.generation)&&exact(r,['schema_version','environment','operation_kind',
+  'operation_id','maintenance_id','approval_ref','evidence_hash','bundle','state','history','updated_at_ms'])&&r.schema_version==='1.0'&&
   r.environment==='dev'&&r.operation_kind==='dev-ops-pair'&&
   r.operation_id===identity.key&&r.maintenance_id===identity.maintenance_id&&
   pairOperationIdentity(r.approval_ref).key===identity.key&&match(HEX,r.evidence_hash)&&
-  Array.isArray(r.history)&&r.history.length<=MAX_EVENTS&&
+  Array.isArray(r.history)&&r.history.length<=MAX_EVENTS&&Number.isSafeInteger(r.updated_at_ms)&&
   (r.state==='RESERVED'||r.state==='RUNNING'||TERMINALS.has(r.state)),
   'pair_record_invalid');
  validateBundle(r.bundle,r.evidence_hash);
  require(r.bundle.evidence.approval===r.approval_ref,'pair_record_approval_mismatch');
+ let pending=null;
+ for(const e of r.history){
+  require(exact(e,['step','outcome','at_ms'])&&STEPS.has(e.step)&&Number.isSafeInteger(e.at_ms),
+   'invalid_pair_history');
+  if(e.outcome==='INTENT'){require(pending===null,'unresolved_pair_intent');pending=e.step;}
+  else{require(['CONFIRMED','UNKNOWN'].includes(e.outcome)&&pending===e.step,'invalid_pair_receipt');pending=null;}
+ }
+ require(r.state!=='RESERVED'||r.history.length===0,'invalid_pair_reservation');
  return r;
 }
 
@@ -244,7 +257,7 @@ export class PairJournal {
    // can include staging and traffic transfer; recovery never replays either.
    await this.event(step,'INTENT');
    let result;
-   try{result=await invoke();}
+   try{this.admission.assertFresh();result=await invoke();}
    catch(e){await this.event(step,'UNKNOWN');throw e;}
    await this.event(step,'CONFIRMED');
    return result;
@@ -264,10 +277,18 @@ export function summarizePairRecord(record){
 /** Read-only reconciliation, never an approval to release or roll back. */
 export function reconcilePairRecord(record,live){
  const b=record.bundle,old=b.previous,next=b.next;
- require(plain(live)&&plain(live.gateway_binding)&&plain(live.worker_binding)&&
-  plain(live.effective_binding)&&match(REV,live.revision)&&validateTags(live.tags)&&
-  URI.has(live.uri)&&match(HEX,live.protected_baseline)&&
-  ['OWNED_ACTIVE','OWNED_RELEASED','ABSENT','OTHER','AMBIGUOUS'].includes(live.lease_state),
+ const observedBinding=x=>exact(x,['source_sha','gateway_digest','worker_digest'])&&
+  match(SHA,x.source_sha)&&match(DIGEST,x.gateway_digest)&&match(DIGEST,x.worker_digest);
+ require(exact(live,['gateway_binding','worker_binding','effective_binding','gateway_template_hash',
+  'worker_template_hash','gateway_policy_hash','worker_policy_hash','revision','tags','uri','catalog',
+  'protected_baseline','lease_state','lease_generation'])&&
+  ['gateway_binding','worker_binding','effective_binding'].every(k=>observedBinding(live[k]))&&
+  ['gateway_template_hash','worker_template_hash','gateway_policy_hash','worker_policy_hash',
+   'protected_baseline'].every(k=>match(HEX,live[k]))&&match(REV,live.revision)&&validateTags(live.tags)&&
+  URI.has(live.uri)&&match(CATALOG,live.catalog)&&
+  ['OWNED_ACTIVE','OWNED_RELEASED','ABSENT','OTHER','AMBIGUOUS'].includes(live.lease_state)&&
+  (['OWNED_ACTIVE','OWNED_RELEASED','AMBIGUOUS'].includes(live.lease_state)?
+   match(GEN,live.lease_generation):live.lease_generation===null),
   'invalid_recovery_observation');
  const values=x=>({source_sha:x.source_sha,gateway_digest:x.gateway_digest,worker_digest:x.worker_digest});
  const bindingMatches=x=>['gateway_binding','worker_binding','effective_binding'].every(k=>same(live[k],values(x)));
