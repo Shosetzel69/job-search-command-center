@@ -165,11 +165,11 @@ steps:
             cmp "$$root/package.json" "$$tmp/package.json"
             docker cp "$$cid:/workspace/ops/observation/dev-runtime-observer.mjs" "$$tmp/observer.mjs"
             cmp "$$root/observation/dev-runtime-observer.mjs" "$$tmp/observer.mjs"
-            if [[ "$role" == gateway ]]; then
-              docker cp "$cid:/workspace/scripts/gcp/remote_executor_dev_lifecycle.json" "$tmp/lifecycle.json"
-              cmp "$root/../scripts/gcp/remote_executor_dev_lifecycle.json" "$tmp/lifecycle.json"
+            if [[ "$$role" == gateway ]]; then
+              docker cp "$$cid:/workspace/scripts/gcp/remote_executor_dev_lifecycle.json" "$$tmp/lifecycle.json"
+              cmp "$$root/../scripts/gcp/remote_executor_dev_lifecycle.json" "$$tmp/lifecycle.json"
             fi
-            if [[ "$role" == worker ]]; then
+            if [[ "$$role" == worker ]]; then
               docker cp "$$cid:/workspace/ops/observation/dev-rollout-evaluator.mjs" "$$tmp/evaluator.mjs"
               cmp "$$root/observation/dev-rollout-evaluator.mjs" "$$tmp/evaluator.mjs"
             fi
@@ -252,7 +252,7 @@ steps:
     args:
       - -ceu
       - |
-        for image in "${_GATEWAY_IMAGE}:$SOURCE_SHA" "${_WORKER_IMAGE}:$SOURCE_SHA" "${_OPERATOR_IMAGE}:$SOURCE_SHA"; do
+        for image in "${_GATEWAY_IMAGE}:$$SOURCE_SHA" "${_WORKER_IMAGE}:$$SOURCE_SHA" "${_OPERATOR_IMAGE}:$$SOURCE_SHA"; do
           digest="$$(gcloud artifacts docker images describe "$$image" --project=jscc-shared --format='value(image_summary.digest)')"
           [[ "$$digest" =~ ^sha256:[0-9a-f]{64}$$ ]]
           echo "OPS_IMAGE=$$image@$$digest"
