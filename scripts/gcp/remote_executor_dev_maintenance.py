@@ -1,6 +1,7 @@
 """Operator-side #589 DEV maintenance boundary. No runtime credentials or CLI mutation."""
 import hashlib
 import json
+from pathlib import Path
 import re
 import subprocess
 import time
@@ -15,6 +16,8 @@ PROJECT = "jscc-dev"
 REGION = "europe-west1"
 RUN_ROOT = f"https://run.googleapis.com/v2/projects/{PROJECT}/locations/{REGION}"
 BUCKET = "jscc-dev-ops-state"
+BUCKET_METADATA = f"https://storage.googleapis.com/storage/v1/b/{BUCKET}"
+LIFECYCLE_FILE = Path(__file__).with_name("remote_executor_dev_lifecycle.json")
 STORAGE = f"https://storage.googleapis.com/storage/v1/b/{BUCKET}/o"
 UPLOAD = f"https://storage.googleapis.com/upload/storage/v1/b/{BUCKET}/o"
 LEASE = "leases/diagnostics.json"
@@ -83,6 +86,9 @@ class OperatorAPI:
             seen.add(token)
             params["pageToken"] = token
         raise Blocked("page_limit_exceeded")
+
+    def bucket_metadata(self):
+        return self.request(BUCKET_METADATA + "?fields=name,location,lifecycle")[0]
 
     def service(self):
         return self.request(RUN_ROOT + "/services/jscc-command-api-dev")[0]
@@ -172,6 +178,30 @@ def assert_available(record):
             and record["expires_at_ms"] <= now_ms(), "lease_active_or_ambiguous")
 
 
+def assert_scoped_lifecycle(api):
+    bucket = api.bucket_metadata()
+    require(bucket.get("name") == BUCKET and bucket.get("location") == "EUROPE-WEST1",
+            "ops_bucket_identity_mismatch")
+    expected = json.loads(LIFECYCLE_FILE.read_text(encoding="utf-8"))
+    actual = bucket.get("lifecycle")
+    # GCS may return the allowlist in a different order. No other rule or
+    # condition is accepted; unknown or unconditional deletes fail closed.
+    require(isinstance(actual, dict) and set(actual) == {"rule"} and
+            isinstance(actual["rule"], list) and len(actual["rule"]) == 1,
+            "ops_lifecycle_not_scoped")
+    rule = actual["rule"][0]
+    require(isinstance(rule, dict) and set(rule) == {"action", "condition"} and
+            rule["action"] == {"type": "Delete"}, "ops_lifecycle_not_scoped")
+    condition = rule["condition"]
+    prefixes = condition.get("matchesPrefix") if isinstance(condition, dict) else None
+    require(isinstance(prefixes, list) and all(isinstance(p, str) for p in prefixes),
+            "ops_lifecycle_not_scoped")
+    normalized = {"rule": [{"action": rule["action"], "condition": {
+        **condition, "matchesPrefix": sorted(prefixes)}}]}
+    expected["rule"][0]["condition"]["matchesPrefix"].sort()
+    require(normalized == expected, "ops_lifecycle_not_scoped")
+
+
 class MaintenanceGuard:
     """Adapter for existing R6 freeze/unfreeze callbacks; no deploy authority."""
 
@@ -182,6 +212,7 @@ class MaintenanceGuard:
         self.baseline = None
 
     def inspect(self):
+        assert_scoped_lifecycle(self.api)
         before = protected_snapshot(self.api)
         assert_drained(self.api)
         record, _ = self.api.read_lease()
