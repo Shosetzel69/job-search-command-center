@@ -76,8 +76,13 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
 - `remote_executor_dev_publish_approval.mjs` is an independent publisher
   interface, not an MCP tool. Its trusted pin must come from independently
   authenticated owner/reviewer/cost evidence obtained through the existing
-  GitHub authority. A remote trusted publisher and exact-source archive
-  staging are still missing; a self-supplied hash does not authorize a change.
+  GitHub authority. The same independent publisher module prepares a bounded
+  Git archive from an exact clean trusted checkout and stages it only with an
+  externally pinned approval/review/cost record and archive SHA256. Upload uses
+  the existing dedicated bucket, a deterministic approval-specific object,
+  create-only generation precondition and exact-generation digest readback.
+  A remote authenticated publisher route and live permissions remain missing;
+  a self-supplied hash does not authorize staging or a change.
 - The Job parses the staged build YAML in a bounded Python subprocess using
   PyYAML and compares the exact reviewed REST configuration. Build success
   does not prove source provenance. Registry tag/digest observation reports
