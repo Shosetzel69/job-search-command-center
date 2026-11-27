@@ -61,3 +61,19 @@ test('R2 delete is one exact generation-bound file and refuses recursive or miss
   {path:'src/code.py',if_generation_match:1,recursive:true},
  ]) assert.throws(()=>validatedWorkspaceRequest('workspace_delete',bad));
 });
+
+test('RE-02: workspace_run supports bounded relative cwd and preserves root payload',()=>{
+ const expected={method:'POST',path:'/v1/run',body:{task:'command',argv:['python3','app.py'],cwd:'src/pkg'}};
+ assert.deepEqual(validatedWorkspaceRequest('workspace_run',expected.body),expected);
+ assert.deepEqual(validatedWorkspaceRequest('workspace_run',{task:'pytest',cwd:'.'}),
+  validatedWorkspaceRequest('workspace_run',{task:'pytest'}));
+ assert.deepEqual(validatedWorkspaceRequest('workspace_run',{task:'python_syntax',cwd:'src'}).body,
+  {task:'python_syntax',cwd:'src'});
+ const schema=workspaceTools.find(x=>x.name==='workspace_run').inputSchema;
+ assert.equal(schema.properties.cwd.type,'string');
+ assert.ok(!schema.required.includes('cwd'));
+ for(const cwd of [null,undefined,'','/tmp','../tmp','src/..','src//pkg','src/.git','src/.env','C:/Windows','a\\b','x'.repeat(181)]){
+  assert.throws(()=>validatedWorkspaceRequest('workspace_run',{task:'pytest',cwd}));
+ }
+ assert.throws(()=>validatedWorkspaceRequest('workspace_run',{task:'command',argv:['gcloud','run','jobs','execute'],cwd:'src'}));
+});
