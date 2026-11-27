@@ -1,12 +1,13 @@
 // #589 R4: execute one prepackaged, SHA-bound, READ-ONLY diagnostic program.
 // This is a typed Google Cloud API script, not a general gcloud/bash subprocess.
-// The worker inherits only its existing DEV diagnostic identity.
+// Executed only by the separately admitted DEV operator; never by the
+// existing unprivileged diagnostics worker.
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
 import {
   DEV_DIAGNOSTIC_SCRIPT_ID, DEV_DIAGNOSTIC_SCRIPT_SHA256,
-  validateTaskRequest,
 } from '../src/lib.mjs';
+import {admitDevRequest} from '../observation/dev-runtime-observer.mjs';
 
 const PLAN_URL=new URL('./dev-runtime-build-inventory-v1.json',import.meta.url);
 const EXPECTED_STEPS=Object.freeze([
@@ -29,12 +30,22 @@ function verifiedPlan(bytes) {
   return data;
 }
 
+export function validateDevInventoryArgs(args){
+ const fields=['environment','script_id','script_sha256','service','buildId'];
+ if(!args||typeof args!=='object'||Array.isArray(args)||Object.keys(args).length!==fields.length||
+  fields.some(k=>!Object.hasOwn(args,k))||args.environment!=='dev'||
+  args.script_id!==DEV_DIAGNOSTIC_SCRIPT_ID||args.script_sha256!==DEV_DIAGNOSTIC_SCRIPT_SHA256)
+  throw Error('SCRIPT_REQUEST_DENIED');
+ const service=admitDevRequest({environment:'dev',task:'describe_dev_runtime',service:args.service}).service;
+ const buildId=admitDevRequest({environment:'dev',task:'describe_dev_build',buildId:args.buildId}).buildId;
+ return Object.freeze({environment:'dev',script_id:args.script_id,script_sha256:args.script_sha256,service,buildId});
+}
+
 export async function executeDevGcloudScript(args, {
   observer, manifestBytes=readFileSync(PLAN_URL),
 }={}) {
-  // Defense in depth: worker revalidates all caller-controlled fields even
-  // after the Gateway has validated and signed the bounded dispatch.
-  const clean=validateTaskRequest('run_dev_gcloud_script',args).args;
+  // Keep the original worker catalog intentionally unchanged.
+  const clean=validateDevInventoryArgs(args);
   verifiedPlan(manifestBytes);
   if(!observer || typeof observer.describe!=='function') throw new Error('observer_required');
 
