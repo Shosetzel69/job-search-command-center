@@ -1,6 +1,7 @@
 """Operator-side #589 DEV maintenance boundary. No runtime credentials or CLI mutation."""
 import hashlib
 import json
+import re
 import subprocess
 import time
 import uuid
@@ -188,12 +189,16 @@ class MaintenanceGuard:
         require(protected_snapshot(self.api) == before, "protected_state_drift")
         return before
 
-    def freeze(self, expected_baseline):
+    def freeze(self, expected_baseline, maintenance_id=None):
         require(self.operation_id is None, "guard_already_used")
         require(self.inspect() == expected_baseline, "protected_state_drift")
         record, generation = self.api.read_lease()
         assert_available(record)
-        self.operation_id = "maintenance-" + uuid.uuid4().hex
+        if maintenance_id is not None:
+            require(isinstance(maintenance_id, str) and
+                    re.fullmatch(r"maintenance-[a-f0-9]{32,64}", maintenance_id),
+                    "invalid_maintenance_id")
+        self.operation_id = maintenance_id or "maintenance-" + uuid.uuid4().hex
         self.baseline = expected_baseline
         value = {"operation_id": self.operation_id, "state": "ACTIVE",
                  "acquired_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
