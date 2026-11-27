@@ -8,6 +8,10 @@ on:
       - "scripts/gcp/*remote_executor_dev.sh"
       - "scripts/gcp/remote_executor_dev_maintenance.py"
       - "scripts/test_remote_executor_dev_maintenance.py"
+      - "scripts/gcp/remote_executor_dev_pair.py"
+      - "scripts/gcp/remote_executor_dev_pair.mjs"
+      - "scripts/test_remote_executor_dev_pair.py"
+      - "scripts/test_remote_executor_dev_pair.mjs"
       - "docs/runbooks/remote-executor-dev.md"
       - "docs/adr/ADR-006-google-cloud-runtime.md"
       - "ARCHITECTURE.md"
@@ -20,6 +24,10 @@ on:
       - "scripts/gcp/*remote_executor_dev.sh"
       - "scripts/gcp/remote_executor_dev_maintenance.py"
       - "scripts/test_remote_executor_dev_maintenance.py"
+      - "scripts/gcp/remote_executor_dev_pair.py"
+      - "scripts/gcp/remote_executor_dev_pair.mjs"
+      - "scripts/test_remote_executor_dev_pair.py"
+      - "scripts/test_remote_executor_dev_pair.mjs"
       - "docs/runbooks/remote-executor-dev.md"
       - "docs/adr/ADR-006-google-cloud-runtime.md"
       - "ARCHITECTURE.md"
@@ -55,6 +63,11 @@ jobs:
 
       - name: Run DEV maintenance guard contracts
         run: python3 -m unittest discover -s scripts -p 'test_remote_executor_dev_maintenance.py' -v
+
+      - name: Run DEV R6 operator contracts
+        run: |
+          python3 -m unittest discover -s scripts -p 'test_remote_executor_dev_pair.py' -v
+          node --test scripts/test_remote_executor_dev_pair.mjs
 
       - name: Validate auth library resolution
         run: node -e "Promise.all([import('@node-oauth/oauth2-server'),import('openid-client')])"
