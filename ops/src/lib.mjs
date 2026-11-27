@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
-export const CATALOG_VERSION = '589-nile-api-v1';
+export const CATALOG_VERSION = '589-operator-v1';
 export const DEV_DIAGNOSTIC_SCRIPT_ID = 'dev_runtime_build_inventory_v1';
 export const DEV_DIAGNOSTIC_SCRIPT_SHA256 = '60f9c0f87abd9da979e1dc66c5a5e2580faa5a4483aacb7f3b8bdd2478bea73b';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
