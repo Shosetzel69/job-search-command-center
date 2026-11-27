@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','gcloud_inventory']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','gcloud_inventory','gcs_artifact']);
 const STATES=new Set(['DISPATCH_PENDING_OR_UNKNOWN','SUBMITTED','WORKING','SUCCEEDED','FAILED','BLOCKED',
  'CANCELLED','SUBMISSION_UNKNOWN','ROLLED_BACK','RECOVERY_REQUIRED','FREEZE_UNCERTAIN',
  'ROLLBACK_BLOCKED','UNFREEZE_UNCERTAIN','ADMISSION_BLOCKED','OBSERVED']);
@@ -93,6 +93,11 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
   operatorRequire(operatorExact(v.bundle,['original_approval_ref'])&&
    match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref,
    'operator_observation_approval_mismatch');
+ }else if(v.action==='gcs_artifact'){
+  operatorRequire(v.bundle.environment==='dev'&&(
+   v.bundle.operation==='metadata'&&operatorExact(v.bundle,['environment','operation','bucket','object','generation'])||
+   v.bundle.operation==='copy_generation'&&operatorExact(v.bundle,['environment','operation','source','source_generation','destination','expected_md5','expected_crc32c'])),
+   'operator_gcs_approval_mismatch');
  }else{
   operatorRequire(operatorExact(v.bundle,['environment','script_id','script_sha256','service','buildId'])&&
    v.bundle.environment==='dev','operator_script_approval_mismatch');
@@ -125,6 +130,14 @@ export function projectOperatorResult(request,record){
  for(const k of ['build_id','controller_operation_id','source_provenance','script_verdict','live_pair','lease_state','failure_class']){
   const x=v[k];if(typeof x==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(x))out[k]=x;
  }
+ const m=v.artifact_metadata;
+ if(request.action==='gcs_artifact'&&m&&typeof m==='object'&&
+  ['jscc-shared-ops-cloudbuild-source','jscc-dev-runtime-828902654738'].includes(m.bucket)&&
+  typeof m.name==='string'&&/^(?:source\/dev-[a-f0-9]{40}-[a-z0-9-]{8,64}\.tar\.gz|runs\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\/(?:run-status\.json|jobs\.json))$/.test(m.name)&&!m.name.includes('..')&&
+  match(GEN,m.generation)&&typeof m.size==='string'&&/^[0-9]{1,20}$/.test(m.size)&&
+  typeof m.crc32c==='string'&&/^[a-zA-Z0-9+/]{6}==$/.test(m.crc32c)&&
+  (m.md5===null||typeof m.md5==='string'&&/^[a-zA-Z0-9+/]{22}==$/.test(m.md5)))
+  out.artifact_metadata={bucket:m.bucket,name:m.name,generation:m.generation,size:m.size,crc32c:m.crc32c,md5:m.md5};
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;
 }
