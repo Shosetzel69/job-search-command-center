@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {workspaceTools, validatedWorkspaceRequest, hasDevWriteScope} from '../src/dev_workspace.mjs';
+import {workspaceTools, validatedWorkspaceRequest, hasDevWriteScope, invokeWorkspaceTool} from '../src/dev_workspace.mjs';
 
 test('R2 adds typed tools to the EXISTING DEV gateway scope',()=>{
  const names=workspaceTools.map(x=>x.name);
@@ -76,4 +76,18 @@ test('RE-02: workspace_run supports bounded relative cwd and preserves root payl
   assert.throws(()=>validatedWorkspaceRequest('workspace_run',{task:'pytest',cwd}));
  }
  assert.throws(()=>validatedWorkspaceRequest('workspace_run',{task:'command',argv:['gcloud','run','jobs','execute'],cwd:'src'}));
+});
+
+
+test('RE-02: optional snapshot pin is exact and cannot be silently ignored by a legacy manager',async()=>{
+ const pin='a'.repeat(64),args={task:'pytest',expected_snapshot_sha256:pin};
+ assert.deepEqual(validatedWorkspaceRequest('workspace_run',args).body,args);
+ for(const bad of [null,undefined,'a','A'.repeat(64),'a'.repeat(65)])
+  assert.throws(()=>validatedWorkspaceRequest('workspace_run',{...args,expected_snapshot_sha256:bad}));
+ const url='https://jscc-dev-workspace-manager-fixture.run.app';
+ const opts={identityToken:'fixture',fetchImpl:async()=>Response.json({exit_code:0})};
+ await assert.rejects(()=>invokeWorkspaceTool('workspace_run',args,url,opts),/snapshot_unconfirmed/);
+ const result=await invokeWorkspaceTool('workspace_run',args,url,{...opts,
+  fetchImpl:async()=>Response.json({exit_code:0,snapshot_sha256:pin})});
+ assert.equal(result.data.snapshot_sha256,pin);
 });

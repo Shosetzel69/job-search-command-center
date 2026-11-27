@@ -1,5 +1,6 @@
 """Bounded, no-Git DEV workspace protocol shared by controller and sandbox."""
 import base64
+import hashlib
 import json
 import re
 
@@ -83,3 +84,30 @@ def checked_task(task, argv):
 
 def json_bytes(obj):
     return json.dumps(obj, separators=(',', ':'), ensure_ascii=False).encode('utf-8')
+
+
+def snapshot_sha256(files):
+    """Hash exact path/content pairs, not a mutable directory name or Git claim."""
+    if not isinstance(files, dict) or len(files) > MAX_FILES:
+        raise ValueError('file_count_limit')
+    total = 0
+    manifest = []
+    for name in sorted(files):
+        checked_path(name)
+        data = files[name]
+        if not isinstance(data, bytes) or len(data) > MAX_FILE:
+            raise ValueError('file_too_large')
+        total += len(data)
+        if total > MAX_TOTAL:
+            raise ValueError('workspace_too_large')
+        manifest.append([name, len(data), hashlib.sha256(data).hexdigest()])
+    return hashlib.sha256(json_bytes(manifest)).hexdigest()
+
+
+def checked_snapshot_sha256(expected, files):
+    if not isinstance(expected, str) or not re.fullmatch(r'[a-f0-9]{64}', expected):
+        raise ValueError('invalid_snapshot_sha256')
+    actual = snapshot_sha256(files)
+    if actual != expected:
+        raise ValueError('snapshot_sha256_mismatch')
+    return actual

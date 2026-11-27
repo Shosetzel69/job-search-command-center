@@ -138,6 +138,28 @@ class WorkspaceHTTPTests(unittest.TestCase):
                 self.assertEqual(payload['task'],'pytest')
 
 
+    def test_snapshot_pin_matches_listing_and_rejects_drift_before_worker(self):
+        from unittest.mock import patch
+        status, listing = self.request('/v1/files')
+        self.assertEqual(status,200)
+        pin=listing['snapshot_sha256']
+        self.assertEqual(len(pin),64)
+        with patch.object(manager,'execute_worker',return_value={'exit_code':0,'snapshot_sha256':pin}) as run:
+            status,result=self.request('/v1/run',{'task':'pytest','expected_snapshot_sha256':pin})
+            self.assertEqual(status,200)
+            self.assertEqual(result['snapshot_sha256'],pin)
+            self.assertEqual(run.call_args.kwargs['expected_snapshot_sha256'],pin)
+            run.reset_mock()
+            for bad in (None,'0'*64,'A'*64):
+                status,result=self.request('/v1/run',{'task':'pytest','expected_snapshot_sha256':bad})
+                self.assertEqual(status,400)
+            run.assert_not_called()
+            run.return_value={'exit_code':0}
+            status,result=self.request('/v1/run',{'task':'pytest','expected_snapshot_sha256':pin})
+            self.assertEqual(status,502)
+            self.assertEqual(result['error'],'worker_snapshot_unconfirmed')
+
+
 class WorkerCwdTests(unittest.TestCase):
     def test_actual_worker_runs_from_selected_snapshot_directory(self):
         import base64
@@ -152,6 +174,22 @@ class WorkerCwdTests(unittest.TestCase):
             result=worker.execute(*args)
             self.assertEqual(result['exit_code'],0)
             self.assertEqual(result['stdout'].strip(),'fixture')
+
+    def test_worker_rechecks_snapshot_identity_before_process_launch(self):
+        import base64
+        from unittest.mock import patch
+        from service import worker
+        from service.common import snapshot_sha256
+        files={'src/a.txt':base64.b64encode(b'abc').decode()}
+        pin=snapshot_sha256({'src/a.txt':b'abc'})
+        self.assertNotEqual(pin,snapshot_sha256({'src/b.txt':b'abc'}))
+        self.assertNotEqual(pin,snapshot_sha256({'src/a.txt':b'abd'}))
+        with patch.object(worker.subprocess,'Popen') as launch:
+            with self.assertRaisesRegex(ValueError,'snapshot_sha256_mismatch'):
+                worker.execute(files,'pytest',expected_snapshot_sha256='0'*64)
+            launch.assert_not_called()
+        result=worker.execute(files,'command',['python3','-V'],expected_snapshot_sha256=pin)
+        self.assertEqual(result['snapshot_sha256'],pin)
 
     def test_worker_denies_invalid_cwd_before_process_launch(self):
         import base64

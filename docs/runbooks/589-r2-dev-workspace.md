@@ -96,3 +96,17 @@ current image lineage. Do not build from arbitrary branch or image tags.
 The Gateway validates the path syntax, Manager requires an existing directory implied by the exact snapshot files, and Worker independently validates and resolves it inside the fresh temporary snapshot before process launch. Absolute, traversal, restricted, missing and file paths are denied. No directory is created from `cwd` itself; the existing executable allowlist, environment, limits, DEV OAuth scopes and unprivileged execution boundary remain unchanged. Root requests omit the new field on the wire for compatibility with the existing Manager/Worker protocol. A selected subdirectory is **not** supported by the old Worker or Manager; it must fail rather than silently execute in the root.
 
 The consolidated #711 candidate now extends `cloudbuild.workspace-manager-r2.yaml` with the existing Manager and Sandbox Worker immutable-image lineages, a worker overlay (`Dockerfile.r2-worker`), source parity and smoke steps. Historical baseline refs must be verified against the actual serving images before build. Gateway, Manager and Worker require a coordinated source/digest-aligned release and rollback; no build, rollout or live acceptance has been performed by this candidate. Existing cost admission and Retrieve protection remain mandatory.
+
+
+## RE-02 exact workspace snapshot binding (source only)
+
+The existing list operation returns the SHA256 of a deterministic sorted
+manifest of relative paths, byte lengths and per-file content hashes.
+An optional `expected_snapshot_sha256` in the existing `workspace_run`
+tool binds the manager's bounded snapshot to that pin before dispatch.
+The worker independently recomputes it from decoded input and returns
+the actual digest; manager and gateway fail closed if the worker result
+does not confirm the pin. Legacy unpinned calls remain compatible.
+This proves exact workspace bytes, not an authenticated Git SHA or
+the provenance of the caller-supplied pin. Coordinated gateway, manager
+and worker release and live acceptance remain required.

@@ -9,12 +9,14 @@ import subprocess
 import tempfile
 import time
 from .httpbase import BaseHandler, serve
-from .common import checked_files, checked_task, checked_workdir, MAX_OUTPUT
+from .common import checked_files, checked_task, checked_workdir, snapshot_sha256, checked_snapshot_sha256, MAX_OUTPUT
 
 TIMEOUT = 35
 
-def execute(files, task, argv=None, cwd='.'):
+def execute(files, task, argv=None, cwd='.', expected_snapshot_sha256=None):
     decoded = checked_files(files)
+    digest = (snapshot_sha256(decoded) if expected_snapshot_sha256 is None else
+              checked_snapshot_sha256(expected_snapshot_sha256, decoded))
     command = checked_task(task, argv)
     directory = checked_workdir(cwd, decoded)
     if command[0] in ('python','python3'):
@@ -62,6 +64,7 @@ def execute(files, task, argv=None, cwd='.'):
             'stdout': stdout[:MAX_OUTPUT].decode('utf-8', 'replace'),
             'stderr': stderr[:MAX_OUTPUT].decode('utf-8', 'replace'),
             'truncated': len(stdout)>MAX_OUTPUT or len(stderr)>MAX_OUTPUT,
+            'snapshot_sha256': digest,
             'task': task
         }
 
@@ -75,9 +78,11 @@ class Handler(BaseHandler):
             return self.out(404, {'error':'not_found'})
         try:
             data = self.body()
-            if not isinstance(data, dict) or set(data) - {'files','task','argv','cwd'}:
+            if not isinstance(data, dict) or set(data) - {'files','task','argv','cwd','expected_snapshot_sha256'}:
                 raise ValueError('invalid_request')
-            return self.out(200, execute(data.get('files'), data.get('task'), data.get('argv'), data.get('cwd','.')))
+            if 'expected_snapshot_sha256' in data and data['expected_snapshot_sha256'] is None:
+                raise ValueError('invalid_snapshot_sha256')
+            return self.out(200, execute(data.get('files'), data.get('task'), data.get('argv'), data.get('cwd','.'), data.get('expected_snapshot_sha256')))
         except ValueError as e:
             return self.out(400, {'error':str(e)})
         except Exception:
