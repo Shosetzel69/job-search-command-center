@@ -2,6 +2,7 @@ import {
   CATALOG_VERSION, TEST_SUITES, envConfig, executionJobName, gcpFetch, gcsReadJson, gcsReplaceJson,
   gcsWriteJson, isoNow, normalizeExecutionId, publicEvidence, releaseLease, sanitizeExternal, sanitizeText, validateDispatchBinding, validateTaskRequest
 } from './lib.mjs';
+import { observeDevNile } from './dev-nile-client.mjs';
 import { createDevObserver } from '../observation/dev-runtime-observer.mjs';
 import { assessDevRollout, planDevDeployment } from '../observation/dev-rollout-evaluator.mjs';
 import {listExecutionTaskEvidence,readBoundedExecutionLogs,inspectDevRunSnapshot} from './dev-e2e-diagnostics.mjs';
@@ -166,6 +167,7 @@ async function describeDevObservation(task,args){
   };
 }
 function publicAssertions(task, value) {
+  if(task==='observe_dev_nile')return {nile_status:value.nile_status,nile_stage:value.nile_stage??null,nile_sqlstate:value.nile_sqlstate??null,nile_evidence_json:value.nile_evidence_json??null};
   if (task === 'describe_execution') return { target_alias:value.target_alias, failed_count:value.failed_count, succeeded_count:value.succeeded_count, cancelled_count:value.cancelled_count, completed:Boolean(value.completion_time), task_count:value.task_count, target_exit_code:value.target_exit_code, target_term_signal:value.target_term_signal, root_cause:value.root_cause, task_metadata_available:value.task_metadata_available, task_metadata_error:value.task_metadata_error };
   if (task === 'read_execution_logs') return { target_alias:value.target_alias, line_count:value.line_count, log_excerpt:value.log_excerpt, log_evidence_verified:value.log_evidence_verified, log_search_complete:value.log_search_complete, log_lookup_status:value.log_lookup_status };
   if (task === 'inspect_runtime_snapshot') return { target_alias:value.target_alias, run_status:value.run_status, published_jobs:value.published_jobs, status_present:value.status_present, jobs_present:value.jobs_present, jobs_evidence:value.jobs_evidence };
@@ -223,6 +225,7 @@ async function main(){
     if(taskReq.task==='describe_execution') value=await describeExecution(taskReq.args);
     else if(taskReq.task==='read_execution_logs') value=await readExecutionLogs(taskReq.args);
     else if(taskReq.task==='inspect_runtime_snapshot') value=await inspectRuntimeSnapshot(taskReq.args);
+    else if(taskReq.task==='observe_dev_nile') value=await observeDevNile(taskReq.args,cfg);
     else if(taskReq.task==='run_test_suite') value=await runTestSuite(taskReq.args);
     else if(['describe_dev_runtime','inspect_dev_rollout','plan_dev_deployment'].includes(taskReq.task))
       value=await describeDevObservation(taskReq.task,taskReq.args);
@@ -230,10 +233,10 @@ async function main(){
     const external=sanitizeExternal(typeof value.output==='string'?value.output:'');
     if (!external.ok) throw new Error(external.coarse_error);
     const text=external.text;
-    const result={schema_version:'1.0',operation_id:opId,work_item_ref:dispatch.work_item_ref,task:taskReq.task,task_class:taskReq.task_class,operation_state:'SUCCEEDED',test_verdict:value.test_verdict??null,target_alias:value.target_alias??null,ops_source_sha:cfg.opsSourceSha,target_source_sha:value.target_source_sha??null,gateway_image_digest:process.env.GATEWAY_IMAGE_DIGEST,worker_image_digest:cfg.workerDigest,started_at:workerStartedAt,finished_at:isoNow(),exit_code:value.exit_code??0,sanitizer_version:'1',line_count:text?text.split(/\r?\n/).length:0,byte_count:Buffer.byteLength(text),assertions:publicAssertions(taskReq.task,value),private_details:value,private_output:text};
+    const result={schema_version:'1.0',operation_id:opId,work_item_ref:dispatch.work_item_ref,task:taskReq.task,task_class:taskReq.task_class,operation_state:taskReq.task==='observe_dev_nile'&&value.nile_status!=='COLLECTED'?'FAILED':'SUCCEEDED',test_verdict:value.test_verdict??null,target_alias:value.target_alias??null,ops_source_sha:cfg.opsSourceSha,target_source_sha:value.target_source_sha??null,gateway_image_digest:process.env.GATEWAY_IMAGE_DIGEST,worker_image_digest:cfg.workerDigest,started_at:workerStartedAt,finished_at:isoNow(),exit_code:value.exit_code??0,sanitizer_version:'1',line_count:text?text.split(/\r?\n/).length:0,byte_count:Buffer.byteLength(text),assertions:publicAssertions(taskReq.task,value),private_details:value,private_output:text};
     await gcsWriteJson(cfg.bucket,`results/${opId}.json`,result,0);
     await gcsWriteJson(cfg.bucket,`public/${opId}.json`,publicEvidence(result),0);
-    await updateOperation(opId,{operation_state:'SUCCEEDED',test_verdict:result.test_verdict,finished_at:result.finished_at});
+    await updateOperation(opId,{operation_state:result.operation_state,test_verdict:result.test_verdict,finished_at:result.finished_at});
     await releaseLease(cfg.bucket,opId);
     console.log(JSON.stringify(publicEvidence(result)));
   } catch(e) {

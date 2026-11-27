@@ -60,6 +60,51 @@ export async function withTenantTransaction(
   }, { env, db });
 }
 
+// DEV diagnostics only: fixed repository callbacks, rollback even on success.
+// A global account lookup is separate from the tenant transaction because Nile
+// requires tenant selection before the first query that establishes a snapshot.
+async function devDiagnosticReadOnly(env,db,tenantId,fn) {
+  if(env.APP_ENV!=='dev' || env.JSCC_DEV_NILE_DIAGNOSTICS!=='true') throw httpError('Diagnostic disabled',404);
+  let stage='connect',client,discard=true;
+  try {
+    client=await db.connect();
+    stage='begin';
+    await client.query('BEGIN READ ONLY');
+    if(tenantId) {
+      await establishTenantContext({query:(sql,params)=>{
+        stage=sql.startsWith('SET LOCAL nile.tenant_id')?'tenant_set':'tenant_verify';
+        return client.query(sql,params);
+      }},tenantId);
+    }
+    stage='statement_timeout';
+    await client.query("SET LOCAL statement_timeout='10000ms'");
+    stage='lock_timeout';
+    await client.query("SET LOCAL lock_timeout='1000ms'");
+    stage='database_guard';
+    const check=(await client.query("SELECT current_database() AS db, current_setting('transaction_read_only') AS ro")).rows?.[0];
+    if(check?.db!=='jobsearch_dev'||check.ro!=='on') throw httpError('Diagnostic database guard failed',503);
+    stage='callback';
+    return await fn((sql,params=[])=>client.query(sql,params));
+  } catch(error) {
+    if(stage!=='callback') error.diagnosticStage=stage;
+    throw error;
+  } finally {
+    if(client){
+      try {await client.query('ROLLBACK');discard=false;}
+      catch(error){error.diagnosticStage='rollback';throw error;}
+      finally {client.release(discard);}
+    }
+  }
+}
+export async function withDevDiagnosticAccountLookup(fn,{env=process.env,db=getPool(env)}={}) {
+  return devDiagnosticReadOnly(env,db,null,query=>fn(Object.freeze({query})));
+}
+export async function withDevDiagnosticTransaction(authContext,fn,{env=process.env,db=getPool(env)}={}) {
+  const context=requireTenantAuthContext(authContext);
+  if(context.status!=='ACTIVE')throw httpError('Diagnostic account unavailable',403);
+  return devDiagnosticReadOnly(env,db,context.profile_id,query=>fn(Object.freeze({tenantId:context.profile_id,authContext:context,query})));
+}
+
 // Managed Nile requires tenants-table DML to be the first SQL statement after BEGIN.
 export async function createTenantFirst(tx, profileId) {
   const tenantId = requireUuid(profileId, 'profile_id');
