@@ -1,5 +1,6 @@
 // #589: operator-side R6 composition; no MCP admission or live CLI entry point.
-import {spawn} from 'node:child_process';
+import {spawn,execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import {createInterface} from 'node:readline';
 import {fileURLToPath} from 'node:url';
 import {planDevOpsPairDeployment,executeApprovedDevOpsPair}
@@ -8,6 +9,7 @@ import {planDevOpsPairDeployment,executeApprovedDevOpsPair}
 import {pinnedPairAdmission,operatorPairStore,readPairOperation,reservePairOperation,
  PairJournal,summarizePairRecord,reconcilePairRecord} from './remote_executor_dev_admission.mjs';
 
+const REPO=fileURLToPath(new URL('../../',import.meta.url));
 const SCRIPT=fileURLToPath(new URL('./remote_executor_dev_pair.py',import.meta.url));
 const GATEWAY='projects/jscc-dev/locations/europe-west1/services/jscc-ops-gateway-dev';
 const WORKER='projects/jscc-dev/locations/europe-west1/jobs/jscc-diagnostics-dev';
@@ -74,14 +76,25 @@ export async function inspectPairAdmission(target,sessionFactory=openOperatorSes
   }finally{session.close();}
 }
 
+async function checkedOperatorSource(){
+  const run=promisify(execFile);
+  const options={cwd:REPO,timeout:30000,maxBuffer:65536};
+  const {stdout:head}=await run('git',['rev-parse','HEAD'],options);
+  const {stdout:status}=await run('git',['status','--porcelain','--untracked-files=all'],options);
+  if(status.trim())throw Error('operator_checkout_dirty');
+  return head.trim();
+}
+
 /** The caller is a trusted operator, not an MCP request handler.
  * Only accept a pin selected independently through the standard GitHub
  * connector. Neither a pin computed from caller input nor an unreviewed
  * evidence bundle confers authority. No public mutation entry point.
  */
 export async function runApprovedPair({bundle,trustedEvidenceHash,store=operatorPairStore(),
-  now=Date.now},sessionFactory=openOperatorSession){
+  now=Date.now},sessionFactory=openOperatorSession,readOperatorSource=checkedOperatorSource){
   const admission=pinnedPairAdmission(bundle,trustedEvidenceHash,now);
+  if(await readOperatorSource()!==admission.bundle.operator_source_sha)
+    throw Error('operator_source_mismatch');
   const ref=admission.bundle.evidence.approval;
   const existing=await readPairOperation(store,ref);
   if(existing){
