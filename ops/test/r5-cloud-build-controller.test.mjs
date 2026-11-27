@@ -70,7 +70,7 @@ test('R5 cannot dispatch without trusted server-side admission callbacks',async(
  const callbacks={
   verifyApproval:async()=>({verified:false,kind:'OWNER_APPROVAL'}),
   verifyTrustedRef:async()=>proof('TRUSTED_REF'),
-  verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),generation:'12',object_sha256:digest}),
+  verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),object:'source/approved.tar.gz',generation:'12',object_sha256:digest}),
   verifyCostAdmission:async()=>({...proof('COST_ADMISSION'),no_incremental_cost_proven:true}),
   dispatch:async()=>{launches++; return {build_id:id,project:'jscc-shared',region:'europe-west1',source_sha:source};},
  };
@@ -81,7 +81,7 @@ test('R5 cannot dispatch without trusted server-side admission callbacks',async(
 test('R5 requires every proof and fail-closed cost before the sole fixed dispatch',async()=>{
  const cases=[
   {name:'TRUSTED_REF',change:{verifyTrustedRef:async()=>({...proof('TRUSTED_REF'),source_sha:'x'.repeat(40)})}},
-  {name:'SOURCE_SNAPSHOT',change:{verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),generation:'0',object_sha256:digest})}},
+  {name:'SOURCE_SNAPSHOT',change:{verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),object:'source/approved.tar.gz',generation:'0',object_sha256:digest})}},
   {name:'COST_ADMISSION',change:{verifyCostAdmission:async()=>({...proof('COST_ADMISSION'),no_incremental_cost_proven:false})}},
  ];
  for(const c of cases) {
@@ -89,7 +89,7 @@ test('R5 requires every proof and fail-closed cost before the sole fixed dispatc
   const callbacks={
    verifyApproval:async()=>({...proof('OWNER_APPROVAL'),approval_ref:'#589/APPROVE_BUILD'}),
    verifyTrustedRef:async()=>proof('TRUSTED_REF'),
-   verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),generation:'12',object_sha256:digest}),
+   verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),object:'source/approved.tar.gz',generation:'12',object_sha256:digest}),
    verifyCostAdmission:async()=>({...proof('COST_ADMISSION'),no_incremental_cost_proven:true}),
    dispatch:async()=>{launches++;return {build_id:id,project:'jscc-shared',region:'europe-west1',source_sha:source};},
    ...c.change,
@@ -105,7 +105,7 @@ test('R5 authorized operator submits ONLY fixed existing build script, config an
   verifyApproval:async(plan)=>{calls.push('approval'); return {...proof('OWNER_APPROVAL'),approval_ref:'#589/APPROVE_BUILD'};},
   verifyTrustedRef:async(plan)=>{calls.push('ref');return proof('TRUSTED_REF');},
   verifySourceSnapshot:async(plan)=>{calls.push('snapshot');return {...proof('SOURCE_SNAPSHOT'),
-    generation:'12345',object_sha256:digest};},
+    object:'source/approved.tar.gz',generation:'12345',object_sha256:digest};},
   verifyCostAdmission:async(plan)=>{calls.push('cost');return {...proof('COST_ADMISSION'),
     no_incremental_cost_proven:true};},
   dispatch:async(x)=>{calls.push('dispatch');assert.deepEqual(x,{
@@ -114,7 +114,7 @@ test('R5 authorized operator submits ONLY fixed existing build script, config an
    project:'jscc-shared',region:'europe-west1',
    source_bucket:'jscc-shared-ops-cloudbuild-source',
    expected_build_service_account:'projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com',
-   approved_source_generation:'12345',approved_source_sha256:digest,
+   approved_source_object:'source/approved.tar.gz',approved_source_generation:'12345',approved_source_sha256:digest,
    approval_ref:'#589/APPROVE_BUILD',
   });return {build_id:id,project:'jscc-shared',region:'europe-west1',source_sha:source,
     approval_ref:'#589/APPROVE_BUILD'};},
@@ -198,7 +198,7 @@ test('R5 dispatch receipt MUST carry matching exact owner approval reference',as
  const callbacks={
   verifyApproval:async()=>({...proof('OWNER_APPROVAL'),approval_ref:'#589/APPROVE_BUILD'}),
   verifyTrustedRef:async()=>proof('TRUSTED_REF'),
-  verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),generation:'5',object_sha256:digest}),
+  verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),object:'source/approved.tar.gz',generation:'5',object_sha256:digest}),
   verifyCostAdmission:async()=>({...proof('COST_ADMISSION'),no_incremental_cost_proven:true}),
   dispatch:async()=>({
    build_id:id,project:'jscc-shared',region:'europe-west1',
@@ -233,4 +233,19 @@ test('R5 contracts do not alter Delivery 1 catalog or worker image',()=>{
  const worker=readFileSync(new URL('../Dockerfile.worker',import.meta.url),'utf8');
  assert.doesNotMatch(worker,/COPY ops\/build\/dev-cloud-build-controller.mjs/);
  assert.match(worker,/USER node/);
+});
+
+test('R5 requires an exact staged source archive name, not generation alone',async()=>{
+ for(const object of [undefined,'source/../x.tar.gz','other/approved.tar.gz','source/a.zip']){
+  let launches=0;
+  const callbacks={
+   verifyApproval:async()=>({...proof('OWNER_APPROVAL'),approval_ref:'#589/APPROVE_BUILD'}),
+   verifyTrustedRef:async()=>proof('TRUSTED_REF'),
+   verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),object,generation:'12',object_sha256:digest}),
+   verifyCostAdmission:async()=>({...proof('COST_ADMISSION'),no_incremental_cost_proven:true}),
+   dispatch:async()=>{launches++;},
+  };
+  await assert.rejects(()=>submitApprovedDevOpsBuild(input,callbacks),/source_snapshot_unverifiable/);
+  assert.equal(launches,0);
+ }
 });
