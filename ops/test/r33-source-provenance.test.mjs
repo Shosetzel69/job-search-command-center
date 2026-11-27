@@ -13,10 +13,30 @@ for(const [name,expected] of Object.entries(sha)){
   assert.equal(createHash('sha256').update(content).digest('hex'),expected);
  });
 }
-test('gateway remains byte-for-byte R33 and adds no new MCP endpoints',()=>{
- const candidate=readFileSync(new URL('../src/gateway.mjs',import.meta.url));
- const baseline=readFileSync(new URL('gateway.mjs',base));
- assert.deepEqual(candidate,baseline);
+test('gateway differs from immutable R33 only by the approved disabled-by-default operator routing',()=>{
+ let candidate=readFileSync(new URL('../src/gateway.mjs',import.meta.url),'utf8');
+ const baseline=readFileSync(new URL('gateway.mjs',base),'utf8');
+ const additions=[
+  "import {operatorGatewayConfig,operatorTools,invokeDevOperator} from './dev_operator_gateway.mjs';\n",
+  "const operatorConfig = operatorGatewayConfig();\n",
+  "        ...(operatorConfig?operatorTools:[]),\n",
+  `      if (body.method === 'tools/call' && operatorConfig && operatorTools.some(t=>t.name===body.params?.name)) {
+        try {
+          const out=await invokeDevOperator(body.params.name,body.params.arguments||{},auth.record.actor_sub,operatorConfig);
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}]}});
+        }catch(e){
+          const code=String(e?.message||'operator_request_failed');
+          const safe=/^[a-z0-9_]{1,60}$/.test(code)?code:'operator_request_failed';
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:safe})}]}});
+        }
+      }
+`,
+ ];
+ for(const block of additions){
+  assert.equal(candidate.split(block).length,2,'operator delta must be exact and unique');
+  candidate=candidate.replace(block,'');
+ }
+ assert.equal(candidate,baseline,'all legacy authentication/dispatch behavior must remain byte-identical');
 });
 test('new tasks are dispatched using existing #537 catalog and worker',()=>{
  const lib=readFileSync(new URL('../src/lib.mjs',import.meta.url),'utf8');
