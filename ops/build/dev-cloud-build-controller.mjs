@@ -11,6 +11,7 @@ const SOURCE_BUCKET='jscc-shared-ops-cloudbuild-source';
 const SHA40=/^[0-9a-f]{40}$/;
 const BUILD_ID=/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 const DIGEST=/^sha256:[0-9a-f]{64}$/;
+const SOURCE_OBJECT=/^source\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,180}\.tar\.gz$/;
 const TERMINAL=new Set(['SUCCESS','FAILURE','CANCELLED','EXPIRED','INTERNAL_ERROR','TIMEOUT']);
 const PENDING=new Set(['STATUS_UNKNOWN','PENDING','QUEUED','WORKING']);
 
@@ -84,7 +85,8 @@ export async function submitApprovedDevOpsBuild(input, {
   verifiedProof(ref,'TRUSTED_REF',plan);
   const archive=await verifySourceSnapshot(plan);
   verifiedProof(archive,'SOURCE_SNAPSHOT',plan);
-  if(typeof archive.generation!=='string' || !/^[1-9][0-9]{0,19}$/.test(archive.generation) ||
+  if(typeof archive.object!=='string' || !SOURCE_OBJECT.test(archive.object) || archive.object.includes('..') ||
+      typeof archive.generation!=='string' || !/^[1-9][0-9]{0,19}$/.test(archive.generation) ||
       typeof archive.object_sha256!=='string' || !DIGEST.test(archive.object_sha256))
     throw new Error('source_snapshot_unverifiable');
   const cost=await verifyCostAdmission(plan);
@@ -99,6 +101,7 @@ export async function submitApprovedDevOpsBuild(input, {
     script:BUILD_SCRIPT,config:BUILD_CONFIG,
     project:PROJECT,region:REGION,source_bucket:SOURCE_BUCKET,
     expected_build_service_account:BUILDER,
+    approved_source_object:archive.object,
     approved_source_generation:archive.generation,
     approved_source_sha256:archive.object_sha256,
     approval_ref:approval.approval_ref,
