@@ -10,7 +10,7 @@ export const workspaceTools = Object.freeze([
   { name:'workspace_list_files', description:'List JSCC DEV workspace files (not TEST or PROD). Requires jscc.dev.write.', inputSchema:{type:'object',properties:{},additionalProperties:false} },
   { name:'workspace_read_file', description:'Read a UTF-8 file from the DEV workspace.', inputSchema:{type:'object',required:['path'],properties:{path:{type:'string'}},additionalProperties:false} },
   { name:'workspace_write_file', description:'Create or update one DEV workspace file using optimistic generation checking (0 for create).', inputSchema:{type:'object',required:['path','content','if_generation_match'],properties:{path:{type:'string'},content:{type:'string'},if_generation_match:{type:'integer',minimum:0}},additionalProperties:false} },
-  { name:'workspace_run', description:'Run a trusted DEV development command or validation task in the isolated sandbox; no TEST/PROD.', inputSchema:{type:'object',required:['task'],properties:{task:{type:'string',enum:['python_syntax','pytest','command']},argv:{type:'array',items:{type:'string'}}},additionalProperties:false} },
+  { name:'workspace_run', description:'Run a trusted DEV development command or validation task in the isolated sandbox, optionally from a snapshot-relative working directory; no TEST/PROD.', inputSchema:{type:'object',required:['task'],properties:{task:{type:'string',enum:['python_syntax','pytest','command']},argv:{type:'array',items:{type:'string'}},cwd:{type:'string',minLength:1,maxLength:180}},additionalProperties:false} },
   { name:'workspace_checksum', description:'Read SHA256, byte count and generation for one DEV workspace file without retrieving its contents.', inputSchema:{type:'object',required:['path'],properties:{path:{type:'string'}},additionalProperties:false} },
   { name:'workspace_search', description:'Search literal text in bounded DEV workspace files. Returns file names and line numbers only, never matching source snippets.', inputSchema:{type:'object',required:['term'],properties:{term:{type:'string',minLength:1,maxLength:100}},additionalProperties:false} },
   { name:'workspace_compare', description:'Compare two DEV workspace files by SHA256 and changed-line ranges (no source snippets).', inputSchema:{type:'object',required:['left','right'],properties:{left:{type:'string'},right:{type:'string'}},additionalProperties:false} },
@@ -82,7 +82,12 @@ export function validatedWorkspaceRequest(name, args) {
     if(!Number.isSafeInteger(args.if_generation_match) || args.if_generation_match<=0) throw new Error('invalid_generation');
     return {method:'DELETE',path:'/v1/file?path='+encodeURIComponent(path)+'&if_generation_match='+args.if_generation_match};
   }
-  if (name==='workspace_run') {plainArgs(args,['task','argv']);return {method:'POST',path:'/v1/run',body:gatewayCommand(args.task,args.argv)};}
+  if (name==='workspace_run') {
+    plainArgs(args,['task','argv','cwd']);
+    const body=gatewayCommand(args.task,args.argv);
+    if (Object.hasOwn(args,'cwd') && args.cwd!=='.') body.cwd=filePath(args.cwd);
+    return {method:'POST',path:'/v1/run',body};
+  }
   throw new Error('unknown_workspace_tool');
 }
 export function validateManagerUrl(raw) {
