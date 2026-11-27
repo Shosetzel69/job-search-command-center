@@ -69,8 +69,9 @@ class OperatorAPI:
 
     def pages(self, url, field, **params):
         seen = set()
+        size_key = "maxResults" if url == STORAGE else "pageSize"
         for _ in range(MAX_PAGES_PER_COLLECTION):
-            data, _ = self.request(url + "?" + urlencode({"pageSize": 100, **params}))
+            data, _ = self.request(url + "?" + urlencode({size_key: 100, **params}))
             values = data.get(field, [])
             require(isinstance(values, list), "invalid_page")
             yield from values
