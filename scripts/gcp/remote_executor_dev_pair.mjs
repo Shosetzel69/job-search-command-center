@@ -1,10 +1,15 @@
 // #589: operator-side R6 composition; no MCP admission or live CLI entry point.
-import {spawn} from 'node:child_process';
+import {spawn,execFile} from 'node:child_process';
+import {promisify} from 'node:util';
 import {createInterface} from 'node:readline';
 import {fileURLToPath} from 'node:url';
 import {planDevOpsPairDeployment,executeApprovedDevOpsPair}
  from '../../ops/control/dev-ops-pair-deployment.mjs';
 
+import {pinnedPairAdmission,operatorPairStore,readPairOperation,reservePairOperation,
+ PairJournal,summarizePairRecord,reconcilePairRecord} from './remote_executor_dev_admission.mjs';
+
+const REPO=fileURLToPath(new URL('../../',import.meta.url));
 const SCRIPT=fileURLToPath(new URL('./remote_executor_dev_pair.py',import.meta.url));
 const GATEWAY='projects/jscc-dev/locations/europe-west1/services/jscc-ops-gateway-dev';
 const WORKER='projects/jscc-dev/locations/europe-west1/jobs/jscc-diagnostics-dev';
@@ -48,55 +53,118 @@ function proof(kind,plan,extra={}) {
     work_item_ref:plan.work_item_ref,plan_hash:plan.plan_hash,...extra};
 }
 
-/** The caller is a trusted operator, not an MCP request handler.
- * The proof providers must independently verify authoritative evidence; raw user
- * booleans are not providers. No default verifier, credentials or live entry point.
- */
-export async function runApprovedPair({
-  source_sha,gateway_digest,worker_digest,catalog,previous_catalog,
-  verifyApproval,verifyImagePair,verifyCost,verifyMaintenanceWindow,
-},sessionFactory=openOperatorSession) {
-  if([verifyApproval,verifyImagePair,verifyCost,verifyMaintenanceWindow].some(f=>typeof f!=='function'))
-    throw new Error('trusted_operator_verifiers_required');
+function derivePlan(target,observed){
+  return planDevOpsPairDeployment({
+    environment:'dev',work_item_ref:'#589',source_sha:target.source_sha,
+    expected_current_gateway_digest:observed.gateway_digest,
+    expected_current_worker_digest:observed.worker_digest,
+    proposed_gateway_digest:target.gateway_digest,
+    proposed_worker_digest:target.worker_digest,
+    observed_gateway:{environment:'dev',task:'describe_dev_runtime',resource:GATEWAY,
+      effective_revisions:[{revision:observed.revision,percent:100,image_digest:observed.gateway_digest}]},
+    observed_worker:{environment:'dev',resource:WORKER,
+      effective_image_digest:observed.worker_digest,image_resolution_verified:true},
+  });
+}
+
+/** Read-only plan for the independent evidence/approval process. */
+export async function inspectPairAdmission(target,sessionFactory=openOperatorSession){
   const session=sessionFactory();
   try{
-    const observed=await session.call('capture',{source_sha,gateway_digest,worker_digest,catalog,previous_catalog});
-    const plan=planDevOpsPairDeployment({
-      environment:'dev',work_item_ref:'#589',source_sha,
-      expected_current_gateway_digest:observed.gateway_digest,
-      expected_current_worker_digest:observed.worker_digest,
-      proposed_gateway_digest:gateway_digest,proposed_worker_digest:worker_digest,
-      observed_gateway:{environment:'dev',task:'describe_dev_runtime',resource:GATEWAY,
-        effective_revisions:[{revision:observed.revision,percent:100,image_digest:observed.gateway_digest}]},
-      observed_worker:{environment:'dev',resource:WORKER,
-        effective_image_digest:observed.worker_digest,image_resolution_verified:true},
-    });
-    if(!plan.change_required)throw new Error('already_at_digest_requires_read_only_acceptance');
+    const previous=await session.call('capture',target);
+    return {plan:derivePlan(target,previous),previous,next:target,mutation_authorized:false};
+  }finally{session.close();}
+}
+
+async function checkedOperatorSource(){
+  const run=promisify(execFile);
+  const options={cwd:REPO,timeout:30000,maxBuffer:65536};
+  const {stdout:head}=await run('git',['rev-parse','HEAD'],options);
+  const {stdout:status}=await run('git',['status','--porcelain','--untracked-files=all'],options);
+  if(status.trim())throw Error('operator_checkout_dirty');
+  return head.trim();
+}
+
+/** The caller is a trusted operator, not an MCP request handler.
+ * Only accept a pin selected independently through the standard GitHub
+ * connector. Neither a pin computed from caller input nor an unreviewed
+ * evidence bundle confers authority. No public mutation entry point.
+ */
+export async function runApprovedPair({bundle,trustedEvidenceHash,store=operatorPairStore(),
+  now=Date.now},sessionFactory=openOperatorSession,readOperatorSource=checkedOperatorSource){
+  const admission=pinnedPairAdmission(bundle,trustedEvidenceHash,now);
+  if(await readOperatorSource()!==admission.bundle.operator_source_sha)
+    throw Error('operator_source_mismatch');
+  const ref=admission.bundle.evidence.approval;
+  const existing=await readPairOperation(store,ref);
+  if(existing){
+    if(existing.record.evidence_hash!==admission.pin)throw Error('approval_already_consumed');
+    return {...summarizePairRecord(existing.record),duplicate:true};
+  }
+  const target=admission.bundle.next;
+  const session=sessionFactory();
+  try{
+    const observed=await session.call('capture',target);
+    const plan=derivePlan(target,observed);
+    if(!plan.change_required)throw Error('already_at_digest_requires_read_only_acceptance');
+    admission.bind(plan,observed,target);
+    const reservation=await reservePairOperation(store,admission,now);
+    if(!reservation.created)return {...summarizePairRecord(reservation.record),duplicate:true};
+    const journal=new PairJournal(store,reservation,admission,now);
     let rollback=false;
     const captured={gateway_image:ROOT+'jscc-ops-gateway@'+observed.gateway_digest,
       worker_image:ROOT+'jscc-diagnostics@'+observed.worker_digest};
-    return await executeApprovedDevOpsPair(plan,{
-      verifyApproval:async p=>verifyApproval(p,observed),
-      verifyImagePair:async p=>verifyImagePair(p,{...observed,catalog,previous_catalog}),
-      verifyCost:async p=>verifyCost(p),
-      verifyCurrentState:async p=>{
-        if(rollback)return proof('CURRENT_STATE',p,await session.call('verify_pair',true));
-        const window=await verifyMaintenanceWindow(p,observed);
-        if(window?.verified!==true||window.kind!=='MAINTENANCE_WINDOW'||
-           window.environment!=='dev'||window.source_sha!==p.source_sha||
-           window.work_item_ref!==p.work_item_ref||window.plan_hash!==p.plan_hash||
-           window.retrieve_and_deploy_excluded!==true||window.tagged_revision_lease_compatible!==true||
-           window.rollback_authorized!==true||window.operator_access_verified!==true)
-          throw new Error('maintenance_window_not_verified');
-        return proof('CURRENT_STATE',p,captured);
-      },
-      freezeOps:async()=>session.call('freeze'),
-      deployWorker:async()=>session.call('deploy_worker'),
-      deployGateway:async()=>session.call('deploy_gateway'),
-      verifyPair:async p=>proof('DEPLOYED_PAIR',p,await session.call('verify_pair',false)),
-      rollbackGateway:async()=>{rollback=true;await session.call('rollback_gateway');},
-      rollbackWorker:async()=>{rollback=true;await session.call('rollback_worker');},
-      unfreezeOps:async()=>session.call('release'),
-    });
+    const step=(name,method,...args)=>journal.step(name,()=>session.call(method,...args));
+    let result;
+    try{
+      result=await executeApprovedDevOpsPair(plan,{
+        verifyApproval:admission.verifyApproval,
+        verifyImagePair:admission.verifyImagePair,
+        verifyCost:admission.verifyCost,
+        verifyCurrentState:async p=>{
+          if(rollback)return proof('CURRENT_STATE',p,await step('verify_previous','verify_pair',true));
+          const window=await admission.verifyMaintenanceWindow(p);
+          if(window?.verified!==true||window.kind!=='MAINTENANCE_WINDOW'||
+             window.environment!=='dev'||window.source_sha!==p.source_sha||
+             window.work_item_ref!==p.work_item_ref||window.plan_hash!==p.plan_hash||
+             window.retrieve_and_deploy_excluded!==true||window.tagged_revision_lease_compatible!==true||
+             window.rollback_authorized!==true||window.operator_access_verified!==true)
+            throw Error('maintenance_window_not_verified');
+          return proof('CURRENT_STATE',p,captured);
+        },
+        freezeOps:async()=>step('freeze','freeze',reservation.identity.maintenance_id),
+        deployWorker:async()=>step('deploy_worker','deploy_worker'),
+        deployGateway:async()=>step('deploy_gateway','deploy_gateway'),
+        verifyPair:async p=>proof('DEPLOYED_PAIR',p,await step('verify_next','verify_pair',false)),
+        rollbackGateway:async()=>{rollback=true;await step('rollback_gateway','rollback_gateway');},
+        rollbackWorker:async()=>{rollback=true;await step('rollback_worker','rollback_worker');},
+        unfreezeOps:async()=>step('release','release'),
+      });
+    }catch(e){
+      if(journal.record.history.length===0&&!journal.poisoned){
+        await journal.finish('ADMISSION_BLOCKED');
+        throw e;
+      }
+      return {state:'RECOVERY_REQUIRED',operation_id:reservation.identity.key,
+        automatic_retry:false,manual_intervention_required:true};
+    }
+    try{await journal.finish(result.state);}
+    catch{
+      return {state:'RECOVERY_REQUIRED',operation_id:reservation.identity.key,
+        automatic_retry:false,manual_intervention_required:true};
+    }
+    return {...result,operation_id:reservation.identity.key,automatic_retry:false};
+  }finally{session.close();}
+}
+
+/** Restart path: read current state, never re-dispatch a consumed approval. */
+export async function observePairRecovery({approvalRef,store=operatorPairStore()},
+ sessionFactory=openOperatorSession){
+  const existing=await readPairOperation(store,approvalRef);
+  if(!existing)throw Error('pair_operation_not_found');
+  const session=sessionFactory();
+  try{
+    const live=await session.call('observe_recovery',existing.identity.maintenance_id);
+    return reconcilePairRecord(existing.record,live);
   }finally{session.close();}
 }

@@ -105,7 +105,7 @@ class PairTests(unittest.TestCase):
             patcher = patch.object(pair, method, return_value=value)
             patcher.start()
             self.addCleanup(patcher.stop)
-        self.p.capture({"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]],
+        self.anchor = self.p.capture({"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]],
                         "worker_digest": NEW[pair.KEYS[2]], "catalog": CAT, "previous_catalog": CAT})
 
     def test_explicit_cutover_and_owned_release(self):
@@ -209,11 +209,118 @@ class PairTests(unittest.TestCase):
         with self.assertRaisesRegex(pair.Blocked, "effective_revision_binding_mismatch"):
             self.p.verify_pair(False)
 
+    def test_recovery_anchors_and_live_lease_are_read_only(self):
+        maintenance_id = "maintenance-" + "a" * 64
+        self.api.read_lease = Mock(return_value=(
+            {"operation_id": maintenance_id, "state": "ACTIVE",
+             "expires_at_ms": pair.MAINTENANCE_EXPIRY}, "123"))
+        baseline = self.p.observe_recovery(maintenance_id)
+        self.assertEqual(baseline["lease_state"], "OWNED_ACTIVE")
+        self.assertEqual(baseline["lease_generation"], "123")
+        self.assertEqual(baseline["gateway_template_hash"], self.anchor["gateway_template_hash"])
+        self.assertEqual(baseline["worker_template_hash"], self.anchor["worker_template_hash"])
+        self.assertEqual(self.api.calls, [])
+        self.p.freeze(maintenance_id)
+        self.p.guard.freeze.assert_called_once_with("protected", maintenance_id)
+        self.p.deploy_worker()
+        self.p.deploy_gateway()
+        after = self.p.observe_recovery(maintenance_id)
+        self.assertEqual(after["gateway_template_hash"], self.anchor["next_gateway_template_hash"])
+        self.assertEqual(after["worker_template_hash"], self.anchor["next_worker_template_hash"])
+        self.assertEqual(after["effective_binding"]["source_sha"], NEW[pair.KEYS[0]])
+        self.api.read_lease.return_value = (
+            {"operation_id": "unrelated", "state": "ACTIVE", "expires_at_ms": 100}, "456")
+        other = self.p.observe_recovery(maintenance_id)
+        self.assertEqual(other["lease_state"], "OTHER")
+        self.assertIsNone(other["lease_generation"])
+        self.assertNotIn("unrelated", str(other))
+        self.assertNotIn("fixture-secret", str(other))
+
+    def test_protected_baseline_changes_after_capture_block_freeze(self):
+        self.p.guard.inspect.return_value = "changed"
+        with self.assertRaisesRegex(pair.Blocked, "protected_state_drift_since_capture"):
+            self.p.freeze("maintenance-" + "a" * 64)
+        self.p.guard.freeze.assert_not_called()
+        self.assertEqual(self.api.calls, [])
+
+    def test_private_rpc_requires_matching_durable_intent(self):
+        approval = "#589/1001"
+        operation_id = pair.fingerprint({"environment": "dev", "work_item_ref": "#589",
+                                         "operation": "dev-ops-pair", "approval_ref": approval})
+        maintenance_id = "maintenance-" + operation_id
+        target = {"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]],
+                  "worker_digest": NEW[pair.KEYS[2]], "catalog": CAT, "previous_catalog": CAT}
+        now = pair.now_ms()
+        bundle = {"environment": "dev", "work_item_ref": "#589", "previous": self.anchor,
+                  "next": target, "evidence": {"approval": approval},
+                  "issued_at_ms": now-1000, "expires_at_ms": now+60000}
+        record = {"schema_version": "1.0", "environment": "dev",
+                  "operation_kind": "dev-ops-pair", "operation_id": operation_id,
+                  "maintenance_id": maintenance_id, "state": "RUNNING",
+                  "approval_ref": approval, "evidence_hash": pair.fingerprint(bundle),
+                  "bundle": bundle, "history": [{"step": "freeze", "outcome": "INTENT"}]}
+        api = Mock()
+        api.request.return_value = (record, {"x-goog-generation": "99"})
+        pair.require_journal_intent(api, maintenance_id, "freeze", self.anchor, target)
+        self.assertTrue(api.request.call_args.args[0].endswith(
+            "control%2Fv1%2Fdeployments%2F" + operation_id + ".json?alt=media"))
+        with self.assertRaisesRegex(pair.Blocked, "durable_intent_mismatch"):
+            pair.require_journal_intent(api, maintenance_id, "deploy_worker", self.anchor, target)
+        record["history"][-1]["outcome"] = "CONFIRMED"
+        with self.assertRaisesRegex(pair.Blocked, "durable_intent_mismatch"):
+            pair.require_journal_intent(api, maintenance_id, "freeze", self.anchor, target)
+        record["history"][-1]["outcome"] = "INTENT"
+        bundle["issued_at_ms"], bundle["expires_at_ms"] = now-60000, now-1000
+        record["evidence_hash"] = pair.fingerprint(bundle)
+        with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+            pair.require_journal_intent(api, maintenance_id, "freeze", self.anchor, target)
+        # An expired forward approval still permits the same admitted session
+        # to compensate and verify, never a new freeze or forward deployment.
+        frozen = [{"step": "freeze", "outcome": "INTENT"},
+                  {"step": "freeze", "outcome": "CONFIRMED"}]
+        worker = [{"step": "deploy_worker", "outcome": "INTENT"},
+                  {"step": "deploy_worker", "outcome": "CONFIRMED"}]
+        gateway = [{"step": "deploy_gateway", "outcome": "INTENT"},
+                   {"step": "deploy_gateway", "outcome": "CONFIRMED"}]
+        def intent(step, prior):
+            record["history"] = prior + [{"step": step, "outcome": "INTENT"}]
+            pair.require_journal_intent(api, maintenance_id, step, self.anchor, target)
+
+        for step in ("freeze", "deploy_worker", "deploy_gateway"):
+            with self.subTest(step=step), self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+                intent(step, frozen)
+        for step in ("rollback_gateway", "rollback_worker", "verify_previous"):
+            with self.subTest(step=step):
+                intent(step, frozen + worker)
+                with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+                    intent(step, [{"step": "freeze", "outcome": "UNKNOWN"}])
+        with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+            intent("verify_next", frozen + worker)
+        intent("verify_next", frozen + worker + gateway)
+        with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+            intent("release", frozen + worker + gateway)
+        for verified in ("verify_next", "verify_previous"):
+            intent("release", frozen + worker + gateway +
+                   [{"step": verified, "outcome": "INTENT"},
+                    {"step": verified, "outcome": "CONFIRMED"}])
+        # A wrong target or a terminal record remains denied after expiry.
+        with self.assertRaisesRegex(pair.Blocked, "durable_intent_mismatch"):
+            pair.require_journal_intent(api, maintenance_id, "release", self.anchor,
+                                        {**target, "catalog": "wrong"})
+        record["state"] = "ROLLED_BACK"
+        with self.assertRaisesRegex(pair.Blocked, "durable_intent_mismatch"):
+            intent("rollback_gateway", frozen)
+        self.assertEqual(self.api.calls, [])
+
     def test_missing_lease_ownership_blocks_before_cli(self):
         self.p.freeze()
         self.p.guard.assert_owned.side_effect = pair.Blocked("not-owned")
         with self.assertRaises(pair.Blocked):
             self.p.deploy_worker()
+        self.assertEqual(self.api.calls, [])
+        for rollback in (self.p.rollback_gateway, self.p.rollback_worker):
+            with self.assertRaises(pair.Blocked):
+                rollback()
         self.assertEqual(self.api.calls, [])
 
 
