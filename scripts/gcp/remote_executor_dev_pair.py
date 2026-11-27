@@ -5,11 +5,12 @@ import re
 import subprocess
 import sys
 from urllib.request import urlopen
+from urllib.parse import quote
 
 from cloud_run_v2_read import primary_revision, revision_image
 from remote_executor_dev_maintenance import (
     Blocked, MaintenanceGuard, OperatorAPI, PROJECT, REGION, RUN_ROOT,
-    assert_drained, protected_snapshot, require, fingerprint, MAINTENANCE_EXPIRY,
+    assert_drained, protected_snapshot, require, fingerprint, MAINTENANCE_EXPIRY, STORAGE, now_ms,
 )
 
 GATEWAY = "jscc-ops-gateway-dev"
@@ -377,9 +378,52 @@ class PairOperator:
         return True
 
 
+
+def require_journal_intent(api, maintenance_id, step, previous, target):
+    """An operator RPC cannot mutate without the corresponding durable intent.
+    IAM and the separately verified pin still establish the trust boundary.
+    """
+    require(isinstance(maintenance_id, str) and
+            re.fullmatch(r"maintenance-[a-f0-9]{64}", maintenance_id),
+            "invalid_maintenance_id")
+    operation_id = maintenance_id[len("maintenance-"):]
+    name = "control/v1/deployments/" + operation_id + ".json"
+    record, headers = api.request(STORAGE + "/" + quote(name, safe="") + "?alt=media")
+    require(isinstance(headers.get("x-goog-generation"), str) and
+            re.fullmatch(r"[1-9][0-9]{0,19}", headers["x-goog-generation"]),
+            "journal_generation_missing")
+    bundle = record.get("bundle", {})
+    history = record.get("history", [])
+    last = history[-1] if isinstance(history, list) and history else {}
+    require(record.get("schema_version") == "1.0" and
+            record.get("environment") == "dev" and
+            record.get("operation_kind") == "dev-ops-pair" and
+            record.get("operation_id") == operation_id and
+            record.get("maintenance_id") == maintenance_id and
+            record.get("state") == "RUNNING" and
+            bundle.get("environment") == "dev" and bundle.get("work_item_ref") == "#589" and
+            bundle.get("previous") == previous and bundle.get("next") == target and
+            record.get("evidence_hash") == fingerprint(bundle) and
+            last.get("step") == step and last.get("outcome") == "INTENT",
+            "durable_intent_mismatch")
+    approval = record.get("approval_ref")
+    require(isinstance(approval, str) and re.fullmatch(r"#589/[1-9][0-9]{0,19}", approval) and
+            bundle.get("evidence", {}).get("approval") == approval and
+            fingerprint({"environment": "dev", "work_item_ref": "#589",
+                         "operation": "dev-ops-pair", "approval_ref": approval}) == operation_id,
+            "durable_approval_mismatch")
+    issued, expires = bundle.get("issued_at_ms"), bundle.get("expires_at_ms")
+    require(type(issued) is int and type(expires) is int and
+            0 < expires - issued <= 60 * 60 * 1000 and issued <= now_ms() < expires,
+            "journal_window_closed")
+
+
 def serve():
     """Private operator subprocess. No MCP tool or public endpoint."""
     operator = None
+    previous = None
+    target = None
+    maintenance_id = None
     methods = {"capture", "freeze", "deploy_worker", "deploy_gateway", "rollback_gateway",
                "rollback_worker", "verify_pair", "release", "observe_recovery"}
     for line in sys.stdin:
@@ -398,7 +442,21 @@ def serve():
                       isinstance(args[0], str) and re.fullmatch(r"maintenance-[a-f0-9]{64}", args[0])) or
                      (method not in ("capture", "verify_pair", "freeze", "observe_recovery") and not args)),
                     "argument_denied")
-            result = getattr(operator, method)(*args)
+            if method == "capture":
+                require(previous is None, "session_already_prepared")
+                target = args[0]
+                result = operator.capture(target)
+                previous = result
+            elif method == "observe_recovery":
+                result = operator.observe_recovery(*args)
+            else:
+                require(previous is not None and target is not None, "session_not_prepared")
+                if method == "freeze":
+                    require(maintenance_id is None, "maintenance_session_already_started")
+                    maintenance_id = args[0]
+                step = ("verify_previous" if args[0] else "verify_next") if method == "verify_pair" else method
+                require_journal_intent(operator.api, maintenance_id, step, previous, target)
+                result = getattr(operator, method)(*args)
             reply = {"ok": True, "result": result}
         except Exception:
             # No raw exception, CLI output, environment, or credential crosses the RPC.
