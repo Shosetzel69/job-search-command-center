@@ -195,3 +195,40 @@ test('F4: containerStatuses are joined by name, never by array order',async()=>{
  const result=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
  assert.equal(result.effective_revisions[0].image_digest,'sha256:'+sha);
 });
+
+test('RE-01: exact v2 immutable revision pin works without containerStatuses',async()=>{
+ const digest='sha256:'+sha;
+ const observer=createDevObserver({transport:async({path})=>({
+   status:200,body:path.endsWith('/revisions/'+rev1)
+     ? {name:servicePath+'/revisions/'+rev1,containers:[
+       {image:'europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/gateway@'+digest}
+     ]}
+     : {name:servicePath,trafficStatuses:[{revision:rev1,percent:100}],
+       latestReadyRevision:rev2,template:{containers:[{image:'repo/wrong@sha256:'+'b'.repeat(64)}]}}
+ })});
+ const out=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
+ assert.equal(out.effective_revisions[0].image_digest,digest);
+ assert.equal(out.source_sha,'UNKNOWN');
+});
+
+test('RE-01: conflicting or ambiguous revision image evidence remains unknown',async()=>{
+ const pin='repo/image@sha256:'+sha;
+ const other='repo/image@sha256:'+'b'.repeat(64);
+ for(const fixture of [
+  {containers:[{name:'app',image:pin}],containerStatuses:[{name:'app',imageDigest:other}]},
+  {containers:[{name:'app',image:pin}],containerStatuses:[{name:'app',imageDigest:pin},{name:'app',imageDigest:pin}]},
+  {containers:[{name:'app',image:pin}],containerStatuses:[{name:'app',imageDigest:'invalid'}]},
+  {containers:[{image:pin},{image:other}]},
+  {containers:[{image:'repo/image:mutable'}]},
+  {containers:[{image:'sha256:'+sha}]},
+ ]) {
+  const observer=createDevObserver({transport:async({path})=>({
+   status:200,body:path.endsWith('/revisions/'+rev1)
+     ? {name:servicePath+'/revisions/'+rev1,...fixture}
+     : {name:servicePath,trafficStatuses:[{revision:rev1,percent:100}],
+       template:{containers:[{image:pin}]}}
+  })});
+  const out=await observer.describe({environment:'dev',task:'describe_dev_runtime',service});
+  assert.equal(out.effective_revisions[0].image_digest,'UNKNOWN',JSON.stringify(fixture));
+ }
+});
