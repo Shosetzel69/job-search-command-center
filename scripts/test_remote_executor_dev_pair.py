@@ -274,6 +274,42 @@ class PairTests(unittest.TestCase):
         record["evidence_hash"] = pair.fingerprint(bundle)
         with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
             pair.require_journal_intent(api, maintenance_id, "freeze", self.anchor, target)
+        # An expired forward approval still permits the same admitted session
+        # to compensate and verify, never a new freeze or forward deployment.
+        frozen = [{"step": "freeze", "outcome": "INTENT"},
+                  {"step": "freeze", "outcome": "CONFIRMED"}]
+        worker = [{"step": "deploy_worker", "outcome": "INTENT"},
+                  {"step": "deploy_worker", "outcome": "CONFIRMED"}]
+        gateway = [{"step": "deploy_gateway", "outcome": "INTENT"},
+                   {"step": "deploy_gateway", "outcome": "CONFIRMED"}]
+        def intent(step, prior):
+            record["history"] = prior + [{"step": step, "outcome": "INTENT"}]
+            pair.require_journal_intent(api, maintenance_id, step, self.anchor, target)
+
+        for step in ("freeze", "deploy_worker", "deploy_gateway"):
+            with self.subTest(step=step), self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+                intent(step, frozen)
+        for step in ("rollback_gateway", "rollback_worker", "verify_previous"):
+            with self.subTest(step=step):
+                intent(step, frozen + worker)
+                with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+                    intent(step, [{"step": "freeze", "outcome": "UNKNOWN"}])
+        with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+            intent("verify_next", frozen + worker)
+        intent("verify_next", frozen + worker + gateway)
+        with self.assertRaisesRegex(pair.Blocked, "journal_window_closed"):
+            intent("release", frozen + worker + gateway)
+        for verified in ("verify_next", "verify_previous"):
+            intent("release", frozen + worker + gateway +
+                   [{"step": verified, "outcome": "INTENT"},
+                    {"step": verified, "outcome": "CONFIRMED"}])
+        # A wrong target or a terminal record remains denied after expiry.
+        with self.assertRaisesRegex(pair.Blocked, "durable_intent_mismatch"):
+            pair.require_journal_intent(api, maintenance_id, "release", self.anchor,
+                                        {**target, "catalog": "wrong"})
+        record["state"] = "ROLLED_BACK"
+        with self.assertRaisesRegex(pair.Blocked, "durable_intent_mismatch"):
+            intent("rollback_gateway", frozen)
         self.assertEqual(self.api.calls, [])
 
     def test_missing_lease_ownership_blocks_before_cli(self):
@@ -281,6 +317,10 @@ class PairTests(unittest.TestCase):
         self.p.guard.assert_owned.side_effect = pair.Blocked("not-owned")
         with self.assertRaises(pair.Blocked):
             self.p.deploy_worker()
+        self.assertEqual(self.api.calls, [])
+        for rollback in (self.p.rollback_gateway, self.p.rollback_worker):
+            with self.assertRaises(pair.Blocked):
+                rollback()
         self.assertEqual(self.api.calls, [])
 
 
