@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  REQUIRED_AUDIENCE, REQUIRED_SCOPE, accessTokenRecordError,
+  REQUIRED_AUDIENCE, REQUIRED_SCOPE, ACCESS_TOKEN_TTL_MS, AUTH_CODE_TTL_MS, STATE_TTL_MS, accessTokenRecordError,
   CHATGPT_CLIENT_ID, CHATGPT_REDIRECT_URI, publicEvidence, authenticatedEvidence, sanitizeExternal, sanitizeText, sha256, assertDailyOperationAllowed, assertLeaseAvailable, authorizationCodeRecordError, isAllowedChatGptClientId, operationObject, resolveIdempotencyReservation, validateChatGptRedirectUris, validateDispatchBinding, validateTaskRequest
 } from '../src/lib.mjs';
 
@@ -21,6 +21,18 @@ test('N10 SHA must be exact immutable SHA',()=>assert.throws(()=>validateTaskReq
 test('N13 operation/test verdict remain distinct in public evidence',()=>{
   const x=publicEvidence({operation_id:'op-x',operation_state:'SUCCEEDED',test_verdict:'FAIL',ops_source_sha:'a'.repeat(40),target_source_sha:'b'.repeat(40),private_output:'secret'});
   assert.equal(x.operation_state,'SUCCEEDED');assert.equal(x.test_verdict,'FAIL');assert.equal(x.ops_source_sha,'a'.repeat(40));assert.equal(x.target_source_sha,'b'.repeat(40));assert.equal('private_output' in x,false);
+});
+test('DEV connector lifetime is bounded; existing expiry is authoritative',()=>{
+  const now=1700000000000;
+  const minute=60*1000;
+  const record={revoked:false,scope:[REQUIRED_SCOPE],audience:REQUIRED_AUDIENCE,expires_at_ms:now+ACCESS_TOKEN_TTL_MS};
+  assert.equal(ACCESS_TOKEN_TTL_MS,60*minute);
+  assert.equal(AUTH_CODE_TTL_MS,5*minute);
+  assert.equal(STATE_TTL_MS,5*minute);
+  assert.equal(accessTokenRecordError(record,null,now+59*minute),null);
+  assert.equal(accessTokenRecordError(record,null,now+60*minute),'expired_token');
+  assert.equal(accessTokenRecordError({...record,expires_at_ms:now+15*minute},null,now+15*minute),'expired_token');
+  assert.equal(accessTokenRecordError({...record,revoked:true},null,now),'revoked_token');
 });
 test('N20 wrong audience rejected',()=>assert.equal(accessTokenRecordError({revoked:false,expires_at_ms:Date.now()+1000,scope:[REQUIRED_SCOPE],audience:'wrong'}),'wrong_audience'));
 test('N20 wrong scope rejected',()=>assert.equal(accessTokenRecordError({revoked:false,expires_at_ms:Date.now()+1000,scope:['other'],audience:REQUIRED_AUDIENCE}),'insufficient_scope'));
