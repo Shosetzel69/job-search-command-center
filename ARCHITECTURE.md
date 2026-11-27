@@ -1052,6 +1052,20 @@ Product build/deploy identities nu publica sau promoveaza imagini ops, iar ops i
 
 Remote Executor produce evidence; nu produce si nu autorizeaza singur `REVIEW_PASS`, `DEV_PASS`, `TEST_PASS`, `PROD_GO` sau alte gate-uri AgentFlow.
 
+### #589 — extindere aprobata DEV, TEST si PROD (2026-11-27)
+
+Decizia owner din #589 extinde scope-ul arhitectural #537. Sectiunea DEV-only de mai sus descrie baseline-ul runtime curent, nu interdictia permanenta de extindere. Implementarea ramane etapizata; numai DEV este instalat in prezent. Contractul normativ pentru extensie este amendamentul #589 din ADR-006.
+
+| Capabilitate | DEV | TEST | PROD |
+|---|---|---|---|
+| Diagnostic, monitorizare, citire Nile limitata | Admis dupa activarea mediului | Admis dupa activarea mediului | Admis dupa activarea mediului |
+| Build, deploy, rollback | Scope aprobat si verificat | Aprobare explicita pe actiune si mediu | Aprobare explicita si gate PROD_GO existent |
+| Modificare DB | Aprobare script exact | Aprobare script exact | Aprobare script exact si gate de privilegii ADR-008 |
+
+Fiecare mediu are identitate, endpoint, OAuth scope/audience, state, lease, allowlist de resurse si binding DB proprii. Un token DEV nu autorizeaza TEST/PROD. Un token TEST nu autorizeaza PROD. Selectorul de mediu nu schimba identitatea de executie. Gateway-ul si worker-ul generic nu primesc drepturi de publicare/deploy ale produsului; actiunile aprobate apeleaza operatorul dedicat din lifecycle-ul existent, fara ruta alternativa si fara autoritate Git duplicata. Se reutilizeaza repository-urile si build identities existente; promovarea foloseste digest-uri imutabile.
+
+Ordine obligatorie: finalizare si acceptanta DEV, apoi activare si acceptanta TEST, apoi activare separata PROD read-only si, ulterior, operatii CHANGE aprobate. Fiecare CHANGE este legat de mediu, actor, actiune, resursa, sursa/digest, parametri, aprobare si evidenta; retry/rollback sunt controlate si auditate. Fara shell privilegiat arbitrar, raw SQL arbitrar, export de secrete sau bypass tenant. Cost incremental zero, gate-uri independente, protectia Retrieve si provenienta efectiva a runtime-ului sunt conditii obligatorii. Nu se acorda permisiuni live prin aceasta decizie de arhitectura.
+
 ## Jobs Family v1 — #531 / #535 QA acceptance
 
 The canonical role hierarchy is defined in `shared/role-taxonomy.json` (version `2026.10.08-1`) and exposed through `shared/role-taxonomy-runtime.mjs`. The six major families are Project & Delivery Management, Service & Operations Management, Product & Agile, Business Analysis & Transformation, Customer & Professional Services, and Technical Leadership & Architecture; `UNKNOWN` is an explicit fallback. Family/subfamily selection is consumed by classification, Search Profile preferences, Eligibility, bounded Retrieve/Refresh and Coverage, with frontend options derived from the canonical contract.
