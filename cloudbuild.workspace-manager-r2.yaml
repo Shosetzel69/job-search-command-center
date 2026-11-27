@@ -164,6 +164,30 @@ steps:
             thread.join(timeout=5)
         PY
 
+  - id: verify-workspace-image-source
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        root=/workspace/jscc589-verified-src/ops/workspace-manager/service
+        tmp="$$(mktemp -d)"
+        (
+          manager= worker=
+          trap 'if [[ -n "$$manager" ]]; then docker rm "$$manager" >/dev/null; fi; if [[ -n "$$worker" ]]; then docker rm "$$worker" >/dev/null; fi; rm -rf "$$tmp"' EXIT
+          manager="$$(docker create --network none "${_MANAGER_IMAGE}:${_GIT_SHA}")"
+          worker="$$(docker create --network none "${_WORKER_IMAGE}:${_GIT_SHA}")"
+          for f in common.py backend.py manager.py httpbase.py workspace_ops.py; do
+            docker cp "$$manager:/workspace/service/$$f" "$$tmp/manager-$$f"
+            cmp "$$root/$$f" "$$tmp/manager-$$f"
+          done
+          for f in common.py worker.py; do
+            docker cp "$$worker:/workspace/service/$$f" "$$tmp/worker-$$f"
+            cmp "$$root/$$f" "$$tmp/worker-$$f"
+          done
+          echo "WORKSPACE_IMAGE_SOURCE_VERIFIED"
+        )
+
   - id: push-manager-r2
     name: gcr.io/cloud-builders/docker
     args: [push, "${_MANAGER_IMAGE}:${_GIT_SHA}"]
@@ -183,7 +207,7 @@ steps:
         echo "JSCC589_MANAGER_R2_IMAGE=${_MANAGER_IMAGE}@$${digest}"
         worker_digest="$$(gcloud artifacts docker images describe "${_WORKER_IMAGE}:${_GIT_SHA}" --project=jscc-shared --format='value(image_summary.digest)')"
         [[ "$$worker_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-        echo "JSCC589_WORKER_R2_IMAGE=${_WORKER_IMAGE}@${worker_digest}"
+        echo "JSCC589_WORKER_R2_IMAGE=${_WORKER_IMAGE}@$${worker_digest}"
 
 serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com
 options:
