@@ -1011,7 +1011,7 @@ Workflow-ul `deploy-environment.yml` este manual-only si `dry_run=true` implicit
 
 ## Engineering control-plane — Remote Executor (#537)
 
-Status: **APPROVED / DEV-only**.
+Status: **APPROVED / DEV-only** (baseline runtime #537; scope-ul extins este definit in sectiunea #589 de mai jos).
 
 Remote Executor este o capacitate de engineering separata de runtime-ul produsului si de bridge-ul GitHub:
 
@@ -1025,10 +1025,10 @@ ChatGPT private custom MCP
 
 Boundary-uri obligatorii:
 
-- exista numai in `jscc-dev/europe-west1`; identitatile sale nu au granturi in TEST sau PROD;
+- baseline-ul #537 exista numai in `jscc-dev/europe-west1`; identitatile DEV nu au granturi in TEST sau PROD (pentru extindere izolata, vezi #589 mai jos);
 - nu este parte din `command-api` si nu extinde `ai-github-bridge`;
 - catalogul v1 este finit si tipizat: `describe_execution`, `read_execution_logs`, `inspect_runtime_snapshot`, `run_test_suite`; `get_operation` este operatia de control;
-- nu exista shell/Python arbitrar, raw SQL, URL/path arbitrar, DB credential, task mutating, environment selector sau candidate checkout-and-run;
+- in baseline-ul #537 nu exista shell/Python arbitrar, raw SQL, URL/path arbitrar, DB credential, task mutating, environment selector sau candidate checkout-and-run (pentru capabilitatile tipizate aprobate ulterior, vezi #589 mai jos);
 - gateway-ul poate executa numai `jscc-diagnostics-dev`; `run.jobs.runWithOverrides` si `run.executions.cancel` sunt interzise;
 - worker-ul este separat si nu poate executa Cloud Run Jobs; accesul la execution metadata, log view si GCS este limitat la resursele/prefixele aprobate;
 - binding-ul operation -> Cloud Run execution este exact si fail-closed, pe `CLOUD_RUN_EXECUTION` + dispatch keyed by execution name + generation preconditions;
@@ -1060,7 +1060,7 @@ Decizia owner din #589 extinde scope-ul arhitectural #537. Sectiunea DEV-only de
 |---|---|---|---|
 | Diagnostic, monitorizare, citire Nile limitata | Admis dupa activarea mediului | Admis dupa activarea mediului | Admis dupa activarea mediului |
 | Build, deploy, rollback | Scope aprobat si verificat | Aprobare explicita pe actiune si mediu | Aprobare explicita si gate PROD_GO existent |
-| Modificare DB | Aprobare script exact | Aprobare script exact | Aprobare script exact si gate de privilegii ADR-008 |
+| Modificare DB | Aprobare script exact | Aprobare script exact | Aprobare script exact si gate de privilegii ADR-008 §7 |
 
 Fiecare mediu are identitate, endpoint, OAuth scope/audience, state, lease, allowlist de resurse si binding DB proprii. Un token DEV nu autorizeaza TEST/PROD. Un token TEST nu autorizeaza PROD. Selectorul de mediu nu schimba identitatea de executie. Gateway-ul si worker-ul generic nu primesc drepturi de publicare/deploy ale produsului; actiunile aprobate apeleaza operatorul dedicat din lifecycle-ul existent, fara ruta alternativa si fara autoritate Git duplicata. Se reutilizeaza repository-urile si build identities existente; promovarea foloseste digest-uri imutabile.
 
