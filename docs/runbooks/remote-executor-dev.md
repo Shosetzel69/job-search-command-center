@@ -134,7 +134,7 @@ Ops images may be built only from:
 - exact protected/reviewed `refs/heads/main`; or
 - an owner-approved immutable tag matching `refs/tags/jscc-ops-approved/*`.
 
-Every build must supply both the exact `SOURCE_SHA` and `TRUSTED_OPS_REF`. Cloud Build independently resolves the remote ref and rejects a SHA mismatch before tests/build/push. Feature-branch HEAD alone is never sufficient build authority.
+Every build must supply both the exact `SOURCE_SHA` and `TRUSTED_OPS_REF`. The submitter rejects a different local HEAD or dirty worktree. Cloud Build independently fetches the trusted ref, verifies FETCH_HEAD, and materializes the exact commit into an isolated archive used for contract tests and both Docker contexts. Before publication or reuse, both images must match the archive's embedded ops source, package manifest, role-specific observation modules and SOURCE_SHA. Reused immutable tags are pulled and checked, never overwritten. A mismatch blocks the build; retain the evidence and obtain independent review before issuing a new source SHA. This protects against source/context drift within the reviewed build configuration, not arbitrary unauthorized replacement of that configuration. Feature-branch HEAD alone is never sufficient build authority.
 
 Use `scripts/gcp/build_remote_executor_dev.sh`; direct ad-hoc `gcloud builds submit` without the trusted-ref substitution fails closed.
 
