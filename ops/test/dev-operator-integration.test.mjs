@@ -33,7 +33,8 @@ function fixture({record=approval(),jobImage=DIGEST,lifecycleOK=true,loseDispatc
   calls.push([method,path]);
   if(method==='GET'&&path===root+'/jobs/jscc-ops-operator-dev')return {
    name:path,reconciling:false,template:{taskCount:1,parallelism:1,template:{
-    maxRetries:0,serviceAccount:sa,containers:[{
+    maxRetries:0,serviceAccount:sa,timeout:'1800s',containers:[{
+     resources:{limits:{cpu:'1',memory:'1Gi'}},
      image:'europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-operator@'+jobImage,
      env:Object.entries({SOURCE_SHA:SHA,GCP_PROJECT:'jscc-dev',GCP_REGION:'europe-west1',OPS_BUCKET:'jscc-dev-ops-state'}).map(([name,value])=>({name,value})),
     }],
