@@ -10,7 +10,9 @@ import {
   randomToken, releaseLease, resolveIdempotencyReservation, sha256, sanitizeText, isAllowedChatGptClientId, validateChatGptRedirectUris, validateTaskRequest
 } from './lib.mjs';
 
+import {operatorGatewayConfig,operatorTools,invokeDevOperator} from './dev_operator_gateway.mjs';
 const cfg = envConfig();
+const operatorConfig = operatorGatewayConfig();
 const PORT = Number(process.env.PORT || 8080);
 
 function chatGptClient(clientId) {
@@ -459,11 +461,22 @@ const server = http.createServer(async (req, res) => {
       if (body.method === 'initialize') return sendJson(res, 200, { jsonrpc: '2.0', id, result: { protocolVersion: body.params?.protocolVersion || '2025-03-26', capabilities: { tools: {} }, serverInfo: { name: 'jscc-ops-gateway-dev', version: '1.0.0' } } });
       if (body.method === 'notifications/initialized') { res.writeHead(202); return res.end(); }
       if (body.method === 'tools/list') return sendJson(res, 200, { jsonrpc: '2.0', id, result: { tools: [
+        ...(operatorConfig?operatorTools:[]),
         ...workspaceTools.map(t => ({ ...t, securitySchemes: [{ type:'oauth2', scopes:[REQUIRED_SCOPE,DEV_SCOPE] }] })),
         { name: 'auth_check', description: 'Return non-sensitive authentication metadata.', inputSchema: { type:'object',properties:{},additionalProperties:false } },
         { name: 'run_operation', description: 'Run an allowlisted DEV diagnostic or verification operation.', inputSchema: { type:'object', required:['work_item_ref','idempotency_key','task','args'], additionalProperties:false, properties:{ work_item_ref:{type:'string'}, idempotency_key:{type:'string'}, task:{type:'string',enum:Object.keys(TASK_CATALOG)}, args:{type:'object'} } } },
         { name: 'get_operation', description: 'Read sanitized operation state/evidence.', inputSchema: { type:'object',required:['operation_id'],additionalProperties:false,properties:{operation_id:{type:'string'}} } }
       ] } });
+      if (body.method === 'tools/call' && operatorConfig && operatorTools.some(t=>t.name===body.params?.name)) {
+        try {
+          const out=await invokeDevOperator(body.params.name,body.params.arguments||{},auth.record.actor_sub,operatorConfig);
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{content:[{type:'text',text:JSON.stringify(out)}]}});
+        }catch(e){
+          const code=String(e?.message||'operator_request_failed');
+          const safe=/^[a-z0-9_]{1,60}$/.test(code)?code:'operator_request_failed';
+          return sendJson(res,200,{jsonrpc:'2.0',id,result:{isError:true,content:[{type:'text',text:JSON.stringify({error:safe})}]}});
+        }
+      }
       if (body.method === 'tools/call' && workspaceTools.some(t => t.name===body.params?.name)) {
         try {
           if (!hasDevWriteScope(auth.record.scope)) {
