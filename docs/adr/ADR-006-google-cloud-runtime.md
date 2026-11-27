@@ -288,7 +288,7 @@ reviewed ops source SHA
 Constraints:
 
 - `jscc-ops` is an engineering security boundary, not a second product artifact repository;
-- ops artifacts are DEV-only and are not promoted through the product DEV/TEST/PROD chain;
+- in the #537 baseline, ops artifacts are DEV-only (see the #589 environment-scoped amendment below for the approved extension); ops artifacts are not promoted through the product DEV/TEST/PROD chain;
 - product build/deploy identities have no ops publish/deploy authority;
 - ops build/deploy identities have no product publish/deploy authority;
 - runtime gateway/worker identities are distinct from build/deploy identities;
@@ -296,3 +296,18 @@ Constraints:
 - the approved runtime target remains GCP Cloud Run + Cloud Build + Artifact Registry.
 
 This amendment does not alter Nile persistence, product release identity, DB migration gates, or the canonical product promotion lifecycle.
+
+## Amendment — #589 environment-scoped Remote Executor extension (2026-11-27)
+
+**Status: owner-approved architecture scope; staged implementation and independent review pending.** Supersedes the permanent DEV-only limitation of the #537 engineering lineage above, not its current deployed DEV boundary. No TEST or PROD infrastructure, IAM, credential or operation is authorized by this amendment alone.
+
+- Preserve the separate `jscc-ops` and product `jscc` artifact lineages. Build each reviewed ops candidate once, verify source and immutable gateway/worker digests, then admit the same approved digests to each isolated target. Product build-once and promotion gates remain unchanged.
+- Each target has a distinct gateway/operator/worker identity boundary, endpoint, OAuth audience and scope, state and leases, project/region and resource allowlists, and database binding. Target parameters cannot switch identities; cross-environment requests fail closed. Shared registry access is limited to the existing approved lineage and required privileges.
+- OBSERVE (diagnostics, monitoring, bounded read-only Nile): allowed within an explicitly admitted environment, with authenticated typed operations, sanitized results and cost limits. No credentials, raw unrestricted SQL, tenant bypass or unrestricted shell.
+- CHANGE (build, deployment, rollback): DEV within reviewed owner-approved task scope; TEST requires explicit target/action approval; PROD additionally requires the existing PROD_GO gate. Use existing dedicated product release operators through their approval boundary, not direct product publish/deploy authority in generic ops identities. Bind each authorization to exact action, environment, resource, source/digest, parameters and actor; reject stale/replayed or mismatched approvals.
+- Managed DB changes in any environment require separate exact-script approval, database binding, migration/rollback or forward-repair evidence. PROD preserves the ADR-008 §7 runtime/migration privilege gate: separation where Nile supports a demonstrable mechanism, with explicit Architecture review of provider-specific limitations that create residual security risk. Never perform a production migration, restore or provider run merely to demonstrate access.
+- Progression: finish DEV RE-01–RE-09 and independent acceptance first; isolated TEST admission and independent acceptance next; separately approved PROD read-only admission first, then separately approved PROD CHANGE capabilities. The same environment-specific acceptance contracts apply where relevant. Do not mutate TEST/PROD while implementing DEV.
+- Every release must prove actual serving revision, traffic, digest and catalog, not merely latest-created revision or successful build. Paired gateway/worker changes require coherent rollback and protected Retrieve baseline/non-regression evidence. Do not cancel active Retrieve or bypass its locks to admit a release. Functional acceptance remains independent.
+- Retain strict zero incremental cost admission, separate approval for privileged changes, bounded execution, private evidence and existing AgentFlow gates. If required isolation cannot be achieved under the cost constraint, stop for an owner decision. No new deployment route, Git authority, blanket IAM role or uncontrolled production privilege.
+
+Acceptance is tracked exclusively in #589 (AC-ENV-01–05 and existing RE/DOD criteria). This amendment extends capability scope, not current runtime permissions.
