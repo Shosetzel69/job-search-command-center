@@ -106,5 +106,64 @@ class WorkspaceHTTPTests(unittest.TestCase):
         self.assertEqual(status,400)
         self.assertEqual(data['error'],'replacement_not_unique')
 
+
+    def test_run_cwd_validated_before_forwarding(self):
+        from unittest.mock import patch
+        with patch.object(manager, 'execute_worker', return_value={'exit_code':0}) as execute:
+            for body, expected in [
+                ({'task':'pytest'}, '.'),
+                ({'task':'pytest','cwd':'.'}, '.'),
+                ({'task':'command','argv':['python3','app.py'],'cwd':'src'}, 'src'),
+            ]:
+                status, result = self.request('/v1/run', body)
+                self.assertEqual(status, 200)
+                self.assertEqual(result['exit_code'], 0)
+                self.assertEqual(execute.call_args.args[1:], (body['task'],body.get('argv'),expected))
+            execute.reset_mock()
+            for cwd in (None, '', '/tmp', '../tmp', 'src/..', 'src/.git',
+                        'missing', 'src/app.py'):
+                status, result = self.request('/v1/run', {'task':'pytest','cwd':cwd})
+                self.assertEqual(status, 400, cwd)
+            execute.assert_not_called()
+
+    def test_manager_worker_payload_legacy_compatibility(self):
+        from unittest.mock import patch, MagicMock
+        response=MagicMock()
+        response.__enter__.return_value.read.return_value='{"exit_code":0}'
+        with patch.object(manager.urllib.request,'urlopen',return_value=response) as call:
+            for cwd in ('.','src'):
+                manager.execute_worker({'src/app.py':b'pass'},'pytest',cwd=cwd)
+                payload=json.loads(call.call_args.args[0].data)
+                self.assertEqual(payload.get('cwd'),None if cwd=='.' else 'src')
+                self.assertEqual(payload['task'],'pytest')
+
+
+class WorkerCwdTests(unittest.TestCase):
+    def test_actual_worker_runs_from_selected_snapshot_directory(self):
+        import base64
+        from service import worker
+        files={'src/nested/value.txt':base64.b64encode(b'fixture').decode()}
+        argv=['python3','-c','from pathlib import Path; print(Path("value.txt").read_text())']
+        result=worker.execute(files,'command',argv,'src/nested')
+        self.assertEqual(result['exit_code'],0)
+        self.assertEqual(result['stdout'].strip(),'fixture')
+        root_argv=['python3','-c','from pathlib import Path; print(Path("src/nested/value.txt").read_text())']
+        for args in ((files,'command',root_argv),(files,'command',root_argv,'.')):
+            result=worker.execute(*args)
+            self.assertEqual(result['exit_code'],0)
+            self.assertEqual(result['stdout'].strip(),'fixture')
+
+    def test_worker_denies_invalid_cwd_before_process_launch(self):
+        import base64
+        from unittest.mock import patch
+        from service import worker
+        files={'src/nested/value.txt':base64.b64encode(b'fixture').decode()}
+        with patch.object(worker.subprocess,'Popen') as launch:
+            for cwd in (None, '', '/tmp', '../tmp', 'src/..', 'src/.git',
+                        'missing', 'src/nested/value.txt', 'src//nested'):
+                with self.subTest(cwd=cwd), self.assertRaises(ValueError):
+                    worker.execute(files,'command',['python3','-V'],cwd)
+            launch.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()
