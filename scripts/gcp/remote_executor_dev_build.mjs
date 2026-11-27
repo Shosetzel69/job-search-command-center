@@ -302,11 +302,9 @@ export async function cancelApprovedBuild(original,expectedBuildId,{
  }
  // Only a fresh provider observation confirms CANCELLED (or a competing
  // terminal outcome). No automatic second cancellation.
- const after=verify(await (await request(url)).json());
- const observed=await observeDevBuildOnce(identity,store,{getBuild:async()=>({
-  id:expectedBuildId,name:'projects/jscc-shared/locations/europe-west1/builds/'+expectedBuildId,
-  projectId:'jscc-shared',serviceAccount:SA,status:after.status
- })});
+ const afterRaw=await (await request(url)).json();
+ const after=verify(afterRaw);
+ const observed=await observeDevBuildOnce(identity,store,{getBuild:async()=>afterRaw});
  const state=after.status==='CANCELLED'?'CANCELLED':after.status==='SUCCESS'?'SUCCEEDED':
   after.terminal?'FAILED':'WORKING';
  require(observed.state===state,'build_cancel_ledger_provider_conflict');
