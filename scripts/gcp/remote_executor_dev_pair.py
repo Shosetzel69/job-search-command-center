@@ -39,7 +39,8 @@ def image(kind, values):
 
 
 def container(template):
-    values = template.get("containers")
+    task = template.get("template", template)
+    values = task.get("containers")
     require(isinstance(values, list) and len(values) == 1, "container_layout_denied")
     return values[0]
 
@@ -62,6 +63,9 @@ def normalized(template):
     env = container(result).get("env", [])
     require(len({row.get("name") for row in env}) == len(env), "duplicate_env")
     container(result)["env"] = sorted(env, key=lambda row: row["name"])
+    if "template" in result:
+        for key in ("client", "clientVersion"):
+            result["template"].pop(key, None)
     return result
 
 
@@ -92,7 +96,9 @@ def tags(service):
 def ready(resource, name):
     require(resource.get("name") == f"projects/{PROJECT}/locations/{REGION}/{name}"
             and resource.get("reconciling", False) is False
-            and resource.get("terminalCondition", {}).get("state") == "CONDITION_SUCCEEDED",
+            and resource.get("terminalCondition", {}).get("state") == "CONDITION_SUCCEEDED"
+            and resource.get("generation") == resource.get("observedGeneration")
+            and bool(resource.get("generation")),
             "resource_not_reconciled")
 
 
@@ -126,7 +132,7 @@ class PairOperator:
     def worker(self):
         value = self.api.job(WORKER)
         ready(value, "jobs/" + WORKER)
-        return value["template"]["template"]
+        return value["template"]
 
     def health(self, uri):
         require(uri in URIS, "gateway_uri_denied")
@@ -140,7 +146,9 @@ class PairOperator:
 
     def verify_revision(self, revision, values):
         data = self.revision(revision)
-        require(revision_image(data) == image("gateway", values) and metadata(data) == values,
+        require(data.get("reconciling", False) is False
+                and data.get("serviceAccount") == f"{GATEWAY}@{PROJECT}.iam.gserviceaccount.com"
+                and revision_image(data) == image("gateway", values) and metadata(data) == values,
                 "effective_revision_binding_mismatch")
 
     def capture(self, request):
@@ -157,7 +165,7 @@ class PairOperator:
                 and container(svc["template"])["image"] == image("gateway", values),
                 "current_pair_binding_mismatch")
         require(svc["template"].get("serviceAccount") == f"{GATEWAY}@{PROJECT}.iam.gserviceaccount.com"
-                and job.get("serviceAccount") == f"{WORKER}@{PROJECT}.iam.gserviceaccount.com",
+                and job["template"].get("serviceAccount") == f"{WORKER}@{PROJECT}.iam.gserviceaccount.com",
                 "runtime_identity_mismatch")
         self.verify_revision(revision, values)
         # Rollout starts only from explicit revision-pinned canonical traffic.
