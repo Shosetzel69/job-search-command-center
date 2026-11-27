@@ -138,5 +138,74 @@ class MaintenanceTests(unittest.TestCase):
             list(api.executions("jscc-search-dev"))
 
 
+    def test_api_pagination_parameters_are_endpoint_specific(self):
+        from unittest.mock import Mock
+        from urllib.parse import parse_qs, urlsplit
+
+        api = guard.OperatorAPI(token="fixture")
+        api.request = Mock(side_effect=[
+            ({"items": [], "nextPageToken": "next"}, {}),
+            ({"items": []}, {}),
+            ({"executions": []}, {}),
+        ])
+        self.assertEqual(list(api.objects("operations/")), [])
+        self.assertEqual(list(api.executions("jscc-search-dev")), [])
+        queries = [parse_qs(urlsplit(call.args[0]).query) for call in api.request.call_args_list]
+        self.assertEqual(queries, [
+            {"maxResults": ["100"], "prefix": ["operations/"]},
+            {"maxResults": ["100"], "prefix": ["operations/"], "pageToken": ["next"]},
+            {"pageSize": ["100"]},
+        ])
+
+    def test_http_lease_absence_and_create_only_generation(self):
+        from unittest.mock import Mock
+        from urllib.parse import parse_qs, urlsplit
+
+        api = guard.OperatorAPI(token="fixture")
+        value = {"state": "ACTIVE", "operation_id": "maintenance-fixture"}
+        api.request = Mock(side_effect=[(None, {}), ({"generation": "123"}, {})])
+        self.assertEqual(api.read_lease(), (None, "0"))
+        self.assertEqual(api.replace_lease(value, "0"), "123")
+        read, write = api.request.call_args_list
+        self.assertEqual(read.args[0], guard.STORAGE + "/leases%2Fdiagnostics.json?alt=media")
+        self.assertEqual(read.kwargs, {"missing_ok": True})
+        self.assertEqual(urlsplit(write.args[0])._replace(query="").geturl(), guard.UPLOAD)
+        self.assertEqual(parse_qs(urlsplit(write.args[0]).query),
+                         {"uploadType": ["media"], "name": [guard.LEASE], "ifGenerationMatch": ["0"]})
+        self.assertEqual(write.kwargs, {"method": "POST", "body": value})
+
+    def test_http_lease_header_and_generation_matched_replacement(self):
+        from unittest.mock import Mock
+        from urllib.parse import parse_qs, urlsplit
+
+        api = guard.OperatorAPI(token="fixture")
+        value = {"state": "RELEASED", "operation_id": "maintenance-fixture"}
+        api.request = Mock(side_effect=[(value, {"x-goog-generation": "456"}),
+                                        ({"generation": "789"}, {})])
+        self.assertEqual(api.read_lease(), (value, "456"))
+        self.assertEqual(api.replace_lease(value, "456"), "789")
+        self.assertEqual(parse_qs(urlsplit(api.request.call_args.args[0]).query)["ifGenerationMatch"],
+                         ["456"])
+        for headers in ({}, {"x-goog-generation": "0"}, {"x-goog-generation": "bad"}):
+            api.request = Mock(return_value=(value, headers))
+            with self.assertRaisesRegex(guard.Blocked, "lease_generation_missing"):
+                api.read_lease()
+
+    def test_http_lease_uncertain_write_response_and_cas_conflict(self):
+        from unittest.mock import Mock
+
+        api = guard.OperatorAPI(token="fixture")
+        value = {"state": "ACTIVE", "operation_id": "maintenance-fixture"}
+        for response in ({}, {"generation": 123}, {"generation": "0"}, {"generation": "bad"}):
+            api.request = Mock(return_value=(response, {}))
+            with self.assertRaisesRegex(guard.Blocked, "lease_write_outcome_uncertain"):
+                api.replace_lease(value, "456")
+            api.request.assert_called_once()
+        api.request = Mock(side_effect=guard.Blocked("api_http_412"))
+        with self.assertRaisesRegex(guard.Blocked, "api_http_412"):
+            api.replace_lease(value, "456")
+        api.request.assert_called_once()
+
+
 if __name__ == "__main__":
     unittest.main()
