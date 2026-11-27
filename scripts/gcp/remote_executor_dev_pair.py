@@ -9,7 +9,7 @@ from urllib.request import urlopen
 from cloud_run_v2_read import primary_revision, revision_image
 from remote_executor_dev_maintenance import (
     Blocked, MaintenanceGuard, OperatorAPI, PROJECT, REGION, RUN_ROOT,
-    assert_drained, protected_snapshot, require,
+    assert_drained, protected_snapshot, require, fingerprint, MAINTENANCE_EXPIRY,
 )
 
 GATEWAY = "jscc-ops-gateway-dev"
@@ -203,9 +203,52 @@ class PairOperator:
         self.old = {"values": values, "gateway": svc["template"], "worker": job,
                     "revision": revision, "tags": tags(svc), "uri": svc["uri"],
                     "gateway_policy": policy(svc, "gateway"), "worker_policy": policy(worker, "worker")}
+        self.protected_baseline = protected_snapshot(self.api)
         return {"source_sha": values[KEYS[0]], "gateway_digest": values[KEYS[1]],
                 "worker_digest": values[KEYS[2]], "revision": revision,
-                "tags": self.old["tags"]}
+                "tags": self.old["tags"], "uri": self.old["uri"],
+                "gateway_template_hash": fingerprint(normalized(self.old["gateway"])),
+                "worker_template_hash": fingerprint(normalized(self.old["worker"])),
+                "gateway_policy_hash": fingerprint(self.old["gateway_policy"]),
+                "worker_policy_hash": fingerprint(self.old["worker_policy"]),
+                "next_gateway_template_hash": fingerprint(normalized(expected_template(
+                    self.old["gateway"], "gateway", self.new))),
+                "next_worker_template_hash": fingerprint(normalized(expected_template(
+                    self.old["worker"], "worker", self.new))),
+                "protected_baseline": self.protected_baseline}
+
+    def observe_recovery(self, maintenance_id):
+        # This path never reconstructs mutation authority from a stale process.
+        require(isinstance(maintenance_id, str) and
+                re.fullmatch(r"maintenance-[a-f0-9]{64}", maintenance_id),
+                "invalid_maintenance_id")
+        svc, worker = self.gateway(), self.worker_resource()
+        revision = primary_revision(svc)
+        rev = self.revision(revision)
+        def observed_binding(template, kind):
+            values = metadata(template)
+            require(container(template)["image"] == image(kind, values), "observed_image_binding_mismatch")
+            return dict(zip(("source_sha", "gateway_digest", "worker_digest"),
+                            (values[k] for k in KEYS)))
+        record, generation = self.api.read_lease()
+        lease_state = "ABSENT" if record is None else "OTHER"
+        lease_generation = None
+        if record is not None and record.get("operation_id") == maintenance_id:
+            lease_generation = generation
+            lease_state = ("OWNED_ACTIVE" if record.get("state") == "ACTIVE" and
+                           record.get("expires_at_ms") == MAINTENANCE_EXPIRY else
+                           "OWNED_RELEASED" if record.get("state") == "RELEASED" else "AMBIGUOUS")
+        return {"gateway_binding": observed_binding(svc["template"], "gateway"),
+                "worker_binding": observed_binding(worker["template"], "worker"),
+                "effective_binding": observed_binding(rev, "gateway"),
+                "gateway_template_hash": fingerprint(normalized(svc["template"])),
+                "worker_template_hash": fingerprint(normalized(worker["template"])),
+                "gateway_policy_hash": fingerprint(policy(svc, "gateway")),
+                "worker_policy_hash": fingerprint(policy(worker, "worker")),
+                "revision": revision, "tags": tags(svc), "uri": svc["uri"],
+                "catalog": self.health_reader(svc["uri"]),
+                "protected_baseline": protected_snapshot(self.api),
+                "lease_state": lease_state, "lease_generation": lease_generation}
 
     def check_config(self, kind, values):
         resource = self.gateway() if kind == "gateway" else self.worker_resource()
@@ -227,12 +270,13 @@ class PairOperator:
                 "catalog_mismatch")
         return {"gateway_image": image("gateway", values), "worker_image": image("worker", values)}
 
-    def freeze(self):
+    def freeze(self, maintenance_id=None):
         require(self.old is not None, "session_not_prepared")
         # Cost and owner proof are checked by R6 before this callback.
         self.verify(restored=True)
         baseline = self.guard.inspect()
-        self.guard.freeze(baseline)
+        require(baseline == self.protected_baseline, "protected_state_drift_since_capture")
+        self.guard.freeze(baseline, maintenance_id)
         self.verify(restored=True)
         self.admitted = True
         return True
@@ -337,20 +381,23 @@ def serve():
     """Private operator subprocess. No MCP tool or public endpoint."""
     operator = None
     methods = {"capture", "freeze", "deploy_worker", "deploy_gateway", "rollback_gateway",
-               "rollback_worker", "verify_pair", "release"}
+               "rollback_worker", "verify_pair", "release", "observe_recovery"}
     for line in sys.stdin:
         try:
             request = json.loads(line)
             method = request["method"]
             require(method in methods, "method_denied")
             if operator is None:
-                require(method == "capture", "session_not_prepared")
+                require(method in ("capture", "observe_recovery"), "session_not_prepared")
                 operator = PairOperator(OperatorAPI())
             args = request.get("args", [])
             require(isinstance(args, list) and
                     ((method == "capture" and len(args) == 1 and isinstance(args[0], dict)) or
                      (method == "verify_pair" and len(args) == 1 and type(args[0]) is bool) or
-                     (method not in ("capture", "verify_pair") and not args)), "argument_denied")
+                     (method in ("freeze", "observe_recovery") and len(args) == 1 and
+                      isinstance(args[0], str) and re.fullmatch(r"maintenance-[a-f0-9]{64}", args[0])) or
+                     (method not in ("capture", "verify_pair", "freeze", "observe_recovery") and not args)),
+                    "argument_denied")
             result = getattr(operator, method)(*args)
             reply = {"ok": True, "result": result}
         except Exception:
