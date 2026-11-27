@@ -120,7 +120,7 @@ export async function executeApprovedDevOpsPair(plan,{
      live.worker_image!==plan.previous.worker_image)
     throw new Error('deployment_state_drift');
   const done=[];
-  let frozen=false,freezeAttempted=false;
+  let frozen=false,freezeAttempted=false,unfreezeAttempted=false;
   try {
     freezeAttempted=true;
     await freezeOps(plan);
@@ -142,11 +142,19 @@ export async function executeApprovedDevOpsPair(plan,{
     if(verified.gateway_image!==plan.next.gateway_image ||
        verified.worker_image!==plan.next.worker_image)
       throw new Error('deployment_verification_mismatch');
+    unfreezeAttempted=true;
     await unfreezeOps(plan);
     frozen=false;
     return Object.freeze({state:'SUCCEEDED',environment:'dev',source_sha:plan.source_sha,
       pair_verified:true,rollback_attempted:false});
   } catch(e) {
+    // A release may have succeeded remotely before the response was lost.
+    // Never mutate either workload again when exclusion is no longer proven.
+    if(unfreezeAttempted) return Object.freeze({
+      state:'UNFREEZE_UNCERTAIN',environment:'dev',source_sha:plan.source_sha,
+      pair_verified:true,rollback_attempted:false,manual_intervention_required:true,
+      coarse_error:'unfreeze_outcome_unknown',rollback_errors:[],
+    });
     if(freezeAttempted && !frozen) return Object.freeze({
       state:'FREEZE_UNCERTAIN',environment:'dev',source_sha:plan.source_sha,
       pair_verified:false,rollback_attempted:false,manual_intervention_required:true,
