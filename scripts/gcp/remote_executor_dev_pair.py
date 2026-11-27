@@ -413,9 +413,22 @@ def require_journal_intent(api, maintenance_id, step, previous, target):
                          "operation": "dev-ops-pair", "approval_ref": approval}) == operation_id,
             "durable_approval_mismatch")
     issued, expires = bundle.get("issued_at_ms"), bundle.get("expires_at_ms")
+    current = now_ms()
     require(type(issued) is int and type(expires) is int and
-            0 < expires - issued <= 60 * 60 * 1000 and issued <= now_ms() < expires,
+            0 < expires - issued <= 60 * 60 * 1000 and issued <= current,
             "journal_window_closed")
+    if current >= expires:
+        prior = history[:-1]
+        def confirmed(name):
+            return any(e.get("step") == name and e.get("outcome") == "CONFIRMED" for e in prior)
+        previous_event = prior[-1] if prior else {}
+        completion = (step in ("rollback_gateway", "rollback_worker", "verify_previous") or
+                      (step == "verify_next" and confirmed("deploy_worker") and confirmed("deploy_gateway")) or
+                      (step == "release" and previous_event.get("outcome") == "CONFIRMED" and
+                       previous_event.get("step") in ("verify_next", "verify_previous")))
+        require(completion and confirmed("freeze"), "journal_window_closed")
+        # PairOperator still requires same-session admission, owned generation,
+        # protected Retrieve parity, drain and verified pair before release.
 
 
 def serve():
