@@ -38,6 +38,11 @@ case "$TRUSTED_OPS_REF" in
     ;;
 esac
 
+if [[ "$TRUSTED_OPS_REF" != refs/heads/main && ! "$TRUSTED_OPS_REF" =~ ^refs/tags/jscc-ops-approved/[A-Za-z0-9._-]+$ ]]; then
+  echo "TRUSTED_OPS_SOURCE=BLOCKED invalid_trusted_ref" >&2
+  exit 4
+fi
+
 REMOTE_SHA="$(git ls-remote "$OPS_SOURCE_REMOTE" "$TRUSTED_OPS_REF" | awk 'NR==1 {print $1}')"
 [[ -n "$REMOTE_SHA" && "$REMOTE_SHA" == "$SOURCE_SHA" ]] || {
   echo "TRUSTED_OPS_SOURCE=BLOCKED ref_sha_mismatch" >&2
