@@ -196,3 +196,39 @@ Owner-approved alternative to the unavailable dedicated native read-only credent
 - Independent reviewer checks exact SHA, negative route/caller/source/tenant/database cases, rollback and absence of DB credentials in worker, existing task regression, no raw plan predicates or PII, and live provider support for EXPLAIN/ANALYZE and transaction controls. Existing DEV-only cost and deployment gates remain. Disable flag for rollback of feature admission; restore prior reviewed images via existing routes if needed.
 - This is a bounded #659 diagnostic capability, not completion of #589 RE-07: arbitrary SQL, schema/migration/restore operations and disposable Nile container remain outside this delivery.
 
+## #589 RE-04 / RE-08 — R5 operator-side build submission (source only)
+
+The existing `ops/build/dev-cloud-build-controller.mjs` and durable
+`ops/control/dev-build-operation-ledger.mjs` now bind approval to the exact
+staged source object, generation and SHA256. A create-only approval record
+in the existing `control/v1/builds/` prefix consumes each authoritative
+approval once, independently of actor and idempotency key. The operation
+record is confirmed in SUBMITTING before remote dispatch; uncertain submit
+receipts are never retried automatically.
+
+`scripts/gcp/remote_executor_dev_build.mjs` reuses the existing trusted
+operator credential and GCS CAS transport. It accepts an independently
+obtained canonical evidence pin, not a caller-generated self-hash.
+The pin binds the reviewed source SHA/ref, existing staging object and
+generation, archive SHA256, canonical YAML file SHA256, reviewed equivalent
+Cloud Build REST configuration, owner/review/cost/access/lifecycle evidence
+references and a bounded time window. The configuration equivalence is an
+**independent-review requirement**, not automatically inferred from the list
+of build step IDs. The operator verifies its exact clean checkout and remote
+ref, the settled scoped lifecycle and archive bytes before submission.
+It sends the existing reviewed build configuration to the regional
+Cloud Build create API with `source.storageSource.generation` explicitly
+set, reusing `jscc-shared-ops-cloudbuild-source`, `jscc-ops-build` and the
+existing ops image lineage. No new infrastructure or runtime permission.
+Only the trusted operator may invoke this source module. It does not
+expose a new MCP mutation, does not replace the approved manual build script,
+and does not assert source provenance from a successful build status.
+
+Release dependencies remain: a trusted remote operator entrypoint with
+independently authenticated approval delivery (not the Gateway, diagnostics
+or sandbox identity), actual staged archive/config-equivalence evidence,
+cost and permission admission, lifecycle convergence, and exact-SHA
+independent review. Existing `cloudbuild.ops.yaml` manually publishes images;
+build status alone may not contain `results.images`; live registry/provenance
+correlation is still required. No build, cloud operation, IAM or product
+configuration has been executed by this source slice.
