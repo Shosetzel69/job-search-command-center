@@ -6,7 +6,7 @@ import {execFile,spawn} from 'node:child_process';
 import {promisify} from 'node:util';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
-import {planDevOpsBuild} from '../../ops/build/dev-cloud-build-controller.mjs';
+import {planDevOpsBuild,projectDevBuildStatus} from '../../ops/build/dev-cloud-build-controller.mjs';
 import {operationIdentity,executeApprovedDevBuildOnce,observeDevBuildOnce}
  from '../../ops/control/dev-build-operation-ledger.mjs';
 import {evidenceDigest,operatorBuildStore} from './remote_executor_dev_admission.mjs';
@@ -249,4 +249,66 @@ export async function observeApprovedBuild(identity,{
   require(project==='jscc-shared'&&region==='europe-west1'&&UUID.test(String(build_id)),'build_observe_denied');
   return (await request(ROOT+'/'+build_id)).json();
  }});
+}
+
+// Cancellation requires a NEW authoritative approval and the exact original
+// submitted build identity. The operator Job's immutable claim prevents
+// automatic replay; an uncertain POST is reconciled by observation only.
+export async function cancelApprovedBuild(original,expectedBuildId,{
+ getToken=token,fetchImpl=fetch,store=operatorBuildStore({getToken,fetchImpl}),
+ assertFresh,now=Date.now,
+}={}){
+ require(typeof assertFresh==='function'&&UUID.test(String(expectedBuildId)),
+  'build_cancel_admission_missing');
+ const plan=planDevOpsBuild(original.request);
+ require(plan.work_item_ref==='#589'&&original.archive?.bucket===BUCKET,'build_cancel_scope_denied');
+ const identity=operationIdentity({actor_sub_hash:original.actor_sub_hash,
+  idempotency_key:original.idempotency_key,request:original.request});
+ const current=await store.get(identity.path),rec=current?.data;
+ require(current?.generation&&rec?.operation_id===identity.key&&
+  rec.request_hash===identity.request_hash&&rec.actor_sub_hash===identity.actor_sub_hash&&
+  rec.approval_ref===original.evidence?.approval&&rec.source_sha===plan.source_sha&&
+  rec.trusted_ref===plan.trusted_ref&&rec.build_id===expectedBuildId&&
+  rec.source_object===original.archive.object&&rec.source_generation===original.archive.generation&&
+  rec.source_sha256===original.archive.sha256&&
+  ['SUBMITTED','WORKING','SUCCEEDED','FAILED','CANCELLED'].includes(rec.state),
+  'build_cancel_original_mismatch');
+ const request=operatorTransport(getToken,fetchImpl);
+ const url=ROOT+'/'+expectedBuildId;
+ const expected={project:'jscc-shared',region:'europe-west1',build_id:expectedBuildId,source_sha:plan.source_sha};
+ const verify=raw=>{
+  const status=projectDevBuildStatus(raw,expected);
+  require(raw.substitutions?._GIT_SHA===plan.source_sha&&raw.substitutions?._TRUSTED_REF===plan.trusted_ref&&
+   evidenceDigest(raw.source?.storageSource)===evidenceDigest({bucket:BUCKET,
+    object:original.archive.object,generation:original.archive.generation}),
+   'build_cancel_provider_binding_mismatch');
+  return status;
+ };
+ assertFresh();
+ await verifyLifecycle(request,now);
+ const before=verify(await (await request(url)).json());
+ if(!before.terminal){
+  require(['SUBMITTED','WORKING'].includes(rec.state)&&['PENDING','QUEUED','WORKING'].includes(before.status),
+   'build_cancel_state_denied');
+  assertFresh();
+  // Re-read the durable original just before mutation. Observation may have
+  // advanced the ledger; if so stop instead of racing that state transition.
+  const latest=await store.get(identity.path);
+  require(latest?.generation===current.generation&&evidenceDigest(latest.data)===evidenceDigest(rec),
+   'build_cancel_ledger_changed');
+  assertFresh();
+  const reply=await request(url+':cancel',{method:'POST',body:{projectId:'jscc-shared',id:expectedBuildId}});
+  verify(await reply.json());
+ }
+ // Only a fresh provider observation confirms CANCELLED (or a competing
+ // terminal outcome). No automatic second cancellation.
+ const after=verify(await (await request(url)).json());
+ const observed=await observeDevBuildOnce(identity,store,{getBuild:async()=>({
+  id:expectedBuildId,name:'projects/jscc-shared/locations/europe-west1/builds/'+expectedBuildId,
+  projectId:'jscc-shared',serviceAccount:SA,status:after.status
+ })});
+ const state=after.status==='CANCELLED'?'CANCELLED':after.status==='SUCCESS'?'SUCCEEDED':
+  after.terminal?'FAILED':'WORKING';
+ require(observed.state===state,'build_cancel_ledger_provider_conflict');
+ return {operation_id:identity.key,build_id:expectedBuildId,state,source_provenance:'UNVERIFIED'};
 }

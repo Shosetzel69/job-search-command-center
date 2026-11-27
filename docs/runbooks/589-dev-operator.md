@@ -72,7 +72,12 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   evidence. Supported source actions: pinned build and build observation,
   approved gateway/diagnostics paired deployment and recovery observation,
   bounded R4 inventory, GCS artifact metadata/copy, and GCP metadata.
-  Uncertain submission is not retried automatically.
+  Uncertain submission is not retried automatically. Build cancellation is a
+  separate approved action bound to the original approval and exact build ID;
+  verify ledger and provider source before regional cancellation, then observe
+  the actual terminal outcome. Lost receipts require observation, never retry.
+  `cloudbuild.builds.update` requires separate least-privilege admission; no
+  live permission or cancellation has been performed.
 - `remote_executor_dev_publish_approval.mjs` is an independent publisher
   interface, not an MCP tool. Its trusted pin must come from independently
   authenticated owner/reviewer/cost evidence obtained through the existing

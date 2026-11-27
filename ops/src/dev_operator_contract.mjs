@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','gcloud_inventory','gcs_artifact','gcp_metadata']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata']);
 const STATES=new Set(['DISPATCH_PENDING_OR_UNKNOWN','SUBMITTED','WORKING','SUCCEEDED','FAILED','BLOCKED',
  'CANCELLED','SUBMISSION_UNKNOWN','ROLLED_BACK','RECOVERY_REQUIRED','FREEZE_UNCERTAIN',
  'ROLLBACK_BLOCKED','UNFREEZE_UNCERTAIN','ADMISSION_BLOCKED','OBSERVED']);
@@ -89,6 +89,11 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
   operatorRequire(v.bundle.operator_source_sha===sourceSha&&v.bundle.evidence?.approval===ref&&
    v.bundle.evidence?.cost===v.cost_ref&&v.bundle.evidence?.independent_review===v.review_ref,
    'operator_pair_approval_mismatch');
+ }else if(v.action==='cancel_build'){
+  operatorRequire(operatorExact(v.bundle,['original_approval_ref','build_id'])&&
+   match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref&&
+   match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,v.bundle.build_id),
+   'operator_cancel_approval_mismatch');
  }else if(v.action==='observe_build'||v.action==='observe_pair'){
   operatorRequire(operatorExact(v.bundle,['original_approval_ref'])&&
    match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref,

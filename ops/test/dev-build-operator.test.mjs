@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {admitBuildBundle,runApprovedBuild,observeApprovedBuild}
+import {admitBuildBundle,runApprovedBuild,observeApprovedBuild,cancelApprovedBuild}
  from '../../scripts/gcp/remote_executor_dev_build.mjs';
 import {evidenceDigest,operatorBuildStore,operatorPairStore}
  from '../../scripts/gcp/remote_executor_dev_admission.mjs';
@@ -122,4 +122,54 @@ test('R5 build and pair operator stores retain distinct exact GCS prefixes',asyn
  await assert.rejects(()=>operatorBuildStore(opts).get(pair),/path_denied/);
  await assert.rejects(()=>operatorPairStore(opts).get(build),/path_denied/);
  assert.equal(calls.length,2);
+});
+
+test('approved cancellation binds exact durable original, regional resource and provider source',async()=>{
+ const x=bundle(),s=setup();
+ await run(x,s.options);
+ const calls=[];
+ const provider=status=>({id,name:parent+'/'+id,serviceAccount:sa,status,
+  substitutions:{_GIT_SHA:sha,_TRUSTED_REF:x.request.trusted_ref},
+  source:{storageSource:{bucket,object,generation}}});
+ let state='WORKING';
+ const opts={...s.options,assertFresh:()=>{},fetchImpl:async(url,init)=>{
+  calls.push({url,method:init.method});
+  if(url.includes('/b/jscc-dev-ops-state?'))return s.options.fetchImpl(url,init);
+  if(url.endsWith(':cancel')){
+   assert.equal(init.method,'POST');
+   assert.deepEqual(JSON.parse(init.body),{projectId:'jscc-shared',id});
+   assert.equal(url,'https://cloudbuild.googleapis.com/v1/'+parent+'/'+id+':cancel');
+   state='CANCELLED';
+  }
+  return Response.json(provider(state));
+ }};
+ await assert.rejects(()=>cancelApprovedBuild(x,'11111111-1111-1111-1111-111111111111',opts),/original_mismatch/);
+ assert.equal(calls.length,0);
+ const result=await cancelApprovedBuild(x,id,opts);
+ assert.equal(result.state,'CANCELLED');
+ assert.equal(calls.filter(c=>c.method==='POST').length,1);
+ assert.equal((await cancelApprovedBuild(x,id,opts)).state,'CANCELLED');
+ assert.equal(calls.filter(c=>c.method==='POST').length,1);
+});
+
+test('cancel fails closed on lost response, expired approval or provider source drift',async()=>{
+ const x=bundle(),s=setup();await run(x,s.options);
+ let posts=0,drift=true,expired=false;
+ const opts={...s.options,assertFresh:()=>{if(expired)throw Error('expired');},fetchImpl:async(url,init)=>{
+  if(url.includes('/b/jscc-dev-ops-state?'))return s.options.fetchImpl(url,init);
+  if(init.method==='POST'){posts++;throw Error('lost_receipt');}
+  return Response.json({id,name:parent+'/'+id,serviceAccount:sa,status:'WORKING',
+   substitutions:{_GIT_SHA:drift?'b'.repeat(40):sha,_TRUSTED_REF:x.request.trusted_ref},
+   source:{storageSource:{bucket,object,generation}}});
+ }};
+ await assert.rejects(()=>cancelApprovedBuild(x,id,opts),/provider_binding_mismatch/);
+ assert.equal(posts,0);
+ drift=false;expired=true;
+ await assert.rejects(()=>cancelApprovedBuild(x,id,opts),/expired/);
+ assert.equal(posts,0);
+ expired=false;
+ await assert.rejects(()=>cancelApprovedBuild(x,id,opts),/lost_receipt/);
+ assert.equal(posts,1);
+ const rec=[...s.records.values()].find(x=>x.data.operation_kind==='dev-ops-build');
+ assert.equal(rec.data.state,'SUBMITTED');
 });

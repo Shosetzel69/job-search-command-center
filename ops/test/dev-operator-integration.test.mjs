@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {operatorActor,operatorHash,operatorPaths,operatorDispatchPath,operatorExecution,operatorLro}
+import {operatorActor,operatorHash,operatorPaths,operatorDispatchPath,operatorExecution,operatorLro,validateOperatorApproval}
  from '../src/dev_operator_contract.mjs';
 import {invokeDevOperator,operatorGatewayConfig} from '../src/dev_operator_gateway.mjs';
 import {runOperatorJob,runtimeConfig} from '../operator/dev_operator_job.mjs';
@@ -153,4 +153,13 @@ test('operator artifact is separate and existing images do not package privilege
   assert.doesNotMatch(docker(role),/COPY ops\/operator|COPY scripts\/gcp\/remote_executor_dev_pair/);
  }
  assert.match(docker('gateway'),/remote_executor_dev_lifecycle\.json/);
+});
+
+test('cancel action requires new approval and exact original build reference, not arbitrary target',()=>{
+ const cancelBundle={original_approval_ref:'#589/1230',build_id:'254d3513-9c02-4f33-a974-e8e8f8935aa7'};
+ const make=b=>({...approval(),action:'cancel_build',bundle:b,bundle_hash:operatorHash(b)});
+ const validate=b=>validateOperatorApproval({generation:'1',data:make(b)},{ref,actor,sourceSha:SHA,now:now()});
+ assert.equal(validate(cancelBundle).approval.action,'cancel_build');
+ for(const bad of [{...cancelBundle,original_approval_ref:ref},{...cancelBundle,build_id:'any-build'},
+  {...cancelBundle,project:'jscc-prod'}])assert.throws(()=>validate(bad),/operator_cancel_approval_mismatch/);
 });
