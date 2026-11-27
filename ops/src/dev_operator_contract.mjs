@@ -167,6 +167,15 @@ function projectMetadata(m){
    return {revision:x.revision,percent:x.percent,...(typeof x.tag==='string'&&/^[a-z0-9-]{1,63}$/.test(x.tag)?{tag:x.tag}:{})};
   });
   operatorRequire(out.traffic.reduce((n,x)=>n+x.percent,0)===100,'operator_metadata_invalid');
+  operatorRequire(Array.isArray(m.effective_revisions)&&m.effective_revisions.length===out.traffic.length,
+   'operator_metadata_invalid');
+  out.effective_revisions=m.effective_revisions.map((x,i)=>{
+   operatorRequire(x.revision===out.traffic[i].revision&&x.percent===out.traffic[i].percent&&
+    (x.image_digest==='UNKNOWN'||typeof x.image_digest==='string'&&/^sha256:[a-f0-9]{64}$/.test(x.image_digest)),
+    'operator_metadata_invalid');
+   return {revision:x.revision,percent:x.percent,image_digest:x.image_digest};
+  });
+  out.source_provenance='UNVERIFIED';
  }
  operatorRequire(Buffer.byteLength(JSON.stringify(out))<=32768,'operator_metadata_limit');
  return out;

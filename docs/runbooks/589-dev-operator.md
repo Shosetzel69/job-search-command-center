@@ -82,6 +82,10 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   PyYAML and compares the exact reviewed REST configuration. Build success
   does not prove source provenance. Registry tag/digest observation reports
   provenance UNVERIFIED until correlated with trusted evidence.
+- Service metadata separates desired template configuration from observed
+  traffic revisions and their immutable digest evidence using the existing
+  DEV runtime observer; unresolved digests remain UNKNOWN. It does not
+  establish source provenance or expose revision environment values.
 - GCS copy is restricted to the dedicated staging bucket, approved DEV
   artifact names, exact source generation/checksums and create-only
   destination. A multipart/uncertain rewrite stops; managed data deletion

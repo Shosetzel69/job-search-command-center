@@ -41,3 +41,47 @@ test('registry evidence remains unverified source provenance',async()=>{
  assert.equal(result.metadata.digest,digest);
  assert.equal(result.metadata.source_provenance,'UNVERIFIED');
 });
+
+test('service inventory distinguishes serving revisions from the desired template',async()=>{
+ const name='jscc-ops-gateway-dev',root='projects/jscc-dev/locations/europe-west1/services/'+name;
+ const rev=name+'-00001-abc',other=name+'-00002-def',digest='sha256:'+'a'.repeat(64);
+ const desired='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway@sha256:'+'b'.repeat(64);
+ const serving='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway@'+digest;
+ const calls=[];
+ const fetchImpl=async(url,init)=>{
+  assert.equal(init.method,'GET');
+  calls.push(url);
+  const base='https://run.googleapis.com/v2/'+root;
+  if(url===base)return Response.json({name:root,latestReadyRevision:other,
+   template:{containers:[{image:desired,env:[{name:'PRIVATE',value:'not-returned'}]}]},
+   trafficStatuses:[{revision:rev,percent:100},{revision:rev,percent:0,tag:'preview'}]});
+  assert.equal(url,base+'/revisions/'+rev);
+  return Response.json({name:root+'/revisions/'+rev,containers:[{name:'main',image:serving,
+   env:[{name:'TOKEN',value:'also-not-returned'}]}]});
+ };
+ const out=await executeDevGcpMetadata({environment:'dev',kind:'run_service',name},{fetchImpl});
+ const req={operation_id:'op',approval_hash:'hash',action:'gcp_metadata'};
+ const wrap=metadata=>projectOperatorResult(req,{generation:'1',data:{...req,...out,metadata}});
+ const projected=wrap(out.metadata);
+ assert.equal(calls.length,2);
+ assert.equal(projected.metadata.configuration_scope,'service_template');
+ assert.equal(projected.metadata.containers[0].image,desired);
+ assert.deepEqual(projected.metadata.effective_revisions,[{revision:rev,percent:100,image_digest:digest},
+  {revision:rev,percent:0,image_digest:digest}]);
+ assert.equal(projected.metadata.source_provenance,'UNVERIFIED');
+ assert.equal(JSON.stringify(projected).includes('not-returned'),false);
+ assert.throws(()=>wrap({...out.metadata,effective_revisions:[{revision:other,percent:100,image_digest:digest},
+  {revision:rev,percent:0,image_digest:digest}]}),/operator_metadata_invalid/);
+ assert.throws(()=>wrap({...out.metadata,effective_revisions:[]}),/operator_metadata_invalid/);
+});
+
+test('service inventory rejects revision identity mismatch instead of falling back to template',async()=>{
+ const name='jscc-ops-gateway-dev',root='projects/jscc-dev/locations/europe-west1/services/'+name;
+ const rev=name+'-00001-abc';
+ let calls=0;
+ await assert.rejects(()=>executeDevGcpMetadata({environment:'dev',kind:'run_service',name},{fetchImpl:async()=>{
+  if(++calls===1)return Response.json({name:root,template:{containers:[{image:'tag'}]},
+   trafficStatuses:[{revision:rev,percent:100}]});
+  return Response.json({name:root+'/revisions/'+name+'-different',containers:[]});
+ }}),/RESOURCE_MISMATCH/);
+});

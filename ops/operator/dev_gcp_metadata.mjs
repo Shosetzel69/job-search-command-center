@@ -1,7 +1,7 @@
 // #589: narrow metadata-only DEV observations, under the admitted operator.
 import {gcpFetch} from '../src/lib.mjs';
 import {operatorExact,operatorRequire} from '../src/dev_operator_contract.mjs';
-import {DEV_OBSERVATION_TARGETS} from '../observation/dev-runtime-observer.mjs';
+import {createDevObserver,DEV_OBSERVATION_TARGETS} from '../observation/dev-runtime-observer.mjs';
 const JOBS=new Set(['jscc-search-dev','jscc-diagnostics-dev','jscc-db-migrate-dev','jscc-ops-operator-dev']);
 const SECRETS=new Set(['JSCC_OPS_GOOGLE_CLIENT_ID','JSCC_OPS_GOOGLE_CLIENT_SECRET','JSCC_OPS_GOOGLE_ALLOWED_SUB','NILE_DATABASE_URL']);
 const PACKAGES=new Set(['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator',
@@ -100,6 +100,19 @@ export async function executeDevGcpMetadata(input,{fetchImpl=gcpFetch}={}){
    return {revision,percent:x.percent,...(typeof x.tag==='string'&&/^[a-z0-9-]{1,63}$/.test(x.tag)?{tag:x.tag}:{})};
   });
   operatorRequire(result.traffic.reduce((n,x)=>n+x.percent,0)===100,'gcp_metadata_traffic_invalid');
+  const servicePath='/v2/projects/jscc-dev/locations/europe-west1/services/'+input.name;
+  const revisionPaths=new Set(result.traffic.map(x=>servicePath+'/revisions/'+x.revision));
+  const cache=new Map([[servicePath,value]]);
+  const observer=createDevObserver({transport:async({api,path})=>{
+   operatorRequire(api==='run.googleapis.com'&&(path===servicePath||revisionPaths.has(path)),
+    'gcp_metadata_revision_denied');
+   if(!cache.has(path))cache.set(path,await get('https://'+api+path,fetchImpl));
+   return {status:200,body:cache.get(path)};
+  }});
+  const observation=await observer.describe({environment:'dev',task:'describe_dev_runtime',service:input.name});
+  result.effective_revisions=observation.effective_revisions.map(x=>({
+   revision:x.revision,percent:x.percent,image_digest:x.image_digest}));
+  result.source_provenance='UNVERIFIED';
  }
  operatorRequire(Buffer.byteLength(JSON.stringify(result))<=32768,'gcp_metadata_projection_limit');
  return {state:'OBSERVED',metadata:result};
