@@ -80,6 +80,15 @@ def expected_template(template, kind, values):
     return result
 
 
+def policy(resource, kind):
+    # Explicit top-level configuration fields outside the revision/execution template.
+    common = ("description", "labels", "annotations", "launchStage", "binaryAuthorization")
+    service = ("ingress", "customAudiences", "scaling", "invokerIamDisabled",
+               "defaultUriDisabled", "multiRegionSettings", "iapEnabled", "sshEnabled")
+    keys = common + service if kind == "gateway" else common
+    return {key: copy.deepcopy(resource.get(key)) for key in keys}
+
+
 def tags(service):
     rows = service.get("trafficStatuses", [])
     result = {}
@@ -129,10 +138,13 @@ class PairOperator:
                     for c in data.get("conditions", [])), "revision_not_ready")
         return data
 
-    def worker(self):
+    def worker_resource(self):
         value = self.api.job(WORKER)
         ready(value, "jobs/" + WORKER)
-        return value["template"]
+        return value
+
+    def worker(self):
+        return self.worker_resource()["template"]
 
     def health(self, uri):
         require(uri in URIS, "gateway_uri_denied")
@@ -158,7 +170,8 @@ class PairOperator:
         self.old_catalog = request["previous_catalog"]
         require(all(isinstance(x, str) and re.fullmatch(r"[a-z0-9-]{1,80}", x)
                     for x in (self.new_catalog, self.old_catalog)), "invalid_catalog")
-        svc, job = self.gateway(), self.worker()
+        svc, worker = self.gateway(), self.worker_resource()
+        job = worker["template"]
         revision = primary_revision(svc)
         values = metadata(svc["template"])
         require(metadata(job) == values and container(job)["image"] == image("worker", values)
@@ -177,13 +190,16 @@ class PairOperator:
                 and not positive[0].get("tag"), "unpinned_canonical_traffic")
         require(svc.get("uri") in URIS, "gateway_uri_denied")
         self.old = {"values": values, "gateway": svc["template"], "worker": job,
-                    "revision": revision, "tags": tags(svc), "uri": svc["uri"]}
+                    "revision": revision, "tags": tags(svc), "uri": svc["uri"],
+                    "gateway_policy": policy(svc, "gateway"), "worker_policy": policy(worker, "worker")}
         return {"source_sha": values[KEYS[0]], "gateway_digest": values[KEYS[1]],
                 "worker_digest": values[KEYS[2]], "revision": revision,
                 "tags": self.old["tags"]}
 
     def check_config(self, kind, values):
-        template = self.gateway()["template"] if kind == "gateway" else self.worker()
+        resource = self.gateway() if kind == "gateway" else self.worker_resource()
+        template = resource["template"]
+        require(policy(resource, kind) == self.old[kind + "_policy"], "resource_policy_drift")
         require(normalized(template) == normalized(expected_template(self.old[kind], kind, values)),
                 "template_drift")
 
