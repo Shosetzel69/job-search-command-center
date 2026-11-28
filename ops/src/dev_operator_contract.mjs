@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step']);
 export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
  run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.executions.cancel','run.executions.get','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
@@ -62,6 +62,34 @@ export function devRunExecutionTarget(job,execution){
  operatorRequire(jobs.includes(job)&&typeof execution==='string'&&execution.startsWith(job+'-')&&
   /^[a-z0-9-]{1,63}$/.test(execution)&&execution.length>job.length+1,'operator_run_execution_target_denied');
  return OPERATOR_ROOT+'/jobs/'+job+'/executions/'+execution;
+}
+export const WORKSPACE_RELEASE_SERVICES=Object.freeze({
+ manager:'jscc-dev-workspace-manager',worker:'jscc-dev-sandbox-worker'});
+export const WORKSPACE_RELEASE_PACKAGES=Object.freeze({
+ manager:'jscc-dev-workspace-manager-r2',worker:'jscc-dev-workspace-worker-cap100'});
+export const WORKSPACE_RELEASE_PHASES=Object.freeze(['stage','tag','cutover','rollback','retire_tag']);
+const WORKSPACE_REGISTRY='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/';
+export function workspaceRevision(role,value){
+ return Object.hasOwn(WORKSPACE_RELEASE_SERVICES,role)&&typeof value==='string'&&
+  value.startsWith(WORKSPACE_RELEASE_SERVICES[role]+'-')&&/^[a-z0-9-]{1,63}$/.test(value);
+}
+export function workspaceImage(role,value){
+ const packages=role==='manager'?['jscc-dev-workspace-manager','jscc-dev-workspace-manager-cap100','jscc-dev-workspace-manager-r2']:
+  role==='worker'?['jscc-dev-sandbox-worker','jscc-dev-workspace-worker-cap100']:[];
+ return typeof value==='string'&&packages.some(p=>value.startsWith(WORKSPACE_REGISTRY+p+'@'))&&
+  /^sha256:[a-f0-9]{64}$/.test(value.split('@').at(-1))&&value.split('@').length===2;
+}
+export function validateWorkspaceReleaseBundle(v){
+ operatorRequire(operatorExact(v,['environment','phase','role','source_sha','build_approval_ref','expected_pair_sha256','previous','candidate'])&&
+  v.environment==='dev'&&WORKSPACE_RELEASE_PHASES.includes(v.phase)&&
+  Object.hasOwn(WORKSPACE_RELEASE_SERVICES,v.role)&&match(SHA,v.source_sha)&&match(REF,v.build_approval_ref)&&
+  match(HEX,v.expected_pair_sha256)&&operatorExact(v.previous,['manager','worker'])&&operatorExact(v.candidate,['manager','worker'])&&
+  Object.keys(WORKSPACE_RELEASE_SERVICES).every(role=>operatorExact(v.previous[role],['revision','image'])&&
+   workspaceRevision(role,v.previous[role].revision)&&workspaceImage(role,v.previous[role].image)&&
+   /^sha256:[a-f0-9]{64}$/.test(v.candidate[role]||'')&&
+   v.previous[role].image!==WORKSPACE_REGISTRY+WORKSPACE_RELEASE_PACKAGES[role]+'@'+v.candidate[role]),
+  'workspace_release_bundle_denied');
+ return v;
 }
 export function operatorDispatchPath(execution){
  operatorRequire(match(EXEC,execution),'invalid_operator_execution');
@@ -117,6 +145,11 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
    (v.action!=='cancel_diagnostic_execution'||v.bundle.job==='jscc-diagnostics-dev'),
    'operator_run_execution_approval_mismatch');
   devRunExecutionTarget(v.bundle.job,v.bundle.execution);
+ }else if(v.action==='observe_workspace_release'){
+  operatorRequire(operatorExact(v.bundle,['environment'])&&v.bundle.environment==='dev','workspace_release_observe_denied');
+ }else if(v.action==='workspace_release_step'){
+  validateWorkspaceReleaseBundle(v.bundle);
+  operatorRequire(v.bundle.build_approval_ref!==ref,'workspace_release_approval_mismatch');
  }else if(v.action==='gcp_metadata'){
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.kind==='artifact_tag'&&operatorExact(v.bundle,['environment','kind','package','source_sha'])||
@@ -355,6 +388,25 @@ export function projectOperatorResult(request,record){
    'operator_build_artifact_result_invalid');
   out.build_artifacts={log_search_complete:m.log_search_complete,correlation:m.correlation,
    images:m.images.map(x=>({package:x.package,digest:x.digest,marker:x.marker})),source_provenance:'UNVERIFIED'};
+ }
+ if(['observe_workspace_release','workspace_release_step'].includes(request.action)&&['OBSERVED','SUCCEEDED'].includes(v.state)){
+  const m=v.workspace_release;
+  operatorRequire(m&&match(HEX,m.pair_sha256)&&operatorExact(m.services,['manager','worker'])&&
+   (request.action==='observe_workspace_release'?m.phase===null:WORKSPACE_RELEASE_PHASES.includes(m.phase)&&
+    Object.hasOwn(WORKSPACE_RELEASE_SERVICES,m.role)),'operator_workspace_release_invalid');
+  const services={};
+  for(const role of ['manager','worker']){
+   const x=m.services[role];
+   operatorRequire(x&&x.service===WORKSPACE_RELEASE_SERVICES[role]&&workspaceRevision(role,x.revision)&&
+    workspaceRevision(role,x.latest_ready_revision)&&workspaceImage(role,x.image)&&
+    match(HEX,x.configuration_sha256)&&Array.isArray(x.tags)&&x.tags.length<=20&&
+    x.tags.every(t=>match(/^[a-z0-9][a-z0-9-]{0,62}$/,t?.tag)&&workspaceRevision(role,t.revision))&&
+    new Set(x.tags.map(t=>t.tag)).size===x.tags.length,'operator_workspace_release_invalid');
+   services[role]={service:x.service,revision:x.revision,image:x.image,latest_ready_revision:x.latest_ready_revision,
+    configuration_sha256:x.configuration_sha256,tags:x.tags.map(t=>({tag:t.tag,revision:t.revision}))};
+  }
+  out.workspace_release={pair_sha256:m.pair_sha256,services,phase:m.phase,role:m.phase===null?null:m.role,
+   functional_acceptance:'PENDING',automatic_retry:false};
  }
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;

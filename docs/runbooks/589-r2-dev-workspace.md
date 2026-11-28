@@ -136,3 +136,21 @@ hardlinks and special files, removes its temporary directory before response,
 and kills remaining members of the launched process group. No binary export,
 GCS persistence, host/container escape proof or network privilege change.
 Manager/Gateway bind returned paths and cleanup evidence to the request.
+
+## RE-05 controlled Workspace R2 release (source only)
+
+The existing workspace pair release now has fixed operator actions:
+observe_workspace_release and workspace_release_step (stage, tag, cutover,
+rollback, retire_tag). Reuse the existing workspace R2 immutable build and
+operator approval/claim; every phase binds the current two-service snapshot,
+original successful build, exact candidate digests and prior revisions.
+No arbitrary service, config or image input. Stage changes image/revision
+only, requires revision-pinned existing traffic, tag allocates zero percent,
+cutover requires staged health and worker-before-manager, rollback is reverse
+order, retire removes only the candidate tag. Validate-only and etag before
+one PATCH, bounded LRO polling, effective revision/config/traffic readback;
+uncertain receipt requires observation and separately approved rollback, not
+retry. Existing manager/worker compatible rollout and independent synthetic
+smoke are required; health is not functional acceptance. Private service
+invoker, exact scoped update, image/source and existing traffic/URI formats
+are live admission gates. No product Service/Search Job, IAM or DB mutation.
