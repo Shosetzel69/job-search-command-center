@@ -190,7 +190,12 @@ actual immutable operator image, fixed DEV project/region, task count and
 parallelism one, retries zero, 1800s timeout, 1 CPU, 1Gi memory, fixed
 environment, no mount/command/args overrides. Gateway config:
 `JSCC_DEV_OPERATOR_ENABLED`, `JSCC_DEV_OPERATOR_SOURCE_SHA`,
-`JSCC_DEV_OPERATOR_IMAGE_DIGEST`. The Job additionally requires the independently approved public `JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256` fingerprint (R2). Enabling is a separate controlled
+`JSCC_DEV_OPERATOR_IMAGE_DIGEST`, `JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256`.
+The Gateway and Job must use the same independently approved public fingerprint. The existing
+`next.operator_activation.review_key_sha256` field in the externally pinned pair evidence
+must equal the owner-approved Publisher fingerprint (S1); never derive the expected pin
+from the deployed Job. Gateway verifies the signed companion before preflight/reservation
+and rechecks proof and Job before dispatch (S2). Enabling is a separate controlled
 configuration change. Keep disabled until all preconditions pass.
 Capture the protected product API and Search Job baseline, drain Retrieve,
 preserve their effective config/revisions/digests and do not manipulate
