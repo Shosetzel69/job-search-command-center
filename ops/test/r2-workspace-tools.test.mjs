@@ -100,3 +100,14 @@ test('workspace atomic move is exact generation-bound and create-only by contrac
   assert.throws(()=>validatedWorkspaceRequest('workspace_move',bad));
  assert.ok(workspaceTools.some(x=>x.name==='workspace_move'));
 });
+
+test('workspace toolchain and temporary artifact requests keep fixed task and snapshot limits',()=>{
+ const pin='a'.repeat(64);
+ assert.deepEqual(validatedWorkspaceRequest('workspace_run',{task:'toolchain'}).body,{task:'toolchain'});
+ for(const executable of ['sh','npx','jq'])assert.equal(validatedWorkspaceRequest('workspace_run',{task:'command',argv:[executable,'--version']}).body.argv[0],executable);
+ const args={task:'command',argv:['python3','app.py'],expected_snapshot_sha256:pin,artifact_paths:['artifacts/result.txt']};
+ assert.deepEqual(validatedWorkspaceRequest('workspace_run',args).body,args);
+ for(const bad of [{...args,expected_snapshot_sha256:undefined},{...args,artifact_paths:['src/private']},
+  {...args,artifact_paths:['artifacts/../private']},{...args,artifact_paths:['artifacts/a','artifacts/a']},
+  {...args,task:'toolchain',argv:undefined}])assert.throws(()=>validatedWorkspaceRequest('workspace_run',bad));
+});

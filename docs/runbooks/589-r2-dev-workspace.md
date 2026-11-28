@@ -123,3 +123,16 @@ new bucket, SDK upgrade or IAM change. Existing GCS layout, cost and permission
 admission must be verified before live use. The result confirms destination
 generation/content and absence of source; uncertain outcome is not retried.
 Reference: https://docs.cloud.google.com/storage/docs/json_api/v1/objects/move
+
+## RE-02 toolchain and transient artifact evidence (source only)
+
+The existing workspace_run admits a fixed toolchain inventory and sh/npx/jq
+only as already isolated sandbox executables. No installation or availability
+claim for the inherited image: inventory reports actual executable discovery,
+not versions or successful tool execution. Optional artifact_paths accepts up
+to four paths under artifacts/ only with an exact snapshot pin. The worker
+returns only bounded regular-file size/hash metadata, rejects symlinks,
+hardlinks and special files, removes its temporary directory before response,
+and kills remaining members of the launched process group. No binary export,
+GCS persistence, host/container escape proof or network privilege change.
+Manager/Gateway bind returned paths and cleanup evidence to the request.

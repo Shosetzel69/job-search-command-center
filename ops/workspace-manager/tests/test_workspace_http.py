@@ -220,3 +220,32 @@ class WorkerCwdTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class TemporaryArtifactTests(unittest.TestCase):
+    def test_toolchain_inventory_is_fixed_and_reports_availability_only(self):
+        from service import worker
+        from service.common import ALLOWED_BINARIES
+        result = worker.execute({}, 'toolchain')
+        self.assertEqual({r['name'] for r in result['tools']}, ALLOWED_BINARIES)
+        self.assertTrue(all(isinstance(r['available'], bool) for r in result['tools']))
+        self.assertFalse(result['versions_verified'])
+
+    def test_artifact_metadata_rejects_symlink_and_confirms_temporary_cleanup(self):
+        import hashlib
+        from service import worker
+        from service.common import snapshot_sha256
+        pin = snapshot_sha256({})
+        code = ("from pathlib import Path; p=Path('artifacts'); p.mkdir(); "
+                "(p/'ok.txt').write_bytes(b'fixture'); (p/'link').symlink_to('/etc/passwd')")
+        result = worker.execute({}, 'command', ['python3','-c',code],
+                                expected_snapshot_sha256=pin,
+                                artifact_paths=['artifacts/ok.txt','artifacts/link','artifacts/absent'])
+        self.assertEqual(result['exit_code'],0)
+        self.assertEqual(result['artifacts'],[
+            {'path':'artifacts/ok.txt','status':'HASHED','bytes':7,'sha256':hashlib.sha256(b'fixture').hexdigest()},
+            {'path':'artifacts/link','status':'REJECTED'},
+            {'path':'artifacts/absent','status':'MISSING'}])
+        self.assertTrue(result['temporary_directory_removed'])
+        with self.assertRaises(ValueError):
+            worker.execute({}, 'command', ['python3','-V'], artifact_paths=['artifacts/x'])

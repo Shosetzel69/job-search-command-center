@@ -62,12 +62,16 @@ def checked_files(files):
         decoded[path] = raw
     return decoded
 
-ALLOWED_TASKS = {'python_syntax', 'pytest', 'command'}
-ALLOWED_BINARIES = {'python', 'python3', 'pytest', 'bash', 'node', 'npm'}
+ALLOWED_TASKS = {'python_syntax', 'pytest', 'command', 'toolchain'}
+ALLOWED_BINARIES = {'python', 'python3', 'pytest', 'bash', 'sh', 'node', 'npm', 'npx', 'jq'}
 
 def checked_task(task, argv):
     if task not in ALLOWED_TASKS:
         raise ValueError('unsupported_task')
+    if task == 'toolchain':
+        if argv is not None:
+            raise ValueError('invalid_argv')
+        return []
     if task == 'python_syntax':
         return ['python', '-m', 'compileall', '-q', '.']
     if task == 'pytest':
@@ -111,3 +115,12 @@ def checked_snapshot_sha256(expected, files):
     if actual != expected:
         raise ValueError('snapshot_sha256_mismatch')
     return actual
+
+
+def checked_artifact_paths(paths):
+    if not isinstance(paths, list) or not 1 <= len(paths) <= 4:
+        raise ValueError('invalid_artifact_paths')
+    checked = [checked_path(path) for path in paths]
+    if len(set(checked)) != len(checked) or any(not p.startswith('artifacts/') for p in checked):
+        raise ValueError('invalid_artifact_paths')
+    return checked
