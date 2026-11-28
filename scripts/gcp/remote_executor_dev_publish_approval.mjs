@@ -4,11 +4,12 @@
 // A client-generated hash is not approval. IAM must restrict creation to the
 // separate authorized publisher; Gateway and operator must have read-only access.
 import {promisify} from 'node:util';
-import {createHash,createPublicKey,verify} from 'node:crypto';
+import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {planDevOpsBuild} from '../../ops/build/dev-cloud-build-controller.mjs';
 import {execFile} from 'node:child_process';
-import {operatorHash,operatorPaths,operatorRequire,validateOperatorApproval,OPERATOR_BUCKET}
+import {operatorHash,operatorPaths,operatorRequire,validateOperatorApproval,OPERATOR_BUCKET,
+ publisherReviewKey,publisherReviewMessage,verifyPublisherReview,signatureValid,operatorApprovalReviewPath,operatorApprovalReviewProof}
  from '../../ops/src/dev_operator_contract.mjs';
 const exec=promisify(execFile);
 async function token(){
@@ -16,36 +17,44 @@ async function token(){
  return stdout.trim();
 }
 export async function publishIndependentApproval(record,{
- trustedRecordHash,sourceSha,actor,now=Date.now,getToken=token,fetchImpl=fetch,
+ trustedRecordHash,sourceSha,actor,reviewConfig,reviewSignature,now=Date.now,getToken=token,fetchImpl=fetch,
 }={}){
  operatorRequire(typeof trustedRecordHash==='string'&&/^[a-f0-9]{64}$/.test(trustedRecordHash)&&
   operatorHash(record)===trustedRecordHash,'approval_publisher_pin_mismatch');
  const a=validateOperatorApproval({generation:'1',data:record},{
   ref:record.approval_ref,actor,sourceSha,now:now()
  });
+ const proof=operatorApprovalReviewProof(record,reviewConfig,reviewSignature);
  const value=JSON.stringify(record);
  operatorRequire(Buffer.byteLength(value)<=131072,'approval_record_size_limit');
  const access=await getToken();
  operatorRequire(typeof access==='string'&&access.length>0,'approval_publisher_identity_missing');
  const headers={Authorization:'Bearer '+access,Accept:'application/json'};
- const path=a.paths.approval;
- const q=new URLSearchParams({uploadType:'media',name:path,ifGenerationMatch:'0'});
- const response=await fetchImpl('https://storage.googleapis.com/upload/storage/v1/b/'+OPERATOR_BUCKET+'/o?'+q,{
-  method:'POST',headers:{...headers,'Content-Type':'application/json'},body:value,
-  redirect:'error',signal:AbortSignal.timeout(20000)
- });
- if(response.status===412)throw Error('approval_already_published');
- operatorRequire(response.ok,'approval_publish_uncertain');
- const metadata=await response.json();
- operatorRequire(metadata.name===path&&metadata.bucket===OPERATOR_BUCKET&&
-  /^[1-9][0-9]{0,19}$/.test(metadata.generation||''),'approval_publish_uncertain');
- const readback=await fetchImpl('https://storage.googleapis.com/storage/v1/b/'+OPERATOR_BUCKET+'/o/'+
-  encodeURIComponent(path)+'?alt=media&generation='+metadata.generation,{
-  headers,redirect:'error',signal:AbortSignal.timeout(20000)
- });
- operatorRequire(readback.ok,'approval_readback_uncertain');
- const saved=await readback.json();
- operatorRequire(operatorHash(saved)===trustedRecordHash,'approval_readback_mismatch');
+ async function createAndRead(path,data){
+  operatorRequire(now()>=record.issued_at_ms&&now()<record.expires_at_ms,'approval_publisher_expired');
+  const q=new URLSearchParams({uploadType:'media',name:path,ifGenerationMatch:'0'});
+  const response=await fetchImpl('https://storage.googleapis.com/upload/storage/v1/b/'+OPERATOR_BUCKET+'/o?'+q,{
+   method:'POST',headers:{...headers,'Content-Type':'application/json'},body:JSON.stringify(data),
+   redirect:'error',signal:AbortSignal.timeout(20000)
+  });
+  if(response.status===412)throw Error('approval_already_published');
+  operatorRequire(response.ok,'approval_publish_uncertain');
+  const metadata=await response.json();
+  operatorRequire(metadata.name===path&&metadata.bucket===OPERATOR_BUCKET&&
+   /^[1-9][0-9]{0,19}$/.test(metadata.generation||''),'approval_publish_uncertain');
+  const readback=await fetchImpl('https://storage.googleapis.com/storage/v1/b/'+OPERATOR_BUCKET+'/o/'+
+   encodeURIComponent(path)+'?alt=media&generation='+metadata.generation,{
+    headers,redirect:'error',signal:AbortSignal.timeout(20000)
+  });
+  operatorRequire(readback.ok,'approval_readback_uncertain');
+  const saved=await readback.json();
+  operatorRequire(operatorHash(saved)===operatorHash(data),'approval_readback_mismatch');
+  return metadata;
+ }
+ // A proof is immutable and confirmed before publishing the approval. An
+ // uncertain outcome or partial pair needs independent reconciliation.
+ await createAndRead(operatorApprovalReviewPath(record.approval_ref),proof);
+ const metadata=await createAndRead(a.paths.approval,record);
  return {approval_ref:record.approval_ref,operation_id:operatorPaths(record.approval_ref).key,
   generation:metadata.generation,record_hash:trustedRecordHash};
 }
@@ -151,35 +160,7 @@ const REMOTE_ARCHIVE_LIMIT=16*1024*1024;
 // F2: existing independent authority authenticates the actual GitHub
 // evidence before signing this exact record. The delivery SA alone is
 // insufficient. Only the public verification key is installed in DEV.
-export function publisherReviewKey(value){
- operatorRequire(typeof value==='string'&&value.length<=128&&/^[A-Za-z0-9+/]+={0,2}$/.test(value),'publisher_review_key_invalid');
- const bytes=Buffer.from(value,'base64');
- operatorRequire(bytes.toString('base64')===value,'publisher_review_key_invalid');
- const key=createPublicKey({key:bytes,format:'der',type:'spki'});
- operatorRequire(key.asymmetricKeyType==='ed25519'&&key.export({format:'der',type:'spki'}).equals(bytes),'publisher_review_key_invalid');
- return {key,fingerprint:sha256(bytes)};
-}
-export function publisherReviewMessage(record,purpose,config){
- operatorRequire(['approval','source'].includes(purpose)&&record&&typeof record==='object'&&
-  [record.approval_ref,record.review_ref,record.cost_ref].every(x=>typeof x==='string'&&REF.test(x))&&
-  new Set([record.approval_ref,record.review_ref,record.cost_ref]).size===3&&
-  /^[a-f0-9]{40}$/.test(config?.publisherSourceSha||'')&&/^[a-f0-9]{40}$/.test(config?.operatorSourceSha||'')&&
-  HEX.test(config?.actor||'')&&/^[0-9]{6,40}$/.test(config?.sub||'')&&
-  /^[a-z][a-z0-9-]{4,62}@jscc-dev\.iam\.gserviceaccount\.com$/.test(config?.email||''),
-  'publisher_review_binding_invalid');
- return Buffer.from(JSON.stringify({domain:'JSCC-589-DEV-INDEPENDENT-REVIEW-V1',purpose,
-  record_hash:operatorHash(record),publisher_source_sha:config.publisherSourceSha,
-  operator_source_sha:config.operatorSourceSha,actor_sub_hash:config.actor,
-  authority_email:config.email,authority_sub:config.sub}),'utf8');
-}
-const signatureValid=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{86}$/.test(x)&&
- Buffer.from(x,'base64url').length===64&&Buffer.from(x,'base64url').toString('base64url')===x;
-export function verifyPublisherReview(record,purpose,config,signature){
- try{
-  return signatureValid(signature)&&verify(null,publisherReviewMessage(record,purpose,config),
-   publisherReviewKey(config.reviewKey).key,Buffer.from(signature,'base64url'));
- }catch{return false;}
-}
+export {publisherReviewKey,publisherReviewMessage,verifyPublisherReview};
 async function remotePublisherRequest(path,body,{getIdentityToken,fetchImpl,now,record}){
  operatorRequire(typeof getIdentityToken==='function'&&typeof fetchImpl==='function'&&
   now()>=record.issued_at_ms&&now()<record.expires_at_ms,'remote_publisher_admission_denied');
