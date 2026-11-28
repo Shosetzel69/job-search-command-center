@@ -12,7 +12,6 @@ Owner-approved alternative to the unavailable dedicated native read-only credent
 - Existing gateway/worker must be upgraded together because the catalog version changes to `589-nile-api-v1`. Product Command API must be deployed from the independently reviewed source first, with diagnostics disabled until trusted configuration and effective runtime identity have been verified. Activation is a separate DEV configuration operation, not part of the image-only deploy. Verify live MCP tool schema after gateway upgrade; refresh connector if needed.
 - Independent reviewer checks exact SHA, negative route/caller/source/tenant/database cases, rollback and absence of DB credentials in worker, existing task regression, no raw plan predicates or PII, and live provider support for EXPLAIN/ANALYZE and transaction controls. Existing DEV-only cost and deployment gates remain. Disable flag for rollback of feature admission; restore prior reviewed images via existing routes if needed.
 - This is a bounded #659 diagnostic capability, not completion of #589 RE-07: arbitrary SQL, schema/migration/restore operations and disposable Nile container remain outside this delivery.
-
 ## #589 RE-04 / RE-08 — R5 operator-side build submission (source only)
 
 The existing `ops/build/dev-cloud-build-controller.mjs` and durable
@@ -71,7 +70,8 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   bounded R4 inventory, GCS artifact metadata/copy, and GCP metadata.
   A create-only request receipt binds the execution before dispatch mapping;
   pending status observes receipt/claim and exact execution, never replays.
-  operator_catalog exposes action contract/pins only, not live IAM authority.
+  operator_catalog exposes action contract/pins; operator_preflight checks
+  published approval, lifecycle and exact Job without dispatch or IAM claims.
   Uncertain submission is not retried automatically. Build cancellation is a
   separate approved action bound to the original approval and exact build ID;
   verify ledger and provider source before regional cancellation, then observe
@@ -96,8 +96,8 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   Independent client verifies exact fixed DEV publisher origin, external pin,
   token audience, archive and returned generation/hash; no retry. Remote
   archive cap 16 MiB; existing trusted staging handles larger archives.
-  Disabled by default; actual caller identity, URL, IAM and GCS admission
-  remain unverified. Self-supplied hashes never authorize changes.
+  Private authenticated status verifies both source pins; disabled by default.
+  Actual caller, URL, IAM/GCS admission remain unverified; no self-approval.
 - The same approved build controller accepts fixed `workspace_r2` for #589:
   existing cloudbuild.workspace-manager-r2.yaml, exact paired base digests,
   fixed image packages and step IDs. Existing staging archive hash, YAML

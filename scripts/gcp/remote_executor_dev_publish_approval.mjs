@@ -204,3 +204,26 @@ export async function stageDevSourceRemotely(record,{
   'remote_stage_receipt_mismatch');
  return value;
 }
+
+
+// Independent preflight before publication. No storage mutation or discovery
+// outside the fixed private service, no caller identity disclosure.
+export async function inspectDevPublisher({publisherSourceSha,operatorSourceSha,getIdentityToken,fetchImpl=fetch}={}){
+ operatorRequire(typeof publisherSourceSha==='string'&&/^[a-f0-9]{40}$/.test(publisherSourceSha)&&
+  typeof operatorSourceSha==='string'&&/^[a-f0-9]{40}$/.test(operatorSourceSha)&&typeof getIdentityToken==='function',
+  'remote_publisher_status_admission_denied');
+ const token=await getIdentityToken(DEV_PUBLISHER_AUDIENCE);
+ operatorRequire(typeof token==='string'&&token.length<=8192&&/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token),
+  'remote_publisher_identity_invalid');
+ const response=await fetchImpl(DEV_PUBLISHER_ORIGIN+'/v1/status',{method:'GET',headers:{Authorization:'Bearer '+token,Accept:'application/json'},
+  redirect:'error',signal:AbortSignal.timeout(10000)});
+ operatorRequire(response.ok,'remote_publisher_status_unverified');
+ const raw=await response.text();
+ operatorRequire(Buffer.byteLength(raw)<=4096,'remote_publisher_receipt_limit');
+ const value=JSON.parse(raw);
+ operatorRequire(exact(value,['environment','service','publisher_source_sha','operator_source_sha','identity_binding','storage_permissions','publication_authorized'])&&
+  value.environment==='dev'&&value.service==='jscc-ops-publisher-dev'&&value.publisher_source_sha===publisherSourceSha&&
+  value.operator_source_sha===operatorSourceSha&&value.identity_binding==='AUTHENTICATED'&&
+  value.storage_permissions==='UNVERIFIED'&&value.publication_authorized===false,'remote_publisher_status_mismatch');
+ return value;
+}

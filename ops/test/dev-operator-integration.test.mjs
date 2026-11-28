@@ -234,3 +234,20 @@ test('authenticated catalog is derived from admitted actions, never calls cloud 
  await assert.rejects(()=>invokeDevOperator('operator_catalog',{environment:'prod'},sub,config,f.opts));
  await assert.rejects(()=>invokeDevOperator('operator_catalog',{},'invalid',config,f.opts));
 });
+
+
+test('published approval preflight binds same actor, generation, lifecycle and Job without consuming approval',async()=>{
+ const f=fixture(),preflight=()=>invokeDevOperator('operator_preflight',{approval_ref:ref},sub,config,f.opts);
+ const out=await preflight();
+ assert.equal(out.state,'PREFLIGHT_OBSERVED');assert.equal(out.approval_generation,'1');
+ assert.equal(out.record_hash,operatorHash(approval()));assert.equal(out.job_template,'OBSERVED_MATCH');
+ assert.equal(out.runtime_permissions,'UNVERIFIED');assert.equal(out.execution_authorized,false);
+ assert.equal(f.map.size,1);assert.equal(f.calls.filter(x=>x[0]==='POST').length,0);
+ await assert.rejects(()=>invokeDevOperator('operator_preflight',{approval_ref:ref},'999999',config,f.opts));
+ await start(f);
+ assert.equal((await preflight()).state,'ALREADY_REQUESTED');
+ assert.equal(f.calls.filter(x=>x[0]==='POST').length,1);
+ const g=fixture({jobImage:'sha256:'+'f'.repeat(64)});
+ await assert.rejects(()=>invokeDevOperator('operator_preflight',{approval_ref:ref},sub,config,g.opts),/job_binding/);
+ assert.equal(g.map.size,1);
+});

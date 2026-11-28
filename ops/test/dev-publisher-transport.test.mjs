@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {publisherRuntimeConfig,authorizePublisher,createPublisherHandler} from '../publisher/server.mjs';
 const sha='a'.repeat(40),actor='b'.repeat(64),sub='123456789012345678901',email='independent-authority-dev@jscc-dev.iam.gserviceaccount.com';
-const config={email,sub,actor,operatorSourceSha:sha};
+const config={email,sub,actor,operatorSourceSha:sha,publisherSourceSha:sha};
 const record={approval_ref:'#589/1',review_ref:'#589/2',cost_ref:'#589/3',actor_sub_hash:actor,operator_source_sha:sha};
 const body={record,trusted_record_hash:'c'.repeat(64)};
 const req=(path='/v1/approval',value=body,headers={})=>new Request('https://fixture.invalid'+path,{
@@ -57,4 +57,19 @@ test('uncertain publisher receipt is not replayed automatically',async()=>{
  const response=await handler(req());
  assert.equal(response.status,503);assert.deepEqual(await response.json(),{error:'publisher_outcome_unverified',automatic_retry:false});
  assert.equal(calls,1);
+});
+
+
+test('publisher status is independently authenticated and returns only exact configured source pins',async()=>{
+ const request=new Request('https://fixture.invalid/v1/status',{headers:{Authorization:'Bearer test.token.value'}});
+ const opts={authorize:async()=>true,publish:async()=>assert.fail('publish'),stage:async()=>assert.fail('stage')};
+ const handler=createPublisherHandler(config,opts);
+ const response=await handler(request);assert.equal(response.status,200);
+ const value=await response.json();
+ assert.deepEqual(value,{environment:'dev',service:'jscc-ops-publisher-dev',publisher_source_sha:sha,
+  operator_source_sha:sha,identity_binding:'AUTHENTICATED',storage_permissions:'UNVERIFIED',publication_authorized:false});
+ assert.equal(JSON.stringify(value).includes(email),false);
+ assert.equal((await createPublisherHandler(config,{...opts,authorize:async()=>false})(request)).status,403);
+ assert.equal((await createPublisherHandler(null,opts)(request)).status,404);
+ assert.equal((await handler(req('/v1/status'))).status,405);
 });

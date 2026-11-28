@@ -39,7 +39,7 @@ export async function publisherRuntimeConfig(env=process.env,{fetchImpl=fetch,re
  const r=await fetchImpl(META,{headers:{'Metadata-Flavor':'Google'},redirect:'error',signal:AbortSignal.timeout(5000)});
  operatorRequire(r.ok&&(await r.text()).trim()===SA,'publisher_runtime_identity_denied');
  return Object.freeze({email,sub,actor:env.JSCC_DEV_PUBLISHER_ACTOR_SUB_HASH,
-  operatorSourceSha:env.JSCC_DEV_PUBLISHER_OPERATOR_SOURCE_SHA});
+  operatorSourceSha:env.JSCC_DEV_PUBLISHER_OPERATOR_SOURCE_SHA,publisherSourceSha:env.SOURCE_SHA});
 }
 export async function authorizePublisher(request,config,verify=jwtVerify){
  if(!config||request.headers.has('Origin')||request.headers.has('Cookie'))return false;
@@ -75,9 +75,13 @@ export function createPublisherHandler(config,{authorize=authorizePublisher,publ
  return async request=>{
   if(!config)return reply(404,{error:'not_found'});
   const url=new URL(request.url),source=url.pathname==='/v1/source';
-  if(url.search||(!source&&url.pathname!=='/v1/approval'))return reply(404,{error:'not_found'});
-  if(request.method!=='POST')return reply(405,{error:'method_denied'});
+  const status=url.pathname==='/v1/status';
+  if(url.search||(!source&&!status&&url.pathname!=='/v1/approval'))return reply(404,{error:'not_found'});
+  if(request.method!==(status?'GET':'POST'))return reply(405,{error:'method_denied'});
   if(!(await authorize(request,config)))return reply(403,{error:'forbidden'});
+  if(status)return reply(200,{environment:'dev',service:SERVICE,publisher_source_sha:config.publisherSourceSha,
+   operator_source_sha:config.operatorSourceSha,identity_binding:'AUTHENTICATED',
+   storage_permissions:'UNVERIFIED',publication_authorized:false});
   if(active)return reply(429,{error:'publisher_busy'});
   active=true;
   try{

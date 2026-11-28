@@ -13,6 +13,8 @@ const OPERATOR_IMAGE='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-
 export const operatorTools=Object.freeze([
  {name:'operator_catalog',description:'Read the implemented DEV operator action contract and configured source/image pins; does not establish live permissions or authorize execution.',
   inputSchema:{type:'object',properties:{},additionalProperties:false}},
+ {name:'operator_preflight',description:'Check protected published approval, current configured Job template and state lifecycle without reserving or dispatching. Use operator_start separately.',
+  inputSchema:{type:'object',required:['approval_ref'],properties:{approval_ref:{type:'string',pattern:'^#589/[1-9][0-9]{0,19}$'}},additionalProperties:false}},
  {name:'operator_start',description:'Start one independently approved DEV operator action by GitHub approval reference; no arbitrary scripts or parameters.',
   inputSchema:{type:'object',required:['approval_ref'],properties:{approval_ref:{type:'string',pattern:'^#589/[1-9][0-9]{0,19}$'}},additionalProperties:false}},
  {name:'operator_status',description:'Read sanitized state of an already requested DEV operator action; never retries.',
@@ -133,7 +135,7 @@ export async function invokeDevOperator(name,args,actorSub,config,{
    configured_image_digest:config.imageDigest,actions,catalog_sha256:operatorHash(actions),
    live_permissions:'UNVERIFIED',execution_authorized:false};
  }
- operatorRequire(name==='operator_start'||name==='operator_status','operator_tool_denied');
+ operatorRequire(['operator_start','operator_status','operator_preflight'].includes(name),'operator_tool_denied');
  const ref=validateOperatorToolArgs(args),actor=operatorActor(actorSub),paths=operatorPaths(ref);
  const previous=await read(paths.request);
  if(previous){
@@ -145,6 +147,9 @@ export async function invokeDevOperator(name,args,actorSub,config,{
    /^[a-f0-9]{64}$/.test(req.approval_hash||''),'operator_request_not_found');
   const result=await read(paths.result);
   const projection=projectOperatorResult(req,result);
+  if(name==='operator_preflight')return {environment:'dev',work_item_ref:'#589',approval_ref:ref,
+   operation_id:paths.key,state:'ALREADY_REQUESTED',operation_state:projection.state,
+   automatic_retry:false,execution_authorized:false};
   if(name==='operator_status'&&!result){
    // Additional scoped receipt/claim reads and execution observation are
    // admitted separately. Missing permission cannot authorize a retry.
@@ -155,13 +160,24 @@ export async function invokeDevOperator(name,args,actorSub,config,{
   }
   return {...projection,duplicate:name==='operator_start'};
  }
- operatorRequire(name==='operator_start','operator_request_not_found');
+ operatorRequire(name!=='operator_status','operator_request_not_found');
  const admission=validateOperatorApproval(await read(paths.approval),{
   ref,actor,sourceSha:config.sourceSha,now:now()
  });
  await verifyLifecycle(now());
  await verifyJob(call,config);
  const req=operatorRequest(admission,now());
+ if(name==='operator_preflight'){
+  const latest=validateOperatorApproval(await read(paths.approval),{ref,actor,sourceSha:config.sourceSha,now:now()});
+  operatorRequire(latest.generation===admission.generation&&operatorHash(latest.approval)===operatorHash(admission.approval),
+   'operator_preflight_approval_drift');
+  operatorRequire(!(await read(paths.request)),'operator_preflight_request_race');
+  return {environment:'dev',work_item_ref:'#589',approval_ref:ref,operation_id:paths.key,
+   state:'PREFLIGHT_OBSERVED',action:admission.approval.action,approval_generation:admission.generation,
+   record_hash:operatorHash(admission.approval),operator_source_sha:config.sourceSha,
+   configured_image_digest:config.imageDigest,lifecycle:'OBSERVED_MATCH',job_template:'OBSERVED_MATCH',
+   runtime_permissions:'UNVERIFIED',automatic_retry:false,execution_authorized:false};
+ }
  validateOperatorRequest(req,admission);
  try{await create(paths.request,req);}
  catch(e){

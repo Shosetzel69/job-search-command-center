@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {prepareDevSourceArchive,stageIndependentDevSource,stageDevSourceRemotely,publishApprovalRemotely,DEV_PUBLISHER_ORIGIN,DEV_PUBLISHER_AUDIENCE} from '../../scripts/gcp/remote_executor_dev_publish_approval.mjs';
+import {prepareDevSourceArchive,stageIndependentDevSource,stageDevSourceRemotely,publishApprovalRemotely,inspectDevPublisher,DEV_PUBLISHER_ORIGIN,DEV_PUBLISHER_AUDIENCE} from '../../scripts/gcp/remote_executor_dev_publish_approval.mjs';
 import {operatorHash} from '../src/dev_operator_contract.mjs';
 
 const now=()=>1760000000000;
@@ -103,4 +103,18 @@ test('remote approval client verifies independent record pin and exact protected
  assert.equal(calls,1);
  await assert.rejects(()=>publishApprovalRemotely(a,{...opts,fetchImpl:async()=>Response.json({...receipt,generation:'0'})}),
   /receipt_mismatch/);
+});
+
+
+test('independent client checks exact publisher and operator source pins via read-only status',async()=>{
+ const value={environment:'dev',service:'jscc-ops-publisher-dev',publisher_source_sha:sha,operator_source_sha:sha,
+  identity_binding:'AUTHENTICATED',storage_permissions:'UNVERIFIED',publication_authorized:false};
+ const options={publisherSourceSha:sha,operatorSourceSha:sha,getIdentityToken:async audience=>{
+  assert.equal(audience,DEV_PUBLISHER_AUDIENCE);return 'a.b.c';
+ },fetchImpl:async(url,init)=>{
+  assert.equal(url,DEV_PUBLISHER_ORIGIN+'/v1/status');assert.equal(init.method,'GET');assert.equal(init.body,undefined);
+  return Response.json(value);
+ }};
+ assert.deepEqual(await inspectDevPublisher(options),value);
+ await assert.rejects(()=>inspectDevPublisher({...options,operatorSourceSha:'f'.repeat(40)}),/status_mismatch/);
 });
