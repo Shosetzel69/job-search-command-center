@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {operatorActor,operatorHash,operatorPaths,operatorDispatchPath,operatorExecution,operatorLro,validateOperatorApproval}
  from '../src/dev_operator_contract.mjs';
-import {invokeDevOperator,operatorGatewayConfig} from '../src/dev_operator_gateway.mjs';
+import {invokeDevOperator,operatorGatewayConfig,operatorTools} from '../src/dev_operator_gateway.mjs';
 import {runOperatorJob,runtimeConfig} from '../operator/dev_operator_job.mjs';
 
 const SHA='a'.repeat(40),DIGEST='sha256:'+'b'.repeat(64);
@@ -218,4 +218,19 @@ test('operator audit binds protected approval and claim to the actual outcome an
  assert.equal(JSON.stringify(audit).includes('never-return'),false);
  f.map.get(paths.result).data.audit.actor_sub_hash='f'.repeat(64);
  await assert.rejects(()=>status(f),/operator_audit_binding_invalid/);
+});
+
+
+test('authenticated catalog is derived from admitted actions, never calls cloud or creates approval',async()=>{
+ const f=fixture();
+ const out=await invokeDevOperator('operator_catalog',{},sub,config,f.opts);
+ assert.ok(operatorTools.some(x=>x.name==='operator_catalog'));
+ assert.equal(out.catalog_sha256,operatorHash(out.actions));
+ assert.equal(out.live_permissions,'UNVERIFIED');assert.equal(out.execution_authorized,false);
+ assert.ok(out.actions.every(x=>x.approval_required===true));
+ assert.ok(out.actions.some(x=>x.action==='observe_product_incident'&&x.classification==='OBSERVE'));
+ assert.ok(out.actions.some(x=>x.action==='reconcile_build_submission'&&x.classification==='CHANGE'));
+ assert.equal(f.calls.length,0);assert.equal(f.map.size,1);
+ await assert.rejects(()=>invokeDevOperator('operator_catalog',{environment:'prod'},sub,config,f.opts));
+ await assert.rejects(()=>invokeDevOperator('operator_catalog',{},'invalid',config,f.opts));
 });

@@ -71,6 +71,7 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   bounded R4 inventory, GCS artifact metadata/copy, and GCP metadata.
   A create-only request receipt binds the execution before dispatch mapping;
   pending status observes receipt/claim and exact execution, never replays.
+  operator_catalog exposes action contract/pins only, not live IAM authority.
   Uncertain submission is not retried automatically. Build cancellation is a
   separate approved action bound to the original approval and exact build ID;
   verify ledger and provider source before regional cancellation, then observe
@@ -191,7 +192,6 @@ environment, no mount/command/args overrides. Gateway config:
 `JSCC_DEV_OPERATOR_ENABLED`, `JSCC_DEV_OPERATOR_SOURCE_SHA`,
 `JSCC_DEV_OPERATOR_IMAGE_DIGEST`. Enabling is a separate controlled
 configuration change. Keep disabled until all preconditions pass.
-
 Capture the protected product API and Search Job baseline, drain Retrieve,
 preserve their effective config/revisions/digests and do not manipulate
 product locks. Coordinate immutable Gateway/diagnostics/workspace upgrades

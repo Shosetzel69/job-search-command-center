@@ -15,6 +15,13 @@ export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
  run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.executions.cancel','run.executions.get','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
 });
+// Advertise the implemented contract, not live IAM or an approval.
+const OBSERVATIONS=new Set(['observe_build','observe_pair','gcloud_inventory','gcp_metadata','observe_run_execution',
+ 'observe_build_artifacts','observe_workspace_release','observe_product_release','observe_workspace_delivery','observe_product_incident']);
+export function operatorActionCatalog(){
+ return [...ACTIONS].sort().map(action=>({action,classification:OBSERVATIONS.has(action)?'OBSERVE':
+  action==='gcs_artifact'?'MIXED':'CHANGE',approval_required:true}));
+}
 const STATES=new Set(['DISPATCH_PENDING_OR_UNKNOWN','SUBMITTED','WORKING','SUCCEEDED','FAILED','BLOCKED',
  'CANCELLED','SUBMISSION_UNKNOWN','ROLLED_BACK','RECOVERY_REQUIRED','FREEZE_UNCERTAIN',
  'ROLLBACK_BLOCKED','UNFREEZE_UNCERTAIN','ADMISSION_BLOCKED','OBSERVED']);

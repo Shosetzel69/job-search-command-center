@@ -5,12 +5,14 @@ import {gcpFetch,gcsReadJson,gcsWriteJson} from './lib.mjs';
 import {OPERATOR_BUCKET,OPERATOR_ROOT,OPERATOR_JOB,operatorActor,operatorPaths,
  operatorExecution,operatorLro,operatorDispatchPath,operatorHash,operatorRequest,
  operatorRequire,validateOperatorToolArgs,validateOperatorApproval,validateOperatorRequest,
- projectOperatorResult} from './dev_operator_contract.mjs';
+ projectOperatorResult,operatorActionCatalog,operatorExact} from './dev_operator_contract.mjs';
 
 const RUN='https://run.googleapis.com/v2/';
 const OPERATOR_SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
 const OPERATOR_IMAGE='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-operator@';
 export const operatorTools=Object.freeze([
+ {name:'operator_catalog',description:'Read the implemented DEV operator action contract and configured source/image pins; does not establish live permissions or authorize execution.',
+  inputSchema:{type:'object',properties:{},additionalProperties:false}},
  {name:'operator_start',description:'Start one independently approved DEV operator action by GitHub approval reference; no arbitrary scripts or parameters.',
   inputSchema:{type:'object',required:['approval_ref'],properties:{approval_ref:{type:'string',pattern:'^#589/[1-9][0-9]{0,19}$'}},additionalProperties:false}},
  {name:'operator_status',description:'Read sanitized state of an already requested DEV operator action; never retries.',
@@ -123,6 +125,14 @@ export async function invokeDevOperator(name,args,actorSub,config,{
 }={}){
  operatorRequire(config&&/^[a-f0-9]{40}$/.test(config.sourceSha)&&
   /^sha256:[a-f0-9]{64}$/.test(config.imageDigest||''),'operator_not_configured');
+ if(name==='operator_catalog'){
+  operatorRequire(operatorExact(args,[]),'invalid_operator_arguments');
+  operatorActor(actorSub);
+  const actions=operatorActionCatalog();
+  return {environment:'dev',work_item_ref:'#589',operator_source_sha:config.sourceSha,
+   configured_image_digest:config.imageDigest,actions,catalog_sha256:operatorHash(actions),
+   live_permissions:'UNVERIFIED',execution_authorized:false};
+ }
  operatorRequire(name==='operator_start'||name==='operator_status','operator_tool_denied');
  const ref=validateOperatorToolArgs(args),actor=operatorActor(actorSub),paths=operatorPaths(ref);
  const previous=await read(paths.request);
