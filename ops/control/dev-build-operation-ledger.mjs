@@ -27,7 +27,7 @@ export function operationIdentity({actor_sub_hash,idempotency_key,request}) {
 }
 
 export function gcsDevOperationStore(bucket,{read=gcsReadJson,create=gcsWriteJson,replace=gcsReplaceJson}={}) {
-  if(typeof bucket!=='string' || !/^jscc-dev-[a-z0-9-]{3,80}$/.test(bucket))
+  if(bucket!=='jscc-dev-ops-state')
     throw new Error('invalid_dev_state_bucket');
   return Object.freeze({
     get:async path=>read(bucket,path),
@@ -97,6 +97,34 @@ export async function executeApprovedDevBuildOnce(identity,store,trust) {
       verifySourceSnapshot:trust?.verifySourceSnapshot,
       verifyCostAdmission:trust?.verifyCostAdmission,
       dispatch:typeof trust?.dispatch==='function' ? async request=>{
+        // One authoritative approval is single-use even when a caller changes
+        // the idempotency key or actor. Reserve before any remote submission.
+        const approvalPath='control/v1/builds/'+HASH({
+          environment:'dev',operation:'dev-ops-build-approval',
+          approval_ref:request.approval_ref
+        })+'.json';
+        const approvalRecord={
+          schema_version:'1.0',environment:'dev',operation_kind:'dev-ops-build-approval',
+          approval_ref:request.approval_ref,operation_id:identity.key,
+          request_hash:identity.request_hash,source_sha:request.source_sha,
+          source_object:request.approved_source_object,
+          source_generation:request.approved_source_generation,
+          source_sha256:request.approved_source_sha256,
+        };
+        try {await store.create(approvalPath,approvalRecord);}
+        catch(e){
+          if(e?.message==='generation_precondition_failed')throw Error('build_approval_already_consumed');
+          throw e;
+        }
+        const receipt=await store.get(approvalPath);
+        if(!receipt?.generation || HASH(receipt.data)!==HASH(approvalRecord))
+          throw Error('build_approval_reservation_unconfirmed');
+        ({record,generation}=await advance(identity,store,record,generation,{
+          state:'SUBMITTING',approval_ref:request.approval_ref,
+          source_object:request.approved_source_object,
+          source_generation:request.approved_source_generation,
+          source_sha256:request.approved_source_sha256,
+        }));
         dispatchEntered=true;
         return trust.dispatch(request);
       } : undefined,
@@ -151,4 +179,43 @@ export async function observeDevBuildOnce(identity,store,{getBuild}={}) {
     immutable_image_count:status.immutable_image_count,
     // Always unverified until independent source/archive attestation.
     source_provenance:'UNVERIFIED'};
+}
+
+
+// Recover only an unknown submission against its original single-use claim.
+export async function reconcileDevBuildSubmission(identity,store,{approvalRef,archive,buildId,verifyBuild,assertFresh}={}){
+ if(typeof verifyBuild!=='function'||typeof assertFresh!=='function'||!/^#589\/[1-9][0-9]{0,19}$/.test(approvalRef||'')||
+  !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(buildId||''))
+  throw Error('build_recovery_admission_denied');
+ const saved=await store.get(identity.path),record=saved?.data;
+ if(!/^[1-9][0-9]{0,19}$/.test(saved?.generation||'')||record?.state!=='SUBMISSION_UNKNOWN'||
+  record.environment!=='dev'||record.operation_kind!=='dev-ops-build'||record.operation_id!==identity.key||
+  record.actor_sub_hash!==identity.actor_sub_hash||record.request_hash!==identity.request_hash||
+  record.work_item_ref!==identity.normalized.work_item_ref||record.source_sha!==identity.normalized.source_sha||
+  record.trusted_ref!==identity.normalized.trusted_ref||record.approval_ref!==approvalRef||
+  record.build_id!==null||record.source_object!==archive?.object||
+  record.source_generation!==archive?.generation||record.source_sha256!==archive?.sha256)
+  throw Error('build_recovery_ledger_mismatch');
+ const approvalPath='control/v1/builds/'+HASH({environment:'dev',operation:'dev-ops-build-approval',approval_ref:approvalRef})+'.json';
+ const approval=await store.get(approvalPath),expected={schema_version:'1.0',environment:'dev',
+  operation_kind:'dev-ops-build-approval',approval_ref:approvalRef,operation_id:identity.key,
+  request_hash:identity.request_hash,source_sha:record.source_sha,source_object:archive.object,
+  source_generation:archive.generation,source_sha256:archive.sha256};
+ if(!/^[1-9][0-9]{0,19}$/.test(approval?.generation||'')||HASH(approval.data)!==HASH(expected))
+  throw Error('build_recovery_approval_reservation_mismatch');
+ assertFresh();
+ const raw=await verifyBuild(record);
+ const status=projectDevBuildStatus(raw,{project:'jscc-shared',region:'europe-west1',build_id:buildId,source_sha:record.source_sha});
+ const state=status.status==='SUCCESS'?'SUCCEEDED':status.status==='CANCELLED'?'CANCELLED':status.terminal?'FAILED':'WORKING';
+ const latest=await store.get(identity.path),latestApproval=await store.get(approvalPath);
+ if(latest?.generation!==saved.generation||HASH(latest.data)!==HASH(record)||
+  latestApproval?.generation!==approval.generation||HASH(latestApproval.data)!==HASH(expected))
+  throw Error('build_recovery_ledger_drift');
+ assertFresh();
+ const next=await advance(identity,store,record,saved.generation,{state,build_id:buildId,build_status:status.status,
+  immutable_image_count:status.immutable_image_count,coarse_error:null,reconciled_submission:true});
+ if(next.record.build_id!==buildId||next.record.reconciled_submission!==true||next.record.approval_ref!==approvalRef)
+  throw Error('build_recovery_write_unconfirmed');
+ return {operation_id:identity.key,build_id:buildId,state:next.record.state,build_status:status.status,
+  reconciled_submission:true,source_provenance:'UNVERIFIED',retry_dispatched:false};
 }

@@ -84,3 +84,116 @@ current image lineage. Do not build from arbitrary branch or image tags.
 5. DEV smoke and rollback proof; no TEST/PROD or Nile schema changes.
 
 **Current status:** SOURCE_IMPLEMENTED, TESTED_IN_CI, NOT_DEPLOYED.
+
+## RE-02 selectable working directory (source only)
+
+`workspace_run` accepts optional `cwd` for all existing tasks. Omit it or pass `"."` for the existing snapshot root; for example:
+
+```json
+{"task":"command","argv":["python3","app.py"],"cwd":"src"}
+```
+
+The Gateway validates the path syntax, Manager requires an existing directory implied by the exact snapshot files, and Worker independently validates and resolves it inside the fresh temporary snapshot before process launch. Absolute, traversal, restricted, missing and file paths are denied. No directory is created from `cwd` itself; the existing executable allowlist, environment, limits, DEV OAuth scopes and unprivileged execution boundary remain unchanged. Root requests omit the new field on the wire for compatibility with the existing Manager/Worker protocol. A selected subdirectory is **not** supported by the old Worker or Manager; it must fail rather than silently execute in the root.
+
+The consolidated #711 candidate now extends `cloudbuild.workspace-manager-r2.yaml` with the existing Manager and Sandbox Worker immutable-image lineages, a worker overlay (`Dockerfile.r2-worker`), source parity and smoke steps. Historical baseline refs must be verified against the actual serving images before build. Gateway, Manager and Worker require a coordinated source/digest-aligned release and rollback; no build, rollout or live acceptance has been performed by this candidate. Existing cost admission and Retrieve protection remain mandatory.
+
+
+## RE-02 exact workspace snapshot binding (source only)
+
+The existing list operation returns the SHA256 of a deterministic sorted
+manifest of relative paths, byte lengths and per-file content hashes.
+An optional `expected_snapshot_sha256` in the existing `workspace_run`
+tool binds the manager's bounded snapshot to that pin before dispatch.
+The worker independently recomputes it from decoded input and returns
+the actual digest; manager and gateway fail closed if the worker result
+does not confirm the pin. Legacy unpinned calls remain compatible.
+This proves exact workspace bytes, not an authenticated Git SHA or
+the provenance of the caller-supplied pin. Coordinated gateway, manager
+and worker release and live acceptance remain required.
+
+
+## RE-02 atomic workspace move (source only)
+
+The new workspace_move operation uses the existing Manager and write scope.
+It accepts only a single source and absent destination, with exact source
+generation. GCS uses the documented atomic objects/move endpoint only after
+verifying the existing bucket supports hierarchical namespace. A flat or
+unverified namespace fails closed; there is no non-atomic copy/delete fallback,
+new bucket, SDK upgrade or IAM change. Existing GCS layout, cost and permission
+admission must be verified before live use. The result confirms destination
+generation/content and absence of source; uncertain outcome is not retried.
+Reference: https://docs.cloud.google.com/storage/docs/json_api/v1/objects/move
+
+## RE-02 toolchain and transient artifact evidence (source only)
+
+The existing workspace_run admits a fixed toolchain inventory and sh/npx/jq
+only as already isolated sandbox executables. No installation or availability
+claim for the inherited image: inventory reports actual executable discovery,
+not versions or successful tool execution. Optional artifact_paths accepts up
+to four paths under artifacts/ only with an exact snapshot pin. The worker
+returns bounded regular-file size/hash metadata or explicit export_artifacts
+(base64, total 8 KiB, verified by Manager/Gateway; reduced output cap), rejects symlinks,
+hardlinks and special files, removes its temporary directory before response,
+and kills remaining members of the launched process group. No GCS persistence,
+host/container escape proof or network privilege change.
+Manager/Gateway bind returned paths and cleanup evidence to the request.
+
+## RE-05 controlled Workspace R2 release (source only)
+
+The existing workspace pair release now has fixed operator actions:
+observe_workspace_release and workspace_release_step (stage, tag, cutover,
+rollback, retire_tag). Reuse the existing workspace R2 immutable build and
+operator approval/claim; every phase binds the current two-service snapshot,
+original successful build, exact candidate digests and prior revisions.
+No arbitrary service, config or image input. Stage changes image/revision
+only, requires revision-pinned existing traffic, tag allocates zero percent,
+cutover requires staged health and worker-before-manager, rollback is reverse
+order, retire removes only the candidate tag. Validate-only and etag before
+one PATCH, bounded LRO polling, effective revision/config/traffic readback;
+uncertain receipt requires observation and separately approved rollback, not
+retry. workspace_revision_cleanup requires reviewed maintenance/retention,
+exact obsolete revision etag, untagged inactive target and retained rollback;
+validateOnly/delete/readback; never deletes images. observe_workspace_delivery
+reconciles exact build/marker evidence and ordered protected step receipts;
+returns next approval or recovery, never auto-dispatch. Independent smoke remains required. Private service
+invoker, exact scoped update, image/source and existing traffic/URI formats
+are live admission gates. No product Service/Search Job, IAM or DB mutation.
+## RE-07 isolated Nile testing invocation (source only)
+
+Extend the existing owner issue-comment dispatcher, not GitHub credentials or
+GCP Docker privileges: /jscc-nile-ci dev followed by the exact lowercase main
+SHA, only on issue #589. It dispatches the existing Validate Command API
+workflow in nile_only mode, verifies trusted main SHA again before starting
+its pinned official disposable Nile container, reuses mandatory native test
+and cleanup gates. Existing GitDeploy requires push, not workflow_dispatch.
+The tester owns invocation and review. No managed DB or product deployment,
+no new runner, cloud identity or container image. Source changes must first
+be independently reviewed and merged; this route has not been invoked.
+## RE-05/07/09 product release correlation (source only)
+
+Approved observe_product_release reads the effective Command API revision,
+fixed Search and migration Job templates, exact product registry tags and
+specified regional successful builds under the existing builder identity.
+A fresh same-actor schema_inventory operation must bind the same source and
+actual K_REVISION to correlate Nile; legacy or stale evidence stays UNVERIFIED.
+The baseline is read twice; Retrieve lock status is metadata only, never a
+quiescence guarantee. Missing image results stay UNVERIFIED. Product incident
+correlates fresh account state, effective revision, Origin hash and bounded
+service-wide HTTP counts; no session/403 cause claim or release approval.
+Existing GitDeploy/GCloudDeploy remains the Service-only release route.
+## RE-04/06 version inventories (source only)
+
+Fixed ops package artifact_versions reports bounded digest/SHA-tag metadata;
+relatedTags is not a complete reference inventory or deletion authorization.
+GCS list_versions admits exact known artifact names, ordinary generations or
+staging-only soft-deleted metadata, bounded pagination; ignores prefix siblings.
+No media reads, deletes, registry force-delete, or rollback image changes.
+F1–F3 bind task identities, log truncation and DEV snapshot generations.
+Live access and provider response formats require independent acceptance.
+## RE-08 durable operation audit (source only)
+
+Operator results bind actual claim/execution, approval generation/hash, actor
+hash, source and bundle pins, review/cost refs, timestamps and outcome. Raw
+parameters stay in the protected approval; no fabricated subprocess exit code.
+Original approval links support recovery; records are create-only and returned
+only through the same-actor authenticated status route. Live readback pending.

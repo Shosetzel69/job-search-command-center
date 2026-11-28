@@ -18,6 +18,8 @@ WORKER = "jscc-diagnostics-dev"
 DEPLOYER = f"jscc-ops-deployer-dev@{PROJECT}.iam.gserviceaccount.com"
 ROOT = "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/"
 KEYS = ("SOURCE_SHA", "GATEWAY_IMAGE_DIGEST", "WORKER_IMAGE_DIGEST")
+OP_KEYS = ("JSCC_DEV_OPERATOR_ENABLED", "JSCC_DEV_OPERATOR_SOURCE_SHA", "JSCC_DEV_OPERATOR_IMAGE_DIGEST")
+OP_JOB = "jscc-ops-operator-dev"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
 REV = re.compile(GATEWAY + r"-[a-z0-9-]{1,40}")
@@ -79,7 +81,21 @@ def normalized(template):
     return result
 
 
-def expected_template(template, kind, values):
+def operator_env(template):
+    rows = [row for row in container(template).get("env", []) if row.get("name") in OP_KEYS]
+    require(len({row["name"] for row in rows}) == len(rows) and
+            all("valueSource" not in row and isinstance(row.get("value"), str) for row in rows),
+            "operator_env_invalid")
+    values = {row["name"]: row["value"] for row in rows}
+    if values:
+        require(values.get(OP_KEYS[0]) in ("true", "false") and
+                (set(values) == {OP_KEYS[0]} and values[OP_KEYS[0]] == "false" or
+                 set(values) == set(OP_KEYS) and SHA.fullmatch(values[OP_KEYS[1]]) and
+                 DIGEST.fullmatch(values[OP_KEYS[2]])), "operator_env_invalid")
+    return values
+
+
+def expected_template(template, kind, values, activation=None):
     result = copy.deepcopy(template)
     c = container(result)
     c["image"] = image(kind, values)
@@ -87,6 +103,9 @@ def expected_template(template, kind, values):
     for row in c["env"]:
         if row["name"] in KEYS:
             row["value"] = values[row["name"]]
+    if kind == "gateway" and activation is not None:
+        c["env"] = [row for row in c["env"] if row["name"] not in OP_KEYS]
+        c["env"].extend({"name": key, "value": value} for key, value in activation.items())
     return result
 
 
@@ -134,6 +153,35 @@ class PairOperator:
         self.release_attempted = False
         self.verified = None
         self.admitted = False
+        self.old_operator_env = None
+        self.new_operator_env = None
+
+    def desired_template(self, kind, values):
+        activation = self.new_operator_env if values == self.new else self.old_operator_env
+        return expected_template(self.old[kind], kind, values, activation)
+
+    def verify_operator_job(self):
+        if self.new_operator_env is None:
+            return
+        x = self.new_operator_env
+        raw = self.api.request(RUN_ROOT + "/jobs/" + OP_JOB)[0]
+        ready(raw, "jobs/" + OP_JOB)
+        execution = raw.get("template", {})
+        task = execution.get("template", {})
+        c = container(task)
+        env = c.get("env", [])
+        required = {"SOURCE_SHA": x[OP_KEYS[1]], "GCP_PROJECT": PROJECT, "GCP_REGION": REGION,
+                    "OPS_BUCKET": "jscc-dev-ops-state"}
+        require(execution.get("taskCount") == 1 and execution.get("parallelism") == 1 and
+                task.get("maxRetries") == 0 and task.get("timeout") == "1800s" and
+                task.get("serviceAccount") == OP_JOB + "@" + PROJECT + ".iam.gserviceaccount.com" and
+                c.get("image") == ROOT + "jscc-ops-operator@" + x[OP_KEYS[2]] and
+                not task.get("volumes") and not c.get("volumeMounts") and
+                not c.get("command") and not c.get("args") and
+                c.get("resources", {}).get("limits") == {"cpu": "1", "memory": "1Gi"} and
+                len(env) == len(required) and all("valueSource" not in row for row in env) and
+                {row.get("name"): row.get("value") for row in env} == required,
+                "operator_activation_job_binding_mismatch")
 
     def gateway(self):
         value = self.api.request(RUN_ROOT + "/services/" + GATEWAY)[0]
@@ -173,6 +221,9 @@ class PairOperator:
                 and data.get("serviceAccount") == f"{GATEWAY}@{PROJECT}.iam.gserviceaccount.com"
                 and revision_image(data) == image("gateway", values) and metadata(data) == values,
                 "effective_revision_binding_mismatch")
+        if self.new_operator_env is not None:
+            expected = self.new_operator_env if values == self.new else self.old_operator_env
+            require(operator_env(data) == expected, "effective_operator_activation_mismatch")
 
     def capture(self, request):
         require(self.old is None, "session_already_prepared")
@@ -192,6 +243,18 @@ class PairOperator:
         require(svc["template"].get("serviceAccount") == f"{GATEWAY}@{PROJECT}.iam.gserviceaccount.com"
                 and job["template"].get("serviceAccount") == f"{WORKER}@{PROJECT}.iam.gserviceaccount.com",
                 "runtime_identity_mismatch")
+        if "operator_activation" in request:
+            x = request["operator_activation"]
+            require(isinstance(x, dict) and set(x) == {"source_sha", "image_digest", "activation_ref", "publisher_ref"} and
+                    x["source_sha"] == request["source_sha"] and isinstance(x["image_digest"], str) and
+                    DIGEST.fullmatch(x["image_digest"]) and values[KEYS[1]] != self.new[KEYS[1]] and
+                    all(isinstance(x[key], str) and re.fullmatch(r"#589/[1-9][0-9]{0,19}", x[key])
+                        for key in ("activation_ref", "publisher_ref")) and
+                    x["activation_ref"] != x["publisher_ref"], "operator_activation_binding_denied")
+            self.old_operator_env = operator_env(svc["template"])
+            self.new_operator_env = dict(zip(OP_KEYS, ("true", x["source_sha"], x["image_digest"])))
+            require(not operator_env(job), "worker_operator_env_denied")
+            self.verify_operator_job()
         self.verify_revision(revision, values)
         # Rollout starts only from explicit revision-pinned canonical traffic.
         traffic = svc.get("traffic", [])
@@ -212,8 +275,7 @@ class PairOperator:
                 "worker_template_hash": fingerprint(normalized(self.old["worker"])),
                 "gateway_policy_hash": fingerprint(self.old["gateway_policy"]),
                 "worker_policy_hash": fingerprint(self.old["worker_policy"]),
-                "next_gateway_template_hash": fingerprint(normalized(expected_template(
-                    self.old["gateway"], "gateway", self.new))),
+                "next_gateway_template_hash": fingerprint(normalized(self.desired_template("gateway", self.new))),
                 "next_worker_template_hash": fingerprint(normalized(expected_template(
                     self.old["worker"], "worker", self.new))),
                 "protected_baseline": self.protected_baseline}
@@ -255,7 +317,7 @@ class PairOperator:
         resource = self.gateway() if kind == "gateway" else self.worker_resource()
         template = resource["template"]
         require(policy(resource, kind) == self.old[kind + "_policy"], "resource_policy_drift")
-        require(normalized(template) == normalized(expected_template(self.old[kind], kind, values)),
+        require(normalized(template) == normalized(self.desired_template(kind, values)),
                 "template_drift")
 
     def verify(self, restored=False):
@@ -267,6 +329,8 @@ class PairOperator:
         require(primary_revision(svc) == revision and tags(svc) == self.old["tags"]
                 and svc["uri"] == self.old["uri"], "effective_traffic_mismatch")
         self.verify_revision(revision, values)
+        if not restored:
+            self.verify_operator_job()
         require(self.health_reader(self.old["uri"]) == (self.old_catalog if restored else self.new_catalog),
                 "catalog_mismatch")
         return {"gateway_image": image("gateway", values), "worker_image": image("worker", values)}
@@ -306,8 +370,19 @@ class PairOperator:
 
     def update(self, kind, values):
         resource = ("services", GATEWAY) if kind == "gateway" else ("jobs", WORKER)
+        updates = {k: values[k] for k in KEYS}
+        removes = []
+        if kind == "gateway" and self.new_operator_env is not None:
+            target = self.new_operator_env if values == self.new else self.old_operator_env
+            if values == self.new:
+                self.verify_operator_job()
+            updates.update(target)
+            current = operator_env(self.gateway()["template"])
+            removes = [key for key in current if key not in target]
         args = [resource[0], "update", resource[1], "--image=" + image(kind, values),
-                "--update-env-vars=" + ",".join(k + "=" + values[k] for k in KEYS)]
+                "--update-env-vars=" + ",".join(k + "=" + v for k, v in updates.items())]
+        if removes:
+            args.append("--remove-env-vars=" + ",".join(removes))
         if kind == "gateway":
             args.append("--no-traffic")
         self.command(*args)
@@ -339,6 +414,7 @@ class PairOperator:
                 "candidate_revision_not_proven")
         self.verify_revision(candidate, self.new)
         self.candidate = candidate
+        self.verify_operator_job()
         self.route(candidate)
         return True
 
@@ -346,8 +422,8 @@ class PairOperator:
         self.before_mutation()
         current = self.gateway()["template"]
         require(normalized(current) in (
-            normalized(expected_template(self.old["gateway"], "gateway", self.old["values"])),
-            normalized(expected_template(self.old["gateway"], "gateway", self.new))), "unexpected_gateway_drift")
+            normalized(self.desired_template("gateway", self.old["values"])),
+            normalized(self.desired_template("gateway", self.new))), "unexpected_gateway_drift")
         if metadata(current) != self.old["values"]:
             self.update("gateway", self.old["values"])
         self.verify_revision(self.old["revision"], self.old["values"])

@@ -293,3 +293,29 @@ export async function purgeDevJobProjections(authContext, env = process.env, { d
   }
   return counts;
 }
+
+// #589: fixed bounded consistency checks for the configured diagnostic tenant.
+// No caller-supplied tenant, table, SQL or data rows; no global data export.
+export async function collectDevTenantInvariants(tx){
+ const require=(ok,code)=>{if(!ok)throw Error(code);};
+ const boundedRows=(r,max)=>{require(Array.isArray(r?.rows)&&r.rows.length<=max,'tenant_invariant_metadata_invalid');return r.rows;};
+ const id=tx?.tenantId;
+ require(typeof id==='string'&&/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(id),
+  'tenant_invariant_scope_invalid');
+ const guard=boundedRows(await tx.query("SELECT current_database() AS db, current_setting('transaction_read_only') AS ro, current_setting('nile.tenant_id', true) AS tenant"),1);
+ require(guard.length===1&&guard[0].db==='jobsearch_dev'&&guard[0].ro==='on'&&guard[0].tenant===id,'tenant_invariant_scope_invalid');
+ // Two is a saturation bound for uniqueness/existence, not a total count.
+ const rows=boundedRows(await tx.query(
+  `SELECT
+   (SELECT count(*)::integer FROM (SELECT 1 FROM search_profile WHERE tenant_id=$1 AND status='ACTIVE' LIMIT 2) a) AS active_profiles,
+   (SELECT count(*)::integer FROM (SELECT 1 FROM search_profile sp
+      LEFT JOIN search_profile_preferences p ON p.tenant_id=sp.tenant_id AND p.search_profile_id=sp.search_profile_id
+      WHERE sp.tenant_id=$1 AND sp.status='ACTIVE' AND p.search_profile_id IS NULL LIMIT 2) b) AS missing_preferences`,[id]),1);
+ const row=rows[0],valid=x=>Number.isInteger(x)&&x>=0&&x<=2;
+ require(rows.length===1&&valid(row.active_profiles)&&valid(row.missing_preferences)&&
+  row.missing_preferences<=row.active_profiles,'tenant_invariant_metadata_invalid');
+ return {database:'jobsearch_dev',read_only:true,scope:'configured_diagnostic_tenant',saturation_limit:2,
+  active_profiles:row.active_profiles,missing_preferences:row.missing_preferences,
+  foundation_state:row.active_profiles===1&&row.missing_preferences===0?'CONSISTENT':'INCONSISTENT',
+  complete_database_validation:false,repair_authorized:false};
+}

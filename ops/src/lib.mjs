@@ -1,7 +1,7 @@
 import crypto from 'node:crypto';
 import { admitDevRequest } from '../observation/dev-runtime-observer.mjs';
 
-export const CATALOG_VERSION = '589-nile-api-v1';
+export const CATALOG_VERSION = '589-operator-v1';
 export const DEV_DIAGNOSTIC_SCRIPT_ID = 'dev_runtime_build_inventory_v1';
 export const DEV_DIAGNOSTIC_SCRIPT_SHA256 = '60f9c0f87abd9da979e1dc66c5a5e2580faa5a4483aacb7f3b8bdd2478bea73b';
 export const REQUIRED_SCOPE = 'jscc.ops.dev';
@@ -120,7 +120,7 @@ export function validateTaskRequest(task, args) {
       if (value !== 'dev') throw new Error('environment_denied');
       clean[name] = 'dev';
     } else if (type === 'nile_plan') {
-      if (!['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze'].includes(value)) throw new Error('nile_operation_denied');
+      if (!['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants','account_readiness'].includes(value)) throw new Error('nile_operation_denied');
       clean[name]=value;
     } else if (type === 'dev_service') {
       clean[name] = admitDevRequest({environment:'dev',task:'describe_dev_runtime',service:value}).service;

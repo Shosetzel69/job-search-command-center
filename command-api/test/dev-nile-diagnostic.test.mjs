@@ -68,3 +68,31 @@ test('failed rollback discards pooled connection',async()=>{
   await assert.rejects(withDevDiagnosticTransaction(context,async()=>{}, {env,db:f.db}),err=>err.diagnosticStage==='rollback');
   assert.deepEqual(f.released,[true]);
 });
+
+
+test('configured account readiness classifies observed account without disclosing identity or issuing a session',async()=>{
+ const {observeDevNilePlan}=await import('../src/multiuser-repository.js');
+ const user='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',base={user_id:user,profile_id:profile,role:'ADMIN',status:'ACTIVE',provisioned_at:'2026-11-01'};
+ const run=async row=>{
+  const calls=[];
+  const db={connect:async()=>({query:async(sql,params)=>{
+   calls.push(sql);
+   if(sql==='BEGIN READ ONLY'||sql==='ROLLBACK'||sql.startsWith('SET LOCAL'))return {rows:[]};
+   if(sql.includes('current_database()'))return {rows:[{db:'jobsearch_dev',ro:'on'}]};
+   if(sql.includes('FROM app_user a')){assert.deepEqual(params,[user]);return {rows:row?[row]:[]};}
+   if(sql.includes('FROM tenants')){assert.deepEqual(params,[profile]);return {rows:[{id:profile,name:'private'}]};}
+   assert.fail(sql);
+  },release:()=>{}})};
+  const result=await observeDevNilePlan('account_readiness',null,{...env,JSCC_DEV_NILE_DIAGNOSTIC_USER_ID:user},{db});
+  assert.equal(result.status,'COLLECTED');assert.equal(calls.at(-1),'ROLLBACK');
+  assert.equal(JSON.stringify(result).includes(user),false);assert.equal(JSON.stringify(result).includes(profile),false);
+  assert.equal(result.account.user_session_verified,false);
+  return result.account.state;
+ };
+ assert.equal(await run(null),'NOT_FOUND');
+ assert.equal(await run({...base,status:'DISABLED'}),'NOT_ACTIVE');
+ assert.equal(await run({...base,provisioned_at:null}),'PROVISIONING_INCOMPLETE');
+ assert.equal(await run({...base,deletion_started_at:'2026-11-01'}),'DELETION_PENDING');
+ assert.equal(await run({...base,role:'USER'}),'ROLE_NOT_ADMITTED');
+ assert.equal(await run(base),'READY');
+});

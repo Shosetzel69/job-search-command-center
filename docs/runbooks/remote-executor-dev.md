@@ -183,16 +183,14 @@ Evidence Bundle must record:
 - sanitizer/public projection evidence;
 - DEV functional acceptance.
 
-
 ## #589 RE-07 — Command API mediated Nile observations
 
-Owner-approved alternative to the unavailable dedicated native read-only credential. This replaces the isolated-DB-operator approach preserved in draft #701. It reuses the existing diagnostics Job identity and the product Command API connection. The application identity is not database-role read-only; protection comes from the fixed endpoint, exact caller authentication, server-selected tenant, database read-only transactions and unconditional rollback. Native transaction compatibility remains a live acceptance gate.
+See [the DEV operator extension](589-dev-operator.md#589-re-07--command-api-mediated-nile-observations).
 
-- Command API DEV only: `JSCC_DEV_NILE_DIAGNOSTICS=true`, `JSCC_DEV_NILE_DIAGNOSTIC_CALLER_SUB` (numeric Google subject of the existing diagnostics Job service account), `JSCC_DEV_NILE_DIAGNOSTIC_USER_ID` (approved active ADMIN account ID, server-side only). Absent/disabled flag denies access. Resolve identifiers from trusted DEV resources; never publish their values or tokens.
-- Existing diagnostics Job `DEV_BASE_URL` must be the verified canonical HTTPS Cloud Run origin of the DEV Command API. The worker requests a Google ID token with the fixed diagnostic audience using its existing identity; no additional DB secret, account, role, dependency, or IAM elevation.
-- Typed task `observe_dev_nile`: environment=dev, expected_source_sha, operation restricted to `fit_verify_plan`, `global_listing_plan`, `fit_verify_analyze`, `global_listing_analyze`. No arbitrary SQL, tenant, filter, URL or cursor parameters. Global listing uses the fixed publication-descending first-page limit 20, aligned to #659 S2/Q1 (R702-F01). Cursor pages, fit-desc UI default and Q2–Q5 decomposition remain outside this slice. Only sanitized plan metrics and known node classifications are returned, through authenticated operation evidence.
-- Account lookup and tenant diagnostics use distinct read-only transactions. Tenant binding is established before other queries in the tenant transaction. Failure to establish context, read-only state, database binding, timeout or rollback fails closed; no fallback to writable transactions. `EXPLAIN ANALYZE` executes the fixed SELECT and may consume DEV capacity; obtain cost admission before live execution.
-- Existing gateway/worker must be upgraded together because the catalog version changes to `589-nile-api-v1`. Product Command API must be deployed from the independently reviewed source first, with diagnostics disabled until trusted configuration and effective runtime identity have been verified. Activation is a separate DEV configuration operation, not part of the image-only deploy. Verify live MCP tool schema after gateway upgrade; refresh connector if needed.
-- Independent reviewer checks exact SHA, negative route/caller/source/tenant/database cases, rollback and absence of DB credentials in worker, existing task regression, no raw plan predicates or PII, and live provider support for EXPLAIN/ANALYZE and transaction controls. Existing DEV-only cost and deployment gates remain. Disable flag for rollback of feature admission; restore prior reviewed images via existing routes if needed.
-- This is a bounded #659 diagnostic capability, not completion of #589 RE-07: arbitrary SQL, schema/migration/restore operations and disposable Nile container remain outside this delivery.
+## #589 RE-04 / RE-08 — R5 operator-side build submission (source only)
 
+See [the DEV operator extension](589-dev-operator.md#589-re-04--re-08--r5-operator-side-build-submission-source-only).
+
+## #589 — consolidated DEV operator candidate (PR #711)
+
+See [the DEV operator extension](589-dev-operator.md#589--consolidated-dev-operator-candidate-pr-711).

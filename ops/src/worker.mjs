@@ -32,10 +32,14 @@ async function describeExecution(args) {
   const id = normalizeExecutionId(args.execution_id); const job = executionJobName(id);
   const url = `https://run.googleapis.com/v2/projects/${cfg.project}/locations/${cfg.region}/jobs/${job}/executions/${id}`;
   const r = await gcpFetch(url); if (!r.ok) throw new Error(`execution_read_${r.status}`); const j=await r.json();
+  const path=url.slice('https://run.googleapis.com/v2/'.length),named=x=>typeof x==='string'?x.replace(/^projects\/828902654738\//,'projects/jscc-dev/'):null;
+  if(named(j?.name)!==path||(j.job!==job&&named(j.job)!==path.split('/executions/')[0])||!Number.isInteger(j.taskCount)||j.taskCount<1||j.taskCount>1000)
+    throw Error('execution_resource_binding_mismatch');
 
   const taskEvidence=await listExecutionTaskEvidence(id,{request:gcpFetch});
   const {task_metadata_available:taskMetadataAvailable,
          task_metadata_error:taskMetadataError,tasks}=taskEvidence;
+  if(tasks.length>j.taskCount||tasks.some(t=>t.index>=j.taskCount))throw Error('execution_task_count_mismatch');
 
   let targetExitCode = null;
   let targetTermSignal = null;
@@ -100,7 +104,7 @@ async function inspectRuntimeSnapshot(args) {
       if(r.status===404 || r.status===403)return {status:r.status};
       if(!r.ok)throw Error('jobs_metadata_read_'+r.status);
       const obj=await r.json();
-      return {status:200,contentType:obj.contentType||null};
+      return {status:200,bucket:obj.bucket,name:obj.name,generation:obj.generation,contentType:obj.contentType||null};
     },
   });
 }

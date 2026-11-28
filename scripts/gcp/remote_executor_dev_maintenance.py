@@ -1,6 +1,7 @@
 """Operator-side #589 DEV maintenance boundary. No runtime credentials or CLI mutation."""
 import hashlib
 import json
+import os
 from pathlib import Path
 import re
 import subprocess
@@ -50,13 +51,26 @@ class OperatorAPI:
     """Only fixed DEV reads and CAS writes to the existing diagnostics lease."""
 
     def __init__(self, token=None):
-        self.token = token or subprocess.check_output(
+        self.remote = token is None and os.environ.get("CLOUD_RUN_JOB") == "jscc-ops-operator-dev"
+        self.token = token if self.remote or token else subprocess.check_output(
             ["gcloud", "auth", "print-access-token"], text=True, timeout=30
         ).strip()
-        require(bool(self.token), "missing_operator_token")
+        if not self.remote:
+            require(bool(self.token), "missing_operator_token")
+
+    def access_token(self):
+        if not self.remote:
+            return self.token
+        # Remote Job uses the attached isolated identity, never a local user key.
+        url = "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/token"
+        req = Request(url, headers={"Metadata-Flavor": "Google"})
+        with urlopen(req, timeout=5) as response:
+            token = json.load(response).get("access_token")
+        require(isinstance(token, str) and bool(token), "missing_operator_token")
+        return token
 
     def request(self, url, method="GET", body=None, missing_ok=False):
-        headers = {"Authorization": "Bearer " + self.token, "Accept": "application/json"}
+        headers = {"Authorization": "Bearer " + self.access_token(), "Accept": "application/json"}
         if body is not None:
             headers["Content-Type"] = "application/json"
         request = Request(url, data=None if body is None else json.dumps(body).encode(),

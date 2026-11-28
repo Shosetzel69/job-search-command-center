@@ -1,9 +1,11 @@
-# JSCC #589 — DEV-only Workspace Manager R2 image build; no Cloud Run deployment.
+# JSCC #589 — DEV-only Workspace Manager + Sandbox Worker R2 image build; no Cloud Run deployment.
 substitutions:
   _GIT_SHA: ""
   _TRUSTED_REF: ""
-  _MANAGER_BASE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-cap100@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb"
+  _MANAGER_BASE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2@sha256:ac80ef6e88a57b78c51c958930bc345141fa85d569544cf085f10c33323b99f1"
   _MANAGER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2"
+  _WORKER_BASE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-worker-cap100@sha256:1dc1354d2777b0e7e65a1d07758d012c66f15d223fd1fec4fee3e82cd02ce617"
+  _WORKER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-worker-cap100"
 
 steps:
   - id: trusted-source-admission
@@ -37,20 +39,27 @@ steps:
         [[ -f "$$source_root/ops/workspace-manager/service/manager.py" ]]
         echo "TRUSTED_BUILD_CONTEXT=VERIFIED"
 
-  - id: immutable-manager-baseline
+  - id: immutable-workspace-baselines
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
     args:
       - -ceu
       - |
         [[ "${_GIT_SHA}" =~ ^[0-9a-f]{40}$ ]]
-        [[ "${_MANAGER_BASE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-cap100@sha256:97ac5aab25242a65be391a6e6a048451d585a9df0d106713eb1f05ef8b39e3fb" ]]
+        [[ "${_MANAGER_BASE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2@sha256:ac80ef6e88a57b78c51c958930bc345141fa85d569544cf085f10c33323b99f1" ]]
         [[ "${_MANAGER_IMAGE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-manager-r2" ]]
         gcloud artifacts docker images describe "${_MANAGER_BASE}" --project=jscc-shared >/dev/null
         immutable="$$(gcloud artifacts repositories describe jscc-ops --project=jscc-shared --location=europe-west1 --format='value(dockerConfig.immutableTags)')"
         [[ "$$immutable" == "True" || "$$immutable" == "true" ]]
         if gcloud artifacts docker images describe "${_MANAGER_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
           echo "IMMUTABLE_TAG_ALREADY_EXISTS" >&2
+          exit 1
+        fi
+        [[ "${_WORKER_BASE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-worker-cap100@sha256:1dc1354d2777b0e7e65a1d07758d012c66f15d223fd1fec4fee3e82cd02ce617" ]]
+        [[ "${_WORKER_IMAGE}" == "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-dev-workspace-worker-cap100" ]]
+        gcloud artifacts docker images describe "${_WORKER_BASE}" --project=jscc-shared >/dev/null
+        if gcloud artifacts docker images describe "${_WORKER_IMAGE}:${_GIT_SHA}" --project=jscc-shared >/dev/null 2>&1; then
+          echo "IMMUTABLE_WORKER_TAG_ALREADY_EXISTS" >&2
           exit 1
         fi
 
@@ -73,6 +82,34 @@ steps:
       - --build-arg=BASE_IMAGE=${_MANAGER_BASE}
       - --tag=${_MANAGER_IMAGE}:${_GIT_SHA}
       - /workspace/jscc589-verified-src
+
+  - id: build-worker-r2
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --pull=false
+      - --file=/workspace/jscc589-verified-src/ops/workspace-manager/Dockerfile.r2-worker
+      - --build-arg=BASE_IMAGE=${_WORKER_BASE}
+      - --tag=${_WORKER_IMAGE}:${_GIT_SHA}
+      - /workspace/jscc589-verified-src
+
+  - id: worker-image-cwd-smoke
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        docker run --rm -i --network=none --read-only --tmpfs /tmp \
+          -w /workspace --entrypoint python3 "${_WORKER_IMAGE}:${_GIT_SHA}" -B - <<'PY'
+        import base64
+        from service.worker import execute
+        files={'src/value.txt':base64.b64encode(b'fixture').decode()}
+        result=execute(files,'command',['python3','-c','from pathlib import Path; print(Path("value.txt").read_text())'],'src')
+        assert result['exit_code']==0 and result['stdout'].strip()=='fixture'
+        result=execute(files,'command',['python3','-c','from pathlib import Path; print(Path("src/value.txt").read_text())'])
+        assert result['exit_code']==0 and result['stdout'].strip()=='fixture'
+        print('WORKER_IMAGE_CWD_SMOKE_PASS')
+        PY
 
   - id: manager-image-route-smoke
     name: gcr.io/cloud-builders/docker
@@ -127,9 +164,37 @@ steps:
             thread.join(timeout=5)
         PY
 
+  - id: verify-workspace-image-source
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        root=/workspace/jscc589-verified-src/ops/workspace-manager/service
+        tmp="$$(mktemp -d)"
+        (
+          manager= worker=
+          trap 'if [[ -n "$$manager" ]]; then docker rm "$$manager" >/dev/null; fi; if [[ -n "$$worker" ]]; then docker rm "$$worker" >/dev/null; fi; rm -rf "$$tmp"' EXIT
+          manager="$$(docker create --network none "${_MANAGER_IMAGE}:${_GIT_SHA}")"
+          worker="$$(docker create --network none "${_WORKER_IMAGE}:${_GIT_SHA}")"
+          for f in common.py backend.py manager.py httpbase.py workspace_ops.py; do
+            docker cp "$$manager:/workspace/service/$$f" "$$tmp/manager-$$f"
+            cmp "$$root/$$f" "$$tmp/manager-$$f"
+          done
+          for f in common.py worker.py; do
+            docker cp "$$worker:/workspace/service/$$f" "$$tmp/worker-$$f"
+            cmp "$$root/$$f" "$$tmp/worker-$$f"
+          done
+          echo "WORKSPACE_IMAGE_SOURCE_VERIFIED"
+        )
+
   - id: push-manager-r2
     name: gcr.io/cloud-builders/docker
     args: [push, "${_MANAGER_IMAGE}:${_GIT_SHA}"]
+
+  - id: push-worker-r2
+    name: gcr.io/cloud-builders/docker
+    args: [push, "${_WORKER_IMAGE}:${_GIT_SHA}"]
 
   - id: digest-evidence
     name: gcr.io/cloud-builders/gcloud
@@ -140,6 +205,9 @@ steps:
         digest="$$(gcloud artifacts docker images describe "${_MANAGER_IMAGE}:${_GIT_SHA}" --project=jscc-shared --format='value(image_summary.digest)')"
         [[ "$$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
         echo "JSCC589_MANAGER_R2_IMAGE=${_MANAGER_IMAGE}@$${digest}"
+        worker_digest="$$(gcloud artifacts docker images describe "${_WORKER_IMAGE}:${_GIT_SHA}" --project=jscc-shared --format='value(image_summary.digest)')"
+        [[ "$$worker_digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+        echo "JSCC589_WORKER_R2_IMAGE=${_WORKER_IMAGE}@$${worker_digest}"
 
 serviceAccount: projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com
 options:

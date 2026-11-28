@@ -1,20 +1,23 @@
 // #537-compatible DEV-only workspace extension. No GitHub dependencies.
 // Write authorization is separate from the legacy jscc.ops.dev scope.
+import {createHash} from 'node:crypto';
 export const DEV_SCOPE = 'jscc.dev.write';
-const allowedExecutables = new Set(['python', 'python3', 'pytest', 'bash', 'node', 'npm']);
+const allowedExecutables = new Set(['python', 'python3', 'pytest', 'bash', 'sh', 'node', 'npm', 'npx', 'jq']);
 const maxSourceBytes = 128 * 1024;
 const maxResponseBytes = 48 * 1024;
+const maxArtifactExportBytes=8*1024;
 const managerPrefix = 'jscc-dev-workspace-manager-';
 
 export const workspaceTools = Object.freeze([
   { name:'workspace_list_files', description:'List JSCC DEV workspace files (not TEST or PROD). Requires jscc.dev.write.', inputSchema:{type:'object',properties:{},additionalProperties:false} },
   { name:'workspace_read_file', description:'Read a UTF-8 file from the DEV workspace.', inputSchema:{type:'object',required:['path'],properties:{path:{type:'string'}},additionalProperties:false} },
   { name:'workspace_write_file', description:'Create or update one DEV workspace file using optimistic generation checking (0 for create).', inputSchema:{type:'object',required:['path','content','if_generation_match'],properties:{path:{type:'string'},content:{type:'string'},if_generation_match:{type:'integer',minimum:0}},additionalProperties:false} },
-  { name:'workspace_run', description:'Run a trusted DEV development command or validation task in the isolated sandbox; no TEST/PROD.', inputSchema:{type:'object',required:['task'],properties:{task:{type:'string',enum:['python_syntax','pytest','command']},argv:{type:'array',items:{type:'string'}}},additionalProperties:false} },
+  { name:'workspace_run', description:'Run a trusted DEV development command or validation task in the isolated sandbox, optionally from a snapshot-relative working directory; no TEST/PROD.', inputSchema:{type:'object',required:['task'],properties:{task:{type:'string',enum:['python_syntax','pytest','command','toolchain']},argv:{type:'array',items:{type:'string'}},cwd:{type:'string',minLength:1,maxLength:180},expected_snapshot_sha256:{type:'string',pattern:'^[a-f0-9]{64}$'},artifact_paths:{type:'array',minItems:1,maxItems:4,items:{type:'string'}},export_artifacts:{type:'boolean'}},additionalProperties:false} },
   { name:'workspace_checksum', description:'Read SHA256, byte count and generation for one DEV workspace file without retrieving its contents.', inputSchema:{type:'object',required:['path'],properties:{path:{type:'string'}},additionalProperties:false} },
   { name:'workspace_search', description:'Search literal text in bounded DEV workspace files. Returns file names and line numbers only, never matching source snippets.', inputSchema:{type:'object',required:['term'],properties:{term:{type:'string',minLength:1,maxLength:100}},additionalProperties:false} },
   { name:'workspace_compare', description:'Compare two DEV workspace files by SHA256 and changed-line ranges (no source snippets).', inputSchema:{type:'object',required:['left','right'],properties:{left:{type:'string'},right:{type:'string'}},additionalProperties:false} },
   { name:'workspace_replace', description:'Replace one unique literal in an existing DEV UTF-8 file with an optimistic generation precondition.', inputSchema:{type:'object',required:['path','old','new','if_generation_match'],properties:{path:{type:'string'},old:{type:'string'},new:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
+  { name:'workspace_move', description:'Atomically rename one generation-pinned DEV workspace file to an absent path. Requires supported storage namespace.', inputSchema:{type:'object',required:['source','destination','if_generation_match'],properties:{source:{type:'string'},destination:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
   { name:'workspace_delete', description:'Delete one exact DEV workspace file only if its existing object generation matches (no recursive delete).', inputSchema:{type:'object',required:['path','if_generation_match'],properties:{path:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
 ]);
 
@@ -37,7 +40,7 @@ function filePath(value) {
   return value;
 }
 function gatewayCommand(task, argv) {
-  if (!['command','pytest','python_syntax'].includes(task)) throw new Error('unsupported_task');
+  if (!['command','pytest','python_syntax','toolchain'].includes(task)) throw new Error('unsupported_task');
   if (task !== 'command') {
     if (argv !== undefined) throw new Error('unrecognized_parameter');
     return {task};
@@ -76,13 +79,40 @@ export function validatedWorkspaceRequest(name, args) {
     if(!Number.isSafeInteger(args.if_generation_match) || args.if_generation_match<=0) throw new Error('invalid_generation');
     return {method:'POST',path:'/v1/replace',body:{path,old:args.old,new:args.new,if_generation_match:args.if_generation_match}};
   }
+  if (name==='workspace_move') {
+    plainArgs(args,['source','destination','if_generation_match']);
+    const source=filePath(args.source),destination=filePath(args.destination);
+    if(source===destination||source.startsWith(destination+'/')||destination.startsWith(source+'/'))throw new Error('invalid_move_path');
+    if(!Number.isSafeInteger(args.if_generation_match)||args.if_generation_match<=0)throw new Error('invalid_generation');
+    return {method:'POST',path:'/v1/move',body:{source,destination,if_generation_match:args.if_generation_match}};
+  }
   if (name==='workspace_delete') {
     plainArgs(args,['path','if_generation_match']);
     const path=filePath(args.path);
     if(!Number.isSafeInteger(args.if_generation_match) || args.if_generation_match<=0) throw new Error('invalid_generation');
     return {method:'DELETE',path:'/v1/file?path='+encodeURIComponent(path)+'&if_generation_match='+args.if_generation_match};
   }
-  if (name==='workspace_run') {plainArgs(args,['task','argv']);return {method:'POST',path:'/v1/run',body:gatewayCommand(args.task,args.argv)};}
+  if (name==='workspace_run') {
+    plainArgs(args,['task','argv','cwd','expected_snapshot_sha256','artifact_paths','export_artifacts']);
+    const body=gatewayCommand(args.task,args.argv);
+    if (Object.hasOwn(args,'cwd') && args.cwd!=='.') body.cwd=filePath(args.cwd);
+    if (Object.hasOwn(args,'expected_snapshot_sha256')) {
+      if (typeof args.expected_snapshot_sha256!=='string'||!/^[a-f0-9]{64}$/.test(args.expected_snapshot_sha256)) throw new Error('invalid_snapshot_sha256');
+      body.expected_snapshot_sha256=args.expected_snapshot_sha256;
+    }
+    if(Object.hasOwn(args,'artifact_paths')){
+      if(args.task==='toolchain'||!body.expected_snapshot_sha256||!Array.isArray(args.artifact_paths)||
+         args.artifact_paths.length<1||args.artifact_paths.length>4)throw new Error('invalid_artifact_paths');
+      const paths=args.artifact_paths.map(filePath);
+      if(paths.some(x=>!x.startsWith('artifacts/'))||new Set(paths).size!==paths.length)throw new Error('invalid_artifact_paths');
+      body.artifact_paths=paths;
+    }
+    if(Object.hasOwn(args,'export_artifacts')){
+      if(args.export_artifacts!==true||!body.artifact_paths)throw new Error('invalid_artifact_export');
+      body.export_artifacts=true;
+    }
+    return {method:'POST',path:'/v1/run',body};
+  }
   throw new Error('unknown_workspace_tool');
 }
 export function validateManagerUrl(raw) {
@@ -121,6 +151,43 @@ export async function invokeWorkspaceTool(name,args,managerUrl,{fetchImpl=fetch,
   if (!response.ok) {
     const safeError=typeof data?.error==='string' && /^[a-z0-9_]{1,60}$/.test(data.error)?data.error:'workspace_request_failed';
     return {ok:false,status:response.status,error:safeError};
+  }
+  if(name==='workspace_run'&&request.body.expected_snapshot_sha256&&
+     data?.snapshot_sha256!==request.body.expected_snapshot_sha256)throw new Error('workspace_snapshot_unconfirmed');
+  if(name==='workspace_run'&&request.body.task==='toolchain'){
+    if(!data||!Array.isArray(data.tools)||data.tools.length!==allowedExecutables.size||
+       new Set(data.tools.map(x=>x?.name)).size!==allowedExecutables.size||
+       !data.tools.every(x=>allowedExecutables.has(x?.name)&&typeof x.available==='boolean'))
+      throw new Error('workspace_toolchain_unconfirmed');
+    return {ok:true,status:response.status,data:{task:'toolchain',snapshot_sha256:data.snapshot_sha256,
+      tools:data.tools.map(x=>({name:x.name,available:x.available})),versions_verified:false}};
+  }
+  if(name==='workspace_run'&&request.body.artifact_paths){
+    const expected=request.body.artifact_paths;
+    if(!Array.isArray(data?.artifacts)||data.artifacts.length!==expected.length||data.temporary_directory_removed!==true||
+       !data.artifacts.every((x,i)=>x?.path===expected[i]&&
+       (x.status==='MISSING'||x.status==='REJECTED'||x.status==='HASHED'&&Number.isSafeInteger(x.bytes)&&
+       x.bytes>=0&&x.bytes<=131072&&/^[a-f0-9]{64}$/.test(x.sha256||''))))
+      throw new Error('workspace_artifacts_unconfirmed');
+    let exported=0;
+    data.artifacts=data.artifacts.map(x=>{
+      const out={path:x.path,status:x.status,...(x.status==='HASHED'?{bytes:x.bytes,sha256:x.sha256}:{})};
+      if(request.body.export_artifacts&&x.status==='HASHED'){
+        if(x.export_status==='LIMIT'&&x.bytes>maxArtifactExportBytes-exported&&!Object.hasOwn(x,'content_base64'))
+          return {...out,export_status:'LIMIT'};
+        if(x.export_status!=='EXPORTED'||typeof x.content_base64!=='string'||
+           x.content_base64.length>Math.ceil(maxArtifactExportBytes/3)*4)throw new Error('workspace_artifact_export_unconfirmed');
+        const bytes=Buffer.from(x.content_base64,'base64');
+        if(bytes.toString('base64')!==x.content_base64||bytes.length!==x.bytes||
+           createHash('sha256').update(bytes).digest('hex')!==x.sha256||
+           (exported+=bytes.length)>maxArtifactExportBytes)throw new Error('workspace_artifact_export_unconfirmed');
+        return {...out,export_status:'EXPORTED',content_base64:x.content_base64};
+      }
+      if(Object.hasOwn(x,'content_base64')||Object.hasOwn(x,'export_status'))throw new Error('workspace_artifact_export_unconfirmed');
+      return out;
+    });
+    if(request.body.export_artifacts&&(data.artifact_export_bytes!==exported||data.artifact_export_limit!==maxArtifactExportBytes))
+      throw new Error('workspace_artifact_export_unconfirmed');
   }
   // The caller must sanitize arbitrary test output before returning to ChatGPT.
   return {ok:true,status:response.status,data};

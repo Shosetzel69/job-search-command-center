@@ -106,5 +106,169 @@ class WorkspaceHTTPTests(unittest.TestCase):
         self.assertEqual(status,400)
         self.assertEqual(data['error'],'replacement_not_unique')
 
+
+    def test_run_cwd_validated_before_forwarding(self):
+        from unittest.mock import patch
+        with patch.object(manager, 'execute_worker', return_value={'exit_code':0}) as execute:
+            for body, expected in [
+                ({'task':'pytest'}, '.'),
+                ({'task':'pytest','cwd':'.'}, '.'),
+                ({'task':'command','argv':['python3','app.py'],'cwd':'src'}, 'src'),
+            ]:
+                status, result = self.request('/v1/run', body)
+                self.assertEqual(status, 200)
+                self.assertEqual(result['exit_code'], 0)
+                self.assertEqual(execute.call_args.args[1:], (body['task'],body.get('argv'),expected))
+            execute.reset_mock()
+            for cwd in (None, '', '/tmp', '../tmp', 'src/..', 'src/.git',
+                        'missing', 'src/app.py'):
+                status, result = self.request('/v1/run', {'task':'pytest','cwd':cwd})
+                self.assertEqual(status, 400, cwd)
+            execute.assert_not_called()
+
+    def test_manager_worker_payload_legacy_compatibility(self):
+        from unittest.mock import patch, MagicMock
+        response=MagicMock()
+        response.__enter__.return_value.read.return_value='{"exit_code":0}'
+        with patch.object(manager.urllib.request,'urlopen',return_value=response) as call:
+            for cwd in ('.','src'):
+                manager.execute_worker({'src/app.py':b'pass'},'pytest',cwd=cwd)
+                payload=json.loads(call.call_args.args[0].data)
+                self.assertEqual(payload.get('cwd'),None if cwd=='.' else 'src')
+                self.assertEqual(payload['task'],'pytest')
+
+
+    def test_snapshot_pin_matches_listing_and_rejects_drift_before_worker(self):
+        from unittest.mock import patch
+        status, listing = self.request('/v1/files')
+        self.assertEqual(status,200)
+        pin=listing['snapshot_sha256']
+        self.assertEqual(len(pin),64)
+        with patch.object(manager,'execute_worker',return_value={'exit_code':0,'snapshot_sha256':pin}) as run:
+            status,result=self.request('/v1/run',{'task':'pytest','expected_snapshot_sha256':pin})
+            self.assertEqual(status,200)
+            self.assertEqual(result['snapshot_sha256'],pin)
+            self.assertEqual(run.call_args.kwargs['expected_snapshot_sha256'],pin)
+            run.reset_mock()
+            for bad in (None,'0'*64,'A'*64):
+                status,result=self.request('/v1/run',{'task':'pytest','expected_snapshot_sha256':bad})
+                self.assertEqual(status,400)
+            run.assert_not_called()
+            run.return_value={'exit_code':0}
+            status,result=self.request('/v1/run',{'task':'pytest','expected_snapshot_sha256':pin})
+            self.assertEqual(status,502)
+            self.assertEqual(result['error'],'worker_snapshot_unconfirmed')
+
+
+    def test_atomic_move_local_backend_refuses_overwrite_and_stale_generation(self):
+        manager.backend.put('move/src.txt',b'fixture',0)
+        manager.backend.put('move/existing.txt',b'keep',0)
+        args={'source':'move/src.txt','destination':'move/dst.txt','if_generation_match':1}
+        for bad in ({**args,'destination':'move/existing.txt'},{**args,'if_generation_match':2}):
+            status,result=self.request('/v1/move',bad)
+            self.assertEqual(status,409)
+            self.assertEqual(manager.backend.get('move/src.txt')[0],b'fixture')
+        status,result=self.request('/v1/move',args)
+        self.assertEqual(status,200)
+        self.assertTrue(result['moved'])
+        self.assertIsNone(manager.backend.get('move/src.txt'))
+        self.assertEqual(manager.backend.get('move/dst.txt'),(b'fixture',result['generation']))
+
+
+class WorkerCwdTests(unittest.TestCase):
+    def test_actual_worker_runs_from_selected_snapshot_directory(self):
+        import base64
+        from service import worker
+        files={'src/nested/value.txt':base64.b64encode(b'fixture').decode()}
+        argv=['python3','-c','from pathlib import Path; print(Path("value.txt").read_text())']
+        result=worker.execute(files,'command',argv,'src/nested')
+        self.assertEqual(result['exit_code'],0)
+        self.assertEqual(result['stdout'].strip(),'fixture')
+        root_argv=['python3','-c','from pathlib import Path; print(Path("src/nested/value.txt").read_text())']
+        for args in ((files,'command',root_argv),(files,'command',root_argv,'.')):
+            result=worker.execute(*args)
+            self.assertEqual(result['exit_code'],0)
+            self.assertEqual(result['stdout'].strip(),'fixture')
+
+    def test_worker_rechecks_snapshot_identity_before_process_launch(self):
+        import base64
+        from unittest.mock import patch
+        from service import worker
+        from service.common import snapshot_sha256
+        files={'src/a.txt':base64.b64encode(b'abc').decode()}
+        pin=snapshot_sha256({'src/a.txt':b'abc'})
+        self.assertNotEqual(pin,snapshot_sha256({'src/b.txt':b'abc'}))
+        self.assertNotEqual(pin,snapshot_sha256({'src/a.txt':b'abd'}))
+        with patch.object(worker.subprocess,'Popen') as launch:
+            with self.assertRaisesRegex(ValueError,'snapshot_sha256_mismatch'):
+                worker.execute(files,'pytest',expected_snapshot_sha256='0'*64)
+            launch.assert_not_called()
+        result=worker.execute(files,'command',['python3','-V'],expected_snapshot_sha256=pin)
+        self.assertEqual(result['snapshot_sha256'],pin)
+
+    def test_worker_denies_invalid_cwd_before_process_launch(self):
+        import base64
+        from unittest.mock import patch
+        from service import worker
+        files={'src/nested/value.txt':base64.b64encode(b'fixture').decode()}
+        with patch.object(worker.subprocess,'Popen') as launch:
+            for cwd in (None, '', '/tmp', '../tmp', 'src/..', 'src/.git',
+                        'missing', 'src/nested/value.txt', 'src//nested'):
+                with self.subTest(cwd=cwd), self.assertRaises(ValueError):
+                    worker.execute(files,'command',['python3','-V'],cwd)
+            launch.assert_not_called()
+
 if __name__ == '__main__':
     unittest.main()
+
+
+class TemporaryArtifactTests(unittest.TestCase):
+    def test_toolchain_inventory_is_fixed_and_reports_availability_only(self):
+        from service import worker
+        from service.common import ALLOWED_BINARIES
+        result = worker.execute({}, 'toolchain')
+        self.assertEqual({r['name'] for r in result['tools']}, ALLOWED_BINARIES)
+        self.assertTrue(all(isinstance(r['available'], bool) for r in result['tools']))
+        self.assertFalse(result['versions_verified'])
+
+    def test_artifact_metadata_rejects_symlink_and_confirms_temporary_cleanup(self):
+        import hashlib
+        from service import worker
+        from service.common import snapshot_sha256
+        pin = snapshot_sha256({})
+        code = ("from pathlib import Path; p=Path('artifacts'); p.mkdir(); "
+                "(p/'ok.txt').write_bytes(b'fixture'); (p/'link').symlink_to('/etc/passwd')")
+        result = worker.execute({}, 'command', ['python3','-c',code],
+                                expected_snapshot_sha256=pin,
+                                artifact_paths=['artifacts/ok.txt','artifacts/link','artifacts/absent'])
+        self.assertEqual(result['exit_code'],0)
+        self.assertEqual(result['artifacts'],[
+            {'path':'artifacts/ok.txt','status':'HASHED','bytes':7,'sha256':hashlib.sha256(b'fixture').hexdigest()},
+            {'path':'artifacts/link','status':'REJECTED'},
+            {'path':'artifacts/absent','status':'MISSING'}])
+        self.assertTrue(result['temporary_directory_removed'])
+        with self.assertRaises(ValueError):
+            worker.execute({}, 'command', ['python3','-V'], artifact_paths=['artifacts/x'])
+
+
+    def test_export_binds_exact_bytes_and_limit(self):
+        import base64
+        from service import worker
+        from service.common import snapshot_sha256, checked_artifact_export
+        pin=snapshot_sha256({})
+        paths=['artifacts/one.bin','artifacts/big.bin','artifacts/link']
+        code=("from pathlib import Path; p=Path('artifacts'); p.mkdir(); "
+              "(p/'one.bin').write_bytes(bytes([0,1,255])); (p/'big.bin').write_bytes(b'a'*8192); "
+              "(p/'link').symlink_to('/etc/passwd')")
+        result=worker.execute({},'command',['python3','-c',code],expected_snapshot_sha256=pin,
+                              artifact_paths=paths,export_artifacts=True)
+        self.assertEqual(result['artifacts'][0]['content_base64'],base64.b64encode(bytes([0,1,255])).decode())
+        self.assertEqual(result['artifacts'][1]['export_status'],'LIMIT')
+        self.assertEqual(result['artifacts'][2]['status'],'REJECTED')
+        self.assertEqual(result['artifact_export_bytes'],3)
+        self.assertEqual(checked_artifact_export(result,paths,True),result)
+        with self.assertRaises(ValueError):
+            checked_artifact_export(result,paths,False)
+        result['artifacts'][0]['content_base64']='AAAA'
+        with self.assertRaises(ValueError):
+            checked_artifact_export(result,paths,True)

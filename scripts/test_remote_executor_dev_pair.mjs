@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {runApprovedPair,inspectPairAdmission,observePairRecovery} from './gcp/remote_executor_dev_pair.mjs';
-import {evidenceDigest,operatorPairStore,pairOperationIdentity} from './gcp/remote_executor_dev_admission.mjs';
+import {evidenceDigest,operatorPairStore,pairOperationIdentity,pinnedPairAdmission} from './gcp/remote_executor_dev_admission.mjs';
 
 const old={source_sha:'a'.repeat(40),gateway_digest:'sha256:'+'b'.repeat(64),
  worker_digest:'sha256:'+'c'.repeat(64),revision:'jscc-ops-gateway-dev-00015-lxb',tags:{},
@@ -232,4 +232,19 @@ test('operator GCS adapter uses fixed path, generation preconditions and no redi
  const conflict=operatorPairStore({getToken:async()=> 'fixture',
   fetchImpl:async()=>new Response('{}',{status:412})});
  await assert.rejects(conflict.create(path,{}),/generation_precondition_failed/);
+});
+
+
+test('operator activation is a separately pinned target in the existing pair approval',async()=>{
+ const f=await fixture(),bundle=structuredClone(f.args.bundle);
+ bundle.next.operator_activation={source_sha:next.source_sha,image_digest:'sha256:'+'1'.repeat(64),
+  activation_ref:'#589/300',publisher_ref:'#589/301'};
+ assert.deepEqual(pinnedPairAdmission(bundle,evidenceDigest(bundle),()=>NOW).bundle.next.operator_activation,bundle.next.operator_activation);
+ for(const mutation of [x=>x.next.operator_activation.source_sha=old.source_sha,
+  x=>x.next.operator_activation.activation_ref=x.evidence.approval,
+  x=>x.next.operator_activation.publisher_ref=x.next.operator_activation.activation_ref,
+  x=>x.next.gateway_digest=old.gateway_digest]){
+  const bad=structuredClone(bundle);mutation(bad);
+  assert.throws(()=>pinnedPairAdmission(bad,evidenceDigest(bad),()=>NOW),/activation_binding_denied/);
+ }
 });

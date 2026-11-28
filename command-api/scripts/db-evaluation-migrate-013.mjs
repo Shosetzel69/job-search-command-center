@@ -82,6 +82,17 @@ async function state(client,files){
    throw error;
  }
 }
+// #589: reuse the same exact release precheck via an existing tenant-scoped
+// read-only diagnostic transaction. No migration pool or transaction ownership.
+export async function inspectEvaluation013ReadOnly(tx,{readMigrations=loadMigrations}={}){
+ const guard=await tx.query("SELECT current_database() AS db, current_setting('transaction_read_only') AS ro");
+ if(guard.rows?.length!==1||guard.rows[0].db!=='jobsearch_dev'||guard.rows[0].ro!=='on')
+  fail('EVALUATION013_DIAGNOSTIC_SCOPE_DENIED');
+ const files=await readMigrations();
+ const readiness=await state(tx,files);
+ return {database:'jobsearch_dev',read_only:true,migration:TARGET,checksum:files.at(-1).checksum,
+  readiness,apply_authorized:false};
+}
 export async function prepareOrApplyEvaluation013({env=process.env,buildIdentity,db,migrations}={}){
  const admitted=admitEvaluation013(env,buildIdentity);
  migrationDatabaseConfig(env);

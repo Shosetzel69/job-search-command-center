@@ -6,7 +6,7 @@ import urllib.parse
 import urllib.request
 from .httpbase import BaseHandler, serve
 from .backend import GCSBackend, LocalBackend, GenerationConflict
-from .common import checked_path, checked_content, checked_task, MAX_FILES, MAX_TOTAL, MAX_REQUEST, json_bytes
+from .common import checked_path, checked_content, checked_task, checked_workdir, snapshot_sha256, checked_snapshot_sha256, checked_artifact_paths, checked_artifact_export, MAX_FILES, MAX_TOTAL, MAX_REQUEST, json_bytes
 from .workspace_ops import checksum, find_literal, compare, replace_once
 
 WORKER_URL = os.environ.get('WORKER_URL','').rstrip('/')
@@ -25,9 +25,18 @@ else:
         raise SystemExit('local_worker_required')
     backend = LocalBackend(os.environ['JSCC_LOCAL_BACKEND'])
 
-def execute_worker(snapshot, task, argv=None):
+def execute_worker(snapshot, task, argv=None, cwd='.', expected_snapshot_sha256=None, artifact_paths=None, export_artifacts=False):
     files = {k:base64.b64encode(v).decode() for k,v in snapshot.items()}
-    payload = json_bytes({'files':files,'task':task,'argv':argv})
+    payload = {'files':files,'task':task,'argv':argv}
+    if cwd != '.':
+        payload['cwd'] = cwd
+    if expected_snapshot_sha256 is not None:
+        payload['expected_snapshot_sha256'] = expected_snapshot_sha256
+    if artifact_paths is not None:
+        payload['artifact_paths'] = artifact_paths
+    if export_artifacts:
+        payload['export_artifacts'] = True
+    payload = json_bytes(payload)
     headers = {'Content-Type':'application/json'}
     if os.environ.get('K_SERVICE'):
         import google.auth.transport.requests
@@ -35,7 +44,10 @@ def execute_worker(snapshot, task, argv=None):
         headers['Authorization'] = 'Bearer ' + id_token.fetch_id_token(google.auth.transport.requests.Request(),WORKER_URL)
     req = urllib.request.Request(WORKER_URL+'/internal/execute',data=payload,headers=headers,method='POST')
     with urllib.request.urlopen(req,timeout=58) as r:
-        return json.load(r)
+        raw=r.read(48*1024+1)
+        if len(raw)>48*1024:
+            raise ValueError('worker_response_too_large')
+        return json.loads(raw)
 
 class Handler(BaseHandler):
     def do_GET(self):
@@ -45,7 +57,8 @@ class Handler(BaseHandler):
         if q.path == '/v1/files':
             try:
                 snap = backend.snapshot()
-                return self.out(200,{'files':sorted(snap),'file_count':len(snap),'total_bytes':sum(map(len,snap.values()))})
+                return self.out(200,{'files':sorted(snap),'file_count':len(snap),'total_bytes':sum(map(len,snap.values())),
+                                     'snapshot_sha256':snapshot_sha256(snap)})
             except ValueError as e:
                 return self.out(413,{'error':str(e)})
         if q.path == '/v1/file':
@@ -131,6 +144,18 @@ class Handler(BaseHandler):
             return self.out(400,{'error':str(e)})
 
     def do_POST(self):
+        if self.path == '/v1/move':
+            try:
+                o=self.body()
+                if not isinstance(o,dict) or set(o) != {'source','destination','if_generation_match'}:
+                    raise ValueError('invalid_request')
+                return self.out(200,backend.move(o['source'],o['destination'],o['if_generation_match']))
+            except GenerationConflict:
+                return self.out(409,{'error':'generation_conflict'})
+            except ValueError as e:
+                return self.out(400,{'error':str(e)}) if str(e) in ('invalid_path','invalid_move_path','invalid_generation','atomic_move_unsupported','symlink_forbidden') else self.out(502,{'error':'move_outcome_unconfirmed'})
+            except Exception:
+                return self.out(502,{'error':'move_outcome_unconfirmed'})
         if self.path == '/v1/replace':
             try:
                 o=self.body()
@@ -146,13 +171,34 @@ class Handler(BaseHandler):
             return self.out(404,{'error':'not_found'})
         try:
             o=self.body()
-            if not isinstance(o,dict) or set(o)-{'task','argv'}:
+            if not isinstance(o,dict) or set(o)-{'task','argv','cwd','expected_snapshot_sha256','artifact_paths','export_artifacts'}:
                 raise ValueError('invalid_request')
             cmd=checked_task(o.get('task'),o.get('argv'))
             snap=backend.snapshot()
             if len(snap)>MAX_FILES or sum(map(len,snap.values()))>MAX_TOTAL:
                 raise ValueError('workspace_limit')
-            return self.out(200,execute_worker(snap,o['task'],o.get('argv')))
+            cwd=checked_workdir(o.get('cwd','.'),snap)
+            options = {}
+            if 'artifact_paths' in o:
+                if 'expected_snapshot_sha256' not in o or o['task'] == 'toolchain':
+                    raise ValueError('invalid_artifact_paths')
+                options['artifact_paths'] = checked_artifact_paths(o['artifact_paths'])
+            if 'export_artifacts' in o:
+                if o['export_artifacts'] is not True or 'artifact_paths' not in options:
+                    raise ValueError('invalid_artifact_export')
+                options['export_artifacts'] = True
+            if 'expected_snapshot_sha256' in o:
+                pin=checked_snapshot_sha256(o['expected_snapshot_sha256'],snap)
+                result=execute_worker(snap,o['task'],o.get('argv'),cwd,expected_snapshot_sha256=pin,**options)
+                if not isinstance(result,dict) or result.get('snapshot_sha256') != pin:
+                    return self.out(502,{'error':'worker_snapshot_unconfirmed'})
+                if 'artifact_paths' in options:
+                    try:
+                        checked_artifact_export(result,options['artifact_paths'],options.get('export_artifacts',False))
+                    except ValueError:
+                        return self.out(502,{'error':'worker_artifacts_unconfirmed'})
+                return self.out(200,result)
+            return self.out(200,execute_worker(snap,o['task'],o.get('argv'),cwd))
         except ValueError as e:
             return self.out(400,{'error':str(e)})
         except urllib.error.HTTPError as e:

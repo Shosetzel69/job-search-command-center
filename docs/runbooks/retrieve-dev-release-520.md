@@ -37,3 +37,57 @@ No changes to selection/fit, source activation/replacement, historical writes, n
 
 ## 2026-11-15 correction: DEV migration collision
 Managed DEV ledger 011 is already `011_profile_job_count_snapshots.sql` (SHA-256 `c6cb6ac52c9a717a5dc452b38fb0874be51896190dc24beab01babfafe623f0e`), recovered byte-for-byte from draft PR #591 @0ad953f30bd3fa1717d2b9974dcff12fccdc1c2d. Only the historical SQL is restored; no #591 application code is imported. The new request-mapping migration is `012_refresh_requests.sql`. This supersedes all earlier 011 Retrieve instructions/approval tokens in this historical runbook. Use `db-retrieve-migrate-012.mjs`, `RETRIEVE012_MODE=inspect` or the separately approved `RETRIEVE012_MODE=apply` with `RETRIEVE012_OWNER_GATE=APPROVE_RETRIEVE_DEV_NILE_012_<new_exact_candidate_SHA>`. Admissible ledger is exact 001–011 (pending 012) or exact 001–012; inspect historical 011 schema before applying anything. No ledger repair, no historical DDL replay against managed DEV, no old image release or reuse of #636 candidate-specific preflight. New paired build and fresh preflight must bind the corrected commit; native 011→012 and old-runtime rollback compatibility remain gates. No TEST/PROD changes authorized.
+
+## #589 dedicated managed 013 release adapter (source only)
+
+`scripts/gcp/remote_executor_dev_nile_013.mjs` reuses the existing
+`jscc-db-migrate-dev` release procedure recorded in #535 comment 6951698590.
+Requires an independently admitted release identity (no default credentials),
+exact external evidence pin, pre-staged immutable candidate Job template with
+refuse default, v1 secret references, exact build/tag, reviewed script hash
+and owned GOV85 sentinel/catalog generation. All Search and migration
+executions must be terminal; active.json absent. The adapter consumes one
+approval in the existing GCS CAS store under control/v1/migrations before a
+single etag-bound run with fixed inspect/apply override; verifies script
+and migration SQL hashes inside the image. Apply requires separate prior inspect evidence and
+owner/review/rollback authority, plus the exact protected inspect claim/receipt
+and externally verified PENDING_013 evidence. Already-applied inspection cannot authorize apply. It does not stage or restore the Job, release
+the sentinel, interpret SQL logs or certify a managed migration outcome.
+Uncertain receipt retains claim; no replay. The existing independently
+reviewed release authority must stage/restore the exact Job and correlate
+execution/logs/ledger; read-only reconciliation of the protected receipt
+and exact execution is implemented, never a SQL PASS inference. The generic
+operator has no runWithOverrides grant.
+013 was already applied historically; do not reapply. No live mutation,
+new IAM grant, generic migration reactivation or managed backup/restore.
+
+## #589 guarded product Job stage/restore (source only)
+
+The existing guarded release procedure gains a dedicated adapter
+`scripts/gcp/remote_executor_dev_job_release.mjs`. It reuses the exact GOV85
+sentinel/catalog and bounded all-page quiescence checks from the 013 adapter.
+Only the canonical DEV Search/Migration Jobs, existing identity, immutable
+image and SOURCE_SHA may change; prior/next exact template hashes are pinned.
+Migration retains refuse default and command/secret references. Search stage
+requires the candidate Service zero-traffic tagged revision, restoration
+requires prior Service serving again. Independent authority must verify
+staged health, signed dispatch exclusion and rollback compatibility. One
+claim per approval, validateOnly + etag + actual update + readback; unknown
+receipt retains claim and lock. Read-only reconciliation reports exact prior,
+target or drift, even after approval expiry; never authorizes replay.
+No Job execute/cancel, schema change, lock
+write, automatic retry, new product route or generic operator grant. Actual
+release identity, provider shape, immutable build results and live acceptance
+remain prerequisites. The protected product-job-steps prefix needs scoped IAM.
+
+## #589 signed Search cancellation (source only)
+
+The existing release-side adapter also admits exact signed manual/admin Search cancellation, not launch. The independent authority pins the actor/recovery plan, immutable execution UID/image/source, run ID, request signature, scope hash and both live marker generations/descriptor hash. Verify the same scope in execution overrides and marker payloads, create one protected claim, re-read markers and etag, submit cancellation once and observe the exact execution. Terminal state is not a database rollback claim. No marker deletion, automatic retry, generic operator permission or resume approval. The existing authorized application Retrieve endpoint remains the sole launch route. Provider cancellation permission and functional recovery acceptance remain live gates.
+
+## #589 compatible Service-only release handoff (source only)
+
+For an independently reviewed release needing no managed schema change, the existing GitDeploy/GCloudDeploy Service engine may finish first while the owned Retrieve sentinel excludes all dispatch. A separate approved Search `align` step requires exact serving candidate revision, product Service/Search build IDs and immutable digests, external release evidence and explicit `schema_change_required=false`. It does not relax the zero-traffic `stage` gate for migration-required releases. `observeCompatibleProductDelivery` binds the exact alignment approval, refusal-only migration template, independently verified schema/health references and durable claim/receipt to repeated live observations, reporting pending alignment, recovery or independent acceptance required. Never launches Service deployment, migration or Search; no lock release authority. Existing Service-only release and protected identities remain unchanged.
+
+## #589 migration-required release progression (source only)
+
+`advanceMigrationProductDelivery` reuses the separately approved migration Job stage, 013 inspect, conditional apply, restoration and Search stage adapters, with the same exact source, lock, catalog and candidate digest bindings. An explicit requested next step may execute only through the existing release authority; otherwise the function observes and reports the next gate. Each step requires its own original approval; existing receipts are checked, unknown outcomes stop, and independently verified ALREADY_APPLIED inspection skips apply. Managed SQL success is not inferred from execution success. Staged Service health and migration evidence must be authenticated by the independent authority. The function stops before the existing Service cutover approval; it cannot cut traffic, release the lock or start Retrieve. No additional release identity or endpoint is created.

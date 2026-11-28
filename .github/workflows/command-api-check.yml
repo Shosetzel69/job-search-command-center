@@ -61,12 +61,22 @@ on:
       - "test_m01_r8.py"
       - "package.json"
   workflow_dispatch:
+    inputs:
+      nile_only:
+        description: "Run only existing disposable Nile native CI (no deployment)"
+        type: boolean
+        default: false
+      expected_source_sha:
+        description: "Exact trusted main SHA required for nile_only"
+        type: string
+        default: ""
 
 permissions:
   contents: read
 
 jobs:
   validate:
+    if: github.event_name != 'workflow_dispatch' || !inputs.nile_only
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -274,6 +284,18 @@ jobs:
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Admit exact manual Nile CI candidate before container startup
+        if: github.event_name == 'workflow_dispatch' && inputs.nile_only
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = Shosetzel69/job-search-command-center
+          test "$GITHUB_REF" = refs/heads/main
+          [[ "$EXPECTED_SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$EXPECTED_SOURCE_SHA"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
       - name: Set up Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:

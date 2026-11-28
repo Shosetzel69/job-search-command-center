@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   dispatch:
-    if: ${{ github.actor == 'Shosetzel69' && (startsWith(github.event.comment.body, '/jscc-search') || startsWith(github.event.comment.body, '/jscc-validate')) }}
+    if: ${{ github.actor == 'Shosetzel69' && (startsWith(github.event.comment.body, '/jscc-search') || startsWith(github.event.comment.body, '/jscc-validate') || (github.event.issue.number == 589 && !github.event.issue.pull_request && startsWith(github.event.comment.body, '/jscc-nile-ci'))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -39,6 +39,12 @@ jobs:
           payload="$(jq -c '.payload' <<<"$envelope")"
           case "$workflow" in
             test-full-search.yml|dev-source-validation.yml) ;;
+            command-api-check.yml)
+              test "$ISSUE_NUMBER" = 589
+              sha="$(jq -er '.inputs.expected_source_sha' <<<"$payload")"
+              test "$(git rev-parse HEAD)" = "$sha"
+              test "$(jq -r '.inputs.nile_only' <<<"$payload")" = true
+              ;;
             *) echo "Unexpected workflow target" >&2; exit 1 ;;
           esac
           printf '%s' "$payload" | gh api \

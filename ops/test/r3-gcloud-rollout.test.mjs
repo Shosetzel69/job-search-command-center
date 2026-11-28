@@ -13,7 +13,7 @@ const obs=(rows)=>({task:'describe_dev_runtime',environment:'dev',
 const row=(rev,percent,digest)=>({revision:service+'-'+rev,percent,image_digest:digest});
 
 test('Catalogue retains rollout operations and exact version',()=>{
- assert.equal(CATALOG_VERSION,'589-nile-api-v1');
+ assert.equal(CATALOG_VERSION,'589-operator-v1');
  assert.equal(TASK_CATALOG.inspect_dev_rollout.class,'OBSERVE');
  assert.ok(TASK_CATALOG.describe_execution);
  assert.ok(TASK_CATALOG.read_execution_logs);

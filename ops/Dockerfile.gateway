@@ -4,6 +4,7 @@ COPY ops/package.json ./ops/package.json
 RUN cd ops && npm install --omit=dev --ignore-scripts
 COPY ops/src ./ops/src
 COPY ops/observation/dev-runtime-observer.mjs ./ops/observation/dev-runtime-observer.mjs
+COPY scripts/gcp/remote_executor_dev_lifecycle.json ./scripts/gcp/remote_executor_dev_lifecycle.json
 RUN node --check ops/src/lib.mjs && node --check ops/src/gateway.mjs
 ARG SOURCE_SHA
 ENV SOURCE_SHA=${SOURCE_SHA}

@@ -34,10 +34,10 @@ gcloud run jobs describe jscc-diagnostics-dev \
   --region="$REGION" \
   --impersonate-service-account="$DEPLOYER" >/dev/null
 
-gcloud run services describe jscc-ops-gateway-dev \
-  --project="$PROJECT" \
-  --region="$REGION" \
-  --impersonate-service-account="$DEPLOYER" >/dev/null
+# The old set-env-vars route cannot preserve activated operator bindings.
+# Observe desired and effective revision before either workload is mutated.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+[[ "$(python3 "$SCRIPT_DIR/cloud_run_v2_read.py" "$PROJECT" "$REGION" jscc-ops-gateway-dev ops-legacy-deploy)" == JSCC_LEGACY_OPS_DEPLOY_ALLOWED ]]
 
 gcloud run jobs deploy jscc-diagnostics-dev \
   --project="$PROJECT" \

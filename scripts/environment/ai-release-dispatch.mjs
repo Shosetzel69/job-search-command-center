@@ -2,6 +2,7 @@ export const OWNER_LOGIN = "Shosetzel69";
 export const DEPLOY_WORKFLOW = "deploy-environment.yml";
 export const SEARCH_WORKFLOW = "test-full-search.yml";
 export const VALIDATION_WORKFLOW = "dev-source-validation.yml";
+export const NILE_CI_WORKFLOW = "command-api-check.yml";
 
 export function parseDeployCommand(body, { actor, issueNumber, commentId } = {}) {
   if (actor !== OWNER_LOGIN) throw new Error("Only the repository owner may dispatch release environments.");
@@ -101,8 +102,20 @@ export function validationWorkflowDispatchPayload(command) {
   };
 }
 
+// #589: existing isolated native CI runner only; never a managed DB or deployment route.
+export function nileCiWorkflowDispatchPayload(body,{actor,issueNumber,commentId}={}){
+ if(actor!==OWNER_LOGIN||Number(issueNumber)!==589||!Number.isSafeInteger(Number(commentId))||Number(commentId)<1)
+  throw new Error('Nile CI dispatch requires the owner and issue #589.');
+ const text=typeof body==='string'?body.trim():'';
+ const match=text.match(/^\/jscc-nile-ci[ \t]+dev[ \t]+([a-f0-9]{40})$/);
+ if(!match)throw new Error('Invalid isolated Nile CI command.');
+ return {ref:'main',inputs:{nile_only:true,expected_source_sha:match[1]}};
+}
 export function dispatchEnvelope(body, context = {}) {
   const text = typeof body === "string" ? body.trim() : "";
+  if (text.startsWith("/jscc-nile-ci")) {
+    return {workflow:NILE_CI_WORKFLOW,payload:nileCiWorkflowDispatchPayload(text,context)};
+  }
   if (text.startsWith("/jscc-search")) {
     return { workflow:SEARCH_WORKFLOW, payload:searchWorkflowDispatchPayload(parseSearchCommand(text, context)) };
   }
