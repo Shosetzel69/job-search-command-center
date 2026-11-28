@@ -91,3 +91,12 @@ test('RE-02: optional snapshot pin is exact and cannot be silently ignored by a 
   fetchImpl:async()=>Response.json({exit_code:0,snapshot_sha256:pin})});
  assert.equal(result.data.snapshot_sha256,pin);
 });
+
+test('workspace atomic move is exact generation-bound and create-only by contract',()=>{
+ const args={source:'src/a.txt',destination:'src/b.txt',if_generation_match:7};
+ assert.deepEqual(validatedWorkspaceRequest('workspace_move',args),{method:'POST',path:'/v1/move',body:args});
+ for(const bad of [{...args,destination:args.source},{...args,destination:'src/a.txt/nested'},
+  {...args,source:'../private'},{...args,if_generation_match:0},{...args,overwrite:true}])
+  assert.throws(()=>validatedWorkspaceRequest('workspace_move',bad));
+ assert.ok(workspaceTools.some(x=>x.name==='workspace_move'));
+});

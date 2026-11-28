@@ -110,3 +110,16 @@ does not confirm the pin. Legacy unpinned calls remain compatible.
 This proves exact workspace bytes, not an authenticated Git SHA or
 the provenance of the caller-supplied pin. Coordinated gateway, manager
 and worker release and live acceptance remain required.
+
+
+## RE-02 atomic workspace move (source only)
+
+The new workspace_move operation uses the existing Manager and write scope.
+It accepts only a single source and absent destination, with exact source
+generation. GCS uses the documented atomic objects/move endpoint only after
+verifying the existing bucket supports hierarchical namespace. A flat or
+unverified namespace fails closed; there is no non-atomic copy/delete fallback,
+new bucket, SDK upgrade or IAM change. Existing GCS layout, cost and permission
+admission must be verified before live use. The result confirms destination
+generation/content and absence of source; uncertain outcome is not retried.
+Reference: https://docs.cloud.google.com/storage/docs/json_api/v1/objects/move

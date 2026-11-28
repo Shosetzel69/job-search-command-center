@@ -160,6 +160,21 @@ class WorkspaceHTTPTests(unittest.TestCase):
             self.assertEqual(result['error'],'worker_snapshot_unconfirmed')
 
 
+    def test_atomic_move_local_backend_refuses_overwrite_and_stale_generation(self):
+        manager.backend.put('move/src.txt',b'fixture',0)
+        manager.backend.put('move/existing.txt',b'keep',0)
+        args={'source':'move/src.txt','destination':'move/dst.txt','if_generation_match':1}
+        for bad in ({**args,'destination':'move/existing.txt'},{**args,'if_generation_match':2}):
+            status,result=self.request('/v1/move',bad)
+            self.assertEqual(status,409)
+            self.assertEqual(manager.backend.get('move/src.txt')[0],b'fixture')
+        status,result=self.request('/v1/move',args)
+        self.assertEqual(status,200)
+        self.assertTrue(result['moved'])
+        self.assertIsNone(manager.backend.get('move/src.txt'))
+        self.assertEqual(manager.backend.get('move/dst.txt'),(b'fixture',result['generation']))
+
+
 class WorkerCwdTests(unittest.TestCase):
     def test_actual_worker_runs_from_selected_snapshot_directory(self):
         import base64

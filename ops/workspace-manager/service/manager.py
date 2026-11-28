@@ -137,6 +137,18 @@ class Handler(BaseHandler):
             return self.out(400,{'error':str(e)})
 
     def do_POST(self):
+        if self.path == '/v1/move':
+            try:
+                o=self.body()
+                if not isinstance(o,dict) or set(o) != {'source','destination','if_generation_match'}:
+                    raise ValueError('invalid_request')
+                return self.out(200,backend.move(o['source'],o['destination'],o['if_generation_match']))
+            except GenerationConflict:
+                return self.out(409,{'error':'generation_conflict'})
+            except ValueError as e:
+                return self.out(400,{'error':str(e)}) if str(e) in ('invalid_path','invalid_move_path','invalid_generation','atomic_move_unsupported','symlink_forbidden') else self.out(502,{'error':'move_outcome_unconfirmed'})
+            except Exception:
+                return self.out(502,{'error':'move_outcome_unconfirmed'})
         if self.path == '/v1/replace':
             try:
                 o=self.body()

@@ -15,6 +15,7 @@ export const workspaceTools = Object.freeze([
   { name:'workspace_search', description:'Search literal text in bounded DEV workspace files. Returns file names and line numbers only, never matching source snippets.', inputSchema:{type:'object',required:['term'],properties:{term:{type:'string',minLength:1,maxLength:100}},additionalProperties:false} },
   { name:'workspace_compare', description:'Compare two DEV workspace files by SHA256 and changed-line ranges (no source snippets).', inputSchema:{type:'object',required:['left','right'],properties:{left:{type:'string'},right:{type:'string'}},additionalProperties:false} },
   { name:'workspace_replace', description:'Replace one unique literal in an existing DEV UTF-8 file with an optimistic generation precondition.', inputSchema:{type:'object',required:['path','old','new','if_generation_match'],properties:{path:{type:'string'},old:{type:'string'},new:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
+  { name:'workspace_move', description:'Atomically rename one generation-pinned DEV workspace file to an absent path. Requires supported storage namespace.', inputSchema:{type:'object',required:['source','destination','if_generation_match'],properties:{source:{type:'string'},destination:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
   { name:'workspace_delete', description:'Delete one exact DEV workspace file only if its existing object generation matches (no recursive delete).', inputSchema:{type:'object',required:['path','if_generation_match'],properties:{path:{type:'string'},if_generation_match:{type:'integer',minimum:1}},additionalProperties:false} },
 ]);
 
@@ -75,6 +76,13 @@ export function validatedWorkspaceRequest(name, args) {
        typeof args.new!=='string' || Buffer.byteLength(args.new,'utf8')>8192) throw new Error('invalid_replacement_text');
     if(!Number.isSafeInteger(args.if_generation_match) || args.if_generation_match<=0) throw new Error('invalid_generation');
     return {method:'POST',path:'/v1/replace',body:{path,old:args.old,new:args.new,if_generation_match:args.if_generation_match}};
+  }
+  if (name==='workspace_move') {
+    plainArgs(args,['source','destination','if_generation_match']);
+    const source=filePath(args.source),destination=filePath(args.destination);
+    if(source===destination||source.startsWith(destination+'/')||destination.startsWith(source+'/'))throw new Error('invalid_move_path');
+    if(!Number.isSafeInteger(args.if_generation_match)||args.if_generation_match<=0)throw new Error('invalid_generation');
+    return {method:'POST',path:'/v1/move',body:{source,destination,if_generation_match:args.if_generation_match}};
   }
   if (name==='workspace_delete') {
     plainArgs(args,['path','if_generation_match']);
