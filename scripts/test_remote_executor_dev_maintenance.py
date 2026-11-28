@@ -12,6 +12,7 @@ import remote_executor_dev_maintenance as guard
 class FakeAPI:
     def __init__(self):
         self.lifecycle = json.loads(guard.LIFECYCLE_FILE.read_text(encoding='utf-8'))
+        self.updated = '2020-01-01T00:00:00Z'
         self.lease = None
         self.generation = "0"
         self.active = {name: [] for name in guard.JOBS}
@@ -22,7 +23,7 @@ class FakeAPI:
 
     def bucket_metadata(self):
         return {'name': guard.BUCKET, 'location': 'EUROPE-WEST1',
-                'lifecycle': copy.deepcopy(self.lifecycle)}
+                'lifecycle': copy.deepcopy(self.lifecycle), 'updated': self.updated}
 
     def service(self):
         return {"name": "projects/jscc-dev/locations/europe-west1/services/jscc-command-api-dev",
@@ -107,10 +108,60 @@ class MaintenanceTests(unittest.TestCase):
         self.api.lifecycle["rule"][0]["condition"]["matchesPrefix"].reverse()
         self.assertEqual(self.guard.inspect(), baseline)
 
+    def test_lifecycle_settling_boundary_and_invalid_timestamps(self):
+        from datetime import datetime, timezone
+        from unittest.mock import patch
+        self.api.updated = "2026-11-28T20:15:59.502Z"
+        boundary = int(datetime(2026, 11, 29, 20, 15, 59, 502000,
+                                tzinfo=timezone.utc).timestamp() * 1000)
+        with patch.object(guard, "now_ms", return_value=boundary):
+            baseline = self.guard.inspect()
+        with patch.object(guard, "now_ms", return_value=boundary - 1):
+            with self.assertRaisesRegex(guard.Blocked, "operator_lifecycle_not_settled"):
+                self.guard.freeze(baseline)
+        self.assertEqual(self.api.writes, [])
+        for updated in (None, "", "invalid", "2026-11-28", "2026-11-28T20:15:59",
+                        "2026-02-30T00:00:00Z", "2099-01-01T00:00:00Z"):
+            self.api.updated = updated
+            with self.subTest(updated=updated), patch.object(guard, "now_ms", return_value=boundary):
+                with self.assertRaisesRegex(guard.Blocked, "operator_lifecycle_not_settled"):
+                    self.guard.inspect()
+        self.assertEqual(self.api.writes, [])
+
+    def test_capacity_trigger_blocks_new_maintenance_but_not_owned_release(self):
+        def populate(count, dispatch_count):
+            self.api.records["operations/"] = [
+                (f"operations/op-{i}.json", {"operation_id": f"op-{i}", "operation_state": "SUCCEEDED",
+                  "finished_at": "done", "execution_name": f"ex-{i}"}) for i in range(count)]
+            self.api.records["dispatch/"] = [
+                (f"dispatch/ex-{i}.json", {"operation_id": f"op-{i}", "execution_name": f"ex-{i}"})
+                for i in range(dispatch_count)]
+        limit = guard.MAINTENANCE_CAPACITY_TRIGGER
+        self.assertEqual(limit, 1500)
+        populate(limit - 1, limit - 1)
+        baseline = self.guard.inspect()
+        populate(limit, 0)
+        with self.assertRaisesRegex(guard.Blocked, "maintenance_capacity_reached"):
+            self.guard.freeze(baseline)
+        self.assertEqual(self.api.writes, [])
+        # Independently exercise the dispatch boundary without first hitting operations.
+        populate(1, 0)
+        self.api.records["dispatch/"] = [
+            ("dispatch/ex-0.json", {"operation_id": "op-0", "execution_name": "ex-0"})] * limit
+        with self.assertRaisesRegex(guard.Blocked, "maintenance_capacity_reached"):
+            self.guard.inspect()
+        self.assertEqual(self.api.writes, [])
+        populate(limit - 1, limit - 1)
+        self.guard.freeze(baseline)
+        populate(limit, limit)
+        self.guard.release_after_verified(lambda: True)
+        self.assertEqual(self.api.lease["state"], "RELEASED")
+
     def test_policy_drift_does_not_prevent_owned_verified_release(self):
         self.guard.freeze(self.guard.inspect())
         self.api.lifecycle = {"rule": [{"action": {"type": "Delete"},
                                        "condition": {"age": 14}}]}
+        self.api.updated = None
         self.guard.release_after_verified(lambda: True)
         self.assertEqual(self.api.lease["state"], "RELEASED")
 
@@ -120,7 +171,7 @@ class MaintenanceTests(unittest.TestCase):
         api.request = Mock(return_value=({"name": guard.BUCKET}, {}))
         self.assertEqual(api.bucket_metadata(), {"name": guard.BUCKET})
         api.request.assert_called_once_with(
-            guard.BUCKET_METADATA + "?fields=name,location,lifecycle")
+            guard.BUCKET_METADATA + "?fields=name,location,lifecycle,updated")
 
     def test_active_or_expired_active_lease_never_overwritten(self):
         for expiry in (guard.now_ms() - 1, guard.now_ms() + 100000):
