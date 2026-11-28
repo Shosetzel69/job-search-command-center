@@ -16,6 +16,7 @@ const roles=[
  role(DEV,'jsccOpsControlCreateDev',['storage.objects.create']),
  role(DEV,'jsccOpsControlReplaceDev',['storage.objects.create','storage.objects.delete']),
  role(DEV,'jsccOpsControlBucketGetDev',['storage.buckets.get']),
+ role(DEV,'jsccOpsMaintenanceListDev',['storage.objects.list']),
  role(SHARED,'jsccOpsSourceGetDev',['storage.objects.get']),
  role(SHARED,'jsccOpsSourceCreateDev',['storage.objects.create']),
  role(DEV,'jsccOpsOperatorInvokeDev',['run.jobs.get','run.jobs.run','run.executions.get']),
@@ -29,18 +30,25 @@ const metadata=name=>({project:DEV,bucket:OPS,member:member(name),role:'projects
 export function planDevOperatorIam(){
  const read=['approvals','operator-requests','operator-dispatch','operator-claims','operator-results'].map(control);
  const writes=['operator-requests','operator-dispatch'].map(control);
- const immutable=['operator-claims','operator-results'].map(control);
- const ledgers=['builds','deployments'].map(control);
+ const immutable=['operator-claims','operator-results','builds/consumed'].map(control);
+ const ledgers=['builds/ledgers','deployments'].map(control);
  const p=[
   binding(GATEWAY,OPS,'jsccOpsControlGetDev',read,'jscc589_gateway_control_read'),
   binding(GATEWAY,OPS,'jsccOpsControlCreateDev',writes,'jscc589_gateway_control_create'),
   metadata(GATEWAY),
-  binding(JOB,OPS,'jsccOpsControlGetDev',[...read,...ledgers,'operations/','results/'],'jscc589_job_control_read'),
+  binding(JOB,OPS,'jsccOpsControlGetDev',[...read,control('builds'),control('deployments'),'operations/','results/','dispatch/'],'jscc589_job_control_read'),
   binding(JOB,OPS,'jsccOpsControlCreateDev',immutable,'jscc589_job_control_create'),
   // GCS requires delete permission to overwrite a mutable object. Only
   // the existing CAS ledger prefixes receive it, never approval/request/
-  // dispatch/claim/result prefixes. No storage.objects.list in this plan.
+  // dispatch/claim/result or legacy build records.
   binding(JOB,OPS,'jsccOpsControlReplaceDev',ledgers,'jscc589_job_cas_replace'),
+  {project:DEV,bucket:OPS,member:member(JOB),role:'projects/'+DEV+'/roles/jsccOpsControlGetDev',
+   condition:{title:'jscc589_job_lease_read',expression:"resource.name == 'projects/_/buckets/"+OPS+"/objects/leases/diagnostics.json'"}},
+  {project:DEV,bucket:OPS,member:member(JOB),role:'projects/'+DEV+'/roles/jsccOpsControlReplaceDev',
+   condition:{title:'jscc589_job_lease_cas',expression:"resource.name == 'projects/_/buckets/"+OPS+"/objects/leases/diagnostics.json'"}},
+  // List is bucket-level; only the isolated Job, and only this bucket.
+  {project:DEV,bucket:OPS,member:member(JOB),role:'projects/'+DEV+'/roles/jsccOpsMaintenanceListDev',
+   condition:{title:'jscc589_job_maintenance_list',expression:bucketEq(OPS)}},
   metadata(JOB),
   binding(PUBLISHER,OPS,'jsccOpsControlGetDev',[control('approvals')],'jscc589_publisher_approval_read'),
   binding(PUBLISHER,OPS,'jsccOpsControlCreateDev',[control('approvals')],'jscc589_publisher_approval_create'),
@@ -50,7 +58,7 @@ export function planDevOperatorIam(){
  ];
  const plan={schema_version:'1.0',environment:'dev',work_item_ref:'#589',roles:structuredClone(roles),bucket_bindings:p,
   job_bindings:[{project:DEV,region:'europe-west1',job:JOB,member:member(GATEWAY),role:'projects/'+DEV+'/roles/jsccOpsOperatorInvokeDev'}],
-  prerequisites:['UNIFORM_BUCKET_ACCESS','EXACT_EXISTING_IDENTITIES','NO_INHERITED_BYPASS','INDEPENDENT_AUTHORITY_CUSTODY'],
+  prerequisites:['UNIFORM_BUCKET_ACCESS','EXACT_EXISTING_IDENTITIES','NO_INHERITED_BYPASS','INDEPENDENT_AUTHORITY_CUSTODY','R6_BUCKET_LIST_OWNER_APPROVAL','LEGACY_BUILD_LEDGER_RECONCILED'],
   activation_authorized:false,live_iam_verified:false};
  return {plan,sha256:createHash('sha256').update(JSON.stringify(plan)).digest('hex')};
 }
@@ -72,6 +80,9 @@ export function operatorIamCommands(pin){
 if(process.argv[1]===fileURLToPath(import.meta.url)){
  const args=process.argv.slice(2);
  if(args.length===0)console.log(JSON.stringify(planDevOperatorIam(),null,2));
- else if(args.length===2&&args[0]==='--commands')console.log(JSON.stringify(operatorIamCommands(args[1]),null,2));
+ else if(args.length===2&&args[0]==='--commands'){
+  if(args[1]!==planDevOperatorIam().sha256){console.error('operator_iam_plan_pin_mismatch');process.exitCode=2;}
+  else console.log(JSON.stringify(operatorIamCommands(args[1]),null,2));
+ }
  else{console.error('operator_iam_plan_arguments_denied');process.exitCode=2;}
 }
