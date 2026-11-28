@@ -154,3 +154,15 @@ retry. Existing manager/worker compatible rollout and independent synthetic
 smoke are required; health is not functional acceptance. Private service
 invoker, exact scoped update, image/source and existing traffic/URI formats
 are live admission gates. No product Service/Search Job, IAM or DB mutation.
+
+## RE-07 isolated Nile testing invocation (source only)
+
+Extend the existing owner issue-comment dispatcher, not GitHub credentials or
+GCP Docker privileges: /jscc-nile-ci dev followed by the exact lowercase main
+SHA, only on issue #589. It dispatches the existing Validate Command API
+workflow in nile_only mode, verifies trusted main SHA again before starting
+its pinned official disposable Nile container, reuses mandatory native test
+and cleanup gates. Existing GitDeploy requires push, not workflow_dispatch.
+The tester owns invocation and review. No managed DB or product deployment,
+no new runner, cloud identity or container image. Source changes must first
+be independently reviewed and merged; this route has not been invoked.

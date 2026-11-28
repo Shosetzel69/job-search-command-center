@@ -96,7 +96,7 @@ def execute(files, task, argv=None, cwd='.', expected_snapshot_sha256=None, arti
             resource.setrlimit(resource.RLIMIT_CPU, (TIMEOUT, TIMEOUT+1))
             resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
         timed_out = False
-        with open(logs/'stdout.log', 'wb') as out, open(logs/'stderr.log', 'wb') as err:
+        with open(logs/'stdout.log', 'w+b') as out, open(logs/'stderr.log', 'w+b') as err:
             p = subprocess.Popen(command, cwd=working_dir, env=env, stdout=out,
                                  stderr=err, start_new_session=True, preexec_fn=limits)
             try:
@@ -112,8 +112,11 @@ def execute(files, task, argv=None, cwd='.', expected_snapshot_sha256=None, arti
                     os.killpg(p.pid, signal.SIGKILL)
                 except ProcessLookupError:
                     pass
-        stdout = (logs/'stdout.log').read_bytes()[:MAX_OUTPUT+1]
-        stderr = (logs/'stderr.log').read_bytes()[:MAX_OUTPUT+1]
+            # Read bounded original descriptors, not filenames the child can replace.
+            out.seek(0)
+            err.seek(0)
+            stdout = out.read(MAX_OUTPUT+1)
+            stderr = err.read(MAX_OUTPUT+1)
         duration = int((time.monotonic()-started)*1000)
         result = {
             'exit_code': 124 if timed_out else p.returncode,

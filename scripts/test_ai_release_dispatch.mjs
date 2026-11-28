@@ -173,3 +173,15 @@ test("Zoho named IDs are permitted without weakening exact DEV cohort gates", ()
     assert.throws(() => parseValidationCommand(`/jscc-validate dev ${SHA} ${bad}`, context), /Invalid validation command/);
   }
 });
+
+
+test('isolated Nile CI uses only exact main SHA and existing canonical workflow, owner issue #589',()=>{
+ const sha='a'.repeat(40),ctx={actor:OWNER_LOGIN,issueNumber:589,commentId:30001};
+ assert.deepEqual(dispatchEnvelope('/jscc-nile-ci dev '+sha,ctx),{
+  workflow:'command-api-check.yml',payload:{ref:'main',inputs:{nile_only:true,expected_source_sha:sha}}});
+ for(const body of ['/jscc-nile-ci prod '+sha,'/jscc-nile-ci test '+sha,
+  '/jscc-nile-ci dev '+sha+' extra','/jscc-nile-ci dev short'])
+  assert.throws(()=>dispatchEnvelope(body,ctx));
+ assert.throws(()=>dispatchEnvelope('/jscc-nile-ci dev '+sha,{...ctx,issueNumber:588}));
+ assert.throws(()=>dispatchEnvelope('/jscc-nile-ci dev '+sha,{...ctx,actor:'other'}));
+});
