@@ -101,6 +101,11 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   traffic revisions and their immutable digest evidence using the existing
   DEV runtime observer; unresolved digests remain UNKNOWN. It does not
   establish source provenance or expose revision environment values.
+- Fixed Cloud Run v2 testIamPermissions probes first verify exact DEV resource
+  existence and report the current operator's returned permissions only.
+  No caller-selected permissions, policy mutation, arbitrary principal or
+  project-wide isolation claim. Conditional IAM and other resources require
+  separate independent live evidence.
 - GCS copy is restricted to the dedicated staging bucket, approved DEV
   artifact names, exact source generation/checksums and create-only
   destination. A multipart/uncertain rewrite stops; managed data deletion

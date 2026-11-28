@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {executeDevGcpMetadata} from '../operator/dev_gcp_metadata.mjs';
-import {projectOperatorResult} from '../src/dev_operator_contract.mjs';
+import {projectOperatorResult,DEV_RUN_PERMISSION_PROBES} from '../src/dev_operator_contract.mjs';
 
 test('job inventory exposes configuration metadata, never secret or environment values',async()=>{
  const name='jscc-search-dev';
@@ -84,4 +84,35 @@ test('service inventory rejects revision identity mismatch instead of falling ba
    trafficStatuses:[{revision:rev,percent:100}]});
   return Response.json({name:root+'/revisions/'+name+'-different',containers:[]});
  }}),/RESOURCE_MISMATCH/);
+});
+
+
+test('permission probe is read-only exact DEV resource, fixed caller permission list and no isolation claim',async()=>{
+ const name='jscc-command-api-dev',kind='run_service_permissions';
+ const root='projects/jscc-dev/locations/europe-west1/services/'+name;
+ const calls=[];
+ const out=await executeDevGcpMetadata({environment:'dev',kind,name},{fetchImpl:async(url,init)=>{
+  calls.push([url,init.method]);
+  if(init.method==='GET'){assert.equal(url,'https://run.googleapis.com/v2/'+root+'?fields=name');return Response.json({name:root});}
+  assert.equal(url,'https://run.googleapis.com/v2/'+root+':testIamPermissions');
+  assert.deepEqual(JSON.parse(init.body),{permissions:[...DEV_RUN_PERMISSION_PROBES[kind]]});
+  return Response.json({permissions:['run.services.get','run.services.update'],private:'ignore'});
+ }});
+ const req={operation_id:'op',approval_hash:'hash',action:'gcp_metadata'};
+ const result=projectOperatorResult(req,{generation:'1',data:{...req,...out}});
+ assert.deepEqual(result.metadata.reported_permissions,['run.services.get','run.services.update']);
+ assert.ok(result.metadata.not_reported_permissions.includes('run.services.delete'));
+ assert.equal(result.metadata.policy_isolation,'UNVERIFIED');
+ assert.equal(JSON.stringify(result).includes('private'),false);
+ assert.deepEqual(calls.map(x=>x[1]),['GET','POST']);
+});
+test('permission probes deny caller-supplied permissions, foreign names and missing/mismatched resource',async()=>{
+ const input={environment:'dev',kind:'run_job_permissions',name:'jscc-search-dev'};
+ for(const bad of [{...input,name:'jscc-search-prod'},{...input,environment:'test'},{...input,permissions:['*']}])
+  await assert.rejects(()=>executeDevGcpMetadata(bad,{fetchImpl:async()=>assert.fail('unexpected API')}));
+ let calls=0;
+ await assert.rejects(()=>executeDevGcpMetadata(input,{fetchImpl:async()=>{
+  calls++;return Response.json({name:'projects/foreign/locations/europe-west1/jobs/jscc-search-dev'});
+ }}),/resource_unverified/);
+ assert.equal(calls,1);
 });

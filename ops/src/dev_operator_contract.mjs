@@ -11,6 +11,10 @@ const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
 const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata']);
+export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
+ run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
+ run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
+});
 const STATES=new Set(['DISPATCH_PENDING_OR_UNKNOWN','SUBMITTED','WORKING','SUCCEEDED','FAILED','BLOCKED',
  'CANCELLED','SUBMISSION_UNKNOWN','ROLLED_BACK','RECOVERY_REQUIRED','FREEZE_UNCERTAIN',
  'ROLLBACK_BLOCKED','UNFREEZE_UNCERTAIN','ADMISSION_BLOCKED','OBSERVED']);
@@ -101,7 +105,7 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
  }else if(v.action==='gcp_metadata'){
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.kind==='artifact_tag'&&operatorExact(v.bundle,['environment','kind','package','source_sha'])||
-   ['secret','run_job','run_service'].includes(v.bundle.kind)&&operatorExact(v.bundle,['environment','kind','name'])),
+   ['secret','run_job','run_service','run_job_permissions','run_service_permissions'].includes(v.bundle.kind)&&operatorExact(v.bundle,['environment','kind','name'])),
    'operator_metadata_approval_mismatch');
  }else if(v.action==='gcs_artifact'){
   operatorRequire(v.bundle.environment==='dev'&&(
@@ -138,7 +142,21 @@ export function validateOperatorRequest(value,admission){
 }
 function projectMetadata(m){
  const safeName=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,255}$/.test(x);
- if(!m||!['artifact_tag','secret','run_job','run_service'].includes(m.kind))throw Error('operator_metadata_invalid');
+ if(!m||!['artifact_tag','secret','run_job','run_service','run_job_permissions','run_service_permissions'].includes(m.kind))throw Error('operator_metadata_invalid');
+ if(Object.hasOwn(DEV_RUN_PERMISSION_PROBES,m.kind)){
+  const requested=DEV_RUN_PERMISSION_PROBES[m.kind];
+  const targets=m.kind==='run_job_permissions'?
+   ['jscc-search-dev','jscc-diagnostics-dev','jscc-db-migrate-dev','jscc-ops-operator-dev']:
+   ['jscc-dev-workspace-manager','jscc-dev-sandbox-worker','jscc-ops-gateway-dev','jscc-command-api-dev'];
+  operatorRequire(targets.includes(m.name)&&m.scope==='current_operator_resource_probe'&&
+   m.resource_exists===true&&Array.isArray(m.reported_permissions)&&
+   m.reported_permissions.every(x=>requested.includes(x))&&
+   new Set(m.reported_permissions).size===m.reported_permissions.length,'operator_permissions_invalid');
+  return {kind:m.kind,name:m.name,scope:m.scope,resource_exists:true,
+   requested_permissions:[...requested],reported_permissions:requested.filter(x=>m.reported_permissions.includes(x)),
+   not_reported_permissions:requested.filter(x=>!m.reported_permissions.includes(x)),
+   policy_isolation:'UNVERIFIED'};
+ }
  if(m.kind==='artifact_tag'){
   operatorRequire(['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator','jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100'].includes(m.package)&&
    match(SHA,m.source_sha)&&/^sha256:[a-f0-9]{64}$/.test(m.digest||'')&&m.immutable_tags===true&&

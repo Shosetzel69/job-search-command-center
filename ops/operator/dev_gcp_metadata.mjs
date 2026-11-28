@@ -1,6 +1,6 @@
 // #589: narrow metadata-only DEV observations, under the admitted operator.
 import {gcpFetch} from '../src/lib.mjs';
-import {operatorExact,operatorRequire} from '../src/dev_operator_contract.mjs';
+import {operatorExact,operatorRequire,DEV_RUN_PERMISSION_PROBES} from '../src/dev_operator_contract.mjs';
 import {createDevObserver,DEV_OBSERVATION_TARGETS} from '../observation/dev-runtime-observer.mjs';
 const JOBS=new Set(['jscc-search-dev','jscc-diagnostics-dev','jscc-db-migrate-dev','jscc-ops-operator-dev']);
 const SECRETS=new Set(['JSCC_OPS_GOOGLE_CLIENT_ID','JSCC_OPS_GOOGLE_CLIENT_SECRET','JSCC_OPS_GOOGLE_ALLOWED_SUB','NILE_DATABASE_URL']);
@@ -14,8 +14,9 @@ const DIGEST=/^sha256:[a-f0-9]{64}$/;
 const ENV=/^[A-Za-z_][A-Za-z0-9_]{0,127}$/;
 const ACCOUNT=/^[a-z][a-z0-9-]{3,120}@jscc-dev\.iam\.gserviceaccount\.com$/;
 const match=(re,x)=>typeof x==='string'&&re.test(x);
-async function get(url,fetchImpl){
- const response=await fetchImpl(url,{method:'GET',redirect:'error',signal:AbortSignal.timeout(10000)});
+async function get(url,fetchImpl,body){
+ const response=await fetchImpl(url,{method:body===undefined?'GET':'POST',redirect:'error',signal:AbortSignal.timeout(10000),
+  ...(body===undefined?{}:{headers:{'Content-Type':'application/json'},body:JSON.stringify(body)})});
  operatorRequire(response.ok,'gcp_metadata_http_error');
  const text=await response.text();
  operatorRequire(Buffer.byteLength(text)<=131072,'gcp_metadata_response_limit');
@@ -67,6 +68,26 @@ export async function executeDevGcpMetadata(input,{fetchImpl=gcpFetch}={}){
    'gcp_metadata_secret_mismatch');
   return {state:'OBSERVED',metadata:{kind:'secret',name:input.name,
    replication:secret.replication?.automatic?'automatic':secret.replication?.userManaged?'user_managed':'UNKNOWN'}};
+ }
+ if(Object.hasOwn(DEV_RUN_PERMISSION_PROBES,input.kind)){
+  const job=input.kind==='run_job_permissions';
+  operatorRequire(job?JOBS.has(input.name):DEV_OBSERVATION_TARGETS.includes(input.name),
+   'gcp_metadata_permission_target_denied');
+  const suffix=(job?'/jobs/':'/services/')+input.name;
+  // A missing resource may return an empty IAM probe. Require independently
+  // observed resource identity first; never claim absence of grants globally.
+  const resource=await get(RUN+suffix+'?fields=name',fetchImpl);
+  operatorRequire(resource.name==='projects/jscc-dev/locations/europe-west1'+suffix,
+   'gcp_metadata_permission_resource_unverified');
+  const requested=DEV_RUN_PERMISSION_PROBES[input.kind];
+  const result=await get(RUN+suffix+':testIamPermissions',fetchImpl,{permissions:[...requested]});
+  operatorRequire(result&&typeof result==='object'&&!Array.isArray(result),'gcp_metadata_permission_invalid');
+  const reported=result.permissions===undefined?[]:result.permissions;
+  operatorRequire(Array.isArray(reported)&&reported.every(x=>requested.includes(x))&&
+   new Set(reported).size===reported.length,'gcp_metadata_permission_invalid');
+  return {state:'OBSERVED',metadata:{kind:input.kind,name:input.name,scope:'current_operator_resource_probe',
+   resource_exists:true,requested_permissions:[...requested],reported_permissions:requested.filter(x=>reported.includes(x)),
+   not_reported_permissions:requested.filter(x=>!reported.includes(x)),policy_isolation:'UNVERIFIED'}};
  }
  const isJob=input.kind==='run_job',isService=input.kind==='run_service';
  operatorRequire((isJob&&JOBS.has(input.name))||(isService&&DEV_OBSERVATION_TARGETS.includes(input.name)),
