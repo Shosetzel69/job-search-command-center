@@ -172,6 +172,10 @@ class PairOperator:
         env = c.get("env", [])
         required = {"SOURCE_SHA": x[OP_KEYS[1]], "GCP_PROJECT": PROJECT, "GCP_REGION": REGION,
                     "OPS_BUCKET": "jscc-dev-ops-state"}
+        fingerprints = [row.get("value") for row in env if row.get("name") == "JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256"]
+        require(len(fingerprints) == 1 and isinstance(fingerprints[0], str) and re.fullmatch(r"[0-9a-f]{64}", fingerprints[0]),
+                "operator_review_key_pin_missing")
+        required["JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256"] = fingerprints[0]
         require(execution.get("taskCount") == 1 and execution.get("parallelism") == 1 and
                 task.get("maxRetries") == 0 and task.get("timeout") == "1800s" and
                 task.get("serviceAccount") == OP_JOB + "@" + PROJECT + ".iam.gserviceaccount.com" and
