@@ -78,3 +78,7 @@ No Job execute/cancel, schema change, lock
 write, automatic retry, new product route or generic operator grant. Actual
 release identity, provider shape, immutable build results and live acceptance
 remain prerequisites. The protected product-job-steps prefix needs scoped IAM.
+
+## #589 signed Search cancellation (source only)
+
+The existing release-side adapter also admits exact signed manual/admin Search cancellation, not launch. The independent authority pins the actor/recovery plan, immutable execution UID/image/source, run ID, request signature, scope hash and both live marker generations/descriptor hash. Verify the same scope in execution overrides and marker payloads, create one protected claim, re-read markers and etag, submit cancellation once and observe the exact execution. Terminal state is not a database rollback claim. No marker deletion, automatic retry, generic operator permission or resume approval. The existing authorized application Retrieve endpoint remains the sole launch route. Provider cancellation permission and functional recovery acceptance remain live gates.

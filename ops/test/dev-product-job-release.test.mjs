@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {executeApprovedProductJobStep,observeApprovedProductJobStep} from '../../scripts/gcp/remote_executor_dev_job_release.mjs';
+import {executeApprovedProductJobStep,observeApprovedProductJobStep,cancelApprovedSearchExecution} from '../../scripts/gcp/remote_executor_dev_job_release.mjs';
 import {operatorHash} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),old='b'.repeat(40),digest='sha256:'+'c'.repeat(64),oldDigest='sha256:'+'d'.repeat(64),id='254d3513-9c02-4f33-a974-e8e8f8935aa7';
 const root='projects/jscc-dev/locations/europe-west1',repo='projects/jscc-shared/locations/europe-west1/repositories/jscc';
@@ -108,4 +108,48 @@ test('lost update receipt can be reconciled without replay or release authorizat
  const observed=await observeApprovedProductJobStep(request,{...options,now:()=>now()+10000});
  assert.equal(observed.template_state,'TARGET');assert.equal(observed.receipt_available,false);
  assert.equal(observed.lock_release_authorized,false);assert.equal(f.patches.length,2);
+});
+
+
+test('signed Search cancellation binds exact execution and both marker generations; never releases markers',async()=>{
+ const runId='run-254d3513-9c02-4f33-a974-e8e8f8935aa7',execution='jscc-search-dev-fixture',
+  signature='1'.repeat(64),scope={source_catalog_generation:'34',scopes:['fixture'],effective_source_ids:['fixture']};
+ const descriptor={schema_version:'1.0',run_id:runId,source_sha:sha,request_signature:signature,run_trigger:'manual-ui',
+  retrieve_scope:scope,started_at:'2026-11-28T00:00:00Z'};
+ const x={schema_version:'1.0',environment:'dev',work_item_ref:'#589',source_sha:sha,digest,
+  execution,uid:id,run_id:runId,request_signature:signature,scope_sha256:operatorHash(scope),catalog_generation:'34',
+  lock_generation:'12',active_generation:'13',descriptor_sha256:operatorHash(descriptor),
+  approval_ref:'#589/300',review_ref:'#589/301',cost_ref:'#589/302',access_ref:'#589/303',recovery_ref:'#589/304',
+  issued_at_ms:now()-1,expires_at_ms:now()+1000};
+ const path=root+'/jobs/jscc-search-dev/executions/'+execution,records=new Map(),calls=[];
+ const store={get:async p=>records.get(p)??null,create:async(p,data)=>{
+  if(records.has(p))throw Error('generation_precondition_failed');records.set(p,{generation:'1',data});
+ }};
+ const fetchImpl=async(url,init)=>{
+  const u=new URL(url);calls.push({url,method:init.method});
+  if(init.method==='POST'){
+   assert.equal(u.pathname,'/v2/'+path+':cancel');assert.deepEqual(JSON.parse(init.body),{etag:'exact'});
+   return Response.json({name:root+'/operations/cancel',done:false});
+  }
+  assert.equal(init.method,'GET');
+  if(u.pathname==='/v2/'+path)return Response.json({name:path,job:'jscc-search-dev',uid:id,etag:'exact',taskCount:1,
+   template:{serviceAccount:'jscc-dev-runtime@jscc-dev.iam.gserviceaccount.com',containers:[{
+    image:'europe-west1-docker.pkg.dev/jscc-shared/jscc/jscc@'+digest,
+    env:Object.entries({APP_ENV:'dev',SOURCE_SHA:sha,GCP_RUNTIME_BUCKET:bucket,JSCC_RUN_ID:runId,
+     JSCC_REQUEST_SIGNATURE:signature,JSCC_SOURCE_CATALOG_GENERATION:'34',RUN_TRIGGER:'manual-ui',
+     JSCC_RETRIEVE_SCOPE_JSON:JSON.stringify(scope)}).map(([name,value])=>({name,value}))}]}});
+  const object=decodeURIComponent(u.pathname.split('/o/').at(-1));
+  assert.ok(['locks/heavy-search.lock','active.json'].includes(object));
+  return Response.json(u.searchParams.get('alt')==='media'?descriptor:{name:object,bucket,generation:object==='active.json'?'13':'12'});
+ };
+ const options={store,fetchImpl,now,verifyAuthority:async()=>true,getToken:async()=> 'fixture'};
+ const run=y=>cancelApprovedSearchExecution(y,{...options,trustedRecordHash:operatorHash(y)});
+ await assert.rejects(()=>run({...x,active_generation:'99'}),/marker_mismatch/);
+ assert.equal(calls.filter(c=>c.method==='POST').length,0);
+ const result=await run(x);assert.equal(result.cancellation_requested,true);
+ assert.equal(result.execution_state,'RUNNING_OR_PENDING');assert.equal(result.lock_release_authorized,false);
+ assert.equal(result.db_outcome,'UNVERIFIED');
+ assert.equal((await run(x)).state,'ALREADY_CLAIMED');
+ assert.equal(calls.filter(c=>c.method==='POST').length,1);
+ assert.equal(calls.filter(c=>c.method==='DELETE').length,0);
 });

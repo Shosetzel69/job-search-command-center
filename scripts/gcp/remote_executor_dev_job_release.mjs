@@ -196,3 +196,105 @@ export async function observeApprovedProductJobStep(record,{
   source_sha:identity?.source_sha??null,digest:identity?.digest??null,receipt_available:Boolean(receipt),
   automatic_retry:false,functional_acceptance:'PENDING',lock_release_authorized:false};
 }
+
+
+// Existing signed Retrieve dispatch remains the only launch path. This
+// separately authorized release-side cancellation cannot initiate a run,
+// change scope, or delete/release its markers, even after a terminal result.
+const RUN_ID=/^run-[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const SEARCH_EXEC=/^jscc-search-dev-[a-z0-9-]{1,40}$/;
+const RUNTIME_BUCKET='jscc-dev-runtime-828902654738';
+const STORAGE='https://storage.googleapis.com/storage/v1/b/'+RUNTIME_BUCKET+'/o/';
+function admitSearchCancel(record,pin,now){
+ const keys=['schema_version','environment','work_item_ref','source_sha','digest','execution','uid','run_id',
+  'request_signature','scope_sha256','catalog_generation','lock_generation','active_generation','descriptor_sha256',
+  'approval_ref','review_ref','cost_ref','access_ref','recovery_ref','issued_at_ms','expires_at_ms'];
+ require(operatorExact(record,keys)&&match(HEX,pin)&&operatorHash(record)===pin&&record.schema_version==='1.0'&&
+  record.environment==='dev'&&record.work_item_ref==='#589'&&match(SHA,record.source_sha)&&match(DIGEST,record.digest)&&
+  match(SEARCH_EXEC,record.execution)&&match(UUID,record.uid)&&match(RUN_ID,record.run_id)&&
+  [record.request_signature,record.scope_sha256,record.descriptor_sha256].every(x=>match(HEX,x))&&
+  [record.catalog_generation,record.lock_generation,record.active_generation].every(x=>match(GEN,x))&&
+  [record.approval_ref,record.review_ref,record.cost_ref,record.access_ref,record.recovery_ref].every(x=>match(REF,x))&&
+  new Set([record.approval_ref,record.review_ref,record.cost_ref,record.access_ref,record.recovery_ref]).size===5&&
+  Number.isSafeInteger(record.issued_at_ms)&&Number.isSafeInteger(record.expires_at_ms)&&
+  record.expires_at_ms>record.issued_at_ms&&record.expires_at_ms-record.issued_at_ms<=3600000,'search_cancel_admission_denied');
+ const x=JSON.parse(JSON.stringify(record));
+ const fresh=()=>require(now()>=x.issued_at_ms&&now()<x.expires_at_ms,'search_cancel_approval_expired');
+ fresh();return {x,fresh};
+}
+async function searchMarkers(call,x){
+ for(const [object,generation] of [['locks/heavy-search.lock',x.lock_generation],['active.json',x.active_generation]]){
+  const path=STORAGE+encodeURIComponent(object),meta=()=>call(path+'?fields=bucket,name,generation');
+  const before=await meta();
+  require(before.bucket===RUNTIME_BUCKET&&before.name===object&&before.generation===generation,'search_cancel_marker_mismatch');
+  const payload=await call(path+'?alt=media&generation='+generation);
+  require(payload?.schema_version==='1.0'&&payload.run_id===x.run_id&&payload.source_sha===x.source_sha&&
+   payload.request_signature===x.request_signature&&['manual-ui','admin-ui'].includes(payload.run_trigger)&&
+   String(payload.retrieve_scope?.source_catalog_generation)===x.catalog_generation&&
+   operatorHash(payload.retrieve_scope)===x.scope_sha256&&operatorHash(payload)===x.descriptor_sha256,
+   'search_cancel_descriptor_mismatch');
+  require((await meta()).generation===generation,'search_cancel_marker_drift');
+ }
+}
+function searchExecution(raw,x){
+ const path=jobPath('search')+'/executions/'+x.execution,c=raw?.template?.containers?.[0],env=c?.env||[];
+ require(bound(raw?.name,path)&&(raw.job===JOBS.search||bound(raw.job,jobPath('search')))&&raw.uid===x.uid&&
+  raw.taskCount===1&&raw.template?.serviceAccount===SA&&raw.template.containers?.length===1&&
+  c.image===image('search',x.digest)&&typeof raw.etag==='string'&&raw.etag.length>0&&raw.etag.length<=1024&&
+  Array.isArray(env)&&new Set(env.map(y=>y.name)).size===env.length,'search_cancel_execution_binding_mismatch');
+ const e=Object.fromEntries(env.map(y=>[y.name,y])),plain=(k,v)=>e[k]?.value===v&&!e[k].valueSource;
+ require(plain('APP_ENV','dev')&&plain('SOURCE_SHA',x.source_sha)&&plain('GCP_RUNTIME_BUCKET',RUNTIME_BUCKET)&&
+  plain('JSCC_RUN_ID',x.run_id)&&plain('JSCC_REQUEST_SIGNATURE',x.request_signature)&&
+  plain('JSCC_SOURCE_CATALOG_GENERATION',x.catalog_generation)&&
+  ['manual-ui','admin-ui'].includes(e.RUN_TRIGGER?.value)&&!e.RUN_TRIGGER?.valueSource&&
+  typeof e.JSCC_RETRIEVE_SCOPE_JSON?.value==='string'&&!e.JSCC_RETRIEVE_SCOPE_JSON.valueSource&&
+  Buffer.byteLength(e.JSCC_RETRIEVE_SCOPE_JSON.value)<=65536&&
+  operatorHash(JSON.parse(e.JSCC_RETRIEVE_SCOPE_JSON.value))===x.scope_sha256,'search_cancel_signed_scope_mismatch');
+ const terminal=typeof raw.completionTime==='string'&&Number.isFinite(Date.parse(raw.completionTime));
+ const completed=(raw.conditions||[]).filter(y=>y.type==='Completed');
+ return {terminal,execution_state:!terminal?'RUNNING_OR_PENDING':
+  completed.length===1&&completed[0].state==='CONDITION_SUCCEEDED'?'SUCCEEDED':
+  completed.length===1&&completed[0].state==='CONDITION_FAILED'?'FAILED_OR_CANCELLED':'TERMINAL_UNVERIFIED'};
+}
+export async function cancelApprovedSearchExecution(record,{
+ trustedRecordHash,verifyAuthority,getToken,fetchImpl=fetch,store,now=Date.now
+}={}){
+ const {x,fresh}=admitSearchCancel(record,trustedRecordHash,now);
+ require(typeof getToken==='function'&&typeof verifyAuthority==='function'&&await verifyAuthority(x)===true,'search_cancel_authority_denied');
+ fresh();
+ const call=transport(getToken,fetchImpl),ledger=store||operatorProductJobStore({getToken,fetchImpl});
+ const key=operatorHash({environment:'dev',work_item_ref:'#589',operation:'search-cancel',approval_ref:x.approval_ref});
+ const base='control/v1/product-job-steps/'+key,claim={environment:'dev',operation_id:key,evidence_hash:trustedRecordHash,
+  action:'cancel_search',approval_ref:x.approval_ref};
+ const prior=await ledger.get(base+'.claim.json');
+ if(prior){
+  require(match(GEN,prior.generation)&&same(prior.data,claim),'search_cancel_claim_mismatch');
+  return {operation_id:key,state:'ALREADY_CLAIMED',automatic_retry:false,lock_release_authorized:false};
+ }
+ const path=jobPath('search')+'/executions/'+x.execution;
+ const raw=await call(RUN+path),observed=searchExecution(raw,x);
+ if(observed.terminal)return {operation_id:key,state:'OBSERVED',...observed,cancellation_requested:false,
+  automatic_retry:false,lock_release_authorized:false};
+ await searchMarkers(call,x);fresh();
+ try{await ledger.create(base+'.claim.json',claim);}
+ catch(e){if(e?.message==='generation_precondition_failed')return {operation_id:key,state:'ALREADY_CLAIMED',automatic_retry:false,lock_release_authorized:false};throw e;}
+ const saved=await ledger.get(base+'.claim.json');
+ require(match(GEN,saved?.generation)&&same(saved.data,claim),'search_cancel_claim_unverified');
+ try{
+  await searchMarkers(call,x);
+  const before=await call(RUN+path),current=searchExecution(before,x);
+  let op=null;
+  if(!current.terminal){
+   require(before.etag===raw.etag,'search_cancel_etag_drift');fresh();
+   op=await call(RUN+path+':cancel',{method:'POST',body:{etag:before.etag}});
+   require(operatorLro(op?.name)&&!op.error,'search_cancel_receipt_unverified');
+  }
+  const after=searchExecution(await call(RUN+path),x);
+  const result={...claim,state:'OBSERVED',execution:x.execution,uid:x.uid,...after,cancellation_requested:op!==null,
+   operation_name:op?.name??null,automatic_retry:false,lock_release_authorized:false,db_outcome:'UNVERIFIED'};
+  await ledger.create(base+'.receipt.json',result);
+  const confirmed=await ledger.get(base+'.receipt.json');
+  require(match(GEN,confirmed?.generation)&&same(confirmed.data,result),'search_cancel_receipt_unverified');
+  return result;
+ }catch{return {operation_id:key,state:'RECOVERY_REQUIRED',automatic_retry:false,lock_release_authorized:false,db_outcome:'UNVERIFIED'};}
+}
