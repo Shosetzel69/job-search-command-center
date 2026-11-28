@@ -21,7 +21,7 @@ export function operationIdentity({actor_sub_hash,idempotency_key,request}) {
   const key=HASH({actor_sub_hash,idempotency_key,operation:'dev-ops-build'});
   return Object.freeze({
     key,request_hash:requestHash,
-    path:'control/v1/builds/'+key+'.json',
+    path:'control/v1/builds/ledgers/'+key+'.json',
     actor_sub_hash,normalized,
   });
 }
@@ -45,6 +45,8 @@ function recordSafe(record) {
 export async function reserveDevBuildOperation(identity,store,{now=()=>new Date().toISOString()}={}) {
   if(typeof store?.get!=='function' || typeof store?.create!=='function' ||
      typeof store?.replace!=='function') throw new Error('operation_store_not_configured');
+  const legacyPath='control/v1/builds/'+identity.key+'.json';
+  if(await store.get(legacyPath)!=null)throw Error('legacy_build_ledger_reconciliation_required');
   const rec={
     schema_version:'1.0',environment:'dev',operation_kind:'dev-ops-build',
     operation_id:identity.key,actor_sub_hash:identity.actor_sub_hash,
@@ -99,10 +101,9 @@ export async function executeApprovedDevBuildOnce(identity,store,trust) {
       dispatch:typeof trust?.dispatch==='function' ? async request=>{
         // One authoritative approval is single-use even when a caller changes
         // the idempotency key or actor. Reserve before any remote submission.
-        const approvalPath='control/v1/builds/'+HASH({
-          environment:'dev',operation:'dev-ops-build-approval',
-          approval_ref:request.approval_ref
-        })+'.json';
+        const approvalKey=HASH({environment:'dev',operation:'dev-ops-build-approval',approval_ref:request.approval_ref});
+        if(await store.get('control/v1/builds/'+approvalKey+'.json')!=null)throw Error('build_approval_already_consumed');
+        const approvalPath='control/v1/builds/consumed/'+approvalKey+'.json';
         const approvalRecord={
           schema_version:'1.0',environment:'dev',operation_kind:'dev-ops-build-approval',
           approval_ref:request.approval_ref,operation_id:identity.key,
@@ -196,7 +197,7 @@ export async function reconcileDevBuildSubmission(identity,store,{approvalRef,ar
   record.build_id!==null||record.source_object!==archive?.object||
   record.source_generation!==archive?.generation||record.source_sha256!==archive?.sha256)
   throw Error('build_recovery_ledger_mismatch');
- const approvalPath='control/v1/builds/'+HASH({environment:'dev',operation:'dev-ops-build-approval',approval_ref:approvalRef})+'.json';
+ const approvalPath='control/v1/builds/consumed/'+HASH({environment:'dev',operation:'dev-ops-build-approval',approval_ref:approvalRef})+'.json';
  const approval=await store.get(approvalPath),expected={schema_version:'1.0',environment:'dev',
   operation_kind:'dev-ops-build-approval',approval_ref:approvalRef,operation_id:identity.key,
   request_hash:identity.request_hash,source_sha:record.source_sha,source_object:archive.object,
