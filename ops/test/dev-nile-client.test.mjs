@@ -105,3 +105,21 @@ test('013 migration preflight is exact read-only evidence, never apply authoriza
   {...migration,checksum:'wrong'},{...migration,migration:'014_other.sql'}])
   assert.equal((await run(bad)).nile_status,'ERROR');
 });
+
+test('tenant consistency returns fixed saturated counts without tenant identifiers or repair authority',async()=>{
+ const req={...args,operation:'tenant_invariants'};
+ assert.equal(validateTaskRequest('observe_dev_nile',req).task_class,'OBSERVE');
+ const invariants={database:'jobsearch_dev',read_only:true,scope:'configured_diagnostic_tenant',saturation_limit:2,
+  active_profiles:1,missing_preferences:0,foundation_state:'CONSISTENT',complete_database_validation:false,
+  repair_authorized:false,tenant:'private-id'};
+ const run=async value=>{
+  let calls=0;
+  return observeDevNile(req,cfg,{fetchImpl:async()=>++calls===1?new Response('a.b.c'):
+   Response.json({source_sha:sha,operation:req.operation,status:'COLLECTED',elapsed_ms:1,invariants:value})});
+ };
+ const out=await run(invariants);
+ assert.equal(out.nile_status,'COLLECTED');assert.equal(out.nile_evidence_json.includes('private-id'),false);
+ for(const bad of [{...invariants,repair_authorized:true},{...invariants,scope:'all_tenants'},
+  {...invariants,active_profiles:2},{...invariants,database:'jobsearch_prod'}])
+  assert.equal((await run(bad)).nile_status,'ERROR');
+});

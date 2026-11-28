@@ -1,7 +1,7 @@
 // #589: existing diagnostics worker uses only its own Google identity.
 // This module never receives a DB connection string or caller-supplied URL.
 const AUDIENCE='urn:jscc:dev:nile-diagnostic';
-const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight']);
+const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants']);
 const METRICS=['Plan Rows','Plan Width','Startup Cost','Total Cost','Actual Rows','Actual Loops','Actual Total Time','Shared Hit Blocks','Shared Read Blocks'];
 const DIAGNOSTIC_PLAN_ENUMS=Object.freeze({
   'Node Type':new Set(['Aggregate','Append','BitmapAnd','BitmapOr','Bitmap Heap Scan','Bitmap Index Scan','CTE Scan','Custom Scan','Foreign Scan','Function Scan','Gather','Gather Merge','Group','Hash','Hash Join','Incremental Sort','Index Scan','Index Only Scan','Limit','LockRows','Materialize','Memoize','Merge Append','Merge Join','Nested Loop','ProjectSet','Recursive Union','Result','Sample Scan','Seq Scan','SetOp','Sort','Subquery Scan','Tid Scan','Tid Range Scan','Unique','Values Scan','WindowAgg','WorkTable Scan']),
@@ -75,6 +75,18 @@ function healthSummary(raw){
   waiting_locks:raw.waiting_locks,pool_scope:raw.pool_scope,
   pool:{total:raw.pool.total,idle:raw.pool.idle,waiting:raw.pool.waiting}};
 }
+function invariantSummary(raw){
+ const valid=x=>Number.isInteger(x)&&x>=0&&x<=2;
+ if(!raw||raw.database!=='jobsearch_dev'||raw.read_only!==true||raw.scope!=='configured_diagnostic_tenant'||
+  raw.saturation_limit!==2||!valid(raw.active_profiles)||!valid(raw.missing_preferences)||
+  raw.missing_preferences>raw.active_profiles||
+  raw.foundation_state!==(raw.active_profiles===1&&raw.missing_preferences===0?'CONSISTENT':'INCONSISTENT')||
+  raw.complete_database_validation!==false||raw.repair_authorized!==false)
+  throw Error('invalid_tenant_invariants');
+ return {database:raw.database,read_only:true,scope:raw.scope,saturation_limit:2,active_profiles:raw.active_profiles,
+  missing_preferences:raw.missing_preferences,foundation_state:raw.foundation_state,complete_database_validation:false,
+  repair_authorized:false};
+}
 function migration013Summary(raw){
  if(!raw||raw.database!=='jobsearch_dev'||raw.read_only!==true||
   raw.migration!=='013_profile_job_evaluation_listing.sql'||
@@ -118,7 +130,7 @@ export async function observeDevNile(args,cfg,{fetchImpl=fetch}={}){
     const raw=await boundedJson(response);
     if(raw.source_sha!==args.expected_source_sha||raw.operation!==args.operation)return fail('source_or_response');
     if(!response.ok||raw.status!=='COLLECTED'){
-      const stage=['account','transaction','basis','explain','route','connect','begin','tenant_set','tenant_verify','statement_timeout','lock_timeout','database_guard','rollback','schema','runtime_health','migration_013_preflight'].includes(raw.stage)?raw.stage:'api';
+      const stage=['account','transaction','basis','explain','route','connect','begin','tenant_set','tenant_verify','statement_timeout','lock_timeout','database_guard','rollback','schema','runtime_health','migration_013_preflight','tenant_invariants'].includes(raw.stage)?raw.stage:'api';
       return fail(stage,/^[0-9A-Z]{5}$/.test(raw.sqlstate||'')?raw.sqlstate:null);
     }
     if(!Number.isSafeInteger(raw.elapsed_ms)||raw.elapsed_ms<0)return fail('metrics');
@@ -130,7 +142,9 @@ export async function observeDevNile(args,cfg,{fetchImpl=fetch}={}){
         ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,health:healthSummary(raw.health)}
         : args.operation==='migration_013_preflight'
           ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,migration:migration013Summary(raw.migration)}
-          : {operation:args.operation,elapsed_ms:raw.elapsed_ms,timing,plan:planSummary(raw.plan)};
+          : args.operation==='tenant_invariants'
+            ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,invariants:invariantSummary(raw.invariants)}
+            : {operation:args.operation,elapsed_ms:raw.elapsed_ms,timing,plan:planSummary(raw.plan)};
     if(args.operation==='schema_inventory'&&typeof raw.runtime_revision==='string'&&/^jscc-command-api-dev-[a-z0-9-]{1,44}$/.test(raw.runtime_revision))evidence.runtime_revision=raw.runtime_revision;
     return {nile_status:'COLLECTED',nile_evidence_json:JSON.stringify(evidence),target_source_sha:raw.source_sha,exit_code:0};
   }catch{return fail('transport_or_response');}

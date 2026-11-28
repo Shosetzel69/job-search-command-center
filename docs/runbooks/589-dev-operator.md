@@ -158,6 +158,7 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   migration checksum and PENDING_013/ALREADY_APPLIED, never apply authority.
   Generic db:migrate stays disabled. Dedicated release-side 013 adapter
   is separate; see retrieve-dev-release-520.md. No raw SQL.
+  tenant_invariants checks only configured tenant foundation, counts capped at two.
   Product image release stays on its existing route, with DEV acceptance
   and Retrieve protection. The operator has no product deploy authority.
 ### Activation prerequisites (not an executable provisioning instruction)

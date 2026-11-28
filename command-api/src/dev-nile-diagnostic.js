@@ -6,7 +6,7 @@ import {BUILD_IDENTITY} from './build-identity.generated.js';
 const JWKS=createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 export const DIAGNOSTIC_PATH='/admin/dev/nile-diagnostic';
 const AUDIENCE='urn:jscc:dev:nile-diagnostic';
-const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight']);
+const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants']);
 let active=false;
 let lastStart=0;
 const reply=(body,status)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json','cache-control':'no-store'}});
@@ -34,7 +34,7 @@ export async function handleDevNileDiagnostic(request,env,{authorize=verifyDiagn
   active=true;
   lastStart=Date.now();
   try{
-    const nomenclatures=['schema_inventory','runtime_health','migration_013_preflight'].includes(operation)?null:(await read(env)).payload;
+    const nomenclatures=['schema_inventory','runtime_health','migration_013_preflight','tenant_invariants'].includes(operation)?null:(await read(env)).payload;
     const result=await observe(operation,nomenclatures,env);
     console.log(JSON.stringify({event:'dev_nile_diagnostic',operation,status:result.status}));
     const runtimeRevision=typeof env.K_REVISION==='string'&&/^jscc-command-api-dev-[a-z0-9-]{1,44}$/.test(env.K_REVISION)?env.K_REVISION:null;

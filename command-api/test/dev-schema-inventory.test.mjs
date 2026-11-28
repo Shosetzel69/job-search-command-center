@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {collectDevSchemaInventory,collectDevRuntimeHealth,DEV_SCHEMA_TABLES} from '../src/db/dev-schema-inventory.js';
+import {collectDevSchemaInventory,collectDevRuntimeHealth,collectDevTenantInvariants,DEV_SCHEMA_TABLES} from '../src/db/dev-schema-inventory.js';
 import {withDevDiagnosticTransaction} from '../src/db/tenant-gateway.js';
 const sha='a'.repeat(64),other='b'.repeat(64);
 const migrations=[{version:'001',name:'001_schema_migrations.sql',checksum:sha}];
@@ -125,4 +125,22 @@ test('013 remote preflight reuses exact migration ledger and refuses writable or
  await assert.rejects(()=>run({db:'jobsearch_test'}),/DIAGNOSTIC_SCOPE_DENIED/);
  await assert.rejects(()=>run({ro:'off'}),/DIAGNOSTIC_SCOPE_DENIED/);
  await assert.rejects(()=>run({applied:true,drift:true}),/INDEX_DRIFT/);
+});
+
+test('configured diagnostic tenant foundation check is read-only, parameterized and saturates at two',async()=>{
+ const id='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+ const collect=(row,guard={db:'jobsearch_dev',ro:'on',tenant:id})=>collectDevTenantInvariants({tenantId:id,query:async(sql,params)=>{
+  assert.match(sql,/^SELECT/);
+  if(sql.includes('current_database()'))return {rows:[guard]};
+  assert.deepEqual(params,[id]);assert.match(sql,/sp.tenant_id=\$1/);assert.match(sql,/LIMIT 2/);
+  return {rows:[row]};
+ }});
+ const good=await collect({active_profiles:1,missing_preferences:0,private:'not-returned'});
+ assert.equal(good.foundation_state,'CONSISTENT');assert.equal(good.complete_database_validation,false);
+ assert.equal(JSON.stringify(good).includes(id),false);assert.equal(JSON.stringify(good).includes('not-returned'),false);
+ assert.equal((await collect({active_profiles:2,missing_preferences:0})).foundation_state,'INCONSISTENT');
+ assert.equal((await collect({active_profiles:1,missing_preferences:1})).foundation_state,'INCONSISTENT');
+ await assert.rejects(()=>collect({active_profiles:0,missing_preferences:1}));
+ await assert.rejects(()=>collect({active_profiles:1,missing_preferences:0},{db:'jobsearch_dev',ro:'off',tenant:id}));
+ await assert.rejects(()=>collect({active_profiles:1,missing_preferences:0},{db:'jobsearch_dev',ro:'on',tenant:'foreign'}));
 });

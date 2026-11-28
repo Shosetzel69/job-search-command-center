@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getPool, withTransaction } from './db/pool.js';
-import {collectDevSchemaInventory,collectDevRuntimeHealth} from './db/dev-schema-inventory.js';
+import {collectDevSchemaInventory,collectDevRuntimeHealth,collectDevTenantInvariants} from './db/dev-schema-inventory.js';
 import {inspectEvaluation013ReadOnly} from '../scripts/db-evaluation-migrate-013.mjs';
 import {
   deleteTenantDomain,
@@ -2216,7 +2216,7 @@ export async function listGlobalProfileJobs(authContext,nomenclatures,query,env=
 
 // #589 / #659: diagnostics share the production SQL builders. No request SQL,
 // tenant identifiers, filters, cursor, or raw query-plan data cross this boundary.
-const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight']);
+const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants']);
 const DIAGNOSTIC_PLAN_ENUMS=Object.freeze({
   'Node Type':new Set(['Aggregate','Append','BitmapAnd','BitmapOr','Bitmap Heap Scan','Bitmap Index Scan','CTE Scan','Custom Scan','Foreign Scan','Function Scan','Gather','Gather Merge','Group','Hash','Hash Join','Incremental Sort','Index Scan','Index Only Scan','Limit','LockRows','Materialize','Memoize','Merge Append','Merge Join','Nested Loop','ProjectSet','Recursive Union','Result','Sample Scan','Seq Scan','SetOp','Sort','Subquery Scan','Tid Scan','Tid Range Scan','Unique','Values Scan','WindowAgg','WorkTable Scan']),
   'Join Type':new Set(['Inner','Left','Right','Full','Semi','Anti','Right Anti','Right Semi']),
@@ -2252,6 +2252,12 @@ export async function observeDevNilePlan(operation,nomenclatures,env=process.env
         const start=performance.now();
         const migration=await inspectEvaluation013ReadOnly(tx);
         return {status:'COLLECTED',operation,elapsed_ms:Math.round(performance.now()-start),migration};
+      }
+      if(operation==='tenant_invariants'){
+        stage='tenant_invariants';
+        const start=performance.now();
+        const invariants=await collectDevTenantInvariants(tx);
+        return {status:'COLLECTED',operation,elapsed_ms:Math.round(performance.now()-start),invariants};
       }
       if(operation==='runtime_health'){
         stage='runtime_health';
