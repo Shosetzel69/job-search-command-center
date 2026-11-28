@@ -43,7 +43,7 @@ test('only independent authenticated transport can deliver exact pinned approval
  let published=0,staged=0;
  const handler=createPublisherHandler(config,{authorize:async()=>true,publish:async(value,opts)=>{
   published++;assert.deepEqual(value,record);assert.equal(opts.actor,actor);assert.equal(opts.sourceSha,sha);
-  assert.equal(opts.trustedRecordHash,body.trusted_record_hash);return {approval_ref:value.approval_ref};
+  assert.equal(opts.trustedRecordHash,body.trusted_record_hash);assert.equal(opts.reviewSignature,body.review_signature);assert.equal(opts.reviewConfig,config);return {approval_ref:value.approval_ref};
  },stage:async(value,opts)=>{
   staged++;assert.deepEqual(value,record);assert.deepEqual(await opts.materialize(),Buffer.from('archive'));
   return {generation:'1'};
