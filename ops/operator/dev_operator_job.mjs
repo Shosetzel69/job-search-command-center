@@ -64,7 +64,8 @@ async function inventoryTransport({api,path}){
 }
 
 const defaultHandlers={
- gcs_artifact:async a=>executeDevGcsArtifact(a.bundle),
+ gcs_artifact:async a=>executeDevGcsArtifact(a.bundle,{assertFresh:()=>operatorRequire(
+  Date.now()>=a.issued_at_ms&&Date.now()<a.expires_at_ms,'operator_approval_expired')}),
  gcp_metadata:async a=>executeDevGcpMetadata(a.bundle),
  build:async a=>runApprovedBuild({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash},
   {getToken:()=>metadataAccessToken(),verifyStagedConfig:true}),

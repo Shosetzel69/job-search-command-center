@@ -99,7 +99,14 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
 - GCS copy is restricted to the dedicated staging bucket, approved DEV
   artifact names, exact source generation/checksums and create-only
   destination. A multipart/uncertain rewrite stops; managed data deletion
-  and soft-deleted object restoration are not implemented.
+  is excluded. Separately approved transient staging cleanup deletes only the
+  exact generation after checksum verification; 404 readback does not prove
+  physical deletion. Soft-deleted staging restore uses create-only destination,
+  verifies old/new generations and checksums, and rejects ambiguous restore
+  tokens. Publisher must prove no active build needs an archive before cleanup,
+  flat namespace/soft-delete support and zero-cost admission before restore.
+  No grants or live mutations; storage.objects.delete/restore require scoped
+  independent admission. See Google Cloud JSON API objects/delete and restore.
 - Nile adds `schema_inventory` to the existing fixed read-only Command API
   route: migration checksums, table presence and observed index/constraint
   names only. No rows, arbitrary SQL, DDL, backup or migration execution.

@@ -1,6 +1,6 @@
 // #589: fixed DEV snapshot metadata and transient archive copy/restore.
 // No durable runtime objects, leases, approvals, DB data or arbitrary buckets
-// may be modified. Every copy is a new object, never an overwrite or delete.
+// may be modified. Copy and restore create only; cleanup is separately approved.
 import {gcpFetch} from '../src/lib.mjs';
 import {operatorExact,operatorRequire} from '../src/dev_operator_contract.mjs';
 const STAGING='jscc-shared-ops-cloudbuild-source';
@@ -21,13 +21,13 @@ function metadata(raw,bucket,name,generation){
   md5:raw.md5Hash??null};
 }
 const objectUrl=(bucket,name)=>'https://storage.googleapis.com/storage/v1/b/'+bucket+'/o/'+encodeURIComponent(name);
-async function jsonRequest(url,method,fetchImpl){
+async function jsonRequest(url,method,fetchImpl,{noBody=false}={}){
  const response=await fetchImpl(url,{method,redirect:'error',signal:AbortSignal.timeout(15000),
-  ...(method==='POST'?{headers:{'Content-Type':'application/json'},body:'{}'}:{})});
+  ...(method==='POST'&&!noBody?{headers:{'Content-Type':'application/json'},body:'{}'}:{})});
  operatorRequire(response.ok,'gcs_artifact_http_error');
  return response.json();
 }
-export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch}={}){
+export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFresh,now=Date.now}={}){
  operatorRequire(input?.environment==='dev','gcs_artifact_environment_denied');
  if(input.operation==='metadata'){
   operatorRequire(operatorExact(input,['environment','operation','bucket','object','generation'])&&
@@ -39,6 +39,54 @@ export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch}={}){
   const value=metadata(await jsonRequest(objectUrl(input.bucket,input.object)+'?'+query,'GET',fetchImpl),
    input.bucket,input.object,input.generation);
   return {state:'OBSERVED',artifact_metadata:value};
+ }
+ if(input.operation==='restore_soft_deleted'||input.operation==='cleanup_generation'){
+  operatorRequire(operatorExact(input,['environment','operation','bucket','object','generation',
+   'expected_md5','expected_crc32c'])&&input.bucket===STAGING&&valid(ARCHIVE,input.object)&&
+   valid(GEN,input.generation)&&valid(MD5,input.expected_md5)&&valid(CRC,input.expected_crc32c)&&
+   typeof assertFresh==='function','gcs_artifact_mutation_denied');
+  const url=objectUrl(STAGING,input.object);
+  const restore=input.operation==='restore_soft_deleted';
+  const q=new URLSearchParams({fields:fields+(restore?',softDeleteTime,hardDeleteTime,restoreToken':''),
+   generation:input.generation,...(restore?{softDeleted:'true'}:{})});
+  assertFresh();
+  const raw=await jsonRequest(url+'?'+q,'GET',fetchImpl);
+  const src=metadata(raw,STAGING,input.object,input.generation);
+  operatorRequire(src.md5===input.expected_md5&&src.crc32c===input.expected_crc32c&&
+   BigInt(src.size)<=64n*1024n*1024n,'gcs_artifact_source_mismatch');
+  if(restore){
+   // A restore must never overwrite a live object or restore an ambiguous
+   // HNS version. This staging bucket's flat namespace is an admission gate.
+   operatorRequire(typeof raw.softDeleteTime==='string'&&Number.isFinite(Date.parse(raw.softDeleteTime))&&
+    typeof raw.hardDeleteTime==='string'&&Date.parse(raw.hardDeleteTime)>now()&&
+    raw.restoreToken===undefined,'gcs_artifact_restore_not_admitted');
+   const params=new URLSearchParams({generation:src.generation,ifGenerationMatch:'0',
+    copySourceAcl:'false',projection:'noAcl',fields});
+   assertFresh();
+   const dest=metadata(await jsonRequest(url+'/restore?'+params,'POST',fetchImpl,{noBody:true}),
+    STAGING,input.object,null);
+   operatorRequire(dest.generation!==src.generation,'gcs_artifact_restore_unconfirmed');
+   const saved=metadata(await jsonRequest(url+'?'+new URLSearchParams({fields,generation:dest.generation}),
+    'GET',fetchImpl),STAGING,input.object,dest.generation);
+   operatorRequire([dest,saved].every(x=>x.md5===src.md5&&x.crc32c===src.crc32c&&x.size===src.size),
+    'gcs_artifact_restore_unconfirmed');
+   return {state:'SUCCEEDED',artifact_metadata:saved,artifact_operation:'restore_soft_deleted',
+    prior_generation:src.generation};
+  }
+  // Cleanup only this generation of an independently approved transient
+  // staging archive. No live application objects or durable evidence.
+  // The publisher must independently establish that no build needs it.
+  const deleteQuery=new URLSearchParams({generation:src.generation,ifGenerationMatch:src.generation});
+  assertFresh();
+  const deleted=await fetchImpl(url+'?'+deleteQuery,{method:'DELETE',redirect:'error',signal:AbortSignal.timeout(15000)});
+  operatorRequire(deleted.status===204,'gcs_artifact_cleanup_uncertain');
+  const after=await fetchImpl(url+'?'+new URLSearchParams({fields,generation:src.generation}),
+   {method:'GET',redirect:'error',signal:AbortSignal.timeout(15000)});
+  operatorRequire(after.status===404,'gcs_artifact_cleanup_unconfirmed');
+  // 404 confirms the exact generation is not normally readable, not that
+  // retained soft-delete bytes are physically gone or billing has stopped.
+  return {state:'SUCCEEDED',artifact_metadata:src,artifact_operation:'cleanup_generation',
+   generation_no_longer_live:true};
  }
  operatorRequire(input.operation==='copy_generation'&&operatorExact(input,['environment','operation',
   'source','source_generation','destination','expected_md5','expected_crc32c'])&&

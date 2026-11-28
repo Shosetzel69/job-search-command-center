@@ -106,7 +106,9 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
  }else if(v.action==='gcs_artifact'){
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.operation==='metadata'&&operatorExact(v.bundle,['environment','operation','bucket','object','generation'])||
-   v.bundle.operation==='copy_generation'&&operatorExact(v.bundle,['environment','operation','source','source_generation','destination','expected_md5','expected_crc32c'])),
+   v.bundle.operation==='copy_generation'&&operatorExact(v.bundle,['environment','operation','source','source_generation','destination','expected_md5','expected_crc32c'])||
+   ['restore_soft_deleted','cleanup_generation'].includes(v.bundle.operation)&&
+   operatorExact(v.bundle,['environment','operation','bucket','object','generation','expected_md5','expected_crc32c'])),
    'operator_gcs_approval_mismatch');
  }else{
   operatorRequire(operatorExact(v.bundle,['environment','script_id','script_sha256','service','buildId'])&&
@@ -205,6 +207,16 @@ export function projectOperatorResult(request,record){
   (m.md5===null||typeof m.md5==='string'&&/^[a-zA-Z0-9+/]{22}==$/.test(m.md5)))
   out.artifact_metadata={bucket:m.bucket,name:m.name,generation:m.generation,size:m.size,crc32c:m.crc32c,md5:m.md5};
  if(request.action==='gcs_artifact'&&['SUCCEEDED','OBSERVED'].includes(v.state))operatorRequire(out.artifact_metadata,'operator_artifact_result_invalid');
+ if(request.action==='gcs_artifact'&&v.artifact_operation==='restore_soft_deleted'){
+  operatorRequire(out.artifact_metadata?.bucket==='jscc-shared-ops-cloudbuild-source'&&
+   match(GEN,v.prior_generation)&&v.prior_generation!==out.artifact_metadata.generation,'operator_artifact_result_invalid');
+  out.artifact_operation=v.artifact_operation;out.prior_generation=v.prior_generation;
+ }
+ if(request.action==='gcs_artifact'&&v.artifact_operation==='cleanup_generation'){
+  operatorRequire(out.artifact_metadata?.bucket==='jscc-shared-ops-cloudbuild-source'&&
+   v.generation_no_longer_live===true,'operator_artifact_result_invalid');
+  out.artifact_operation=v.artifact_operation;out.generation_no_longer_live=true;
+ }
  if(request.action==='gcp_metadata'&&v.state==='OBSERVED')out.metadata=projectMetadata(v.metadata);
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;

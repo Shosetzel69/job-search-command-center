@@ -47,3 +47,51 @@ test('runtime snapshot is metadata-only with exact DEV bucket, never media or mu
  assert.equal(result.state,'OBSERVED');
  await assert.rejects(()=>executeDevGcsArtifact({...input,bucket:'jscc-test-runtime-1'},{fetchImpl:async()=>assert.fail('unexpected API')}));
 });
+
+const cleanup={environment:'dev',operation:'cleanup_generation',bucket,object:source,generation:'12',
+ expected_md5:md5,expected_crc32c:crc};
+test('cleanup binds exact transient generation and confirms normal readability is gone',async()=>{
+ const calls=[];
+ const result=await executeDevGcsArtifact(cleanup,{assertFresh:()=>{},fetchImpl:async(url,init)=>{
+  calls.push(init.method);const q=new URL(url).searchParams;
+  assert.equal(q.get('generation'),'12');
+  if(init.method==='DELETE'){assert.equal(q.get('ifGenerationMatch'),'12');return new Response(null,{status:204});}
+  return calls.length===1?Response.json(meta(source,'12')):new Response(null,{status:404});
+ }});
+ assert.deepEqual(calls,['GET','DELETE','GET']);
+ assert.equal(result.generation_no_longer_live,true);
+ assert.equal(result.artifact_metadata.generation,'12');
+});
+test('restore is create-only, exact soft-deleted generation and verified checksum readback',async()=>{
+ const calls=[];
+ const result=await executeDevGcsArtifact({...cleanup,operation:'restore_soft_deleted'},{
+  assertFresh:()=>{},now:()=>Date.parse('2026-11-28T00:00:00Z'),fetchImpl:async(url,init)=>{
+   calls.push(init.method);const q=new URL(url).searchParams;
+   if(init.method==='POST'){
+    assert.equal(q.get('generation'),'12');
+    assert.equal(q.get('ifGenerationMatch'),'0');
+    assert.equal(q.get('copySourceAcl'),'false');
+    assert.equal(init.body,undefined);
+    return Response.json(meta(source,'13'));
+   }
+   if(calls.length===1){
+    assert.equal(q.get('softDeleted'),'true');
+    return Response.json({...meta(source,'12'),softDeleteTime:'2026-11-27T00:00:00Z',hardDeleteTime:'2026-12-01T00:00:00Z'});
+   }
+   assert.equal(q.get('generation'),'13');return Response.json(meta(source,'13'));
+  }});
+ assert.deepEqual(calls,['GET','POST','GET']);
+ assert.equal(result.prior_generation,'12');
+ assert.equal(result.artifact_metadata.generation,'13');
+});
+test('cleanup/restore deny runtime objects, missing fresh admission and stale checksums',async()=>{
+ for(const bad of [{...cleanup,bucket:'jscc-dev-runtime-828902654738'},
+  {...cleanup,object:'control/v1/approvals/x.json'},{...cleanup,generation:'0'}])
+  await assert.rejects(()=>executeDevGcsArtifact(bad,{assertFresh:()=>{},fetchImpl:async()=>assert.fail('unexpected API')}));
+ await assert.rejects(()=>executeDevGcsArtifact(cleanup,{fetchImpl:async()=>assert.fail('unexpected API')}));
+ let calls=0;
+ await assert.rejects(()=>executeDevGcsArtifact(cleanup,{assertFresh:()=>{},fetchImpl:async()=>{
+  calls++;return Response.json({...meta(source,'12'),md5Hash:'B'.repeat(22)+'=='});
+ }}),/source_mismatch/);
+ assert.equal(calls,1);
+});
