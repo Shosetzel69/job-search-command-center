@@ -48,7 +48,6 @@ build status alone may not contain `results.images`; live registry/provenance
 correlation is still required. No build, cloud operation, IAM or product
 configuration has been executed by this source slice.
 ## #589 — consolidated DEV operator candidate (PR #711)
-
 Source-only extension of R5/R6. This section supersedes the earlier statement
 that there is no MCP mutation entrypoint. It does not authorize deployment.
 
@@ -97,7 +96,8 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   token audience, archive and returned generation/hash; no retry. Remote
   archive cap 16 MiB; existing trusted staging handles larger archives.
   Private authenticated status verifies both source pins; disabled by default.
-  Actual caller, URL, IAM/GCS admission remain unverified; no self-approval.
+  F1/F2: see [activation gate](589-operator-activation-gate.md). Caller IAM,
+  independent review-key custody and effective permissions require live proof.
 - The same approved build controller accepts fixed `workspace_r2` for #589:
   existing cloudbuild.workspace-manager-r2.yaml, exact paired base digests,
   fixed image packages and step IDs. Existing staging archive hash, YAML

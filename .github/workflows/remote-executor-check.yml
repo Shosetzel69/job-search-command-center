@@ -14,6 +14,7 @@ on:
       - "scripts/gcp/remote_executor_dev_admission.mjs"
       - "scripts/gcp/remote_executor_dev_build.mjs"
       - "scripts/gcp/remote_executor_dev_publish_approval.mjs"
+      - "scripts/gcp/remote_executor_dev_operator_iam.mjs"
       - "scripts/gcp/remote_executor_dev_nile_013.mjs"
       - "scripts/gcp/remote_executor_dev_job_release.mjs"
       - "cloudbuild.workspace-manager-r2.yaml"
@@ -37,6 +38,7 @@ on:
       - "scripts/gcp/remote_executor_dev_admission.mjs"
       - "scripts/gcp/remote_executor_dev_build.mjs"
       - "scripts/gcp/remote_executor_dev_publish_approval.mjs"
+      - "scripts/gcp/remote_executor_dev_operator_iam.mjs"
       - "scripts/gcp/remote_executor_dev_nile_013.mjs"
       - "scripts/gcp/remote_executor_dev_job_release.mjs"
       - "cloudbuild.workspace-manager-r2.yaml"
@@ -99,6 +101,7 @@ jobs:
           node --check ops/diagnostics/dev-gcloud-script-runner.mjs
           node --check scripts/gcp/remote_executor_dev_build.mjs
           node --check scripts/gcp/remote_executor_dev_publish_approval.mjs
+          node --check scripts/gcp/remote_executor_dev_operator_iam.mjs
           node --check scripts/gcp/remote_executor_dev_nile_013.mjs
           node --check scripts/gcp/remote_executor_dev_job_release.mjs
           node --check ops/src/dev_operator_contract.mjs
