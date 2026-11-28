@@ -129,6 +129,20 @@ authority and key fingerprint/custodian, exact proof references, denied
 effective paths and any unresolved inheritance. No key or token values
 in the report. See https://cloud.google.com/iam/docs/service-account-permissions.
 
+## Lifecycle and maintenance admission (#709)
+
+The scoped policy must be independently re-read after at least 24 hours from
+provider `updated` (M4-F1). Python admission checks the timestamp and exact
+policy before inspect/freeze; missing, malformed, future or too-recent metadata
+blocks. Owned compensation/release remains independent of lifecycle drift.
+R709-F01: new maintenance admission blocks at 1,500 or more objects in either
+existing operations/ or dispatch/ collection, counted in the existing drain.
+The hard pagination ceiling remains unchanged. No threshold override, archive,
+object deletion or new storage mechanism is authorized. Before activation,
+owner selects and independent reviewer accepts a capacity procedure; no age
+cleanup of durable records and no rollback to the unconditional lifecycle.
+See #589 evidence 7243440790 and 7245237305.
+
 ## Review and release boundary
 
 F1 source: plan and offline permission matrix.
