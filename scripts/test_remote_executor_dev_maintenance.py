@@ -120,7 +120,14 @@ class MaintenanceTests(unittest.TestCase):
             with self.assertRaisesRegex(guard.Blocked, "operator_lifecycle_not_settled"):
                 self.guard.freeze(baseline)
         self.assertEqual(self.api.writes, [])
+        self.api.updated = "2026-11-28T20:15:59.502000001Z"
+        with patch.object(guard, "now_ms", return_value=boundary):
+            with self.assertRaisesRegex(guard.Blocked, "operator_lifecycle_not_settled"):
+                self.guard.inspect()
+        with patch.object(guard, "now_ms", return_value=boundary + 1):
+            self.assertEqual(self.guard.inspect(), baseline)
         for updated in (None, "", "invalid", "2026-11-28", "2026-11-28T20:15:59",
+                        "2026-11-28T20:15:59+00:99",
                         "2026-02-30T00:00:00Z", "2099-01-01T00:00:00Z"):
             self.api.updated = updated
             with self.subTest(updated=updated), patch.object(guard, "now_ms", return_value=boundary):
