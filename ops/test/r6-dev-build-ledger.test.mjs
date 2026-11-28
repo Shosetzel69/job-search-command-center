@@ -46,7 +46,7 @@ function fakeStore() {
 test('R6 ledger binds opaque actor, exact request and idempotency key to GCS path',()=>{
  const a=identity(),b=identity();
  assert.deepEqual(a,b);
- assert.match(a.path,/^control\/v1\/builds\/[a-f0-9]{64}\.json$/);
+ assert.match(a.path,/^control\/v1\/builds\/ledgers\/[a-f0-9]{64}\.json$/);
  assert.equal(a.path.includes('#589'),false);
  assert.throws(()=>operationIdentity({actor_sub_hash:'USER_EMAIL',idempotency_key:'short',request}));
  assert.throws(()=>operationIdentity({actor_sub_hash:actor,idempotency_key:'short',request}));
@@ -188,4 +188,11 @@ test('R6 intent failure prevents dispatch even after approval reservation',async
  cb.dispatch=async()=>{launches++;return callbacks().dispatch();};
  assert.equal((await executeApprovedDevBuildOnce(identity(),store,cb)).state,'BLOCKED');
  assert.equal(launches,0);
+});
+
+test('R3 historical flat ledger blocks reservation under new mutable prefix',async()=>{
+ const store=fakeStore(),a=identity();
+ await store.create('control/v1/builds/'+a.key+'.json',{state:'SUBMITTED'});
+ await assert.rejects(()=>reserveDevBuildOperation(a,store),/legacy_build_ledger_reconciliation_required/);
+ assert.equal(await store.get(a.path),null);
 });
