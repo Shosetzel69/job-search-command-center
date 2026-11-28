@@ -66,6 +66,20 @@ class ContractTest(unittest.TestCase):
         with self.assertRaises(ValueError):
             cr.stage_preflight({**SERVICE, "template": {"containers": [{"env": []}]}})
 
+    def test_legacy_ops_deploy_rejects_operator_flags_in_template_or_serving_revision(self):
+        parent = "projects/jscc-dev/locations/europe-west1/services/jscc-ops-gateway-dev"
+        rev = "jscc-ops-gateway-dev-00001-abc"
+        service = {"name": parent, "uri": SERVICE["uri"], "latestReadyRevision": rev,
+                   "trafficStatuses": [{"revision": rev, "percent": 100}],
+                   "template": {"containers": [{"env": []}]}}
+        revision = {"name": parent + "/revisions/" + rev, "containers": [{"env": []}]}
+        self.assertEqual(cr.legacy_ops_deploy_guard(service, revision), "JSCC_LEGACY_OPS_DEPLOY_ALLOWED")
+        for resource in (service["template"], revision):
+            resource["containers"][0]["env"] = [{"name": "JSCC_DEV_OPERATOR_ENABLED", "value": "false"}]
+            with self.assertRaisesRegex(ValueError, "guarded R6"):
+                cr.legacy_ops_deploy_guard(service, revision)
+            resource["containers"][0]["env"] = []
+
     def test_v2_list_pagination_fails_closed(self):
         old = cr.fetch_v2
         try:

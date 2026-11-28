@@ -47,7 +47,6 @@ independent review. Existing `cloudbuild.ops.yaml` manually publishes images;
 build status alone may not contain `results.images`; live registry/provenance
 correlation is still required. No build, cloud operation, IAM or product
 configuration has been executed by this source slice.
-
 ## #589 — consolidated DEV operator candidate (PR #711)
 
 Source-only extension of R5/R6. This section supersedes the earlier statement
@@ -68,7 +67,7 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   evidence. Supported source actions: pinned build and build observation,
   R6 image-changing pair supports separately pinned operator activation,
   verifies exact Job and restores prior flags on rollback; publisher/access
-  approval stays external. observe_ops_delivery correlates build/journal/readback.
+  approval stays external. Legacy deploy refuses operator flags; use R6.
   A create-only request receipt binds the execution before dispatch mapping;
   pending status observes receipt/claim and exact execution, never replays.
   operator_catalog exposes action contract/pins; operator_preflight checks

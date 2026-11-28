@@ -142,6 +142,29 @@ def list_names(project, region, kind):
     return "\n".join(require(x.get("name"), "resource name").rsplit("/", 1)[-1] for x in plural)
 
 
+def legacy_ops_deploy_guard(service, revision):
+    """Prevent legacy set-env-vars rollout from silently removing operator activation."""
+    parent = "projects/jscc-dev/locations/europe-west1/services/jscc-ops-gateway-dev"
+    name = service.get("name")
+    if name not in (parent, parent.replace("projects/jscc-dev/", "projects/828902654738/")):
+        raise ValueError("legacy ops deploy service identity mismatch")
+    rev = primary_revision(service)
+    if revision.get("name") not in (name + "/revisions/" + rev, parent + "/revisions/" + rev):
+        raise ValueError("legacy ops deploy revision identity mismatch")
+    for template in (service.get("template"), revision):
+        containers = (template or {}).get("containers")
+        if not isinstance(containers, list) or len(containers) != 1:
+            raise ValueError("legacy ops deploy container layout mismatch")
+        env = containers[0].get("env", [])
+        if not isinstance(env, list) or any(not isinstance(row, dict) for row in env):
+            raise ValueError("legacy ops deploy environment invalid")
+        if any(row.get("name", "").startswith("JSCC_DEV_OPERATOR_") for row in env):
+            raise ValueError("operator activation requires guarded R6 rollout")
+    if service.get("reconciling", False) or service.get("latestReadyRevision", "").rsplit("/", 1)[-1] != rev:
+        raise ValueError("legacy ops deploy effective revision not settled")
+    return "JSCC_LEGACY_OPS_DEPLOY_ALLOWED"
+
+
 def main(argv):
     if len(argv) < 4:
         raise ValueError("usage: cloud_run_v2_read.py PROJECT REGION SERVICE MODE [ARG]")
@@ -164,6 +187,10 @@ def main(argv):
         return stage_preflight(d)
     if mode == "env":
         return env_value(d, argv[4])
+    if mode == "ops-legacy-deploy":
+        if (project, region, service) != ("jscc-dev", "europe-west1", "jscc-ops-gateway-dev"):
+            raise ValueError("legacy ops deploy target denied")
+        return legacy_ops_deploy_guard(d, fetch_revision(project, region, service, primary_revision(d)))
     if mode == "effective-image":
         rev = primary_revision(d)
         return revision_image(fetch_revision(project, region, service, rev))
