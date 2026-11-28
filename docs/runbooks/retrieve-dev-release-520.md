@@ -37,3 +37,23 @@ No changes to selection/fit, source activation/replacement, historical writes, n
 
 ## 2026-11-15 correction: DEV migration collision
 Managed DEV ledger 011 is already `011_profile_job_count_snapshots.sql` (SHA-256 `c6cb6ac52c9a717a5dc452b38fb0874be51896190dc24beab01babfafe623f0e`), recovered byte-for-byte from draft PR #591 @0ad953f30bd3fa1717d2b9974dcff12fccdc1c2d. Only the historical SQL is restored; no #591 application code is imported. The new request-mapping migration is `012_refresh_requests.sql`. This supersedes all earlier 011 Retrieve instructions/approval tokens in this historical runbook. Use `db-retrieve-migrate-012.mjs`, `RETRIEVE012_MODE=inspect` or the separately approved `RETRIEVE012_MODE=apply` with `RETRIEVE012_OWNER_GATE=APPROVE_RETRIEVE_DEV_NILE_012_<new_exact_candidate_SHA>`. Admissible ledger is exact 001–011 (pending 012) or exact 001–012; inspect historical 011 schema before applying anything. No ledger repair, no historical DDL replay against managed DEV, no old image release or reuse of #636 candidate-specific preflight. New paired build and fresh preflight must bind the corrected commit; native 011→012 and old-runtime rollback compatibility remain gates. No TEST/PROD changes authorized.
+
+## #589 dedicated managed 013 release adapter (source only)
+
+`scripts/gcp/remote_executor_dev_nile_013.mjs` reuses the existing
+`jscc-db-migrate-dev` release procedure recorded in #535 comment 6951698590.
+Requires an independently admitted release identity (no default credentials),
+exact external evidence pin, pre-staged immutable candidate Job template with
+refuse default, v1 secret references, exact build/tag, reviewed script hash
+and owned GOV85 sentinel/catalog generation. All Search and migration
+executions must be terminal; active.json absent. The adapter consumes one
+approval in the existing GCS CAS store under control/v1/migrations before a
+single etag-bound run with fixed inspect/apply override; verifies the script
+hash inside the image. Apply requires separate prior inspect evidence and
+owner/review/rollback authority. It does not stage or restore the Job, release
+the sentinel, interpret SQL logs or certify a managed migration outcome.
+Uncertain receipt retains claim; no replay. The existing independently
+reviewed release authority must stage/restore the exact Job and correlate
+execution/logs/ledger; current generic operator has no runWithOverrides grant.
+013 was already applied historically; do not reapply. No live mutation,
+new IAM grant, generic migration reactivation or managed backup/restore.

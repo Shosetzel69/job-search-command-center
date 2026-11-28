@@ -147,6 +147,12 @@ export function operatorPairStore(options={}){
 export function operatorBuildStore(options={}){
  return operatorStateStore(path=>typeof path==='string'&&/^control\/v1\/builds\/[a-f0-9]{64}\.json$/.test(path),options);
 }
+// Separate, explicitly admitted product/DB release authority only. No default
+// gcloud or generic operator credentials for this store.
+export function operatorMigrationStore(options={}){
+ require(typeof options.getToken==='function','migration_release_identity_required');
+ return operatorStateStore(path=>typeof path==='string'&&/^control\/v1\/migrations\/[a-f0-9]{64}\.(?:claim|receipt)\.json$/.test(path),options);
+}
 function operatorStateStore(allowedPath,{getToken,fetchImpl=fetch}={}){
  const tokenProvider=getToken||asyncToken;
  async function request(bucket,path,{write=false,data,generation}={}){

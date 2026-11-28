@@ -157,8 +157,8 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   Fixed migration_013_preflight reuses the existing dedicated 013 release
   catalog/ledger validator in the read-only transaction; reports exact
   migration checksum and PENDING_013/ALREADY_APPLIED, never apply authority.
-  Legacy generic db:migrate remains disabled; no separate database identity.
-  No application rows, arbitrary SQL, DDL, backup or migration execution.
+  Generic db:migrate stays disabled. Dedicated release-side 013 adapter
+  is separate from the generic operator; see workspace runbook. No raw SQL.
   Product image release stays on its existing route, with DEV acceptance
   and Retrieve protection. The operator has no product deploy authority.
 ### Activation prerequisites (not an executable provisioning instruction)

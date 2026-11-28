@@ -187,7 +187,6 @@ GCS list_versions admits exact known artifact names, ordinary generations or
 staging-only soft-deleted metadata, bounded pagination; ignores prefix siblings.
 No media reads, deletes, registry force-delete, or changes to rollback images.
 Live access and provider response formats require independent acceptance.
-
 ## RE-08 durable operation audit (source only)
 
 Operator results bind actual claim/execution, approval generation/hash, actor
