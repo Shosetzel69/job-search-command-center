@@ -69,12 +69,21 @@ function validateBundle(bundle,pin){
   match(HEX,bundle.plan_hash)&&match(SHA,bundle.operator_source_sha)&&match(BUILD,bundle.build_id),
   'evidence_scope_mismatch');
  validateObserved(bundle.previous);
- const next=bundle.next;
- require(exact(next,['source_sha','gateway_digest','worker_digest','catalog','previous_catalog'])&&
+ const next=bundle.next,keys=['source_sha','gateway_digest','worker_digest','catalog','previous_catalog'];
+ const activate=Object.hasOwn(next||{},'operator_activation');
+ if(activate)keys.push('operator_activation');
+ require(exact(next,keys)&&
   match(SHA,next.source_sha)&&match(DIGEST,next.gateway_digest)&&match(DIGEST,next.worker_digest)&&
   match(CATALOG,next.catalog)&&match(CATALOG,next.previous_catalog),'invalid_target_binding');
  require(exact(bundle.evidence,EVIDENCE_KEYS)&&EVIDENCE_KEYS.every(k=>match(REF,bundle.evidence[k])),
   'missing_authoritative_evidence_reference');
+ if(activate){
+  const x=next.operator_activation;
+  require(exact(x,['source_sha','image_digest','activation_ref','publisher_ref'])&&
+   x.source_sha===next.source_sha&&match(DIGEST,x.image_digest)&&match(REF,x.activation_ref)&&match(REF,x.publisher_ref)&&
+   x.activation_ref!==x.publisher_ref&&![x.activation_ref,x.publisher_ref].some(ref=>Object.values(bundle.evidence).includes(ref))&&
+   next.gateway_digest!==bundle.previous.gateway_digest,'operator_activation_binding_denied');
+ }
  require(Number.isSafeInteger(bundle.issued_at_ms)&&Number.isSafeInteger(bundle.expires_at_ms)&&
   bundle.issued_at_ms>=0&&bundle.expires_at_ms>bundle.issued_at_ms&&
   bundle.expires_at_ms-bundle.issued_at_ms<=MAX_WINDOW_MS,'invalid_evidence_window');

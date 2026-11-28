@@ -47,6 +47,7 @@ class API:
             "template": {"taskCount": 1, "labels": {"client.knative.dev/nonce": "initial"},
                          "template": task("worker", OLD)}}
         self.revisions = {OLD_REV: self.revision(OLD_REV, OLD)}
+        self.operator = None
         self.calls = []
 
     def revision(self, name, values):
@@ -55,6 +56,8 @@ class API:
                 **task("gateway", values)}
 
     def request(self, url):
+        if url.endswith("/jobs/"+pair.OP_JOB):
+            return copy.deepcopy(self.operator), {}
         if "/revisions/" in url:
             return copy.deepcopy(self.revisions[url.rsplit("/", 1)[-1]]), {}
         return copy.deepcopy(self.service_data), {}
@@ -85,10 +88,18 @@ class API:
             self.worker_data["template"]["template"]["labels"]["client.knative.dev/nonce"] = str(len(self.calls))
         else:
             assert "--no-traffic" in argv
-            self.service_data["template"] = pair.expected_template(self.service_data["template"], "gateway", vals)
+            current = pair.operator_env(self.service_data["template"])
+            current.update({key: value for key, value in vals.items() if key in pair.OP_KEYS})
+            for arg in argv:
+                if arg.startswith("--remove-env-vars="):
+                    for key in arg.split("=", 1)[1].split(","):
+                        current.pop(key, None)
+            values = {key: vals[key] for key in pair.KEYS}
+            self.service_data["template"] = pair.expected_template(self.service_data["template"], "gateway", values, current)
             self.service_data["template"]["labels"]["client.knative.dev/nonce"] = str(len(self.calls))
-            rev = NEW_REV if vals == NEW else pair.GATEWAY+"-00017-def"
-            self.revisions[rev] = self.revision(rev, vals)
+            rev = NEW_REV if values == NEW else pair.GATEWAY+"-00017-def"
+            self.revisions[rev] = self.revision(rev, values)
+            pair.container(self.revisions[rev])["env"].extend({"name": k, "value": v} for k, v in current.items())
             self.service_data["latestReadyRevision"] = rev
             self.service_data["latestCreatedRevision"] = rev
 
@@ -107,6 +118,34 @@ class PairTests(unittest.TestCase):
             self.addCleanup(patcher.stop)
         self.anchor = self.p.capture({"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]],
                         "worker_digest": NEW[pair.KEYS[2]], "catalog": CAT, "previous_catalog": CAT})
+
+    def test_operator_activation_preserves_other_env_and_rollback_removes_only_owned_flags(self):
+        # Recreate the session with the separately pinned new operator Job.
+        self.p.old = None
+        digest = "sha256:" + "1"*64
+        self.api.operator = {"name": BASE+"jobs/"+pair.OP_JOB, "generation": "1", "observedGeneration": "1",
+            "terminalCondition": {"state": "CONDITION_SUCCEEDED"}, "template": {"taskCount": 1, "parallelism": 1,
+            "template": {"serviceAccount": pair.OP_JOB+"@jscc-dev.iam.gserviceaccount.com",
+            "maxRetries": 0, "timeout": "1800s", "containers": [{"image": pair.ROOT+"jscc-ops-operator@"+digest,
+            "resources": {"limits": {"cpu": "1", "memory": "1Gi"}}, "env": [
+            {"name": k, "value": v} for k, v in {"SOURCE_SHA": NEW[pair.KEYS[0]], "GCP_PROJECT": "jscc-dev",
+             "GCP_REGION": "europe-west1", "OPS_BUCKET": "jscc-dev-ops-state"}.items()]}]}}}
+        target = {"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]], "worker_digest": NEW[pair.KEYS[2]],
+                  "catalog": CAT, "previous_catalog": CAT, "operator_activation": {"source_sha": NEW[pair.KEYS[0]],
+                  "image_digest": digest, "activation_ref": "#589/300", "publisher_ref": "#589/301"}}
+        self.p.capture(target)
+        self.p.freeze()
+        self.p.deploy_worker()
+        self.p.deploy_gateway()
+        self.assertEqual(pair.operator_env(self.api.service_data["template"]), self.p.new_operator_env)
+        self.assertEqual(pair.operator_env(self.api.worker_data["template"]), {})
+        self.p.verify_pair(False)
+        self.p.rollback_gateway()
+        self.p.rollback_worker()
+        self.p.verify_pair(True)
+        self.assertEqual(pair.operator_env(self.api.service_data["template"]), {})
+        self.assertEqual(pair.normalized(self.api.service_data["template"]), pair.normalized(self.p.old["gateway"]))
+        self.assertTrue(any("--remove-env-vars="+",".join(pair.OP_KEYS) in argv for argv in self.api.calls))
 
     def test_explicit_cutover_and_owned_release(self):
         self.p.freeze()

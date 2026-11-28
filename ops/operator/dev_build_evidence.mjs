@@ -109,7 +109,9 @@ export async function observeOpsDelivery(bundle,{actor,get,readPair,observePair}
  if(x.pair_approval_ref!==null){
   const pair=await evidence(x.pair_approval_ref,'deploy_ops_pair'),v=pair.approval.bundle;
   operatorRequire(v.build_id===m.build_id&&v.next?.source_sha===x.source_sha&&
-   v.next.gateway_digest===images['jscc-ops-gateway']&&v.next.worker_digest===images['jscc-diagnostics'],
+   v.next.gateway_digest===images['jscc-ops-gateway']&&v.next.worker_digest===images['jscc-diagnostics']&&
+   (!v.next.operator_activation||v.next.operator_activation.source_sha===x.source_sha&&
+    v.next.operator_activation.image_digest===images['jscc-ops-operator']),
    'ops_delivery_pair_binding_mismatch');
   const before=await readPair(x.pair_approval_ref);
   if(!pair.requested&&!before)disposition='PAIR_REQUEST_PENDING';
