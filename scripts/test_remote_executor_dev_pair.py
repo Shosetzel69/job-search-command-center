@@ -133,8 +133,16 @@ class PairTests(unittest.TestCase):
               "JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256": "a"*64}.items()]}]}}}
         target = {"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]], "worker_digest": NEW[pair.KEYS[2]],
                   "catalog": CAT, "previous_catalog": CAT, "operator_activation": {"source_sha": NEW[pair.KEYS[0]],
-                  "image_digest": digest, "activation_ref": "#589/300", "publisher_ref": "#589/301"}}
+                  "image_digest": digest, "activation_ref": "#589/300", "publisher_ref": "#589/301",
+                   "review_key_sha256": "a"*64}}
         self.p.capture(target)
+        self.assertEqual(self.p.new_operator_env[pair.OP_KEYS[3]], "a"*64)
+        env = self.api.operator["template"]["template"]["containers"][0]["env"]
+        row = next(row for row in env if row["name"] == pair.OP_KEYS[3])
+        row["value"] = "b"*64
+        with self.assertRaisesRegex(pair.Blocked, "operator_activation_job_binding_mismatch"):
+            self.p.verify_operator_job()
+        row["value"] = "a"*64
         self.p.freeze()
         self.p.deploy_worker()
         self.p.deploy_gateway()
