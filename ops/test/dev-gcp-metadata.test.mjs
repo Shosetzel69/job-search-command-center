@@ -154,3 +154,25 @@ test('quota observation is bounded, exact DEV project, excludes other dimensions
  await assert.rejects(()=>executeDevGcpMetadata(input,{fetchImpl:async()=>Response.json({quotaInfos:[
   {...row('x',[]),name:'projects/other/locations/global/services/run.googleapis.com/quotaInfos/x'}]})}));
 });
+
+test('service monitoring reports only bound DEV request counts, never root cause or complete coverage',async()=>{
+ const input={environment:'dev',kind:'service_request_metrics',name:'jscc-command-api-dev'};
+ const now=()=>Date.parse('2026-11-28T00:20:00Z');
+ const row=(code,value)=>({metric:{type:'run.googleapis.com/request_count',labels:{response_code:code,private:'ignore'}},
+  resource:{type:'cloud_run_revision',labels:{project_id:'jscc-dev',location:'europe-west1',service_name:input.name,revision_name:input.name+'-fixture'}},
+  metricKind:'DELTA',valueType:'INT64',points:[{interval:{startTime:'2026-11-28T00:10:00Z',endTime:'2026-11-28T00:11:00Z'},value:{int64Value:value}}]});
+ const out=await executeDevGcpMetadata(input,{now,fetchImpl:async(url,init)=>{
+  const u=new URL(url);assert.equal(u.origin,'https://monitoring.googleapis.com');
+  assert.equal(u.pathname,'/v3/projects/jscc-dev/timeSeries');assert.equal(init.method,'GET');
+  assert.match(u.searchParams.get('filter'),/jscc-command-api-dev/);
+  return Response.json({timeSeries:[row('200','12'),row('403','2'),row('503','1')]});
+ }});
+ assert.deepEqual(out.metadata.counts,{'1xx':0,'2xx':12,'3xx':0,'4xx':2,'5xx':1,other:0});
+ const req={operation_id:'op',approval_hash:'hash',action:'gcp_metadata'};
+ const evidence=projectOperatorResult(req,{generation:'1',data:{...req,...out}});
+ assert.equal(evidence.metadata.root_cause,'INSUFFICIENT_EVIDENCE');
+ assert.equal(evidence.metadata.request_coverage,'UNVERIFIED');
+ assert.equal(JSON.stringify(evidence).includes('private'),false);
+ await assert.rejects(()=>executeDevGcpMetadata({...input,name:'jscc-command-api-prod'},{fetchImpl:async()=>assert.fail('network')}));
+ await assert.rejects(()=>executeDevGcpMetadata(input,{now,fetchImpl:async()=>Response.json({timeSeries:[row('200','1'),row('200','1')]})}),/duplicate_point/);
+});

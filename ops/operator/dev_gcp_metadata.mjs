@@ -1,6 +1,6 @@
 // #589: narrow metadata-only DEV observations, under the admitted operator.
 import {gcpFetch} from '../src/lib.mjs';
-import {operatorExact,operatorRequire,DEV_RUN_PERMISSION_PROBES} from '../src/dev_operator_contract.mjs';
+import {operatorExact,operatorRequire,operatorHash,DEV_RUN_PERMISSION_PROBES} from '../src/dev_operator_contract.mjs';
 import {createDevObserver,DEV_OBSERVATION_TARGETS} from '../observation/dev-runtime-observer.mjs';
 const JOBS=new Set(['jscc-search-dev','jscc-diagnostics-dev','jscc-db-migrate-dev','jscc-ops-operator-dev']);
 const SECRETS=new Set(['JSCC_OPS_GOOGLE_CLIENT_ID','JSCC_OPS_GOOGLE_CLIENT_SECRET','JSCC_OPS_GOOGLE_ALLOWED_SUB','NILE_DATABASE_URL']);
@@ -38,7 +38,7 @@ function containerMetadata(c){
  const image=typeof c.image==='string'&&/^europe-west1-docker\.pkg\.dev\/jscc-shared\/(?:jscc|jscc-ops)\/[a-z0-9._-]+@sha256:[a-f0-9]{64}$/.test(c.image)?c.image:'UNKNOWN';
  return {image,env};
 }
-export async function executeDevGcpMetadata(input,{fetchImpl=gcpFetch}={}){
+export async function executeDevGcpMetadata(input,{fetchImpl=gcpFetch,now=Date.now}={}){
  operatorRequire(input?.environment==='dev','gcp_metadata_environment_denied');
  if(input.kind==='artifact_tag'){
   operatorRequire(operatorExact(input,['environment','kind','package','source_sha'])&&PACKAGES.has(input.package)&&
@@ -60,6 +60,57 @@ export async function executeDevGcpMetadata(input,{fetchImpl=gcpFetch}={}){
    digest,uri,immutable_tags:true,source_provenance:'UNVERIFIED'}};
  }
  operatorRequire(operatorExact(input,['environment','kind','name']),'gcp_metadata_request_denied');
+ if(input.kind==='service_request_metrics'){
+  operatorRequire(DEV_OBSERVATION_TARGETS.includes(input.name),'gcp_monitoring_service_denied');
+  // Fixed recent window; exclude the most recent two minutes to reduce
+  // ingestion lag, but never certify complete request coverage.
+  const end=Math.floor(now()/60000)*60000-120000,start=end-900000;
+  const startTime=new Date(start).toISOString(),endTime=new Date(end).toISOString();
+  const metric='run.googleapis.com/request_count';
+  const filter='metric.type="'+metric+'" AND resource.type="cloud_run_revision" AND resource.labels.project_id="jscc-dev"'+
+   ' AND resource.labels.location="europe-west1" AND resource.labels.service_name="'+input.name+'"';
+  const counts={'1xx':0,'2xx':0,'3xx':0,'4xx':0,'5xx':0,other:0};
+  const seen=new Set(),tokens=new Set();
+  let token='',excluded=0,points=0;
+  for(let page=0;page<4;page++){
+   const q=new URLSearchParams({filter,'interval.startTime':startTime,'interval.endTime':endTime,view:'FULL',pageSize:'100'});
+   if(token)q.set('pageToken',token);
+   const v=await get('https://monitoring.googleapis.com/v3/projects/jscc-dev/timeSeries?'+q,fetchImpl);
+   operatorRequire(!(v.executionErrors||[]).length&&!v.unreachable?.length,'gcp_monitoring_partial_provider_error');
+   const rows=v.timeSeries||[];
+   operatorRequire(Array.isArray(rows)&&rows.length<=100,'gcp_monitoring_page_invalid');
+   for(const row of rows){
+    const labels=row.resource?.labels;
+    operatorRequire(row.metric?.type===metric&&row.resource?.type==='cloud_run_revision'&&
+     labels?.project_id==='jscc-dev'&&labels.location==='europe-west1'&&labels.service_name===input.name&&
+     typeof labels.revision_name==='string'&&labels.revision_name.startsWith(input.name+'-')&&
+     row.metricKind==='DELTA'&&row.valueType==='INT64'&&Array.isArray(row.points)&&row.points.length<=100,
+     'gcp_monitoring_series_binding_mismatch');
+    const code=row.metric.labels?.response_code;
+    const group=typeof code==='string'&&/^[1-5][0-9]{2}$/.test(code)?code[0]+'xx':'other';
+    const series=operatorHash({resource:labels,metric:row.metric.labels||{}});
+    for(const point of row.points){
+     operatorRequire(++points<=400,'gcp_monitoring_point_limit');
+     const first=Date.parse(point.interval?.startTime),last=Date.parse(point.interval?.endTime);
+     const value=point.value?.int64Value;
+     operatorRequire(Number.isFinite(first)&&Number.isFinite(last)&&last>first&&
+      typeof value==='string'&&/^[0-9]{1,15}$/.test(value),'gcp_monitoring_point_invalid');
+     const key=series+':'+first+':'+last;
+     operatorRequire(!seen.has(key),'gcp_monitoring_duplicate_point');seen.add(key);
+     if(first<start||last>end){excluded++;continue;}
+     counts[group]+=Number(value);
+     operatorRequire(Number.isSafeInteger(counts[group]),'gcp_monitoring_count_overflow');
+    }
+   }
+   token=v.nextPageToken||'';
+   operatorRequire(typeof token==='string'&&token.length<=2048&&(!token||!tokens.has(token)),'gcp_monitoring_page_token_invalid');
+   if(!token)break;
+   tokens.add(token);
+  }
+  return {state:'OBSERVED',metadata:{kind:input.kind,name:input.name,start_time:startTime,end_time:endTime,
+   counts,observed_points:points-excluded,excluded_boundary_points:excluded,pagination_complete:!token,
+   request_coverage:'UNVERIFIED',root_cause:'INSUFFICIENT_EVIDENCE'}};
+ }
  if(input.kind==='billing_status'){
   operatorRequire(['jscc-dev','jscc-shared'].includes(input.name),'gcp_metadata_billing_target_denied');
   const name='projects/'+input.name+'/billingInfo';

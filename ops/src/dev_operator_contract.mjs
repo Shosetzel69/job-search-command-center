@@ -120,7 +120,7 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
  }else if(v.action==='gcp_metadata'){
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.kind==='artifact_tag'&&operatorExact(v.bundle,['environment','kind','package','source_sha'])||
-   ['secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info'].includes(v.bundle.kind)&&operatorExact(v.bundle,['environment','kind','name'])),
+   ['secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info','service_request_metrics'].includes(v.bundle.kind)&&operatorExact(v.bundle,['environment','kind','name'])),
    'operator_metadata_approval_mismatch');
  }else if(v.action==='gcs_artifact'){
   operatorRequire(v.bundle.environment==='dev'&&(
@@ -158,7 +158,21 @@ export function validateOperatorRequest(value,admission){
 }
 function projectMetadata(m){
  const safeName=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,255}$/.test(x);
- if(!m||!['artifact_tag','secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info'].includes(m.kind))throw Error('operator_metadata_invalid');
+ if(!m||!['artifact_tag','secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info','service_request_metrics'].includes(m.kind))throw Error('operator_metadata_invalid');
+ if(m.kind==='service_request_metrics'){
+  const services=['jscc-dev-workspace-manager','jscc-dev-sandbox-worker','jscc-ops-gateway-dev','jscc-command-api-dev'];
+  const groups=['1xx','2xx','3xx','4xx','5xx','other'];
+  const start=Date.parse(m.start_time),end=Date.parse(m.end_time);
+  operatorRequire(services.includes(m.name)&&Number.isFinite(start)&&Number.isFinite(end)&&end-start===900000&&
+   operatorExact(m.counts,groups)&&groups.every(k=>Number.isSafeInteger(m.counts[k])&&m.counts[k]>=0)&&
+   Number.isSafeInteger(m.observed_points)&&m.observed_points>=0&&Number.isSafeInteger(m.excluded_boundary_points)&&
+   m.excluded_boundary_points>=0&&m.observed_points+m.excluded_boundary_points<=400&&
+   typeof m.pagination_complete==='boolean','operator_monitoring_metadata_invalid');
+  return {kind:m.kind,name:m.name,start_time:m.start_time,end_time:m.end_time,
+   counts:Object.fromEntries(groups.map(k=>[k,m.counts[k]])),observed_points:m.observed_points,
+   excluded_boundary_points:m.excluded_boundary_points,pagination_complete:m.pagination_complete,
+   request_coverage:'UNVERIFIED',root_cause:'INSUFFICIENT_EVIDENCE'};
+ }
  if(m.kind==='billing_status'){
   operatorRequire(['jscc-dev','jscc-shared'].includes(m.name)&&typeof m.billing_enabled==='boolean','operator_billing_metadata_invalid');
   return {kind:m.kind,name:m.name,billing_enabled:m.billing_enabled,spend:'UNVERIFIED',cost_admission:'UNVERIFIED'};
