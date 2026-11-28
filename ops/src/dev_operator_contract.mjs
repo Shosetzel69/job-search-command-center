@@ -107,8 +107,13 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.operation==='metadata'&&operatorExact(v.bundle,['environment','operation','bucket','object','generation'])||
    v.bundle.operation==='copy_generation'&&operatorExact(v.bundle,['environment','operation','source','source_generation','destination','expected_md5','expected_crc32c'])||
-   ['restore_soft_deleted','cleanup_generation'].includes(v.bundle.operation)&&
-   operatorExact(v.bundle,['environment','operation','bucket','object','generation','expected_md5','expected_crc32c'])),
+
+   v.bundle.operation==='restore_soft_deleted'&&
+   operatorExact(v.bundle,['environment','operation','bucket','object','generation','expected_md5','expected_crc32c'])||
+   v.bundle.operation==='cleanup_generation'&&
+   operatorExact(v.bundle,['environment','operation','bucket','object','generation','expected_md5','expected_crc32c','original_approval_ref','build_id'])&&
+   match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref&&
+   match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,v.bundle.build_id)),
    'operator_gcs_approval_mismatch');
  }else{
   operatorRequire(operatorExact(v.bundle,['environment','script_id','script_sha256','service','buildId'])&&

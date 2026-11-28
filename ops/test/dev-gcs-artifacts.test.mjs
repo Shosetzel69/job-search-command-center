@@ -49,10 +49,12 @@ test('runtime snapshot is metadata-only with exact DEV bucket, never media or mu
 });
 
 const cleanup={environment:'dev',operation:'cleanup_generation',bucket,object:source,generation:'12',
- expected_md5:md5,expected_crc32c:crc};
+ expected_md5:md5,expected_crc32c:crc,original_approval_ref:'#589/123',
+ build_id:'254d3513-9c02-4f33-a974-e8e8f8935aa7'};
+const {original_approval_ref:ignoredRef,build_id:ignoredBuild,...restoreBase}=cleanup;
 test('cleanup binds exact transient generation and confirms normal readability is gone',async()=>{
  const calls=[];
- const result=await executeDevGcsArtifact(cleanup,{assertFresh:()=>{},fetchImpl:async(url,init)=>{
+ const result=await executeDevGcsArtifact(cleanup,{assertFresh:()=>{},verifyCleanup:async input=>assert.deepEqual(input,cleanup),fetchImpl:async(url,init)=>{
   calls.push(init.method);const q=new URL(url).searchParams;
   assert.equal(q.get('generation'),'12');
   if(init.method==='DELETE'){assert.equal(q.get('ifGenerationMatch'),'12');return new Response(null,{status:204});}
@@ -64,7 +66,7 @@ test('cleanup binds exact transient generation and confirms normal readability i
 });
 test('restore is create-only, exact soft-deleted generation and verified checksum readback',async()=>{
  const calls=[];
- const result=await executeDevGcsArtifact({...cleanup,operation:'restore_soft_deleted'},{
+ const result=await executeDevGcsArtifact({...restoreBase,operation:'restore_soft_deleted'},{
   assertFresh:()=>{},now:()=>Date.parse('2026-11-28T00:00:00Z'),fetchImpl:async(url,init)=>{
    calls.push(init.method);const q=new URL(url).searchParams;
    if(init.method==='POST'){
@@ -87,11 +89,23 @@ test('restore is create-only, exact soft-deleted generation and verified checksu
 test('cleanup/restore deny runtime objects, missing fresh admission and stale checksums',async()=>{
  for(const bad of [{...cleanup,bucket:'jscc-dev-runtime-828902654738'},
   {...cleanup,object:'control/v1/approvals/x.json'},{...cleanup,generation:'0'}])
-  await assert.rejects(()=>executeDevGcsArtifact(bad,{assertFresh:()=>{},fetchImpl:async()=>assert.fail('unexpected API')}));
+  await assert.rejects(()=>executeDevGcsArtifact(bad,{assertFresh:()=>{},verifyCleanup:async()=>{},fetchImpl:async()=>assert.fail('unexpected API')}));
  await assert.rejects(()=>executeDevGcsArtifact(cleanup,{fetchImpl:async()=>assert.fail('unexpected API')}));
  let calls=0;
- await assert.rejects(()=>executeDevGcsArtifact(cleanup,{assertFresh:()=>{},fetchImpl:async()=>{
+ await assert.rejects(()=>executeDevGcsArtifact(cleanup,{assertFresh:()=>{},verifyCleanup:async()=>{},fetchImpl:async()=>{
   calls++;return Response.json({...meta(source,'12'),md5Hash:'B'.repeat(22)+'=='});
  }}),/source_mismatch/);
+ assert.equal(calls,1);
+});
+
+
+test('cleanup never deletes before independently admitted original build is verified terminal',async()=>{
+ let calls=0;
+ await assert.rejects(()=>executeDevGcsArtifact(cleanup,{assertFresh:()=>{},
+  fetchImpl:async()=>assert.fail('missing cleanup gate must not read')}),/mutation_denied/);
+ await assert.rejects(()=>executeDevGcsArtifact(cleanup,{assertFresh:()=>{},
+  verifyCleanup:async()=>{throw Error('build_not_terminal');},
+  fetchImpl:async(url,init)=>{calls++;assert.equal(init.method,'GET');return Response.json(meta(source,'12'));}}),
+  /build_not_terminal/);
  assert.equal(calls,1);
 });

@@ -63,8 +63,18 @@ async function inventoryTransport({api,path}){
 }
 
 const defaultHandlers={
- gcs_artifact:async a=>executeDevGcsArtifact(a.bundle,{assertFresh:()=>operatorRequire(
-  Date.now()>=a.issued_at_ms&&Date.now()<a.expires_at_ms,'operator_approval_expired')}),
+
+ gcs_artifact:async(a,get)=>executeDevGcsArtifact(a.bundle,{assertFresh:()=>operatorRequire(
+  Date.now()>=a.issued_at_ms&&Date.now()<a.expires_at_ms,'operator_approval_expired'),
+  verifyCleanup:async input=>{
+   const original=await readOriginal(input.original_approval_ref,a.actor_sub_hash,get);
+   operatorRequire(original.action==='build'&&original.bundle.archive?.bucket===input.bucket&&
+    original.bundle.archive?.object===input.object&&original.bundle.archive?.generation===input.generation,
+    'operator_cleanup_original_mismatch');
+   const build=await observeApprovedBuildEvidence(original.bundle,{getToken:()=>metadataAccessToken()});
+   operatorRequire(build.build_id===input.build_id&&['SUCCEEDED','FAILED','CANCELLED'].includes(build.state),
+    'operator_cleanup_build_not_terminal');
+  }}),
  gcp_metadata:async a=>executeDevGcpMetadata(a.bundle),
  build:async a=>runApprovedBuild({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash},
   {getToken:()=>metadataAccessToken(),verifyStagedConfig:true}),

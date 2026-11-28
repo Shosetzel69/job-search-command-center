@@ -27,7 +27,7 @@ async function jsonRequest(url,method,fetchImpl,{noBody=false}={}){
  operatorRequire(response.ok,'gcs_artifact_http_error');
  return response.json();
 }
-export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFresh,now=Date.now}={}){
+export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFresh,verifyCleanup,now=Date.now}={}){
  operatorRequire(input?.environment==='dev','gcs_artifact_environment_denied');
  if(input.operation==='metadata'){
   operatorRequire(operatorExact(input,['environment','operation','bucket','object','generation'])&&
@@ -41,12 +41,17 @@ export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFres
   return {state:'OBSERVED',artifact_metadata:value};
  }
  if(input.operation==='restore_soft_deleted'||input.operation==='cleanup_generation'){
-  operatorRequire(operatorExact(input,['environment','operation','bucket','object','generation',
-   'expected_md5','expected_crc32c'])&&input.bucket===STAGING&&valid(ARCHIVE,input.object)&&
-   valid(GEN,input.generation)&&valid(MD5,input.expected_md5)&&valid(CRC,input.expected_crc32c)&&
-   typeof assertFresh==='function','gcs_artifact_mutation_denied');
-  const url=objectUrl(STAGING,input.object);
+
   const restore=input.operation==='restore_soft_deleted';
+  const keys=['environment','operation','bucket','object','generation','expected_md5','expected_crc32c'];
+  if(!restore)keys.push('original_approval_ref','build_id');
+  operatorRequire(operatorExact(input,keys)&&input.bucket===STAGING&&valid(ARCHIVE,input.object)&&
+   valid(GEN,input.generation)&&valid(MD5,input.expected_md5)&&valid(CRC,input.expected_crc32c)&&
+   typeof assertFresh==='function'&&(restore||
+    typeof verifyCleanup==='function'&&/^#589\/[1-9][0-9]{0,19}$/.test(input.original_approval_ref||'')&&
+    /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(input.build_id||'')),
+   'gcs_artifact_mutation_denied');
+  const url=objectUrl(STAGING,input.object);
   const q=new URLSearchParams({fields:fields+(restore?',softDeleteTime,hardDeleteTime,restoreToken':''),
    generation:input.generation,...(restore?{softDeleted:'true'}:{})});
   assertFresh();
@@ -76,6 +81,8 @@ export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFres
   // Cleanup only this generation of an independently approved transient
   // staging archive. No live application objects or durable evidence.
   // The publisher must independently establish that no build needs it.
+  assertFresh();
+  await verifyCleanup(input);
   const deleteQuery=new URLSearchParams({generation:src.generation,ifGenerationMatch:src.generation});
   assertFresh();
   const deleted=await fetchImpl(url+'?'+deleteQuery,{method:'DELETE',redirect:'error',signal:AbortSignal.timeout(15000)});

@@ -108,7 +108,9 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   exact generation after checksum verification; 404 readback does not prove
   physical deletion. Soft-deleted staging restore uses create-only destination,
   verifies old/new generations and checksums, and rejects ambiguous restore
-  tokens. Publisher must prove no active build needs an archive before cleanup,
+  tokens. Cleanup additionally binds the original build approval, exact build
+  ID and archive, and observes a terminal provider/ledger state before DELETE.
+  Publisher must prove no other active build needs that archive before cleanup,
   flat namespace/soft-delete support and zero-cost admission before restore.
   No grants or live mutations; storage.objects.delete/restore require scoped
   independent admission. See Google Cloud JSON API objects/delete and restore.
