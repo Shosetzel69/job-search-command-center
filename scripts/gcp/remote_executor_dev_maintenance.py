@@ -1,4 +1,5 @@
 """Operator-side #589 DEV maintenance boundary. No runtime credentials or CLI mutation."""
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -25,8 +26,9 @@ LEASE = "leases/diagnostics.json"
 JOBS = ("jscc-search-dev", "jscc-diagnostics-dev")
 TERMINAL = {"SUCCEEDED", "FAILED", "REJECTED"}
 MAX_PAGES_PER_COLLECTION = 20
+MAINTENANCE_CAPACITY_TRIGGER = 1500
 # Compatible with the existing gateway's numeric expiry comparison.
-# Explicit release only; bucket lifecycle still limits retention.
+# Explicit release only; the scoped lifecycle excludes the lease.
 MAINTENANCE_EXPIRY = 9007199254740991
 
 
@@ -102,7 +104,7 @@ class OperatorAPI:
         raise Blocked("page_limit_exceeded")
 
     def bucket_metadata(self):
-        return self.request(BUCKET_METADATA + "?fields=name,location,lifecycle")[0]
+        return self.request(BUCKET_METADATA + "?fields=name,location,lifecycle,updated")[0]
 
     def service(self):
         return self.request(RUN_ROOT + "/services/jscc-command-api-dev")[0]
@@ -159,7 +161,7 @@ def protected_snapshot(api):
                         "job_template": job["template"]})
 
 
-def assert_drained(api):
+def assert_drained(api, *, admission=False):
     for name in JOBS:
         job = api.job(name)
         require(job.get("name") == f"projects/{PROJECT}/locations/{REGION}/jobs/{name}"
@@ -168,14 +170,18 @@ def assert_drained(api):
             require(isinstance(execution, dict) and isinstance(execution.get("completionTime"), str)
                     and bool(execution["completionTime"]), "unfinished_execution")
     operations = {}
-    for name, record in api.objects("operations/"):
+    for count, (name, record) in enumerate(api.objects("operations/"), 1):
+        require(not admission or count < MAINTENANCE_CAPACITY_TRIGGER,
+                "maintenance_capacity_reached")
         operation_id = record.get("operation_id")
         require(isinstance(operation_id, str) and name == f"operations/{operation_id}.json"
                 and operation_id not in operations, "invalid_operation_record")
         require(record.get("operation_state") in TERMINAL and record.get("finished_at"),
                 "unresolved_operation")
         operations[operation_id] = record
-    for name, dispatch in api.objects("dispatch/"):
+    for count, (name, dispatch) in enumerate(api.objects("dispatch/"), 1):
+        require(not admission or count < MAINTENANCE_CAPACITY_TRIGGER,
+                "maintenance_capacity_reached")
         execution = dispatch.get("execution_name")
         record = operations.get(dispatch.get("operation_id"))
         require(isinstance(execution, str) and name == f"dispatch/{execution}.json"
@@ -214,6 +220,16 @@ def assert_scoped_lifecycle(api):
         **condition, "matchesPrefix": sorted(prefixes)}}]}
     expected["rule"][0]["condition"]["matchesPrefix"].sort()
     require(normalized == expected, "ops_lifecycle_not_scoped")
+    updated = bucket.get("updated")
+    require(isinstance(updated, str) and re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})", updated),
+        "operator_lifecycle_not_settled")
+    try:
+        changed = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+        settled = datetime.fromtimestamp(now_ms() / 1000, timezone.utc) - changed >= timedelta(hours=24)
+    except (ValueError, OverflowError):
+        settled = False
+    require(settled, "operator_lifecycle_not_settled")
 
 
 class MaintenanceGuard:
@@ -228,7 +244,7 @@ class MaintenanceGuard:
     def inspect(self):
         assert_scoped_lifecycle(self.api)
         before = protected_snapshot(self.api)
-        assert_drained(self.api)
+        assert_drained(self.api, admission=True)
         record, _ = self.api.read_lease()
         assert_available(record)
         require(protected_snapshot(self.api) == before, "protected_state_drift")
