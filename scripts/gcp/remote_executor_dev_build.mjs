@@ -35,7 +35,9 @@ const WORKSPACE_SUBSTITUTIONS={
 const OPS_SUBSTITUTIONS={_GIT_SHA:'',_TRUSTED_REF:'',_GATEWAY_IMAGE:REGISTRY+'jscc-ops-gateway',
  _WORKER_IMAGE:REGISTRY+'jscc-diagnostics',_OPERATOR_IMAGE:REGISTRY+'jscc-ops-operator'};
 const stepsFor=plan=>plan.build_kind==='workspace_r2'?WORKSPACE_STEPS:STEPS;
-const substitutionsFor=plan=>plan.build_kind==='workspace_r2'?WORKSPACE_SUBSTITUTIONS:OPS_SUBSTITUTIONS;
+const substitutionsFor=(plan,config)=>plan.build_kind==='workspace_r2'?WORKSPACE_SUBSTITUTIONS:
+ Object.hasOwn(config?.substitutions||{},'_PUBLISHER_IMAGE')?
+ {...OPS_SUBSTITUTIONS,_PUBLISHER_IMAGE:REGISTRY+'jscc-ops-publisher'}:OPS_SUBSTITUTIONS;
 const exact=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&
  Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
 function require(ok,code){if(!ok)throw Error(code);}
@@ -69,8 +71,8 @@ export function admitBuildBundle(bundle,pin,now=Date.now){
  // additionally parses and compares the archived YAML before submission.
  require(exact(config,['steps','substitutions','serviceAccount','options'])&&
   config.serviceAccount===SA&&exact(config.options,['logging'])&&config.options.logging==='CLOUD_LOGGING_ONLY'&&
-  exact(config.substitutions,Object.keys(substitutionsFor(plan)))&&
-  evidenceDigest(config.substitutions)===evidenceDigest(substitutionsFor(plan))&&
+  exact(config.substitutions,Object.keys(substitutionsFor(plan,config)))&&
+  evidenceDigest(config.substitutions)===evidenceDigest(substitutionsFor(plan,config))&&
   Array.isArray(config.steps)&&config.steps.length===stepsFor(plan).length&&
   config.steps.every((s,i)=>s&&s.id===stepsFor(plan)[i])&&JSON.stringify(config).length<=65536,
   'build_config_scope_denied');

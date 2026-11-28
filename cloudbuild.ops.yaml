@@ -5,6 +5,7 @@ substitutions:
   _GATEWAY_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-gateway"
   _WORKER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-diagnostics"
   _OPERATOR_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-operator"
+  _PUBLISHER_IMAGE: "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-publisher"
 steps:
   - id: trusted-source-admission
     name: gcr.io/cloud-builders/git
@@ -83,7 +84,7 @@ steps:
     args:
       - -ceu
       - |
-        rm -f /workspace/.gateway-exists /workspace/.worker-exists /workspace/.operator-exists
+        rm -f /workspace/.gateway-exists /workspace/.worker-exists /workspace/.operator-exists /workspace/.publisher-exists
         if gcloud artifacts docker images describe "${_GATEWAY_IMAGE}:$$SOURCE_SHA" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.gateway-exists
           echo "REUSE_GATEWAY_TAG=$$SOURCE_SHA"
@@ -95,6 +96,10 @@ steps:
         if gcloud artifacts docker images describe "${_OPERATOR_IMAGE}:$$SOURCE_SHA" --project=jscc-shared >/dev/null 2>&1; then
           touch /workspace/.operator-exists
           echo "REUSE_OPERATOR_TAG=$$SOURCE_SHA"
+        fi
+        if gcloud artifacts docker images describe "${_PUBLISHER_IMAGE}:$$SOURCE_SHA" --project=jscc-shared >/dev/null 2>&1; then
+          touch /workspace/.publisher-exists
+          echo "REUSE_PUBLISHER_TAG=$$SOURCE_SHA"
         fi
 
   - id: build-gateway
@@ -138,6 +143,11 @@ steps:
           echo "SKIP_OPERATOR_BUILD_EXISTING_IMMUTABLE_TAG"
         else
           docker build --pull -f /workspace/jscc589-ops-verified-src/ops/Dockerfile.operator --build-arg "SOURCE_SHA=$$SOURCE_SHA" -t "${_OPERATOR_IMAGE}:$$SOURCE_SHA" /workspace/jscc589-ops-verified-src
+        fi
+        if [[ -f /workspace/.publisher-exists ]]; then
+          echo "SKIP_PUBLISHER_BUILD_EXISTING_IMMUTABLE_TAG"
+        else
+          docker build --pull -f /workspace/jscc589-ops-verified-src/ops/Dockerfile.publisher --build-arg "SOURCE_SHA=$$SOURCE_SHA" -t "${_PUBLISHER_IMAGE}:$$SOURCE_SHA" /workspace/jscc589-ops-verified-src
         fi
 
   - id: verify-image-source
@@ -203,6 +213,23 @@ steps:
           done
           echo "OPS_IMAGE_SOURCE_VERIFIED=operator"
         )
+        publisher="${_PUBLISHER_IMAGE}:$$SOURCE_SHA"
+        if [[ -f /workspace/.publisher-exists ]]; then docker pull "$$publisher"; fi
+        docker inspect --format '{{range .Config.Env}}{{println .}}{{end}}' "$$publisher" |
+          grep -Fx "SOURCE_SHA=$$SOURCE_SHA" >/dev/null
+        tmp="$$(mktemp -d)"
+        (
+          cid=
+          trap 'if [[ -n "$$cid" ]]; then docker rm "$$cid" >/dev/null; fi; rm -rf "$$tmp"' EXIT
+          cid="$$(docker create --network none "$$publisher")"
+          docker cp "$$cid:/workspace/ops/publisher-source-sha" "$$tmp/publisher-source-sha"
+          [[ "$$(cat "$$tmp/publisher-source-sha")" == "$$SOURCE_SHA" ]]
+          for f in ops/publisher/server.mjs ops/package.json ops/src/lib.mjs ops/src/dev_operator_contract.mjs ops/observation/dev-runtime-observer.mjs ops/build/dev-cloud-build-controller.mjs scripts/gcp/remote_executor_dev_publish_approval.mjs; do
+            docker cp "$$cid:/workspace/$$f" "$$tmp/file"
+            cmp "$$root/../$$f" "$$tmp/file"
+          done
+          echo "OPS_IMAGE_SOURCE_VERIFIED=publisher"
+        )
 
   - id: push-gateway
     name: gcr.io/cloud-builders/docker
@@ -244,6 +271,11 @@ steps:
         else
           docker push "${_OPERATOR_IMAGE}:$$SOURCE_SHA"
         fi
+        if [[ -f /workspace/.publisher-exists ]]; then
+          echo "REUSE_PUBLISHER_IMMUTABLE_TAG"
+        else
+          docker push "${_PUBLISHER_IMAGE}:$$SOURCE_SHA"
+        fi
   - id: evidence
     name: gcr.io/cloud-builders/gcloud
     entrypoint: bash
@@ -252,7 +284,7 @@ steps:
     args:
       - -ceu
       - |
-        for image in "${_GATEWAY_IMAGE}:$$SOURCE_SHA" "${_WORKER_IMAGE}:$$SOURCE_SHA" "${_OPERATOR_IMAGE}:$$SOURCE_SHA"; do
+        for image in "${_GATEWAY_IMAGE}:$$SOURCE_SHA" "${_WORKER_IMAGE}:$$SOURCE_SHA" "${_OPERATOR_IMAGE}:$$SOURCE_SHA" "${_PUBLISHER_IMAGE}:$$SOURCE_SHA"; do
           digest="$$(gcloud artifacts docker images describe "$$image" --project=jscc-shared --format='value(image_summary.digest)')"
           [[ "$$digest" =~ ^sha256:[0-9a-f]{64}$$ ]]
           echo "OPS_IMAGE=$$image@$$digest"

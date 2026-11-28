@@ -5,7 +5,7 @@ import {createDevObserver,DEV_OBSERVATION_TARGETS} from '../observation/dev-runt
 const JOBS=new Set(['jscc-search-dev','jscc-diagnostics-dev','jscc-db-migrate-dev','jscc-ops-operator-dev']);
 const SECRETS=new Set(['JSCC_OPS_GOOGLE_CLIENT_ID','JSCC_OPS_GOOGLE_CLIENT_SECRET','JSCC_OPS_GOOGLE_ALLOWED_SUB','NILE_DATABASE_URL']);
 const PACKAGES=new Set(['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator',
- 'jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100']);
+ 'jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100','jscc-ops-publisher']);
 const RUN='https://run.googleapis.com/v2/projects/jscc-dev/locations/europe-west1';
 const REGISTRY='projects/jscc-shared/locations/europe-west1/repositories/jscc-ops';
 const AR='https://artifactregistry.googleapis.com/v1/';

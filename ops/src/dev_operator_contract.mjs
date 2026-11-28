@@ -190,7 +190,7 @@ function projectMetadata(m){
    policy_isolation:'UNVERIFIED'};
  }
  if(m.kind==='artifact_tag'){
-  operatorRequire(['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator','jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100'].includes(m.package)&&
+  operatorRequire(['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator','jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100','jscc-ops-publisher'].includes(m.package)&&
    match(SHA,m.source_sha)&&/^sha256:[a-f0-9]{64}$/.test(m.digest||'')&&m.immutable_tags===true&&
    m.uri==='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/'+m.package+'@'+m.digest,'operator_metadata_invalid');
   return {kind:m.kind,package:m.package,source_sha:m.source_sha,digest:m.digest,uri:m.uri,
