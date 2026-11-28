@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution']);
 export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
  run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
@@ -57,6 +57,12 @@ export function operatorLro(value){
  }
  return null;
 }
+export function devRunExecutionTarget(job,execution){
+ const jobs=['jscc-search-dev','jscc-diagnostics-dev','jscc-db-migrate-dev'];
+ operatorRequire(jobs.includes(job)&&typeof execution==='string'&&execution.startsWith(job+'-')&&
+  /^[a-z0-9-]{1,63}$/.test(execution)&&execution.length>job.length+1,'operator_run_execution_target_denied');
+ return OPERATOR_ROOT+'/jobs/'+job+'/executions/'+execution;
+}
 export function operatorDispatchPath(execution){
  operatorRequire(match(EXEC,execution),'invalid_operator_execution');
  return 'control/v1/operator-dispatch/'+execution+'.json';
@@ -102,6 +108,15 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
   operatorRequire(operatorExact(v.bundle,['original_approval_ref'])&&
    match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref,
    'operator_observation_approval_mismatch');
+ }else if(v.action==='observe_run_execution'||v.action==='cancel_diagnostic_execution'){
+  operatorRequire(operatorExact(v.bundle,['environment','job','execution','expected_uid','expected_image','expected_source_sha'])&&
+   v.bundle.environment==='dev'&&match(/^[a-f0-9-]{8,64}$/,v.bundle.expected_uid)&&
+   match(SHA,v.bundle.expected_source_sha)&&
+   typeof v.bundle.expected_image==='string'&&
+   /^europe-west1-docker\.pkg\.dev\/jscc-shared\/(?:jscc|jscc-ops)\/[a-z0-9._-]+@sha256:[a-f0-9]{64}$/.test(v.bundle.expected_image)&&
+   (v.action!=='cancel_diagnostic_execution'||v.bundle.job==='jscc-diagnostics-dev'),
+   'operator_run_execution_approval_mismatch');
+  devRunExecutionTarget(v.bundle.job,v.bundle.execution);
  }else if(v.action==='gcp_metadata'){
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.kind==='artifact_tag'&&operatorExact(v.bundle,['environment','kind','package','source_sha'])||
@@ -241,6 +256,22 @@ export function projectOperatorResult(request,record){
   out.artifact_operation=v.artifact_operation;out.generation_no_longer_live=true;
  }
  if(request.action==='gcp_metadata'&&v.state==='OBSERVED')out.metadata=projectMetadata(v.metadata);
+ if(['observe_run_execution','cancel_diagnostic_execution'].includes(request.action)&&v.execution_observation){
+  const m=v.execution_observation;
+  devRunExecutionTarget(m.job,m.execution);
+  operatorRequire(match(/^[a-f0-9-]{8,64}$/,m.uid)&&match(SHA,m.source_sha)&&
+   /^europe-west1-docker\.pkg\.dev\/jscc-shared\/(?:jscc|jscc-ops)\/[a-z0-9._-]+@sha256:[a-f0-9]{64}$/.test(m.image||'')&&
+   ['RUNNING_OR_PENDING','SUCCEEDED','FAILED_OR_CANCELLED','TERMINAL_UNVERIFIED'].includes(m.status)&&
+   Number.isSafeInteger(m.task_count)&&m.task_count>=1&&m.task_count<=1000&&
+   typeof m.terminal==='boolean'&&m.terminal===(m.status!=='RUNNING_OR_PENDING')&&
+   typeof m.cancellation_requested==='boolean'&&
+   (request.action==='cancel_diagnostic_execution'?m.job==='jscc-diagnostics-dev':!m.cancellation_requested),
+   'operator_run_execution_result_invalid');
+  out.execution_observation={job:m.job,execution:m.execution,uid:m.uid,source_sha:m.source_sha,image:m.image,
+   task_count:m.task_count,status:m.status,terminal:m.terminal,cancellation_requested:m.cancellation_requested};
+ }
+ if(['observe_run_execution','cancel_diagnostic_execution'].includes(request.action)&&v.state==='OBSERVED')
+  operatorRequire(out.execution_observation,'operator_run_execution_result_invalid');
  if(request.action==='observe_build'&&v.build_observation){
   const m=v.build_observation;
   const ids=['trusted-source-admission','materialize-verified-source','validate-candidate',

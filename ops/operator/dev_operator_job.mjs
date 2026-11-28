@@ -13,6 +13,7 @@ import {createDevObserver,admitDevRequest} from '../observation/dev-runtime-obse
 import {executeDevGcloudScript} from '../diagnostics/dev-gcloud-script-runner.mjs';
 import {executeDevGcsArtifact} from './dev_gcs_artifacts.mjs';
 import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
+import {executeDevRunExecution} from './dev_run_execution.mjs';
 
 const SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
 const META='http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/';
@@ -76,6 +77,9 @@ const defaultHandlers={
     'operator_cleanup_build_not_terminal');
   }}),
  gcp_metadata:async a=>executeDevGcpMetadata(a.bundle),
+ observe_run_execution:async a=>executeDevRunExecution(a.bundle),
+ cancel_diagnostic_execution:async a=>executeDevRunExecution(a.bundle,{cancel:true,
+  assertFresh:()=>operatorRequire(Date.now()>=a.issued_at_ms&&Date.now()<a.expires_at_ms,'operator_approval_expired')}),
  build:async a=>runApprovedBuild({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash},
   {getToken:()=>metadataAccessToken(),verifyStagedConfig:true}),
  deploy_ops_pair:async a=>runApprovedPair({bundle:a.bundle,trustedEvidenceHash:a.bundle_hash,

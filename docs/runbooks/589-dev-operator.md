@@ -101,6 +101,13 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   traffic revisions and their immutable digest evidence using the existing
   DEV runtime observer; unresolved digests remain UNKNOWN. It does not
   establish source provenance or expose revision environment values.
+- Fixed DEV execution observation binds the Search, diagnostics or migration
+  Job execution to its UID, immutable image and SOURCE_SHA. Separately approved
+  cancellation is limited to the diagnostics Job, uses its execution etag, and
+  reads back the exact execution without claiming cancellation from the receipt.
+  No product/migration cancel, Job overrides, deletion, lock release or retry.
+  The cancellation permission (run.jobs.run) requires separate resource-scoped
+  admission; existing product release authority is unchanged.
 - Fixed Cloud Run v2 testIamPermissions probes first verify exact DEV resource
   existence and report the current operator's returned permissions only.
   No caller-selected permissions, policy mutation, arbitrary principal or
