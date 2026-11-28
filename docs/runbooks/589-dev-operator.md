@@ -17,7 +17,7 @@ Owner-approved alternative to the unavailable dedicated native read-only credent
 The existing `ops/build/dev-cloud-build-controller.mjs` and durable
 `ops/control/dev-build-operation-ledger.mjs` now bind approval to the exact
 staged source object, generation and SHA256. A create-only approval record
-in the existing `control/v1/builds/` prefix consumes each authoritative
+in `control/v1/builds/consumed/` consumes each authoritative
 approval once, independently of actor and idempotency key. The operation
 record is confirmed in SUBMITTING before remote dispatch; uncertain submit
 receipts are never retried automatically.
