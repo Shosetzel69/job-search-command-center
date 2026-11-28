@@ -1,4 +1,5 @@
 import {createRemoteJWKSet,jwtVerify} from 'jose';
+import {createHash} from 'node:crypto';
 import {readNomenclatures} from './index.js';
 import {observeDevNilePlan} from './multiuser-repository.js';
 import {BUILD_IDENTITY} from './build-identity.generated.js';
@@ -6,7 +7,7 @@ import {BUILD_IDENTITY} from './build-identity.generated.js';
 const JWKS=createRemoteJWKSet(new URL('https://www.googleapis.com/oauth2/v3/certs'));
 export const DIAGNOSTIC_PATH='/admin/dev/nile-diagnostic';
 const AUDIENCE='urn:jscc:dev:nile-diagnostic';
-const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants']);
+const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants','account_readiness']);
 let active=false;
 let lastStart=0;
 const reply=(body,status)=>new Response(JSON.stringify(body),{status,headers:{'content-type':'application/json','cache-control':'no-store'}});
@@ -34,11 +35,25 @@ export async function handleDevNileDiagnostic(request,env,{authorize=verifyDiagn
   active=true;
   lastStart=Date.now();
   try{
-    const nomenclatures=['schema_inventory','runtime_health','migration_013_preflight','tenant_invariants'].includes(operation)?null:(await read(env)).payload;
+    const nomenclatures=['schema_inventory','runtime_health','migration_013_preflight','tenant_invariants','account_readiness'].includes(operation)?null:(await read(env)).payload;
     const result=await observe(operation,nomenclatures,env);
     console.log(JSON.stringify({event:'dev_nile_diagnostic',operation,status:result.status}));
     const runtimeRevision=typeof env.K_REVISION==='string'&&/^jscc-command-api-dev-[a-z0-9-]{1,44}$/.test(env.K_REVISION)?env.K_REVISION:null;
-    return reply({...result,source_sha:sourceSha,runtime_revision:runtimeRevision},result.status==='COLLECTED'?200:503);
+    // The hash binds the actual configured Origin without exposing an
+    // arbitrary configuration string. It does not prove any browser request.
+    let originState='MISSING',originSha=null;
+    if(typeof env.FRONTEND_ORIGIN==='string'&&env.FRONTEND_ORIGIN.length){
+      originState='INVALID';
+      try{
+        const u=new URL(env.FRONTEND_ORIGIN);
+        if(u.protocol==='https:'&&u.origin===env.FRONTEND_ORIGIN&&!u.username&&!u.password){
+          originState='HTTPS_ORIGIN';
+          originSha=createHash('sha256').update(u.origin).digest('hex');
+        }
+      }catch{}
+    }
+    const extra=operation==='account_readiness'?{origin_config:{state:originState,sha256:originSha}}:{};
+    return reply({...result,...extra,source_sha:sourceSha,runtime_revision:runtimeRevision},result.status==='COLLECTED'?200:503);
   }catch{
     return reply({status:'ERROR',operation,stage:'route',sqlstate:null,source_sha:sourceSha},503);
   }finally{active=false;}

@@ -2217,7 +2217,7 @@ export async function listGlobalProfileJobs(authContext,nomenclatures,query,env=
 
 // #589 / #659: diagnostics share the production SQL builders. No request SQL,
 // tenant identifiers, filters, cursor, or raw query-plan data cross this boundary.
-const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants']);
+const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants','account_readiness']);
 const DIAGNOSTIC_PLAN_ENUMS=Object.freeze({
   'Node Type':new Set(['Aggregate','Append','BitmapAnd','BitmapOr','Bitmap Heap Scan','Bitmap Index Scan','CTE Scan','Custom Scan','Foreign Scan','Function Scan','Gather','Gather Merge','Group','Hash','Hash Join','Incremental Sort','Index Scan','Index Only Scan','Limit','LockRows','Materialize','Memoize','Merge Append','Merge Join','Nested Loop','ProjectSet','Recursive Union','Result','Sample Scan','Seq Scan','SetOp','Sort','Subquery Scan','Tid Scan','Tid Range Scan','Unique','Values Scan','WindowAgg','WorkTable Scan']),
   'Join Type':new Set(['Inner','Left','Right','Full','Semi','Anti','Right Anti','Right Semi']),
@@ -2237,6 +2237,27 @@ export async function observeDevNilePlan(operation,nomenclatures,env=process.env
   let stage='account';
   try {
     const userId=requireUuid(env.JSCC_DEV_NILE_DIAGNOSTIC_USER_ID,'diagnostic user');
+    if(operation==='account_readiness'){
+      const start=performance.now();
+      const account=await withDevDiagnosticAccountLookup(async tx=>{
+        const row=await accountStateForUser(tx,userId);
+        let state;
+        if(!row)state='NOT_FOUND';
+        else if(row.deletion_started_at)state='DELETION_PENDING';
+        else if(row.status!=='ACTIVE')state='NOT_ACTIVE';
+        else if(!row.profile_id||!row.provisioned_at)state='PROVISIONING_INCOMPLETE';
+        else if(row.role!=='ADMIN')state='ROLE_NOT_ADMITTED';
+        else{
+          stage='tenant_mapping';
+          await verifyTenantMapping(String(row.profile_id),{env,db:tx});
+          state='READY';
+        }
+        return {database:'jobsearch_dev',read_only:true,scope:'configured_diagnostic_account',
+          state,tenant_mapping:state==='READY'?'VERIFIED':'NOT_CHECKED',
+          user_session_verified:false,root_cause:'INSUFFICIENT_EVIDENCE'};
+      },{env,db});
+      return {status:'COLLECTED',operation,elapsed_ms:Math.round(performance.now()-start),account};
+    }
     const row=await withDevDiagnosticAccountLookup(tx=>verifyAccountReadyForSession(tx,userId),{env,db});
     const context=accountContext(row);
     if(context.role!=='ADMIN') throw httpError('Diagnostic account not authorized',403);

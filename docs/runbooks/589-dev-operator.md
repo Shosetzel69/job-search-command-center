@@ -158,7 +158,8 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   migration checksum and PENDING_013/ALREADY_APPLIED, never apply authority.
   Generic db:migrate stays disabled. Dedicated release-side 013 adapter
   is separate; see retrieve-dev-release-520.md. No raw SQL.
-  tenant_invariants checks only configured tenant foundation, counts capped at two.
+  tenant_invariants checks configured tenant foundation (counts capped at two);
+  account_readiness reports only configured account state, revision/origin hash.
   Product image release stays on its existing route, with DEV acceptance
   and Retrieve protection. The operator has no product deploy authority.
 ### Activation prerequisites (not an executable provisioning instruction)
@@ -167,7 +168,6 @@ Independent exact-SHA review, explicit owner release approval and
 STRICT_ZERO_INCREMENTAL_COST admission are required before any cloud write.
 The new Job and identity have not been created. Do not reuse the Gateway,
 diagnostics or sandbox identity for privileged execution.
-
 Review exact IAM permissions and resource conditions first:
 Gateway: fixed operator Job get/run (no overrides), LRO observation, read
 approved records/results/claims and create-only request/receipt/dispatch;

@@ -1,7 +1,7 @@
 // #589: existing diagnostics worker uses only its own Google identity.
 // This module never receives a DB connection string or caller-supplied URL.
 const AUDIENCE='urn:jscc:dev:nile-diagnostic';
-const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants']);
+const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight','tenant_invariants','account_readiness']);
 const METRICS=['Plan Rows','Plan Width','Startup Cost','Total Cost','Actual Rows','Actual Loops','Actual Total Time','Shared Hit Blocks','Shared Read Blocks'];
 const DIAGNOSTIC_PLAN_ENUMS=Object.freeze({
   'Node Type':new Set(['Aggregate','Append','BitmapAnd','BitmapOr','Bitmap Heap Scan','Bitmap Index Scan','CTE Scan','Custom Scan','Foreign Scan','Function Scan','Gather','Gather Merge','Group','Hash','Hash Join','Incremental Sort','Index Scan','Index Only Scan','Limit','LockRows','Materialize','Memoize','Merge Append','Merge Join','Nested Loop','ProjectSet','Recursive Union','Result','Sample Scan','Seq Scan','SetOp','Sort','Subquery Scan','Tid Scan','Tid Range Scan','Unique','Values Scan','WindowAgg','WorkTable Scan']),
@@ -87,6 +87,17 @@ function invariantSummary(raw){
   missing_preferences:raw.missing_preferences,foundation_state:raw.foundation_state,complete_database_validation:false,
   repair_authorized:false};
 }
+function accountReadinessSummary(raw,origin){
+ if(!raw||raw.database!=='jobsearch_dev'||raw.read_only!==true||raw.scope!=='configured_diagnostic_account'||
+  !['NOT_FOUND','DELETION_PENDING','NOT_ACTIVE','PROVISIONING_INCOMPLETE','ROLE_NOT_ADMITTED','READY'].includes(raw.state)||
+  raw.tenant_mapping!==(raw.state==='READY'?'VERIFIED':'NOT_CHECKED')||
+  raw.user_session_verified!==false||raw.root_cause!=='INSUFFICIENT_EVIDENCE'||
+  !origin||!['MISSING','INVALID','HTTPS_ORIGIN'].includes(origin.state)||
+  (origin.state==='HTTPS_ORIGIN'?typeof origin.sha256!=='string'||!/^[a-f0-9]{64}$/.test(origin.sha256):origin.sha256!==null))
+  throw Error('invalid_account_readiness');
+ return {account:{database:raw.database,read_only:true,scope:raw.scope,state:raw.state,tenant_mapping:raw.tenant_mapping,
+  user_session_verified:false,root_cause:'INSUFFICIENT_EVIDENCE'},origin_config:{state:origin.state,sha256:origin.sha256}};
+}
 function migration013Summary(raw){
  if(!raw||raw.database!=='jobsearch_dev'||raw.read_only!==true||
   raw.migration!=='013_profile_job_evaluation_listing.sql'||
@@ -130,7 +141,7 @@ export async function observeDevNile(args,cfg,{fetchImpl=fetch}={}){
     const raw=await boundedJson(response);
     if(raw.source_sha!==args.expected_source_sha||raw.operation!==args.operation)return fail('source_or_response');
     if(!response.ok||raw.status!=='COLLECTED'){
-      const stage=['account','transaction','basis','explain','route','connect','begin','tenant_set','tenant_verify','statement_timeout','lock_timeout','database_guard','rollback','schema','runtime_health','migration_013_preflight','tenant_invariants'].includes(raw.stage)?raw.stage:'api';
+      const stage=['account','transaction','basis','explain','route','tenant_mapping','connect','begin','tenant_set','tenant_verify','statement_timeout','lock_timeout','database_guard','rollback','schema','runtime_health','migration_013_preflight','tenant_invariants','account_readiness'].includes(raw.stage)?raw.stage:'api';
       return fail(stage,/^[0-9A-Z]{5}$/.test(raw.sqlstate||'')?raw.sqlstate:null);
     }
     if(!Number.isSafeInteger(raw.elapsed_ms)||raw.elapsed_ms<0)return fail('metrics');
@@ -144,8 +155,10 @@ export async function observeDevNile(args,cfg,{fetchImpl=fetch}={}){
           ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,migration:migration013Summary(raw.migration)}
           : args.operation==='tenant_invariants'
             ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,invariants:invariantSummary(raw.invariants)}
-            : {operation:args.operation,elapsed_ms:raw.elapsed_ms,timing,plan:planSummary(raw.plan)};
-    if(args.operation==='schema_inventory'&&typeof raw.runtime_revision==='string'&&/^jscc-command-api-dev-[a-z0-9-]{1,44}$/.test(raw.runtime_revision))evidence.runtime_revision=raw.runtime_revision;
+            : args.operation==='account_readiness'
+              ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,...accountReadinessSummary(raw.account,raw.origin_config)}
+              : {operation:args.operation,elapsed_ms:raw.elapsed_ms,timing,plan:planSummary(raw.plan)};
+    if(['schema_inventory','account_readiness'].includes(args.operation)&&typeof raw.runtime_revision==='string'&&/^jscc-command-api-dev-[a-z0-9-]{1,44}$/.test(raw.runtime_revision))evidence.runtime_revision=raw.runtime_revision;
     return {nile_status:'COLLECTED',nile_evidence_json:JSON.stringify(evidence),target_source_sha:raw.source_sha,exit_code:0};
   }catch{return fail('transport_or_response');}
 }

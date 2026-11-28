@@ -123,3 +123,21 @@ test('tenant consistency returns fixed saturated counts without tenant identifie
   {...invariants,active_profiles:2},{...invariants,database:'jobsearch_prod'}])
   assert.equal((await run(bad)).nile_status,'ERROR');
 });
+
+
+test('account readiness binds revision and origin hash, projects no identifiers or session claims',async()=>{
+ const req={...args,operation:'account_readiness'};
+ assert.equal(validateTaskRequest('observe_dev_nile',req).task_class,'OBSERVE');
+ const account={database:'jobsearch_dev',read_only:true,scope:'configured_diagnostic_account',state:'READY',
+  tenant_mapping:'VERIFIED',user_session_verified:false,root_cause:'INSUFFICIENT_EVIDENCE',user_id:'private'};
+ const origin_config={state:'HTTPS_ORIGIN',sha256:'c'.repeat(64),value:'private'};
+ const run=async extra=>{let calls=0;return observeDevNile(req,cfg,{fetchImpl:async()=>++calls===1?new Response('a.b.c'):
+  Response.json({source_sha:sha,operation:req.operation,status:'COLLECTED',elapsed_ms:1,
+   runtime_revision:'jscc-command-api-dev-00001-abc',account,origin_config,...extra})});};
+ const result=await run({});
+ assert.equal(result.nile_status,'COLLECTED');const out=JSON.parse(result.nile_evidence_json);
+ assert.equal(out.runtime_revision,'jscc-command-api-dev-00001-abc');assert.equal(out.account.state,'READY');
+ assert.equal(result.nile_evidence_json.includes('private'),false);
+ assert.equal((await run({account:{...account,user_session_verified:true}})).nile_status,'ERROR');
+ assert.equal((await run({origin_config:{state:'HTTPS_ORIGIN',sha256:null}})).nile_status,'ERROR');
+});
