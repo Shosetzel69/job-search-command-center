@@ -4,7 +4,7 @@
 // A client-generated hash is not approval. IAM must restrict creation to the
 // separate authorized publisher; Gateway and operator must have read-only access.
 import {promisify} from 'node:util';
-import {createHash} from 'node:crypto';
+import {createHash,createPublicKey,verify} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
 import {planDevOpsBuild} from '../../ops/build/dev-cloud-build-controller.mjs';
 import {execFile} from 'node:child_process';
@@ -148,6 +148,38 @@ export async function stageIndependentDevSource(record,{
 export const DEV_PUBLISHER_ORIGIN='https://jscc-ops-publisher-dev-828902654738.europe-west1.run.app';
 export const DEV_PUBLISHER_AUDIENCE='urn:jscc:ops:dev:publisher';
 const REMOTE_ARCHIVE_LIMIT=16*1024*1024;
+// F2: existing independent authority authenticates the actual GitHub
+// evidence before signing this exact record. The delivery SA alone is
+// insufficient. Only the public verification key is installed in DEV.
+export function publisherReviewKey(value){
+ operatorRequire(typeof value==='string'&&value.length<=128&&/^[A-Za-z0-9+/]+={0,2}$/.test(value),'publisher_review_key_invalid');
+ const bytes=Buffer.from(value,'base64');
+ operatorRequire(bytes.toString('base64')===value,'publisher_review_key_invalid');
+ const key=createPublicKey({key:bytes,format:'der',type:'spki'});
+ operatorRequire(key.asymmetricKeyType==='ed25519'&&key.export({format:'der',type:'spki'}).equals(bytes),'publisher_review_key_invalid');
+ return {key,fingerprint:sha256(bytes)};
+}
+export function publisherReviewMessage(record,purpose,config){
+ operatorRequire(['approval','source'].includes(purpose)&&record&&typeof record==='object'&&
+  [record.approval_ref,record.review_ref,record.cost_ref].every(x=>typeof x==='string'&&REF.test(x))&&
+  new Set([record.approval_ref,record.review_ref,record.cost_ref]).size===3&&
+  /^[a-f0-9]{40}$/.test(config?.publisherSourceSha||'')&&/^[a-f0-9]{40}$/.test(config?.operatorSourceSha||'')&&
+  HEX.test(config?.actor||'')&&/^[0-9]{6,40}$/.test(config?.sub||'')&&
+  /^[a-z][a-z0-9-]{4,62}@jscc-dev\.iam\.gserviceaccount\.com$/.test(config?.email||''),
+  'publisher_review_binding_invalid');
+ return Buffer.from(JSON.stringify({domain:'JSCC-589-DEV-INDEPENDENT-REVIEW-V1',purpose,
+  record_hash:operatorHash(record),publisher_source_sha:config.publisherSourceSha,
+  operator_source_sha:config.operatorSourceSha,actor_sub_hash:config.actor,
+  authority_email:config.email,authority_sub:config.sub}),'utf8');
+}
+const signatureValid=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{86}$/.test(x)&&
+ Buffer.from(x,'base64url').length===64&&Buffer.from(x,'base64url').toString('base64url')===x;
+export function verifyPublisherReview(record,purpose,config,signature){
+ try{
+  return signatureValid(signature)&&verify(null,publisherReviewMessage(record,purpose,config),
+   publisherReviewKey(config.reviewKey).key,Buffer.from(signature,'base64url'));
+ }catch{return false;}
+}
 async function remotePublisherRequest(path,body,{getIdentityToken,fetchImpl,now,record}){
  operatorRequire(typeof getIdentityToken==='function'&&typeof fetchImpl==='function'&&
   now()>=record.issued_at_ms&&now()<record.expires_at_ms,'remote_publisher_admission_denied');
@@ -168,14 +200,15 @@ async function remotePublisherRequest(path,body,{getIdentityToken,fetchImpl,now,
  return JSON.parse(raw);
 }
 export async function publishApprovalRemotely(record,{
- trustedRecordHash,actor,sourceSha,getIdentityToken,fetchImpl=fetch,now=Date.now,
+ trustedRecordHash,actor,sourceSha,reviewSignature,getIdentityToken,fetchImpl=fetch,now=Date.now,
 }={}){
  operatorRequire(typeof trustedRecordHash==='string'&&HEX.test(trustedRecordHash)&&
   operatorHash(record)===trustedRecordHash,'remote_publisher_pin_mismatch');
  const frozen=JSON.parse(JSON.stringify(record));
  const admission=validateOperatorApproval({generation:'1',data:frozen},
   {ref:frozen.approval_ref,actor,sourceSha,now:now()});
- const value=await remotePublisherRequest('/v1/approval',{record:frozen,trusted_record_hash:trustedRecordHash},
+ operatorRequire(signatureValid(reviewSignature),'remote_publisher_review_required');
+ const value=await remotePublisherRequest('/v1/approval',{record:frozen,trusted_record_hash:trustedRecordHash,review_signature:reviewSignature},
   {getIdentityToken,fetchImpl,now,record:frozen});
  operatorRequire(exact(value,['approval_ref','operation_id','generation','record_hash'])&&
   value.approval_ref===frozen.approval_ref&&value.operation_id===admission.paths.key&&
@@ -183,7 +216,7 @@ export async function publishApprovalRemotely(record,{
  return value;
 }
 export async function stageDevSourceRemotely(record,{
- trustedRecordHash,getIdentityToken,fetchImpl=fetch,now=Date.now,materialize=gitArchive,
+ trustedRecordHash,reviewSignature,getIdentityToken,fetchImpl=fetch,now=Date.now,materialize=gitArchive,
 }={}){
  operatorRequire(exact(record,['schema_version','request','approval_ref','review_ref','cost_ref','archive_sha256','issued_at_ms','expires_at_ms'])&&
   typeof trustedRecordHash==='string'&&HEX.test(trustedRecordHash)&&operatorHash(record)===trustedRecordHash&&
@@ -194,10 +227,11 @@ export async function stageDevSourceRemotely(record,{
   record.expires_at_ms-record.issued_at_ms<=3600000&&now()>=record.issued_at_ms&&now()<record.expires_at_ms,
   'remote_stage_admission_denied');
  const frozen=JSON.parse(JSON.stringify(record));
+ operatorRequire(signatureValid(reviewSignature),'remote_publisher_review_required');
  const archive=await prepareDevSourceArchive(frozen.request,{materialize});
  operatorRequire(archive.size<=REMOTE_ARCHIVE_LIMIT&&archive.sha256===frozen.archive_sha256,'remote_stage_archive_mismatch');
  const value=await remotePublisherRequest('/v1/source',{record:frozen,trusted_record_hash:trustedRecordHash,
-  archive_base64:archive.bytes.toString('base64')},{getIdentityToken,fetchImpl,now,record:frozen});
+  review_signature:reviewSignature,archive_base64:archive.bytes.toString('base64')},{getIdentityToken,fetchImpl,now,record:frozen});
  const object='source/dev-'+frozen.request.source_sha+'-'+sha256(frozen.approval_ref)+'.tar.gz';
  operatorRequire(exact(value,['bucket','object','generation','sha256'])&&value.bucket===SOURCE_BUCKET&&
   value.object===object&&GEN.test(value.generation||'')&&value.sha256===frozen.archive_sha256,
@@ -208,9 +242,9 @@ export async function stageDevSourceRemotely(record,{
 
 // Independent preflight before publication. No storage mutation or discovery
 // outside the fixed private service, no caller identity disclosure.
-export async function inspectDevPublisher({publisherSourceSha,operatorSourceSha,getIdentityToken,fetchImpl=fetch}={}){
+export async function inspectDevPublisher({publisherSourceSha,operatorSourceSha,reviewKeyFingerprint,getIdentityToken,fetchImpl=fetch}={}){
  operatorRequire(typeof publisherSourceSha==='string'&&/^[a-f0-9]{40}$/.test(publisherSourceSha)&&
-  typeof operatorSourceSha==='string'&&/^[a-f0-9]{40}$/.test(operatorSourceSha)&&typeof getIdentityToken==='function',
+  typeof operatorSourceSha==='string'&&/^[a-f0-9]{40}$/.test(operatorSourceSha)&&HEX.test(reviewKeyFingerprint||'')&&typeof getIdentityToken==='function',
   'remote_publisher_status_admission_denied');
  const token=await getIdentityToken(DEV_PUBLISHER_AUDIENCE);
  operatorRequire(typeof token==='string'&&token.length<=8192&&/^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token),
@@ -221,9 +255,9 @@ export async function inspectDevPublisher({publisherSourceSha,operatorSourceSha,
  const raw=await response.text();
  operatorRequire(Buffer.byteLength(raw)<=4096,'remote_publisher_receipt_limit');
  const value=JSON.parse(raw);
- operatorRequire(exact(value,['environment','service','publisher_source_sha','operator_source_sha','identity_binding','storage_permissions','publication_authorized'])&&
+ operatorRequire(exact(value,['environment','service','publisher_source_sha','operator_source_sha','identity_binding','review_key_sha256','storage_permissions','publication_authorized'])&&
   value.environment==='dev'&&value.service==='jscc-ops-publisher-dev'&&value.publisher_source_sha===publisherSourceSha&&
   value.operator_source_sha===operatorSourceSha&&value.identity_binding==='AUTHENTICATED'&&
-  value.storage_permissions==='UNVERIFIED'&&value.publication_authorized===false,'remote_publisher_status_mismatch');
+  value.review_key_sha256===reviewKeyFingerprint&&value.storage_permissions==='UNVERIFIED'&&value.publication_authorized===false,'remote_publisher_status_mismatch');
  return value;
 }

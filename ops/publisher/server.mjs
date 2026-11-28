@@ -8,8 +8,8 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {createRemoteJWKSet,jwtVerify} from 'jose';
 import {metadataAccessToken} from '../src/lib.mjs';
-import {operatorExact,operatorRequire} from '../src/dev_operator_contract.mjs';
-import {publishIndependentApproval,stageIndependentDevSource} from '../../scripts/gcp/remote_executor_dev_publish_approval.mjs';
+import {operatorExact,operatorRequire,operatorHash} from '../src/dev_operator_contract.mjs';
+import {publishIndependentApproval,stageIndependentDevSource,publisherReviewKey,verifyPublisherReview} from '../../scripts/gcp/remote_executor_dev_publish_approval.mjs';
 const SERVICE='jscc-ops-publisher-dev';
 const SA=SERVICE+'@jscc-dev.iam.gserviceaccount.com';
 const AUD='urn:jscc:ops:dev:publisher';
@@ -31,6 +31,8 @@ export async function publisherRuntimeConfig(env=process.env,{fetchImpl=fetch,re
  new URL('../publisher-source-sha',import.meta.url),'utf8')}={}){
  if(env.JSCC_DEV_PUBLISHER_ENABLED!=='true')return null;
  const email=env.JSCC_DEV_PUBLISHER_CALLER_EMAIL,sub=env.JSCC_DEV_PUBLISHER_CALLER_SUB;
+ const reviewKey=env.JSCC_DEV_PUBLISHER_REVIEW_KEY_SPKI_B64;
+ const {fingerprint}=publisherReviewKey(reviewKey);
  operatorRequire(env.K_SERVICE===SERVICE&&env.GCP_PROJECT==='jscc-dev'&&env.GCP_REGION==='europe-west1'&&
   match(SHA,env.SOURCE_SHA)&&match(SHA,env.JSCC_DEV_PUBLISHER_OPERATOR_SOURCE_SHA)&&
   match(HEX,env.JSCC_DEV_PUBLISHER_ACTOR_SUB_HASH)&&match(EMAIL,email)&&
@@ -39,7 +41,7 @@ export async function publisherRuntimeConfig(env=process.env,{fetchImpl=fetch,re
  const r=await fetchImpl(META,{headers:{'Metadata-Flavor':'Google'},redirect:'error',signal:AbortSignal.timeout(5000)});
  operatorRequire(r.ok&&(await r.text()).trim()===SA,'publisher_runtime_identity_denied');
  return Object.freeze({email,sub,actor:env.JSCC_DEV_PUBLISHER_ACTOR_SUB_HASH,
-  operatorSourceSha:env.JSCC_DEV_PUBLISHER_OPERATOR_SOURCE_SHA,publisherSourceSha:env.SOURCE_SHA});
+  operatorSourceSha:env.JSCC_DEV_PUBLISHER_OPERATOR_SOURCE_SHA,publisherSourceSha:env.SOURCE_SHA,reviewKey,reviewKeyFingerprint:fingerprint});
 }
 export async function authorizePublisher(request,config,verify=jwtVerify){
  if(!config||request.headers.has('Origin')||request.headers.has('Cookie'))return false;
@@ -80,7 +82,7 @@ export function createPublisherHandler(config,{authorize=authorizePublisher,publ
   if(request.method!==(status?'GET':'POST'))return reply(405,{error:'method_denied'});
   if(!(await authorize(request,config)))return reply(403,{error:'forbidden'});
   if(status)return reply(200,{environment:'dev',service:SERVICE,publisher_source_sha:config.publisherSourceSha,
-   operator_source_sha:config.operatorSourceSha,identity_binding:'AUTHENTICATED',
+   operator_source_sha:config.operatorSourceSha,identity_binding:'AUTHENTICATED',review_key_sha256:config.reviewKeyFingerprint,
    storage_permissions:'UNVERIFIED',publication_authorized:false});
   if(active)return reply(429,{error:'publisher_busy'});
   active=true;
@@ -88,11 +90,14 @@ export function createPublisherHandler(config,{authorize=authorizePublisher,publ
    let input;
    try{
     input=await jsonBody(request,source?MAX_SOURCE_BODY:MAX_RECORD_BODY);
-    operatorRequire(operatorExact(input,source?['record','trusted_record_hash','archive_base64']:['record','trusted_record_hash'])&&
-     match(HEX,input.trusted_record_hash)&&distinctEvidence(input.record),'publisher_request_denied');
+    operatorRequire(operatorExact(input,source?['record','trusted_record_hash','review_signature','archive_base64']:['record','trusted_record_hash','review_signature'])&&
+     match(HEX,input.trusted_record_hash)&&distinctEvidence(input.record)&&
+     operatorHash(input.record)===input.trusted_record_hash,'publisher_request_denied');
     if(!source)operatorRequire(input.record.actor_sub_hash===config.actor&&
      input.record.operator_source_sha===config.operatorSourceSha,'publisher_actor_source_denied');
    }catch{return reply(400,{error:'invalid_request'});}
+   if(!verifyPublisherReview(input.record,source?'source':'approval',config,input.review_signature))
+    return reply(403,{error:'independent_review_required'});
    try{
     let result;
     const options={trustedRecordHash:input.trusted_record_hash,getToken,fetchImpl,now};
