@@ -88,6 +88,11 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   create-only generation precondition and exact-generation digest readback.
   A remote authenticated publisher route and live permissions remain missing;
   a self-supplied hash does not authorize staging or a change.
+- The same approved build controller accepts fixed `workspace_r2` for #589:
+  existing cloudbuild.workspace-manager-r2.yaml, exact paired base digests,
+  fixed image packages and step IDs. Existing staging archive hash, YAML
+  equivalence, approval, cost and ledger checks still apply. Build only;
+  Manager/Worker rollout remains on the separately approved release boundary.
 - The Job parses the staged build YAML in a bounded Python subprocess using
   PyYAML and compares the exact reviewed REST configuration. Build success
   does not prove source provenance. Registry tag/digest observation reports

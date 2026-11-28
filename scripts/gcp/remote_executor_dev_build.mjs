@@ -23,6 +23,19 @@ const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const STEPS=['trusted-source-admission','materialize-verified-source','validate-candidate',
  'python-contract-tests','ops-contract-tests','registry-immutability','detect-existing-images',
  'build-gateway','build-worker','build-operator','verify-image-source','push-gateway','push-worker','push-operator','evidence'];
+const WORKSPACE_STEPS=['trusted-source-admission','materialize-verified-source','immutable-workspace-baselines',
+ 'workspace-manager-contract-tests','build-manager-r2','build-worker-r2','worker-image-cwd-smoke',
+ 'manager-image-route-smoke','verify-workspace-image-source','push-manager-r2','push-worker-r2','digest-evidence'];
+const WORKSPACE_SUBSTITUTIONS={
+ _GIT_SHA:'',_TRUSTED_REF:'',
+ _MANAGER_BASE:REGISTRY+'jscc-dev-workspace-manager-r2@sha256:ac80ef6e88a57b78c51c958930bc345141fa85d569544cf085f10c33323b99f1',
+ _MANAGER_IMAGE:REGISTRY+'jscc-dev-workspace-manager-r2',
+ _WORKER_BASE:REGISTRY+'jscc-dev-workspace-worker-cap100@sha256:1dc1354d2777b0e7e65a1d07758d012c66f15d223fd1fec4fee3e82cd02ce617',
+ _WORKER_IMAGE:REGISTRY+'jscc-dev-workspace-worker-cap100'};
+const OPS_SUBSTITUTIONS={_GIT_SHA:'',_TRUSTED_REF:'',_GATEWAY_IMAGE:REGISTRY+'jscc-ops-gateway',
+ _WORKER_IMAGE:REGISTRY+'jscc-diagnostics',_OPERATOR_IMAGE:REGISTRY+'jscc-ops-operator'};
+const stepsFor=plan=>plan.build_kind==='workspace_r2'?WORKSPACE_STEPS:STEPS;
+const substitutionsFor=plan=>plan.build_kind==='workspace_r2'?WORKSPACE_SUBSTITUTIONS:OPS_SUBSTITUTIONS;
 const exact=(v,keys)=>v!==null&&typeof v==='object'&&!Array.isArray(v)&&
  Object.keys(v).length===keys.length&&keys.every(k=>Object.hasOwn(v,k));
 function require(ok,code){if(!ok)throw Error(code);}
@@ -56,13 +69,10 @@ export function admitBuildBundle(bundle,pin,now=Date.now){
  // additionally parses and compares the archived YAML before submission.
  require(exact(config,['steps','substitutions','serviceAccount','options'])&&
   config.serviceAccount===SA&&exact(config.options,['logging'])&&config.options.logging==='CLOUD_LOGGING_ONLY'&&
-  exact(config.substitutions,['_GIT_SHA','_TRUSTED_REF','_GATEWAY_IMAGE','_WORKER_IMAGE','_OPERATOR_IMAGE'])&&
-  config.substitutions._GIT_SHA===''&&config.substitutions._TRUSTED_REF===''&&
-  config.substitutions._GATEWAY_IMAGE===REGISTRY+'jscc-ops-gateway'&&
-  config.substitutions._WORKER_IMAGE===REGISTRY+'jscc-diagnostics'&&
-  config.substitutions._OPERATOR_IMAGE===REGISTRY+'jscc-ops-operator'&&
-  Array.isArray(config.steps)&&config.steps.length===STEPS.length&&
-  config.steps.every((s,i)=>s&&s.id===STEPS[i])&&JSON.stringify(config).length<=65536,
+  exact(config.substitutions,Object.keys(substitutionsFor(plan)))&&
+  evidenceDigest(config.substitutions)===evidenceDigest(substitutionsFor(plan))&&
+  Array.isArray(config.steps)&&config.steps.length===stepsFor(plan).length&&
+  config.steps.every((s,i)=>s&&s.id===stepsFor(plan)[i])&&JSON.stringify(config).length<=65536,
   'build_config_scope_denied');
  require(Number.isSafeInteger(x.issued_at_ms)&&Number.isSafeInteger(x.expires_at_ms)&&
   x.expires_at_ms>x.issued_at_ms&&x.expires_at_ms-x.issued_at_ms<=3600000,'build_evidence_window_invalid');
@@ -82,7 +92,7 @@ async function checkedSource(plan){
   'build_operator_source_mismatch');
  const remote=await git('ls-remote','https://github.com/Shosetzel69/job-search-command-center.git',plan.trusted_ref);
  require(remote===plan.source_sha+'\t'+plan.trusted_ref,'build_trusted_ref_mismatch');
- return hash(await readFile(REPO+'cloudbuild.ops.yaml'));
+ return hash(await readFile(REPO+plan.config));
 }
 async function token(){
  const {stdout}=await exec('gcloud',['auth','print-access-token','--quiet'],{timeout:30000,maxBuffer:65536});
@@ -111,7 +121,8 @@ async function verifyLifecycle(request,now){
 }
 // Inspect only the top-level reviewed build YAML. The tar is never extracted
 // to disk; the parser is a fixed stdlib program with bounded input/output.
-export async function archiveConfigHash(bytes,{verifyConfig=false}={}){
+export async function archiveConfigHash(bytes,{verifyConfig=false,configPath='cloudbuild.ops.yaml'}={}){
+ require(['cloudbuild.ops.yaml','cloudbuild.workspace-manager-r2.yaml'].includes(configPath),'build_archive_config_path_denied');
  require(Buffer.isBuffer(bytes)&&bytes.length>0&&bytes.length<=64*1024*1024,'build_archive_size_limit');
  const code=[
   'import sys,tarfile,hashlib,resource',
@@ -122,7 +133,7 @@ export async function archiveConfigHash(bytes,{verifyConfig=false}={}){
   '    for member in archive:',
   '        count+=1; total+=member.size',
   '        if count>20000 or total>128*1024*1024 or member.size<0: raise ValueError("archive_limit")',
-  '        if member.name not in ("cloudbuild.ops.yaml","./cloudbuild.ops.yaml"): continue',
+  '        if member.name not in (sys.argv[2],"./"+sys.argv[2]): continue',
   '        seen+=1',
   '        if seen!=1 or not member.isfile() or member.size>65536: raise ValueError("config_member_invalid")',
   '        data=archive.extractfile(member).read(65537)',
@@ -145,7 +156,7 @@ export async function archiveConfigHash(bytes,{verifyConfig=false}={}){
   'else: print(digest)',
  ].join('\n');
  return new Promise((resolve,reject)=>{
-  const child=spawn('python3',['-I','-c',code,verifyConfig?'verify':'hash'],{stdio:['pipe','pipe','ignore'],timeout:20000});
+  const child=spawn('python3',['-I','-c',code,verifyConfig?'verify':'hash',configPath],{stdio:['pipe','pipe','ignore'],timeout:20000});
   let out='',failed=false;
   const fail=()=>{if(!failed){failed=true;reject(Error('build_archive_config_invalid'));}};
   child.on('error',fail);
@@ -185,7 +196,7 @@ async function verifyArchive(request,archive,expectedConfig=null){
  }
  require(size>0&&'sha256:'+digest.digest('hex')===archive.sha256,'build_archive_digest_mismatch');
  if(expectedConfig!==null){
-  const parsed=await archiveConfigHash(Buffer.concat(chunks),{verifyConfig:true});
+  const parsed=await archiveConfigHash(Buffer.concat(chunks),{verifyConfig:true,configPath:expectedConfig.configPath});
   require(parsed.sha256===expectedConfig.sha256&&evidenceDigest(parsed.config)===expectedConfig.config_hash,
    'build_archive_config_mismatch');
  }
@@ -213,7 +224,7 @@ export async function runApprovedBuild({bundle,trustedEvidenceHash}, {
   verifyApproval:async()=>{a.fresh();return {...a.proof('OWNER_APPROVAL'),approval_ref:x.evidence.approval};},
   verifyTrustedRef:async()=>{a.fresh();return a.proof('TRUSTED_REF');},
   verifySourceSnapshot:async()=>{
-   a.fresh();await verifyArchive(request,x.archive,verifyStagedConfig?{sha256:x.config_yaml_sha256,config_hash:evidenceDigest(x.build_config)}:null);a.fresh();
+   a.fresh();await verifyArchive(request,x.archive,verifyStagedConfig?{sha256:x.config_yaml_sha256,config_hash:evidenceDigest(x.build_config),configPath:a.plan.config}:null);a.fresh();
    return {...a.proof('SOURCE_SNAPSHOT'),object:x.archive.object,
     generation:x.archive.generation,object_sha256:x.archive.sha256};
   },
@@ -221,6 +232,7 @@ export async function runApprovedBuild({bundle,trustedEvidenceHash}, {
   dispatch:async approved=>{
    a.fresh();
    require(approved.source_sha===a.plan.source_sha&&approved.trusted_ref===a.plan.trusted_ref&&
+    approved.config===a.plan.config&&approved.script===a.plan.script&&
     approved.approval_ref===x.evidence.approval&&approved.source_bucket===BUCKET&&
     approved.approved_source_object===x.archive.object&&approved.approved_source_generation===x.archive.generation&&
     approved.approved_source_sha256===x.archive.sha256,'build_dispatch_binding_mismatch');
@@ -343,8 +355,8 @@ export async function observeApprovedBuildEvidence(original,{
  const steps=raw.steps;
  const allowedStatus=new Set(['STATUS_UNKNOWN','PENDING','QUEUED','WORKING','SUCCESS','FAILURE',
   'INTERNAL_ERROR','TIMEOUT','CANCELLED','EXPIRED']);
- require(steps===undefined||Array.isArray(steps)&&steps.length===STEPS.length&&
-  steps.every((x,i)=>x?.id===STEPS[i]&&(x.status===undefined||allowedStatus.has(x.status))),
+ require(steps===undefined||Array.isArray(steps)&&steps.length===stepsFor(plan).length&&
+  steps.every((x,i)=>x?.id===stepsFor(plan)[i]&&(x.status===undefined||allowedStatus.has(x.status))),
   'build_observe_step_identity_mismatch');
  const observations=(steps||[]).map(x=>({id:x.id,status:x.status||'STATUS_UNKNOWN'}));
  const next=await observeDevBuildOnce(identity,store,{getBuild:async()=>raw});
@@ -352,7 +364,7 @@ export async function observeApprovedBuildEvidence(original,{
   status.terminal?'FAILED':'WORKING';
  require(next.state===expectedState,'build_observe_ledger_provider_conflict');
  return {operation_id:identity.key,build_id:rec.build_id,state:next.state,source_provenance:'UNVERIFIED',
-  build_observation:{source_sha:plan.source_sha,archive_generation:rec.source_generation,
+  build_observation:{...(plan.build_kind?{build_kind:plan.build_kind}:{}),source_sha:plan.source_sha,archive_generation:rec.source_generation,
    archive_binding:resolved===undefined?'REQUEST_MATCH_ONLY':'RESOLVED_MATCH',
    build_status:status.status,steps:observations,immutable_image_count:status.immutable_image_count}};
 }

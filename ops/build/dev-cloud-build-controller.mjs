@@ -6,6 +6,7 @@ const PROJECT='jscc-shared';
 const REGION='europe-west1';
 const BUILD_SCRIPT='scripts/gcp/build_remote_executor_dev.sh';
 const BUILD_CONFIG='cloudbuild.ops.yaml';
+const WORKSPACE_CONFIG='cloudbuild.workspace-manager-r2.yaml';
 const BUILDER='projects/jscc-shared/serviceAccounts/jscc-ops-build@jscc-shared.iam.gserviceaccount.com';
 const SOURCE_BUCKET='jscc-shared-ops-cloudbuild-source';
 const SHA40=/^[0-9a-f]{40}$/;
@@ -17,9 +18,11 @@ const PENDING=new Set(['STATUS_UNKNOWN','PENDING','QUEUED','WORKING']);
 
 export function validateDevOpsBuildInput(input) {
   if(!input || typeof input!=='object' || Array.isArray(input) ||
-     Object.keys(input).some(k=>!['environment','work_item_ref','source_sha','trusted_ref'].includes(k)) ||
-     Object.keys(input).length!==4) throw new Error('invalid_build_request');
-  const {environment,work_item_ref,source_sha,trusted_ref}=input;
+     Object.keys(input).some(k=>!['environment','work_item_ref','source_sha','trusted_ref','build_kind'].includes(k)) ||
+     Object.keys(input).length!==(Object.hasOwn(input,'build_kind')?5:4)) throw new Error('invalid_build_request');
+  const {environment,work_item_ref,source_sha,trusted_ref,build_kind}=input;
+  if(Object.hasOwn(input,'build_kind')&&(build_kind!=='workspace_r2'||work_item_ref!=='#589'))
+    throw new Error('build_kind_denied');
   if(environment!=='dev') throw new Error('environment_denied');
   if(typeof work_item_ref!=='string' || !/^#[1-9][0-9]{0,5}$/.test(work_item_ref))
     throw new Error('invalid_work_item_ref');
@@ -28,14 +31,15 @@ export function validateDevOpsBuildInput(input) {
      !(typeof trusted_ref==='string' &&
        /^refs\/tags\/jscc-ops-approved\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,79}$/.test(trusted_ref) &&
        !trusted_ref.includes('..'))) throw new Error('unapproved_source_ref');
-  return Object.freeze({environment,work_item_ref,source_sha,trusted_ref});
+  return Object.freeze({environment,work_item_ref,source_sha,trusted_ref,...(build_kind?{build_kind}:{})});
 }
 
 export function planDevOpsBuild(input) {
   const x=validateDevOpsBuildInput(input);
   return Object.freeze({
     ...x,
-    project:PROJECT,region:REGION,script:BUILD_SCRIPT,config:BUILD_CONFIG,
+    project:PROJECT,region:REGION,script:x.build_kind==='workspace_r2'?'scripts/gcp/remote_executor_dev_build.mjs':BUILD_SCRIPT,
+    config:x.build_kind==='workspace_r2'?WORKSPACE_CONFIG:BUILD_CONFIG,
     build_service_account:BUILDER,source_bucket:SOURCE_BUCKET,
     image_registry:'europe-west1-docker.pkg.dev/jscc-shared/jscc-ops',
     script_is_existing:true,
@@ -98,7 +102,7 @@ export async function submitApprovedDevOpsBuild(input, {
   const receipt=await dispatch(Object.freeze({
     environment:'dev',work_item_ref:plan.work_item_ref,
     source_sha:plan.source_sha,trusted_ref:plan.trusted_ref,
-    script:BUILD_SCRIPT,config:BUILD_CONFIG,
+    script:plan.script,config:plan.config,
     project:PROJECT,region:REGION,source_bucket:SOURCE_BUCKET,
     expected_build_service_account:BUILDER,
     approved_source_object:archive.object,

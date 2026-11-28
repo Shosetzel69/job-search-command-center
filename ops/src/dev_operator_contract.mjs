@@ -291,7 +291,12 @@ export function projectOperatorResult(request,record){
   operatorRequire(out.execution_observation,'operator_run_execution_result_invalid');
  if(request.action==='observe_build'&&v.build_observation){
   const m=v.build_observation;
-  const ids=['trusted-source-admission','materialize-verified-source','validate-candidate',
+  operatorRequire(m.build_kind===undefined||m.build_kind==='workspace_r2','operator_build_kind_invalid');
+  const ids=m.build_kind==='workspace_r2'?
+   ['trusted-source-admission','materialize-verified-source','immutable-workspace-baselines','workspace-manager-contract-tests',
+    'build-manager-r2','build-worker-r2','worker-image-cwd-smoke','manager-image-route-smoke','verify-workspace-image-source',
+    'push-manager-r2','push-worker-r2','digest-evidence']:
+   ['trusted-source-admission','materialize-verified-source','validate-candidate',
    'python-contract-tests','ops-contract-tests','registry-immutability','detect-existing-images',
    'build-gateway','build-worker','build-operator','verify-image-source','push-gateway','push-worker','push-operator','evidence'];
   const statuses=['STATUS_UNKNOWN','PENDING','QUEUED','WORKING','SUCCESS','FAILURE','INTERNAL_ERROR','TIMEOUT','CANCELLED','EXPIRED'];
@@ -301,7 +306,7 @@ export function projectOperatorResult(request,record){
    Array.isArray(m.steps)&&(m.steps.length===0||m.steps.length===ids.length&&
     m.steps.every((x,i)=>x?.id===ids[i]&&statuses.includes(x.status))),
    'operator_build_observation_invalid');
-  out.build_observation={source_sha:m.source_sha,archive_generation:m.archive_generation,
+  out.build_observation={...(m.build_kind?{build_kind:m.build_kind}:{}),source_sha:m.source_sha,archive_generation:m.archive_generation,
    archive_binding:m.archive_binding,build_status:m.build_status,immutable_image_count:m.immutable_image_count,
    steps:m.steps.map(x=>({id:x.id,status:x.status}))};
  }

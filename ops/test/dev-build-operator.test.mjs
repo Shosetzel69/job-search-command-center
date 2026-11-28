@@ -201,3 +201,41 @@ test('build evidence binds resolved archive generation and fixed steps, includin
  raw.steps[0].id='unapproved';
  await assert.rejects(()=>observeApprovedBuildEvidence(x,opts),/step_identity_mismatch/);
 });
+
+test('workspace R2 build reuses approved ops lineage and fixed paired configuration',async()=>{
+ const {planDevOpsBuild,submitApprovedDevOpsBuild}=await import('../build/dev-cloud-build-controller.mjs');
+ const x=bundle();
+ x.request.build_kind='workspace_r2';
+ const repo='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/';
+ x.build_config.substitutions={_GIT_SHA:'',_TRUSTED_REF:'',
+  _MANAGER_BASE:repo+'jscc-dev-workspace-manager-r2@sha256:ac80ef6e88a57b78c51c958930bc345141fa85d569544cf085f10c33323b99f1',
+  _MANAGER_IMAGE:repo+'jscc-dev-workspace-manager-r2',
+  _WORKER_BASE:repo+'jscc-dev-workspace-worker-cap100@sha256:1dc1354d2777b0e7e65a1d07758d012c66f15d223fd1fec4fee3e82cd02ce617',
+  _WORKER_IMAGE:repo+'jscc-dev-workspace-worker-cap100'};
+ x.build_config.steps=['trusted-source-admission','materialize-verified-source','immutable-workspace-baselines',
+  'workspace-manager-contract-tests','build-manager-r2','build-worker-r2','worker-image-cwd-smoke',
+  'manager-image-route-smoke','verify-workspace-image-source','push-manager-r2','push-worker-r2','digest-evidence'].map(id=>({id}));
+ const admitted=admitBuildBundle(x,evidenceDigest(x),now);
+ assert.equal(admitted.plan.config,'cloudbuild.workspace-manager-r2.yaml');
+ assert.equal(admitted.plan.build_service_account,x.build_config.serviceAccount);
+ assert.notEqual(admitted.identity.request_hash,admitBuildBundle(bundle(),evidenceDigest(bundle()),now).identity.request_hash);
+ const proof=kind=>({verified:true,kind,work_item_ref:'#589',source_sha:x.request.source_sha,trusted_ref:x.request.trusted_ref});
+ const receipt=await submitApprovedDevOpsBuild(x.request,{
+  verifyApproval:async()=>({...proof('OWNER_APPROVAL'),approval_ref:x.evidence.approval}),
+  verifyTrustedRef:async()=>proof('TRUSTED_REF'),
+  verifySourceSnapshot:async()=>({...proof('SOURCE_SNAPSHOT'),object:x.archive.object,generation:x.archive.generation,object_sha256:x.archive.sha256}),
+  verifyCostAdmission:async()=>({...proof('COST_ADMISSION'),no_incremental_cost_proven:true}),
+  dispatch:async req=>{
+   assert.equal(req.config,'cloudbuild.workspace-manager-r2.yaml');
+   assert.equal(req.script,'scripts/gcp/remote_executor_dev_build.mjs');
+   return {build_id:id,project:'jscc-shared',region:'europe-west1',source_sha:x.request.source_sha,approval_ref:x.evidence.approval};
+  }
+ });
+ assert.equal(receipt.build_id,id);
+ for(const key of ['_MANAGER_BASE','_WORKER_BASE','_WORKER_IMAGE']){
+  const bad=structuredClone(x);bad.build_config.substitutions[key]='arbitrary';
+  assert.throws(()=>admitBuildBundle(bad,evidenceDigest(bad),now),/build_config_scope_denied/);
+ }
+ assert.throws(()=>planDevOpsBuild({...x.request,build_kind:'arbitrary'}),/build_kind_denied/);
+ assert.throws(()=>planDevOpsBuild({...x.request,work_item_ref:'#123'}),/build_kind_denied/);
+});
