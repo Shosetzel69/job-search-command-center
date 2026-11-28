@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {observeWorkspaceRelease,executeWorkspaceReleaseStep,cleanupWorkspaceRevision,observeWorkspaceDelivery} from '../operator/dev_workspace_release.mjs';
-import {projectOperatorResult,validateWorkspaceReleaseBundle,validateWorkspaceDelivery} from '../src/dev_operator_contract.mjs';
+import {projectOperatorResult,validateWorkspaceReleaseBundle,validateWorkspaceDelivery,operatorHash,operatorPaths,operatorRequest,validateOperatorApproval} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),root='projects/jscc-dev/locations/europe-west1',registry='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/';
 const service={manager:'jscc-dev-workspace-manager',worker:'jscc-dev-sandbox-worker'};
 const packages={manager:'jscc-dev-workspace-manager-r2',worker:'jscc-dev-workspace-worker-cap100'};
@@ -139,4 +139,47 @@ test('workspace delivery result reports the next separately authorized step, not
  const req={action:'observe_workspace_delivery',operation_id:'op',approval_hash:'hash'};
  assert.deepEqual(projectOperatorResult(req,{generation:'1',data:{...req,state:'OBSERVED',workspace_delivery:v}}).workspace_delivery,v);
  assert.throws(()=>projectOperatorResult(req,{generation:'1',data:{...req,state:'OBSERVED',workspace_delivery:{...v,next_step:'cutover:manager'}}}));
+});
+
+
+test('delivery chain reads exact historical approval/requests, detects drift and never dispatches',async()=>{
+ const f=fixture(),actor='f'.repeat(64),records=new Map(),now=1700000000000;
+ const get=async path=>records.get(path)??null;
+ const put=(ref,action,bundle,result)=>{
+  const a={schema_version:'1.0',environment:'dev',work_item_ref:'#589',approval_ref:ref,action,
+   actor_sub_hash:actor,operator_source_sha:sha,bundle,bundle_hash:operatorHash(bundle),cost_ref:'#589/90',
+   review_ref:'#589/91',issued_at_ms:now-1000,expires_at_ms:now+1000};
+  const record={generation:'1',data:a},admission=validateOperatorApproval(record,{ref,actor,sourceSha:sha,now});
+  const paths=operatorPaths(ref),req=operatorRequest(admission,now);
+  records.set(paths.approval,record);records.set(paths.request,{generation:'2',data:req});
+  if(result)records.set(paths.result,{generation:'3',data:{...result,operation_id:req.operation_id,approval_hash:req.approval_hash,action}});
+ };
+ const buildRef='#589/21',artifactRef='#589/22',stageRef='#589/23',tagRef='#589/24';
+ put(buildRef,'build',{actor_sub_hash:actor,request:{build_kind:'workspace_r2',source_sha:sha},
+  evidence:{approval:buildRef,cost:'#589/90',independent_review:'#589/91'}},{state:'SUBMITTED'});
+ put(artifactRef,'observe_build_artifacts',{original_approval_ref:buildRef},{state:'OBSERVED',build_observation:{
+  build_kind:'workspace_r2',source_sha:sha,archive_generation:'1',archive_binding:'RESOLVED_MATCH',build_status:'SUCCESS',
+  immutable_image_count:2,steps:[]},build_artifacts:{log_search_complete:true,correlation:'MATCHED_MARKERS',
+   images:rolesForTest().map(role=>({package:packages[role],digest:candidate[role],marker:'MATCH'}))}});
+ const initial=(await observeWorkspaceRelease(f.options)).workspace_release.pair_sha256;
+ const request={environment:'dev',source_sha:sha,build_approval_ref:buildRef,artifact_approval_ref:artifactRef,
+  initial_pair_sha256:initial,steps:[]},observe=x=>observeWorkspaceDelivery(x,{actor,get,fetchImpl:f.options.fetchImpl});
+ assert.equal((await observe(request)).workspace_delivery.next_step,'stage:worker');
+ const stepBundle=(phase,role,pair)=>({environment:'dev',phase,role,source_sha:sha,build_approval_ref:buildRef,
+  expected_pair_sha256:pair,previous,candidate});
+ const stage=await f.action('stage','worker');
+ put(stageRef,'workspace_release_step',stepBundle('stage','worker',initial),stage);
+ const staged={...request,steps:[stageRef]},observed=await observe(staged);
+ assert.equal(observed.workspace_delivery.next_step,'tag:worker');
+ assert.equal(observed.workspace_delivery.completed_steps.length,1);
+ put(tagRef,'workspace_release_step',stepBundle('tag','worker',stage.workspace_release.pair_sha256),null);
+ const pending=await observe({...request,steps:[stageRef,tagRef]});
+ assert.equal(pending.workspace_delivery.disposition,'RECOVERY_REQUIRED');
+ const tagResult=await f.action('tag','worker');
+ assert.equal((await observe(staged)).workspace_delivery.disposition,'RECOVERY_REQUIRED');
+ put(tagRef,'workspace_release_step',stepBundle('tag','worker',stage.workspace_release.pair_sha256),tagResult);
+ assert.equal((await observe({...request,steps:[stageRef,tagRef]})).workspace_delivery.next_step,'stage:manager');
+ await assert.rejects(()=>observe({...request,steps:[tagRef]}),/chain_mismatch/);
+ assert.equal(f.patches.length,4);
+ function rolesForTest(){return ['manager','worker'];}
 });
