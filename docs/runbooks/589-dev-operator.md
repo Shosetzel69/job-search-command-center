@@ -108,6 +108,11 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   No product/migration cancel, Job overrides, deletion, lock release or retry.
   The cancellation permission (run.jobs.run) requires separate resource-scoped
   admission; existing product release authority is unchanged.
+- Billing status is read-only for jscc-dev/jscc-shared; quota metadata is
+  bounded to DEV Cloud Run/Storage and reported global/europe-west1 limits.
+  Neither project billing linkage nor quota limits prove consumption, actual
+  charges, remaining credits, or cost admission. No billing account ID,
+  quota change, billing-account action, API activation or IAM grant.
 - Fixed Cloud Run v2 testIamPermissions probes first verify exact DEV resource
   existence and report the current operator's returned permissions only.
   No caller-selected permissions, policy mutation, arbitrary principal or

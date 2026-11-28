@@ -60,6 +60,60 @@ export async function executeDevGcpMetadata(input,{fetchImpl=gcpFetch}={}){
    digest,uri,immutable_tags:true,source_provenance:'UNVERIFIED'}};
  }
  operatorRequire(operatorExact(input,['environment','kind','name']),'gcp_metadata_request_denied');
+ if(input.kind==='billing_status'){
+  operatorRequire(['jscc-dev','jscc-shared'].includes(input.name),'gcp_metadata_billing_target_denied');
+  const name='projects/'+input.name+'/billingInfo';
+  const v=await get('https://cloudbilling.googleapis.com/v1/'+name+'?fields=name,projectId,billingEnabled',fetchImpl);
+  operatorRequire(v.name===name&&v.projectId===input.name&&typeof v.billingEnabled==='boolean',
+   'gcp_metadata_billing_binding_mismatch');
+  return {state:'OBSERVED',metadata:{kind:input.kind,name:input.name,billing_enabled:v.billingEnabled,
+   spend:'UNVERIFIED',cost_admission:'UNVERIFIED'}};
+ }
+ if(input.kind==='quota_info'){
+  operatorRequire(['run.googleapis.com','storage.googleapis.com'].includes(input.name),'gcp_metadata_quota_target_denied');
+  const parent='projects/828902654738/locations/global/services/'+input.name;
+  const records=[],ids=new Set(),tokens=new Set();
+  let pageToken='';
+  for(let page=0;page<4;page++){
+   const q=new URLSearchParams({pageSize:'50',fields:'quotaInfos(name,quotaId,service,metricUnit,dimensionsInfos(dimensions,details(value),applicableLocations)),nextPageToken'});
+   if(pageToken)q.set('pageToken',pageToken);
+   const v=await get('https://cloudquotas.googleapis.com/v1/'+parent+'/quotaInfos?'+q,fetchImpl);
+   const rows=v.quotaInfos||[];
+   operatorRequire(Array.isArray(rows)&&rows.length<=50,'gcp_metadata_quota_page_invalid');
+   for(const row of rows){
+    operatorRequire(typeof row.quotaId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(row.quotaId)&&
+     row.name===parent+'/quotaInfos/'+row.quotaId&&row.service===input.name&&!ids.has(row.quotaId)&&
+     Array.isArray(row.dimensionsInfos||[])&&(row.dimensionsInfos||[]).length<=200,'gcp_metadata_quota_binding_mismatch');
+    ids.add(row.quotaId);
+    const limits=[];
+    for(const dim of row.dimensionsInfos||[]){
+     // No inference from omitted regional dimensions or arbitrary provider dimensions.
+     // Report only global / europe-west1 scopes with no extra dimension keys.
+     const keys=Object.keys(dim.dimensions||{});
+     const locations=dim.applicableLocations||[];
+     operatorRequire(Array.isArray(locations)&&locations.length<=200,'gcp_metadata_quota_locations_invalid');
+     if(keys.some(x=>x!=='region'))continue;
+     for(const location of ['global','europe-west1']){
+      if(!locations.includes(location)||keys.length&&dim.dimensions.region!==location)continue;
+      const value=dim.details?.value;
+      operatorRequire(typeof value==='string'&&/^-?[0-9]{1,19}$/.test(value),'gcp_metadata_quota_limit_invalid');
+      limits.push({location,value});
+     }
+    }
+    operatorRequire(limits.length<=2&&new Set(limits.map(x=>x.location)).size===limits.length,'gcp_metadata_quota_dimension_ambiguous');
+    records.push({quota_id:row.quotaId,limits});
+   }
+   pageToken=v.nextPageToken||'';
+   operatorRequire(typeof pageToken==='string'&&pageToken.length<=2048&&(!pageToken||!tokens.has(pageToken)),
+    'gcp_metadata_quota_page_token_invalid');
+   if(!pageToken)break;
+   tokens.add(pageToken);
+  }
+  const metadata={kind:input.kind,name:input.name,project:'jscc-dev',quotas:records,
+   pagination_complete:!pageToken,usage:'UNVERIFIED',cost_admission:'UNVERIFIED'};
+  operatorRequire(Buffer.byteLength(JSON.stringify(metadata))<=32768,'gcp_metadata_projection_limit');
+  return {state:'OBSERVED',metadata};
+ }
  if(input.kind==='secret'){
   operatorRequire(SECRETS.has(input.name),'gcp_metadata_secret_denied');
   const name='projects/jscc-dev/secrets/'+input.name;

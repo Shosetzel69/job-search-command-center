@@ -116,3 +116,41 @@ test('permission probes deny caller-supplied permissions, foreign names and miss
  }}),/resource_unverified/);
  assert.equal(calls,1);
 });
+
+test('billing metadata binds exact DEV/shared projects and never implies actual spend',async()=>{
+ const input={environment:'dev',kind:'billing_status',name:'jscc-dev'};
+ const out=await executeDevGcpMetadata(input,{fetchImpl:async(url,opts)=>{
+  assert.match(url,/^https:\/\/cloudbilling\.googleapis\.com\/v1\/projects\/jscc-dev\/billingInfo\?/);
+  assert.equal(opts.method,'GET');
+  return Response.json({name:'projects/jscc-dev/billingInfo',projectId:'jscc-dev',billingEnabled:true,
+   billingAccountName:'private-account'});
+ }});
+ assert.equal(out.metadata.billing_enabled,true);assert.equal(out.metadata.cost_admission,'UNVERIFIED');
+ assert.equal(JSON.stringify(out).includes('private-account'),false);
+ await assert.rejects(()=>executeDevGcpMetadata({...input,name:'jscc-prod'},{fetchImpl:async()=>assert.fail('network')}));
+ await assert.rejects(()=>executeDevGcpMetadata(input,{fetchImpl:async()=>Response.json({
+  name:'projects/jscc-prod/billingInfo',projectId:'jscc-prod',billingEnabled:true})}));
+});
+test('quota observation is bounded, exact DEV project, excludes other dimensions and usage claims',async()=>{
+ const parent='projects/828902654738/locations/global/services/run.googleapis.com';
+ const row=(id,dimensionsInfos)=>({name:parent+'/quotaInfos/'+id,quotaId:id,service:'run.googleapis.com',dimensionsInfos});
+ const input={environment:'dev',kind:'quota_info',name:'run.googleapis.com'};
+ let calls=0;
+ const out=await executeDevGcpMetadata(input,{fetchImpl:async(url,opts)=>{
+  assert.match(url,/^https:\/\/cloudquotas\.googleapis\.com\/v1\/projects\/828902654738\/locations\/global\/services\/run\.googleapis\.com\/quotaInfos\?/);
+  assert.equal(opts.method,'GET');
+  if(++calls===1)return Response.json({nextPageToken:'next',quotaInfos:[row('regional',[
+   {dimensions:{region:'europe-west1'},applicableLocations:['europe-west1'],details:{value:'100'}},
+   {dimensions:{region:'us-central1'},applicableLocations:['us-central1'],details:{value:'999'}}])]});
+  assert.equal(new URL(url).searchParams.get('pageToken'),'next');
+  return Response.json({quotaInfos:[row('special',[{dimensions:{private:'secret'},applicableLocations:['global'],details:{value:'3'}}])]});
+ }});
+ assert.equal(calls,2);assert.equal(out.metadata.pagination_complete,true);
+ assert.deepEqual(out.metadata.quotas,[{quota_id:'regional',limits:[{location:'europe-west1',value:'100'}]},
+  {quota_id:'special',limits:[]}]);
+ assert.equal(out.metadata.usage,'UNVERIFIED');
+ assert.equal(out.metadata.cost_admission,'UNVERIFIED');
+ await assert.rejects(()=>executeDevGcpMetadata({...input,name:'compute.googleapis.com'},{fetchImpl:async()=>assert.fail('network')}));
+ await assert.rejects(()=>executeDevGcpMetadata(input,{fetchImpl:async()=>Response.json({quotaInfos:[
+  {...row('x',[]),name:'projects/other/locations/global/services/run.googleapis.com/quotaInfos/x'}]})}));
+});

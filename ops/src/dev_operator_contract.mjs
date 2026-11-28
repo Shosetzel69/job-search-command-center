@@ -120,7 +120,7 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
  }else if(v.action==='gcp_metadata'){
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.kind==='artifact_tag'&&operatorExact(v.bundle,['environment','kind','package','source_sha'])||
-   ['secret','run_job','run_service','run_job_permissions','run_service_permissions'].includes(v.bundle.kind)&&operatorExact(v.bundle,['environment','kind','name'])),
+   ['secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info'].includes(v.bundle.kind)&&operatorExact(v.bundle,['environment','kind','name'])),
    'operator_metadata_approval_mismatch');
  }else if(v.action==='gcs_artifact'){
   operatorRequire(v.bundle.environment==='dev'&&(
@@ -157,7 +157,24 @@ export function validateOperatorRequest(value,admission){
 }
 function projectMetadata(m){
  const safeName=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,255}$/.test(x);
- if(!m||!['artifact_tag','secret','run_job','run_service','run_job_permissions','run_service_permissions'].includes(m.kind))throw Error('operator_metadata_invalid');
+ if(!m||!['artifact_tag','secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info'].includes(m.kind))throw Error('operator_metadata_invalid');
+ if(m.kind==='billing_status'){
+  operatorRequire(['jscc-dev','jscc-shared'].includes(m.name)&&typeof m.billing_enabled==='boolean','operator_billing_metadata_invalid');
+  return {kind:m.kind,name:m.name,billing_enabled:m.billing_enabled,spend:'UNVERIFIED',cost_admission:'UNVERIFIED'};
+ }
+ if(m.kind==='quota_info'){
+  operatorRequire(['run.googleapis.com','storage.googleapis.com'].includes(m.name)&&m.project==='jscc-dev'&&
+   typeof m.pagination_complete==='boolean'&&Array.isArray(m.quotas)&&m.quotas.length<=200&&
+   new Set(m.quotas.map(x=>x?.quota_id)).size===m.quotas.length,'operator_quota_metadata_invalid');
+  const quotas=m.quotas.map(x=>{
+   operatorRequire(match(/^[A-Za-z0-9_-]{1,128}$/,x?.quota_id)&&Array.isArray(x.limits)&&x.limits.length<=2&&
+    x.limits.every(y=>['global','europe-west1'].includes(y?.location)&&match(/^-?[0-9]{1,19}$/,y.value))&&
+    new Set(x.limits.map(y=>y.location)).size===x.limits.length,'operator_quota_metadata_invalid');
+   return {quota_id:x.quota_id,limits:x.limits.map(y=>({location:y.location,value:y.value}))};
+  });
+  return {kind:m.kind,name:m.name,project:m.project,quotas,pagination_complete:m.pagination_complete,
+   usage:'UNVERIFIED',cost_admission:'UNVERIFIED'};
+ }
  if(Object.hasOwn(DEV_RUN_PERMISSION_PROBES,m.kind)){
   const requested=DEV_RUN_PERMISSION_PROBES[m.kind];
   const targets=m.kind==='run_job_permissions'?
