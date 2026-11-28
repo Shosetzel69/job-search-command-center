@@ -15,6 +15,7 @@ on:
       - "scripts/gcp/remote_executor_dev_build.mjs"
       - "scripts/gcp/remote_executor_dev_publish_approval.mjs"
       - "scripts/gcp/remote_executor_dev_nile_013.mjs"
+      - "scripts/gcp/remote_executor_dev_job_release.mjs"
       - "cloudbuild.workspace-manager-r2.yaml"
       - "scripts/test_remote_executor_dev_pair.py"
       - "scripts/test_remote_executor_dev_pair.mjs"
@@ -37,6 +38,7 @@ on:
       - "scripts/gcp/remote_executor_dev_build.mjs"
       - "scripts/gcp/remote_executor_dev_publish_approval.mjs"
       - "scripts/gcp/remote_executor_dev_nile_013.mjs"
+      - "scripts/gcp/remote_executor_dev_job_release.mjs"
       - "cloudbuild.workspace-manager-r2.yaml"
       - "scripts/test_remote_executor_dev_pair.py"
       - "scripts/test_remote_executor_dev_pair.mjs"
@@ -98,6 +100,7 @@ jobs:
           node --check scripts/gcp/remote_executor_dev_build.mjs
           node --check scripts/gcp/remote_executor_dev_publish_approval.mjs
           node --check scripts/gcp/remote_executor_dev_nile_013.mjs
+          node --check scripts/gcp/remote_executor_dev_job_release.mjs
           node --check ops/src/dev_operator_contract.mjs
           node --check ops/src/dev_operator_gateway.mjs
           for file in ops/operator/*.mjs; do node --check "$file"; done

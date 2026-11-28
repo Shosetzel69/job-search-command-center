@@ -50,7 +50,7 @@ function admit(value,pin,now){
  fresh();
  return {x,fresh};
 }
-function transport(getToken,fetchImpl){
+export function transport(getToken,fetchImpl){
  return async(url,{method='GET',body,absent=false}={})=>{
   const token=await getToken();
   require(typeof token==='string'&&token.length>0&&token.length<=8192,'nile_release_identity_missing');
@@ -103,7 +103,7 @@ async function verifyBuild(call,x){
   b.results.images.some(i=>i.name===IMAGE.slice(0,-1)+':'+x.source_sha&&i.digest===x.service_digest),
   'nile_release_build_provenance_unverified');
 }
-async function verifyLock(call,x){
+export async function verifyLock(call,x){
  const path=STORE+'locks%2Fheavy-search.lock';
  const readMeta=()=>call(path+'?fields=bucket,name,generation');
  const m=await readMeta();
@@ -118,7 +118,7 @@ async function verifyLock(call,x){
   'nile_release_catalog_drift');
  require((await readMeta()).generation===x.lock_generation,'nile_release_lock_changed');
 }
-async function verifyIdle(call){
+export async function verifyIdle(call){
  for(const name of ['jscc-search-dev',JOB]){
   const parent=ROOT+'/jobs/'+name+'/executions',seen=new Set(),tokens=new Set();
   let token='';

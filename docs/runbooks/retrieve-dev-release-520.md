@@ -59,3 +59,20 @@ and exact execution is implemented, never a SQL PASS inference. The generic
 operator has no runWithOverrides grant.
 013 was already applied historically; do not reapply. No live mutation,
 new IAM grant, generic migration reactivation or managed backup/restore.
+
+## #589 guarded product Job stage/restore (source only)
+
+The existing guarded release procedure gains a dedicated adapter
+`scripts/gcp/remote_executor_dev_job_release.mjs`. It reuses the exact GOV85
+sentinel/catalog and bounded all-page quiescence checks from the 013 adapter.
+Only the canonical DEV Search/Migration Jobs, existing identity, immutable
+image and SOURCE_SHA may change; prior/next exact template hashes are pinned.
+Migration retains refuse default and command/secret references. Search stage
+requires the candidate Service zero-traffic tagged revision, restoration
+requires prior Service serving again. Independent authority must verify
+staged health, signed dispatch exclusion and rollback compatibility. One
+claim per approval, validateOnly + etag + actual update + readback; unknown
+receipt retains claim and lock. No Job execute/cancel, schema change, lock
+write, automatic retry, new product route or generic operator grant. Actual
+release identity, provider shape, immutable build results and live acceptance
+remain prerequisites. The protected product-job-steps prefix needs scoped IAM.
