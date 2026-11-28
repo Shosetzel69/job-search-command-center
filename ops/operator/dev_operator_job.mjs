@@ -170,6 +170,7 @@ export async function runOperatorJob(config,{
  const confirmed=await get(claimPath);
  operatorRequire(GEN.test(confirmed?.generation||'')&&operatorHash(confirmed.data)===operatorHash(claim),
   'operator_claim_uncertain');
+ const startedAt=now();
  let result;
  try{
   operatorRequire(now()<request.expires_at_ms,'operator_approval_expired');
@@ -188,6 +189,27 @@ export async function runOperatorJob(config,{
   result={operation_id:request.operation_id,approval_hash:request.approval_hash,
    action:request.action,state:'RECOVERY_REQUIRED',automatic_retry:false};
  }
+ const approved=admission.approval,bundle=approved.bundle;
+ const targetSource=bundle.request?.source_sha??bundle.source_sha??bundle.expected_source_sha??null;
+ const targetDigest=bundle.expected_image?.split('@').at(-1)??null;
+ const original=bundle.original_approval_ref??bundle.build_approval_ref??null;
+ const scriptHash=bundle.script_sha256??null;
+ // This immutable, sanitized audit links to the authoritative bundle rather
+ // than copying its potentially sensitive parameters into operation results.
+ // Operator/controller state is not a subprocess exit code.
+ result.audit={environment:'dev',work_item_ref:'#589',approval_ref:request.approval_ref,
+  approval_generation:admission.generation,approval_hash:request.approval_hash,
+  actor_sub_hash:request.actor_sub_hash,operator_source_sha:request.operator_source_sha,
+  approved_bundle_sha256:approved.bundle_hash,review_ref:approved.review_ref,cost_ref:approved.cost_ref,
+  execution_name,claim_generation:confirmed.generation,requested_at_ms:request.requested_at_ms,
+  started_at_ms:startedAt,finished_at_ms:now(),
+  target_source_sha:typeof targetSource==='string'&&SHA.test(targetSource)?targetSource:null,
+  target_image_digest:typeof targetDigest==='string'&&/^sha256:[a-f0-9]{64}$/.test(targetDigest)?targetDigest:null,
+  script_sha256:typeof scriptHash==='string'&&/^[a-f0-9]{64}$/.test(scriptHash)?scriptHash:null,
+  original_approval_ref:typeof original==='string'&&/^#589\/[1-9][0-9]{0,19}$/.test(original)?original:null,
+  exit_code:null,outcome:result.state};
+ // Validate the actual durable projection before attempting its write.
+ projectOperatorResult(request,{generation:'1',data:result});
  await put(paths.result,result);
  const saved=await get(paths.result);
  operatorRequire(GEN.test(saved?.generation||'')&&operatorHash(saved.data)===operatorHash(result),

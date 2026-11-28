@@ -198,3 +198,24 @@ test('lost dispatch mapping still returns known receipt without authorizing a re
  assert.equal((await start(f)).duplicate,true);
  assert.equal(f.calls.filter(x=>x[0]==='POST').length,1);
 });
+
+test('operator audit binds protected approval and claim to the actual outcome and time without inventing exit code',async()=>{
+ const f=fixture();
+ await start(f);
+ const done=await run(f,async()=>({state:'OBSERVED',script_verdict:'BUILD_DIGEST_UNKNOWN',private_output:'never-return'}));
+ const audit=done.audit;
+ assert.equal(audit.approval_ref,ref);
+ assert.equal(audit.actor_sub_hash,actor);
+ assert.equal(audit.operator_source_sha,SHA);
+ assert.equal(audit.approved_bundle_sha256,operatorHash(bundle));
+ assert.equal(audit.execution_name,execution);
+ assert.equal(audit.script_sha256,bundle.script_sha256);
+ assert.equal(audit.exit_code,null);
+ assert.equal(audit.outcome,'OBSERVED');
+ assert.equal(audit.started_at_ms,now());
+ assert.equal(audit.finished_at_ms,now());
+ assert.deepEqual((await status(f)).audit,audit);
+ assert.equal(JSON.stringify(audit).includes('never-return'),false);
+ f.map.get(paths.result).data.audit.actor_sub_hash='f'.repeat(64);
+ await assert.rejects(()=>status(f),/operator_audit_binding_invalid/);
+});

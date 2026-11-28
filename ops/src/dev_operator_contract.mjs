@@ -471,6 +471,31 @@ export function projectOperatorResult(request,record){
    retrieve_lock:m.retrieve_lock,nile_status:m.nile_status,nile_checksum:m.nile_checksum,
    release_authorized:false,source_provenance:'UNVERIFIED'};
  }
+ if(v.audit!==undefined){
+  const x=v.audit;
+  operatorRequire(operatorExact(x,['environment','work_item_ref','approval_ref','approval_generation','approval_hash',
+   'actor_sub_hash','operator_source_sha','approved_bundle_sha256','review_ref','cost_ref','execution_name',
+   'claim_generation','requested_at_ms','started_at_ms','finished_at_ms','target_source_sha',
+   'target_image_digest','script_sha256','original_approval_ref','exit_code','outcome'])&&
+   x.environment==='dev'&&x.work_item_ref==='#589'&&x.approval_ref===request.approval_ref&&
+   x.approval_generation===request.approval_generation&&match(GEN,x.approval_generation)&&
+   x.approval_hash===request.approval_hash&&match(HEX,x.approval_hash)&&
+   x.actor_sub_hash===request.actor_sub_hash&&match(HEX,x.actor_sub_hash)&&
+   x.operator_source_sha===request.operator_source_sha&&match(SHA,x.operator_source_sha)&&
+   match(HEX,x.approved_bundle_sha256)&&match(REF,x.review_ref)&&match(REF,x.cost_ref)&&
+   new Set([x.approval_ref,x.review_ref,x.cost_ref]).size===3&&match(EXEC,x.execution_name)&&
+   match(GEN,x.claim_generation)&&Number.isSafeInteger(x.requested_at_ms)&&
+   x.requested_at_ms===request.requested_at_ms&&Number.isSafeInteger(x.started_at_ms)&&
+   Number.isSafeInteger(x.finished_at_ms)&&x.requested_at_ms<=x.started_at_ms&&x.started_at_ms<=x.finished_at_ms&&
+   (x.target_source_sha===null||match(SHA,x.target_source_sha))&&
+   (x.target_image_digest===null||match(/^sha256:[a-f0-9]{64}$/,x.target_image_digest))&&
+   (x.script_sha256===null||match(HEX,x.script_sha256))&&
+   (x.original_approval_ref===null||match(REF,x.original_approval_ref)&&x.original_approval_ref!==x.approval_ref)&&
+   x.exit_code===null&&x.outcome===v.state,'operator_audit_binding_invalid');
+  // This projection is returned only by the authenticated, same-actor
+  // operator route; no raw subject, parameters, credentials or log payload.
+  out.audit={...x};
+ }
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;
 }
