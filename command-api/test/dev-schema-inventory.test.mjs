@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {collectDevSchemaInventory,collectDevRuntimeHealth,collectDevTenantInvariants,DEV_SCHEMA_TABLES} from '../src/db/dev-schema-inventory.js';
-import {withDevDiagnosticTransaction} from '../src/db/tenant-gateway.js';
+import {collectDevSchemaInventory,collectDevRuntimeHealth,DEV_SCHEMA_TABLES} from '../src/db/dev-schema-inventory.js';
+import {withDevDiagnosticTransaction,collectDevTenantInvariants} from '../src/db/tenant-gateway.js';
 const sha='a'.repeat(64),other='b'.repeat(64);
 const migrations=[{version:'001',name:'001_schema_migrations.sql',checksum:sha}];
 const rows=[{table_name:'schema_migrations',indexes:['schema_migrations_pkey'],constraints:['schema_migrations_pkey']}];

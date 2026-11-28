@@ -1,6 +1,7 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getPool, withTransaction } from './db/pool.js';
-import {collectDevSchemaInventory,collectDevRuntimeHealth,collectDevTenantInvariants} from './db/dev-schema-inventory.js';
+import {collectDevSchemaInventory,collectDevRuntimeHealth} from './db/dev-schema-inventory.js';
+import {collectDevTenantInvariants} from './db/tenant-gateway.js';
 import {inspectEvaluation013ReadOnly} from '../scripts/db-evaluation-migrate-013.mjs';
 import {
   deleteTenantDomain,
