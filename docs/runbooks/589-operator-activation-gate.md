@@ -20,7 +20,16 @@ plan, use the exact independently recorded hash (not a caller-computed pin):
 bash scripts/gcp/provision_remote_executor_dev.sh --operator-iam-plan --commands "$REVIEWED_PLAN_SHA256"
 ```
 No command is executed by either mode. Existing IAM administrator applies
-only the separately approved argument arrays. For each custom role, inspect
+only the separately approved argument arrays. G1-F5: after independent evidence
+closes the default Compute/Cloud Build bypasses (G1-F1/F9), and before role or
+bucket binding application, inspect each fixed DEV service account in the
+plan. Create only on confirmed absence with separate exact-plan owner approval.
+Inspect identity, enabled status, direct SA IAM policy and user-managed keys
+before proceeding; direct bindings and user-managed keys must be empty.
+Do not replace existing SA policies or remove existing user privileges. An
+unexpected existing identity, key, grant, disabled account or ambiguous
+response stops for independent review; no automatic correction. No keys are
+created. D-16 Job binding requires the exact Job to exist (G5). For each custom role, inspect
 the describe response first: existing role must have exactly the listed
 permissions, not be deleted/disabled; a confirmed missing role can be
 created. Any drift, unexpected error or ambiguous outcome stops. Do not
