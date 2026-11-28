@@ -110,7 +110,7 @@ export function createPublisherHandler(config,{authorize=authorizePublisher,publ
      // Caller already materialized exact trusted source. Independent pin binds
      // bytes to that evidence; no private Git credential or GitHub calls here.
      result=await stage(input.record,{...options,materialize:async()=>archive});
-    }else result=await publish(input.record,{...options,actor:config.actor,sourceSha:config.operatorSourceSha});
+    }else result=await publish(input.record,{...options,actor:config.actor,sourceSha:config.operatorSourceSha,reviewConfig:config,reviewSignature:input.review_signature});
     return reply(200,result);
    }catch{
     // May have reached GCS; never advertise safe retry or echo provider details.
