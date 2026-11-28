@@ -18,10 +18,12 @@ WORKER = "jscc-diagnostics-dev"
 DEPLOYER = f"jscc-ops-deployer-dev@{PROJECT}.iam.gserviceaccount.com"
 ROOT = "europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/"
 KEYS = ("SOURCE_SHA", "GATEWAY_IMAGE_DIGEST", "WORKER_IMAGE_DIGEST")
-OP_KEYS = ("JSCC_DEV_OPERATOR_ENABLED", "JSCC_DEV_OPERATOR_SOURCE_SHA", "JSCC_DEV_OPERATOR_IMAGE_DIGEST")
+OP_KEYS = ("JSCC_DEV_OPERATOR_ENABLED", "JSCC_DEV_OPERATOR_SOURCE_SHA", "JSCC_DEV_OPERATOR_IMAGE_DIGEST",
+           "JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256")
 OP_JOB = "jscc-ops-operator-dev"
 SHA = re.compile(r"[0-9a-f]{40}")
 DIGEST = re.compile(r"sha256:[0-9a-f]{64}")
+REVIEW_KEY = re.compile(r"[0-9a-f]{64}")
 REV = re.compile(GATEWAY + r"-[a-z0-9-]{1,40}")
 URIS = {
     "https://jscc-ops-gateway-dev-828902654738.europe-west1.run.app",
@@ -91,7 +93,7 @@ def operator_env(template):
         require(values.get(OP_KEYS[0]) in ("true", "false") and
                 (set(values) == {OP_KEYS[0]} and values[OP_KEYS[0]] == "false" or
                  set(values) == set(OP_KEYS) and SHA.fullmatch(values[OP_KEYS[1]]) and
-                 DIGEST.fullmatch(values[OP_KEYS[2]])), "operator_env_invalid")
+                 DIGEST.fullmatch(values[OP_KEYS[2]]) and REVIEW_KEY.fullmatch(values[OP_KEYS[3]])), "operator_env_invalid")
     return values
 
 
@@ -172,10 +174,7 @@ class PairOperator:
         env = c.get("env", [])
         required = {"SOURCE_SHA": x[OP_KEYS[1]], "GCP_PROJECT": PROJECT, "GCP_REGION": REGION,
                     "OPS_BUCKET": "jscc-dev-ops-state"}
-        fingerprints = [row.get("value") for row in env if row.get("name") == "JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256"]
-        require(len(fingerprints) == 1 and isinstance(fingerprints[0], str) and re.fullmatch(r"[0-9a-f]{64}", fingerprints[0]),
-                "operator_review_key_pin_missing")
-        required["JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256"] = fingerprints[0]
+        required[OP_KEYS[3]] = x[OP_KEYS[3]]
         require(execution.get("taskCount") == 1 and execution.get("parallelism") == 1 and
                 task.get("maxRetries") == 0 and task.get("timeout") == "1800s" and
                 task.get("serviceAccount") == OP_JOB + "@" + PROJECT + ".iam.gserviceaccount.com" and
@@ -249,14 +248,15 @@ class PairOperator:
                 "runtime_identity_mismatch")
         if "operator_activation" in request:
             x = request["operator_activation"]
-            require(isinstance(x, dict) and set(x) == {"source_sha", "image_digest", "activation_ref", "publisher_ref"} and
+            require(isinstance(x, dict) and set(x) == {"source_sha", "image_digest", "activation_ref", "publisher_ref", "review_key_sha256"} and
                     x["source_sha"] == request["source_sha"] and isinstance(x["image_digest"], str) and
-                    DIGEST.fullmatch(x["image_digest"]) and values[KEYS[1]] != self.new[KEYS[1]] and
+                    DIGEST.fullmatch(x["image_digest"]) and isinstance(x["review_key_sha256"], str) and
+                    REVIEW_KEY.fullmatch(x["review_key_sha256"]) and values[KEYS[1]] != self.new[KEYS[1]] and
                     all(isinstance(x[key], str) and re.fullmatch(r"#589/[1-9][0-9]{0,19}", x[key])
                         for key in ("activation_ref", "publisher_ref")) and
                     x["activation_ref"] != x["publisher_ref"], "operator_activation_binding_denied")
             self.old_operator_env = operator_env(svc["template"])
-            self.new_operator_env = dict(zip(OP_KEYS, ("true", x["source_sha"], x["image_digest"])))
+            self.new_operator_env = dict(zip(OP_KEYS, ("true", x["source_sha"], x["image_digest"], x["review_key_sha256"])))
             require(not operator_env(job), "worker_operator_env_denied")
             self.verify_operator_job()
         self.verify_revision(revision, values)

@@ -190,8 +190,8 @@ actual immutable operator image, fixed DEV project/region, task count and
 parallelism one, retries zero, 1800s timeout, 1 CPU, 1Gi memory, fixed
 environment, no mount/command/args overrides. Gateway config:
 `JSCC_DEV_OPERATOR_ENABLED`, `JSCC_DEV_OPERATOR_SOURCE_SHA`,
-`JSCC_DEV_OPERATOR_IMAGE_DIGEST`. The Job additionally requires the independently approved public `JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256` fingerprint (R2). Enabling is a separate controlled
-configuration change. Keep disabled until all preconditions pass.
+`JSCC_DEV_OPERATOR_IMAGE_DIGEST`, `JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256`.
+See [activation gate](589-operator-activation-gate.md) for S1/S2. Keep disabled until all preconditions pass.
 Capture the protected product API and Search Job baseline, drain Retrieve,
 preserve their effective config/revisions/digests and do not manipulate
 product locks. Coordinate immutable Gateway/diagnostics/workspace upgrades

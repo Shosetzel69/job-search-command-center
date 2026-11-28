@@ -5,7 +5,7 @@ import {gcpFetch,gcsReadJson,gcsWriteJson} from './lib.mjs';
 import {OPERATOR_BUCKET,OPERATOR_ROOT,OPERATOR_JOB,operatorActor,operatorPaths,
  operatorExecution,operatorLro,operatorDispatchPath,operatorHash,operatorRequest,
  operatorRequire,validateOperatorToolArgs,validateOperatorApproval,validateOperatorRequest,
- projectOperatorResult,operatorActionCatalog,operatorExact} from './dev_operator_contract.mjs';
+ projectOperatorResult,operatorActionCatalog,operatorExact,operatorApprovalReviewPath,verifyOperatorApprovalReview} from './dev_operator_contract.mjs';
 
 const RUN='https://run.googleapis.com/v2/';
 const OPERATOR_SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
@@ -24,9 +24,11 @@ export function operatorGatewayConfig(env=process.env){
  if(env.JSCC_DEV_OPERATOR_ENABLED!=='true')return null;
  operatorRequire(env.GCP_PROJECT==='jscc-dev'&&env.GCP_REGION==='europe-west1'&&
   env.OPS_BUCKET===OPERATOR_BUCKET&&/^[a-f0-9]{40}$/.test(env.JSCC_DEV_OPERATOR_SOURCE_SHA||'')&&
-  /^sha256:[a-f0-9]{64}$/.test(env.JSCC_DEV_OPERATOR_IMAGE_DIGEST||''),
+  /^sha256:[a-f0-9]{64}$/.test(env.JSCC_DEV_OPERATOR_IMAGE_DIGEST||'')&&
+  /^[a-f0-9]{64}$/.test(env.JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256||''),
   'operator_config_invalid');
- return Object.freeze({sourceSha:env.JSCC_DEV_OPERATOR_SOURCE_SHA,imageDigest:env.JSCC_DEV_OPERATOR_IMAGE_DIGEST});
+ return Object.freeze({sourceSha:env.JSCC_DEV_OPERATOR_SOURCE_SHA,imageDigest:env.JSCC_DEV_OPERATOR_IMAGE_DIGEST,
+  reviewKeyFingerprint:env.JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256});
 }
 const defaultRead=path=>gcsReadJson(OPERATOR_BUCKET,path);
 const defaultCreate=(path,data)=>gcsWriteJson(OPERATOR_BUCKET,path,data,0);
@@ -62,7 +64,7 @@ async function verifyJob(call,config){
   (!container.volumeMounts||container.volumeMounts.length===0)&&
   container.resources?.limits?.cpu==='1'&&container.resources?.limits?.memory==='1Gi'&&
   Array.isArray(container.env)&&container.env.length===5&&container.env.every(x=>!x.valueSource)&&
-  /^[a-f0-9]{64}$/.test(env('JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256')||'')&&
+  env('JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256')===config.reviewKeyFingerprint&&
   env('SOURCE_SHA')===config.sourceSha&&env('GCP_PROJECT')==='jscc-dev'&&env('GCP_REGION')==='europe-west1'&&
   env('OPS_BUCKET')===OPERATOR_BUCKET,'operator_job_binding_mismatch');
 }
@@ -127,7 +129,8 @@ export async function invokeDevOperator(name,args,actorSub,config,{
  verifyLifecycle=verifyOperatorLifecycle,
 }={}){
  operatorRequire(config&&/^[a-f0-9]{40}$/.test(config.sourceSha)&&
-  /^sha256:[a-f0-9]{64}$/.test(config.imageDigest||''),'operator_not_configured');
+  /^sha256:[a-f0-9]{64}$/.test(config.imageDigest||'')&&
+  /^[a-f0-9]{64}$/.test(config.reviewKeyFingerprint||''),'operator_not_configured');
  if(name==='operator_catalog'){
   operatorRequire(operatorExact(args,[]),'invalid_operator_arguments');
   operatorActor(actorSub);
@@ -162,16 +165,25 @@ export async function invokeDevOperator(name,args,actorSub,config,{
   return {...projection,duplicate:name==='operator_start'};
  }
  operatorRequire(name!=='operator_status','operator_request_not_found');
- const admission=validateOperatorApproval(await read(paths.approval),{
-  ref,actor,sourceSha:config.sourceSha,now:now()
- });
+ const readAdmitted=async()=>{
+  const admitted=validateOperatorApproval(await read(paths.approval),{ref,actor,sourceSha:config.sourceSha,now:now()});
+  const proof=await read(operatorApprovalReviewPath(ref));
+  operatorRequire(verifyOperatorApprovalReview(admitted.approval,proof,config.reviewKeyFingerprint),
+   'operator_review_proof_denied');
+  return {admitted,proof};
+ };
+ const first=await readAdmitted(),admission=first.admitted;
+ const verifyUnchanged=async()=>{
+  const latest=await readAdmitted();
+  operatorRequire(latest.admitted.generation===admission.generation&&latest.admitted.approvalHash===admission.approvalHash&&
+   latest.proof.generation===first.proof.generation&&operatorHash(latest.proof.data)===operatorHash(first.proof.data),
+   'operator_preflight_approval_drift');
+ };
  await verifyLifecycle(now());
  await verifyJob(call,config);
+ await verifyUnchanged();
  const req=operatorRequest(admission,now());
  if(name==='operator_preflight'){
-  const latest=validateOperatorApproval(await read(paths.approval),{ref,actor,sourceSha:config.sourceSha,now:now()});
-  operatorRequire(latest.generation===admission.generation&&operatorHash(latest.approval)===operatorHash(admission.approval),
-   'operator_preflight_approval_drift');
   operatorRequire(!(await read(paths.request)),'operator_preflight_request_race');
   return {environment:'dev',work_item_ref:'#589',approval_ref:ref,operation_id:paths.key,
    state:'PREFLIGHT_OBSERVED',action:admission.approval.action,approval_generation:admission.generation,
@@ -195,6 +207,8 @@ export async function invokeDevOperator(name,args,actorSub,config,{
  // Any uncertain start or mapping remains reserved. Never automatically run
  // another Job; an independently authorized reconciliation is required.
  try{
+  await verifyUnchanged();
+  await verifyJob(call,config);
   operatorRequire(now()<req.expires_at_ms,'operator_approval_expired');
   const execution=await startExecution(call,sleep);
   const receipt={operation_id:paths.key,request_hash:operatorHash(req),

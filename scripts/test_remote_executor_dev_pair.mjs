@@ -238,9 +238,14 @@ test('operator GCS adapter uses fixed path, generation preconditions and no redi
 test('operator activation is a separately pinned target in the existing pair approval',async()=>{
  const f=await fixture(),bundle=structuredClone(f.args.bundle);
  bundle.next.operator_activation={source_sha:next.source_sha,image_digest:'sha256:'+'1'.repeat(64),
-  activation_ref:'#589/300',publisher_ref:'#589/301'};
- assert.deepEqual(pinnedPairAdmission(bundle,evidenceDigest(bundle),()=>NOW).bundle.next.operator_activation,bundle.next.operator_activation);
- for(const mutation of [x=>x.next.operator_activation.source_sha=old.source_sha,
+  activation_ref:'#589/300',publisher_ref:'#589/301',review_key_sha256:'a'.repeat(64)};
+ const pin=evidenceDigest(bundle);
+  assert.deepEqual(pinnedPairAdmission(bundle,pin,()=>NOW).bundle.next.operator_activation,bundle.next.operator_activation);
+  const substituted=structuredClone(bundle);substituted.next.operator_activation.review_key_sha256='b'.repeat(64);
+  assert.throws(()=>pinnedPairAdmission(substituted,pin,()=>NOW));
+ for(const mutation of [x=>delete x.next.operator_activation.review_key_sha256,
+   x=>x.next.operator_activation.review_key_sha256='bad',
+   x=>x.next.operator_activation.source_sha=old.source_sha,
   x=>x.next.operator_activation.activation_ref=x.evidence.approval,
   x=>x.next.operator_activation.publisher_ref=x.next.operator_activation.activation_ref,
   x=>x.next.gateway_digest=old.gateway_digest]){

@@ -79,8 +79,9 @@ function validateBundle(bundle,pin){
   'missing_authoritative_evidence_reference');
  if(activate){
   const x=next.operator_activation;
-  require(exact(x,['source_sha','image_digest','activation_ref','publisher_ref'])&&
-   x.source_sha===next.source_sha&&match(DIGEST,x.image_digest)&&match(REF,x.activation_ref)&&match(REF,x.publisher_ref)&&
+  require(exact(x,['source_sha','image_digest','activation_ref','publisher_ref','review_key_sha256'])&&
+   x.source_sha===next.source_sha&&match(DIGEST,x.image_digest)&&match(HEX,x.review_key_sha256)&&
+    match(REF,x.activation_ref)&&match(REF,x.publisher_ref)&&
    x.activation_ref!==x.publisher_ref&&![x.activation_ref,x.publisher_ref].some(ref=>Object.values(bundle.evidence).includes(ref))&&
    next.gateway_digest!==bundle.previous.gateway_digest,'operator_activation_binding_denied');
  }
