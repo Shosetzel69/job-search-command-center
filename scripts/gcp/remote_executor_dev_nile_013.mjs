@@ -50,6 +50,10 @@ function admit(value,pin,now){
  fresh();
  return {x,fresh};
 }
+// Historical record admission for release orchestration. Never grants dispatch.
+export function validateNile013ReleaseRecord(record,pin){
+ return admit(record,pin,()=>record?.issued_at_ms).x;
+}
 export function transport(getToken,fetchImpl){
  return async(url,{method='GET',body,absent=false}={})=>{
   const token=await getToken();
@@ -178,7 +182,7 @@ function executionName(value){
  * checksum and rollback compatibility. The adapter never accepts a generic
  * SQL/script/command argument. No transport is supplied by default. */
 export async function submitApprovedNile013(record,{
- trustedRecordHash,verifyAuthority,getToken,fetchImpl=fetch,store,now=Date.now,
+ trustedRecordHash,verifyAuthority,getToken,fetchImpl=fetch,store,now=Date.now,inspectionEvidence=null,
 }={}){
  const {x,fresh}=admit(record,trustedRecordHash,now);
  require(typeof getToken==='function'&&typeof verifyAuthority==='function','nile_release_authority_missing');
@@ -201,9 +205,24 @@ export async function submitApprovedNile013(record,{
  await verifyLock(call,x);
  await verifyIdle(call);
  if(x.mode==='apply'){
-  const prior=executionProof(await call(RUN+PATH+'/executions/'+x.inspection_execution),x.inspection_execution,x,'inspect');
-  require(prior.outcome==='SUCCEEDED','nile_release_inspect_not_successful');
- }
+  // The current approval's external authority must verify the exact inspect
+  // record and PENDING_013 evidence. The durable inspect receipt, not merely
+  // a matching execution name, must independently bind the earlier dispatch.
+  require(operatorExact(inspectionEvidence,['record','record_hash','readiness','evidence_ref'])&&
+   inspectionEvidence.readiness==='PENDING_013'&&match(REF,inspectionEvidence.evidence_ref)&&
+   inspectionEvidence.evidence_ref!==x.approval_ref&&inspectionEvidence.evidence_ref!==x.inspection_ref,
+   'nile_release_inspection_evidence_required');
+  const previous=validateNile013ReleaseRecord(inspectionEvidence.record,inspectionEvidence.record_hash);
+  require(previous.mode==='inspect'&&previous.approval_ref===x.inspection_ref&&
+   ['source_sha','service_digest','build_id','script_sha256','migration_checksum','job_template_sha256',
+    'lock_generation','lock_payload_sha256','catalog_generation','restore_ref'].every(k=>previous[k]===x[k])&&
+   previous.issued_at_ms<=x.issued_at_ms&&
+   await verifyAuthority(previous,inspectionEvidence)===true,'nile_release_inspection_binding_mismatch');
+  const prior=await observeApprovedNile013(previous,{trustedRecordHash:inspectionEvidence.record_hash,
+   verifyAuthority:async record=>operatorHash(record)===inspectionEvidence.record_hash,getToken,fetchImpl,store:ledger,now});
+  require(prior.state==='OBSERVED'&&prior.execution===x.inspection_execution&&prior.mode==='inspect'&&
+   prior.terminal===true&&prior.outcome==='SUCCEEDED','nile_release_inspect_not_successful');
+ }else require(inspectionEvidence===null,'nile_release_unexpected_inspection_evidence');
  const job=await call(RUN+PATH),etag=verifyTemplate(job,x);
  // Same release owner must have exclusive dispatch control; this read-only
  // lock check alone cannot exclude a second independently privileged actor.

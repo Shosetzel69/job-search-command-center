@@ -96,3 +96,30 @@ test('read-only reconciliation uses exact receipt execution, not automatic retry
  assert.equal(out.outcome,'SUCCEEDED');assert.equal(out.sql_outcome,'UNVERIFIED');
  assert.equal(out.template_restore_required,true);assert.equal(f.posts.length,1);
 });
+
+
+test('apply requires the exact independently admitted historical inspect claim and successful receipt',async()=>{
+ const f=fixture(),options={...f.options,trustedRecordHash:operatorHash(request)};
+ const launched=await submitApprovedNile013(request,options);
+ const override=f.posts[0].body.overrides.containerOverrides[0],priorContainer={...template.template.containers[0],
+  args:override.args,env:[...template.template.containers[0].env,...override.env]};
+ const apply={...request,mode:'apply',approval_ref:'#589/200',inspection_ref:request.approval_ref,inspection_execution:launched.execution};
+ const evidence={record:request,record_hash:operatorHash(request),readiness:'PENDING_013',evidence_ref:'#589/201'};
+ const fetchImpl=async(url,init)=>url.endsWith('/executions/'+launched.execution)?Response.json({
+  name:path+'/executions/'+launched.execution,job:path,taskCount:1,template:{...template.template,containers:[priorContainer]},
+  completionTime:'2026-11-28T00:00:00Z',conditions:[{type:'Completed',state:'CONDITION_SUCCEEDED'}]}):f.options.fetchImpl(url,init);
+ const run=(inspectionEvidence,extra={})=>submitApprovedNile013(apply,{...f.options,fetchImpl,
+  trustedRecordHash:operatorHash(apply),inspectionEvidence,...extra});
+ await assert.rejects(()=>run(null),/inspection_evidence_required/);
+ await assert.rejects(()=>run({...evidence,readiness:'ALREADY_APPLIED'}),/inspection_evidence_required/);
+ await assert.rejects(()=>run({...evidence,record_hash:'0'.repeat(64)}),/approval_denied/);
+ const claim=[...f.records.keys()].find(k=>k.endsWith('.claim.json')),saved=f.records.get(claim);
+ f.records.delete(claim);
+ await assert.rejects(()=>run(evidence),/claim_unverified/);
+ f.records.set(claim,saved);
+ assert.equal(f.posts.length,1);
+ assert.equal((await run(evidence)).state,'SUBMITTED');
+ assert.equal(f.posts.length,2);
+ assert.deepEqual(f.posts[1].body.overrides.containerOverrides[0].env,[
+  {name:'EVALUATION013_MODE',value:'apply'},{name:'EVALUATION013_OWNER_GATE',value:'APPROVE_EVALUATION_DEV_NILE_013_'+sha}]);
+});

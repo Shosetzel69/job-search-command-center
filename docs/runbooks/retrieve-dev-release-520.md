@@ -50,7 +50,8 @@ executions must be terminal; active.json absent. The adapter consumes one
 approval in the existing GCS CAS store under control/v1/migrations before a
 single etag-bound run with fixed inspect/apply override; verifies script
 and migration SQL hashes inside the image. Apply requires separate prior inspect evidence and
-owner/review/rollback authority. It does not stage or restore the Job, release
+owner/review/rollback authority, plus the exact protected inspect claim/receipt
+and externally verified PENDING_013 evidence. Already-applied inspection cannot authorize apply. It does not stage or restore the Job, release
 the sentinel, interpret SQL logs or certify a managed migration outcome.
 Uncertain receipt retains claim; no replay. The existing independently
 reviewed release authority must stage/restore the exact Job and correlate
