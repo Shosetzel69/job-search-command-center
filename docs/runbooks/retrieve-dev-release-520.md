@@ -72,7 +72,9 @@ requires the candidate Service zero-traffic tagged revision, restoration
 requires prior Service serving again. Independent authority must verify
 staged health, signed dispatch exclusion and rollback compatibility. One
 claim per approval, validateOnly + etag + actual update + readback; unknown
-receipt retains claim and lock. No Job execute/cancel, schema change, lock
+receipt retains claim and lock. Read-only reconciliation reports exact prior,
+target or drift, even after approval expiry; never authorizes replay.
+No Job execute/cancel, schema change, lock
 write, automatic retry, new product route or generic operator grant. Actual
 release identity, provider shape, immutable build results and live acceptance
 remain prerequisites. The protected product-job-steps prefix needs scoped IAM.

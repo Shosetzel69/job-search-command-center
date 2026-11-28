@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {executeApprovedProductJobStep} from '../../scripts/gcp/remote_executor_dev_job_release.mjs';
+import {executeApprovedProductJobStep,observeApprovedProductJobStep} from '../../scripts/gcp/remote_executor_dev_job_release.mjs';
 import {operatorHash} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),old='b'.repeat(40),digest='sha256:'+'c'.repeat(64),oldDigest='sha256:'+'d'.repeat(64),id='254d3513-9c02-4f33-a974-e8e8f8935aa7';
 const root='projects/jscc-dev/locations/europe-west1',repo='projects/jscc-shared/locations/europe-west1/repositories/jscc';
@@ -17,9 +17,21 @@ const request={schema_version:'1.0',environment:'dev',work_item_ref:'#589',role:
  lock_generation:'12',lock_payload_sha256:operatorHash(lock),catalog_generation:'34',previous,candidate,service_revision:null,service_digest:null,
  approval_ref:'#589/100',review_ref:'#589/101',cost_ref:'#589/102',access_ref:'#589/103',compatibility_ref:'#589/104',
  issued_at_ms:now()-1,expires_at_ms:now()+1000};
-function fixture({lost=false}={}){
- const path=root+'/jobs/jscc-db-migrate-dev',records=new Map(),patches=[];
- let current={name:path,etag:'e1',generation:'1',observedGeneration:'1',terminalCondition:{state:'CONDITION_SUCCEEDED'},template:template(old,oldDigest)};
+function fixture({lost=false,role='migration',serviceStaged=true}={}){
+ const search=role==='search',pkg=search?'jscc':'jscc-service',baseImage='europe-west1-docker.pkg.dev/jscc-shared/jscc/'+pkg+'@';
+ const tpl=(s,d)=>{
+  const t=template(s,d);
+  if(search){
+   const c=t.template.containers[0];c.image=baseImage+d;c.args=['-ceu','fixed search runner'];
+   c.env=c.env.filter(e=>!['DB_MIGRATION_MODE','NILE_MIGRATION_DATABASE_URL'].includes(e.name));
+   c.env.push({name:'GCP_RUNTIME_BUCKET',value:bucket});
+  }
+  return t;
+ };
+ const path=root+'/jobs/'+(search?'jscc-search-dev':'jscc-db-migrate-dev'),records=new Map(),patches=[];
+ let current={name:path,etag:'e1',generation:'1',observedGeneration:'1',terminalCondition:{state:'CONDITION_SUCCEEDED'},template:tpl(old,oldDigest)};
+ const servicePath=root+'/services/jscc-command-api-dev',rev='jscc-command-api-dev-candidate',oldRev='jscc-command-api-dev-previous';
+ const serviceDigest='sha256:'+'e'.repeat(64);
  const store={get:async p=>records.get(p)??null,create:async(p,data)=>{
   if(records.has(p))throw Error('generation_precondition_failed');records.set(p,{generation:'1',data:structuredClone(data)});
  }};
@@ -36,23 +48,29 @@ function fixture({lost=false}={}){
   }
   assert.equal(init.method,'GET');
   if(p.endsWith('/'+repo))return Response.json({name:repo,dockerConfig:{immutableTags:true}});
-  if(p.includes('/tags/')){const s=p.split('/').at(-1),d=s===sha?digest:oldDigest,name=repo+'/packages/jscc-service/tags/'+s;
-   return Response.json({name,version:repo+'/packages/jscc-service/versions/'+d});}
+  if(p.includes('/tags/')){const s=p.split('/').at(-1),d=s===sha?digest:oldDigest,name=repo+'/packages/'+pkg+'/tags/'+s;
+   return Response.json({name,version:repo+'/packages/'+pkg+'/versions/'+d});}
   if(p.endsWith('/builds/'+id)){
    // Determine target from current template (stage vs restore).
-   const target=current.template.template.containers[0].image===image+digest?old:sha,d=target===sha?digest:oldDigest;
+   const target=current.template.template.containers[0].image===baseImage+digest?old:sha,d=target===sha?digest:oldDigest;
    return Response.json({name:'projects/jscc-shared/locations/europe-west1/builds/'+id,id,
     serviceAccount:'projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com',status:'SUCCESS',
-    substitutions:{_GIT_SHA:target},results:{images:[{name:image.slice(0,-1)+':'+target,digest:d}]}});
+    substitutions:{_GIT_SHA:target},results:{images:[{name:baseImage.slice(0,-1)+':'+target,digest:d}]}});
   }
   if(p.endsWith('/locks%2Fheavy-search.lock'))return Response.json(u.searchParams.get('alt')==='media'?lock:{bucket,name:'locks/heavy-search.lock',generation:'12'});
   if(p.endsWith('/active.json'))return new Response(null,{status:404});
   if(p.endsWith('/seed%2Fsources.json'))return Response.json({bucket,name:'seed/sources.json',generation:'34'});
   if(p.endsWith('/executions'))return Response.json({executions:[]});
+  if(p.endsWith('/'+servicePath))return Response.json({name:servicePath,generation:'1',observedGeneration:'1',
+   terminalCondition:{state:'CONDITION_SUCCEEDED'},trafficStatuses:serviceStaged?
+    [{revision:oldRev,percent:100},{revision:rev,percent:0,tag:'candidate'}]:[{revision:rev,percent:100}]});
+  if(p.endsWith('/'+servicePath+'/revisions/'+rev))return Response.json({name:servicePath+'/revisions/'+rev,
+   serviceAccount:'jscc-dev-runtime@jscc-dev.iam.gserviceaccount.com',conditions:[{type:'Ready',state:'CONDITION_SUCCEEDED'}],
+   containers:[{image:image+serviceDigest,env:[{name:'SOURCE_SHA',value:sha},{name:'RUNTIME_DATA_SHA',value:sha}]}]});
   if(p.endsWith('/'+path))return Response.json(current);
   assert.fail(url);
  };
- return {patches,options:{store,fetchImpl,now,verifyAuthority:async()=>true,getToken:async()=> 'fixture',wait:async()=>{}}};
+ return {patches,tpl,rev,serviceDigest,options:{store,fetchImpl,now,verifyAuthority:async()=>true,getToken:async()=> 'fixture',wait:async()=>{}}};
 }
 test('migration stage and independently approved restore change only digest and source SHA, preserve refuse',async()=>{
  const f=fixture(),run=x=>executeApprovedProductJobStep(x,{...f.options,trustedRecordHash:operatorHash(x)});
@@ -72,4 +90,22 @@ test('foreign environment, unauthorized authority, wrong target hash and lost re
  const l=fixture({lost:true}),again=()=>executeApprovedProductJobStep(request,{...l.options,trustedRecordHash:operatorHash(request)});
  assert.equal((await again()).state,'RECOVERY_REQUIRED');assert.equal((await again()).state,'ALREADY_CLAIMED');
  assert.equal(l.patches.length,2);
+});
+
+test('Search Job image-only update requires independently admitted zero-traffic Service stage',async()=>{
+ const f=fixture({role:'search'}),x={...request,role:'search',service_revision:f.rev,service_digest:f.serviceDigest,
+  previous:{...previous,template_sha256:operatorHash(f.tpl(old,oldDigest))},
+  candidate:{...candidate,template_sha256:operatorHash(f.tpl(sha,digest))}};
+ const out=await executeApprovedProductJobStep(x,{...f.options,trustedRecordHash:operatorHash(x)});
+ assert.equal(out.state,'OBSERVED');assert.deepEqual(f.patches[1].body.template,f.tpl(sha,digest));
+ const g=fixture({role:'search',serviceStaged:false});
+ await assert.rejects(()=>executeApprovedProductJobStep(x,{...g.options,trustedRecordHash:operatorHash(x)}),/service_not_staged/);
+ assert.equal(g.patches.length,0);
+});
+test('lost update receipt can be reconciled without replay or release authorization',async()=>{
+ const f=fixture({lost:true}),options={...f.options,trustedRecordHash:operatorHash(request)};
+ assert.equal((await executeApprovedProductJobStep(request,options)).state,'RECOVERY_REQUIRED');
+ const observed=await observeApprovedProductJobStep(request,{...options,now:()=>now()+10000});
+ assert.equal(observed.template_state,'TARGET');assert.equal(observed.receipt_available,false);
+ assert.equal(observed.lock_release_authorized,false);assert.equal(f.patches.length,2);
 });

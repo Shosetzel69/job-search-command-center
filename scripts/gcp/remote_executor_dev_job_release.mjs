@@ -161,3 +161,38 @@ export async function executeApprovedProductJobStep(record,{
   require(match(GEN,saved?.generation)&&same(saved.data,receipt),'product_job_receipt_unverified');return receipt;
  }catch{return {operation_id:key,state:'RECOVERY_REQUIRED',automatic_retry:false,lock_release_authorized:false};}
 }
+
+
+// Reconcile a claim by reading the exact Job and owned lock. A matching
+// template is observation only, never permission to replay or resume dispatch.
+export async function observeApprovedProductJobStep(record,{
+ trustedRecordHash,verifyAuthority,getToken,fetchImpl=fetch,store,now=Date.now
+}={}){
+ const {x}=admit(record,trustedRecordHash,()=>record?.issued_at_ms);
+ require(typeof getToken==='function'&&typeof verifyAuthority==='function'&&await verifyAuthority(x)===true&&
+  Number.isSafeInteger(now())&&now()>=x.issued_at_ms,'product_job_authority_denied');
+ const key=operatorHash({environment:'dev',work_item_ref:'#589',operation:'product-job-step',approval_ref:x.approval_ref});
+ const base='control/v1/product-job-steps/'+key,ledger=store||operatorProductJobStore({getToken,fetchImpl});
+ const claim={environment:'dev',operation_id:key,evidence_hash:trustedRecordHash,role:x.role,phase:x.phase,approval_ref:x.approval_ref};
+ const stored=await ledger.get(base+'.claim.json');
+ require(match(GEN,stored?.generation)&&same(stored.data,claim),'product_job_claim_unverified');
+ const receipt=await ledger.get(base+'.receipt.json');
+ const from=x.phase==='stage'?x.previous:x.candidate,to=x.phase==='stage'?x.candidate:x.previous;
+ if(receipt){
+  const expected={...claim,state:'OBSERVED',template_sha256:to.template_sha256,source_sha:to.source_sha,
+   digest:to.digest,automatic_retry:false,functional_acceptance:'PENDING',lock_release_authorized:false};
+  require(match(GEN,receipt.generation)&&same(receipt.data,expected),'product_job_receipt_unverified');
+ }
+ const call=transport(getToken,fetchImpl);
+ await verifyLock(call,x);await verifyIdle(call);await serviceGate(call,x);
+ const raw=await call(RUN+jobPath(x.role)),hash=operatorHash(raw.template);
+ let status='DRIFT',identity=null;
+ if(hash===from.template_sha256){readback(raw,x.role,from);status='PREVIOUS';identity=from;}
+ else if(hash===to.template_sha256){readback(raw,x.role,to);status='TARGET';identity=to;}
+ await verifyLock(call,x);
+ const again=await call(RUN+jobPath(x.role));
+ require(raw.etag===again.etag&&operatorHash(again.template)===hash,'product_job_recovery_drift');
+ return {operation_id:key,state:'OBSERVED',template_state:status,template_sha256:hash,
+  source_sha:identity?.source_sha??null,digest:identity?.digest??null,receipt_available:Boolean(receipt),
+  automatic_retry:false,functional_acceptance:'PENDING',lock_release_authorized:false};
+}
