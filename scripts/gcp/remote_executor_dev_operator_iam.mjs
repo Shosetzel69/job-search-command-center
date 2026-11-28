@@ -56,9 +56,12 @@ export function planDevOperatorIam(){
   binding(PUBLISHER,SOURCE,'jsccOpsSourceCreateDev',['source/dev-'],'jscc589_publisher_source_create',SHARED),
   binding(JOB,SOURCE,'jsccOpsSourceGetDev',['source/dev-'],'jscc589_job_source_read',SHARED),
  ];
- const plan={schema_version:'1.0',environment:'dev',work_item_ref:'#589',roles:structuredClone(roles),bucket_bindings:p,
+ const plan={schema_version:'1.0',environment:'dev',work_item_ref:'#589',
+  service_accounts:[JOB,PUBLISHER].map(id=>({project:DEV,id,email:id+'@'+DEV+'.iam.gserviceaccount.com',
+   required_enabled:true,expected_direct_iam_bindings:[],expected_user_managed_keys:[]})),
+  roles:structuredClone(roles),bucket_bindings:p,
   job_bindings:[{project:DEV,region:'europe-west1',job:JOB,member:member(GATEWAY),role:'projects/'+DEV+'/roles/jsccOpsOperatorInvokeDev'}],
-  prerequisites:['UNIFORM_BUCKET_ACCESS','EXACT_EXISTING_IDENTITIES','NO_INHERITED_BYPASS','INDEPENDENT_AUTHORITY_CUSTODY','R6_BUCKET_LIST_OWNER_APPROVAL','LEGACY_BUILD_LEDGER_RECONCILED'],
+  prerequisites:['UNIFORM_BUCKET_ACCESS','EXACT_EXISTING_IDENTITIES','NO_INHERITED_BYPASS','DEFAULT_COMPUTE_AND_BUILD_BYPASS_RESOLVED','INDEPENDENT_AUTHORITY_CUSTODY','R6_BUCKET_LIST_OWNER_APPROVAL','LEGACY_BUILD_LEDGER_RECONCILED'],
   activation_authorized:false,live_iam_verified:false};
  return {plan,sha256:createHash('sha256').update(JSON.stringify(plan)).digest('hex')};
 }
@@ -67,7 +70,14 @@ export function planDevOperatorIam(){
 export function operatorIamCommands(pin){
  const {plan,sha256}=planDevOperatorIam();
  if(pin!==sha256)throw Error('operator_iam_plan_pin_mismatch');
- return {roles:plan.roles.map(x=>({
+ return {service_accounts:plan.service_accounts.map(x=>({
+  describe:['gcloud','iam','service-accounts','describe',x.email,'--project='+x.project,'--format=json'],
+  create:['gcloud','iam','service-accounts','create',x.id,'--project='+x.project,'--quiet'],
+  inspect_policy:['gcloud','iam','service-accounts','get-iam-policy',x.email,'--project='+x.project,'--format=json'],
+  inspect_keys:['gcloud','iam','service-accounts','keys','list','--iam-account='+x.email,'--managed-by=user','--project='+x.project,'--format=json'],
+  expected_enabled:x.required_enabled,expected_direct_iam_bindings:x.expected_direct_iam_bindings,
+  expected_user_managed_keys:x.expected_user_managed_keys
+ })),roles:plan.roles.map(x=>({
   describe:['gcloud','iam','roles','describe',x.id,'--project='+x.project,'--format=json'],
   create:['gcloud','iam','roles','create',x.id,'--project='+x.project,'--title='+x.id,'--permissions='+x.permissions.join(','),'--stage=GA','--quiet'],
   expected_permissions:x.permissions

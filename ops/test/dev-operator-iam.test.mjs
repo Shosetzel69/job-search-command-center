@@ -58,3 +58,22 @@ test('R4 CLI rejects wrong pin without stack trace or commands',()=>{
  const r=spawnSync(process.execPath,[fileURLToPath(new URL('../../scripts/gcp/remote_executor_dev_operator_iam.mjs',import.meta.url)),'--commands','0'.repeat(64)],{encoding:'utf8'});
  assert.equal(r.status,2);assert.equal(r.stdout,'');assert.equal(r.stderr.trim(),'operator_iam_plan_pin_mismatch');
 });
+
+test('G1-F5 exact DEV identity prerequisites are pinned; no existing user or service account grants change',()=>{
+ const commands=operatorIamCommands(sha256);
+ assert.deepEqual(plan.service_accounts.map(x=>x.id),[job,publisher]);
+ assert.ok(plan.prerequisites.includes('DEFAULT_COMPUTE_AND_BUILD_BYPASS_RESOLVED'));
+ for(const [i,identity] of plan.service_accounts.entries()){
+  const c=commands.service_accounts[i];
+  assert.equal(identity.email,identity.id+'@jscc-dev.iam.gserviceaccount.com');
+  assert.equal(identity.project,'jscc-dev');
+  assert.deepEqual(c.create,['gcloud','iam','service-accounts','create',identity.id,'--project=jscc-dev','--quiet']);
+  assert.deepEqual(c.inspect_policy,['gcloud','iam','service-accounts','get-iam-policy',identity.email,'--project=jscc-dev','--format=json']);
+  assert.ok(c.inspect_keys.includes('--managed-by=user'));
+  assert.equal(c.expected_enabled,true);
+  assert.deepEqual(c.expected_direct_iam_bindings,[]);
+  assert.deepEqual(c.expected_user_managed_keys,[]);
+ }
+ assert.ok(!JSON.stringify(commands).includes('remove-iam-policy-binding'));
+ assert.ok(!JSON.stringify(commands).includes('keys","create'));
+});
