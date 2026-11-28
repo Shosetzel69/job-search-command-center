@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {createHash} from 'node:crypto';
 import {
  operationIdentity,reserveDevBuildOperation,executeApprovedDevBuildOnce,
  observeDevBuildOnce,gcsDevOperationStore,
@@ -46,7 +47,7 @@ function fakeStore() {
 test('R6 ledger binds opaque actor, exact request and idempotency key to GCS path',()=>{
  const a=identity(),b=identity();
  assert.deepEqual(a,b);
- assert.match(a.path,/^control\/v1\/builds\/[a-f0-9]{64}\.json$/);
+ assert.match(a.path,/^control\/v1\/builds\/ledgers\/[a-f0-9]{64}\.json$/);
  assert.equal(a.path.includes('#589'),false);
  assert.throws(()=>operationIdentity({actor_sub_hash:'USER_EMAIL',idempotency_key:'short',request}));
  assert.throws(()=>operationIdentity({actor_sub_hash:actor,idempotency_key:'short',request}));
@@ -188,4 +189,22 @@ test('R6 intent failure prevents dispatch even after approval reservation',async
  cb.dispatch=async()=>{launches++;return callbacks().dispatch();};
  assert.equal((await executeApprovedDevBuildOnce(identity(),store,cb)).state,'BLOCKED');
  assert.equal(launches,0);
+});
+
+test('R3 historical flat ledger blocks reservation under new mutable prefix',async()=>{
+ const store=fakeStore(),a=identity();
+ await store.create('control/v1/builds/'+a.key+'.json',{state:'SUBMITTED'});
+ await assert.rejects(()=>reserveDevBuildOperation(a,store),/legacy_build_ledger_reconciliation_required/);
+ assert.equal(await store.get(a.path),null);
+});
+
+test('R3 legacy flat consumption blocks a different idempotency key before dispatch',async()=>{
+ const store=fakeStore(),a=identity(),cb=callbacks();
+ const approval_ref='#589/APPROVE_BUILD';
+ const key=createHash('sha256').update(JSON.stringify({environment:'dev',operation:'dev-ops-build-approval',approval_ref})).digest('hex');
+ await store.create('control/v1/builds/'+key+'.json',{approval_ref});
+ let dispatched=0;cb.dispatch=async()=>{dispatched++;return callbacks().dispatch();};
+ const result=await executeApprovedDevBuildOnce(a,store,cb);
+ assert.equal(result.state,'BLOCKED');assert.equal(dispatched,0);
+ assert.equal(await store.get('control/v1/builds/consumed/'+key+'.json'),null);
 });

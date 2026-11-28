@@ -129,7 +129,8 @@ class PairTests(unittest.TestCase):
             "maxRetries": 0, "timeout": "1800s", "containers": [{"image": pair.ROOT+"jscc-ops-operator@"+digest,
             "resources": {"limits": {"cpu": "1", "memory": "1Gi"}}, "env": [
             {"name": k, "value": v} for k, v in {"SOURCE_SHA": NEW[pair.KEYS[0]], "GCP_PROJECT": "jscc-dev",
-             "GCP_REGION": "europe-west1", "OPS_BUCKET": "jscc-dev-ops-state"}.items()]}]}}}
+             "GCP_REGION": "europe-west1", "OPS_BUCKET": "jscc-dev-ops-state",
+              "JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256": "a"*64}.items()]}]}}}
         target = {"source_sha": NEW[pair.KEYS[0]], "gateway_digest": NEW[pair.KEYS[1]], "worker_digest": NEW[pair.KEYS[2]],
                   "catalog": CAT, "previous_catalog": CAT, "operator_activation": {"source_sha": NEW[pair.KEYS[0]],
                   "image_digest": digest, "activation_ref": "#589/300", "publisher_ref": "#589/301"}}

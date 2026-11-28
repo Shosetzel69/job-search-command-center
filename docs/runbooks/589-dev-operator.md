@@ -17,7 +17,7 @@ Owner-approved alternative to the unavailable dedicated native read-only credent
 The existing `ops/build/dev-cloud-build-controller.mjs` and durable
 `ops/control/dev-build-operation-ledger.mjs` now bind approval to the exact
 staged source object, generation and SHA256. A create-only approval record
-in the existing `control/v1/builds/` prefix consumes each authoritative
+in `control/v1/builds/consumed/` consumes each authoritative
 approval once, independently of actor and idempotency key. The operation
 record is confirmed in SUBMITTING before remote dispatch; uncertain submit
 receipts are never retried automatically.
@@ -190,7 +190,7 @@ actual immutable operator image, fixed DEV project/region, task count and
 parallelism one, retries zero, 1800s timeout, 1 CPU, 1Gi memory, fixed
 environment, no mount/command/args overrides. Gateway config:
 `JSCC_DEV_OPERATOR_ENABLED`, `JSCC_DEV_OPERATOR_SOURCE_SHA`,
-`JSCC_DEV_OPERATOR_IMAGE_DIGEST`. Enabling is a separate controlled
+`JSCC_DEV_OPERATOR_IMAGE_DIGEST`. The Job additionally requires the independently approved public `JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256` fingerprint (R2). Enabling is a separate controlled
 configuration change. Keep disabled until all preconditions pass.
 Capture the protected product API and Search Job baseline, drain Retrieve,
 preserve their effective config/revisions/digests and do not manipulate

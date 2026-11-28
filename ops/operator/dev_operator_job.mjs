@@ -3,7 +3,8 @@ import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {gcpFetch,gcsReadJson,gcsWriteJson,metadataAccessToken} from '../src/lib.mjs';
 import {OPERATOR_BUCKET,OPERATOR_JOB,operatorPaths,operatorDispatchPath,operatorExecution,
- operatorRequire,operatorHash,validateOperatorApproval,validateOperatorRequest,projectOperatorResult}
+ operatorRequire,operatorHash,validateOperatorApproval,validateOperatorRequest,projectOperatorResult,
+ operatorApprovalReviewPath,verifyOperatorApprovalReview}
  from '../src/dev_operator_contract.mjs';
 import {verifyOperatorLifecycle} from '../src/dev_operator_gateway.mjs';
 import {runApprovedBuild,observeApprovedBuildEvidence,cancelApprovedBuild,reconcileApprovedBuild} from '../../scripts/gcp/remote_executor_dev_build.mjs';
@@ -25,6 +26,7 @@ const create=(path,data)=>gcsWriteJson(OPERATOR_BUCKET,path,data,0);
 const sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 const GEN=/^[1-9][0-9]{0,19}$/;
 const SHA=/^[a-f0-9]{40}$/;
+const HEX=/^[a-f0-9]{64}$/;
 
 export async function runtimeConfig(env=process.env,{fetchImpl=fetch,readSource=()=>readFile(
  new URL('../operator-source-sha',import.meta.url),'utf8')}={}){
@@ -37,7 +39,9 @@ export async function runtimeConfig(env=process.env,{fetchImpl=fetch,readSource=
  const response=await fetchImpl(META+'email',{headers:{'Metadata-Flavor':'Google'},
   redirect:'error',signal:AbortSignal.timeout(5000)});
  operatorRequire(response.ok&&(await response.text()).trim()===SA,'operator_identity_denied');
- return Object.freeze({sourceSha:env.SOURCE_SHA,execution:env.CLOUD_RUN_EXECUTION});
+ const reviewKeyFingerprint=env.JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256;
+ operatorRequire(HEX.test(reviewKeyFingerprint||''),'operator_review_key_pin_missing');
+ return Object.freeze({sourceSha:env.SOURCE_SHA,execution:env.CLOUD_RUN_EXECUTION,reviewKeyFingerprint});
 }
 
 async function readOriginal(ref,actor,get){
@@ -153,7 +157,7 @@ export async function runOperatorJob(config,{
  handlers=defaultHandlers,maxPolls=60,
 }={}){
  operatorRequire(SHA.test(config?.sourceSha||'')&&operatorExecution(config.execution)===config.execution&&
-  typeof config.execution==='string','operator_runtime_denied');
+  typeof config.execution==='string'&&HEX.test(config.reviewKeyFingerprint||''),'operator_runtime_denied');
  let dispatch=null;
  for(let i=0;i<maxPolls;i++){
   dispatch=await get(operatorDispatchPath(config.execution));
@@ -167,7 +171,16 @@ export async function runOperatorJob(config,{
  const stored=await get(paths.request);
  operatorRequire(GEN.test(stored?.generation||'')&&operatorHash(stored.data)===operatorHash(request),
   'operator_request_binding_mismatch');
- const admission=validateOperatorApproval(await get(paths.approval),{
+ const readVerified=async path=>{
+  const saved=await get(path);
+  if(/^control\/v1\/approvals\/[a-f0-9]{64}\.json$/.test(path)&&saved){
+   operatorRequire(saved.data&&operatorPaths(saved.data.approval_ref).approval===path&&
+    verifyOperatorApprovalReview(saved.data,await get(operatorApprovalReviewPath(saved.data.approval_ref)),config.reviewKeyFingerprint),
+    'operator_review_proof_denied');
+  }
+  return saved;
+ };
+ const admission=validateOperatorApproval(await readVerified(paths.approval),{
   ref:request.approval_ref,actor:request.actor_sub_hash,sourceSha:config.sourceSha,now:now()
  });
  validateOperatorRequest(request,admission);
@@ -194,7 +207,7 @@ export async function runOperatorJob(config,{
   operatorRequire(now()<request.expires_at_ms,'operator_approval_expired');
   const handler=handlers[request.action];
   operatorRequire(typeof handler==='function','operator_action_unavailable');
-  const raw=await handler(admission.approval,get);
+  const raw=await handler(admission.approval,readVerified);
   const state=['RESERVED','VERIFYING','SUBMITTING','RUNNING'].includes(raw?.state)
    ?'RECOVERY_REQUIRED':raw?.state;
   // Do not publish raw API responses, tokens, source archives or journal.

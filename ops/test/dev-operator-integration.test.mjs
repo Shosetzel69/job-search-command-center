@@ -1,13 +1,22 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {operatorActor,operatorHash,operatorPaths,operatorDispatchPath,operatorExecution,operatorLro,validateOperatorApproval}
+import {generateKeyPairSync,sign} from 'node:crypto';
+import {publishIndependentApproval} from '../../scripts/gcp/remote_executor_dev_publish_approval.mjs';
+import {operatorActor,operatorHash,operatorPaths,operatorDispatchPath,operatorExecution,operatorLro,validateOperatorApproval,
+ publisherReviewKey,publisherReviewMessage,operatorApprovalReviewPath,operatorApprovalReviewProof}
  from '../src/dev_operator_contract.mjs';
 import {invokeDevOperator,operatorGatewayConfig,operatorTools} from '../src/dev_operator_gateway.mjs';
 import {runOperatorJob,runtimeConfig} from '../operator/dev_operator_job.mjs';
 
 const SHA='a'.repeat(40),DIGEST='sha256:'+'b'.repeat(64);
 const sub='123456789',actor=operatorActor(sub),ref='#589/1234';
+const keys=generateKeyPairSync('ed25519');
+const reviewKey=keys.publicKey.export({format:'der',type:'spki'}).toString('base64');
+const reviewKeyFingerprint=publisherReviewKey(reviewKey).fingerprint;
+const reviewConfig={reviewKey,actor,operatorSourceSha:SHA,publisherSourceSha:SHA,email:'independent-authority-dev@jscc-dev.iam.gserviceaccount.com',sub:'123456789012345678901'};
+const reviewSignature=(record,cfg)=>sign(null,publisherReviewMessage(record,'approval',cfg),keys.privateKey).toString('base64url');
+const reviewProof=record=>{const cfg={...reviewConfig,actor:record.actor_sub_hash,operatorSourceSha:record.operator_source_sha};return operatorApprovalReviewProof(record,cfg,reviewSignature(record,cfg));};
 const now=()=>1700000000000,execution='jscc-ops-operator-dev-abcde';
 const root='projects/jscc-dev/locations/europe-west1';
 const sa='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
@@ -22,7 +31,8 @@ function approval(){
   issued_at_ms:now()-1000,expires_at_ms:now()+10000};
 }
 function fixture({record=approval(),jobImage=DIGEST,lifecycleOK=true,loseDispatch=false}={}){
- const map=new Map([[paths.approval,{generation:'1',data:record}]]),calls=[];
+ const map=new Map([[paths.approval,{generation:'1',data:record}],
+  [operatorApprovalReviewPath(ref),{generation:'1',data:reviewProof(record)}]]),calls=[];
  const get=async p=>map.has(p)?structuredClone(map.get(p)):null;
  const put=async(p,data)=>{
   if(loseDispatch&&p===operatorDispatchPath(execution))throw Error('network_loss');
@@ -36,7 +46,7 @@ function fixture({record=approval(),jobImage=DIGEST,lifecycleOK=true,loseDispatc
     maxRetries:0,serviceAccount:sa,timeout:'1800s',containers:[{
      resources:{limits:{cpu:'1',memory:'1Gi'}},
      image:'europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-operator@'+jobImage,
-     env:Object.entries({SOURCE_SHA:SHA,GCP_PROJECT:'jscc-dev',GCP_REGION:'europe-west1',OPS_BUCKET:'jscc-dev-ops-state'}).map(([name,value])=>({name,value})),
+     env:Object.entries({SOURCE_SHA:SHA,GCP_PROJECT:'jscc-dev',GCP_REGION:'europe-west1',OPS_BUCKET:'jscc-dev-ops-state',JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256:reviewKeyFingerprint}).map(([name,value])=>({name,value})),
     }],
    }},
   };
@@ -51,7 +61,7 @@ function fixture({record=approval(),jobImage=DIGEST,lifecycleOK=true,loseDispatc
 }
 const start=f=>invokeDevOperator('operator_start',{approval_ref:ref},sub,config,f.opts);
 const status=f=>invokeDevOperator('operator_status',{approval_ref:ref},sub,config,f.opts);
-const run=(f,handler)=>runOperatorJob({sourceSha:SHA,execution},{...f.jobOpts,handlers:{gcloud_inventory:handler}});
+const run=(f,handler)=>runOperatorJob({sourceSha:SHA,execution,reviewKeyFingerprint},{...f.jobOpts,handlers:{gcloud_inventory:handler}});
 
 test('operator default-disabled; enabled configuration is exact DEV-only and immutable',()=>{
  assert.equal(operatorGatewayConfig({}),null);
@@ -132,14 +142,14 @@ test('lost action receipt is recovery-required and not re-dispatched',async()=>{
 test('runtime identity and embedded source binding require exact Job task and service account',async()=>{
  const env={CLOUD_RUN_JOB:'jscc-ops-operator-dev',CLOUD_RUN_TASK_INDEX:'0',CLOUD_RUN_TASK_COUNT:'1',
   CLOUD_RUN_TASK_ATTEMPT:'0',CLOUD_RUN_EXECUTION:execution,GCP_PROJECT:'jscc-dev',GCP_REGION:'europe-west1',
-  OPS_BUCKET:'jscc-dev-ops-state',SOURCE_SHA:SHA};
+  OPS_BUCKET:'jscc-dev-ops-state',SOURCE_SHA:SHA,JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256:reviewKeyFingerprint};
  const opts={readSource:async()=>SHA+'\n',fetchImpl:async(url,init)=>{
   assert.match(url,/metadata\.google\.internal\/.*\/email$/);
   assert.equal(init.redirect,'error');
   return new Response(sa);
  }};
- assert.deepEqual(await runtimeConfig(env,opts),{sourceSha:SHA,execution});
- for(const delta of [{CLOUD_RUN_TASK_ATTEMPT:'1'},{CLOUD_RUN_TASK_COUNT:'2'},{GCP_PROJECT:'jscc-prod'}])
+ assert.deepEqual(await runtimeConfig(env,opts),{sourceSha:SHA,execution,reviewKeyFingerprint});
+ for(const delta of [{CLOUD_RUN_TASK_ATTEMPT:'1'},{CLOUD_RUN_TASK_COUNT:'2'},{GCP_PROJECT:'jscc-prod'},{JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256:''}])
   await assert.rejects(()=>runtimeConfig({...env,...delta},opts));
  await assert.rejects(()=>runtimeConfig(env,{...opts,readSource:async()=>DIGEST}));
  await assert.rejects(()=>runtimeConfig(env,{...opts,fetchImpl:async()=>new Response('other-sa')}));
@@ -230,7 +240,7 @@ test('authenticated catalog is derived from admitted actions, never calls cloud 
  assert.ok(out.actions.every(x=>x.approval_required===true));
  assert.ok(out.actions.some(x=>x.action==='observe_product_incident'&&x.classification==='OBSERVE'));
  assert.ok(out.actions.some(x=>x.action==='reconcile_build_submission'&&x.classification==='CHANGE'));
- assert.equal(f.calls.length,0);assert.equal(f.map.size,1);
+ assert.equal(f.calls.length,0);assert.equal(f.map.size,2);
  await assert.rejects(()=>invokeDevOperator('operator_catalog',{environment:'prod'},sub,config,f.opts));
  await assert.rejects(()=>invokeDevOperator('operator_catalog',{},'invalid',config,f.opts));
 });
@@ -242,12 +252,52 @@ test('published approval preflight binds same actor, generation, lifecycle and J
  assert.equal(out.state,'PREFLIGHT_OBSERVED');assert.equal(out.approval_generation,'1');
  assert.equal(out.record_hash,operatorHash(approval()));assert.equal(out.job_template,'OBSERVED_MATCH');
  assert.equal(out.runtime_permissions,'UNVERIFIED');assert.equal(out.execution_authorized,false);
- assert.equal(f.map.size,1);assert.equal(f.calls.filter(x=>x[0]==='POST').length,0);
+ assert.equal(f.map.size,2);assert.equal(f.calls.filter(x=>x[0]==='POST').length,0);
  await assert.rejects(()=>invokeDevOperator('operator_preflight',{approval_ref:ref},'999999',config,f.opts));
  await start(f);
  assert.equal((await preflight()).state,'ALREADY_REQUESTED');
  assert.equal(f.calls.filter(x=>x[0]==='POST').length,1);
  const g=fixture({jobImage:'sha256:'+'f'.repeat(64)});
  await assert.rejects(()=>invokeDevOperator('operator_preflight',{approval_ref:ref},sub,config,g.opts),/job_binding/);
- assert.equal(g.map.size,1);
+ assert.equal(g.map.size,2);
+});
+
+test('R2 missing, altered or foreign independent proof denies Job before claim',async()=>{
+ const path=operatorApprovalReviewPath(ref);
+ for(const mutate of [
+  f=>f.map.delete(path),
+  f=>{f.map.get(path).data.review_signature='A'.repeat(86);},
+  f=>{f.map.get(path).data.review_key_sha256='0'.repeat(64);},
+  f=>{f.map.get(path).data.authority_sub='999999';},
+  f=>{f.map.get(path).data.record_hash='0'.repeat(64);}
+ ]){
+  const f=fixture();await start(f);mutate(f);
+  await assert.rejects(()=>run(f,async()=>assert.fail('action reached')),/operator_review_proof_denied/);
+  assert.equal(f.map.has('control/v1/operator-claims/'+paths.key+'.json'),false);
+ }
+ const f=fixture();await start(f);
+ await assert.rejects(()=>runOperatorJob({sourceSha:SHA,execution,reviewKeyFingerprint:'0'.repeat(64)},
+  {...f.jobOpts,handlers:{gcloud_inventory:async()=>assert.fail('action reached')}}),/operator_review_proof_denied/);
+});
+test('R2 Publisher creates and confirms proof before create-only approval',async()=>{
+ const record=approval(),calls=[],objects=new Map();
+ const fetchImpl=async(url,init)=>{
+  const u=new URL(url);
+  if(init.method==='POST'){
+   const path=u.searchParams.get('name');
+   assert.equal(u.searchParams.get('ifGenerationMatch'),'0');
+   calls.push(path);objects.set(path,JSON.parse(init.body));
+   return Response.json({name:path,bucket:'jscc-dev-ops-state',generation:'1'});
+  }
+  assert.equal(u.searchParams.get('generation'),'1');
+  return Response.json(objects.get(decodeURIComponent(u.pathname.split('/o/')[1])));
+ };
+ const options={trustedRecordHash:operatorHash(record),sourceSha:SHA,actor,reviewConfig,
+  reviewSignature:reviewSignature(record,reviewConfig),now,getToken:async()=>'fixture',fetchImpl};
+ await assert.rejects(()=>publishIndependentApproval(record,{...options,reviewSignature:'A'.repeat(86)}));
+ assert.equal(calls.length,0);
+ const receipt=await publishIndependentApproval(record,options);
+ assert.deepEqual(calls,[operatorApprovalReviewPath(ref),paths.approval]);
+ assert.equal(receipt.record_hash,operatorHash(record));
+ assert.deepEqual(objects.get(operatorApprovalReviewPath(ref)),reviewProof(record));
 });

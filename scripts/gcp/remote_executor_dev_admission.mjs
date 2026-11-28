@@ -154,7 +154,16 @@ export function operatorPairStore(options={}){
  return operatorStateStore(validPath,options);
 }
 export function operatorBuildStore(options={}){
- return operatorStateStore(path=>typeof path==='string'&&/^control\/v1\/builds\/[a-f0-9]{64}\.json$/.test(path),options);
+ const root='control/v1/builds/';
+ const legacy=/^control\/v1\/builds\/[a-f0-9]{64}\.json$/;
+ const ledger=/^control\/v1\/builds\/ledgers\/[a-f0-9]{64}\.json$/;
+ const consumed=/^control\/v1\/builds\/consumed\/[a-f0-9]{64}\.json$/;
+ const inner=operatorStateStore(path=>typeof path==='string'&&path.startsWith(root)&&(legacy.test(path)||ledger.test(path)||consumed.test(path)),options);
+ return {get:path=>inner.get(path),create:async(path,data)=>{
+  require(ledger.test(path)||consumed.test(path),'build_store_create_path_denied');return inner.create(path,data);
+ },replace:async(path,data,generation)=>{
+  require(ledger.test(path),'build_store_replace_path_denied');return inner.replace(path,data,generation);
+ }};
 }
 // Separate, explicitly admitted product/DB release authority only. No default
 // gcloud or generic operator credentials for this store.

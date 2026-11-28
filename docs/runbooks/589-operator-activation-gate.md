@@ -33,21 +33,13 @@ No effective grant to another identity may be inferred from the plan.
 | Identity | Protected object access |
 |---|---|
 | Gateway | Get approval, request, receipt, dispatch, claim, result; create request/receipt and dispatch only |
-| Operator Job | Get controller records and existing diagnostic evidence; create claim/result; CAS replace existing build/deployment ledger prefixes only |
+| Operator Job | Get controller records and existing diagnostic evidence; create claim/result; CAS replace new build ledger and existing deployment ledger prefixes; exact diagnostics lease; bucket-level maintenance list subject to separate owner approval |
 | Publisher | Create/get approval; create/get DEV source archive under the existing shared source bucket's source/dev- prefix |
 | Diagnostics / sandbox | No new controller access |
 | Product migration/release identity | No new grant; separate existing release gates |
 
 GCS overwriting an existing object requires storage.objects.delete.
-Only mutable CAS build/deployment ledgers receive this permission, not
-approval, operator claim, request, dispatch or result objects. Existing
-build approval-consumption objects share the historical builds prefix;
-this plan does not change that persisted path or assert its immutability
-against a compromised Operator. The external approval and operator claim
-remain create-only. No list grant is added: object list permission is
-bucket-level and cannot be prefix-filtered by resource.name IAM conditions.
-Action-specific provider access, R6 maintenance lease/list requirements and
-shared build/log permissions are separate already recorded activation gates.
+Only mutable CAS build/deployment ledgers and the exact diagnostics lease receive this permission. Legacy flat build records are read-only; new mutable ledgers use `control/v1/builds/ledgers/` and single-use consumption uses `control/v1/builds/consumed/`. Existing flat consumption is checked before a new reservation; an existing flat ledger blocks a new reservation for the same identity. No automatic migration or legacy recovery mutation: reconcile outstanding legacy ledgers and revoke any old broad grants independently before activation. The exact existing `leases/diagnostics.json` gets get/create/delete; `dispatch/` gets read-only. Object list is bucket-level and cannot be prefix-filtered by resource.name IAM conditions. The new list role is confined to the isolated Job and existing ops-state bucket; it exposes object names across that bucket, not object contents. Owner must independently approve that exposure and the revised plan hash before IAM application or any CHANGE action. The maintenance implementation retains its fixed operations/ and dispatch/ prefix filters. Action-specific provider access and shared build/log permissions remain separate activation gates.
 Do not add broad storage roles to make an action work.
 
 Provider references:
@@ -116,7 +108,7 @@ const signature = sign(null, publisherReviewMessage(record, purpose, config), re
   Publisher rejects invalid/missing public key when enabled, and missing,
   wrong-key, wrong-purpose or altered-record signatures before GCS writes.
   The publisher status client checks the independently pinned fingerprint.
-  The original durable approval record remains unchanged.
+  The original durable approval record remains unchanged. R2: Publisher first creates and reads back a companion under the same create-only approval prefix, containing the exact record hash, signature, public key/fingerprint and signed authority/source metadata. No unsigned direct publication is admitted. The Job requires the independently owner-approved `JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256` public fingerprint, verifies the companion and exact record before claim or handler execution, and verifies original approval records read by handlers against the same pin. Missing, wrong or historical unproven records fail closed. An orphan companion or uncertain publication requires independent reconciliation; no automatic retry. A key rotation must account for existing approval proofs before activation. Gateway and pair preflight require the Job fingerprint field to be present; G2 still must verify its actual owner-approved value and Job image/config immutability.
 - External client publishApprovalRemotely / stageDevSourceRemotely accepts
   reviewSignature and delivers the independently approved record to the fixed
   private endpoint. No signing key is needed or supplied to either client.
