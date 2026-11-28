@@ -61,7 +61,8 @@ async function verifyJob(call,config){
   (!container.command||container.command.length===0)&&(!container.args||container.args.length===0)&&
   (!container.volumeMounts||container.volumeMounts.length===0)&&
   container.resources?.limits?.cpu==='1'&&container.resources?.limits?.memory==='1Gi'&&
-  Array.isArray(container.env)&&container.env.length===4&&container.env.every(x=>!x.valueSource)&&
+  Array.isArray(container.env)&&container.env.length===5&&container.env.every(x=>!x.valueSource)&&
+  /^[a-f0-9]{64}$/.test(env('JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256')||'')&&
   env('SOURCE_SHA')===config.sourceSha&&env('GCP_PROJECT')==='jscc-dev'&&env('GCP_REGION')==='europe-west1'&&
   env('OPS_BUCKET')===OPERATOR_BUCKET,'operator_job_binding_mismatch');
 }
