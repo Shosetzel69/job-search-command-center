@@ -20,7 +20,7 @@ const reviewProof=record=>{const cfg={...reviewConfig,actor:record.actor_sub_has
 const now=()=>1700000000000,execution='jscc-ops-operator-dev-abcde';
 const root='projects/jscc-dev/locations/europe-west1';
 const sa='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
-const config={sourceSha:SHA,imageDigest:DIGEST},paths=operatorPaths(ref);
+const config={sourceSha:SHA,imageDigest:DIGEST,reviewKeyFingerprint},paths=operatorPaths(ref);
 const bundle={environment:'dev',script_id:'dev_runtime_build_inventory_v1',
  script_sha256:'60f9c0f87abd9da979e1dc66c5a5e2580faa5a4483aacb7f3b8bdd2478bea73b',
  service:'jscc-command-api-dev',buildId:'c5bbfb85-0aab-40c7-aa47-a5589aa9e295'};
@@ -30,7 +30,7 @@ function approval(){
   bundle:structuredClone(bundle),bundle_hash:operatorHash(bundle),cost_ref:'#589/1235',review_ref:'#589/1236',
   issued_at_ms:now()-1000,expires_at_ms:now()+10000};
 }
-function fixture({record=approval(),jobImage=DIGEST,lifecycleOK=true,loseDispatch=false}={}){
+function fixture({record=approval(),jobImage=DIGEST,jobFingerprint=reviewKeyFingerprint,lifecycleOK=true,loseDispatch=false}={}){
  const map=new Map([[paths.approval,{generation:'1',data:record}],
   [operatorApprovalReviewPath(ref),{generation:'1',data:reviewProof(record)}]]),calls=[];
  const get=async p=>map.has(p)?structuredClone(map.get(p)):null;
@@ -46,7 +46,7 @@ function fixture({record=approval(),jobImage=DIGEST,lifecycleOK=true,loseDispatc
     maxRetries:0,serviceAccount:sa,timeout:'1800s',containers:[{
      resources:{limits:{cpu:'1',memory:'1Gi'}},
      image:'europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-operator@'+jobImage,
-     env:Object.entries({SOURCE_SHA:SHA,GCP_PROJECT:'jscc-dev',GCP_REGION:'europe-west1',OPS_BUCKET:'jscc-dev-ops-state',JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256:reviewKeyFingerprint}).map(([name,value])=>({name,value})),
+     env:Object.entries({SOURCE_SHA:SHA,GCP_PROJECT:'jscc-dev',GCP_REGION:'europe-west1',OPS_BUCKET:'jscc-dev-ops-state',JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256:jobFingerprint}).map(([name,value])=>({name,value})),
     }],
    }},
   };
@@ -66,7 +66,7 @@ const run=(f,handler)=>runOperatorJob({sourceSha:SHA,execution,reviewKeyFingerpr
 test('operator default-disabled; enabled configuration is exact DEV-only and immutable',()=>{
  assert.equal(operatorGatewayConfig({}),null);
  assert.deepEqual(operatorGatewayConfig({JSCC_DEV_OPERATOR_ENABLED:'true',GCP_PROJECT:'jscc-dev',GCP_REGION:'europe-west1',
-  OPS_BUCKET:'jscc-dev-ops-state',JSCC_DEV_OPERATOR_SOURCE_SHA:SHA,JSCC_DEV_OPERATOR_IMAGE_DIGEST:DIGEST}),config);
+  OPS_BUCKET:'jscc-dev-ops-state',JSCC_DEV_OPERATOR_SOURCE_SHA:SHA,JSCC_DEV_OPERATOR_IMAGE_DIGEST:DIGEST,JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256:reviewKeyFingerprint}),config);
  assert.throws(()=>operatorGatewayConfig({JSCC_DEV_OPERATOR_ENABLED:'true',GCP_PROJECT:'jscc-prod'}));
  assert.equal(operatorExecution(root+'/jobs/jscc-ops-operator-dev/executions/'+execution),execution);
  assert.equal(operatorExecution('projects/other/locations/europe-west1/jobs/jscc-ops-operator-dev/executions/'+execution),null);
@@ -300,4 +300,51 @@ test('R2 Publisher creates and confirms proof before create-only approval',async
  assert.deepEqual(calls,[operatorApprovalReviewPath(ref),paths.approval]);
  assert.equal(receipt.record_hash,operatorHash(record));
  assert.deepEqual(objects.get(operatorApprovalReviewPath(ref)),reviewProof(record));
+});
+
+test('S1 Gateway requires an independently configured fingerprint and rejects a different valid Job pin',async()=>{
+ const env={JSCC_DEV_OPERATOR_ENABLED:'true',GCP_PROJECT:'jscc-dev',GCP_REGION:'europe-west1',
+  OPS_BUCKET:'jscc-dev-ops-state',JSCC_DEV_OPERATOR_SOURCE_SHA:SHA,JSCC_DEV_OPERATOR_IMAGE_DIGEST:DIGEST};
+ assert.throws(()=>operatorGatewayConfig(env),/operator_config_invalid/);
+ const foreign=publisherReviewKey(generateKeyPairSync('ed25519').publicKey.export({format:'der',type:'spki'}).toString('base64')).fingerprint;
+ for(const tool of ['operator_preflight','operator_start']){
+  const f=fixture({jobFingerprint:foreign});
+  await assert.rejects(()=>invokeDevOperator(tool,{approval_ref:ref},sub,config,f.opts),/operator_job_binding_mismatch/);
+  assert.equal(f.map.has(paths.request),false);
+  assert.equal(f.calls.some(c=>c[0]==='POST'),false);
+ }
+});
+test('S2 Gateway rejects missing, altered and self-consistent foreign-key proof before reservation or launch',async()=>{
+ const path=operatorApprovalReviewPath(ref),foreign=generateKeyPairSync('ed25519');
+ const foreignConfig={...reviewConfig,reviewKey:foreign.publicKey.export({format:'der',type:'spki'}).toString('base64')};
+ for(const mutate of [
+  f=>f.map.delete(path),
+  f=>{f.map.get(path).data.review_signature='A'.repeat(86);},
+  f=>{const r=f.map.get(paths.approval).data;
+   f.map.get(path).data=operatorApprovalReviewProof(r,foreignConfig,sign(null,publisherReviewMessage(r,'approval',foreignConfig),foreign.privateKey).toString('base64url'));},
+  f=>{f.map.get(path).data.record_hash='0'.repeat(64);}
+ ]){
+  for(const tool of ['operator_preflight','operator_start']){
+   const f=fixture();mutate(f);
+   await assert.rejects(()=>invokeDevOperator(tool,{approval_ref:ref},sub,config,f.opts),/operator_review_proof_denied/);
+   assert.equal(f.map.has(paths.request),false);assert.equal(f.calls.length,0);
+  }
+ }
+});
+test('S2 proof drift after initial admission stops preflight and start before reservation',async()=>{
+ for(const tool of ['operator_preflight','operator_start']){
+  const f=fixture();
+  f.opts.verifyLifecycle=async()=>{f.map.get(operatorApprovalReviewPath(ref)).generation='2';};
+  await assert.rejects(()=>invokeDevOperator(tool,{approval_ref:ref},sub,config,f.opts),/operator_preflight_approval_drift/);
+  assert.equal(f.map.has(paths.request),false);assert.equal(f.calls.some(c=>c[0]==='POST'),false);
+ }
+});
+test('S2 proof loss after reservation never dispatches or retries',async()=>{
+ const f=fixture(),create=f.opts.create;
+ f.opts.create=async(p,data)=>{await create(p,data);if(p===paths.request)f.map.delete(operatorApprovalReviewPath(ref));};
+ const out=await start(f);
+ assert.equal(out.state,'DISPATCH_PENDING_OR_UNKNOWN');
+ assert.equal(f.map.has(paths.request),true);
+ assert.equal((await start(f)).duplicate,true);
+ assert.equal(f.calls.some(c=>c[0]==='POST'),false);
 });
