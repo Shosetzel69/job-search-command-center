@@ -1,5 +1,5 @@
 // #589: pure DEV operator request/admission contract. No privileged API calls.
-import {createHash} from 'node:crypto';
+import {createHash,createPublicKey,verify} from 'node:crypto';
 
 export const OPERATOR_BUCKET='jscc-dev-ops-state';
 export const OPERATOR_JOB='jscc-ops-operator-dev';
@@ -626,4 +626,59 @@ export function projectOperatorResult(request,record){
  }
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;
+}
+
+// R2: common pure signature contract, shared by Publisher and Operator Job.
+export function publisherReviewKey(value){
+ operatorRequire(typeof value==='string'&&value.length<=128&&/^[A-Za-z0-9+/]+={0,2}$/.test(value),'publisher_review_key_invalid');
+ const bytes=Buffer.from(value,'base64');
+ operatorRequire(bytes.toString('base64')===value,'publisher_review_key_invalid');
+ const key=createPublicKey({key:bytes,format:'der',type:'spki'});
+ operatorRequire(key.asymmetricKeyType==='ed25519'&&key.export({format:'der',type:'spki'}).equals(bytes),'publisher_review_key_invalid');
+ return {key,fingerprint:createHash('sha256').update(bytes).digest('hex')};
+}
+export function publisherReviewMessage(record,purpose,config){
+ operatorRequire(['approval','source'].includes(purpose)&&record&&typeof record==='object'&&
+  [record.approval_ref,record.review_ref,record.cost_ref].every(x=>typeof x==='string'&&REF.test(x))&&
+  new Set([record.approval_ref,record.review_ref,record.cost_ref]).size===3&&
+  /^[a-f0-9]{40}$/.test(config?.publisherSourceSha||'')&&/^[a-f0-9]{40}$/.test(config?.operatorSourceSha||'')&&
+  HEX.test(config?.actor||'')&&/^[0-9]{6,40}$/.test(config?.sub||'')&&
+  /^[a-z][a-z0-9-]{4,62}@jscc-dev\.iam\.gserviceaccount\.com$/.test(config?.email||''),
+  'publisher_review_binding_invalid');
+ return Buffer.from(JSON.stringify({domain:'JSCC-589-DEV-INDEPENDENT-REVIEW-V1',purpose,
+  record_hash:operatorHash(record),publisher_source_sha:config.publisherSourceSha,
+  operator_source_sha:config.operatorSourceSha,actor_sub_hash:config.actor,
+  authority_email:config.email,authority_sub:config.sub}),'utf8');
+}
+export const signatureValid=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{86}$/.test(x)&&
+ Buffer.from(x,'base64url').length===64&&Buffer.from(x,'base64url').toString('base64url')===x;
+export function verifyPublisherReview(record,purpose,config,signature){
+ try{
+  return signatureValid(signature)&&verify(null,publisherReviewMessage(record,purpose,config),
+   publisherReviewKey(config.reviewKey).key,Buffer.from(signature,'base64url'));
+ }catch{return false;}
+}
+
+export function operatorApprovalReviewPath(ref){
+ return 'control/v1/approvals/'+operatorPaths(ref).key+'.review.json';
+}
+export function operatorApprovalReviewProof(record,config,signature){
+ operatorRequire(record.actor_sub_hash===config.actor&&record.operator_source_sha===config.operatorSourceSha&&
+  verifyPublisherReview(record,'approval',config,signature),'operator_review_proof_denied');
+ return {schema_version:'1.0',record_hash:operatorHash(record),review_signature:signature,
+  review_key_spki_b64:config.reviewKey,review_key_sha256:publisherReviewKey(config.reviewKey).fingerprint,
+  publisher_source_sha:config.publisherSourceSha,authority_email:config.email,authority_sub:config.sub};
+}
+export function verifyOperatorApprovalReview(record,stored,expectedFingerprint){
+ try{
+  const p=stored?.data;
+  return match(GEN,stored?.generation)&&match(HEX,expectedFingerprint)&&
+   operatorExact(p,['schema_version','record_hash','review_signature','review_key_spki_b64','review_key_sha256',
+    'publisher_source_sha','authority_email','authority_sub'])&&p.schema_version==='1.0'&&
+   p.record_hash===operatorHash(record)&&p.review_key_sha256===expectedFingerprint&&
+   publisherReviewKey(p.review_key_spki_b64).fingerprint===expectedFingerprint&&
+   verifyPublisherReview(record,'approval',{reviewKey:p.review_key_spki_b64,publisherSourceSha:p.publisher_source_sha,
+    operatorSourceSha:record.operator_source_sha,actor:record.actor_sub_hash,email:p.authority_email,sub:p.authority_sub},
+    p.review_signature);
+ }catch{return false;}
 }
