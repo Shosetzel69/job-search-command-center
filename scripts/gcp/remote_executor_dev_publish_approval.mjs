@@ -19,6 +19,7 @@ async function token(){
 export async function publishIndependentApproval(record,{
  trustedRecordHash,sourceSha,actor,reviewConfig,reviewSignature,now=Date.now,getToken=token,fetchImpl=fetch,
 }={}){
+ record=JSON.parse(JSON.stringify(record));
  operatorRequire(typeof trustedRecordHash==='string'&&/^[a-f0-9]{64}$/.test(trustedRecordHash)&&
   operatorHash(record)===trustedRecordHash,'approval_publisher_pin_mismatch');
  const a=validateOperatorApproval({generation:'1',data:record},{
