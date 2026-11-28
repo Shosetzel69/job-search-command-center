@@ -1,5 +1,8 @@
 // #589: observe the existing product release, never deploy or acquire/release Retrieve locks.
 import {gcpFetch} from '../src/lib.mjs';
+import {createHash} from 'node:crypto';
+import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
+import {validateProductIncidentBundle} from '../src/dev_operator_contract.mjs';
 import {operatorExact,operatorRequire,operatorHash} from '../src/dev_operator_contract.mjs';
 const ROOT='projects/jscc-dev/locations/europe-west1';
 const RUN='https://run.googleapis.com/v2/';
@@ -77,7 +80,18 @@ async function capture(fetchImpl){
   revision:{name:revision.name,containers:revision.containers,serviceAccount:revision.serviceAccount},
   search:{template:snap.search.template,etag:snap.search.etag??null},
   migration:{template:snap.migration.template,etag:snap.migration.etag??null}});
- return {resources,baseline_sha256};
+ const origin=revision.containers[0].env?.find(x=>x.name==='FRONTEND_ORIGIN');
+ let originState='MISSING',originHash=null;
+ if(origin){
+  originState='INVALID';
+  try{
+   const u=new URL(origin.value);
+   if(!origin.valueSource&&u.protocol==='https:'&&u.origin===origin.value){
+    originState='HTTPS_ORIGIN';originHash=createHash('sha256').update(u.origin).digest('hex');
+   }
+  }catch{}
+ }
+ return {resources,baseline_sha256,origin:{state:originState,sha256:originHash}};
 }
 async function registry(fetchImpl,pkg,sha,digest){
  const repo=await get(fetchImpl,'https://artifactregistry.googleapis.com/v1/'+REGISTRY,{optional:true});
@@ -103,25 +117,30 @@ async function build(fetchImpl,id,pkg,sha,digest){
  const matches=results.filter(x=>x?.name===tag);
  return matches.length===1&&matches[0].digest===digest?'PROVIDER_RESULT_MATCH':'MISMATCH';
 }
-async function nileEvidence(id,actor,sha,revision,readEvidence,now){
- if(id===null||typeof readEvidence!=='function')return {nile_status:'UNVERIFIED',nile_checksum:null};
+async function nileObservation(id,actor,sha,revision,readEvidence,now,operation){
+ if(id===null||typeof readEvidence!=='function')return null;
  const op=await readEvidence('operations/'+id+'.json'),res=await readEvidence('results/'+id+'.json');
- if(!op||!res)return {nile_status:'UNVERIFIED',nile_checksum:null};
+ if(!op||!res)return null;
  const a=op.data,b=res.data;
  operatorRequire(match(GEN,op.generation)&&match(GEN,res.generation)&&a?.operation_id===id&&b?.operation_id===id&&
   a.actor_sub_hash===actor&&a.work_item_ref==='#589'&&b.work_item_ref==='#589'&&a.task==='observe_dev_nile'&&
   b.task===a.task&&a.operation_state==='SUCCEEDED'&&b.operation_state==='SUCCEEDED'&&b.exit_code===0&&
   operatorExact(a.args,['environment','operation','expected_source_sha'])&&a.args.environment==='dev'&&
-  a.args.operation==='schema_inventory'&&a.args.expected_source_sha===sha&&b.target_source_sha===sha&&
+  a.args.operation===operation&&a.args.expected_source_sha===sha&&b.target_source_sha===sha&&
   a.ops_source_sha===b.ops_source_sha&&a.worker_image_digest===b.worker_image_digest&&
   a.gateway_image_digest===b.gateway_image_digest&&b.assertions?.nile_status==='COLLECTED'&&
   typeof b.assertions.nile_evidence_json==='string'&&Buffer.byteLength(b.assertions.nile_evidence_json)<=32768,
   'product_release_nile_evidence_mismatch');
  const finished=Date.parse(b.finished_at);
  if(!Number.isFinite(finished)||finished>now||now-finished>600000)
-  return {nile_status:'UNVERIFIED',nile_checksum:null};
+  return null;
  const m=JSON.parse(b.assertions.nile_evidence_json);
- if(m.runtime_revision!==revision)return {nile_status:'UNVERIFIED',nile_checksum:null};
+ if(m.runtime_revision!==revision||m.operation!==operation)return null;
+ return m;
+}
+async function nileEvidence(id,actor,sha,revision,readEvidence,now){
+ const m=await nileObservation(id,actor,sha,revision,readEvidence,now,'schema_inventory');
+ if(!m)return {nile_status:'UNVERIFIED',nile_checksum:null};
  const s=m.schema;
  operatorRequire(m.operation==='schema_inventory'&&s?.database==='jobsearch_dev'&&s.read_only===true&&
   match(HEX,s.migration_checksum)&&['MATCH','DRIFT'].includes(s.migration_state)&&['PRESENT','MISSING'].includes(s.table_state),
@@ -161,4 +180,44 @@ export async function observeProductRelease(x,{actor,readEvidence,fetchImpl=gcpF
  // Observation only: absence of lock at read time is not a quiescence guarantee.
  return {state:'OBSERVED',product_release:{source_sha:x.source_sha,baseline_sha256:first.baseline_sha256,
   resources,retrieve_lock,...nile,release_authorized:false,source_provenance:'UNVERIFIED'}};
+}
+
+
+// Collect a bounded incident evidence set, not a root-cause assertion.
+// No arbitrary user account, request path, log payload or session token.
+export async function observeProductIncident(bundle,{actor,readEvidence,fetchImpl=gcpFetch,now=Date.now,
+ metrics=executeDevGcpMetadata}={}){
+ const x=validateProductIncidentBundle(bundle);
+ operatorRequire(match(HEX,actor),'product_incident_actor_denied');
+ const first=await capture(fetchImpl),service=first.resources.service;
+ operatorRequire(service.source_sha===x.source_sha&&match(DIGEST,service.digest),'product_incident_source_mismatch');
+ const account=await nileObservation(x.account_operation_id,actor,x.source_sha,service.revision,readEvidence,now(),'account_readiness');
+ let accountState='UNVERIFIED',mapping='UNVERIFIED',accountOrigin='UNVERIFIED';
+ if(account){
+  const v=account.account,o=account.origin_config;
+  operatorRequire(v?.database==='jobsearch_dev'&&v.read_only===true&&v.scope==='configured_diagnostic_account'&&
+   ['NOT_FOUND','DELETION_PENDING','NOT_ACTIVE','PROVISIONING_INCOMPLETE','ROLE_NOT_ADMITTED','READY'].includes(v.state)&&
+   v.tenant_mapping===(v.state==='READY'?'VERIFIED':'NOT_CHECKED')&&v.user_session_verified===false&&
+   v.root_cause==='INSUFFICIENT_EVIDENCE'&&o&&['MISSING','INVALID','HTTPS_ORIGIN'].includes(o.state)&&
+   (o.state==='HTTPS_ORIGIN'?match(HEX,o.sha256):o.sha256===null),'product_incident_account_invalid');
+  accountState=v.state;mapping=v.tenant_mapping;
+  accountOrigin=o.state===first.origin.state&&o.sha256===first.origin.sha256?'MATCH':'MISMATCH';
+ }
+ let http=null;
+ try{
+  const result=await metrics({environment:'dev',kind:'service_request_metrics',name:'jscc-command-api-dev'},{fetchImpl,now});
+  const m=result.metadata;
+  operatorRequire(result.state==='OBSERVED'&&m.kind==='service_request_metrics'&&m.name==='jscc-command-api-dev'&&
+   Number.isSafeInteger(m.counts?.['4xx'])&&m.counts['4xx']>=0&&Number.isSafeInteger(m.counts?.['5xx'])&&m.counts['5xx']>=0&&
+   typeof m.pagination_complete==='boolean'&&m.request_coverage==='UNVERIFIED','product_incident_metrics_invalid');
+  http={start_time:m.start_time,end_time:m.end_time,observed_4xx:m.counts['4xx'],observed_5xx:m.counts['5xx'],
+   pagination_complete:m.pagination_complete,scope:'service_all_revisions',request_coverage:'UNVERIFIED'};
+ }catch{/* Missing/denied metrics do not establish absence of errors. */}
+ const last=await capture(fetchImpl);
+ operatorRequire(last.baseline_sha256===first.baseline_sha256,'product_incident_baseline_drift');
+ return {state:'OBSERVED',product_incident:{source_sha:x.source_sha,revision:service.revision,digest:service.digest,
+  baseline_sha256:first.baseline_sha256,origin_state:first.origin.state,origin_sha256:first.origin.sha256,
+  expected_origin_binding:first.origin.state==='HTTPS_ORIGIN'?(first.origin.sha256===x.expected_origin_sha256?'MATCH':'MISMATCH'):'UNVERIFIED',
+  account_state:accountState,tenant_mapping:mapping,account_origin_binding:accountOrigin,http,
+  session_verified:false,request_403_correlated:false,root_cause:'INSUFFICIENT_EVIDENCE'}};
 }

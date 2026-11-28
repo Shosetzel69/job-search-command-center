@@ -177,10 +177,10 @@ specified regional successful builds under the existing builder identity.
 A fresh same-actor schema_inventory operation must bind the same source and
 actual K_REVISION to correlate Nile; legacy or stale evidence stays UNVERIFIED.
 The baseline is read twice; Retrieve lock status is metadata only, never a
-quiescence guarantee. Missing provider image results stay UNVERIFIED. No
-product deployment, migration, lock write, full provenance or release approval.
+quiescence guarantee. Missing image results stay UNVERIFIED. Product incident
+correlates fresh account state, effective revision, Origin hash and bounded
+service-wide HTTP counts; no session/403 cause claim or release approval.
 Existing GitDeploy/GCloudDeploy remains the Service-only release route.
-
 ## RE-04/06 version inventories (source only)
 
 Fixed ops package artifact_versions reports bounded digest/SHA-tag metadata;

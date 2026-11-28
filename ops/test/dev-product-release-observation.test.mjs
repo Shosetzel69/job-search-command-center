@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {observeProductRelease} from '../operator/dev_product_release_observation.mjs';
+import {createHash} from 'node:crypto';
+import {observeProductRelease,observeProductIncident} from '../operator/dev_product_release_observation.mjs';
 import {projectOperatorResult} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),actor='b'.repeat(64),digest='sha256:'+'c'.repeat(64);
 const id='254d3513-9c02-4f33-a974-e8e8f8935aa7',op='op-test-1234567890';
@@ -60,4 +61,40 @@ test('revision mismatch and stale Nile results cannot establish readiness; confi
  assert.equal((await observeProductRelease(request,{...fixture(),now:()=>Date.parse('2026-11-28T01:00:00Z')})).product_release.nile_status,'UNVERIFIED');
  await assert.rejects(()=>observeProductRelease(request,fixture({drift:true})),/baseline_drift/);
  await assert.rejects(()=>observeProductRelease({...request,environment:'test'},fixture()));
+});
+
+
+test('incident correlates fresh same-revision account state and Origin but never claims a specific 403 cause',async()=>{
+ const f=fixture(),origin='https://dev.example.invalid',hash=createHash('sha256').update(origin).digest('hex');
+ const fetchImpl=async(url,init)=>{
+  const response=await f.fetchImpl(url,init);
+  if(new URL(url).pathname.endsWith('/revisions/'+rev)){
+   const data=await response.json();data.containers[0].env.push({name:'FRONTEND_ORIGIN',value:origin});return Response.json(data);
+  }return response;
+ };
+ const readEvidence=async path=>{
+  const record=await f.readEvidence(path);
+  if(path.startsWith('operations/'))record.data.args.operation='account_readiness';
+  else record.data.assertions.nile_evidence_json=JSON.stringify({operation:'account_readiness',runtime_revision:rev,
+   account:{database:'jobsearch_dev',read_only:true,scope:'configured_diagnostic_account',state:'NOT_ACTIVE',
+    tenant_mapping:'NOT_CHECKED',user_session_verified:false,root_cause:'INSUFFICIENT_EVIDENCE',user_id:'private'},
+   origin_config:{state:'HTTPS_ORIGIN',sha256:hash}});
+  return record;
+ };
+ const metrics=async()=>({state:'OBSERVED',metadata:{kind:'service_request_metrics',name,
+  start_time:'2026-11-27T23:45:00Z',end_time:'2026-11-28T00:00:00Z',counts:{'4xx':4,'5xx':1},
+  pagination_complete:true,request_coverage:'UNVERIFIED'}});
+ const x={environment:'dev',source_sha:sha,expected_origin_sha256:hash,account_operation_id:op};
+ const run=(v=x,extra={})=>observeProductIncident(v,{...f,fetchImpl,readEvidence,metrics,...extra});
+ const out=await run(),m=out.product_incident;
+ assert.equal(m.account_state,'NOT_ACTIVE');assert.equal(m.expected_origin_binding,'MATCH');
+ assert.equal(m.account_origin_binding,'MATCH');assert.equal(m.http.observed_4xx,4);
+ assert.equal(m.root_cause,'INSUFFICIENT_EVIDENCE');assert.equal(m.request_403_correlated,false);
+ assert.equal(JSON.stringify(m).includes('private'),false);assert.equal(JSON.stringify(m).includes(origin),false);
+ const req={action:'observe_product_incident',operation_id:'op',approval_hash:'hash'};
+ assert.deepEqual(projectOperatorResult(req,{generation:'1',data:{...req,...out}}).product_incident,m);
+ assert.equal((await run({...x,expected_origin_sha256:'0'.repeat(64)})).product_incident.expected_origin_binding,'MISMATCH');
+ const unavailable=await run(x,{readEvidence:async()=>null,metrics:async()=>{throw Error('denied');}});
+ assert.equal(unavailable.product_incident.account_state,'UNVERIFIED');assert.equal(unavailable.product_incident.http,null);
+ await assert.rejects(()=>run({...x,environment:'prod'}));
 });

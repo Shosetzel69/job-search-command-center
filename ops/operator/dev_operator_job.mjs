@@ -16,7 +16,7 @@ import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
 import {executeDevRunExecution} from './dev_run_execution.mjs';
 import {observeDevBuildArtifacts} from './dev_build_evidence.mjs';
 import {observeWorkspaceRelease,executeWorkspaceReleaseStep,cleanupWorkspaceRevision,observeWorkspaceDelivery} from './dev_workspace_release.mjs';
-import {observeProductRelease} from './dev_product_release_observation.mjs';
+import {observeProductRelease,observeProductIncident} from './dev_product_release_observation.mjs';
 
 const SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
 const META='http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/';
@@ -81,6 +81,7 @@ const defaultHandlers={
   }}),
  gcp_metadata:async a=>executeDevGcpMetadata(a.bundle),
  observe_product_release:async(a,get)=>observeProductRelease(a.bundle,{actor:a.actor_sub_hash,readEvidence:get}),
+ observe_product_incident:async(a,get)=>observeProductIncident(a.bundle,{actor:a.actor_sub_hash,readEvidence:get}),
  observe_workspace_delivery:async(a,get)=>observeWorkspaceDelivery(a.bundle,{
   actor:a.actor_sub_hash,get}),
  observe_workspace_release:async()=>observeWorkspaceRelease(),

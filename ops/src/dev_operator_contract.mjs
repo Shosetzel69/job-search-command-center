@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release','workspace_revision_cleanup','observe_workspace_delivery']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release','workspace_revision_cleanup','observe_workspace_delivery','observe_product_incident']);
 export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
  run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.executions.cancel','run.executions.get','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
@@ -86,6 +86,12 @@ export function validateWorkspaceDelivery(v){
   match(HEX,v.initial_pair_sha256)&&Array.isArray(v.steps)&&v.steps.length<=WORKSPACE_DELIVERY_STEPS.length&&
   v.steps.every(x=>match(REF,x))&&new Set([v.build_approval_ref,v.artifact_approval_ref,...v.steps]).size===v.steps.length+2,
   'workspace_delivery_bundle_denied');
+ return v;
+}
+export function validateProductIncidentBundle(v){
+ operatorRequire(operatorExact(v,['environment','source_sha','expected_origin_sha256','account_operation_id'])&&
+  v.environment==='dev'&&match(SHA,v.source_sha)&&match(HEX,v.expected_origin_sha256)&&
+  match(/^op-[a-z0-9_-]{10,100}$/,v.account_operation_id),'product_incident_bundle_denied');
  return v;
 }
 export function validateWorkspaceRevisionCleanup(v){
@@ -164,6 +170,8 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
    (v.action!=='cancel_diagnostic_execution'||v.bundle.job==='jscc-diagnostics-dev'),
    'operator_run_execution_approval_mismatch');
   devRunExecutionTarget(v.bundle.job,v.bundle.execution);
+ }else if(v.action==='observe_product_incident'){
+  validateProductIncidentBundle(v.bundle);
  }else if(v.action==='observe_product_release'){
   operatorRequire(operatorExact(v.bundle,['environment','source_sha','service_build_id','search_build_id','nile_operation_id'])&&
    v.bundle.environment==='dev'&&match(SHA,v.bundle.source_sha)&&
@@ -493,6 +501,31 @@ export function projectOperatorResult(request,record){
    m.retained_present===true,'operator_revision_cleanup_invalid');
   out.revision_cleanup={role:m.role,revision:m.revision,image:m.image,retained_revision:m.retained_revision,
    pair_sha256:m.pair_sha256,target_absent:true,retained_present:true,image_deletion_authorized:false,automatic_retry:false};
+ }
+ if(request.action==='observe_product_incident'&&v.state==='OBSERVED'){
+  const m=v.product_incident;
+  operatorRequire(m&&match(SHA,m.source_sha)&&match(/^jscc-command-api-dev-[a-z0-9-]{1,44}$/,m.revision)&&
+   match(/^sha256:[a-f0-9]{64}$/,m.digest)&&match(HEX,m.baseline_sha256)&&['MISSING','INVALID','HTTPS_ORIGIN'].includes(m.origin_state)&&
+   (m.origin_state==='HTTPS_ORIGIN'?match(HEX,m.origin_sha256)&&['MATCH','MISMATCH'].includes(m.expected_origin_binding):
+    m.origin_sha256===null&&m.expected_origin_binding==='UNVERIFIED')&&
+   ['UNVERIFIED','NOT_FOUND','DELETION_PENDING','NOT_ACTIVE','PROVISIONING_INCOMPLETE','ROLE_NOT_ADMITTED','READY'].includes(m.account_state)&&
+   m.tenant_mapping===(m.account_state==='READY'?'VERIFIED':m.account_state==='UNVERIFIED'?'UNVERIFIED':'NOT_CHECKED')&&
+   (m.account_state==='UNVERIFIED'?m.account_origin_binding==='UNVERIFIED':['MATCH','MISMATCH'].includes(m.account_origin_binding))&&
+   m.session_verified===false&&m.request_403_correlated===false&&m.root_cause==='INSUFFICIENT_EVIDENCE',
+   'operator_product_incident_invalid');
+  let http=null;
+  if(m.http!==null){
+   const x=m.http,start=Date.parse(x?.start_time),end=Date.parse(x?.end_time);
+   operatorRequire(Number.isFinite(start)&&Number.isFinite(end)&&end-start===900000&&
+    [x.observed_4xx,x.observed_5xx].every(n=>Number.isSafeInteger(n)&&n>=0)&&typeof x.pagination_complete==='boolean'&&
+    x.scope==='service_all_revisions'&&x.request_coverage==='UNVERIFIED','operator_product_incident_invalid');
+   http={start_time:x.start_time,end_time:x.end_time,observed_4xx:x.observed_4xx,observed_5xx:x.observed_5xx,
+    pagination_complete:x.pagination_complete,scope:x.scope,request_coverage:x.request_coverage};
+  }
+  out.product_incident={source_sha:m.source_sha,revision:m.revision,digest:m.digest,baseline_sha256:m.baseline_sha256,
+   origin_state:m.origin_state,origin_sha256:m.origin_sha256,expected_origin_binding:m.expected_origin_binding,
+   account_state:m.account_state,tenant_mapping:m.tenant_mapping,account_origin_binding:m.account_origin_binding,http,
+   session_verified:false,request_403_correlated:false,root_cause:'INSUFFICIENT_EVIDENCE'};
  }
  if(request.action==='observe_product_release'&&v.state==='OBSERVED'){
   const m=v.product_release;
