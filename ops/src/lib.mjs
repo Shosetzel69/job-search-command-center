@@ -120,7 +120,7 @@ export function validateTaskRequest(task, args) {
       if (value !== 'dev') throw new Error('environment_denied');
       clean[name] = 'dev';
     } else if (type === 'nile_plan') {
-      if (!['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health'].includes(value)) throw new Error('nile_operation_denied');
+      if (!['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health','migration_013_preflight'].includes(value)) throw new Error('nile_operation_denied');
       clean[name]=value;
     } else if (type === 'dev_service') {
       clean[name] = admitDevRequest({environment:'dev',task:'describe_dev_runtime',service:value}).service;

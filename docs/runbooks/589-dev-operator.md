@@ -126,6 +126,10 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   own-backend lock counts, current-process pg.Pool counts. No PID, user,
   query text, tenant identifiers or cross-tenant activity. Provider support
   is a live gate; backend TLS does not establish end-to-end client TLS.
+  Fixed migration_013_preflight reuses the existing dedicated 013 release
+  catalog/ledger validator in the read-only transaction; reports exact
+  migration checksum and PENDING_013/ALREADY_APPLIED, never apply authority.
+  Legacy generic db:migrate remains disabled; no separate database identity.
   No application rows, arbitrary SQL, DDL, backup or migration execution.
   Product image release stays on its existing route, with DEV acceptance
   and Retrieve protection. The operator has no product deploy authority.

@@ -86,3 +86,43 @@ test('runtime health reports only current backend and current process bounded ev
   await assert.rejects(()=>read(bad),/runtime_health_metadata_invalid/);
  await assert.rejects(()=>read(row,{...pool,idleCount:4}),/runtime_health_pool_invalid/);
 });
+
+
+test('013 remote preflight reuses exact migration ledger and refuses writable or foreign DB',async()=>{
+ const {inspectEvaluation013ReadOnly,COLUMNS,INDEXES}=await import('../scripts/db-evaluation-migrate-013.mjs');
+ const {loadMigrations}=await import('../src/db/migrations.js');
+ const files=await loadMigrations();
+ const ledger=files.map(({version,name,checksum})=>({version,name,checksum}));
+ const run=async({applied=false,db='jobsearch_dev',ro='on',drift=false}={})=>{
+  const calls=[];
+  const tx={query:async(sql,params)=>{
+   calls.push(sql);
+   assert.match(sql.trim(),/^SELECT\b/i);
+   if(sql.includes('current_database()'))return {rows:[{db,ro}]};
+   if(sql.startsWith('SELECT version,name,checksum'))return {rows:ledger.slice(0,applied?13:12)};
+   if(sql.includes('information_schema.columns')){
+    assert.deepEqual(params,[Object.keys(COLUMNS)]);
+    return {rows:applied?Object.entries(COLUMNS).map(([column_name,data_type])=>({column_name,data_type,is_nullable:'YES'})):[]};
+   }
+   if(sql.includes('to_regclass')&&!sql.includes('pg_catalog.pg_index'))return {rows:[{table_present:true}]};
+   if(sql.includes('pg_catalog.pg_index')){
+    assert.deepEqual(params,[Object.keys(INDEXES)]);
+    return {rows:applied?Object.entries(INDEXES).map(([indexname,column])=>({indexname,
+     indexdef:'CREATE INDEX '+indexname+' ON profile_job_evaluation USING btree (tenant_id, search_profile_id, '+column+', job_id)',
+     indisvalid:!drift,indisready:true})):[]};
+   }
+   throw Error('unexpected_query');
+  }};
+  const result=await inspectEvaluation013ReadOnly(tx,{readMigrations:async()=>files});
+  assert.ok(calls.length>1);
+  return result;
+ };
+ const pending=await run();
+ assert.equal(pending.readiness,'PENDING_013');
+ assert.equal(pending.checksum,files.at(-1).checksum);
+ assert.equal(pending.apply_authorized,false);
+ assert.equal((await run({applied:true})).readiness,'ALREADY_APPLIED');
+ await assert.rejects(()=>run({db:'jobsearch_test'}),/DIAGNOSTIC_SCOPE_DENIED/);
+ await assert.rejects(()=>run({ro:'off'}),/DIAGNOSTIC_SCOPE_DENIED/);
+ await assert.rejects(()=>run({applied:true,drift:true}),/INDEX_DRIFT/);
+});

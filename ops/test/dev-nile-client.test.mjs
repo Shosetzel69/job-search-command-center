@@ -86,3 +86,22 @@ test('runtime health allows only current backend/process evidence; never forward
  assert.equal((await run({...health,lock_scope:'all_tenants'})).nile_status,'ERROR');
  assert.equal((await run({...health,pool:{total:1,idle:2,waiting:0}})).nile_status,'ERROR');
 });
+
+test('013 migration preflight is exact read-only evidence, never apply authorization',async()=>{
+ const req={...args,operation:'migration_013_preflight'};
+ assert.equal(validateTaskRequest('observe_dev_nile',req).task_class,'OBSERVE');
+ const migration={database:'jobsearch_dev',read_only:true,migration:'013_profile_job_evaluation_listing.sql',
+  checksum:'a'.repeat(64),readiness:'PENDING_013',apply_authorized:false,private:'never-return'};
+ const run=async value=>{
+  let calls=0;
+  return observeDevNile(req,cfg,{fetchImpl:async()=>++calls===1?new Response('a.b.c'):
+   Response.json({source_sha:sha,operation:req.operation,status:'COLLECTED',elapsed_ms:1,migration:value})});
+ };
+ const out=await run(migration);
+ assert.equal(out.nile_status,'COLLECTED');
+ assert.equal(JSON.parse(out.nile_evidence_json).migration.apply_authorized,false);
+ assert.equal(out.nile_evidence_json.includes('never-return'),false);
+ for(const bad of [{...migration,apply_authorized:true},{...migration,database:'jobsearch_prod'},
+  {...migration,checksum:'wrong'},{...migration,migration:'014_other.sql'}])
+  assert.equal((await run(bad)).nile_status,'ERROR');
+});
