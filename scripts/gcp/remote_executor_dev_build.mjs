@@ -310,3 +310,49 @@ export async function cancelApprovedBuild(original,expectedBuildId,{
  require(observed.state===state,'build_cancel_ledger_provider_conflict');
  return {operation_id:identity.key,build_id:expectedBuildId,state,source_provenance:'UNVERIFIED'};
 }
+
+
+// Read exact original build evidence, even after its durable ledger has
+// reached a terminal state. The same provider response feeds reconciliation.
+// Never expose raw args, substitutions, URLs, secrets, logs or failure detail.
+export async function observeApprovedBuildEvidence(original,{
+ getToken=token,fetchImpl=fetch,store=operatorBuildStore({getToken,fetchImpl}),
+}={}){
+ const plan=planDevOpsBuild(original.request);
+ const identity=operationIdentity({actor_sub_hash:original.actor_sub_hash,
+  idempotency_key:original.idempotency_key,request:original.request});
+ const stored=await store.get(identity.path),rec=stored?.data;
+ require(plan.work_item_ref==='#589'&&stored?.generation&&rec?.operation_id===identity.key&&
+  rec.request_hash===identity.request_hash&&rec.actor_sub_hash===identity.actor_sub_hash&&
+  rec.approval_ref===original.evidence?.approval&&rec.source_sha===plan.source_sha&&
+  rec.trusted_ref===plan.trusted_ref&&original.archive?.bucket===BUCKET&&
+  rec.source_object===original.archive.object&&rec.source_generation===original.archive.generation&&
+  rec.source_sha256===original.archive.sha256&&UUID.test(rec.build_id||'')&&
+  ['SUBMITTED','WORKING','SUCCEEDED','FAILED','CANCELLED'].includes(rec.state),
+  'build_observe_original_mismatch');
+ const request=operatorTransport(getToken,fetchImpl);
+ const raw=await (await request(ROOT+'/'+rec.build_id)).json();
+ const status=projectDevBuildStatus(raw,{project:'jscc-shared',region:'europe-west1',
+  build_id:rec.build_id,source_sha:plan.source_sha});
+ const source={bucket:BUCKET,object:rec.source_object,generation:rec.source_generation};
+ require(raw.substitutions?._GIT_SHA===plan.source_sha&&raw.substitutions?._TRUSTED_REF===plan.trusted_ref&&
+  evidenceDigest(raw.source?.storageSource)===evidenceDigest(source),'build_observe_provider_binding_mismatch');
+ const resolved=raw.sourceProvenance?.resolvedStorageSource;
+ require(resolved===undefined||evidenceDigest(resolved)===evidenceDigest(source),
+  'build_observe_resolved_source_mismatch');
+ const steps=raw.steps;
+ const allowedStatus=new Set(['STATUS_UNKNOWN','PENDING','QUEUED','WORKING','SUCCESS','FAILURE',
+  'INTERNAL_ERROR','TIMEOUT','CANCELLED','EXPIRED']);
+ require(steps===undefined||Array.isArray(steps)&&steps.length===STEPS.length&&
+  steps.every((x,i)=>x?.id===STEPS[i]&&(x.status===undefined||allowedStatus.has(x.status))),
+  'build_observe_step_identity_mismatch');
+ const observations=(steps||[]).map(x=>({id:x.id,status:x.status||'STATUS_UNKNOWN'}));
+ const next=await observeDevBuildOnce(identity,store,{getBuild:async()=>raw});
+ const expectedState=status.status==='SUCCESS'?'SUCCEEDED':status.status==='CANCELLED'?'CANCELLED':
+  status.terminal?'FAILED':'WORKING';
+ require(next.state===expectedState,'build_observe_ledger_provider_conflict');
+ return {operation_id:identity.key,build_id:rec.build_id,state:next.state,source_provenance:'UNVERIFIED',
+  build_observation:{source_sha:plan.source_sha,archive_generation:rec.source_generation,
+   archive_binding:resolved===undefined?'REQUEST_MATCH_ONLY':'RESOLVED_MATCH',
+   build_status:status.status,steps:observations,immutable_image_count:status.immutable_image_count}};
+}

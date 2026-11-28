@@ -218,6 +218,22 @@ export function projectOperatorResult(request,record){
   out.artifact_operation=v.artifact_operation;out.generation_no_longer_live=true;
  }
  if(request.action==='gcp_metadata'&&v.state==='OBSERVED')out.metadata=projectMetadata(v.metadata);
+ if(request.action==='observe_build'&&v.build_observation){
+  const m=v.build_observation;
+  const ids=['trusted-source-admission','materialize-verified-source','validate-candidate',
+   'python-contract-tests','ops-contract-tests','registry-immutability','detect-existing-images',
+   'build-gateway','build-worker','build-operator','verify-image-source','push-gateway','push-worker','push-operator','evidence'];
+  const statuses=['STATUS_UNKNOWN','PENDING','QUEUED','WORKING','SUCCESS','FAILURE','INTERNAL_ERROR','TIMEOUT','CANCELLED','EXPIRED'];
+  operatorRequire(match(SHA,m.source_sha)&&match(GEN,m.archive_generation)&&
+   ['REQUEST_MATCH_ONLY','RESOLVED_MATCH'].includes(m.archive_binding)&&statuses.includes(m.build_status)&&
+   Number.isSafeInteger(m.immutable_image_count)&&m.immutable_image_count>=0&&m.immutable_image_count<=10&&
+   Array.isArray(m.steps)&&(m.steps.length===0||m.steps.length===ids.length&&
+    m.steps.every((x,i)=>x?.id===ids[i]&&statuses.includes(x.status))),
+   'operator_build_observation_invalid');
+  out.build_observation={source_sha:m.source_sha,archive_generation:m.archive_generation,
+   archive_binding:m.archive_binding,build_status:m.build_status,immutable_image_count:m.immutable_image_count,
+   steps:m.steps.map(x=>({id:x.id,status:x.status}))};
+ }
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;
 }

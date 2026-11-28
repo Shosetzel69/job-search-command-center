@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {admitBuildBundle,runApprovedBuild,observeApprovedBuild,cancelApprovedBuild}
+import {admitBuildBundle,runApprovedBuild,observeApprovedBuild,observeApprovedBuildEvidence,cancelApprovedBuild}
  from '../../scripts/gcp/remote_executor_dev_build.mjs';
 import {evidenceDigest,operatorBuildStore,operatorPairStore}
  from '../../scripts/gcp/remote_executor_dev_admission.mjs';
@@ -172,4 +172,32 @@ test('cancel fails closed on lost response, expired approval or provider source 
  assert.equal(posts,1);
  const rec=[...s.records.values()].find(x=>x.data.operation_kind==='dev-ops-build');
  assert.equal(rec.data.state,'SUBMITTED');
+});
+
+
+test('build evidence binds resolved archive generation and fixed steps, including terminal readback',async()=>{
+ const x=bundle(),s=setup();await run(x,s.options);
+ const storageSource={bucket,object,generation};
+ const raw={id,name:parent+'/'+id,serviceAccount:sa,status:'SUCCESS',
+  source:{storageSource},sourceProvenance:{resolvedStorageSource:storageSource},
+  substitutions:{_GIT_SHA:sha,_TRUSTED_REF:x.request.trusted_ref,private:'not-returned'},
+  steps:x.build_config.steps.map(y=>({...y,status:'SUCCESS',args:['private']}))};
+ const opts={...s.options,fetchImpl:async(url,init)=>{
+  assert.equal(init.method,'GET');assert.equal(url,'https://cloudbuild.googleapis.com/v1/'+parent+'/'+id);
+  return Response.json(raw);
+ }};
+ const first=await observeApprovedBuildEvidence(x,opts);
+ assert.equal(first.state,'SUCCEEDED');
+ assert.equal(first.build_observation.archive_binding,'RESOLVED_MATCH');
+ assert.equal(first.build_observation.steps.length,x.build_config.steps.length);
+ assert.equal(first.source_provenance,'UNVERIFIED');
+ assert.equal(JSON.stringify(first).includes('private'),false);
+ const second=await observeApprovedBuildEvidence(x,opts);
+ assert.deepEqual(second,first);
+ raw.sourceProvenance={resolvedStorageSource:{...storageSource,generation:'999'}};
+ await assert.rejects(()=>observeApprovedBuildEvidence(x,opts),/resolved_source_mismatch/);
+ raw.sourceProvenance=undefined;
+ assert.equal((await observeApprovedBuildEvidence(x,opts)).build_observation.archive_binding,'REQUEST_MATCH_ONLY');
+ raw.steps[0].id='unapproved';
+ await assert.rejects(()=>observeApprovedBuildEvidence(x,opts),/step_identity_mismatch/);
 });

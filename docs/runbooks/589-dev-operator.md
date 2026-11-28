@@ -91,7 +91,12 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
 - The Job parses the staged build YAML in a bounded Python subprocess using
   PyYAML and compares the exact reviewed REST configuration. Build success
   does not prove source provenance. Registry tag/digest observation reports
-  provenance UNVERIFIED until correlated with trusted evidence.
+  provenance UNVERIFIED until correlated with trusted evidence. Approved build
+  observation now binds the original durable record to provider source object,
+  generation, SHA/ref substitutions and resolvedStorageSource when returned;
+  only fixed step IDs/statuses are projected, including terminal observations.
+  No raw build logs or arguments are exposed. This is not full Git-to-image
+  provenance; the existing independent source/image verification remains.
 - Service metadata separates desired template configuration from observed
   traffic revisions and their immutable digest evidence using the existing
   DEV runtime observer; unresolved digests remain UNKNOWN. It does not

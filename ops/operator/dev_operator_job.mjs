@@ -6,8 +6,7 @@ import {OPERATOR_BUCKET,OPERATOR_JOB,operatorPaths,operatorDispatchPath,operator
  operatorRequire,operatorHash,validateOperatorApproval,validateOperatorRequest,projectOperatorResult}
  from '../src/dev_operator_contract.mjs';
 import {verifyOperatorLifecycle} from '../src/dev_operator_gateway.mjs';
-import {operationIdentity} from '../control/dev-build-operation-ledger.mjs';
-import {runApprovedBuild,observeApprovedBuild,cancelApprovedBuild} from '../../scripts/gcp/remote_executor_dev_build.mjs';
+import {runApprovedBuild,observeApprovedBuildEvidence,cancelApprovedBuild} from '../../scripts/gcp/remote_executor_dev_build.mjs';
 import {runApprovedPair,observePairRecovery} from '../../scripts/gcp/remote_executor_dev_pair.mjs';
 import {operatorPairStore} from '../../scripts/gcp/remote_executor_dev_admission.mjs';
 import {createDevObserver,admitDevRequest} from '../observation/dev-runtime-observer.mjs';
@@ -75,9 +74,7 @@ const defaultHandlers={
  observe_build:async(a,get)=>{
   const original=await readOriginal(a.bundle.original_approval_ref,a.actor_sub_hash,get);
   operatorRequire(original.action==='build','operator_observation_action_mismatch');
-  const id=operationIdentity({actor_sub_hash:original.actor_sub_hash,
-   idempotency_key:original.bundle.idempotency_key,request:original.bundle.request});
-  return observeApprovedBuild(id,{getToken:()=>metadataAccessToken()});
+  return observeApprovedBuildEvidence(original.bundle,{getToken:()=>metadataAccessToken()});
  },
  cancel_build:async(a,get)=>{
   const original=await readOriginal(a.bundle.original_approval_ref,a.actor_sub_hash,get);
