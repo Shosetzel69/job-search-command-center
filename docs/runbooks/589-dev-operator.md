@@ -134,8 +134,9 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   separate independent live evidence.
 - GCS copy is restricted to the dedicated staging bucket, approved DEV
   artifact names, exact source generation/checksums and create-only
-  destination. A multipart/uncertain rewrite stops; managed data deletion
-  is excluded. Separately approved transient staging cleanup deletes only the
+  destination and fresh approval. `snapshot_manifest` reads the fixed
+  catalog/run metadata twice against the approved catalog generation; no
+  atomic snapshot or payload-read claim. Multipart/uncertain rewrite stops. Separately approved transient staging cleanup deletes only the
   exact generation after checksum verification; 404 readback does not prove
   physical deletion. Soft-deleted staging restore uses create-only destination,
   verifies old/new generations and checksums, and rejects ambiguous restore
@@ -159,7 +160,6 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   No application rows, arbitrary SQL, DDL, backup or migration execution.
   Product image release stays on its existing route, with DEV acceptance
   and Retrieve protection. The operator has no product deploy authority.
-
 ### Activation prerequisites (not an executable provisioning instruction)
 
 Independent exact-SHA review, explicit owner release approval and

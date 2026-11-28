@@ -9,7 +9,7 @@ const input={environment:'dev',operation:'copy_generation',source,source_generat
 const meta=(name,generation)=>({bucket,name,generation,size:'10',crc32c:crc,md5Hash:md5,metadata:{private:'ignore'}});
 test('exact-generation copy uses create-only destination and confirms checksum readback',async()=>{
  const calls=[];
- const result=await executeDevGcsArtifact(input,{fetchImpl:async(url,init)=>{
+ const result=await executeDevGcsArtifact(input,{assertFresh:()=>{},fetchImpl:async(url,init)=>{
   calls.push([url,init.method]);
   const q=new URL(url).searchParams;
   if(init.method==='POST'){
@@ -31,16 +31,16 @@ test('foreign target, source drift, rewrite continuation and overwrite attempts 
   {...input,destination:source},{...input,destination:'source/../../bad'},{...input,ifGenerationMatch:'1'}])
   await assert.rejects(()=>executeDevGcsArtifact(bad,{fetchImpl:async()=>assert.fail('unexpected API')}));
  let calls=0;
- await assert.rejects(()=>executeDevGcsArtifact(input,{fetchImpl:async()=>{calls++;return Response.json({...meta(source,'12'),md5Hash:'B'.repeat(22)+'=='});}}));
+ await assert.rejects(()=>executeDevGcsArtifact(input,{assertFresh:()=>{},fetchImpl:async()=>{calls++;return Response.json({...meta(source,'12'),md5Hash:'B'.repeat(22)+'=='});}}));
  assert.equal(calls,1);
  calls=0;
- await assert.rejects(()=>executeDevGcsArtifact(input,{fetchImpl:async()=>++calls===1?Response.json(meta(source,'12')):Response.json({done:false,rewriteToken:'token'})}),/outcome_unknown/);
+ await assert.rejects(()=>executeDevGcsArtifact(input,{assertFresh:()=>{},fetchImpl:async()=>++calls===1?Response.json(meta(source,'12')):Response.json({done:false,rewriteToken:'token'})}),/outcome_unknown/);
  assert.equal(calls,2);
 });
 test('runtime snapshot is metadata-only with exact DEV bucket, never media or mutation',async()=>{
  const runtime='jscc-dev-runtime-828902654738',object='runs/run-test/jobs.json';
  const input={environment:'dev',operation:'metadata',bucket:runtime,object,generation:null};
- const result=await executeDevGcsArtifact(input,{fetchImpl:async(url,init)=>{
+ const result=await executeDevGcsArtifact(input,{assertFresh:()=>{},fetchImpl:async(url,init)=>{
   assert.equal(init.method,'GET');assert.equal(new URL(url).searchParams.has('alt'),false);
   return Response.json({...meta(object,'15'),bucket:runtime});
  }});
@@ -107,5 +107,37 @@ test('cleanup never deletes before independently admitted original build is veri
   verifyCleanup:async()=>{throw Error('build_not_terminal');},
   fetchImpl:async(url,init)=>{calls++;assert.equal(init.method,'GET');return Response.json(meta(source,'12'));}}),
   /build_not_terminal/);
+ assert.equal(calls,1);
+});
+
+test('snapshot manifest binds exact live catalog generation and all run objects without reading payloads',async()=>{
+ const {projectOperatorResult}=await import('../src/dev_operator_contract.mjs');
+ const runtime='jscc-dev-runtime-828902654738';
+ const request={environment:'dev',operation:'snapshot_manifest',run_id:'run-fixture',expected_catalog_generation:'12'};
+ const seen=[];
+ const out=await executeDevGcsArtifact(request,{fetchImpl:async(url,init)=>{
+  assert.equal(init.method,'GET');const u=new URL(url);assert.equal(u.searchParams.has('alt'),false);
+  assert.equal(u.searchParams.has('generation'),false);
+  const name=decodeURIComponent(u.pathname.split('/o/')[1]);
+  seen.push(name);return Response.json({...meta(name,'12'),bucket:runtime});
+ }});
+ assert.equal(seen.length,10);assert.deepEqual(seen.slice(0,5),seen.slice(5));
+ assert.equal(out.snapshot_manifest.atomic_snapshot,false);
+ const req={operation_id:'op',approval_hash:'hash',action:'gcs_artifact'};
+ const projection=projectOperatorResult(req,{generation:'1',data:{...req,...out}});
+ assert.deepEqual(projection.snapshot_manifest,out.snapshot_manifest);
+ assert.equal(JSON.stringify(out).includes('private'),false);
+ let n=0;
+ await assert.rejects(()=>executeDevGcsArtifact(request,{fetchImpl:async(url)=>{
+  const name=decodeURIComponent(new URL(url).pathname.split('/o/')[1]);
+  return Response.json({...meta(name,++n===8?'13':'12'),bucket:runtime});
+ }}),/manifest_drift/);
+ await assert.rejects(()=>executeDevGcsArtifact({...request,run_id:'../other'},{fetchImpl:async()=>assert.fail('network')}));
+});
+test('copy requires fresh approval immediately before the rewrite',async()=>{
+ await assert.rejects(()=>executeDevGcsArtifact(input,{fetchImpl:async()=>assert.fail('network')}));
+ let calls=0;
+ await assert.rejects(()=>executeDevGcsArtifact(input,{assertFresh:()=>{throw Error('expired');},
+  fetchImpl:async()=>{calls++;return Response.json(meta(source,'12'));}}),/expired/);
  assert.equal(calls,1);
 });

@@ -2,7 +2,7 @@
 // No durable runtime objects, leases, approvals, DB data or arbitrary buckets
 // may be modified. Copy and restore create only; cleanup is separately approved.
 import {gcpFetch} from '../src/lib.mjs';
-import {operatorExact,operatorRequire} from '../src/dev_operator_contract.mjs';
+import {operatorExact,operatorRequire,operatorHash} from '../src/dev_operator_contract.mjs';
 const STAGING='jscc-shared-ops-cloudbuild-source';
 const RUNTIME='jscc-dev-runtime-828902654738';
 const GEN=/^[1-9][0-9]{0,19}$/;
@@ -29,6 +29,29 @@ async function jsonRequest(url,method,fetchImpl,{noBody=false}={}){
 }
 export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFresh,verifyCleanup,now=Date.now}={}){
  operatorRequire(input?.environment==='dev','gcs_artifact_environment_denied');
+ if(input.operation==='snapshot_manifest'){
+  operatorRequire(operatorExact(input,['environment','operation','run_id','expected_catalog_generation'])&&
+   valid(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/,input.run_id)&&valid(GEN,input.expected_catalog_generation),
+   'gcs_snapshot_target_denied');
+  const names=['seed/sources.json','seed/source-categories.json','seed/nomenclatures.json',
+   'runs/'+input.run_id+'/run-status.json','runs/'+input.run_id+'/jobs.json'];
+  const capture=async()=>{
+   const out=[];
+   for(const name of names){
+    // Live metadata only: no tenant/job contents, no historical generation lookup.
+    const raw=await jsonRequest(objectUrl(RUNTIME,name)+'?'+new URLSearchParams({fields}),'GET',fetchImpl);
+    out.push(metadata(raw,RUNTIME,name,null));
+   }
+   return out;
+  };
+  const first=await capture();
+  operatorRequire(first[0].generation===input.expected_catalog_generation,'gcs_snapshot_catalog_drift');
+  const second=await capture();
+  const digest=operatorHash(first);
+  operatorRequire(operatorHash(second)===digest,'gcs_snapshot_manifest_drift');
+  return {state:'OBSERVED',snapshot_manifest:{run_id:input.run_id,catalog_generation:input.expected_catalog_generation,
+   objects:first,manifest_sha256:digest,consistency:'TWO_READS_MATCH',atomic_snapshot:false}};
+ }
  if(input.operation==='metadata'){
   operatorRequire(operatorExact(input,['environment','operation','bucket','object','generation'])&&
    ((input.bucket===RUNTIME&&valid(SNAPSHOT,input.object))||
@@ -98,7 +121,8 @@ export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFres
  operatorRequire(input.operation==='copy_generation'&&operatorExact(input,['environment','operation',
   'source','source_generation','destination','expected_md5','expected_crc32c'])&&
   valid(ARCHIVE,input.source)&&valid(ARCHIVE,input.destination)&&input.source!==input.destination&&
-  valid(GEN,input.source_generation)&&valid(MD5,input.expected_md5)&&valid(CRC,input.expected_crc32c),
+  valid(GEN,input.source_generation)&&valid(MD5,input.expected_md5)&&valid(CRC,input.expected_crc32c)&&
+  typeof assertFresh==='function',
   'gcs_artifact_copy_denied');
  const src=metadata(await jsonRequest(objectUrl(STAGING,input.source)+'?'+new URLSearchParams({
   fields,generation:input.source_generation
@@ -110,6 +134,7 @@ export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFres
  const url=objectUrl(STAGING,input.source)+'/rewriteTo/b/'+STAGING+'/o/'+encodeURIComponent(input.destination)+'?'+q;
  // Only one rewrite call; uncertain/multipart outcome is never retried by
  // this operator. Independent reconciliation can inspect the destination.
+ assertFresh();
  const copied=await jsonRequest(url,'POST',fetchImpl);
  operatorRequire(copied.done===true,'gcs_artifact_copy_outcome_unknown');
  const dest=metadata(copied.resource,STAGING,input.destination,null);

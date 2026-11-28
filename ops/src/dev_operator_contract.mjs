@@ -124,6 +124,7 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
    'operator_metadata_approval_mismatch');
  }else if(v.action==='gcs_artifact'){
   operatorRequire(v.bundle.environment==='dev'&&(
+   v.bundle.operation==='snapshot_manifest'&&operatorExact(v.bundle,['environment','operation','run_id','expected_catalog_generation'])||
    v.bundle.operation==='metadata'&&operatorExact(v.bundle,['environment','operation','bucket','object','generation'])||
    v.bundle.operation==='copy_generation'&&operatorExact(v.bundle,['environment','operation','source','source_generation','destination','expected_md5','expected_crc32c'])||
 
@@ -261,7 +262,26 @@ export function projectOperatorResult(request,record){
   typeof m.crc32c==='string'&&/^[a-zA-Z0-9+/]{6}==$/.test(m.crc32c)&&
   (m.md5===null||typeof m.md5==='string'&&/^[a-zA-Z0-9+/]{22}==$/.test(m.md5)))
   out.artifact_metadata={bucket:m.bucket,name:m.name,generation:m.generation,size:m.size,crc32c:m.crc32c,md5:m.md5};
- if(request.action==='gcs_artifact'&&['SUCCEEDED','OBSERVED'].includes(v.state))operatorRequire(out.artifact_metadata,'operator_artifact_result_invalid');
+ if(request.action==='gcs_artifact'&&v.snapshot_manifest){
+  const m=v.snapshot_manifest;
+  operatorRequire(match(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/,m.run_id)&&!m.run_id.includes('..')&&
+   match(GEN,m.catalog_generation)&&m.consistency==='TWO_READS_MATCH'&&m.atomic_snapshot===false&&
+   Array.isArray(m.objects)&&m.objects.length===5&&match(HEX,m.manifest_sha256),'operator_snapshot_manifest_invalid');
+  const names=['seed/sources.json','seed/source-categories.json','seed/nomenclatures.json',
+   'runs/'+m.run_id+'/run-status.json','runs/'+m.run_id+'/jobs.json'];
+  const objects=m.objects.map((x,i)=>{
+   operatorRequire(x?.bucket==='jscc-dev-runtime-828902654738'&&x.name===names[i]&&
+    match(GEN,x.generation)&&match(/^[0-9]{1,20}$/,x.size)&&match(/^[a-zA-Z0-9+/]{6}==$/,x.crc32c)&&
+    (x.md5===null||match(/^[a-zA-Z0-9+/]{22}==$/,x.md5)),'operator_snapshot_manifest_invalid');
+   return {bucket:x.bucket,name:x.name,generation:x.generation,size:x.size,crc32c:x.crc32c,md5:x.md5};
+  });
+  operatorRequire(objects[0].generation===m.catalog_generation&&operatorHash(objects)===m.manifest_sha256,
+   'operator_snapshot_manifest_invalid');
+  out.snapshot_manifest={run_id:m.run_id,catalog_generation:m.catalog_generation,objects,manifest_sha256:m.manifest_sha256,
+   consistency:'TWO_READS_MATCH',atomic_snapshot:false};
+ }
+ if(request.action==='gcs_artifact'&&['SUCCEEDED','OBSERVED'].includes(v.state))
+  operatorRequire(out.artifact_metadata||v.state==='OBSERVED'&&out.snapshot_manifest,'operator_artifact_result_invalid');
  if(request.action==='gcs_artifact'&&v.artifact_operation==='restore_soft_deleted'){
   operatorRequire(out.artifact_metadata?.bucket==='jscc-shared-ops-cloudbuild-source'&&
    match(GEN,v.prior_generation)&&v.prior_generation!==out.artifact_metadata.generation,'operator_artifact_result_invalid');
