@@ -15,7 +15,7 @@ import {executeDevGcsArtifact} from './dev_gcs_artifacts.mjs';
 import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
 import {executeDevRunExecution} from './dev_run_execution.mjs';
 import {observeDevBuildArtifacts} from './dev_build_evidence.mjs';
-import {observeWorkspaceRelease,executeWorkspaceReleaseStep} from './dev_workspace_release.mjs';
+import {observeWorkspaceRelease,executeWorkspaceReleaseStep,cleanupWorkspaceRevision} from './dev_workspace_release.mjs';
 import {observeProductRelease} from './dev_product_release_observation.mjs';
 
 const SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
@@ -82,6 +82,8 @@ const defaultHandlers={
  gcp_metadata:async a=>executeDevGcpMetadata(a.bundle),
  observe_product_release:async(a,get)=>observeProductRelease(a.bundle,{actor:a.actor_sub_hash,readEvidence:get}),
  observe_workspace_release:async()=>observeWorkspaceRelease(),
+ workspace_revision_cleanup:async a=>cleanupWorkspaceRevision(a.bundle,{
+  assertFresh:()=>operatorRequire(Date.now()>=a.issued_at_ms&&Date.now()<a.expires_at_ms,'operator_approval_expired')}),
  workspace_release_step:async(a,get)=>{
   const original=await readOriginal(a.bundle.build_approval_ref,a.actor_sub_hash,get);
   operatorRequire(original.action==='build'&&original.bundle.request?.build_kind==='workspace_r2'&&

@@ -4,7 +4,7 @@
 // replay on uncertain responses. Never mutate the Search Job or Command API.
 import {gcpFetch} from '../src/lib.mjs';
 import {operatorHash,operatorRequire,operatorLro,OPERATOR_ROOT,WORKSPACE_RELEASE_SERVICES as SERVICES,
- WORKSPACE_RELEASE_PACKAGES as PACKAGES,workspaceRevision,workspaceImage,validateWorkspaceReleaseBundle} from '../src/dev_operator_contract.mjs';
+ WORKSPACE_RELEASE_PACKAGES as PACKAGES,workspaceRevision,workspaceImage,validateWorkspaceReleaseBundle,validateWorkspaceRevisionCleanup} from '../src/dev_operator_contract.mjs';
 import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
 const RUN='https://run.googleapis.com/v2/';
 const REGISTRY='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/';
@@ -220,4 +220,43 @@ export async function executeWorkspaceReleaseStep(bundle,{
  // or failed health -> existing operator RECOVERY_REQUIRED; observe then admit
  // an explicit compensating traffic step. Never delete revisions.
  return report(after,x.phase,role);
+}
+
+
+// Independent review binds the exact obsolete revision and confirms a
+// maintenance window with no concurrent release/rollback. No registry
+// deletion, no automatic retry, and no permission to delete product revisions.
+export async function cleanupWorkspaceRevision(bundle,{fetchImpl=gcpFetch,assertFresh,wait=sleep}={}){
+ const x=validateWorkspaceRevisionCleanup(bundle),role=x.role,path=servicePath(role)+'/revisions/'+x.revision;
+ operatorRequire(typeof assertFresh==='function','workspace_cleanup_admission_missing');
+ async function preflight(){
+  const p=await capturePair(fetchImpl),current=p.pair[role],raw=current.raw;
+  operatorRequire(p.pair_sha256===x.expected_pair_sha256&&current.summary.revision!==x.revision&&
+   current.summary.latest_ready_revision!==x.revision&&short(raw.latestCreatedRevision)!==x.revision&&
+   short(current.template.revision)!==x.revision&&!current.traffic.some(t=>t.revision===x.revision)&&
+   !current.traffic.some(t=>t.revision===x.retained_revision)&&
+   current.summary.revision!==x.retained_revision,'workspace_cleanup_revision_protected');
+  const candidate=await json(fetchImpl,path);
+  operatorRequire(sameName(candidate.name,path)&&candidate.etag===x.revision_etag&&candidate.reconciling!==true&&
+   candidate.serviceAccount===current.template.serviceAccount&&candidate.containers?.length===1&&
+   candidate.containers[0].image===x.image,'workspace_cleanup_target_drift');
+  await revision(fetchImpl,role,x.retained_revision,x.retained_image,current.template.serviceAccount);
+  return p;
+ }
+ async function deleteRevision(validateOnly){
+  const query=new URLSearchParams({etag:x.revision_etag,validateOnly:String(validateOnly)});
+  return json(fetchImpl,path+'?'+query,{method:'DELETE'});
+ }
+ assertFresh();await preflight();
+ assertFresh();await awaitOperation(await deleteRevision(true),fetchImpl,wait);
+ await preflight();assertFresh();
+ await awaitOperation(await deleteRevision(false),fetchImpl,wait);
+ const response=await fetchImpl(RUN+path,{method:'GET',redirect:'error',signal:AbortSignal.timeout(15000)});
+ operatorRequire(response.status===404,'workspace_cleanup_absence_unconfirmed');
+ const after=await capturePair(fetchImpl);
+ operatorRequire(after.pair_sha256===x.expected_pair_sha256,'workspace_cleanup_service_drift');
+ await revision(fetchImpl,role,x.retained_revision,x.retained_image,after.pair[role].template.serviceAccount);
+ return {state:'SUCCEEDED',revision_cleanup:{role,revision:x.revision,image:x.image,
+  retained_revision:x.retained_revision,pair_sha256:after.pair_sha256,target_absent:true,
+  retained_present:true,image_deletion_authorized:false,automatic_retry:false}};
 }

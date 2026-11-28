@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {observeWorkspaceRelease,executeWorkspaceReleaseStep} from '../operator/dev_workspace_release.mjs';
+import {observeWorkspaceRelease,executeWorkspaceReleaseStep,cleanupWorkspaceRevision} from '../operator/dev_workspace_release.mjs';
 import {projectOperatorResult,validateWorkspaceReleaseBundle} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),root='projects/jscc-dev/locations/europe-west1',registry='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/';
 const service={manager:'jscc-dev-workspace-manager',worker:'jscc-dev-sandbox-worker'};
@@ -88,4 +88,40 @@ test('foreign target, pair drift, unpinned traffic or wrong immutable build cann
  f.options.observeBuild=async()=>({state:'SUCCEEDED',build_observation:{source_sha:sha,build_kind:'ops'}});
  await assert.rejects(()=>f.action('stage','worker'),/build_evidence_missing/);
  assert.equal(f.patches.length,0);
+});
+
+test('workspace cleanup deletes only one reviewed obsolete revision, retains rollback and never touches registry',async()=>{
+ const f=fixture(),role='manager',servicePath=root+'/services/'+service[role],rev=service[role]+'-old-retired',
+  rollback=service[role]+'-old-retained',path=servicePath+'/revisions/'+rev;
+ const oldImage=registry+packages[role]+'@sha256:'+'e'.repeat(64),retainedImage=registry+packages[role]+'@sha256:'+'f'.repeat(64);
+ const make=(name,image)=>({name:servicePath+'/revisions/'+name,etag:'revision-etag',
+  serviceAccount:f.states[role].template.serviceAccount,containers:[{image}],conditions:[{type:'Ready',state:'CONDITION_SUCCEEDED'}]});
+ f.revisions[path]=make(rev,oldImage);f.revisions[servicePath+'/revisions/'+rollback]=make(rollback,retainedImage);
+ const deletes=[],fetchImpl=async(url,init)=>{
+  const u=new URL(url);
+  if(u.pathname==='/v2/'+path){
+   if(init.method==='DELETE'){
+    assert.equal(u.searchParams.get('etag'),'revision-etag');assert.equal(init.body,undefined);
+    deletes.push(u.searchParams.get('validateOnly'));
+    if(deletes.at(-1)==='false')delete f.revisions[path];
+    return Response.json({name:root+'/operations/op',done:true});
+   }
+   if(!f.revisions[path])return new Response(null,{status:404});
+  }
+  assert.equal(init.method,'GET');
+  return f.options.fetchImpl(url,init);
+ };
+ const p=await observeWorkspaceRelease({fetchImpl});
+ const bundle={environment:'dev',role,revision:rev,image:oldImage,revision_etag:'revision-etag',
+  expected_pair_sha256:p.workspace_release.pair_sha256,retained_revision:rollback,retained_image:retainedImage,
+  retention_review_ref:'#589/22'};
+ const opts={...f.options,fetchImpl};
+ await assert.rejects(()=>cleanupWorkspaceRevision({...bundle,revision:f.states[role].latestReadyRevision},opts),/revision_protected/);
+ await assert.rejects(()=>cleanupWorkspaceRevision({...bundle,revision_etag:'wrong'},opts),/target_drift/);
+ assert.equal(deletes.length,0);
+ const out=await cleanupWorkspaceRevision(bundle,opts);
+ assert.deepEqual(deletes,['true','false']);
+ assert.equal(out.revision_cleanup.target_absent,true);assert.equal(out.revision_cleanup.image_deletion_authorized,false);
+ const req={action:'workspace_revision_cleanup',operation_id:'op',approval_hash:'hash'};
+ assert.deepEqual(projectOperatorResult(req,{generation:'1',data:{...req,...out}}).revision_cleanup,out.revision_cleanup);
 });

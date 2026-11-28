@@ -151,11 +151,12 @@ cutover requires staged health and worker-before-manager, rollback is reverse
 order, retire removes only the candidate tag. Validate-only and etag before
 one PATCH, bounded LRO polling, effective revision/config/traffic readback;
 uncertain receipt requires observation and separately approved rollback, not
-retry. Existing manager/worker compatible rollout and independent synthetic
+retry. workspace_revision_cleanup requires reviewed maintenance/retention,
+exact obsolete revision etag, untagged inactive target and retained rollback;
+validateOnly/delete/readback; never deletes images. Existing compatible rollout and independent synthetic
 smoke are required; health is not functional acceptance. Private service
 invoker, exact scoped update, image/source and existing traffic/URI formats
 are live admission gates. No product Service/Search Job, IAM or DB mutation.
-
 ## RE-07 isolated Nile testing invocation (source only)
 
 Extend the existing owner issue-comment dispatcher, not GitHub credentials or
