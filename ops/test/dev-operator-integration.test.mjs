@@ -149,7 +149,7 @@ test('runtime identity and embedded source binding require exact Job task and se
   return new Response(sa);
  }};
  assert.deepEqual(await runtimeConfig(env,opts),{sourceSha:SHA,execution,reviewKeyFingerprint});
- for(const delta of [{CLOUD_RUN_TASK_ATTEMPT:'1'},{CLOUD_RUN_TASK_COUNT:'2'},{GCP_PROJECT:'jscc-prod'}])
+ for(const delta of [{CLOUD_RUN_TASK_ATTEMPT:'1'},{CLOUD_RUN_TASK_COUNT:'2'},{GCP_PROJECT:'jscc-prod'},{JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256:''}])
   await assert.rejects(()=>runtimeConfig({...env,...delta},opts));
  await assert.rejects(()=>runtimeConfig(env,{...opts,readSource:async()=>DIGEST}));
  await assert.rejects(()=>runtimeConfig(env,{...opts,fetchImpl:async()=>new Response('other-sa')}));
@@ -240,7 +240,7 @@ test('authenticated catalog is derived from admitted actions, never calls cloud 
  assert.ok(out.actions.every(x=>x.approval_required===true));
  assert.ok(out.actions.some(x=>x.action==='observe_product_incident'&&x.classification==='OBSERVE'));
  assert.ok(out.actions.some(x=>x.action==='reconcile_build_submission'&&x.classification==='CHANGE'));
- assert.equal(f.calls.length,0);assert.equal(f.map.size,1);
+ assert.equal(f.calls.length,0);assert.equal(f.map.size,2);
  await assert.rejects(()=>invokeDevOperator('operator_catalog',{environment:'prod'},sub,config,f.opts));
  await assert.rejects(()=>invokeDevOperator('operator_catalog',{},'invalid',config,f.opts));
 });
@@ -252,14 +252,14 @@ test('published approval preflight binds same actor, generation, lifecycle and J
  assert.equal(out.state,'PREFLIGHT_OBSERVED');assert.equal(out.approval_generation,'1');
  assert.equal(out.record_hash,operatorHash(approval()));assert.equal(out.job_template,'OBSERVED_MATCH');
  assert.equal(out.runtime_permissions,'UNVERIFIED');assert.equal(out.execution_authorized,false);
- assert.equal(f.map.size,1);assert.equal(f.calls.filter(x=>x[0]==='POST').length,0);
+ assert.equal(f.map.size,2);assert.equal(f.calls.filter(x=>x[0]==='POST').length,0);
  await assert.rejects(()=>invokeDevOperator('operator_preflight',{approval_ref:ref},'999999',config,f.opts));
  await start(f);
  assert.equal((await preflight()).state,'ALREADY_REQUESTED');
  assert.equal(f.calls.filter(x=>x[0]==='POST').length,1);
  const g=fixture({jobImage:'sha256:'+'f'.repeat(64)});
  await assert.rejects(()=>invokeDevOperator('operator_preflight',{approval_ref:ref},sub,config,g.opts),/job_binding/);
- assert.equal(g.map.size,1);
+ assert.equal(g.map.size,2);
 });
 
 test('R2 missing, altered or foreign independent proof denies Job before claim',async()=>{
