@@ -48,12 +48,14 @@ refuse default, v1 secret references, exact build/tag, reviewed script hash
 and owned GOV85 sentinel/catalog generation. All Search and migration
 executions must be terminal; active.json absent. The adapter consumes one
 approval in the existing GCS CAS store under control/v1/migrations before a
-single etag-bound run with fixed inspect/apply override; verifies the script
-hash inside the image. Apply requires separate prior inspect evidence and
+single etag-bound run with fixed inspect/apply override; verifies script
+and migration SQL hashes inside the image. Apply requires separate prior inspect evidence and
 owner/review/rollback authority. It does not stage or restore the Job, release
 the sentinel, interpret SQL logs or certify a managed migration outcome.
 Uncertain receipt retains claim; no replay. The existing independently
 reviewed release authority must stage/restore the exact Job and correlate
-execution/logs/ledger; current generic operator has no runWithOverrides grant.
+execution/logs/ledger; read-only reconciliation of the protected receipt
+and exact execution is implemented, never a SQL PASS inference. The generic
+operator has no runWithOverrides grant.
 013 was already applied historically; do not reapply. No live mutation,
 new IAM grant, generic migration reactivation or managed backup/restore.

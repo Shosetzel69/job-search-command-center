@@ -16,6 +16,7 @@ const REGISTRY='projects/jscc-shared/locations/europe-west1/repositories/jscc';
 const BUILDER='projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com';
 const SA='jscc-dev-runtime@jscc-dev.iam.gserviceaccount.com';
 const MIGRATION='command-api/scripts/db-evaluation-migrate-013.mjs';
+const SQL_FILE='command-api/migrations/013_profile_job_evaluation_listing.sql';
 const CHECKSUM='e30fdd8d16e9ec085c97d61011cf27d86ef91056329c8d5ebec3f030ee6aa38a';
 const SHA=/^[a-f0-9]{40}$/;
 const HEX=/^[a-f0-9]{64}$/;
@@ -141,6 +142,30 @@ async function verifyIdle(call){
   require(!token,'nile_release_execution_pagination_incomplete');
  }
 }
+function migrationCommand(x){
+ return "printf '%s  %s\\n%s  %s\\n' '"+x.script_sha256+"' '"+MIGRATION+
+  "' '"+x.migration_checksum+"' '"+SQL_FILE+"' | sha256sum -c --status; exec node '"+MIGRATION+"'";
+}
+function executionProof(raw,id,x,mode){
+ const path=PATH+'/executions/'+id,task=raw?.template,c=task?.containers?.[0];
+ require(bound(raw?.name,path)&&(raw.job===JOB||bound(raw.job,PATH))&&raw.taskCount===1&&
+  task?.serviceAccount===SA&&task.containers?.length===1&&c.image===IMAGE+x.service_digest&&
+  Array.isArray(c.command)&&c.command.length===1&&c.command[0]==='/bin/bash'&&
+  Array.isArray(c.args)&&c.args.length===2&&c.args[0]==='-ceu'&&c.args[1]===migrationCommand(x)&&
+  Array.isArray(c.env)&&new Set(c.env.map(y=>y.name)).size===c.env.length,
+  'nile_release_execution_binding_mismatch');
+ const env=Object.fromEntries(c.env.map(y=>[y.name,y]));
+ const plain=(k,v)=>env[k]?.value===v&&!env[k].valueSource;
+ require(plain('APP_ENV','dev')&&plain('SOURCE_SHA',x.source_sha)&&plain('DB_MIGRATION_MODE','refuse')&&
+  plain('EVALUATION013_MODE',mode)&&(mode==='inspect'?!Object.hasOwn(env,'EVALUATION013_OWNER_GATE'):
+   plain('EVALUATION013_OWNER_GATE','APPROVE_EVALUATION_DEV_NILE_013_'+x.source_sha)),
+  'nile_release_execution_mode_mismatch');
+ const terminal=typeof raw.completionTime==='string'&&Number.isFinite(Date.parse(raw.completionTime));
+ const conditions=(raw.conditions||[]).filter(y=>y.type==='Completed');
+ const outcome=!terminal?'RUNNING_OR_PENDING':conditions.length===1&&conditions[0].state==='CONDITION_SUCCEEDED'?
+  'SUCCEEDED':conditions.length===1&&conditions[0].state==='CONDITION_FAILED'?'FAILED_OR_CANCELLED':'TERMINAL_UNVERIFIED';
+ return {execution:id,mode,terminal,outcome,sql_outcome:'UNVERIFIED'};
+}
 const claimKey=ref=>operatorHash({environment:'dev',work_item_ref:'#589',operation:'nile-013',approval_ref:ref});
 function executionName(value){
  if(typeof value!=='string')return null;
@@ -175,6 +200,10 @@ export async function submitApprovedNile013(record,{
  await verifyBuild(call,x);
  await verifyLock(call,x);
  await verifyIdle(call);
+ if(x.mode==='apply'){
+  const prior=executionProof(await call(RUN+PATH+'/executions/'+x.inspection_execution),x.inspection_execution,x,'inspect');
+  require(prior.outcome==='SUCCEEDED','nile_release_inspect_not_successful');
+ }
  const job=await call(RUN+PATH),etag=verifyTemplate(job,x);
  // Same release owner must have exclusive dispatch control; this read-only
  // lock check alone cannot exclude a second independently privileged actor.
@@ -195,8 +224,7 @@ export async function submitApprovedNile013(record,{
   // Exact script hash is also checked INSIDE the immutable image, then the
   // existing dedicated 013 entrypoint enforces source/DB/mode/ledger binding.
   // No arbitrary SQL or arguments, no persistent apply environment.
-  const command="printf '%s  %s\\n' '"+x.script_sha256+"' '"+MIGRATION+
-   "' | sha256sum -c --status; exec node '"+MIGRATION+"'";
+  const command=migrationCommand(x);
   const env=[{name:'EVALUATION013_MODE',value:x.mode}];
   if(x.mode==='apply')env.push({name:'EVALUATION013_OWNER_GATE',value:'APPROVE_EVALUATION_DEV_NILE_013_'+x.source_sha});
   const raw=await call(RUN+PATH+':run',{method:'POST',body:{etag,overrides:{
@@ -215,4 +243,41 @@ export async function submitApprovedNile013(record,{
   // Claim is retained. This is not permission to replay or release Retrieve.
   return {operation_id:key,state:'RECOVERY_REQUIRED',automatic_retry:false,template_restore_required:true};
  }
+}
+
+
+// Reconcile a previously submitted operation by its protected claim/receipt.
+// The same independent authority may observe after expiry; no run, patch,
+// cancellation, lock release or SQL-verdict inference occurs in this path.
+export async function observeApprovedNile013(record,{
+ trustedRecordHash,verifyAuthority,getToken,fetchImpl=fetch,store,now=Date.now,
+}={}){
+ const {x}=admit(record,trustedRecordHash,()=>record?.issued_at_ms);
+ require(typeof getToken==='function'&&typeof verifyAuthority==='function'&&await verifyAuthority(x)===true&&
+  Number.isSafeInteger(now())&&now()>=x.issued_at_ms,'nile_release_authority_denied');
+ const key=claimKey(x.approval_ref),base='control/v1/migrations/'+key;
+ const ledger=store||operatorMigrationStore({getToken,fetchImpl});
+ const claim=await ledger.get(base+'.claim.json'),receipt=await ledger.get(base+'.receipt.json');
+ const expected={schema_version:'1.0',environment:'dev',operation_id:key,approval_ref:x.approval_ref,
+  evidence_hash:trustedRecordHash,source_sha:x.source_sha,mode:x.mode};
+ require(match(GEN,claim?.generation)&&operatorHash(claim.data)===operatorHash(expected),'nile_release_claim_unverified');
+ if(!receipt)return {operation_id:key,state:'RECOVERY_REQUIRED',automatic_retry:false,sql_outcome:'UNVERIFIED'};
+ const v=receipt.data;
+ require(match(GEN,receipt.generation)&&operatorExact(v,['operation_id','evidence_hash','operation_name','execution','state',
+  'automatic_retry','template_restore_required'])&&v.operation_id===key&&v.evidence_hash===trustedRecordHash&&
+  operatorLro(v.operation_name)&&(v.execution===null||match(EXEC,v.execution))&&v.state==='SUBMITTED'&&
+  v.automatic_retry===false&&v.template_restore_required===true,'nile_release_receipt_unverified');
+ const call=transport(getToken,fetchImpl);
+ let id=v.execution;
+ if(!id){
+  const op=await call(RUN+v.operation_name);
+  require(op.name===v.operation_name,'nile_release_lro_binding_mismatch');
+  const candidates=[op.response?.name,op.metadata?.name,op.metadata?.execution,op.metadata?.target].map(executionName).filter(Boolean);
+  require(new Set(candidates).size<=1,'nile_release_execution_ambiguous');
+  id=candidates[0]??null;
+  if(!id)return {operation_id:key,state:op.done===true||op.error?'RECOVERY_REQUIRED':'SUBMITTED',
+   automatic_retry:false,sql_outcome:'UNVERIFIED'};
+ }
+ const proof=executionProof(await call(RUN+PATH+'/executions/'+id),id,x,x.mode);
+ return {operation_id:key,state:'OBSERVED',...proof,automatic_retry:false,template_restore_required:true};
 }

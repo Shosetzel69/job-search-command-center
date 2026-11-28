@@ -1,7 +1,6 @@
 # Remote Executor DEV operator extension — #589
 
 Companion to the [existing #537 DEV runbook](remote-executor-dev.md). The sections below preserve the source-only implementation and activation boundaries; this document grants no runtime change authority.
-
 ## #589 RE-07 — Command API mediated Nile observations
 
 Owner-approved alternative to the unavailable dedicated native read-only credential. This replaces the isolated-DB-operator approach preserved in draft #701. It reuses the existing diagnostics Job identity and the product Command API connection. The application identity is not database-role read-only; protection comes from the fixed endpoint, exact caller authentication, server-selected tenant, database read-only transactions and unconditional rollback. Native transaction compatibility remains a live acceptance gate.
@@ -158,7 +157,7 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   catalog/ledger validator in the read-only transaction; reports exact
   migration checksum and PENDING_013/ALREADY_APPLIED, never apply authority.
   Generic db:migrate stays disabled. Dedicated release-side 013 adapter
-  is separate from the generic operator; see workspace runbook. No raw SQL.
+  is separate; see retrieve-dev-release-520.md. No raw SQL.
   Product image release stays on its existing route, with DEV acceptance
   and Retrieve protection. The operator has no product deploy authority.
 ### Activation prerequisites (not an executable provisioning instruction)

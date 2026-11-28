@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {submitApprovedNile013} from '../../scripts/gcp/remote_executor_dev_nile_013.mjs';
+import {submitApprovedNile013,observeApprovedNile013} from '../../scripts/gcp/remote_executor_dev_nile_013.mjs';
 import {operatorHash} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),digest='sha256:'+'b'.repeat(64),id='254d3513-9c02-4f33-a974-e8e8f8935aa7';
 const root='projects/jscc-dev/locations/europe-west1',path=root+'/jobs/jscc-db-migrate-dev';
@@ -60,6 +60,8 @@ test('dedicated release adapter runs one pinned inspect with exact script hash, 
  const body=f.posts[0].body;
  assert.equal(body.etag,'fixed-etag');assert.equal(body.overrides.taskCount,1);
  assert.deepEqual(body.overrides.containerOverrides[0].env,[{name:'EVALUATION013_MODE',value:'inspect'}]);
+ assert.ok(body.overrides.containerOverrides[0].args[1].includes(request.migration_checksum));
+ assert.ok(body.overrides.containerOverrides[0].args[1].includes('command-api/migrations/013_profile_job_evaluation_listing.sql'));
  assert.match(body.overrides.containerOverrides[0].args[1],/sha256sum -c --status; exec node 'command-api\/scripts\/db-evaluation-migrate-013.mjs'/);
  assert.equal((await run(request)).state,'ALREADY_CLAIMED');assert.equal(f.posts.length,1);
 });
@@ -75,4 +77,22 @@ test('managed migration denies foreign environment, missing inspect approval, lo
  const l=fixture({lost:true}),launch=()=>submitApprovedNile013(request,{...l.options,trustedRecordHash:operatorHash(request)});
  assert.equal((await launch()).state,'RECOVERY_REQUIRED');assert.equal((await launch()).state,'ALREADY_CLAIMED');
  assert.equal(l.posts.length,1);
+});
+
+test('read-only reconciliation uses exact receipt execution, not automatic retry or SQL success claim',async()=>{
+ const f=fixture(),options={...f.options,trustedRecordHash:operatorHash(request)};
+ const launched=await submitApprovedNile013(request,options);
+ const override=f.posts[0].body.overrides.containerOverrides[0];
+ const container={...template.template.containers[0],args:override.args,
+  env:[...template.template.containers[0].env,...override.env]};
+ const out=await observeApprovedNile013(request,{...options,now:()=>now()+100000,
+  fetchImpl:async(url,init)=>{
+   assert.equal(init.method,'GET');
+   assert.equal(url,'https://run.googleapis.com/v2/'+path+'/executions/'+launched.execution);
+   return Response.json({name:path+'/executions/'+launched.execution,job:path,taskCount:1,
+    template:{...template.template,containers:[container]},completionTime:'2026-11-28T00:00:00Z',
+    conditions:[{type:'Completed',state:'CONDITION_SUCCEEDED'}]});
+  }});
+ assert.equal(out.outcome,'SUCCEEDED');assert.equal(out.sql_outcome,'UNVERIFIED');
+ assert.equal(out.template_restore_required,true);assert.equal(f.posts.length,1);
 });
