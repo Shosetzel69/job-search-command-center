@@ -8,13 +8,13 @@ import {OPERATOR_BUCKET,OPERATOR_JOB,operatorPaths,operatorDispatchPath,operator
 import {verifyOperatorLifecycle} from '../src/dev_operator_gateway.mjs';
 import {runApprovedBuild,observeApprovedBuildEvidence,cancelApprovedBuild,reconcileApprovedBuild} from '../../scripts/gcp/remote_executor_dev_build.mjs';
 import {runApprovedPair,observePairRecovery} from '../../scripts/gcp/remote_executor_dev_pair.mjs';
-import {operatorPairStore} from '../../scripts/gcp/remote_executor_dev_admission.mjs';
+import {operatorPairStore,readPairOperation} from '../../scripts/gcp/remote_executor_dev_admission.mjs';
 import {createDevObserver,admitDevRequest} from '../observation/dev-runtime-observer.mjs';
 import {executeDevGcloudScript} from '../diagnostics/dev-gcloud-script-runner.mjs';
 import {executeDevGcsArtifact} from './dev_gcs_artifacts.mjs';
 import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
 import {executeDevRunExecution} from './dev_run_execution.mjs';
-import {observeDevBuildArtifacts} from './dev_build_evidence.mjs';
+import {observeDevBuildArtifacts,observeOpsDelivery} from './dev_build_evidence.mjs';
 import {observeWorkspaceRelease,executeWorkspaceReleaseStep,cleanupWorkspaceRevision,observeWorkspaceDelivery} from './dev_workspace_release.mjs';
 import {observeProductRelease,observeProductIncident} from './dev_product_release_observation.mjs';
 
@@ -128,6 +128,11 @@ const defaultHandlers={
   return cancelApprovedBuild(original.bundle,a.bundle.build_id,{
    getToken:()=>metadataAccessToken(),assertFresh:()=>operatorRequire(
     Date.now()>=a.issued_at_ms&&Date.now()<a.expires_at_ms,'operator_approval_expired')});
+ },
+ observe_ops_delivery:async(a,get)=>{
+  const store=operatorPairStore({getToken:()=>metadataAccessToken()});
+  return observeOpsDelivery(a.bundle,{actor:a.actor_sub_hash,get,
+   readPair:ref=>readPairOperation(store,ref),observePair:ref=>observePairRecovery({approvalRef:ref,store})});
  },
  observe_pair:async(a,get)=>{
   const original=await readOriginal(a.bundle.original_approval_ref,a.actor_sub_hash,get);

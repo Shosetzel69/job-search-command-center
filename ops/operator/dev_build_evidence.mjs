@@ -1,7 +1,7 @@
 // #589: correlate the original admitted successful build with exact immutable
 // tags and fixed build-produced markers. Never return arbitrary log content.
 import {gcpFetch} from '../src/lib.mjs';
-import {operatorRequire} from '../src/dev_operator_contract.mjs';
+import {operatorRequire,operatorHash,operatorPaths,validateOperatorApproval,validateOperatorRequest,projectOperatorResult,validateOpsDelivery} from '../src/dev_operator_contract.mjs';
 import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
 const SHA=/^[a-f0-9]{40}$/;
 const UUID=/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -72,4 +72,71 @@ export async function observeDevBuildArtifacts(original,{observe,metadata=execut
   denied?'LOG_ACCESS_DENIED':complete&&images.every(x=>x.marker==='MATCH')?'MATCHED_MARKERS':'INCOMPLETE';
  return {...build,state:'OBSERVED',source_provenance:'UNVERIFIED',
   build_artifacts:{log_search_complete:complete,correlation,images,source_provenance:'UNVERIFIED'}};
+}
+
+
+// Existing approved build + pair controller handoff. All inputs come from
+// protected same-actor records. Only observes; ChatGPT must call separately
+// admitted actions to proceed. Never treats a green build as deployment.
+export async function observeOpsDelivery(bundle,{actor,get,readPair,observePair}={}){
+ const x=validateOpsDelivery(bundle);
+ operatorRequire(/^[a-f0-9]{64}$/.test(actor||'')&&typeof get==='function'&&
+  typeof readPair==='function'&&typeof observePair==='function','ops_delivery_admission_denied');
+ async function evidence(ref,action){
+  const paths=operatorPaths(ref),record=await get(paths.approval);
+  const admitted=validateOperatorApproval(record,{ref,actor,sourceSha:record?.data?.operator_source_sha,fresh:false});
+  operatorRequire(admitted.approval.action===action,'ops_delivery_action_mismatch');
+  const request=await get(paths.request);
+  if(!request)return {approval:admitted.approval,requested:false,result:null};
+  operatorRequire(/^[1-9][0-9]{0,19}$/.test(request.generation||''),'ops_delivery_request_generation');
+  validateOperatorRequest(request.data,admitted);
+  const raw=await get(paths.result);
+  return {approval:admitted.approval,requested:true,result:raw?projectOperatorResult(request.data,raw):null};
+ }
+ const build=await evidence(x.build_approval_ref,'build');
+ operatorRequire(build.requested&&build.approval.bundle.request?.build_kind===undefined&&
+  build.approval.bundle.request?.source_sha===x.source_sha,'ops_delivery_build_mismatch');
+ const observed=await evidence(x.artifact_approval_ref,'observe_build_artifacts'),m=observed.result;
+ operatorRequire(observed.approval.bundle.original_approval_ref===x.build_approval_ref&&m?.state==='OBSERVED'&&
+  UUID.test(m.build_id||'')&&m.build_observation?.source_sha===x.source_sha&&m.build_observation.build_kind===undefined&&
+  m.build_observation.archive_generation===build.approval.bundle.archive?.generation&&
+  m.build_observation.archive_binding==='RESOLVED_MATCH'&&m.build_observation.build_status==='SUCCESS'&&
+  m.build_artifacts?.correlation==='MATCHED_MARKERS'&&m.build_artifacts.log_search_complete===true&&
+  m.build_artifacts.images.every(i=>i.marker==='MATCH')&&
+  (!build.result?.build_id||build.result.build_id===m.build_id),'ops_delivery_artifacts_unverified');
+ const images=Object.fromEntries(m.build_artifacts.images.map(i=>[i.package,i.digest]));
+ let disposition='PAIR_APPROVAL_REQUIRED',pairState='NOT_REQUESTED',livePair=null,protectedMatch=null,leaseState=null;
+ if(x.pair_approval_ref!==null){
+  const pair=await evidence(x.pair_approval_ref,'deploy_ops_pair'),v=pair.approval.bundle;
+  operatorRequire(v.build_id===m.build_id&&v.next?.source_sha===x.source_sha&&
+   v.next.gateway_digest===images['jscc-ops-gateway']&&v.next.worker_digest===images['jscc-diagnostics'],
+   'ops_delivery_pair_binding_mismatch');
+  const before=await readPair(x.pair_approval_ref);
+  if(!pair.requested&&!before)disposition='PAIR_REQUEST_PENDING';
+  else{
+   disposition='RECOVERY_REQUIRED';pairState='UNKNOWN';
+   if(before){
+    operatorRequire(pair.requested&&operatorHash(before.record.bundle)===operatorHash(v)&&
+     /^[1-9][0-9]{0,19}$/.test(before.generation||'')&&
+     (!pair.result?.controller_operation_id||pair.result.controller_operation_id===before.identity.key),
+     'ops_delivery_journal_mismatch');
+    const live=await observePair(x.pair_approval_ref);
+    const after=await readPair(x.pair_approval_ref);
+    operatorRequire(after?.generation===before.generation&&operatorHash(after.record)===operatorHash(before.record)&&
+     live.operation_id===before.identity.key&&live.state===before.record.state&&
+     ['PREVIOUS_PAIR','PROPOSED_PAIR','MIXED_OR_DRIFT'].includes(live.live_pair)&&typeof live.protected_match==='boolean'&&
+     ['OWNED_ACTIVE','OWNED_RELEASED','ABSENT','OTHER','AMBIGUOUS'].includes(live.lease_state),
+     'ops_delivery_live_drift');
+    pairState=before.record.state;livePair=live.live_pair;protectedMatch=live.protected_match;leaseState=live.lease_state;
+    const confirmed=before.record.history.filter(e=>e.outcome==='CONFIRMED').map(e=>e.step);
+    if(pair.result?.state==='SUCCEEDED'&&pairState==='SUCCEEDED'&&livePair==='PROPOSED_PAIR'&&
+      protectedMatch===true&&leaseState==='OWNED_RELEASED'&&
+      operatorHash(confirmed)===operatorHash(['freeze','deploy_worker','deploy_gateway','verify_next','release']))
+      disposition='INDEPENDENT_ACCEPTANCE_REQUIRED';
+   }
+  }
+ }
+ return {state:'OBSERVED',ops_delivery:{source_sha:x.source_sha,build_id:m.build_id,images,
+  pair_approval_ref:x.pair_approval_ref,pair_state:pairState,live_pair:livePair,protected_match:protectedMatch,
+  lease_state:leaseState,disposition,automatic_retry:false,acceptance:'PENDING',source_provenance:'UNVERIFIED'}};
 }

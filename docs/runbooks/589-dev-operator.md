@@ -66,8 +66,8 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
 - The Job rechecks execution/task identity and the protected approval,
   claims a create-only operation before executing, and writes sanitized
   evidence. Supported source actions: pinned build and build observation,
-  approved gateway/diagnostics paired deployment and recovery observation,
-  bounded R4 inventory, GCS artifact metadata/copy, and GCP metadata.
+  approved gateway/diagnostics pair and recovery; observe_ops_delivery binds
+  build markers, pair journal and live readback. R4/GCS/GCP metadata retained.
   A create-only request receipt binds the execution before dispatch mapping;
   pending status observes receipt/claim and exact execution, never replays.
   operator_catalog exposes action contract/pins; operator_preflight checks

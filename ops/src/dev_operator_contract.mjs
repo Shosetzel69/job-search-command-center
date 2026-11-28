@@ -10,14 +10,14 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release','workspace_revision_cleanup','observe_workspace_delivery','observe_product_incident','reconcile_build_submission']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release','workspace_revision_cleanup','observe_workspace_delivery','observe_product_incident','reconcile_build_submission','observe_ops_delivery']);
 export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
  run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.executions.cancel','run.executions.get','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
 });
 // Advertise the implemented contract, not live IAM or an approval.
 const OBSERVATIONS=new Set(['observe_build','observe_pair','gcloud_inventory','gcp_metadata','observe_run_execution',
- 'observe_build_artifacts','observe_workspace_release','observe_product_release','observe_workspace_delivery','observe_product_incident']);
+ 'observe_build_artifacts','observe_workspace_release','observe_product_release','observe_workspace_delivery','observe_product_incident','observe_ops_delivery']);
 export function operatorActionCatalog(){
  return [...ACTIONS].sort().map(action=>({action,classification:OBSERVATIONS.has(action)?'OBSERVE':
   action==='gcs_artifact'?'MIXED':'CHANGE',approval_required:true}));
@@ -93,6 +93,14 @@ export function validateWorkspaceDelivery(v){
   match(HEX,v.initial_pair_sha256)&&Array.isArray(v.steps)&&v.steps.length<=WORKSPACE_DELIVERY_STEPS.length&&
   v.steps.every(x=>match(REF,x))&&new Set([v.build_approval_ref,v.artifact_approval_ref,...v.steps]).size===v.steps.length+2,
   'workspace_delivery_bundle_denied');
+ return v;
+}
+export function validateOpsDelivery(v){
+ operatorRequire(operatorExact(v,['environment','source_sha','build_approval_ref','artifact_approval_ref','pair_approval_ref'])&&
+  v.environment==='dev'&&match(SHA,v.source_sha)&&match(REF,v.build_approval_ref)&&match(REF,v.artifact_approval_ref)&&
+  (v.pair_approval_ref===null||match(REF,v.pair_approval_ref))&&
+  new Set([v.build_approval_ref,v.artifact_approval_ref,v.pair_approval_ref]).size===3,
+  'ops_delivery_bundle_denied');
  return v;
 }
 export function validateProductIncidentBundle(v){
@@ -181,6 +189,9 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
    (v.action!=='cancel_diagnostic_execution'||v.bundle.job==='jscc-diagnostics-dev'),
    'operator_run_execution_approval_mismatch');
   devRunExecutionTarget(v.bundle.job,v.bundle.execution);
+ }else if(v.action==='observe_ops_delivery'){
+  validateOpsDelivery(v.bundle);
+  operatorRequire(![v.bundle.build_approval_ref,v.bundle.artifact_approval_ref,v.bundle.pair_approval_ref].includes(ref),'ops_delivery_reference_mismatch');
  }else if(v.action==='observe_product_incident'){
   validateProductIncidentBundle(v.bundle);
  }else if(v.action==='observe_product_release'){
@@ -497,6 +508,23 @@ export function projectOperatorResult(request,record){
   }
   out.workspace_release={pair_sha256:m.pair_sha256,services,phase:m.phase,role:m.phase===null?null:m.role,
    functional_acceptance:'PENDING',automatic_retry:false};
+ }
+ if(request.action==='observe_ops_delivery'&&v.state==='OBSERVED'){
+  const m=v.ops_delivery,packages=['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator','jscc-ops-publisher'];
+  operatorRequire(m&&match(SHA,m.source_sha)&&match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,m.build_id)&&
+   operatorExact(m.images,packages)&&packages.every(k=>match(/^sha256:[a-f0-9]{64}$/,m.images[k]))&&
+   (m.pair_approval_ref===null||match(REF,m.pair_approval_ref))&&
+   ['NOT_REQUESTED','UNKNOWN','RESERVED','RUNNING','SUCCEEDED','ROLLED_BACK','FREEZE_UNCERTAIN','ROLLBACK_BLOCKED','UNFREEZE_UNCERTAIN','ADMISSION_BLOCKED'].includes(m.pair_state)&&
+   (m.live_pair===null||['PREVIOUS_PAIR','PROPOSED_PAIR','MIXED_OR_DRIFT'].includes(m.live_pair))&&
+   (m.protected_match===null||typeof m.protected_match==='boolean')&&
+   (m.lease_state===null||['OWNED_ACTIVE','OWNED_RELEASED','ABSENT','OTHER','AMBIGUOUS'].includes(m.lease_state))&&
+   ['PAIR_APPROVAL_REQUIRED','PAIR_REQUEST_PENDING','RECOVERY_REQUIRED','INDEPENDENT_ACCEPTANCE_REQUIRED'].includes(m.disposition)&&
+   (m.disposition==='PAIR_APPROVAL_REQUIRED'?m.pair_approval_ref===null:m.pair_approval_ref!==null)&&
+   (m.disposition==='INDEPENDENT_ACCEPTANCE_REQUIRED'?m.pair_state==='SUCCEEDED'&&m.live_pair==='PROPOSED_PAIR'&&m.protected_match===true&&m.lease_state==='OWNED_RELEASED':true),
+   'operator_ops_delivery_invalid');
+  out.ops_delivery={source_sha:m.source_sha,build_id:m.build_id,images:Object.fromEntries(packages.map(k=>[k,m.images[k]])),
+   pair_approval_ref:m.pair_approval_ref,pair_state:m.pair_state,live_pair:m.live_pair,protected_match:m.protected_match,
+   lease_state:m.lease_state,disposition:m.disposition,automatic_retry:false,acceptance:'PENDING',source_provenance:'UNVERIFIED'};
  }
  if(request.action==='observe_workspace_delivery'&&v.state==='OBSERVED'){
   const m=v.workspace_delivery;
