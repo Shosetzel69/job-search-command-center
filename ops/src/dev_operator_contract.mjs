@@ -663,7 +663,7 @@ export function operatorApprovalReviewPath(ref){
  return 'control/v1/approvals/'+operatorPaths(ref).key+'.review.json';
 }
 export function operatorApprovalReviewProof(record,config,signature){
- operatorRequire(record.actor_sub_hash===config.actor&&record.operator_source_sha===config.operatorSourceSha&&
+ operatorRequire(record?.actor_sub_hash===config?.actor&&record?.operator_source_sha===config?.operatorSourceSha&&
   verifyPublisherReview(record,'approval',config,signature),'operator_review_proof_denied');
  return {schema_version:'1.0',record_hash:operatorHash(record),review_signature:signature,
   review_key_spki_b64:config.reviewKey,review_key_sha256:publisherReviewKey(config.reviewKey).fingerprint,
