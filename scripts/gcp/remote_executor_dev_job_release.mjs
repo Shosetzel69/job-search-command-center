@@ -2,8 +2,8 @@
 // Separate release authority only. Not a generic MCP action, not a new
 // product release route, no Search execution, SQL, lock acquisition/release.
 import {operatorExact,operatorHash,operatorRequire as require,operatorLro} from '../../ops/src/dev_operator_contract.mjs';
-import {operatorProductJobStore} from './remote_executor_dev_admission.mjs';
-import {transport,verifyLock,verifyIdle} from './remote_executor_dev_nile_013.mjs';
+import {operatorProductJobStore,operatorMigrationStore} from './remote_executor_dev_admission.mjs';
+import {transport,verifyLock,verifyIdle,validateNile013ReleaseRecord,submitApprovedNile013,observeApprovedNile013} from './remote_executor_dev_nile_013.mjs';
 const ROOT='projects/jscc-dev/locations/europe-west1',RUN='https://run.googleapis.com/v2/';
 const REG='projects/jscc-shared/locations/europe-west1/repositories/jscc';
 const IMAGE='europe-west1-docker.pkg.dev/jscc-shared/jscc/';
@@ -362,4 +362,136 @@ export async function observeCompatibleProductDelivery(record,{
   migration_default:'REFUSE',disposition,search_approval_ref:x.approval_ref,receipt_available:Boolean(receipt),
   schema_evidence_ref:frozen.schema_evidence_ref,service_health_ref:frozen.service_health_ref,
   automatic_retry:false,lock_release_authorized:false,acceptance:'PENDING'};
+}
+
+
+// #589: advance the existing guarded 013 release procedure one separately
+// authorized step at a time. The existing Service release authority owns
+// staging/cutover; this module never takes its role or releases the sentinel.
+export function validateMigrationProductPlan(record,pin,now=Date.now){
+ require(operatorExact(record,['schema_version','environment','work_item_ref','migration_stage','inspect','apply','migration_restore',
+  'search_stage','inspection_evidence','schema_evidence','stage_health_ref','issued_at_ms','expires_at_ms'])&&
+  record.schema_version==='1.0'&&record.environment==='dev'&&record.work_item_ref==='#589'&&match(HEX,pin)&&
+  operatorHash(record)===pin&&match(REF,record.stage_health_ref)&&Number.isSafeInteger(record.issued_at_ms)&&
+  Number.isSafeInteger(record.expires_at_ms)&&record.expires_at_ms>record.issued_at_ms&&
+  record.expires_at_ms-record.issued_at_ms<=3600000&&now()>=record.issued_at_ms&&now()<record.expires_at_ms,
+  'migration_product_plan_denied');
+ const p=structuredClone(record),job=v=>admit(v,operatorHash(v),()=>v.issued_at_ms).x,
+  migration=v=>validateNile013ReleaseRecord(v,operatorHash(v));
+ const stage=job(p.migration_stage),restore=job(p.migration_restore),search=job(p.search_stage),inspect=migration(p.inspect),
+  apply=p.apply===null?null:migration(p.apply);
+ const refs=[stage.approval_ref,inspect.approval_ref,restore.approval_ref,search.approval_ref,p.stage_health_ref,
+  ...(apply?[apply.approval_ref]:[])];
+ const sameRelease=v=>['source_sha','lock_generation','lock_payload_sha256','catalog_generation'].every(k=>v[k]===stage[k]);
+ const boundMigration=v=>sameRelease(v)&&v.service_digest===stage.candidate.digest&&v.build_id===stage.candidate.build_id&&
+  v.job_template_sha256===stage.candidate.template_sha256&&v.restore_ref===restore.approval_ref;
+ require(stage.role==='migration'&&stage.phase==='stage'&&restore.role==='migration'&&restore.phase==='restore'&&
+  search.role==='search'&&search.phase==='stage'&&sameRelease(restore)&&sameRelease(search)&&
+  same(stage.previous,restore.previous)&&same(stage.candidate,restore.candidate)&&
+  search.service_digest===stage.candidate.digest&&inspect.mode==='inspect'&&boundMigration(inspect)&&
+  (!apply||apply.mode==='apply'&&boundMigration(apply)&&apply.inspection_ref===inspect.approval_ref&&
+   apply.script_sha256===inspect.script_sha256&&apply.migration_checksum===inspect.migration_checksum)&&
+  new Set(refs).size===refs.length,'migration_product_plan_binding_mismatch');
+ const evidence=(v,mode)=>v===null||operatorExact(v,['approval_ref','execution','readiness','checksum','evidence_ref'])&&
+  v.approval_ref===(mode==='inspect'?inspect.approval_ref:apply?.approval_ref)&&
+  match(/^jscc-db-migrate-dev-[a-z0-9-]{1,40}$/,v.execution)&&v.checksum===inspect.migration_checksum&&
+  (mode==='inspect'?['PENDING_013','ALREADY_APPLIED'].includes(v.readiness):v.readiness==='ALREADY_APPLIED')&&
+  match(REF,v.evidence_ref)&&!refs.includes(v.evidence_ref);
+ require(evidence(p.inspection_evidence,'inspect')&&evidence(p.schema_evidence,'apply')&&
+  (p.schema_evidence===null||apply!==null&&p.inspection_evidence?.readiness==='PENDING_013'&&
+   p.schema_evidence.evidence_ref!==p.inspection_evidence.evidence_ref)&&
+  (!apply||p.inspection_evidence?.readiness==='PENDING_013'&&apply.inspection_execution===p.inspection_evidence.execution),
+  'migration_product_schema_evidence_mismatch');
+ return p;
+}
+export async function advanceMigrationProductDelivery(record,{
+ trustedRecordHash,verifyAuthority,getToken,fetchImpl=fetch,jobStore,migrationStore,now=Date.now,wait=delay,execute=null
+}={}){
+ const p=validateMigrationProductPlan(record,trustedRecordHash,now);
+ require(typeof getToken==='function'&&typeof verifyAuthority==='function'&&await verifyAuthority(p)===true,
+  'migration_product_authority_denied');
+ const js=jobStore||operatorProductJobStore({getToken,fetchImpl}),ms=migrationStore||operatorMigrationStore({getToken,fetchImpl}),
+  call=transport(getToken,fetchImpl),stage=p.migration_stage,restore=p.migration_restore,search=p.search_stage;
+ const fresh=()=>require(now()>=p.issued_at_ms&&now()<p.expires_at_ms,'migration_product_plan_expired');
+ const info={environment:'dev',source_sha:stage.source_sha,automatic_retry:false,lock_release_authorized:false,acceptance:'PENDING'};
+ // Receipts must match the exact approved record, not just a similar image.
+ async function jobReceipt(x){
+  const key=operatorHash({environment:'dev',work_item_ref:'#589',operation:'product-job-step',approval_ref:x.approval_ref}),
+   base='control/v1/product-job-steps/'+key,claim=await js.get(base+'.claim.json'),receipt=await js.get(base+'.receipt.json'),
+   expected={environment:'dev',operation_id:key,evidence_hash:operatorHash(x),role:x.role,phase:x.phase,approval_ref:x.approval_ref},
+   target=x.phase==='restore'?x.previous:x.candidate;
+  if(claim)require(match(GEN,claim.generation)&&same(claim.data,expected),'migration_product_claim_mismatch');
+  if(receipt)require(claim&&match(GEN,receipt.generation)&&same(receipt.data,{...expected,state:'OBSERVED',
+   template_sha256:target.template_sha256,source_sha:target.source_sha,digest:target.digest,
+   automatic_retry:false,functional_acceptance:'PENDING',lock_release_authorized:false}),'migration_product_receipt_mismatch');
+  return receipt?'CONFIRMED':claim?'UNKNOWN':'ABSENT';
+ }
+ async function migrationReceipt(x){
+  const key=operatorHash({environment:'dev',work_item_ref:'#589',operation:'nile-013',approval_ref:x.approval_ref}),
+   claim=await ms.get('control/v1/migrations/'+key+'.claim.json');
+  if(!claim)return null;
+  return observeApprovedNile013(x,{trustedRecordHash:operatorHash(x),verifyAuthority,getToken,fetchImpl,store:ms,now});
+ }
+ async function next(step,action,kind){
+  fresh();
+  if(execute===null)return {...info,state:'NEXT_STEP_REQUIRED',next_step:step,execution_authorized:false};
+  require(execute===step,'migration_product_step_order_denied');
+  require(now()>=action.issued_at_ms&&now()<action.expires_at_ms,'migration_product_step_expired');
+  await verifyLock(call,stage);await verifyIdle(call);await serviceGate(call,search);fresh();
+  const options={trustedRecordHash:operatorHash(action),verifyAuthority,getToken,fetchImpl,now};
+  const result=kind==='job'?await executeApprovedProductJobStep(action,{...options,store:js,wait}):
+   await submitApprovedNile013(action,{...options,store:ms,...(step==='apply'?{inspectionEvidence:{
+    record:p.inspect,record_hash:operatorHash(p.inspect),readiness:p.inspection_evidence.readiness,
+    evidence_ref:p.inspection_evidence.evidence_ref}}:{})});
+  return {...info,state:'STEP_DISPATCHED',step,result};
+ }
+ function stop(state){
+  require(execute===null,'migration_product_step_order_denied');
+  return {...info,state,next_step:null,execution_authorized:false};
+ }
+ await verifyLock(call,stage);await serviceGate(call,search);
+ const [staged,restored,searched]=await Promise.all([jobReceipt(stage),jobReceipt(restore),jobReceipt(search)]);
+ const liveMigration=await call(RUN+jobPath('migration')),liveSearch=await call(RUN+jobPath('search'));
+ if([staged,restored,searched].includes('UNKNOWN'))return stop('RECOVERY_REQUIRED');
+ const migrationTarget=staged==='CONFIRMED'&&restored!=='CONFIRMED'?stage.candidate:stage.previous;
+ const searchTarget=searched==='CONFIRMED'?search.candidate:search.previous;
+ readback(liveMigration,'migration',migrationTarget);readback(liveSearch,'search',searchTarget);
+ if(staged==='ABSENT'){
+  require(restored==='ABSENT'&&searched==='ABSENT'&&p.inspection_evidence===null&&p.apply===null,'migration_product_step_gap');
+  return next('migration_stage',stage,'job');
+ }
+ const inspection=await migrationReceipt(p.inspect);
+ if(!inspection){
+  require(restored==='ABSENT'&&searched==='ABSENT'&&p.inspection_evidence===null&&p.apply===null,'migration_product_step_gap');
+  return next('inspect',p.inspect,'migration');
+ }
+ if(inspection.state==='SUBMITTED'||inspection.outcome==='RUNNING_OR_PENDING')return stop('WAIT_INSPECT');
+ if(inspection.state!=='OBSERVED'||inspection.outcome!=='SUCCEEDED'||inspection.terminal!==true)return stop('RECOVERY_REQUIRED');
+ const i=p.inspection_evidence;
+ if(!i)return stop('INSPECTION_EVIDENCE_REQUIRED');
+ require(i.execution===inspection.execution&&await verifyAuthority(i)===true,'migration_product_inspection_evidence_denied');
+ if(i.readiness==='PENDING_013'){
+  if(!p.apply)return stop('APPLY_APPROVAL_REQUIRED');
+  const applied=await migrationReceipt(p.apply);
+  if(!applied){
+   require(restored==='ABSENT'&&searched==='ABSENT'&&p.schema_evidence===null,'migration_product_step_gap');
+   return next('apply',p.apply,'migration');
+  }
+  if(applied.state==='SUBMITTED'||applied.outcome==='RUNNING_OR_PENDING')return stop('WAIT_APPLY');
+  if(applied.state!=='OBSERVED'||applied.outcome!=='SUCCEEDED'||applied.terminal!==true)return stop('RECOVERY_REQUIRED');
+  if(!p.schema_evidence)return stop('SCHEMA_EVIDENCE_REQUIRED');
+  require(p.schema_evidence.execution===applied.execution&&await verifyAuthority(p.schema_evidence)===true,
+   'migration_product_schema_evidence_denied');
+ }
+ if(restored==='ABSENT'){
+  require(searched==='ABSENT','migration_product_step_gap');
+  return next('migration_restore',restore,'job');
+ }
+ if(searched==='ABSENT')return next('search_stage',search,'job');
+ await verifyIdle(call);await verifyLock(call,stage);await serviceGate(call,search);
+ const afterMigration=await call(RUN+jobPath('migration')),afterSearch=await call(RUN+jobPath('search'));
+ require(afterMigration.etag===liveMigration.etag&&afterSearch.etag===liveSearch.etag&&
+  same(afterMigration.template,liveMigration.template)&&same(afterSearch.template,liveSearch.template),'migration_product_baseline_drift');
+ fresh();
+ return stop('EXISTING_SERVICE_CUTOVER_APPROVAL_REQUIRED');
 }

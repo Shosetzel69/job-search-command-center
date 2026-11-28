@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {executeApprovedProductJobStep,observeApprovedProductJobStep,cancelApprovedSearchExecution,observeCompatibleProductDelivery} from '../../scripts/gcp/remote_executor_dev_job_release.mjs';
+import {executeApprovedProductJobStep,observeApprovedProductJobStep,cancelApprovedSearchExecution,observeCompatibleProductDelivery,validateMigrationProductPlan,advanceMigrationProductDelivery} from '../../scripts/gcp/remote_executor_dev_job_release.mjs';
 import {operatorHash} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),old='b'.repeat(40),digest='sha256:'+'c'.repeat(64),oldDigest='sha256:'+'d'.repeat(64),id='254d3513-9c02-4f33-a974-e8e8f8935aa7';
 const root='projects/jscc-dev/locations/europe-west1',repo='projects/jscc-shared/locations/europe-west1/repositories/jscc';
@@ -179,4 +179,45 @@ test('compatible Service-only release handoff aligns Search exactly once and ret
  assert.equal((await observe()).disposition,'INDEPENDENT_ACCEPTANCE_REQUIRED');
  assert.equal((await observe()).lock_release_authorized,false);
  assert.equal((await run(step)).state,'ALREADY_CLAIMED');assert.equal(f.patches.length,2);
+});
+
+
+test('013 release orchestration admits only exact separate stage/inspect/restore/Search records and no replay of applied schema',async()=>{
+ const f=fixture({role:'search'}),stage=request,restore={...stage,phase:'restore',approval_ref:'#589/208'},
+  search={...request,role:'search',phase:'stage',approval_ref:'#589/209',service_revision:f.rev,service_digest:digest,
+   previous:{...previous,template_sha256:operatorHash(f.tpl(old,oldDigest))},
+   candidate:{...candidate,template_sha256:operatorHash(f.tpl(sha,digest))}};
+ const inspect={schema_version:'1.0',environment:'dev',work_item_ref:'#589',mode:'inspect',source_sha:sha,
+  service_digest:digest,build_id:id,script_sha256:'c'.repeat(64),
+  migration_checksum:'e30fdd8d16e9ec085c97d61011cf27d86ef91056329c8d5ebec3f030ee6aa38a',
+  job_template_sha256:candidate.template_sha256,lock_generation:stage.lock_generation,
+  lock_payload_sha256:stage.lock_payload_sha256,catalog_generation:stage.catalog_generation,
+  approval_ref:'#589/210',review_ref:stage.review_ref,cost_ref:stage.cost_ref,access_ref:stage.access_ref,
+  restore_ref:restore.approval_ref,inspection_ref:null,inspection_execution:null,issued_at_ms:now()-1,expires_at_ms:now()+1000};
+ const plan={schema_version:'1.0',environment:'dev',work_item_ref:'#589',migration_stage:stage,inspect,apply:null,
+  migration_restore:restore,search_stage:search,inspection_evidence:null,schema_evidence:null,stage_health_ref:'#589/211',
+  issued_at_ms:now()-1,expires_at_ms:now()+1000};
+ const validate=x=>validateMigrationProductPlan(x,operatorHash(x),now);
+ assert.deepEqual(validate(plan),plan);
+ assert.throws(()=>validate({...plan,search_stage:{...search,lock_generation:'99'}}),/binding_mismatch/);
+ assert.throws(()=>validate({...plan,migration_restore:{...restore,approval_ref:stage.approval_ref}}),/binding_mismatch/);
+ const evidence={approval_ref:inspect.approval_ref,execution:'jscc-db-migrate-dev-test',readiness:'ALREADY_APPLIED',
+  checksum:inspect.migration_checksum,evidence_ref:'#589/212'};
+ const apply={...inspect,mode:'apply',approval_ref:'#589/213',inspection_ref:inspect.approval_ref,inspection_execution:evidence.execution};
+ assert.throws(()=>validate({...plan,inspection_evidence:evidence,apply}),/schema_evidence_mismatch/);
+ assert.deepEqual(validate({...plan,inspection_evidence:evidence}).inspection_evidence,evidence);
+ // Cross-stage request is denied before any mutation, even if records are valid.
+ const calls=[];
+ const opts={...f.options,jobStore:f.options.store,migrationStore:f.options.store,
+  trustedRecordHash:operatorHash(plan),fetchImpl:async(url,init)=>{
+   calls.push(init.method);
+   if(url.endsWith('/revisions/'+f.rev)){
+    const resp=await f.options.fetchImpl(url,init),v=await resp.json();v.containers[0].image=image+digest;return Response.json(v);
+   }
+   return f.options.fetchImpl(url,init);
+  }};
+ const first=await advanceMigrationProductDelivery(plan,opts);
+ assert.equal(first.next_step,'migration_stage');assert.equal(first.execution_authorized,false);
+ await assert.rejects(()=>advanceMigrationProductDelivery(plan,{...opts,execute:'search_stage'}),/step_order_denied/);
+ assert.ok(calls.every(m=>m==='GET'));
 });
