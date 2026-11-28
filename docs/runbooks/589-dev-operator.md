@@ -41,7 +41,6 @@ existing ops image lineage. No new infrastructure or runtime permission.
 Only the trusted operator may invoke this source module. It does not
 expose a new MCP mutation, does not replace the approved manual build script,
 and does not assert source provenance from a successful build status.
-
 Release dependencies remain: a trusted remote operator entrypoint with
 independently authenticated approval delivery (not the Gateway, diagnostics
 or sandbox identity), actual staged archive/config-equivalence evidence,
@@ -50,7 +49,6 @@ independent review. Existing `cloudbuild.ops.yaml` manually publishes images;
 build status alone may not contain `results.images`; live registry/provenance
 correlation is still required. No build, cloud operation, IAM or product
 configuration has been executed by this source slice.
-
 
 ## #589 — consolidated DEV operator candidate (PR #711)
 
@@ -72,6 +70,8 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   evidence. Supported source actions: pinned build and build observation,
   approved gateway/diagnostics paired deployment and recovery observation,
   bounded R4 inventory, GCS artifact metadata/copy, and GCP metadata.
+  A create-only request receipt binds the execution before dispatch mapping;
+  pending status observes receipt/claim and exact execution, never replays.
   Uncertain submission is not retried automatically. Build cancellation is a
   separate approved action bound to the original approval and exact build ID;
   verify ledger and provider source before regional cancellation, then observe
@@ -169,7 +169,8 @@ diagnostics or sandbox identity for privileged execution.
 
 Review exact IAM permissions and resource conditions first:
 Gateway: fixed operator Job get/run (no overrides), LRO observation, read
-approved records/results and create-only request/dispatch objects.
+approved records/results/claims and create-only request/receipt/dispatch;
+scoped operator execution get for recovery.
 Operator: read protected approvals/requests/dispatch, create-only claims
 and results, scoped CAS controller journals, existing maintenance lease and
 required observations; impersonation of the existing scoped ops deployer

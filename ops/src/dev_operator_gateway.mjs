@@ -76,6 +76,46 @@ async function startExecution(call,sleep){
  }
  throw Error('operator_execution_unresolved');
 }
+const receiptPath=key=>'control/v1/operator-requests/'+key+'.receipt.json';
+const GEN=/^[1-9][0-9]{0,19}$/;
+// Recovery is observation, not execution. The receipt is create-only and
+// bound to the immutable request before a dispatch mapping can admit the Job.
+async function readRecovery(req,paths,{read,call}){
+ const receipt=await read(receiptPath(paths.key));
+ if(!receipt)return {dispatch_evidence:'NO_RECEIPT',recovery_authorization_required:true};
+ const r=receipt.data;
+ operatorRequire(GEN.test(receipt.generation||'')&&r?.request_hash===operatorHash(req)&&
+  r.operation_id===paths.key&&operatorExecution(r.execution_name)===r.execution_name&&
+  typeof r.execution_name==='string'&&/^sha256:[a-f0-9]{64}$/.test(r.image_digest||''),
+  'operator_receipt_binding_mismatch');
+ const dispatch=await read(operatorDispatchPath(r.execution_name));
+ const bound=Boolean(GEN.test(dispatch?.generation||'')&&
+  operatorHash(dispatch.data)===operatorHash({...req,execution_name:r.execution_name}));
+ operatorRequire(!dispatch||bound,'operator_recovery_dispatch_mismatch');
+ const claim=await read('control/v1/operator-claims/'+paths.key+'.json');
+ const claimed=Boolean(GEN.test(claim?.generation||'')&&claim.data?.environment==='dev'&&
+  claim.data.operation_id===paths.key&&claim.data.approval_hash===req.approval_hash&&
+  claim.data.execution_name===r.execution_name);
+ operatorRequire(!claim||bound&&claimed,'operator_recovery_claim_mismatch');
+ const evidence={execution_name:r.execution_name,dispatch_evidence:claimed?'CLAIM_CONFIRMED':
+  bound?'MAPPING_CONFIRMED':'RECEIPT_ONLY',execution_state:'UNVERIFIED',recovery_authorization_required:true};
+ try{
+  const path=OPERATOR_ROOT+'/jobs/'+OPERATOR_JOB+'/executions/'+r.execution_name;
+  const v=await call('GET',path),task=v?.template,c=task?.containers?.[0];
+  const source=c?.env?.filter(x=>x.name==='SOURCE_SHA')||[];
+  operatorRequire(operatorExecution(v?.name)===r.execution_name&&
+   (v.name===path||v.name===path.replace('projects/jscc-dev/','projects/828902654738/'))&&
+   task?.serviceAccount===OPERATOR_SA&&task.containers.length===1&&c.image===OPERATOR_IMAGE+r.image_digest&&
+   source.length===1&&!source[0].valueSource&&source[0].value===req.operator_source_sha,
+   'operator_recovery_execution_mismatch');
+  evidence.execution_state=typeof v.completionTime==='string'&&Number.isFinite(Date.parse(v.completionTime))?
+   'TERMINAL_WITHOUT_RESULT':'RUNNING_OR_PENDING';
+ }catch{
+  // IAM or provider state unavailable: never report definitive absence.
+  evidence.execution_state='UNVERIFIED';
+ }
+ return evidence;
+}
 export async function invokeDevOperator(name,args,actorSub,config,{
  read=defaultRead,create=defaultCreate,call=cloudRun,now=Date.now,
  sleep=ms=>new Promise(resolve=>setTimeout(resolve,ms)),
@@ -93,7 +133,17 @@ export async function invokeDevOperator(name,args,actorSub,config,{
   operatorRequire(req&&req.operation_id===paths.key&&req.approval_ref===ref&&
    req.environment==='dev'&&req.work_item_ref==='#589'&&req.actor_sub_hash===actor&&
    /^[a-f0-9]{64}$/.test(req.approval_hash||''),'operator_request_not_found');
-  return {...projectOperatorResult(req,await read(paths.result)),duplicate:name==='operator_start'};
+  const result=await read(paths.result);
+  const projection=projectOperatorResult(req,result);
+  if(name==='operator_status'&&!result){
+   // Additional scoped receipt/claim reads and execution observation are
+   // admitted separately. Missing permission cannot authorize a retry.
+   let recovery;
+   try{recovery=await readRecovery(req,paths,{read,call});}
+   catch{recovery={dispatch_evidence:'UNVERIFIED',recovery_authorization_required:true};}
+   return {...projection,...recovery,duplicate:false};
+  }
+  return {...projection,duplicate:name==='operator_start'};
  }
  operatorRequire(name==='operator_start','operator_request_not_found');
  const admission=validateOperatorApproval(await read(paths.approval),{
@@ -120,6 +170,12 @@ export async function invokeDevOperator(name,args,actorSub,config,{
  try{
   operatorRequire(now()<req.expires_at_ms,'operator_approval_expired');
   const execution=await startExecution(call,sleep);
+  const receipt={operation_id:paths.key,request_hash:operatorHash(req),
+   execution_name:execution,image_digest:config.imageDigest};
+  await create(receiptPath(paths.key),receipt);
+  const stored=await read(receiptPath(paths.key));
+  operatorRequire(GEN.test(stored?.generation||'')&&operatorHash(stored.data)===operatorHash(receipt),
+   'operator_receipt_write_uncertain');
   await create(operatorDispatchPath(execution),{...req,execution_name:execution});
  }catch{
   return {...projectOperatorResult(req,null),duplicate:false};

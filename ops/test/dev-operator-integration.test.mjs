@@ -163,3 +163,38 @@ test('cancel action requires new approval and exact original build reference, no
  for(const bad of [{...cancelBundle,original_approval_ref:ref},{...cancelBundle,build_id:'any-build'},
   {...cancelBundle,project:'jscc-prod'}])assert.throws(()=>validate(bad),/operator_cancel_approval_mismatch/);
 });
+
+test('pending status reconciles immutable receipt and mapping; no relaunch on absent result',async()=>{
+ const f=fixture(),call=f.opts.call;
+ f.opts.call=async(method,path)=>{
+  if(method==='GET'&&path.endsWith('/executions/'+execution)){
+   return {name:path,completionTime:'2026-11-28T00:00:00Z',template:{serviceAccount:sa,containers:[{
+    image:'europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/jscc-ops-operator@'+DIGEST,
+    env:[{name:'SOURCE_SHA',value:SHA},{name:'SECRET',value:'never-return'}]}]}};
+  }
+  return call(method,path);
+ };
+ await start(f);
+ const observed=await status(f);
+ assert.equal(observed.dispatch_evidence,'MAPPING_CONFIRMED');
+ assert.equal(observed.execution_state,'TERMINAL_WITHOUT_RESULT');
+ assert.equal(observed.automatic_retry,false);
+ assert.equal(observed.recovery_authorization_required,true);
+ assert.equal(JSON.stringify(observed).includes('never-return'),false);
+ assert.equal((await start(f)).duplicate,true);
+ assert.equal(f.calls.filter(x=>x[0]==='POST').length,1);
+ const receipt='control/v1/operator-requests/'+paths.key+'.receipt.json';
+ f.map.get(receipt).data.request_hash='bad';
+ assert.equal((await status(f)).dispatch_evidence,'UNVERIFIED');
+ assert.equal(f.calls.filter(x=>x[0]==='POST').length,1);
+});
+test('lost dispatch mapping still returns known receipt without authorizing a retry',async()=>{
+ const f=fixture({loseDispatch:true});
+ await start(f);
+ const out=await status(f);
+ assert.equal(out.dispatch_evidence,'RECEIPT_ONLY');
+ assert.equal(out.execution_name,execution);
+ assert.equal(out.execution_state,'UNVERIFIED');
+ assert.equal((await start(f)).duplicate,true);
+ assert.equal(f.calls.filter(x=>x[0]==='POST').length,1);
+});
