@@ -25,11 +25,15 @@ function admit(record,pin,now){
  const keys=['schema_version','environment','work_item_ref','role','phase','source_sha','lock_generation',
   'lock_payload_sha256','catalog_generation','previous','candidate','service_revision','service_digest',
   'approval_ref','review_ref','cost_ref','access_ref','compatibility_ref','issued_at_ms','expires_at_ms'];
+ const align=record?.phase==='align';
+ if(align)keys.push('service_release_ref','service_build_id','schema_change_required');
  const identity=x=>operatorExact(x,['source_sha','digest','template_sha256','build_id'])&&match(SHA,x.source_sha)&&
   match(DIGEST,x.digest)&&match(HEX,x.template_sha256)&&match(UUID,x.build_id);
  require(operatorExact(record,keys)&&match(HEX,pin)&&operatorHash(record)===pin&&
   record.schema_version==='1.0'&&record.environment==='dev'&&record.work_item_ref==='#589'&&
-  Object.hasOwn(JOBS,record.role)&&['stage','restore'].includes(record.phase)&&
+  Object.hasOwn(JOBS,record.role)&&['stage','restore','align'].includes(record.phase)&&
+  (!align||record.role==='search'&&record.schema_change_required===false&&match(REF,record.service_release_ref)&&
+   match(UUID,record.service_build_id)&&![record.approval_ref,record.review_ref,record.cost_ref,record.access_ref,record.compatibility_ref].includes(record.service_release_ref))&&
   identity(record.previous)&&identity(record.candidate)&&record.source_sha===record.candidate.source_sha&&
   record.previous.source_sha!==record.candidate.source_sha&&record.previous.digest!==record.candidate.digest&&
   match(GEN,record.lock_generation)&&match(HEX,record.lock_payload_sha256)&&match(GEN,record.catalog_generation)&&
@@ -99,10 +103,11 @@ async function serviceGate(call,x){
  require(positive.length===1&&positive[0].percent===100,'product_job_service_traffic_denied');
  if(x.phase==='stage')require(short(positive[0].revision)!==x.service_revision&&rows.some(t=>
   short(t.revision)===x.service_revision&&(t.percent??0)===0&&typeof t.tag==='string'&&t.tag.length>0),'product_job_service_not_staged');
- else require(short(positive[0].revision)===x.service_revision,'product_job_service_rollback_order');
+ else require(short(positive[0].revision)===x.service_revision,x.phase==='align'?
+  'product_job_service_not_serving_candidate':'product_job_service_rollback_order');
  const rev=await call(RUN+path+'/revisions/'+x.service_revision),c=rev?.containers?.[0];
  const env=c?.env||[],sha=env.filter(e=>e.name==='SOURCE_SHA'),runtime=env.filter(e=>e.name==='RUNTIME_DATA_SHA');
- const expected=x.phase==='stage'?x.candidate.source_sha:x.previous.source_sha;
+ const expected=x.phase==='restore'?x.previous.source_sha:x.candidate.source_sha;
  require(bound(rev?.name,path+'/revisions/'+x.service_revision)&&rev.serviceAccount===SA&&rev.containers?.length===1&&
   rev.conditions?.some(t=>t.type==='Ready'&&t.state==='CONDITION_SUCCEEDED')&&c.image===IMAGE+'jscc-service@'+x.service_digest&&
   sha.length===1&&runtime.length===1&&sha[0].value===expected&&runtime[0].value===expected&&
@@ -119,7 +124,8 @@ async function poll(call,op,wait){
  throw Error('product_job_lro_timeout');
 }
 /** Independently authenticated authority must bind exact owner/review/cost,
- * pre-staged Service health (Search), signed dispatch exclusion, prior
+ * pre-staged Service health (Search) or exact existing Service-only release
+ * plus already-compatible managed schema (align only), signed dispatch exclusion, prior
  * template/default refusal and rollback compatibility. No default identity. */
 export async function executeApprovedProductJobStep(record,{
  trustedRecordHash,verifyAuthority,getToken,fetchImpl=fetch,store,now=Date.now,wait=delay
@@ -136,8 +142,9 @@ export async function executeApprovedProductJobStep(record,{
   require(match(GEN,prior.generation)&&same(prior.data,claim),'product_job_claim_mismatch');
   return {operation_id:key,state:'ALREADY_CLAIMED',automatic_retry:false};
  }
- const from=x.phase==='stage'?x.previous:x.candidate,to=x.phase==='stage'?x.candidate:x.previous,path=jobPath(x.role);
+ const from=x.phase==='restore'?x.candidate:x.previous,to=x.phase==='restore'?x.previous:x.candidate,path=jobPath(x.role);
  await verifyArtifact(call,x.role,to);
+ if(x.phase==='align')await verifyArtifact(call,'migration',{source_sha:x.source_sha,digest:x.service_digest,build_id:x.service_build_id});
  await verifyLock(call,x);await verifyIdle(call);await serviceGate(call,x);
  const raw=readback(await call(RUN+path),x.role,from),template=nextTemplate(raw,x.role,to);
  const body={name:raw.name,etag:raw.etag,template};
@@ -177,7 +184,7 @@ export async function observeApprovedProductJobStep(record,{
  const stored=await ledger.get(base+'.claim.json');
  require(match(GEN,stored?.generation)&&same(stored.data,claim),'product_job_claim_unverified');
  const receipt=await ledger.get(base+'.receipt.json');
- const from=x.phase==='stage'?x.previous:x.candidate,to=x.phase==='stage'?x.candidate:x.previous;
+ const from=x.phase==='restore'?x.candidate:x.previous,to=x.phase==='restore'?x.previous:x.candidate;
  if(receipt){
   const expected={...claim,state:'OBSERVED',template_sha256:to.template_sha256,source_sha:to.source_sha,
    digest:to.digest,automatic_retry:false,functional_acceptance:'PENDING',lock_release_authorized:false};
@@ -297,4 +304,62 @@ export async function cancelApprovedSearchExecution(record,{
   require(match(GEN,confirmed?.generation)&&same(confirmed.data,result),'search_cancel_receipt_unverified');
   return result;
  }catch{return {operation_id:key,state:'RECOVERY_REQUIRED',automatic_retry:false,lock_release_authorized:false,db_outcome:'UNVERIFIED'};}
+}
+
+
+// Product release handoff for the existing Service-only GitDeploy/GCloudDeploy
+// route, ONLY when independent review establishes no managed schema change is
+// needed. Never launches a second Service deployment, migration or Retrieve.
+// The caller must obtain the exact externally pinned handoff and verify its
+// release, schema and lock authority through the existing GitHub authority.
+export async function observeCompatibleProductDelivery(record,{
+ trustedRecordHash,verifyAuthority,getToken,fetchImpl=fetch,store,now=Date.now
+}={}){
+ require(operatorExact(record,['schema_version','environment','work_item_ref','step','step_hash','migration_baseline',
+  'schema_evidence_ref','service_health_ref','issued_at_ms','expires_at_ms'])&&record.schema_version==='1.0'&&
+  record.environment==='dev'&&record.work_item_ref==='#589'&&match(HEX,trustedRecordHash)&&
+  operatorHash(record)===trustedRecordHash&&match(HEX,record.step_hash)&&
+  operatorHash(record.step)===record.step_hash&&record.step?.phase==='align'&&
+  operatorExact(record.migration_baseline,['source_sha','digest','template_sha256','build_id'])&&
+  match(SHA,record.migration_baseline.source_sha)&&match(DIGEST,record.migration_baseline.digest)&&
+  match(HEX,record.migration_baseline.template_sha256)&&match(UUID,record.migration_baseline.build_id)&&
+  match(REF,record.schema_evidence_ref)&&match(REF,record.service_health_ref)&&
+  new Set([record.schema_evidence_ref,record.service_health_ref,record.step.approval_ref,record.step.service_release_ref]).size===4&&
+  Number.isSafeInteger(record.issued_at_ms)&&Number.isSafeInteger(record.expires_at_ms)&&
+  record.expires_at_ms>record.issued_at_ms&&record.expires_at_ms-record.issued_at_ms<=3600000&&
+  now()>=record.issued_at_ms&&now()<record.expires_at_ms,'product_delivery_admission_denied');
+ const frozen=JSON.parse(JSON.stringify(record));
+ const {x}=admit(frozen.step,frozen.step_hash,()=>frozen.step.issued_at_ms);
+ require(typeof getToken==='function'&&typeof verifyAuthority==='function'&&await verifyAuthority(frozen)===true,
+  'product_delivery_authority_denied');
+ const call=transport(getToken,fetchImpl),ledger=store||operatorProductJobStore({getToken,fetchImpl});
+ await verifyLock(call,x);await verifyIdle(call);await serviceGate(call,x);
+ const migration=readback(await call(RUN+jobPath('migration')),'migration',frozen.migration_baseline);
+ const search=await call(RUN+jobPath('search')),hash=operatorHash(search.template);
+ const key=operatorHash({environment:'dev',work_item_ref:'#589',operation:'product-job-step',approval_ref:x.approval_ref});
+ const base='control/v1/product-job-steps/'+key,claim=await ledger.get(base+'.claim.json'),receipt=await ledger.get(base+'.receipt.json');
+ const expectedClaim={environment:'dev',operation_id:key,evidence_hash:frozen.step_hash,role:'search',phase:'align',approval_ref:x.approval_ref};
+ if(claim)require(match(GEN,claim.generation)&&same(claim.data,expectedClaim),'product_delivery_claim_mismatch');
+ if(receipt)require(claim&&match(GEN,receipt.generation)&&same(receipt.data,{...expectedClaim,state:'OBSERVED',
+  template_sha256:x.candidate.template_sha256,source_sha:x.candidate.source_sha,digest:x.candidate.digest,
+  automatic_retry:false,functional_acceptance:'PENDING',lock_release_authorized:false}),'product_delivery_receipt_mismatch');
+ let disposition='RECOVERY_REQUIRED',searchState='DRIFT';
+ if(hash===x.previous.template_sha256){
+  readback(search,'search',x.previous);searchState='PREVIOUS';
+  if(!claim&&now()>=x.issued_at_ms&&now()<x.expires_at_ms)disposition='SEARCH_ALIGNMENT_PENDING';
+ }else if(hash===x.candidate.template_sha256){
+  readback(search,'search',x.candidate);searchState='CANDIDATE';
+  if(receipt)disposition='INDEPENDENT_ACCEPTANCE_REQUIRED';
+ }
+ await verifyLock(call,x);await verifyIdle(call);await serviceGate(call,x);
+ const after=await call(RUN+jobPath('search')),afterMigration=await call(RUN+jobPath('migration'));
+ require(after.etag===search.etag&&operatorHash(after.template)===hash&&
+  afterMigration.etag===migration.etag&&operatorHash(afterMigration.template)===frozen.migration_baseline.template_sha256,
+  'product_delivery_baseline_drift');
+ require(now()<frozen.expires_at_ms,'product_delivery_evidence_expired');
+ return {state:'OBSERVED',source_sha:x.source_sha,service_revision:x.service_revision,service_digest:x.service_digest,
+  search_state:searchState,search_template_sha256:hash,migration_template_sha256:frozen.migration_baseline.template_sha256,
+  migration_default:'REFUSE',disposition,search_approval_ref:x.approval_ref,receipt_available:Boolean(receipt),
+  schema_evidence_ref:frozen.schema_evidence_ref,service_health_ref:frozen.service_health_ref,
+  automatic_retry:false,lock_release_authorized:false,acceptance:'PENDING'};
 }

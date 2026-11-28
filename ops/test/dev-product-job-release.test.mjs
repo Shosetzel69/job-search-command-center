@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {executeApprovedProductJobStep,observeApprovedProductJobStep,cancelApprovedSearchExecution} from '../../scripts/gcp/remote_executor_dev_job_release.mjs';
+import {executeApprovedProductJobStep,observeApprovedProductJobStep,cancelApprovedSearchExecution,observeCompatibleProductDelivery} from '../../scripts/gcp/remote_executor_dev_job_release.mjs';
 import {operatorHash} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),old='b'.repeat(40),digest='sha256:'+'c'.repeat(64),oldDigest='sha256:'+'d'.repeat(64),id='254d3513-9c02-4f33-a974-e8e8f8935aa7';
 const root='projects/jscc-dev/locations/europe-west1',repo='projects/jscc-shared/locations/europe-west1/repositories/jscc';
@@ -31,7 +31,7 @@ function fixture({lost=false,role='migration',serviceStaged=true}={}){
  const path=root+'/jobs/'+(search?'jscc-search-dev':'jscc-db-migrate-dev'),records=new Map(),patches=[];
  let current={name:path,etag:'e1',generation:'1',observedGeneration:'1',terminalCondition:{state:'CONDITION_SUCCEEDED'},template:tpl(old,oldDigest)};
  const servicePath=root+'/services/jscc-command-api-dev',rev='jscc-command-api-dev-candidate',oldRev='jscc-command-api-dev-previous';
- const serviceDigest='sha256:'+'e'.repeat(64);
+ const serviceDigest='sha256:'+'e'.repeat(64),serviceBuildId='254d3513-9c02-4f33-a974-e8e8f8935aa8';
  const store={get:async p=>records.get(p)??null,create:async(p,data)=>{
   if(records.has(p))throw Error('generation_precondition_failed');records.set(p,{generation:'1',data:structuredClone(data)});
  }};
@@ -48,8 +48,12 @@ function fixture({lost=false,role='migration',serviceStaged=true}={}){
   }
   assert.equal(init.method,'GET');
   if(p.endsWith('/'+repo))return Response.json({name:repo,dockerConfig:{immutableTags:true}});
-  if(p.includes('/tags/')){const s=p.split('/').at(-1),d=s===sha?digest:oldDigest,name=repo+'/packages/'+pkg+'/tags/'+s;
-   return Response.json({name,version:repo+'/packages/'+pkg+'/versions/'+d});}
+  if(p.includes('/tags/')){const s=p.split('/').at(-1),requestedPkg=p.includes('/packages/jscc-service/')?'jscc-service':'jscc',d=requestedPkg!==pkg?serviceDigest:s===sha?digest:oldDigest,name=repo+'/packages/'+requestedPkg+'/tags/'+s;
+   return Response.json({name,version:repo+'/packages/'+requestedPkg+'/versions/'+d});}
+  if(p.endsWith('/builds/'+serviceBuildId))return Response.json({
+   name:'projects/jscc-shared/locations/europe-west1/builds/'+serviceBuildId,id:serviceBuildId,
+   serviceAccount:'projects/jscc-shared/serviceAccounts/jscc-build@jscc-shared.iam.gserviceaccount.com',status:'SUCCESS',
+   substitutions:{_GIT_SHA:sha},results:{images:[{name:image.slice(0,-1)+':'+sha,digest:serviceDigest}]}});
   if(p.endsWith('/builds/'+id)){
    // Determine target from current template (stage vs restore).
    const target=current.template.template.containers[0].image===baseImage+digest?old:sha,d=target===sha?digest:oldDigest;
@@ -67,10 +71,12 @@ function fixture({lost=false,role='migration',serviceStaged=true}={}){
   if(p.endsWith('/'+servicePath+'/revisions/'+rev))return Response.json({name:servicePath+'/revisions/'+rev,
    serviceAccount:'jscc-dev-runtime@jscc-dev.iam.gserviceaccount.com',conditions:[{type:'Ready',state:'CONDITION_SUCCEEDED'}],
    containers:[{image:image+serviceDigest,env:[{name:'SOURCE_SHA',value:sha},{name:'RUNTIME_DATA_SHA',value:sha}]}]});
+  if(search&&p.endsWith('/jobs/jscc-db-migrate-dev'))return Response.json({name:root+'/jobs/jscc-db-migrate-dev',
+   etag:'m1',generation:'1',observedGeneration:'1',terminalCondition:{state:'CONDITION_SUCCEEDED'},template:template(old,oldDigest)});
   if(p.endsWith('/'+path))return Response.json(current);
   assert.fail(url);
  };
- return {patches,tpl,rev,serviceDigest,options:{store,fetchImpl,now,verifyAuthority:async()=>true,getToken:async()=> 'fixture',wait:async()=>{}}};
+ return {patches,tpl,rev,serviceDigest,serviceBuildId,options:{store,fetchImpl,now,verifyAuthority:async()=>true,getToken:async()=> 'fixture',wait:async()=>{}}};
 }
 test('migration stage and independently approved restore change only digest and source SHA, preserve refuse',async()=>{
  const f=fixture(),run=x=>executeApprovedProductJobStep(x,{...f.options,trustedRecordHash:operatorHash(x)});
@@ -152,4 +158,25 @@ test('signed Search cancellation binds exact execution and both marker generatio
  assert.equal((await run(x)).state,'ALREADY_CLAIMED');
  assert.equal(calls.filter(c=>c.method==='POST').length,1);
  assert.equal(calls.filter(c=>c.method==='DELETE').length,0);
+});
+
+
+test('compatible Service-only release handoff aligns Search exactly once and retains refuse migration baseline',async()=>{
+ const f=fixture({role:'search',serviceStaged:false}),step={...request,role:'search',phase:'align',
+  service_revision:f.rev,service_digest:f.serviceDigest,service_build_id:f.serviceBuildId,
+  service_release_ref:'#589/205',schema_change_required:false,
+  previous:{...previous,template_sha256:operatorHash(f.tpl(old,oldDigest))},
+  candidate:{...candidate,template_sha256:operatorHash(f.tpl(sha,digest))}};
+ const plan={schema_version:'1.0',environment:'dev',work_item_ref:'#589',step,step_hash:operatorHash(step),
+  migration_baseline:previous,schema_evidence_ref:'#589/206',service_health_ref:'#589/207',
+  issued_at_ms:now()-1,expires_at_ms:now()+1000};
+ const observe=()=>observeCompatibleProductDelivery(plan,{...f.options,trustedRecordHash:operatorHash(plan)});
+ assert.equal((await observe()).disposition,'SEARCH_ALIGNMENT_PENDING');
+ const run=x=>executeApprovedProductJobStep(x,{...f.options,trustedRecordHash:operatorHash(x)});
+ await assert.rejects(()=>run({...step,schema_change_required:true}),/admission_denied/);
+ assert.equal(f.patches.length,0);
+ assert.equal((await run(step)).state,'OBSERVED');
+ assert.equal((await observe()).disposition,'INDEPENDENT_ACCEPTANCE_REQUIRED');
+ assert.equal((await observe()).lock_release_authorized,false);
+ assert.equal((await run(step)).state,'ALREADY_CLAIMED');assert.equal(f.patches.length,2);
 });
