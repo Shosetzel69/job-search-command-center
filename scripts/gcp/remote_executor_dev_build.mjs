@@ -7,7 +7,7 @@ import {promisify} from 'node:util';
 import {readFile} from 'node:fs/promises';
 import {fileURLToPath} from 'node:url';
 import {planDevOpsBuild,projectDevBuildStatus} from '../../ops/build/dev-cloud-build-controller.mjs';
-import {operationIdentity,executeApprovedDevBuildOnce,observeDevBuildOnce}
+import {operationIdentity,executeApprovedDevBuildOnce,observeDevBuildOnce,reconcileDevBuildSubmission}
  from '../../ops/control/dev-build-operation-ledger.mjs';
 import {evidenceDigest,operatorBuildStore} from './remote_executor_dev_admission.mjs';
 
@@ -369,4 +369,34 @@ export async function observeApprovedBuildEvidence(original,{
   build_observation:{...(plan.build_kind?{build_kind:plan.build_kind}:{}),source_sha:plan.source_sha,archive_generation:rec.source_generation,
    archive_binding:resolved===undefined?'REQUEST_MATCH_ONLY':'RESOLVED_MATCH',
    build_status:status.status,steps:observations,immutable_image_count:status.immutable_image_count}};
+}
+
+
+// Independent review identifies one exact build from submission audit, not
+// merely a matching SHA. Legacy arbitrary archive names cannot be recovered.
+export async function reconcileApprovedBuild(original,buildId,{getToken,fetchImpl=fetch,
+ store=operatorBuildStore({getToken,fetchImpl}),assertFresh,now=Date.now}={}){
+ require(typeof getToken==='function'&&typeof assertFresh==='function'&&UUID.test(buildId||''),'build_recovery_admission_missing');
+ const a=admitBuildBundle(original,evidenceDigest(original),()=>original.issued_at_ms),x=a.bundle;
+ require(x.archive.object==='source/dev-'+a.plan.source_sha+'-'+hash(x.evidence.approval)+'.tar.gz',
+  'build_recovery_unique_archive_required');
+ const request=operatorTransport(getToken,fetchImpl);
+ assertFresh();await verifyLifecycle(request,now);
+ return reconcileDevBuildSubmission(a.identity,store,{approvalRef:x.evidence.approval,archive:x.archive,buildId,assertFresh,
+  verifyBuild:async record=>{
+   const raw=await (await request(ROOT+'/'+buildId)).json();
+   const storage={bucket:BUCKET,object:x.archive.object,generation:x.archive.generation};
+   const substitutions={...x.build_config.substitutions,_GIT_SHA:a.plan.source_sha,_TRUSTED_REF:a.plan.trusted_ref};
+   const created=Date.parse(raw.createTime),intent=Date.parse(record.created_at);
+   require(Number.isFinite(created)&&Number.isFinite(intent)&&created>=Math.max(intent,x.issued_at_ms)&&
+    created<=x.expires_at_ms&&raw.serviceAccount===SA&&raw.name==='projects/jscc-shared/locations/europe-west1/builds/'+buildId&&
+    evidenceDigest(raw.source?.storageSource)===evidenceDigest(storage)&&
+    evidenceDigest(raw.sourceProvenance?.resolvedStorageSource)===evidenceDigest(storage)&&
+    Object.entries(substitutions).every(([k,v])=>raw.substitutions?.[k]===v)&&
+    Object.keys(raw.substitutions||{}).filter(k=>k.startsWith('_')).every(k=>Object.hasOwn(substitutions,k))&&
+    raw.options?.logging==='CLOUD_LOGGING_ONLY'&&Array.isArray(raw.steps)&&raw.steps.length===x.build_config.steps.length&&
+    raw.steps.every((step,i)=>Object.entries(x.build_config.steps[i]).every(([k,v])=>evidenceDigest(step[k])===evidenceDigest(v))),
+    'build_recovery_provider_binding_mismatch');
+   return raw;
+  }});
 }

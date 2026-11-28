@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release','workspace_revision_cleanup','observe_workspace_delivery','observe_product_incident']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release','workspace_revision_cleanup','observe_workspace_delivery','observe_product_incident','reconcile_build_submission']);
 export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
  run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.executions.cancel','run.executions.get','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
@@ -152,6 +152,10 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
   operatorRequire(v.bundle.operator_source_sha===sourceSha&&v.bundle.evidence?.approval===ref&&
    v.bundle.evidence?.cost===v.cost_ref&&v.bundle.evidence?.independent_review===v.review_ref,
    'operator_pair_approval_mismatch');
+ }else if(v.action==='reconcile_build_submission'){
+  operatorRequire(operatorExact(v.bundle,['original_approval_ref','build_id'])&&match(REF,v.bundle.original_approval_ref)&&
+   v.bundle.original_approval_ref!==ref&&match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,v.bundle.build_id),
+   'operator_recovery_approval_mismatch');
  }else if(v.action==='cancel_build'){
   operatorRequire(operatorExact(v.bundle,['original_approval_ref','build_id'])&&
    match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref&&
@@ -355,6 +359,14 @@ export function projectOperatorResult(request,record){
  const out={operation_id:request.operation_id,action:request.action,state:v.state,automatic_retry:false};
  for(const k of ['build_id','controller_operation_id','source_provenance','script_verdict','live_pair','lease_state','failure_class']){
   const x=v[k];if(typeof x==='string'&&/^[a-zA-Z0-9_-]{1,100}$/.test(x))out[k]=x;
+ }
+ if(request.action==='reconcile_build_submission'&&['WORKING','SUCCEEDED','FAILED','CANCELLED'].includes(v.state)){
+  operatorRequire(match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,v.build_id)&&
+   match(HEX,v.controller_operation_id)&&v.reconciled_submission===true&&
+   ['PENDING','QUEUED','WORKING','SUCCESS','FAILURE','INTERNAL_ERROR','TIMEOUT','CANCELLED','EXPIRED'].includes(v.build_status)&&
+   v.state===(v.build_status==='SUCCESS'?'SUCCEEDED':v.build_status==='CANCELLED'?'CANCELLED':
+    ['PENDING','QUEUED','WORKING'].includes(v.build_status)?'WORKING':'FAILED'),'operator_build_recovery_invalid');
+  out.reconciled_submission=true;out.build_status=v.build_status;out.source_provenance='UNVERIFIED';
  }
  const m=v.artifact_metadata;
  if(request.action==='gcs_artifact'&&m&&typeof m==='object'&&

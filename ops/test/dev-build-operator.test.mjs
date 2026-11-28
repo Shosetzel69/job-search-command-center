@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {readFileSync} from 'node:fs';
-import {admitBuildBundle,runApprovedBuild,observeApprovedBuild,observeApprovedBuildEvidence,cancelApprovedBuild}
+import {admitBuildBundle,runApprovedBuild,observeApprovedBuild,observeApprovedBuildEvidence,cancelApprovedBuild,reconcileApprovedBuild}
  from '../../scripts/gcp/remote_executor_dev_build.mjs';
 import {evidenceDigest,operatorBuildStore,operatorPairStore}
  from '../../scripts/gcp/remote_executor_dev_admission.mjs';
@@ -238,4 +238,37 @@ test('workspace R2 build reuses approved ops lineage and fixed paired configurat
  }
  assert.throws(()=>planDevOpsBuild({...x.request,build_kind:'arbitrary'}),/build_kind_denied/);
  assert.throws(()=>planDevOpsBuild({...x.request,work_item_ref:'#123'}),/build_kind_denied/);
+});
+
+
+test('recovery binds unique archive and original approval after lost receipt without resubmission',async()=>{
+ const x=bundle(),s=setup();
+ x.archive.object='source/dev-'+sha+'-'+createHash('sha256').update(x.evidence.approval).digest('hex')+'.tar.gz';
+ const orig=s.options.fetchImpl;
+ const options={...s.options,fetchImpl:async(url,init)=>{
+  if(init.method==='POST'&&url.endsWith('/builds?projectId=jscc-shared')){
+   s.calls.push({url,method:'POST'});throw Error('lost receipt');
+  }
+  return orig(url,init);
+ }};
+ assert.equal((await run(x,options)).state,'SUBMISSION_UNKNOWN');
+ const intent=admitBuildBundle(x,evidenceDigest(x),now).identity;
+ const record=await s.options.store.get(intent.path);
+ await s.options.store.replace(intent.path,{...record.data,created_at:new Date(now()-1000).toISOString()},record.generation);
+ const raw={id,name:parent+'/'+id,serviceAccount:sa,status:'SUCCESS',createTime:new Date(now()).toISOString(),
+  source:{storageSource:{bucket,object:x.archive.object,generation}},
+  sourceProvenance:{resolvedStorageSource:{bucket,object:x.archive.object,generation}},
+  substitutions:{...x.build_config.substitutions,_GIT_SHA:sha,_TRUSTED_REF:'refs/heads/main'},
+  steps:x.build_config.steps,options:x.build_config.options};
+ const recovery={...options,assertFresh:()=>{},fetchImpl:async(url,init)=>{
+  if(url.endsWith('/builds/'+id))return Response.json(raw);
+  return options.fetchImpl(url,init);
+ }};
+ await assert.rejects(()=>reconcileApprovedBuild(x,id,{...recovery,fetchImpl:async(url,init)=>url.endsWith('/builds/'+id)?
+  Response.json({...raw,sourceProvenance:{resolvedStorageSource:{bucket,object:x.archive.object,generation:'999'}}}):recovery.fetchImpl(url,init)}),/provider_binding_mismatch/);
+ const out=await reconcileApprovedBuild(x,id,recovery);
+ assert.equal(out.state,'SUCCEEDED');assert.equal(out.reconciled_submission,true);
+ assert.equal(out.retry_dispatched,false);assert.equal(out.source_provenance,'UNVERIFIED');
+ await assert.rejects(()=>reconcileApprovedBuild(x,id,recovery),/ledger_mismatch/);
+ assert.equal(s.calls.filter(c=>c.method==='POST').length,1);
 });

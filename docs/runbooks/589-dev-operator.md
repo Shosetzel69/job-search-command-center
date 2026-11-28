@@ -74,7 +74,8 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   Uncertain submission is not retried automatically. Build cancellation is a
   separate approved action bound to the original approval and exact build ID;
   verify ledger and provider source before regional cancellation, then observe
-  the actual terminal outcome. Lost receipts require observation, never retry.
+  the actual terminal outcome. reconcile_build_submission uses a new approved
+  exact build ID, unique original archive and CAS claim; never retries.
   `cloudbuild.builds.update` requires separate least-privilege admission; no
   live permission or cancellation has been performed.
 - `remote_executor_dev_publish_approval.mjs` is an independent publisher
@@ -182,7 +183,6 @@ secrets.get only; GCS object-get permission can also read content, so
 the fixed metadata projection is an application boundary, not an IAM
 metadata-only permission. Publisher alone may create approval objects.
 Review inherited roles and actual permission isolation before enabling.
-
 Use the existing lifecycle correction first and establish its settled
 state; do not remove durable approval/claim/result records. Verify the
 actual immutable operator image, fixed DEV project/region, task count and
