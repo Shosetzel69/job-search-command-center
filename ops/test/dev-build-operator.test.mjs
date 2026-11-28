@@ -272,3 +272,13 @@ test('recovery binds unique archive and original approval after lost receipt wit
  await assert.rejects(()=>reconcileApprovedBuild(x,id,recovery),/ledger_mismatch/);
  assert.equal(s.calls.filter(c=>c.method==='POST').length,1);
 });
+
+test('R3 legacy build records and consumed approvals cannot be overwritten through the store',async()=>{
+ let calls=0;
+ const store=operatorBuildStore({getToken:async()=>'fixture',fetchImpl:async()=>{calls++;return new Response(null,{status:404});}});
+ const legacy='control/v1/builds/'+'a'.repeat(64)+'.json';
+ const consumed='control/v1/builds/consumed/'+'b'.repeat(64)+'.json';
+ await assert.rejects(()=>store.create(legacy,{}),/build_store_create_path_denied/);
+ for(const path of [legacy,consumed])await assert.rejects(()=>store.replace(path,{},'1'),/build_store_replace_path_denied/);
+ assert.equal(calls,0);
+});
