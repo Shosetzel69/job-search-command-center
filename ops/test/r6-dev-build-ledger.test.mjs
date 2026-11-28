@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import {createHash} from 'node:crypto';
 import {
  operationIdentity,reserveDevBuildOperation,executeApprovedDevBuildOnce,
  observeDevBuildOnce,gcsDevOperationStore,
@@ -195,4 +196,15 @@ test('R3 historical flat ledger blocks reservation under new mutable prefix',asy
  await store.create('control/v1/builds/'+a.key+'.json',{state:'SUBMITTED'});
  await assert.rejects(()=>reserveDevBuildOperation(a,store),/legacy_build_ledger_reconciliation_required/);
  assert.equal(await store.get(a.path),null);
+});
+
+test('R3 legacy flat consumption blocks a different idempotency key before dispatch',async()=>{
+ const store=fakeStore(),a=identity(),cb=callbacks();
+ const approval_ref='#589/APPROVE_BUILD';
+ const key=createHash('sha256').update(JSON.stringify({environment:'dev',operation:'dev-ops-build-approval',approval_ref})).digest('hex');
+ await store.create('control/v1/builds/'+key+'.json',{approval_ref});
+ let dispatched=0;cb.dispatch=async()=>{dispatched++;return callbacks().dispatch();};
+ const result=await executeApprovedDevBuildOnce(a,store,cb);
+ assert.equal(result.state,'BLOCKED');assert.equal(dispatched,0);
+ assert.equal(await store.get('control/v1/builds/consumed/'+key+'.json'),null);
 });
