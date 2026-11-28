@@ -92,10 +92,11 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   writes the protected objects, not the Gateway/Job. No Git authentication,
   shell endpoint or self-approval. Caller must attest actual owner/reviewer
   evidence separately; same GitHub login is not proof of independence.
-  Source transport caps archives at 16 MiB; larger archives use the existing
-  trusted staging interface. The service is disabled by default; actual
-  independent caller, Cloud Run IAM and scoped GCS access are not admitted.
-  A self-supplied hash never authorizes staging or a change.
+  Independent client verifies exact fixed DEV publisher origin, external pin,
+  token audience, archive and returned generation/hash; no retry. Remote
+  archive cap 16 MiB; existing trusted staging handles larger archives.
+  Disabled by default; actual caller identity, URL, IAM and GCS admission
+  remain unverified. Self-supplied hashes never authorize changes.
 - The same approved build controller accepts fixed `workspace_r2` for #589:
   existing cloudbuild.workspace-manager-r2.yaml, exact paired base digests,
   fixed image packages and step IDs. Existing staging archive hash, YAML

@@ -140,3 +140,67 @@ export async function stageIndependentDevSource(record,{
   'stage_readback_mismatch');
  return {bucket:SOURCE_BUCKET,object,generation:m.generation,sha256:a.archive_sha256};
 }
+
+
+// Independent authority client: the caller supplies the independently obtained
+// evidence pin and identity token provider. No token minting via MCP,
+// GitHub credentials, caller-selected endpoint, or automatic retry.
+export const DEV_PUBLISHER_ORIGIN='https://jscc-ops-publisher-dev-828902654738.europe-west1.run.app';
+export const DEV_PUBLISHER_AUDIENCE='urn:jscc:ops:dev:publisher';
+const REMOTE_ARCHIVE_LIMIT=16*1024*1024;
+async function remotePublisherRequest(path,body,{getIdentityToken,fetchImpl,now,record}){
+ operatorRequire(typeof getIdentityToken==='function'&&typeof fetchImpl==='function'&&
+  now()>=record.issued_at_ms&&now()<record.expires_at_ms,'remote_publisher_admission_denied');
+ const token=await getIdentityToken(DEV_PUBLISHER_AUDIENCE);
+ operatorRequire(typeof token==='string'&&token.length<=8192&&
+  /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(token),'remote_publisher_identity_invalid');
+ operatorRequire(now()>=record.issued_at_ms&&now()<record.expires_at_ms,'remote_publisher_approval_expired');
+ const value=JSON.stringify(body);
+ operatorRequire(Buffer.byteLength(value)<=(path==='/v1/source'?23*1024*1024:132096),'remote_publisher_body_limit');
+ const response=await fetchImpl(DEV_PUBLISHER_ORIGIN+path,{
+  method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json',Accept:'application/json'},
+  body:value,redirect:'error',signal:AbortSignal.timeout(150000)});
+ // A 503, timeout or lost receipt never authorizes retry; reconcile the
+ // protected object by its independently pinned hash and exact generation.
+ operatorRequire(response.ok,'remote_publisher_outcome_unverified');
+ const raw=await response.text();
+ operatorRequire(Buffer.byteLength(raw)<=4096,'remote_publisher_receipt_limit');
+ return JSON.parse(raw);
+}
+export async function publishApprovalRemotely(record,{
+ trustedRecordHash,actor,sourceSha,getIdentityToken,fetchImpl=fetch,now=Date.now,
+}={}){
+ operatorRequire(typeof trustedRecordHash==='string'&&HEX.test(trustedRecordHash)&&
+  operatorHash(record)===trustedRecordHash,'remote_publisher_pin_mismatch');
+ const frozen=JSON.parse(JSON.stringify(record));
+ const admission=validateOperatorApproval({generation:'1',data:frozen},
+  {ref:frozen.approval_ref,actor,sourceSha,now:now()});
+ const value=await remotePublisherRequest('/v1/approval',{record:frozen,trusted_record_hash:trustedRecordHash},
+  {getIdentityToken,fetchImpl,now,record:frozen});
+ operatorRequire(exact(value,['approval_ref','operation_id','generation','record_hash'])&&
+  value.approval_ref===frozen.approval_ref&&value.operation_id===admission.paths.key&&
+  GEN.test(value.generation||'')&&value.record_hash===trustedRecordHash,'remote_publisher_receipt_mismatch');
+ return value;
+}
+export async function stageDevSourceRemotely(record,{
+ trustedRecordHash,getIdentityToken,fetchImpl=fetch,now=Date.now,materialize=gitArchive,
+}={}){
+ operatorRequire(exact(record,['schema_version','request','approval_ref','review_ref','cost_ref','archive_sha256','issued_at_ms','expires_at_ms'])&&
+  typeof trustedRecordHash==='string'&&HEX.test(trustedRecordHash)&&operatorHash(record)===trustedRecordHash&&
+  record.schema_version==='1.0'&&[record.approval_ref,record.review_ref,record.cost_ref].every(x=>typeof x==='string'&&REF.test(x))&&
+  new Set([record.approval_ref,record.review_ref,record.cost_ref]).size===3&&
+  /^sha256:[a-f0-9]{64}$/.test(record.archive_sha256||'')&&Number.isSafeInteger(record.issued_at_ms)&&
+  Number.isSafeInteger(record.expires_at_ms)&&record.expires_at_ms>record.issued_at_ms&&
+  record.expires_at_ms-record.issued_at_ms<=3600000&&now()>=record.issued_at_ms&&now()<record.expires_at_ms,
+  'remote_stage_admission_denied');
+ const frozen=JSON.parse(JSON.stringify(record));
+ const archive=await prepareDevSourceArchive(frozen.request,{materialize});
+ operatorRequire(archive.size<=REMOTE_ARCHIVE_LIMIT&&archive.sha256===frozen.archive_sha256,'remote_stage_archive_mismatch');
+ const value=await remotePublisherRequest('/v1/source',{record:frozen,trusted_record_hash:trustedRecordHash,
+  archive_base64:archive.bytes.toString('base64')},{getIdentityToken,fetchImpl,now,record:frozen});
+ const object='source/dev-'+frozen.request.source_sha+'-'+sha256(frozen.approval_ref)+'.tar.gz';
+ operatorRequire(exact(value,['bucket','object','generation','sha256'])&&value.bucket===SOURCE_BUCKET&&
+  value.object===object&&GEN.test(value.generation||'')&&value.sha256===frozen.archive_sha256,
+  'remote_stage_receipt_mismatch');
+ return value;
+}

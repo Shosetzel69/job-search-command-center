@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
-import {prepareDevSourceArchive,stageIndependentDevSource} from '../../scripts/gcp/remote_executor_dev_publish_approval.mjs';
+import {prepareDevSourceArchive,stageIndependentDevSource,stageDevSourceRemotely,publishApprovalRemotely,DEV_PUBLISHER_ORIGIN,DEV_PUBLISHER_AUDIENCE} from '../../scripts/gcp/remote_executor_dev_publish_approval.mjs';
 import {operatorHash} from '../src/dev_operator_contract.mjs';
 
 const now=()=>1760000000000;
@@ -61,4 +61,46 @@ test('collision and mismatched readback fail without automatic overwrite or retr
  assert.equal(c.calls.length,1);
  await assert.rejects(()=>run(a,b),/stage_readback_mismatch/);
  assert.equal(b.calls.length,2);
+});
+
+test('independent remote source client binds exact endpoint, token audience, archive and receipt',async()=>{
+ const a=record(),pin=operatorHash(a),object='source/dev-'+sha+'-'+createHash('sha256').update(a.approval_ref).digest('hex')+'.tar.gz';
+ let calls=0;
+ const opts={now,trustedRecordHash:pin,materialize:async()=>bytes,getIdentityToken:async audience=>{
+  assert.equal(audience,DEV_PUBLISHER_AUDIENCE);return 'a.b.c';
+ },fetchImpl:async(url,init)=>{
+  calls++;assert.equal(url,DEV_PUBLISHER_ORIGIN+'/v1/source');assert.equal(init.method,'POST');
+  assert.equal(init.redirect,'error');assert.equal(init.headers.Authorization,'Bearer a.b.c');
+  assert.deepEqual(JSON.parse(init.body),{record:a,trusted_record_hash:pin,archive_base64:bytes.toString('base64')});
+  return Response.json({bucket,object,generation:'123',sha256:digest});
+ }};
+ assert.equal((await stageDevSourceRemotely(a,opts)).generation,'123');assert.equal(calls,1);
+ await assert.rejects(()=>stageDevSourceRemotely(a,{...opts,trustedRecordHash:'0'.repeat(64)}),/admission_denied/);
+ assert.equal(calls,1);
+ let failures=0;
+ await assert.rejects(()=>stageDevSourceRemotely(a,{...opts,fetchImpl:async()=>{
+  failures++;return new Response(null,{status:503});
+ }}),/outcome_unverified/);
+ assert.equal(failures,1);
+});
+test('remote approval client verifies independent record pin and exact protected operation receipt',async()=>{
+ const {operatorPaths}=await import('../src/dev_operator_contract.mjs');
+ const actor='b'.repeat(64),bundle={environment:'dev',kind:'billing_status',name:'jscc-dev'};
+ const a={schema_version:'1.0',environment:'dev',work_item_ref:'#589',approval_ref:'#589/21',
+  action:'gcp_metadata',actor_sub_hash:actor,operator_source_sha:sha,bundle,bundle_hash:operatorHash(bundle),
+  cost_ref:'#589/22',review_ref:'#589/23',issued_at_ms:now()-1,expires_at_ms:now()+1000};
+ const pin=operatorHash(a),receipt={approval_ref:a.approval_ref,operation_id:operatorPaths(a.approval_ref).key,
+  generation:'123',record_hash:pin};
+ let calls=0;
+ const opts={now,actor,sourceSha:sha,trustedRecordHash:pin,getIdentityToken:async()=> 'a.b.c',
+  fetchImpl:async(url,init)=>{
+   calls++;assert.equal(url,DEV_PUBLISHER_ORIGIN+'/v1/approval');
+   assert.deepEqual(JSON.parse(init.body),{record:a,trusted_record_hash:pin});
+   return Response.json(receipt);
+  }};
+ assert.deepEqual(await publishApprovalRemotely(a,opts),receipt);
+ await assert.rejects(()=>publishApprovalRemotely(a,{...opts,actor:'c'.repeat(64)}));
+ assert.equal(calls,1);
+ await assert.rejects(()=>publishApprovalRemotely(a,{...opts,fetchImpl:async()=>Response.json({...receipt,generation:'0'})}),
+  /receipt_mismatch/);
 });
