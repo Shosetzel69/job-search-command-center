@@ -131,6 +131,7 @@ export async function observeDevNile(args,cfg,{fetchImpl=fetch}={}){
         : args.operation==='migration_013_preflight'
           ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,migration:migration013Summary(raw.migration)}
           : {operation:args.operation,elapsed_ms:raw.elapsed_ms,timing,plan:planSummary(raw.plan)};
+    if(args.operation==='schema_inventory'&&typeof raw.runtime_revision==='string'&&/^jscc-command-api-dev-[a-z0-9-]{1,44}$/.test(raw.runtime_revision))evidence.runtime_revision=raw.runtime_revision;
     return {nile_status:'COLLECTED',nile_evidence_json:JSON.stringify(evidence),target_source_sha:raw.source_sha,exit_code:0};
   }catch{return fail('transport_or_response');}
 }

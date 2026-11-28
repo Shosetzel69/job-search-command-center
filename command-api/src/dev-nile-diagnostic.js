@@ -37,7 +37,8 @@ export async function handleDevNileDiagnostic(request,env,{authorize=verifyDiagn
     const nomenclatures=['schema_inventory','runtime_health','migration_013_preflight'].includes(operation)?null:(await read(env)).payload;
     const result=await observe(operation,nomenclatures,env);
     console.log(JSON.stringify({event:'dev_nile_diagnostic',operation,status:result.status}));
-    return reply({...result,source_sha:sourceSha},result.status==='COLLECTED'?200:503);
+    const runtimeRevision=typeof env.K_REVISION==='string'&&/^jscc-command-api-dev-[a-z0-9-]{1,44}$/.test(env.K_REVISION)?env.K_REVISION:null;
+    return reply({...result,source_sha:sourceSha,runtime_revision:runtimeRevision},result.status==='COLLECTED'?200:503);
   }catch{
     return reply({status:'ERROR',operation,stage:'route',sqlstate:null,source_sha:sourceSha},503);
   }finally{active=false;}

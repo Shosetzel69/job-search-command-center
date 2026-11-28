@@ -166,3 +166,15 @@ and cleanup gates. Existing GitDeploy requires push, not workflow_dispatch.
 The tester owns invocation and review. No managed DB or product deployment,
 no new runner, cloud identity or container image. Source changes must first
 be independently reviewed and merged; this route has not been invoked.
+
+## RE-05/07/09 product release correlation (source only)
+
+Approved observe_product_release reads the effective Command API revision,
+fixed Search and migration Job templates, exact product registry tags and
+specified regional successful builds under the existing builder identity.
+A fresh same-actor schema_inventory operation must bind the same source and
+actual K_REVISION to correlate Nile; legacy or stale evidence stays UNVERIFIED.
+The baseline is read twice; Retrieve lock status is metadata only, never a
+quiescence guarantee. Missing provider image results stay UNVERIFIED. No
+product deployment, migration, lock write, full provenance or release approval.
+Existing GitDeploy/GCloudDeploy remains the Service-only release route.

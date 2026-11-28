@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release']);
 export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
  run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.executions.cancel','run.executions.get','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
@@ -145,6 +145,12 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
    (v.action!=='cancel_diagnostic_execution'||v.bundle.job==='jscc-diagnostics-dev'),
    'operator_run_execution_approval_mismatch');
   devRunExecutionTarget(v.bundle.job,v.bundle.execution);
+ }else if(v.action==='observe_product_release'){
+  operatorRequire(operatorExact(v.bundle,['environment','source_sha','service_build_id','search_build_id','nile_operation_id'])&&
+   v.bundle.environment==='dev'&&match(SHA,v.bundle.source_sha)&&
+   [v.bundle.service_build_id,v.bundle.search_build_id].every(x=>x===null||match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,x))&&
+   (v.bundle.nile_operation_id===null||match(/^op-[a-z0-9_-]{10,100}$/,v.bundle.nile_operation_id)),
+   'product_release_observation_denied');
  }else if(v.action==='observe_workspace_release'){
   operatorRequire(operatorExact(v.bundle,['environment'])&&v.bundle.environment==='dev','workspace_release_observe_denied');
  }else if(v.action==='workspace_release_step'){
@@ -407,6 +413,31 @@ export function projectOperatorResult(request,record){
   }
   out.workspace_release={pair_sha256:m.pair_sha256,services,phase:m.phase,role:m.phase===null?null:m.role,
    functional_acceptance:'PENDING',automatic_retry:false};
+ }
+ if(request.action==='observe_product_release'&&v.state==='OBSERVED'){
+  const m=v.product_release;
+  operatorRequire(m&&match(SHA,m.source_sha)&&match(HEX,m.baseline_sha256)&&
+   operatorExact(m.resources,['service','search','migration'])&&
+   ['ABSENT','PRESENT','UNVERIFIED'].includes(m.retrieve_lock)&&
+   ['MATCH','DRIFT','UNVERIFIED'].includes(m.nile_status)&&
+   (m.nile_checksum===null||match(HEX,m.nile_checksum)),'operator_product_release_invalid');
+  const resources={};
+  for(const role of ['service','search','migration']){
+   const x=m.resources[role],name={service:'jscc-command-api-dev',search:'jscc-search-dev',migration:'jscc-db-migrate-dev'}[role];
+   operatorRequire(x?.name===name&&(x.source_sha==='UNKNOWN'||match(SHA,x.source_sha))&&
+    (x.digest==='UNKNOWN'||match(/^sha256:[a-f0-9]{64}$/,x.digest))&&
+    (role==='service'?match(/^jscc-command-api-dev-[a-z0-9-]{1,44}$/,x.revision):x.revision===null)&&
+    typeof x.environment_bound==='boolean'&&typeof x.secret_pin_bound==='boolean'&&
+    (x.build_id===null||match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,x.build_id))&&
+    ['MATCH','MISMATCH','UNVERIFIED'].includes(x.registry_binding)&&
+    ['PROVIDER_RESULT_MATCH','MISMATCH','UNVERIFIED'].includes(x.build_binding),'operator_product_release_invalid');
+   resources[role]={name,source_sha:x.source_sha,digest:x.digest,revision:x.revision,
+    environment_bound:x.environment_bound,secret_pin_bound:x.secret_pin_bound,build_id:x.build_id,
+    registry_binding:x.registry_binding,build_binding:x.build_binding};
+  }
+  out.product_release={source_sha:m.source_sha,baseline_sha256:m.baseline_sha256,resources,
+   retrieve_lock:m.retrieve_lock,nile_status:m.nile_status,nile_checksum:m.nile_checksum,
+   release_authorized:false,source_provenance:'UNVERIFIED'};
  }
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;

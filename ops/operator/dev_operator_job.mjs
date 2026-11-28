@@ -16,6 +16,7 @@ import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
 import {executeDevRunExecution} from './dev_run_execution.mjs';
 import {observeDevBuildArtifacts} from './dev_build_evidence.mjs';
 import {observeWorkspaceRelease,executeWorkspaceReleaseStep} from './dev_workspace_release.mjs';
+import {observeProductRelease} from './dev_product_release_observation.mjs';
 
 const SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
 const META='http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/';
@@ -79,6 +80,7 @@ const defaultHandlers={
     'operator_cleanup_build_not_terminal');
   }}),
  gcp_metadata:async a=>executeDevGcpMetadata(a.bundle),
+ observe_product_release:async(a,get)=>observeProductRelease(a.bundle,{actor:a.actor_sub_hash,readEvidence:get}),
  observe_workspace_release:async()=>observeWorkspaceRelease(),
  workspace_release_step:async(a,get)=>{
   const original=await readOriginal(a.bundle.build_approval_ref,a.actor_sub_hash,get);
