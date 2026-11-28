@@ -153,8 +153,9 @@ one PATCH, bounded LRO polling, effective revision/config/traffic readback;
 uncertain receipt requires observation and separately approved rollback, not
 retry. workspace_revision_cleanup requires reviewed maintenance/retention,
 exact obsolete revision etag, untagged inactive target and retained rollback;
-validateOnly/delete/readback; never deletes images. Existing compatible rollout and independent synthetic
-smoke are required; health is not functional acceptance. Private service
+validateOnly/delete/readback; never deletes images. observe_workspace_delivery
+reconciles exact build/marker evidence and ordered protected step receipts;
+returns next approval or recovery, never auto-dispatch. Independent smoke remains required. Private service
 invoker, exact scoped update, image/source and existing traffic/URI formats
 are live admission gates. No product Service/Search Job, IAM or DB mutation.
 ## RE-07 isolated Nile testing invocation (source only)
@@ -168,7 +169,6 @@ and cleanup gates. Existing GitDeploy requires push, not workflow_dispatch.
 The tester owns invocation and review. No managed DB or product deployment,
 no new runner, cloud identity or container image. Source changes must first
 be independently reviewed and merged; this route has not been invoked.
-
 ## RE-05/07/09 product release correlation (source only)
 
 Approved observe_product_release reads the effective Command API revision,

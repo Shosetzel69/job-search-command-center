@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {observeWorkspaceRelease,executeWorkspaceReleaseStep,cleanupWorkspaceRevision} from '../operator/dev_workspace_release.mjs';
-import {projectOperatorResult,validateWorkspaceReleaseBundle} from '../src/dev_operator_contract.mjs';
+import {observeWorkspaceRelease,executeWorkspaceReleaseStep,cleanupWorkspaceRevision,observeWorkspaceDelivery} from '../operator/dev_workspace_release.mjs';
+import {projectOperatorResult,validateWorkspaceReleaseBundle,validateWorkspaceDelivery} from '../src/dev_operator_contract.mjs';
 const sha='a'.repeat(40),root='projects/jscc-dev/locations/europe-west1',registry='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/';
 const service={manager:'jscc-dev-workspace-manager',worker:'jscc-dev-sandbox-worker'};
 const packages={manager:'jscc-dev-workspace-manager-r2',worker:'jscc-dev-workspace-worker-cap100'};
@@ -124,4 +124,19 @@ test('workspace cleanup deletes only one reviewed obsolete revision, retains rol
  assert.equal(out.revision_cleanup.target_absent,true);assert.equal(out.revision_cleanup.image_deletion_authorized,false);
  const req={action:'workspace_revision_cleanup',operation_id:'op',approval_hash:'hash'};
  assert.deepEqual(projectOperatorResult(req,{generation:'1',data:{...req,...out}}).revision_cleanup,out.revision_cleanup);
+});
+
+test('workspace delivery input binds unique ordered approval refs, never arbitrary commands or environments',()=>{
+ const args={environment:'dev',source_sha:sha,build_approval_ref:'#589/21',artifact_approval_ref:'#589/22',
+  initial_pair_sha256:'b'.repeat(64),steps:['#589/23']};
+ assert.deepEqual(validateWorkspaceDelivery(args),args);
+ for(const bad of [{...args,environment:'prod'},{...args,steps:['#589/22']},{...args,steps:Array(7).fill('#589/23')},
+  {...args,command:'gcloud'}])assert.throws(()=>validateWorkspaceDelivery(bad),/bundle_denied/);
+});
+test('workspace delivery result reports the next separately authorized step, not automatic dispatch',()=>{
+ const h='c'.repeat(64),v={source_sha:sha,last_pair_sha256:h,live_pair_sha256:h,completed_steps:[],
+  disposition:'NEXT_APPROVAL_REQUIRED',next_step:'stage:worker',automatic_retry:false,acceptance:'PENDING'};
+ const req={action:'observe_workspace_delivery',operation_id:'op',approval_hash:'hash'};
+ assert.deepEqual(projectOperatorResult(req,{generation:'1',data:{...req,state:'OBSERVED',workspace_delivery:v}}).workspace_delivery,v);
+ assert.throws(()=>projectOperatorResult(req,{generation:'1',data:{...req,state:'OBSERVED',workspace_delivery:{...v,next_step:'cutover:manager'}}}));
 });

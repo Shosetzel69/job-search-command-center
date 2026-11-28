@@ -10,7 +10,7 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release','workspace_revision_cleanup']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts','observe_workspace_release','workspace_release_step','observe_product_release','workspace_revision_cleanup','observe_workspace_delivery']);
 export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
  run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.executions.cancel','run.executions.get','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
@@ -78,6 +78,15 @@ export function workspaceImage(role,value){
   role==='worker'?['jscc-dev-sandbox-worker','jscc-dev-workspace-worker-cap100']:[];
  return typeof value==='string'&&packages.some(p=>value.startsWith(WORKSPACE_REGISTRY+p+'@'))&&
   /^sha256:[a-f0-9]{64}$/.test(value.split('@').at(-1))&&value.split('@').length===2;
+}
+export const WORKSPACE_DELIVERY_STEPS=Object.freeze(['stage:worker','tag:worker','stage:manager','tag:manager','cutover:worker','cutover:manager']);
+export function validateWorkspaceDelivery(v){
+ operatorRequire(operatorExact(v,['environment','source_sha','build_approval_ref','artifact_approval_ref','initial_pair_sha256','steps'])&&
+  v.environment==='dev'&&match(SHA,v.source_sha)&&match(REF,v.build_approval_ref)&&match(REF,v.artifact_approval_ref)&&
+  match(HEX,v.initial_pair_sha256)&&Array.isArray(v.steps)&&v.steps.length<=WORKSPACE_DELIVERY_STEPS.length&&
+  v.steps.every(x=>match(REF,x))&&new Set([v.build_approval_ref,v.artifact_approval_ref,...v.steps]).size===v.steps.length+2,
+  'workspace_delivery_bundle_denied');
+ return v;
 }
 export function validateWorkspaceRevisionCleanup(v){
  operatorRequire(operatorExact(v,['environment','role','revision','image','revision_etag','expected_pair_sha256',
@@ -163,6 +172,9 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
    'product_release_observation_denied');
  }else if(v.action==='observe_workspace_release'){
   operatorRequire(operatorExact(v.bundle,['environment'])&&v.bundle.environment==='dev','workspace_release_observe_denied');
+ }else if(v.action==='observe_workspace_delivery'){
+  validateWorkspaceDelivery(v.bundle);
+  operatorRequire(![v.bundle.build_approval_ref,v.bundle.artifact_approval_ref,...v.bundle.steps].includes(ref),'workspace_delivery_reference_mismatch');
  }else if(v.action==='workspace_revision_cleanup'){
   validateWorkspaceRevisionCleanup(v.bundle);
   operatorRequire(v.bundle.retention_review_ref===v.review_ref,'workspace_cleanup_review_mismatch');
@@ -458,6 +470,20 @@ export function projectOperatorResult(request,record){
   }
   out.workspace_release={pair_sha256:m.pair_sha256,services,phase:m.phase,role:m.phase===null?null:m.role,
    functional_acceptance:'PENDING',automatic_retry:false};
+ }
+ if(request.action==='observe_workspace_delivery'&&v.state==='OBSERVED'){
+  const m=v.workspace_delivery;
+  operatorRequire(m&&match(SHA,m.source_sha)&&match(HEX,m.last_pair_sha256)&&match(HEX,m.live_pair_sha256)&&
+   Array.isArray(m.completed_steps)&&m.completed_steps.length<=WORKSPACE_DELIVERY_STEPS.length&&
+   m.completed_steps.every((x,i)=>x?.step===WORKSPACE_DELIVERY_STEPS[i]&&match(REF,x.approval_ref)&&match(HEX,x.pair_sha256))&&
+   new Set(m.completed_steps.map(x=>x.approval_ref)).size===m.completed_steps.length&&
+   ['NEXT_APPROVAL_REQUIRED','RECOVERY_REQUIRED','INDEPENDENT_ACCEPTANCE_REQUIRED'].includes(m.disposition)&&
+   m.next_step===(m.disposition==='NEXT_APPROVAL_REQUIRED'?WORKSPACE_DELIVERY_STEPS[m.completed_steps.length]:null)&&
+   (m.disposition==='INDEPENDENT_ACCEPTANCE_REQUIRED')===(m.completed_steps.length===WORKSPACE_DELIVERY_STEPS.length&&m.last_pair_sha256===m.live_pair_sha256)&&
+   (m.disposition==='NEXT_APPROVAL_REQUIRED'?m.last_pair_sha256===m.live_pair_sha256:true),'operator_workspace_delivery_invalid');
+  out.workspace_delivery={source_sha:m.source_sha,last_pair_sha256:m.last_pair_sha256,live_pair_sha256:m.live_pair_sha256,
+   completed_steps:m.completed_steps.map(x=>({step:x.step,approval_ref:x.approval_ref,pair_sha256:x.pair_sha256})),
+   disposition:m.disposition,next_step:m.next_step,automatic_retry:false,acceptance:'PENDING'};
  }
  if(request.action==='workspace_revision_cleanup'&&v.state==='SUCCEEDED'){
   const m=v.revision_cleanup;

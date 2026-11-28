@@ -4,7 +4,8 @@
 // replay on uncertain responses. Never mutate the Search Job or Command API.
 import {gcpFetch} from '../src/lib.mjs';
 import {operatorHash,operatorRequire,operatorLro,OPERATOR_ROOT,WORKSPACE_RELEASE_SERVICES as SERVICES,
- WORKSPACE_RELEASE_PACKAGES as PACKAGES,workspaceRevision,workspaceImage,validateWorkspaceReleaseBundle,validateWorkspaceRevisionCleanup} from '../src/dev_operator_contract.mjs';
+ WORKSPACE_RELEASE_PACKAGES as PACKAGES,workspaceRevision,workspaceImage,validateWorkspaceReleaseBundle,validateWorkspaceRevisionCleanup,
+ WORKSPACE_DELIVERY_STEPS,validateWorkspaceDelivery,operatorPaths,validateOperatorApproval,validateOperatorRequest,projectOperatorResult} from '../src/dev_operator_contract.mjs';
 import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
 const RUN='https://run.googleapis.com/v2/';
 const REGISTRY='europe-west1-docker.pkg.dev/jscc-shared/jscc-ops/';
@@ -259,4 +260,64 @@ export async function cleanupWorkspaceRevision(bundle,{fetchImpl=gcpFetch,assert
  return {state:'SUCCEEDED',revision_cleanup:{role,revision:x.revision,image:x.image,
   retained_revision:x.retained_revision,pair_sha256:after.pair_sha256,target_absent:true,
   retained_present:true,image_deletion_authorized:false,automatic_retry:false}};
+}
+
+
+// RE-09: reconcile the ordered release via its existing immutable approval,
+// request and result records. Never create an approval or dispatch another
+// Job from the operator. ChatGPT may request the separately approved next
+// step through operator_start; an unknown or divergent step requires recovery.
+export async function observeWorkspaceDelivery(bundle,{actor,get,fetchImpl=gcpFetch}={}){
+ const x=validateWorkspaceDelivery(bundle);
+ operatorRequire(typeof get==='function'&&/^[a-f0-9]{64}$/.test(actor||''),'workspace_delivery_admission_missing');
+ async function evidence(ref,action){
+  const paths=operatorPaths(ref),record=await get(paths.approval);
+  const admitted=validateOperatorApproval(record,{ref,actor,sourceSha:record?.data?.operator_source_sha,fresh:false});
+  operatorRequire(admitted.approval.action===action,'workspace_delivery_action_mismatch');
+  const request=await get(paths.request);
+  if(!request)return {approval:admitted.approval,result:null};
+  operatorRequire(/^[1-9][0-9]{0,19}$/.test(request.generation||''),'workspace_delivery_request_generation');
+  validateOperatorRequest(request.data,admitted);
+  const raw=await get(paths.result);
+  const result=raw?projectOperatorResult(request.data,raw):null;
+  return {approval:admitted.approval,result};
+ }
+ const original=await evidence(x.build_approval_ref,'build');
+ operatorRequire(original.approval.bundle.request?.build_kind==='workspace_r2'&&
+  original.approval.bundle.request?.source_sha===x.source_sha,'workspace_delivery_build_mismatch');
+ const artifacts=await evidence(x.artifact_approval_ref,'observe_build_artifacts');
+ operatorRequire(artifacts.approval.bundle.original_approval_ref===x.build_approval_ref&&
+  artifacts.result?.state==='OBSERVED'&&artifacts.result.build_observation?.source_sha===x.source_sha&&
+  artifacts.result.build_observation?.build_kind==='workspace_r2'&&
+  artifacts.result.build_observation.archive_binding==='RESOLVED_MATCH'&&
+  artifacts.result.build_artifacts?.correlation==='MATCHED_MARKERS'&&
+  artifacts.result.build_artifacts.log_search_complete===true&&
+  artifacts.result.build_artifacts.images.every(i=>i.marker==='MATCH'),'workspace_delivery_artifacts_unverified');
+ const candidate=Object.fromEntries(roles.map(role=>[role,artifacts.result.build_artifacts.images.find(i=>i.package===PACKAGES[role])?.digest]));
+ let last=x.initial_pair_sha256,blocked=false,previous=null;
+ const completed_steps=[];
+ for(let i=0;i<x.steps.length;i++){
+  const ref=x.steps[i],step=WORKSPACE_DELIVERY_STEPS[i],[phase,role]=step.split(':');
+  const item=await evidence(ref,'workspace_release_step'),v=item.approval.bundle;
+  operatorRequire(v.phase===phase&&v.role===role&&v.source_sha===x.source_sha&&
+   v.build_approval_ref===x.build_approval_ref&&v.expected_pair_sha256===last&&equal(v.candidate,candidate)&&
+   (!previous||equal(previous,v.previous)),'workspace_delivery_chain_mismatch');
+  previous=v.previous;
+  if(item.result?.state!=='SUCCEEDED'){
+   operatorRequire(i===x.steps.length-1,'workspace_delivery_gap');
+   blocked=true;break;
+  }
+  const result=item.result.workspace_release;
+  operatorRequire(result.phase===phase&&result.role===role,'workspace_delivery_step_mismatch');
+  last=result.pair_sha256;completed_steps.push({step,approval_ref:ref,pair_sha256:last});
+ }
+ const p=await capturePair(fetchImpl);
+ let disposition=blocked||p.pair_sha256!==last?'RECOVERY_REQUIRED':
+  completed_steps.length===WORKSPACE_DELIVERY_STEPS.length?'INDEPENDENT_ACCEPTANCE_REQUIRED':'NEXT_APPROVAL_REQUIRED';
+ if(disposition==='INDEPENDENT_ACCEPTANCE_REQUIRED')
+  operatorRequire(roles.every(role=>isCandidate(p,role,{source_sha:x.source_sha,candidate})),
+   'workspace_delivery_effective_image_mismatch');
+ return {state:'OBSERVED',workspace_delivery:{source_sha:x.source_sha,last_pair_sha256:last,live_pair_sha256:p.pair_sha256,
+  completed_steps,disposition,next_step:disposition==='NEXT_APPROVAL_REQUIRED'?WORKSPACE_DELIVERY_STEPS[completed_steps.length]:null,
+  automatic_retry:false,acceptance:'PENDING'}};
 }
