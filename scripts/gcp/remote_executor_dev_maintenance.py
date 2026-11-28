@@ -221,11 +221,15 @@ def assert_scoped_lifecycle(api):
     expected["rule"][0]["condition"]["matchesPrefix"].sort()
     require(normalized == expected, "ops_lifecycle_not_scoped")
     updated = bucket.get("updated")
-    require(isinstance(updated, str) and re.fullmatch(
-        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})", updated),
-        "operator_lifecycle_not_settled")
+    match = re.fullmatch(
+        r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d{1,9}))?(?:Z|[+-](?:[01]\d|2[0-3]):[0-5]\d)",
+        updated) if isinstance(updated, str) else None
+    require(match is not None, "operator_lifecycle_not_settled")
     try:
         changed = datetime.fromisoformat(updated.replace("Z", "+00:00"))
+        # Do not round provider nanoseconds down across the settling boundary.
+        if any(d != "0" for d in (match.group(1) or "")[6:]):
+            changed += timedelta(microseconds=1)
         settled = datetime.fromtimestamp(now_ms() / 1000, timezone.utc) - changed >= timedelta(hours=24)
     except (ValueError, OverflowError):
         settled = False
