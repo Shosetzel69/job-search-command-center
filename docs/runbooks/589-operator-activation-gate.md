@@ -108,7 +108,7 @@ const signature = sign(null, publisherReviewMessage(record, purpose, config), re
   Publisher rejects invalid/missing public key when enabled, and missing,
   wrong-key, wrong-purpose or altered-record signatures before GCS writes.
   The publisher status client checks the independently pinned fingerprint.
-  The original durable approval record remains unchanged.
+  The original durable approval record remains unchanged. R2: Publisher first creates and reads back a companion under the same create-only approval prefix, containing the exact record hash, signature, public key/fingerprint and signed authority/source metadata. No unsigned direct publication is admitted. The Job requires the independently owner-approved `JSCC_DEV_OPERATOR_REVIEW_KEY_SHA256` public fingerprint, verifies the companion and exact record before claim or handler execution, and verifies original approval records read by handlers against the same pin. Missing, wrong or historical unproven records fail closed. An orphan companion or uncertain publication requires independent reconciliation; no automatic retry. A key rotation must account for existing approval proofs before activation. Gateway and pair preflight require the Job fingerprint field to be present; G2 still must verify its actual owner-approved value and Job image/config immutability.
 - External client publishApprovalRemotely / stageDevSourceRemotely accepts
   reviewSignature and delivers the independently approved record to the fixed
   private endpoint. No signing key is needed or supplied to either client.
