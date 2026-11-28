@@ -73,3 +73,29 @@ export async function collectDevSchemaInventory(tx,{readMigrations=loadMigration
  // Index/constraint inventory is observed metadata, not proof of complete DDL parity.
  return schema;
 }
+
+
+// Session-scoped diagnostics only: never query another backend, return a
+// PID, query text, database URL, user name, tenant identifier or global locks.
+export async function collectDevRuntimeHealth(tx,db){
+ const result=boundedRows(await tx.query(
+  `SELECT current_database() AS database,
+          current_setting('transaction_read_only')='on' AS read_only,
+          current_setting('statement_timeout') IN ('10s','10000ms') AS statement_timeout_bound,
+          current_setting('lock_timeout') IN ('1s','1000ms') AS lock_timeout_bound,
+          (SELECT ssl FROM pg_catalog.pg_stat_ssl WHERE pid=pg_backend_pid()) AS backend_tls,
+          (SELECT count(*)::integer FROM pg_catalog.pg_locks WHERE pid=pg_backend_pid() AND granted) AS granted_locks,
+          (SELECT count(*)::integer FROM pg_catalog.pg_locks WHERE pid=pg_backend_pid() AND NOT granted) AS waiting_locks`),1);
+ const row=result[0];
+ const count=x=>Number.isSafeInteger(x)&&x>=0;
+ require(result.length===1&&row.database==='jobsearch_dev'&&row.read_only===true&&
+  row.statement_timeout_bound===true&&row.lock_timeout_bound===true&&
+  (row.backend_tls===null||typeof row.backend_tls==='boolean')&&
+  count(row.granted_locks)&&count(row.waiting_locks),'runtime_health_metadata_invalid');
+ const pool={total:db?.totalCount,idle:db?.idleCount,waiting:db?.waitingCount};
+ require(Object.values(pool).every(count)&&pool.idle<=pool.total,'runtime_health_pool_invalid');
+ return {database:row.database,read_only:true,statement_timeout_bound:true,lock_timeout_bound:true,
+  backend_tls:row.backend_tls===null?'UNKNOWN':row.backend_tls?'OBSERVED_TLS':'OBSERVED_NO_TLS',
+  lock_scope:'current_backend_only',granted_locks:row.granted_locks,waiting_locks:row.waiting_locks,
+  pool_scope:'current_process_only',pool};
+}

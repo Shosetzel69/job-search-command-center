@@ -109,7 +109,12 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   independent admission. See Google Cloud JSON API objects/delete and restore.
 - Nile adds `schema_inventory` to the existing fixed read-only Command API
   route: migration checksums, table presence and observed index/constraint
-  names only. No rows, arbitrary SQL, DDL, backup or migration execution.
+  names only. The existing mediated route also supports runtime_health:
+  verified read-only/timeout settings, current-backend TLS observation and
+  own-backend lock counts, current-process pg.Pool counts. No PID, user,
+  query text, tenant identifiers or cross-tenant activity. Provider support
+  is a live gate; backend TLS does not establish end-to-end client TLS.
+  No application rows, arbitrary SQL, DDL, backup or migration execution.
   Product image release stays on its existing route, with DEV acceptance
   and Retrieve protection. The operator has no product deploy authority.
 

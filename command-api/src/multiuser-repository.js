@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { getPool, withTransaction } from './db/pool.js';
-import {collectDevSchemaInventory} from './db/dev-schema-inventory.js';
+import {collectDevSchemaInventory,collectDevRuntimeHealth} from './db/dev-schema-inventory.js';
 import {
   deleteTenantDomain,
   guardDevProjectionWrite,
@@ -2215,7 +2215,7 @@ export async function listGlobalProfileJobs(authContext,nomenclatures,query,env=
 
 // #589 / #659: diagnostics share the production SQL builders. No request SQL,
 // tenant identifiers, filters, cursor, or raw query-plan data cross this boundary.
-const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory']);
+const DIAGNOSTIC_PLAN_TYPES = new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health']);
 const DIAGNOSTIC_PLAN_ENUMS=Object.freeze({
   'Node Type':new Set(['Aggregate','Append','BitmapAnd','BitmapOr','Bitmap Heap Scan','Bitmap Index Scan','CTE Scan','Custom Scan','Foreign Scan','Function Scan','Gather','Gather Merge','Group','Hash','Hash Join','Incremental Sort','Index Scan','Index Only Scan','Limit','LockRows','Materialize','Memoize','Merge Append','Merge Join','Nested Loop','ProjectSet','Recursive Union','Result','Sample Scan','Seq Scan','SetOp','Sort','Subquery Scan','Tid Scan','Tid Range Scan','Unique','Values Scan','WindowAgg','WorkTable Scan']),
   'Join Type':new Set(['Inner','Left','Right','Full','Semi','Anti','Right Anti','Right Semi']),
@@ -2245,6 +2245,12 @@ export async function observeDevNilePlan(operation,nomenclatures,env=process.env
         const start=performance.now();
         const schema=await collectDevSchemaInventory(tx);
         return {status:'COLLECTED',operation,elapsed_ms:Math.round(performance.now()-start),schema};
+      }
+      if(operation==='runtime_health'){
+        stage='runtime_health';
+        const start=performance.now();
+        const health=await collectDevRuntimeHealth(tx,db);
+        return {status:'COLLECTED',operation,elapsed_ms:Math.round(performance.now()-start),health};
       }
       stage='basis';
       const basis=await readEvaluationBasisTx(tx,nomenclatures);

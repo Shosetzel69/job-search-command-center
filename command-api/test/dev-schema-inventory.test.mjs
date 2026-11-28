@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {collectDevSchemaInventory,DEV_SCHEMA_TABLES} from '../src/db/dev-schema-inventory.js';
+import {collectDevSchemaInventory,collectDevRuntimeHealth,DEV_SCHEMA_TABLES} from '../src/db/dev-schema-inventory.js';
 import {withDevDiagnosticTransaction} from '../src/db/tenant-gateway.js';
 const sha='a'.repeat(64),other='b'.repeat(64);
 const migrations=[{version:'001',name:'001_schema_migrations.sql',checksum:sha}];
@@ -62,4 +62,27 @@ test('schema collector can only operate inside existing read-only transaction; r
  assert.equal(calls[0],'BEGIN READ ONLY');
  assert.equal(calls.at(-1),'ROLLBACK');
  assert.deepEqual(released,[false]);
+});
+
+
+test('runtime health reports only current backend and current process bounded evidence',async()=>{
+ const pool={totalCount:3,idleCount:1,waitingCount:0};
+ const row={database:'jobsearch_dev',read_only:true,statement_timeout_bound:true,lock_timeout_bound:true,
+  backend_tls:true,granted_locks:2,waiting_locks:0,private:'not-returned'};
+ const read=async(value=row,db=pool)=>collectDevRuntimeHealth({query:async(sql,params)=>{
+  assert.match(sql,/pg_catalog\.pg_stat_ssl WHERE pid=pg_backend_pid\(\)/);
+  assert.match(sql,/pg_catalog\.pg_locks WHERE pid=pg_backend_pid\(\)/);
+  assert.equal(params,undefined);
+  return {rows:[value]};
+ }},db);
+ const out=await read();
+ assert.equal(out.backend_tls,'OBSERVED_TLS');
+ assert.equal(out.lock_scope,'current_backend_only');
+ assert.equal(out.pool_scope,'current_process_only');
+ assert.deepEqual(out.pool,{total:3,idle:1,waiting:0});
+ assert.equal(JSON.stringify(out).includes('not-returned'),false);
+ assert.equal((await read({...row,backend_tls:null})).backend_tls,'UNKNOWN');
+ for(const bad of [{...row,database:'jobsearch_prod'},{...row,read_only:false},{...row,waiting_locks:-1}])
+  await assert.rejects(()=>read(bad),/runtime_health_metadata_invalid/);
+ await assert.rejects(()=>read(row,{...pool,idleCount:4}),/runtime_health_pool_invalid/);
 });

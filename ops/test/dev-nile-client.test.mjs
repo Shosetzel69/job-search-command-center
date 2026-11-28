@@ -66,3 +66,23 @@ test('schema inventory binds the source and projects only bounded metadata',asyn
  assert.equal((await run({...schema,database:'jobsearch_prod'})).nile_status,'ERROR');
  assert.equal((await run({...schema,tables:schema.tables.slice(1)})).nile_status,'ERROR');
 });
+
+
+test('runtime health allows only current backend/process evidence; never forwards raw metadata',async()=>{
+ const health={database:'jobsearch_dev',read_only:true,statement_timeout_bound:true,lock_timeout_bound:true,
+  backend_tls:'UNKNOWN',lock_scope:'current_backend_only',granted_locks:1,waiting_locks:0,
+  pool_scope:'current_process_only',pool:{total:2,idle:1,waiting:0,private:'secret'},query:'secret'};
+ const req={...args,operation:'runtime_health'};
+ assert.equal(validateTaskRequest('observe_dev_nile',req).task_class,'OBSERVE');
+ const run=async value=>{
+  let calls=0;
+  return observeDevNile(req,cfg,{fetchImpl:async()=>++calls===1?new Response('a.b.c'):
+   Response.json({source_sha:sha,operation:req.operation,status:'COLLECTED',elapsed_ms:1,health:value})});
+ };
+ const result=await run(health);
+ assert.equal(result.nile_status,'COLLECTED');
+ assert.equal(JSON.parse(result.nile_evidence_json).health.backend_tls,'UNKNOWN');
+ assert.equal(result.nile_evidence_json.includes('secret'),false);
+ assert.equal((await run({...health,lock_scope:'all_tenants'})).nile_status,'ERROR');
+ assert.equal((await run({...health,pool:{total:1,idle:2,waiting:0}})).nile_status,'ERROR');
+});

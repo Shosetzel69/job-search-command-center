@@ -1,7 +1,7 @@
 // #589: existing diagnostics worker uses only its own Google identity.
 // This module never receives a DB connection string or caller-supplied URL.
 const AUDIENCE='urn:jscc:dev:nile-diagnostic';
-const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory']);
+const OPERATIONS=new Set(['fit_verify_plan','global_listing_plan','fit_verify_analyze','global_listing_analyze','schema_inventory','runtime_health']);
 const METRICS=['Plan Rows','Plan Width','Startup Cost','Total Cost','Actual Rows','Actual Loops','Actual Total Time','Shared Hit Blocks','Shared Read Blocks'];
 const DIAGNOSTIC_PLAN_ENUMS=Object.freeze({
   'Node Type':new Set(['Aggregate','Append','BitmapAnd','BitmapOr','Bitmap Heap Scan','Bitmap Index Scan','CTE Scan','Custom Scan','Foreign Scan','Function Scan','Gather','Gather Merge','Group','Hash','Hash Join','Incremental Sort','Index Scan','Index Only Scan','Limit','LockRows','Materialize','Memoize','Merge Append','Merge Join','Nested Loop','ProjectSet','Recursive Union','Result','Sample Scan','Seq Scan','SetOp','Sort','Subquery Scan','Tid Scan','Tid Range Scan','Unique','Values Scan','WindowAgg','WorkTable Scan']),
@@ -61,6 +61,20 @@ function schemaSummary(raw){
  if(Buffer.byteLength(JSON.stringify(result))>32768)deny();
  return result;
 }
+function healthSummary(raw){
+ const count=x=>Number.isSafeInteger(x)&&x>=0;
+ if(!raw||raw.database!=='jobsearch_dev'||raw.read_only!==true||
+  raw.statement_timeout_bound!==true||raw.lock_timeout_bound!==true||
+  !['UNKNOWN','OBSERVED_TLS','OBSERVED_NO_TLS'].includes(raw.backend_tls)||
+  raw.lock_scope!=='current_backend_only'||!count(raw.granted_locks)||!count(raw.waiting_locks)||
+  raw.pool_scope!=='current_process_only'||!raw.pool||
+  ![raw.pool.total,raw.pool.idle,raw.pool.waiting].every(count)||raw.pool.idle>raw.pool.total)
+  throw Error('invalid_runtime_health');
+ return {database:raw.database,read_only:true,statement_timeout_bound:true,lock_timeout_bound:true,
+  backend_tls:raw.backend_tls,lock_scope:raw.lock_scope,granted_locks:raw.granted_locks,
+  waiting_locks:raw.waiting_locks,pool_scope:raw.pool_scope,
+  pool:{total:raw.pool.total,idle:raw.pool.idle,waiting:raw.pool.waiting}};
+}
 async function boundedJson(response){
   const reader=response.body?.getReader();
   if(!reader)throw Error('missing_body');
@@ -95,7 +109,7 @@ export async function observeDevNile(args,cfg,{fetchImpl=fetch}={}){
     const raw=await boundedJson(response);
     if(raw.source_sha!==args.expected_source_sha||raw.operation!==args.operation)return fail('source_or_response');
     if(!response.ok||raw.status!=='COLLECTED'){
-      const stage=['account','transaction','basis','explain','route','connect','begin','tenant_set','tenant_verify','statement_timeout','lock_timeout','database_guard','rollback','schema'].includes(raw.stage)?raw.stage:'api';
+      const stage=['account','transaction','basis','explain','route','connect','begin','tenant_set','tenant_verify','statement_timeout','lock_timeout','database_guard','rollback','schema','runtime_health'].includes(raw.stage)?raw.stage:'api';
       return fail(stage,/^[0-9A-Z]{5}$/.test(raw.sqlstate||'')?raw.sqlstate:null);
     }
     if(!Number.isSafeInteger(raw.elapsed_ms)||raw.elapsed_ms<0)return fail('metrics');
@@ -103,7 +117,9 @@ export async function observeDevNile(args,cfg,{fetchImpl=fetch}={}){
     for(const k of ['Planning Time','Execution Time'])if(Number.isFinite(raw.timing?.[k]))timing[k]=raw.timing[k];
     const evidence=args.operation==='schema_inventory'
       ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,schema:schemaSummary(raw.schema)}
-      : {operation:args.operation,elapsed_ms:raw.elapsed_ms,timing,plan:planSummary(raw.plan)};
+      : args.operation==='runtime_health'
+        ? {operation:args.operation,elapsed_ms:raw.elapsed_ms,health:healthSummary(raw.health)}
+        : {operation:args.operation,elapsed_ms:raw.elapsed_ms,timing,plan:planSummary(raw.plan)};
     return {nile_status:'COLLECTED',nile_evidence_json:JSON.stringify(evidence),target_source_sha:raw.source_sha,exit_code:0};
   }catch{return fail('transport_or_response');}
 }
