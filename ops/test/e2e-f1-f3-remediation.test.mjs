@@ -4,6 +4,8 @@ import {listExecutionTaskEvidence,readBoundedExecutionLogs,inspectDevRunSnapshot
 import {sanitizeText,validateTaskRequest,authenticatedEvidence,publicEvidence} from '../src/lib.mjs';
 
 const id='jscc-diagnostics-dev-5lf4k';
+const parent='projects/jscc-dev/locations/europe-west1/jobs/jscc-diagnostics-dev/executions/'+id;
+const task=(index,exitCode)=>({name:parent+'/tasks/task-'+index,job:'jscc-diagnostics-dev',execution:id,index,lastAttemptResult:{exitCode}});
 const view='projects/jscc-dev/locations/global/buckets/_Default/views/jscc-ops-dev';
 const http=(status,json)=>({ok:status>=200&&status<300,status,json:async()=>json});
 const log=(payload,execution=id)=>({
@@ -31,9 +33,9 @@ test('F1 task details: page through nextPageToken with bound, deny spoofed name'
  let n=0;
  const r=await listExecutionTaskEvidence(id,{request:async url=>{
    n++;
-   if(n===1)return http(200,{tasks:[{name:'task-0',lastAttemptResult:{exitCode:0}}],nextPageToken:'second'});
+   if(n===1)return http(200,{tasks:[task(0,0)],nextPageToken:'second'});
    assert.match(url,/pageToken=second/);
-   return http(200,{tasks:[{name:'task-1',lastAttemptResult:{exitCode:2}}]});
+   return http(200,{tasks:[task(1,2)]});
  }});
  assert.equal(r.task_metadata_available,true);
  assert.equal(r.tasks.length,2);
@@ -119,24 +121,25 @@ test('F2 cross-project log view and unsafe limit rejected locally',async()=>{
 test('F3 snapshot: GCS jobs metadata exists with no content inspection',async()=>{
  const requests=[];
  const result=await inspectDevRunSnapshot({
-  run_id:'run-20261105',runtimeBucket:'jscc-dev-runtime-data',
+  run_id:'run-20261105',runtimeBucket:'jscc-dev-runtime-828902654738',
   readStatus:async(bucket,name)=>{
-    requests.push([bucket,name]);return {data:{run_id:'run-20261105',status:'completed',jobs_published:5}};
+    requests.push([bucket,name]);return {generation:'1',data:{run_id:'run-20261105',status:'completed',jobs_published:5}};
   },
   readMetadata:async(bucket,name)=>{
-    requests.push([bucket,name]);return {status:200,contentType:'application/json'};
+    requests.push([bucket,name]);return {status:200,bucket,name,generation:'2',contentType:'application/json'};
   },
  });
  assert.deepEqual(requests,[
-  ['jscc-dev-runtime-data','runs/run-20261105/run-status.json'],
-  ['jscc-dev-runtime-data','runs/run-20261105/jobs.json']]);
+  ['jscc-dev-runtime-828902654738','runs/run-20261105/run-status.json'],
+  ['jscc-dev-runtime-828902654738','runs/run-20261105/jobs.json'],
+  ['jscc-dev-runtime-828902654738','runs/run-20261105/run-status.json']]);
  assert.equal(result.jobs_present,true);
  assert.equal(result.jobs_evidence,'METADATA_FOUND');
  assert.equal(result.published_jobs,5);
 });
 test('F3 snapshot: absent jobs object distinct from published count; 403 remains UNVERIFIED',async()=>{
- const base={run_id:'run-20261105',runtimeBucket:'jscc-dev-runtime-data',
-  readStatus:async()=>({data:{run_id:'run-20261105',jobs_published:0}})};
+ const base={run_id:'run-20261105',runtimeBucket:'jscc-dev-runtime-828902654738',
+  readStatus:async()=>({generation:'1',data:{run_id:'run-20261105',jobs_published:0}})};
  const missing=await inspectDevRunSnapshot({...base,readMetadata:async()=>({status:404})});
  assert.equal(missing.jobs_present,false);
  assert.equal(missing.jobs_evidence,'METADATA_NOT_FOUND');
@@ -145,13 +148,13 @@ test('F3 snapshot: absent jobs object distinct from published count; 403 remains
  assert.equal(denied.jobs_evidence,'METADATA_DENIED');
 });
 test('F3 snapshot: unknown status, invalid paths, crossenv metadata and mismatched IDs fail closed',async()=>{
- const base={run_id:'run-20261105',runtimeBucket:'jscc-dev-runtime-data',
-  readStatus:async()=>({data:{run_id:'run-20261105'}}),
+ const base={run_id:'run-20261105',runtimeBucket:'jscc-dev-runtime-828902654738',
+  readStatus:async()=>({generation:'1',data:{run_id:'run-20261105'}}),
   readMetadata:async()=>({status:200})};
  await assert.rejects(()=>inspectDevRunSnapshot({...base,run_id:'../secret'}),/invalid_run_id/);
  await assert.rejects(()=>inspectDevRunSnapshot({...base,runtimeBucket:'jscc-prod-runtime-data'}),/runtime_bucket_not_configured/);
  await assert.rejects(()=>inspectDevRunSnapshot({...base,
-   readStatus:async()=>({data:{run_id:'other-run'}})}),/runtime_snapshot_id_mismatch/);
+   readStatus:async()=>({generation:'1',data:{run_id:'other-run'}})}),/runtime_snapshot_id_mismatch/);
  await assert.rejects(()=>inspectDevRunSnapshot({...base,
    readMetadata:async()=>({status:500})}),/jobs_metadata_read_failed/);
  await assert.rejects(()=>inspectDevRunSnapshot({...base,readStatus:async()=>null}),/runtime_snapshot_not_found/);
@@ -161,4 +164,26 @@ test('F3 DEV-only catalog rejects extra TEST/PROD and malicious task inputs',()=
  assert.throws(()=>validateTaskRequest('inspect_runtime_snapshot',{run_id:'abc',environment:'prod'}),/unrecognized_parameter/);
  assert.throws(()=>validateTaskRequest('describe_execution',{execution_id:'jscc-prod-job-abc123'}),/execution_not_allowlisted/);
  assert.throws(()=>validateTaskRequest('run_test_suite',{suite:'arbitrary-shell',expected_source_sha:'a'.repeat(40)}),/unknown_suite/);
+});
+
+
+test('F1 rejects foreign task resource and duplicate index even across pages',async()=>{
+ const bad={...task(0,0),name:parent.replace(id,'jscc-diagnostics-dev-other')+'/tasks/task-0'};
+ await assert.rejects(()=>listExecutionTaskEvidence(id,{request:async()=>http(200,{tasks:[bad]})}),/resource_binding/);
+ await assert.rejects(()=>listExecutionTaskEvidence(id,{request:async()=>http(200,{tasks:[task(0,0),task(0,1)]})}),/resource_binding/);
+});
+test('F2 refuses conflicting execution labels and does not claim complete search after truncation',async()=>{
+ const input={execution_id:id,limit:1,view,sanitize:sanitizeText};
+ await assert.rejects(()=>readBoundedExecutionLogs({...input,request:async()=>http(200,{entries:[
+  {...log('one'),labels:{execution_name:id,'run.googleapis.com/execution_name':'foreign'}}]})}),/binding_mismatch/);
+ const out=await readBoundedExecutionLogs({...input,request:async()=>http(200,{entries:[log('one'),log('two')]})});
+ assert.equal(out.line_count,1);assert.equal(out.log_search_complete,false);
+});
+test('F3 snapshot checks exact bucket/object metadata and detects status generation drift',async()=>{
+ const run_id='run-20261105',runtimeBucket='jscc-dev-runtime-828902654738',name='runs/'+run_id+'/jobs.json';
+ let n=0;
+ const input={run_id,runtimeBucket,readStatus:async()=>({generation:String(++n),data:{run_id,status:'completed'}}),
+  readMetadata:async()=>({status:200,bucket:runtimeBucket,name,generation:'2'})};
+ await assert.rejects(()=>inspectDevRunSnapshot(input),/generation_drift/);
+ await assert.rejects(()=>inspectDevRunSnapshot({...input,readMetadata:async()=>({status:200,bucket:runtimeBucket,name:'other',generation:'2'})}),/metadata_invalid/);
 });
