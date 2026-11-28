@@ -111,3 +111,19 @@ test('workspace toolchain and temporary artifact requests keep fixed task and sn
   {...args,artifact_paths:['artifacts/../private']},{...args,artifact_paths:['artifacts/a','artifacts/a']},
   {...args,task:'toolchain',argv:undefined}])assert.throws(()=>validatedWorkspaceRequest('workspace_run',bad));
 });
+
+test('explicit bounded artifact export verifies bytes, digest, paths and aggregate limit',async()=>{
+ const {createHash}=await import('node:crypto'),pin='a'.repeat(64),path='artifacts/result.bin',bytes=Buffer.from([0,1,255]);
+ const args={task:'command',argv:['python3','app.py'],expected_snapshot_sha256:pin,artifact_paths:[path],export_artifacts:true};
+ assert.deepEqual(validatedWorkspaceRequest('workspace_run',args).body,args);
+ for(const bad of [{...args,artifact_paths:undefined},{...args,export_artifacts:false}])assert.throws(()=>validatedWorkspaceRequest('workspace_run',bad));
+ const row={path,status:'HASHED',bytes:bytes.length,sha256:createHash('sha256').update(bytes).digest('hex'),
+  export_status:'EXPORTED',content_base64:bytes.toString('base64')};
+ const data={snapshot_sha256:pin,temporary_directory_removed:true,artifacts:[row],artifact_export_bytes:3,artifact_export_limit:8192};
+ const invoke=(request,result)=>invokeWorkspaceTool('workspace_run',request,'https://jscc-dev-workspace-manager-fixture.run.app',
+  {identityToken:'fixture',fetchImpl:async()=>Response.json(result)});
+ assert.deepEqual((await invoke(args,data)).data.artifacts,[row]);
+ await assert.rejects(()=>invoke(args,{...data,artifacts:[{...row,content_base64:'AAAA'}]}),/export_unconfirmed/);
+ const metadataOnly={...args};delete metadataOnly.export_artifacts;
+ await assert.rejects(()=>invoke(metadataOnly,data),/export_unconfirmed/);
+});

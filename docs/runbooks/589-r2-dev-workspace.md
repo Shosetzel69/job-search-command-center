@@ -131,10 +131,11 @@ only as already isolated sandbox executables. No installation or availability
 claim for the inherited image: inventory reports actual executable discovery,
 not versions or successful tool execution. Optional artifact_paths accepts up
 to four paths under artifacts/ only with an exact snapshot pin. The worker
-returns only bounded regular-file size/hash metadata, rejects symlinks,
+returns bounded regular-file size/hash metadata or explicit export_artifacts
+(base64, total 8 KiB, verified by Manager/Gateway; reduced output cap), rejects symlinks,
 hardlinks and special files, removes its temporary directory before response,
-and kills remaining members of the launched process group. No binary export,
-GCS persistence, host/container escape proof or network privilege change.
+and kills remaining members of the launched process group. No GCS persistence,
+host/container escape proof or network privilege change.
 Manager/Gateway bind returned paths and cleanup evidence to the request.
 
 ## RE-05 controlled Workspace R2 release (source only)

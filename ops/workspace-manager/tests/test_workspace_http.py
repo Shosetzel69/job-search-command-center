@@ -249,3 +249,26 @@ class TemporaryArtifactTests(unittest.TestCase):
         self.assertTrue(result['temporary_directory_removed'])
         with self.assertRaises(ValueError):
             worker.execute({}, 'command', ['python3','-V'], artifact_paths=['artifacts/x'])
+
+
+    def test_export_binds_exact_bytes_and_limit(self):
+        import base64
+        from service import worker
+        from service.common import snapshot_sha256, checked_artifact_export
+        pin=snapshot_sha256({})
+        paths=['artifacts/one.bin','artifacts/big.bin','artifacts/link']
+        code=("from pathlib import Path; p=Path('artifacts'); p.mkdir(); "
+              "(p/'one.bin').write_bytes(bytes([0,1,255])); (p/'big.bin').write_bytes(b'a'*8192); "
+              "(p/'link').symlink_to('/etc/passwd')")
+        result=worker.execute({},'command',['python3','-c',code],expected_snapshot_sha256=pin,
+                              artifact_paths=paths,export_artifacts=True)
+        self.assertEqual(result['artifacts'][0]['content_base64'],base64.b64encode(bytes([0,1,255])).decode())
+        self.assertEqual(result['artifacts'][1]['export_status'],'LIMIT')
+        self.assertEqual(result['artifacts'][2]['status'],'REJECTED')
+        self.assertEqual(result['artifact_export_bytes'],3)
+        self.assertEqual(checked_artifact_export(result,paths,True),result)
+        with self.assertRaises(ValueError):
+            checked_artifact_export(result,paths,False)
+        result['artifacts'][0]['content_base64']='AAAA'
+        with self.assertRaises(ValueError):
+            checked_artifact_export(result,paths,True)

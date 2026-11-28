@@ -9,6 +9,8 @@ MAX_FILES = 100
 MAX_TOTAL = 2 * 1024 * 1024
 MAX_REQUEST = 3 * 1024 * 1024
 MAX_OUTPUT = 16 * 1024
+MAX_ARTIFACT_EXPORT = 8 * 1024
+EXPORT_OUTPUT = 2 * 1024
 VALID_PATH = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9_.\-/]{0,179}\Z")
 RESTRICTED = {'.env', '.git', '.ssh', 'id_rsa', '.aws', 'credentials.json'}
 
@@ -124,3 +126,50 @@ def checked_artifact_paths(paths):
     if len(set(checked)) != len(checked) or any(not p.startswith('artifacts/') for p in checked):
         raise ValueError('invalid_artifact_paths')
     return checked
+
+
+def checked_artifact_export(result, paths, enabled=False):
+    """Bind exact requested paths, digest and total export; reject unsolicited bytes."""
+    if not isinstance(result, dict) or result.get('temporary_directory_removed') is not True:
+        raise ValueError('worker_artifacts_unconfirmed')
+    rows = result.get('artifacts')
+    if not isinstance(rows, list) or len(rows) != len(paths):
+        raise ValueError('worker_artifacts_unconfirmed')
+    total = 0
+    for path, row in zip(paths, rows):
+        if not isinstance(row, dict) or row.get('path') != path:
+            raise ValueError('worker_artifacts_unconfirmed')
+        status = row.get('status')
+        if status in ('MISSING', 'REJECTED'):
+            if set(row) != {'path', 'status'}:
+                raise ValueError('worker_artifacts_unconfirmed')
+            continue
+        if (status != 'HASHED' or type(row.get('bytes')) is not int or
+                not 0 <= row['bytes'] <= MAX_FILE or not isinstance(row.get('sha256'), str) or
+                not re.fullmatch(r'[a-f0-9]{64}', row['sha256'])):
+            raise ValueError('worker_artifacts_unconfirmed')
+        keys = {'path', 'status', 'bytes', 'sha256'}
+        if not enabled:
+            if set(row) != keys:
+                raise ValueError('worker_artifact_export_unconfirmed')
+            continue
+        if row.get('export_status') == 'LIMIT':
+            if set(row) != keys | {'export_status'} or row['bytes'] <= MAX_ARTIFACT_EXPORT-total:
+                raise ValueError('worker_artifact_export_unconfirmed')
+            continue
+        if (row.get('export_status') != 'EXPORTED' or set(row) != keys | {'export_status','content_base64'} or
+                not isinstance(row['content_base64'], str) or len(row['content_base64']) > 4*((MAX_ARTIFACT_EXPORT+2)//3)):
+            raise ValueError('worker_artifact_export_unconfirmed')
+        try:
+            raw = base64.b64decode(row['content_base64'], validate=True)
+        except Exception:
+            raise ValueError('worker_artifact_export_unconfirmed') from None
+        if (base64.b64encode(raw).decode() != row['content_base64'] or len(raw) != row['bytes'] or
+                hashlib.sha256(raw).hexdigest() != row['sha256']):
+            raise ValueError('worker_artifact_export_unconfirmed')
+        total += len(raw)
+        if total > MAX_ARTIFACT_EXPORT:
+            raise ValueError('worker_artifact_export_unconfirmed')
+    if enabled and (result.get('artifact_export_bytes') != total or result.get('artifact_export_limit') != MAX_ARTIFACT_EXPORT):
+        raise ValueError('worker_artifact_export_unconfirmed')
+    return result

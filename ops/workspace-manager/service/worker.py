@@ -12,11 +12,11 @@ import subprocess
 import tempfile
 import time
 from .httpbase import BaseHandler, serve
-from .common import checked_files, checked_task, checked_workdir, snapshot_sha256, checked_snapshot_sha256, checked_artifact_paths, ALLOWED_BINARIES, MAX_FILE, MAX_OUTPUT
+from .common import checked_files, checked_task, checked_workdir, snapshot_sha256, checked_snapshot_sha256, checked_artifact_paths, ALLOWED_BINARIES, MAX_FILE, MAX_OUTPUT, MAX_ARTIFACT_EXPORT, EXPORT_OUTPUT
 
 TIMEOUT = 35
 
-def artifact_metadata(root, path):
+def artifact_metadata(root, path, export_limit=None):
     """No traversal/symlink/hardlink, device, FIFO or unbounded read."""
     dirs = []
     fd = None
@@ -40,7 +40,14 @@ def artifact_metadata(root, path):
                 (before.st_size, before.st_mtime_ns, before.st_ctime_ns, before.st_nlink) !=
                 (after.st_size, after.st_mtime_ns, after.st_ctime_ns, after.st_nlink)):
             return {'path':path,'status':'REJECTED'}
-        return {'path':path,'status':'HASHED','bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
+        result = {'path':path,'status':'HASHED','bytes':len(data),'sha256':hashlib.sha256(data).hexdigest()}
+        if export_limit is not None:
+            if len(data) > export_limit:
+                result['export_status'] = 'LIMIT'
+            else:
+                result['export_status'] = 'EXPORTED'
+                result['content_base64'] = base64.b64encode(data).decode()
+        return result
     except FileNotFoundError:
         return {'path':path,'status':'MISSING'}
     except OSError:
@@ -51,7 +58,7 @@ def artifact_metadata(root, path):
         for item in reversed(dirs):
             os.close(item)
 
-def execute(files, task, argv=None, cwd='.', expected_snapshot_sha256=None, artifact_paths=None):
+def execute(files, task, argv=None, cwd='.', expected_snapshot_sha256=None, artifact_paths=None, export_artifacts=False):
     decoded = checked_files(files)
     digest = (snapshot_sha256(decoded) if expected_snapshot_sha256 is None else
               checked_snapshot_sha256(expected_snapshot_sha256, decoded))
@@ -62,6 +69,9 @@ def execute(files, task, argv=None, cwd='.', expected_snapshot_sha256=None, arti
         if expected_snapshot_sha256 is None or task == 'toolchain':
             raise ValueError('invalid_artifact_paths')
         requested = checked_artifact_paths(artifact_paths)
+    if type(export_artifacts) is not bool or export_artifacts and requested is None:
+        raise ValueError('invalid_artifact_export')
+    output_limit = EXPORT_OUTPUT if export_artifacts else MAX_OUTPUT
     if task == 'toolchain':
         return {'task':task,'snapshot_sha256':digest,'versions_verified':False,
                 'tools':[{'name':name,'available': bool(sys.executable) if name in ('python','python3')
@@ -115,21 +125,30 @@ def execute(files, task, argv=None, cwd='.', expected_snapshot_sha256=None, arti
             # Read bounded original descriptors, not filenames the child can replace.
             out.seek(0)
             err.seek(0)
-            stdout = out.read(MAX_OUTPUT+1)
-            stderr = err.read(MAX_OUTPUT+1)
+            stdout = out.read(output_limit+1)
+            stderr = err.read(output_limit+1)
         duration = int((time.monotonic()-started)*1000)
         result = {
             'exit_code': 124 if timed_out else p.returncode,
             'timed_out': timed_out,
             'duration_ms': duration,
-            'stdout': stdout[:MAX_OUTPUT].decode('utf-8', 'replace'),
-            'stderr': stderr[:MAX_OUTPUT].decode('utf-8', 'replace'),
-            'truncated': len(stdout)>MAX_OUTPUT or len(stderr)>MAX_OUTPUT,
+            'stdout': stdout[:output_limit].decode('utf-8', 'replace'),
+            'stderr': stderr[:output_limit].decode('utf-8', 'replace'),
+            'truncated': len(stdout)>output_limit or len(stderr)>output_limit,
             'snapshot_sha256': digest,
             'task': task
         }
         if requested is not None:
-            result['artifacts'] = [artifact_metadata(root, path) for path in requested]
+            result['artifacts'] = []
+            total = 0
+            for path in requested:
+                row = artifact_metadata(root,path,MAX_ARTIFACT_EXPORT-total if export_artifacts else None)
+                if row.get('export_status') == 'EXPORTED':
+                    total += row['bytes']
+                result['artifacts'].append(row)
+            if export_artifacts:
+                result['artifact_export_bytes'] = total
+                result['artifact_export_limit'] = MAX_ARTIFACT_EXPORT
     if requested is not None:
         result['temporary_directory_removed'] = not os.path.exists(tmp)
     return result
@@ -144,11 +163,13 @@ class Handler(BaseHandler):
             return self.out(404, {'error':'not_found'})
         try:
             data = self.body()
-            if not isinstance(data, dict) or set(data) - {'files','task','argv','cwd','expected_snapshot_sha256','artifact_paths'}:
+            if not isinstance(data, dict) or set(data) - {'files','task','argv','cwd','expected_snapshot_sha256','artifact_paths','export_artifacts'}:
                 raise ValueError('invalid_request')
             if 'expected_snapshot_sha256' in data and data['expected_snapshot_sha256'] is None:
                 raise ValueError('invalid_snapshot_sha256')
-            return self.out(200, execute(data.get('files'), data.get('task'), data.get('argv'), data.get('cwd','.'), data.get('expected_snapshot_sha256'), data.get('artifact_paths')))
+            if 'export_artifacts' in data and data['export_artifacts'] is not True:
+                raise ValueError('invalid_artifact_export')
+            return self.out(200, execute(data.get('files'), data.get('task'), data.get('argv'), data.get('cwd','.'), data.get('expected_snapshot_sha256'), data.get('artifact_paths'), data.get('export_artifacts',False)))
         except ValueError as e:
             return self.out(400, {'error':str(e)})
         except Exception:
