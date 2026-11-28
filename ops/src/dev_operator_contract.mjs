@@ -10,9 +10,9 @@ const HEX=/^[a-f0-9]{64}$/;
 const GEN=/^[1-9][0-9]{0,19}$/;
 const REF=/^#589\/[1-9][0-9]{0,19}$/;
 const EXEC=/^jscc-ops-operator-dev-[a-z0-9-]{1,40}$/;
-const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution']);
+const ACTIONS=new Set(['build','deploy_ops_pair','observe_build','observe_pair','cancel_build','gcloud_inventory','gcs_artifact','gcp_metadata','observe_run_execution','cancel_diagnostic_execution','observe_build_artifacts']);
 export const DEV_RUN_PERMISSION_PROBES=Object.freeze({
- run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
+ run_job_permissions:Object.freeze(['run.jobs.get','run.jobs.run','run.executions.cancel','run.executions.get','run.jobs.runWithOverrides','run.jobs.update','run.jobs.delete','run.jobs.getIamPolicy','run.jobs.setIamPolicy']),
  run_service_permissions:Object.freeze(['run.services.get','run.services.update','run.services.delete','run.services.getIamPolicy','run.services.setIamPolicy']),
 });
 const STATES=new Set(['DISPATCH_PENDING_OR_UNKNOWN','SUBMITTED','WORKING','SUCCEEDED','FAILED','BLOCKED',
@@ -104,7 +104,7 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
    match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref&&
    match(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/,v.bundle.build_id),
    'operator_cancel_approval_mismatch');
- }else if(v.action==='observe_build'||v.action==='observe_pair'){
+ }else if(v.action==='observe_build'||v.action==='observe_pair'||v.action==='observe_build_artifacts'){
   operatorRequire(operatorExact(v.bundle,['original_approval_ref'])&&
    match(REF,v.bundle.original_approval_ref)&&v.bundle.original_approval_ref!==ref,
    'operator_observation_approval_mismatch');
@@ -289,7 +289,7 @@ export function projectOperatorResult(request,record){
  }
  if(['observe_run_execution','cancel_diagnostic_execution'].includes(request.action)&&v.state==='OBSERVED')
   operatorRequire(out.execution_observation,'operator_run_execution_result_invalid');
- if(request.action==='observe_build'&&v.build_observation){
+ if(['observe_build','observe_build_artifacts'].includes(request.action)&&v.build_observation){
   const m=v.build_observation;
   operatorRequire(m.build_kind===undefined||m.build_kind==='workspace_r2','operator_build_kind_invalid');
   const ids=m.build_kind==='workspace_r2'?
@@ -309,6 +309,18 @@ export function projectOperatorResult(request,record){
   out.build_observation={...(m.build_kind?{build_kind:m.build_kind}:{}),source_sha:m.source_sha,archive_generation:m.archive_generation,
    archive_binding:m.archive_binding,build_status:m.build_status,immutable_image_count:m.immutable_image_count,
    steps:m.steps.map(x=>({id:x.id,status:x.status}))};
+ }
+ if(request.action==='observe_build_artifacts'&&v.state==='OBSERVED'){
+  const m=v.build_artifacts,build=out.build_observation;
+  const packages=build?.build_kind==='workspace_r2'?['jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100']:
+   ['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator','jscc-ops-publisher'];
+  operatorRequire(build?.build_status==='SUCCESS'&&m&&typeof m.log_search_complete==='boolean'&&
+   ['MATCHED_MARKERS','INCOMPLETE','LOG_ACCESS_DENIED','MISMATCH'].includes(m.correlation)&&
+   Array.isArray(m.images)&&m.images.length===packages.length&&m.images.every((x,i)=>x?.package===packages[i]&&
+   /^sha256:[a-f0-9]{64}$/.test(x.digest||'')&&['MATCH','MISSING','MISMATCH'].includes(x.marker)),
+   'operator_build_artifact_result_invalid');
+  out.build_artifacts={log_search_complete:m.log_search_complete,correlation:m.correlation,
+   images:m.images.map(x=>({package:x.package,digest:x.digest,marker:x.marker})),source_provenance:'UNVERIFIED'};
  }
  for(const k of ['protected_match','recovery_authorization_required','duplicate'])if(typeof v[k]==='boolean')out[k]=v[k];
  return out;

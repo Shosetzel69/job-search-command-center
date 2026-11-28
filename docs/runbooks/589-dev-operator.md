@@ -108,8 +108,9 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   observation now binds the original durable record to provider source object,
   generation, SHA/ref substitutions and resolvedStorageSource when returned;
   only fixed step IDs/statuses are projected, including terminal observations.
-  No raw build logs or arguments are exposed. This is not full Git-to-image
-  provenance; the existing independent source/image verification remains.
+  Approved `observe_build_artifacts` correlates immutable registry tags with
+  fixed build-emitted digest markers using a dedicated shared log view (not
+  yet admitted). No raw logs, full provenance claim or project-wide fallback.
 - Service metadata separates desired template configuration from observed
   traffic revisions and their immutable digest evidence using the existing
   DEV runtime observer; unresolved digests remain UNKNOWN. It does not
@@ -119,7 +120,7 @@ that there is no MCP mutation entrypoint. It does not authorize deployment.
   cancellation is limited to the diagnostics Job, uses its execution etag, and
   reads back the exact execution without claiming cancellation from the receipt.
   No product/migration cancel, Job overrides, deletion, lock release or retry.
-  The cancellation permission (run.jobs.run) requires separate resource-scoped
+  The cancellation permission (run.executions.cancel) requires separate resource-scoped
   admission; existing product release authority is unchanged.
 - Billing status is read-only for jscc-dev/jscc-shared; quota metadata is
   bounded to DEV Cloud Run/Storage and reported global/europe-west1 limits.

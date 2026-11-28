@@ -14,6 +14,7 @@ import {executeDevGcloudScript} from '../diagnostics/dev-gcloud-script-runner.mj
 import {executeDevGcsArtifact} from './dev_gcs_artifacts.mjs';
 import {executeDevGcpMetadata} from './dev_gcp_metadata.mjs';
 import {executeDevRunExecution} from './dev_run_execution.mjs';
+import {observeDevBuildArtifacts} from './dev_build_evidence.mjs';
 
 const SA='jscc-ops-operator-dev@jscc-dev.iam.gserviceaccount.com';
 const META='http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/';
@@ -89,6 +90,12 @@ const defaultHandlers={
   const original=await readOriginal(a.bundle.original_approval_ref,a.actor_sub_hash,get);
   operatorRequire(original.action==='build','operator_observation_action_mismatch');
   return observeApprovedBuildEvidence(original.bundle,{getToken:()=>metadataAccessToken()});
+ },
+ observe_build_artifacts:async(a,get)=>{
+  const original=await readOriginal(a.bundle.original_approval_ref,a.actor_sub_hash,get);
+  operatorRequire(original.action==='build','operator_observation_action_mismatch');
+  return observeDevBuildArtifacts(original.bundle,{observe:bundle=>observeApprovedBuildEvidence(bundle,
+   {getToken:()=>metadataAccessToken()})});
  },
  cancel_build:async(a,get)=>{
   const original=await readOriginal(a.bundle.original_approval_ref,a.actor_sub_hash,get);
