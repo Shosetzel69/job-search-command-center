@@ -176,3 +176,24 @@ test('service monitoring reports only bound DEV request counts, never root cause
  await assert.rejects(()=>executeDevGcpMetadata({...input,name:'jscc-command-api-prod'},{fetchImpl:async()=>assert.fail('network')}));
  await assert.rejects(()=>executeDevGcpMetadata(input,{now,fetchImpl:async()=>Response.json({timeSeries:[row('200','1'),row('200','1')]})}),/duplicate_point/);
 });
+
+test('registry version inventory exposes only bounded package digest and SHA tags, not deletion authority',async()=>{
+ const pkg='jscc-ops-gateway',root='projects/jscc-shared/locations/europe-west1/repositories/jscc-ops';
+ const parent=root+'/packages/'+pkg,digest='sha256:'+'a'.repeat(64),sha='b'.repeat(40);
+ const input={environment:'dev',kind:'artifact_versions',package:pkg};
+ const out=await executeDevGcpMetadata(input,{fetchImpl:async(url,init)=>{
+  assert.equal(init.method,'GET');
+  if(url.endsWith(root))return Response.json({name:root,dockerConfig:{immutableTags:true}});
+  assert.equal(new URL(url).pathname,'/v1/'+parent+'/versions');
+  assert.equal(new URL(url).searchParams.get('view'),'FULL');
+  const name=parent+'/versions/'+digest;
+  return Response.json({versions:[{name,relatedTags:[{name:parent+'/tags/'+sha,version:name},
+   {name:parent+'/tags/private-alias',version:name}]}]});
+ }});
+ assert.deepEqual(out.metadata.versions,[{digest,source_sha_tags:[sha],related_tag_count:2}]);
+ assert.equal(out.metadata.deletion_authorized,false);
+ assert.equal(JSON.stringify(out).includes('private-alias'),false);
+ const req={operation_id:'op',approval_hash:'hash',action:'gcp_metadata'};
+ assert.deepEqual(projectOperatorResult(req,{generation:'1',data:{...req,...out}}).metadata,out.metadata);
+ await assert.rejects(()=>executeDevGcpMetadata({...input,package:'arbitrary'},{fetchImpl:async()=>assert.fail('network')}));
+});

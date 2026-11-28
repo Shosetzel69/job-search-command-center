@@ -29,6 +29,39 @@ async function jsonRequest(url,method,fetchImpl,{noBody=false}={}){
 }
 export async function executeDevGcsArtifact(input,{fetchImpl=gcpFetch,assertFresh,verifyCleanup,now=Date.now}={}){
  operatorRequire(input?.environment==='dev','gcs_artifact_environment_denied');
+ if(input.operation==='list_versions'){
+  operatorRequire(operatorExact(input,['environment','operation','bucket','object','mode'])&&
+   ((input.bucket===RUNTIME&&valid(SNAPSHOT,input.object))||
+    (input.bucket===STAGING&&valid(ARCHIVE,input.object)))&&
+   ['versions','soft_deleted'].includes(input.mode)&&
+   (input.mode!=='soft_deleted'||input.bucket===STAGING),'gcs_artifact_versions_denied');
+  const objects=[],seen=new Set(),tokens=new Set();
+  let token='';
+  for(let page=0;page<4;page++){
+   const query=new URLSearchParams({prefix:input.object,maxResults:'50',
+    fields:'items('+fields+'),nextPageToken',
+    ...(input.mode==='versions'?{versions:'true'}:{softDeleted:'true'})});
+   if(token)query.set('pageToken',token);
+   const raw=await jsonRequest('https://storage.googleapis.com/storage/v1/b/'+input.bucket+'/o?'+query,'GET',fetchImpl);
+   const rows=raw.items||[];
+   operatorRequire(Array.isArray(rows)&&rows.length<=50,'gcs_artifact_versions_page_invalid');
+   for(const row of rows){
+    // prefix is not equality: do not expose other matching names.
+    if(row.name!==input.object)continue;
+    const value=metadata(row,input.bucket,input.object,null);
+    operatorRequire(!seen.has(value.generation),'gcs_artifact_versions_ambiguous');
+    seen.add(value.generation);objects.push(value);
+   }
+   token=raw.nextPageToken||'';
+   operatorRequire(typeof token==='string'&&token.length<=2048&&(!token||!tokens.has(token)),
+    'gcs_artifact_versions_token_invalid');
+   if(!token)break;
+   tokens.add(token);
+  }
+  const out={bucket:input.bucket,object:input.object,mode:input.mode,objects,pagination_complete:!token};
+  operatorRequire(Buffer.byteLength(JSON.stringify(out))<=32768,'gcs_artifact_versions_limit');
+  return {state:'OBSERVED',artifact_versions:out};
+ }
  if(input.operation==='snapshot_manifest'){
   operatorRequire(operatorExact(input,['environment','operation','run_id','expected_catalog_generation'])&&
    valid(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/,input.run_id)&&valid(GEN,input.expected_catalog_generation),

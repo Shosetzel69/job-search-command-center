@@ -159,10 +159,12 @@ export function validateOperatorApproval(record,{ref,actor,sourceSha,now=Date.no
  }else if(v.action==='gcp_metadata'){
   operatorRequire(v.bundle.environment==='dev'&&(
    v.bundle.kind==='artifact_tag'&&operatorExact(v.bundle,['environment','kind','package','source_sha'])||
+   v.bundle.kind==='artifact_versions'&&operatorExact(v.bundle,['environment','kind','package'])||
    ['secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info','service_request_metrics'].includes(v.bundle.kind)&&operatorExact(v.bundle,['environment','kind','name'])),
    'operator_metadata_approval_mismatch');
  }else if(v.action==='gcs_artifact'){
   operatorRequire(v.bundle.environment==='dev'&&(
+   v.bundle.operation==='list_versions'&&operatorExact(v.bundle,['environment','operation','bucket','object','mode'])||
    v.bundle.operation==='snapshot_manifest'&&operatorExact(v.bundle,['environment','operation','run_id','expected_catalog_generation'])||
    v.bundle.operation==='metadata'&&operatorExact(v.bundle,['environment','operation','bucket','object','generation'])||
    v.bundle.operation==='copy_generation'&&operatorExact(v.bundle,['environment','operation','source','source_generation','destination','expected_md5','expected_crc32c'])||
@@ -197,7 +199,7 @@ export function validateOperatorRequest(value,admission){
 }
 function projectMetadata(m){
  const safeName=x=>typeof x==='string'&&/^[A-Za-z0-9_-]{1,255}$/.test(x);
- if(!m||!['artifact_tag','secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info','service_request_metrics'].includes(m.kind))throw Error('operator_metadata_invalid');
+ if(!m||!['artifact_tag','artifact_versions','secret','run_job','run_service','run_job_permissions','run_service_permissions','billing_status','quota_info','service_request_metrics'].includes(m.kind))throw Error('operator_metadata_invalid');
  if(m.kind==='service_request_metrics'){
   const services=['jscc-dev-workspace-manager','jscc-dev-sandbox-worker','jscc-ops-gateway-dev','jscc-command-api-dev'];
   const groups=['1xx','2xx','3xx','4xx','5xx','other'];
@@ -242,6 +244,20 @@ function projectMetadata(m){
    requested_permissions:[...requested],reported_permissions:requested.filter(x=>m.reported_permissions.includes(x)),
    not_reported_permissions:requested.filter(x=>!m.reported_permissions.includes(x)),
    policy_isolation:'UNVERIFIED'};
+ }
+ if(m.kind==='artifact_versions'){
+  operatorRequire(['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator','jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100','jscc-ops-publisher'].includes(m.package)&&
+   m.immutable_tags===true&&typeof m.pagination_complete==='boolean'&&Array.isArray(m.versions)&&m.versions.length<=200&&
+   new Set(m.versions.map(x=>x?.digest)).size===m.versions.length,'operator_registry_versions_invalid');
+  const versions=m.versions.map(x=>{
+   operatorRequire(match(/^sha256:[a-f0-9]{64}$/,x.digest)&&Array.isArray(x.source_sha_tags)&&
+    x.source_sha_tags.every(y=>match(SHA,y))&&new Set(x.source_sha_tags).size===x.source_sha_tags.length&&
+    Number.isSafeInteger(x.related_tag_count)&&x.related_tag_count>=x.source_sha_tags.length&&x.related_tag_count<=100,
+    'operator_registry_versions_invalid');
+   return {digest:x.digest,source_sha_tags:[...x.source_sha_tags],related_tag_count:x.related_tag_count};
+  });
+  return {kind:m.kind,package:m.package,versions,pagination_complete:m.pagination_complete,immutable_tags:true,
+   active_references:'UNVERIFIED',deletion_authorized:false};
  }
  if(m.kind==='artifact_tag'){
   operatorRequire(['jscc-ops-gateway','jscc-diagnostics','jscc-ops-operator','jscc-dev-workspace-manager-r2','jscc-dev-workspace-worker-cap100','jscc-ops-publisher'].includes(m.package)&&
@@ -315,6 +331,22 @@ export function projectOperatorResult(request,record){
   typeof m.crc32c==='string'&&/^[a-zA-Z0-9+/]{6}==$/.test(m.crc32c)&&
   (m.md5===null||typeof m.md5==='string'&&/^[a-zA-Z0-9+/]{22}==$/.test(m.md5)))
   out.artifact_metadata={bucket:m.bucket,name:m.name,generation:m.generation,size:m.size,crc32c:m.crc32c,md5:m.md5};
+ if(request.action==='gcs_artifact'&&v.artifact_versions){
+  const m=v.artifact_versions;
+  const staging=m.bucket==='jscc-shared-ops-cloudbuild-source';
+  operatorRequire((staging&&match(/^source\/dev-[a-f0-9]{40}-[a-z0-9-]{8,64}\.tar\.gz$/,m.object)||
+   m.bucket==='jscc-dev-runtime-828902654738'&&match(/^runs\/[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\/(?:run-status\.json|jobs\.json)$/,m.object))&&
+   !m.object.includes('..')&&['versions','soft_deleted'].includes(m.mode)&&(m.mode!=='soft_deleted'||staging)&&
+   typeof m.pagination_complete==='boolean'&&Array.isArray(m.objects)&&m.objects.length<=200&&
+   new Set(m.objects.map(x=>x?.generation)).size===m.objects.length,'operator_artifact_versions_invalid');
+  const objects=m.objects.map(x=>{
+   operatorRequire(x?.bucket===m.bucket&&x.name===m.object&&match(GEN,x.generation)&&match(/^[0-9]{1,20}$/,x.size)&&
+    match(/^[a-zA-Z0-9+/]{6}==$/,x.crc32c)&&(x.md5===null||match(/^[a-zA-Z0-9+/]{22}==$/,x.md5)),
+    'operator_artifact_versions_invalid');
+   return {bucket:x.bucket,name:x.name,generation:x.generation,size:x.size,crc32c:x.crc32c,md5:x.md5};
+  });
+  out.artifact_versions={bucket:m.bucket,object:m.object,mode:m.mode,objects,pagination_complete:m.pagination_complete};
+ }
  if(request.action==='gcs_artifact'&&v.snapshot_manifest){
   const m=v.snapshot_manifest;
   operatorRequire(match(/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/,m.run_id)&&!m.run_id.includes('..')&&
@@ -334,7 +366,7 @@ export function projectOperatorResult(request,record){
    consistency:'TWO_READS_MATCH',atomic_snapshot:false};
  }
  if(request.action==='gcs_artifact'&&['SUCCEEDED','OBSERVED'].includes(v.state))
-  operatorRequire(out.artifact_metadata||v.state==='OBSERVED'&&out.snapshot_manifest,'operator_artifact_result_invalid');
+  operatorRequire(out.artifact_metadata||v.state==='OBSERVED'&&(out.snapshot_manifest||out.artifact_versions),'operator_artifact_result_invalid');
  if(request.action==='gcs_artifact'&&v.artifact_operation==='restore_soft_deleted'){
   operatorRequire(out.artifact_metadata?.bucket==='jscc-shared-ops-cloudbuild-source'&&
    match(GEN,v.prior_generation)&&v.prior_generation!==out.artifact_metadata.generation,'operator_artifact_result_invalid');

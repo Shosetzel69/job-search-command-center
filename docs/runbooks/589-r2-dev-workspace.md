@@ -178,3 +178,12 @@ The baseline is read twice; Retrieve lock status is metadata only, never a
 quiescence guarantee. Missing provider image results stay UNVERIFIED. No
 product deployment, migration, lock write, full provenance or release approval.
 Existing GitDeploy/GCloudDeploy remains the Service-only release route.
+
+## RE-04/06 version inventories (source only)
+
+Fixed ops package artifact_versions reports bounded digest/SHA-tag metadata;
+relatedTags is not a complete reference inventory or deletion authorization.
+GCS list_versions admits exact known artifact names, ordinary generations or
+staging-only soft-deleted metadata, bounded pagination; ignores prefix siblings.
+No media reads, deletes, registry force-delete, or changes to rollback images.
+Live access and provider response formats require independent acceptance.

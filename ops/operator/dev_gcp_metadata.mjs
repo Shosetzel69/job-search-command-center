@@ -40,6 +40,46 @@ function containerMetadata(c){
 }
 export async function executeDevGcpMetadata(input,{fetchImpl=gcpFetch,now=Date.now}={}){
  operatorRequire(input?.environment==='dev','gcp_metadata_environment_denied');
+ if(input.kind==='artifact_versions'){
+  operatorRequire(operatorExact(input,['environment','kind','package'])&&PACKAGES.has(input.package),
+   'gcp_metadata_artifact_denied');
+  const repo=await get(AR+REGISTRY,fetchImpl);
+  operatorRequire(repo.name===REGISTRY&&repo.dockerConfig?.immutableTags===true,'gcp_metadata_registry_not_immutable');
+  const parent=REGISTRY+'/packages/'+input.package,versionPrefix=parent+'/versions/',tagPrefix=parent+'/tags/';
+  const versions=[],seen=new Set(),tokens=new Set();
+  let token='';
+  for(let page=0;page<4;page++){
+   const q=new URLSearchParams({pageSize:'50',view:'FULL',fields:'versions(name,createTime,relatedTags(name,version)),nextPageToken'});
+   if(token)q.set('pageToken',token);
+   const v=await get(AR+parent+'/versions?'+q,fetchImpl);
+   const rows=v.versions||[];
+   operatorRequire(Array.isArray(rows)&&rows.length<=50,'gcp_metadata_versions_page_invalid');
+   for(const row of rows){
+    const digest=typeof row.name==='string'&&row.name.startsWith(versionPrefix)?row.name.slice(versionPrefix.length):null;
+    operatorRequire(match(DIGEST,digest)&&!seen.has(digest)&&Array.isArray(row.relatedTags||[])&&
+     (row.relatedTags||[]).length<=100,'gcp_metadata_versions_binding_mismatch');
+    seen.add(digest);
+    const shaTags=[];
+    for(const tag of row.relatedTags||[]){
+     operatorRequire(typeof tag.name==='string'&&tag.name.startsWith(tagPrefix)&&tag.version===row.name,
+      'gcp_metadata_versions_tag_mismatch');
+     const name=tag.name.slice(tagPrefix.length);
+     if(match(SHA,name))shaTags.push(name);
+    }
+    operatorRequire(new Set(shaTags).size===shaTags.length,'gcp_metadata_versions_duplicate_tag');
+    versions.push({digest,source_sha_tags:shaTags.sort(),related_tag_count:(row.relatedTags||[]).length});
+   }
+   token=v.nextPageToken||'';
+   operatorRequire(typeof token==='string'&&token.length<=2048&&(!token||!tokens.has(token)),
+    'gcp_metadata_versions_token_invalid');
+   if(!token)break;
+   tokens.add(token);
+  }
+  const metadata={kind:input.kind,package:input.package,versions,pagination_complete:!token,
+   immutable_tags:true,active_references:'UNVERIFIED',deletion_authorized:false};
+  operatorRequire(Buffer.byteLength(JSON.stringify(metadata))<=32768,'gcp_metadata_projection_limit');
+  return {state:'OBSERVED',metadata};
+ }
  if(input.kind==='artifact_tag'){
   operatorRequire(operatorExact(input,['environment','kind','package','source_sha'])&&PACKAGES.has(input.package)&&
    match(SHA,input.source_sha),'gcp_metadata_artifact_denied');

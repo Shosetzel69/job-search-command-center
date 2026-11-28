@@ -141,3 +141,22 @@ test('copy requires fresh approval immediately before the rewrite',async()=>{
   fetchImpl:async()=>{calls++;return Response.json(meta(source,'12'));}}),/expired/);
  assert.equal(calls,1);
 });
+
+test('list exact GCS artifact generations and soft-deleted staging versions without exposing prefix siblings',async()=>{
+ const {projectOperatorResult}=await import('../src/dev_operator_contract.mjs');
+ const input={environment:'dev',operation:'list_versions',bucket,object:source,mode:'versions'};
+ let calls=0;
+ const out=await executeDevGcsArtifact(input,{fetchImpl:async(url,init)=>{
+  assert.equal(init.method,'GET');const q=new URL(url).searchParams;
+  assert.equal(q.get('prefix'),source);assert.equal(q.get('versions'),'true');
+  if(++calls===1)return Response.json({items:[meta(source,'12'),meta(source+'.private','99')],nextPageToken:'next'});
+  assert.equal(q.get('pageToken'),'next');return Response.json({items:[meta(source,'13')]});
+ }});
+ assert.deepEqual(out.artifact_versions.objects.map(x=>x.generation),['12','13']);
+ assert.equal(out.artifact_versions.pagination_complete,true);
+ assert.equal(JSON.stringify(out).includes('private'),false);
+ const req={operation_id:'op',approval_hash:'hash',action:'gcs_artifact'};
+ assert.deepEqual(projectOperatorResult(req,{generation:'1',data:{...req,...out}}).artifact_versions,out.artifact_versions);
+ await assert.rejects(()=>executeDevGcsArtifact({...input,bucket:'jscc-dev-runtime-828902654738',object:'runs/run-test/jobs.json',mode:'soft_deleted'},
+  {fetchImpl:async()=>assert.fail('network')}));
+});
