@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 PROJECT=jscc-dev
+# #589 F1: review-only exact-prefix plan; never run legacy provisioning to
+# activate Operator. No IAM mutation occurs in this mode.
+if [[ "${1:-}" == --operator-iam-plan ]]; then
+  shift
+  exec node "$(dirname -- "${BASH_SOURCE[0]}")/remote_executor_dev_operator_iam.mjs" "$@"
+fi
 SHARED=jscc-shared
 REGION=europe-west1
 OPS_BUCKET="${OPS_BUCKET:-jscc-dev-ops-state}"

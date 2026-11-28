@@ -1,10 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {createHash} from 'node:crypto';
+import {createHash,generateKeyPairSync,sign} from 'node:crypto';
 import {prepareDevSourceArchive,stageIndependentDevSource,stageDevSourceRemotely,publishApprovalRemotely,inspectDevPublisher,DEV_PUBLISHER_ORIGIN,DEV_PUBLISHER_AUDIENCE} from '../../scripts/gcp/remote_executor_dev_publish_approval.mjs';
 import {operatorHash} from '../src/dev_operator_contract.mjs';
 
 const now=()=>1760000000000;
+const reviewSignature=sign(null,Buffer.from('fixture'),generateKeyPairSync('ed25519').privateKey).toString('base64url');
 const bytes=Buffer.from('synthetic reviewed archive');
 const sha='a'.repeat(40),digest='sha256:'+createHash('sha256').update(bytes).digest('hex');
 const bucket='jscc-shared-ops-cloudbuild-source';
@@ -66,12 +67,12 @@ test('collision and mismatched readback fail without automatic overwrite or retr
 test('independent remote source client binds exact endpoint, token audience, archive and receipt',async()=>{
  const a=record(),pin=operatorHash(a),object='source/dev-'+sha+'-'+createHash('sha256').update(a.approval_ref).digest('hex')+'.tar.gz';
  let calls=0;
- const opts={now,trustedRecordHash:pin,materialize:async()=>bytes,getIdentityToken:async audience=>{
+ const opts={now,trustedRecordHash:pin,reviewSignature,materialize:async()=>bytes,getIdentityToken:async audience=>{
   assert.equal(audience,DEV_PUBLISHER_AUDIENCE);return 'a.b.c';
  },fetchImpl:async(url,init)=>{
   calls++;assert.equal(url,DEV_PUBLISHER_ORIGIN+'/v1/source');assert.equal(init.method,'POST');
   assert.equal(init.redirect,'error');assert.equal(init.headers.Authorization,'Bearer a.b.c');
-  assert.deepEqual(JSON.parse(init.body),{record:a,trusted_record_hash:pin,archive_base64:bytes.toString('base64')});
+  assert.deepEqual(JSON.parse(init.body),{record:a,trusted_record_hash:pin,review_signature:reviewSignature,archive_base64:bytes.toString('base64')});
   return Response.json({bucket,object,generation:'123',sha256:digest});
  }};
  assert.equal((await stageDevSourceRemotely(a,opts)).generation,'123');assert.equal(calls,1);
@@ -92,10 +93,10 @@ test('remote approval client verifies independent record pin and exact protected
  const pin=operatorHash(a),receipt={approval_ref:a.approval_ref,operation_id:operatorPaths(a.approval_ref).key,
   generation:'123',record_hash:pin};
  let calls=0;
- const opts={now,actor,sourceSha:sha,trustedRecordHash:pin,getIdentityToken:async()=> 'a.b.c',
+ const opts={now,actor,sourceSha:sha,trustedRecordHash:pin,reviewSignature,getIdentityToken:async()=> 'a.b.c',
   fetchImpl:async(url,init)=>{
    calls++;assert.equal(url,DEV_PUBLISHER_ORIGIN+'/v1/approval');
-   assert.deepEqual(JSON.parse(init.body),{record:a,trusted_record_hash:pin});
+   assert.deepEqual(JSON.parse(init.body),{record:a,trusted_record_hash:pin,review_signature:reviewSignature});
    return Response.json(receipt);
   }};
  assert.deepEqual(await publishApprovalRemotely(a,opts),receipt);
@@ -108,8 +109,8 @@ test('remote approval client verifies independent record pin and exact protected
 
 test('independent client checks exact publisher and operator source pins via read-only status',async()=>{
  const value={environment:'dev',service:'jscc-ops-publisher-dev',publisher_source_sha:sha,operator_source_sha:sha,
-  identity_binding:'AUTHENTICATED',storage_permissions:'UNVERIFIED',publication_authorized:false};
- const options={publisherSourceSha:sha,operatorSourceSha:sha,getIdentityToken:async audience=>{
+  identity_binding:'AUTHENTICATED',review_key_sha256:'c'.repeat(64),storage_permissions:'UNVERIFIED',publication_authorized:false};
+ const options={publisherSourceSha:sha,operatorSourceSha:sha,reviewKeyFingerprint:value.review_key_sha256,getIdentityToken:async audience=>{
   assert.equal(audience,DEV_PUBLISHER_AUDIENCE);return 'a.b.c';
  },fetchImpl:async(url,init)=>{
   assert.equal(url,DEV_PUBLISHER_ORIGIN+'/v1/status');assert.equal(init.method,'GET');assert.equal(init.body,undefined);
